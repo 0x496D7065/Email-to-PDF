@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.eml
+*.msg
+*.mbox
+*.pst
+# Local junk
+.DS_Store
+Thumbs.db
+*.log
+
+# Local planning files (private, never commit)
+PROJECT_BRIEF.md
+STATUS.md
+CLAUDE.md
+.claude/
