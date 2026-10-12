@@ -5,10 +5,16 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
-*.eml
-*.msg
-*.mbox
-*.pst
+# Email files, in ANY letter case: on case-sensitive checkouts (Linux, CI)
+# "*.eml" would not match "a.EML", so each letter is a [lower UPPER] pair.
+*.[eE][mM][lL]
+*.[mM][sS][gG]
+*.[mM][bB][oO][xX]
+*.[pP][sS][tT]
+# Narrow exception: hand-written SYNTHETIC test emails (see tests/fixtures/README.md).
+# Real emails stay ignored everywhere else. Must come after the rules above.
+!tests/fixtures/**/*.[eE][mM][lL]
+!tests/fixtures/**/*.[mM][sS][gG]
 # Local junk
 .DS_Store
 Thumbs.db
