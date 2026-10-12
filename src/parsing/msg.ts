@@ -20,6 +20,8 @@ import MsgReaderImport, { type FieldsData } from '@kenjiuno/msgreader';
 import { encodingForCodepage } from './codepages';
 import { parseEmailDate } from './date';
 import { sha256Hex } from './hash';
+import { convertHtmlBody, HtmlConversionError } from './html-conversion';
+import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
 import type {
   AttachmentInfo,
@@ -49,9 +51,16 @@ export interface MsgParserOptions {
    * Converts an HTML body to plain text. Called only when the message has no
    * plain-text body but has an HTML one. It must be inert: no rendering, no
    * script execution, no loading of images or styles (README.md, rule R4).
-   * Injected so that this adapter stays testable in Node without a DOM.
+   * Injected so that this adapter stays testable in Node without a DOM. In
+   * the browser this is htmlToTextWithDomParser (html-dom.ts, see
+   * browser-parsers.ts).
+   *
+   * It returns the text and whether it was cut at the converter's length
+   * limit; a cut adds the 'html-body-truncated' warning. If it throws or
+   * returns anything else, the file is reported as 'corrupt' with the detail
+   * "HTML body could not be converted: ...", never as a damaged file.
    */
-  readonly htmlToText: (html: string) => string;
+  readonly htmlToText: (html: string) => HtmlToTextResult;
 }
 
 /** Longest error detail kept for the preview's error list. */
@@ -83,8 +92,9 @@ async function parseMsg(file: InputFile, options: MsgParserOptions): Promise<Par
     const fields = readFields(file.bytes);
     return resultFromFields(fields, file.name, sha256, options);
   } catch (error) {
-    // A TypeError here comes from inside msgreader: a damaged file makes it
-    // look up a part of the file that is not there.
+    // A TypeError or RangeError here comes from inside msgreader: a damaged
+    // or cut-off file makes it look up a part of the file that is not there
+    // (RangeError: "Offset is outside the bounds of the DataView").
     return { ok: false, error: 'corrupt', detail: errorDetail(error, 'unreadable file structure'), fileName: file.name, sha256 };
   }
 }
@@ -385,7 +395,8 @@ interface MessageBody {
  * The body, in this order:
  * 1. the plain-text body (PidTagBody), if it has any text;
  * 2. otherwise the HTML body (PidTagHtml), converted by the injected
- *    `htmlToText` ('html-only-body');
+ *    `htmlToText` ('html-only-body', plus 'html-body-truncated' if the text
+ *    was cut);
  * 3. otherwise, if there is only an RTF body (PidTagRtfCompressed): '' with
  *    'rtf-only-body'. It is not converted (no RTF reader is bundled); the
  *    text stays in the original file and the preview flags the message;
@@ -405,7 +416,10 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody {
   if (plain !== undefined && plain.trim() !== '') return { text: plain.replace(/\r\n/g, '\n'), warnings: [] };
 
   const html = htmlBody(fields);
-  if (html !== undefined && html.trim() !== '') return { text: options.htmlToText(html), warnings: ['html-only-body'] };
+  if (html !== undefined && html.trim() !== '') {
+    const converted = convertHtmlBody(options.htmlToText, html);
+    return { text: converted.text, warnings: converted.truncated ? ['html-only-body', 'html-body-truncated'] : ['html-only-body'] };
+  }
 
   const rtf: unknown = fields.compressedRtf;
   if (rtf !== undefined && !(rtf instanceof Uint8Array)) throw new DamagedPropertyError('RTF body');
@@ -456,15 +470,23 @@ function htmlBody(fields: FieldsData): string | undefined {
  */
 function attachmentInfo(attachment: FieldsData): AttachmentInfo {
   const isOutlookItem = attachment.innerMsgContent === true;
-  const displayName = asString(attachment.name);
   return {
     fileName:
       nonEmpty(asString(attachment.fileName)) ??
       nonEmpty(asString(attachment.fileNameShort)) ??
-      (displayName === undefined || displayName === '' ? '' : isOutlookItem ? `${displayName}.msg` : displayName),
+      displayFileName(asString(attachment.name), isOutlookItem),
     size: typeof attachment.contentLength === 'number' ? attachment.contentLength : null,
     mimeType: nonEmpty(asString(attachment.attachMimeTag)) ?? (isOutlookItem ? OUTLOOK_ITEM_MIME_TYPE : 'application/octet-stream'),
   };
+}
+
+/**
+ * The file name made from an attachment's display name: '' if there is none,
+ * the name plus ".msg" for an attached Outlook item, else the name as it is.
+ */
+function displayFileName(displayName: string | undefined, isOutlookItem: boolean): string {
+  if (displayName === undefined || displayName === '') return '';
+  return isOutlookItem ? `${displayName}.msg` : displayName;
 }
 
 function nonEmpty(text: string | undefined): string | undefined {
@@ -490,14 +512,22 @@ class DamagedPropertyError extends Error {
 }
 
 /**
- * A short, single-line message for the preview's error list. A TypeError
- * ("x.trim is not a function", "Cannot read properties of undefined") is a
- * JavaScript internal that means nothing to the user: it becomes
- * "damaged property: <typeErrorReason>".
+ * A short, single-line message for the preview's error list. Exported for
+ * unit tests.
+ *
+ * - A failure of the injected HTML converter keeps its own message ("HTML
+ *   body could not be converted: ..."): it is not damage in the file. It is
+ *   checked first, so a TypeError or RangeError from inside the converter is
+ *   never mistaken for one from msgreader.
+ * - A TypeError ("x.trim is not a function", "Cannot read properties of
+ *   undefined") or a RangeError ("Offset is outside the bounds of the
+ *   DataView", from a cut-off file) is a JavaScript internal that means
+ *   nothing to the user: it becomes "damaged property: <reason>".
  */
-function errorDetail(error: unknown, typeErrorReason: string): string {
+export function errorDetail(error: unknown, reason: string): string {
+  if (error instanceof HtmlConversionError) return shortDetail(error.message);
   if (error instanceof DamagedPropertyError) return shortDetail(error.message);
-  if (error instanceof TypeError) return shortDetail(`damaged property: ${typeErrorReason}`);
+  if (error instanceof TypeError || error instanceof RangeError) return shortDetail(`damaged property: ${reason}`);
   return shortDetail(error instanceof Error ? error.message : String(error));
 }
 

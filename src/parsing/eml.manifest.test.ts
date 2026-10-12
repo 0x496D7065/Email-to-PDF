@@ -12,14 +12,23 @@ const files = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', {
   eager: true,
 });
 
-// HTML-to-text is a later task (2.6). This stub only marks that the HTML path
-// was taken; it is NOT a converter and must never be used outside tests.
+// The real HTML-to-text converter needs the browser's DOMParser, which Node
+// does not have, and no DOM library is installed (writing a second HTML
+// parser just for tests would test that parser, not the browser's). So here
+// the converter is a stub that records the HTML it was handed. The real
+// conversion of these fixtures, with their bodyContains/bodyExcludes, is
+// checked in Chromium by e2e/html-to-text.spec.ts. The stub is NOT a
+// converter and must never be used outside tests.
 const STUB_PREFIX = '[stub html-to-text]';
-const parser = createEmlParser({ htmlToText: (html) => `${STUB_PREFIX} ${html.length} chars` });
+/** Every HTML string handed to the stub; the stub's output names the index. */
+const htmlCalls: string[] = [];
+const parser = createEmlParser({
+  htmlToText: (html) => ({ text: `${STUB_PREFIX} #${String(htmlCalls.push(html) - 1)}`, truncated: false }),
+});
 
-// Fixtures whose body is HTML-only: their bodyContains/bodyExcludes need the
-// real HTML-to-text step, so those two checks wait for task 2.6. Every other
-// field (and the 'html-only-body' warning) is still checked now.
+// Fixtures whose body is HTML-only: their converted text is checked in the
+// browser (see above). Every other field (and the 'html-only-body' warning)
+// is checked here.
 const BODY_CHECKS_NEED_HTML_TO_TEXT = new Set(['eml/50-html-only.eml']);
 
 const emlFixtures = FIXTURES.filter((f) => f.kind === 'eml');
@@ -65,14 +74,17 @@ describe('.eml adapter matches the manifest', () => {
     expect(message.source.sha256).toMatch(/^[0-9a-f]{64}$/);
 
     if (BODY_CHECKS_NEED_HTML_TO_TEXT.has(id)) {
-      // Deferred to task 2.6 (see above). For now: the stub was used.
+      // The stub was used, and was handed the DECODED HTML (quoted-printable
+      // undone, soft line breaks joined), which holds the visible snippets.
+      // The converted text itself is checked in e2e/html-to-text.spec.ts.
       expect(message.bodyText.startsWith(STUB_PREFIX)).toBe(true);
+      const html = htmlCalls[Number(message.bodyText.slice(STUB_PREFIX.length + 2))] ?? '';
+      expect(html).toContain('<p>Dear Alice,</p>');
+      expect(html).not.toContain('=3D'); // quoted-printable was decoded
+      for (const snippet of expected.bodyContains) expect(html).toContain(snippet);
       return;
     }
     for (const snippet of expected.bodyContains) expect(message.bodyText).toContain(snippet);
     for (const snippet of expected.bodyExcludes ?? []) expect(message.bodyText).not.toContain(snippet);
   });
-
-  // Placeholder so the deferred checks stay visible in the test report.
-  it.todo('50-html-only: bodyContains/bodyExcludes after the real HTML-to-text (task 2.6)');
 });

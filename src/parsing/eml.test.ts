@@ -5,6 +5,7 @@ import { decodeWords } from 'postal-mime';
 import { describe, expect, it, vi } from 'vitest';
 import { createEmlParser } from './eml';
 import { sha256Hex } from './hash';
+import type { HtmlToTextResult } from './html-to-text';
 import type { NormalizedMessage, ParseResult } from './types';
 
 // decodeWords is wrapped in a spy that calls the real function, so that one
@@ -39,7 +40,7 @@ const HEADERS = crlf(
 );
 
 /** A stub, NOT a converter: it only shows that the HTML path was taken. */
-const stubHtmlToText = (html: string): string => `[stub] ${html.length}`;
+const stubHtmlToText = (html: string): HtmlToTextResult => ({ text: `[stub] ${html.length}`, truncated: false });
 const parser = createEmlParser({ htmlToText: stubHtmlToText });
 
 async function parse(data: Uint8Array, name = 'test.eml'): Promise<ParseResult> {
@@ -214,7 +215,7 @@ describe('createEmlParser: body', () => {
   });
 
   it('passes an HTML-only body to the injected htmlToText and warns html-only-body', async () => {
-    const htmlToText = vi.fn(() => 'converted text');
+    const htmlToText = vi.fn(() => ({ text: 'converted text', truncated: false }));
     const html = '<p>Hello <script>window.SCRIPT_RAN = 1</script></p>';
     const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n', html, '\r\n');
     const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: data });
@@ -223,6 +224,15 @@ describe('createEmlParser: body', () => {
     expect(htmlToText.mock.calls[0]).toEqual([`${html}\n`]);
     expect(result.message.bodyText).toBe('converted text');
     expect(result.message.warnings).toEqual(['html-only-body']);
+  });
+
+  it('a converter result cut at its length limit adds html-body-truncated (the note stays in the text)', async () => {
+    const htmlToText = (): HtmlToTextResult => ({ text: 'start\n\n[Text cut here: ...]', truncated: true });
+    const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>long</p>\r\n');
+    const result = await createEmlParser({ htmlToText }).parse({ name: 'cut.eml', bytes: data });
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.bodyText).toBe('start\n\n[Text cut here: ...]');
+    expect(result.message.warnings).toEqual(['html-only-body', 'html-body-truncated']);
   });
 
   it('a message with no body at all gives "" and no-body', async () => {
@@ -395,7 +405,7 @@ describe('createEmlParser: inline forwarded messages', () => {
   });
 
   it('an HTML-only forwarded message goes through the injected htmlToText', async () => {
-    const htmlToText = vi.fn<(html: string) => string>(() => 'converted inner text');
+    const htmlToText = vi.fn<(html: string) => HtmlToTextResult>(() => ({ text: 'converted inner text', truncated: false }));
     const innerHtml = '<p>Inner <b>HTML</b></p>';
     const inner = crlf('From: carol@example.test', 'Date: Mon, 2 Jun 2025 23:30:00 +0000', 'Content-Type: text/html', '', innerHtml);
     const result = await createEmlParser({ htmlToText }).parse({
@@ -410,6 +420,18 @@ describe('createEmlParser: inline forwarded messages', () => {
     expect(result.message.bodyText).not.toContain('<b>');
     // Part of bodyText was converted from HTML: flagged like an HTML-only body.
     expect(result.message.warnings).toEqual(['html-only-body']);
+  });
+
+  it('a truncated HTML-only forwarded message passes html-body-truncated up to the outer message', async () => {
+    const htmlToText = (): HtmlToTextResult => ({ text: 'cut inner text', truncated: true });
+    const inner = crlf('From: carol@example.test', 'Content-Type: text/html', '', '<p>Inner</p>');
+    const result = await createEmlParser({ htmlToText }).parse({
+      name: 'fw-cut.eml',
+      bytes: withParts('Outer text.', rfc822Part(inner)),
+    });
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.bodyText).toContain('cut inner text');
+    expect(result.message.warnings).toEqual(['html-only-body', 'html-body-truncated']);
   });
 
   /** A chain of `levels` forwarded messages: level 1 forwards level 2, which forwards level 3... */
@@ -629,12 +651,12 @@ describe('createEmlParser: inline forwarded messages', () => {
   });
 });
 
-// Known limitation, to be replaced in 2.6: text/plain and a SEPARATE text/html
+// Known limitation, to be replaced in 2.6b: text/plain and a SEPARATE text/html
 // part in multipart/mixed. postal-mime converts that HTML with its own regex
 // converter and appends it to the text; the injected htmlToText is bypassed.
 // And (P2) text parts that follow an inline forwarded message are placed
 // before it. These tests pin today's output so any change is deliberate.
-describe('createEmlParser: known limitation, to be replaced in 2.6', () => {
+describe('createEmlParser: known limitation, to be replaced in 2.6b', () => {
   const mixed = (...parts: string[]): Uint8Array =>
     bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="m"\r\n\r\n', crlf(...parts.flatMap((p) => ['--m', p]), '--m--', ''));
 
@@ -802,7 +824,7 @@ describe('createEmlParser: malformed input never throws', () => {
     expect(!result.ok && result.detail.length).toBeGreaterThan(0);
   });
 
-  it('a failing htmlToText becomes a corrupt result, not an exception', async () => {
+  it('a failing htmlToText becomes a corrupt result that names the conversion, not an exception', async () => {
     const failing = createEmlParser({
       htmlToText: () => {
         throw new Error('converter failed');
@@ -813,9 +835,58 @@ describe('createEmlParser: malformed input never throws', () => {
     expect(result).toEqual({
       ok: false,
       error: 'corrupt',
-      detail: 'converter failed',
+      detail: 'HTML body could not be converted: converter failed',
       fileName: 'h.eml',
       sha256: await sha256Hex(data),
     });
+  });
+
+  it.each([
+    ['a TypeError', new TypeError('x.trim is not a function'), 'x.trim is not a function'],
+    ['a RangeError (e.g. a stack overflow)', new RangeError('Maximum call stack size exceeded'), 'Maximum call stack size exceeded'],
+    ['a thrown non-Error value', 'plain string', 'plain string'],
+    ['an Error with an empty message', new Error(''), 'unknown error'],
+  ])('%s thrown by htmlToText is reported as a conversion failure', async (_label, thrown: unknown, reason) => {
+    const failing = createEmlParser({
+      htmlToText: () => {
+        // Typed unknown: a converter may throw anything, not only an Error.
+        throw thrown;
+      },
+    });
+    const data = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
+    const result = await failing.parse({ name: 'h.eml', bytes: data });
+    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: `HTML body could not be converted: ${reason}` });
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['a bare string', 'text'],
+    ['no truncated flag', { text: 'text' }],
+    ['a non-string text', { text: 42, truncated: false }],
+  ])('an htmlToText that returns %s (not a { text, truncated } result) is a conversion failure', async (_label, value: unknown) => {
+    const broken = createEmlParser({ htmlToText: () => value as HtmlToTextResult });
+    const data = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
+    const result = await broken.parse({ name: 'h.eml', bytes: data });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'corrupt',
+      detail: 'HTML body could not be converted: the converter returned no text',
+    });
+  });
+
+  it('a failing htmlToText inside an inline forwarded message is reported the same way', async () => {
+    const failing = createEmlParser({
+      htmlToText: () => {
+        throw new TypeError('inner failure');
+      },
+    });
+    const inner = crlf('From: carol@example.test', 'Subject: inner', 'Content-Type: text/html', '', '<p>inner</p>');
+    const data = bytes(
+      HEADERS,
+      '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nouter\r\n',
+      `--b\r\nContent-Type: message/rfc822\r\n\r\n${inner}\r\n--b--\r\n`,
+    );
+    const result = await failing.parse({ name: 'f.eml', bytes: data });
+    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: 'HTML body could not be converted: inner failure' });
   });
 });

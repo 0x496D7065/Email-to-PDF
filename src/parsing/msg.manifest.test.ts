@@ -7,13 +7,17 @@ import { FIXTURES, type FixtureExpectation } from '../../tests/fixtures/manifest
 import { buildMsg } from '../../tests/fixtures/msg/builder';
 import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
 import { createEmlParser } from './eml';
+import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
 import type { NormalizedMessage } from './types';
 
-// HTML-to-text is a later task (2.6). This stub only marks that the HTML path
-// was taken; it is NOT a converter and must never be used outside tests.
+// The real HTML-to-text converter needs the browser's DOMParser, which Node
+// does not have, and no DOM library is installed. So here the converter is a
+// stub that only marks that the HTML path was taken. The real converter is
+// checked in Chromium by e2e/html-to-text.spec.ts. The stub is NOT a
+// converter and must never be used outside tests.
 const STUB_PREFIX = '[stub html-to-text]';
-const htmlToText = (html: string): string => `${STUB_PREFIX} ${html.length} chars`;
+const htmlToText = (html: string): HtmlToTextResult => ({ text: `${STUB_PREFIX} ${html.length} chars`, truncated: false });
 const msgParser = createMsgParser({ htmlToText });
 const emlParser = createEmlParser({ htmlToText });
 

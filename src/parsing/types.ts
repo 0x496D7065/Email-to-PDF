@@ -54,6 +54,7 @@ export type ParseWarning =
   | 'unknown-time-zone'
   | 'missing-message-id' // no Message-ID header (duplicate detection gets weaker)
   | 'html-only-body' // no plain-text part: body text was converted from HTML
+  | 'html-body-truncated' // the converted HTML text hit the length limit and was cut (a note line says so)
   | 'rtf-only-body' // .msg with only an RTF body
   | 'no-body' // no body text found at all
   // A forwarded message whose text was not expanded (.eml: nested too deep or

@@ -8,11 +8,13 @@ import { TypeEnum } from '@kenjiuno/msgreader/lib/Reader';
 import { describe, expect, it, vi } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
 import { sha256Hex } from './hash';
-import { createMsgParser, resultFromFields } from './msg';
+import { HtmlConversionError } from './html-conversion';
+import type { HtmlToTextResult } from './html-to-text';
+import { createMsgParser, errorDetail, resultFromFields } from './msg';
 import type { NormalizedMessage, ParseResult } from './types';
 
 /** A stub, NOT a converter: it only shows that the HTML path was taken. */
-const stubHtmlToText = (html: string): string => `[stub] ${html.length}`;
+const stubHtmlToText = (html: string): HtmlToTextResult => ({ text: `[stub] ${html.length}`, truncated: false });
 const parser = createMsgParser({ htmlToText: stubHtmlToText });
 
 const ALICE = { name: 'Alice Example', smtp: 'alice@example.test' };
@@ -353,7 +355,7 @@ describe('createMsgParser: body', () => {
   });
 
   it('HTML only: hands the exact HTML string to htmlToText and warns "html-only-body"', async () => {
-    const htmlToText = vi.fn((html: string) => `converted ${html.length}`);
+    const htmlToText = vi.fn((html: string) => ({ text: `converted ${html.length}`, truncated: false }));
     const result = await createMsgParser({ htmlToText }).parse({
       name: 'a.msg',
       bytes: buildMsg(spec({ bodyText: undefined, bodyHtml: HTML })),
@@ -363,6 +365,17 @@ describe('createMsgParser: body', () => {
     expect(htmlToText).toHaveBeenCalledWith(HTML);
     expect(result.message.bodyText).toBe(`converted ${HTML.length}`);
     expect(result.message.warnings).toEqual(['html-only-body']);
+  });
+
+  it('HTML only, cut at the converter limit: also warns "html-body-truncated" (the note stays in the text)', async () => {
+    const htmlToText = (): HtmlToTextResult => ({ text: 'start\n\n[Text cut here: ...]', truncated: true });
+    const result = await createMsgParser({ htmlToText }).parse({
+      name: 'a.msg',
+      bytes: buildMsg(spec({ bodyText: undefined, bodyHtml: HTML })),
+    });
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.bodyText).toBe('start\n\n[Text cut here: ...]');
+    expect(result.message.warnings).toEqual(['html-only-body', 'html-body-truncated']);
   });
 
   it('a plain body of only whitespace does not hide the HTML body', async () => {
@@ -476,6 +489,14 @@ describe('createMsgParser: broken files never throw', () => {
     await expectCorrupt(buildMsg(BASE).slice(0, length));
   });
 
+  it('a cut-off .msg (msgreader fails inside with a RangeError) gives a plain detail', async () => {
+    // Cut in the middle: msgreader reads past the end of its DataView and
+    // throws "RangeError: Offset is outside the bounds of the DataView".
+    const full = buildMsg(BASE);
+    const detail = await expectCorrupt(full.slice(0, Math.floor(full.length / 2)));
+    expect(detail).toBe('damaged property: unreadable file structure');
+  });
+
   it('a valid Compound File that is not an Outlook message (e.g. a renamed .doc)', async () => {
     const stream = new TextEncoder().encode('not a message');
     const data = burn([
@@ -497,9 +518,34 @@ describe('createMsgParser: broken files never throw', () => {
     expect(result).toEqual({
       ok: false,
       error: 'corrupt',
-      detail: 'converter failed on two lines',
+      detail: 'HTML body could not be converted: converter failed on two lines',
       fileName: 'x.msg',
       sha256: await sha256Hex(data),
+    });
+  });
+
+  it.each([
+    ['a TypeError', new TypeError('x.trim is not a function'), 'x.trim is not a function'],
+    ['a RangeError (e.g. a stack overflow)', new RangeError('Maximum call stack size exceeded'), 'Maximum call stack size exceeded'],
+  ])('%s thrown by htmlToText is a conversion failure, never "damaged property"', async (_label, thrown, reason) => {
+    const throwing = createMsgParser({
+      htmlToText: () => {
+        throw thrown;
+      },
+    });
+    const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
+    const result = await throwing.parse({ name: 'x.msg', bytes: data });
+    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: `HTML body could not be converted: ${reason}` });
+  });
+
+  it('an htmlToText that returns something other than a { text, truncated } result is a conversion failure', async () => {
+    const broken = createMsgParser({ htmlToText: () => null as unknown as HtmlToTextResult });
+    const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
+    const result = await broken.parse({ name: 'x.msg', bytes: data });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'corrupt',
+      detail: 'HTML body could not be converted: the converter returned no text',
     });
   });
 
@@ -652,5 +698,23 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
   it('a reader error is passed on as a short single line', () => {
     const result = map({ dataType: null, error: 'Unsupported file type!' });
     expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: 'Unsupported file type!' });
+  });
+});
+
+describe('errorDetail', () => {
+  it('a TypeError or RangeError from msgreader becomes "damaged property: <reason>"', () => {
+    expect(errorDetail(new TypeError("Cannot read properties of undefined (reading 'x')"), 'r')).toBe('damaged property: r');
+    expect(errorDetail(new RangeError('Offset is outside the bounds of the DataView'), 'r')).toBe('damaged property: r');
+  });
+
+  it('a conversion failure keeps its own message, even when the converter threw a TypeError', () => {
+    const error = new HtmlConversionError(new TypeError('x is not a function').message);
+    expect(errorDetail(error, 'r')).toBe('HTML body could not be converted: x is not a function');
+  });
+
+  it('any other error is passed on as one short line', () => {
+    expect(errorDetail(new Error(`a\n${'b'.repeat(300)}`), 'r')).toBe(`a ${'b'.repeat(198)}`);
+    expect(errorDetail('text', 'r')).toBe('text');
+    expect(errorDetail(new Error('  '), 'r')).toBe('unknown error');
   });
 });

@@ -25,6 +25,8 @@ import PostalMime, {
 } from 'postal-mime';
 import { parseEmailDate } from './date';
 import { sha256Hex } from './hash';
+import { convertHtmlBody } from './html-conversion';
+import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
 import type {
   AttachmentInfo,
@@ -44,7 +46,13 @@ export interface EmlParserOptions {
    * forwarded message) has an HTML part but no plain-text part. It must be
    * inert: no rendering, no script execution, no loading of images or styles
    * (README.md, rule R4). Injected so that this adapter stays testable in Node
-   * without a DOM.
+   * without a DOM. In the browser this is htmlToTextWithDomParser
+   * (html-dom.ts, see browser-parsers.ts).
+   *
+   * It returns the text and whether it was cut at the converter's length
+   * limit; a cut adds the 'html-body-truncated' warning. If it throws or
+   * returns anything else, the file is reported as 'corrupt' with the detail
+   * "HTML body could not be converted: ...", never as a damaged file.
    *
    * Known limitation: when a text/plain part and a SEPARATE text/html part
    * sit side by side in multipart/mixed (not multipart/alternative),
@@ -54,10 +62,9 @@ export interface EmlParserOptions {
    * body and the plain part is only a footer. That text can contain link
    * targets and the contents of <style> blocks. Nothing is rendered, so this
    * is a text-quality problem, not a security one. It is planned to go away
-   * when the real HTML-to-text step lands and the adapter assembles the body
-   * part by part.
+   * when the adapter assembles the body part by part from the MIME tree.
    */
-  readonly htmlToText: (html: string) => string;
+  readonly htmlToText: (html: string) => HtmlToTextResult;
 }
 
 // postal-mime's built-in safety limits (README.md, rule R4: guard against
@@ -219,7 +226,7 @@ interface MessageContent {
  *      limitation on EmlParserOptions.htmlToText for an HTML part that sits
  *      next to a text/plain part in multipart/mixed;
  *    - otherwise the HTML, converted by the injected `htmlToText`
- *      ('html-only-body');
+ *      ('html-only-body', plus 'html-body-truncated' if the text was cut);
  *    - otherwise nothing;
  * 2. then each inline forwarded message, in file order, see expandForwarded.
  * If both are empty, the text is '' with a 'no-body' warning.
@@ -244,8 +251,10 @@ async function readContent(
   if (email.text !== undefined) {
     text = email.text;
   } else if (email.html !== undefined) {
-    text = options.htmlToText(email.html);
+    const converted = convertHtmlBody(options.htmlToText, email.html);
+    text = converted.text;
     warnings.push('html-only-body');
+    if (converted.truncated) warnings.push('html-body-truncated');
   } else {
     hasOwnBody = false;
   }
@@ -341,13 +350,16 @@ async function expandForwarded(
     text: noBody ? header : `${header}\n\n${body.text}`,
     attachments: body.attachments,
     // readContent only ever gives body warnings ('html-only-body',
-    // 'forwarded-message-not-expanded', and 'no-body'). 'no-body' describes
+    // 'html-body-truncated', 'forwarded-message-not-expanded', and
+    // 'no-body'). 'no-body' describes
     // the inner message only: the outer one now has this block as text, so it
     // is dropped here. Date and Message-ID warnings come from buildMessage,
     // which never runs for an inner message. This allow-list also guards
     // against a body warning being added later without deciding whether it
     // applies to the outer message.
-    warnings: body.warnings.filter((w) => w === 'html-only-body' || w === 'forwarded-message-not-expanded'),
+    warnings: body.warnings.filter(
+      (w) => w === 'html-only-body' || w === 'html-body-truncated' || w === 'forwarded-message-not-expanded',
+    ),
   };
 }
 
@@ -408,8 +420,15 @@ function attachmentInfo(attachment: Attachment): AttachmentInfo {
   };
 }
 
-/** A short, single-line message for the preview's error list. */
+/**
+ * A short, single-line message for the preview's error list. A failure of the
+ * injected HTML converter keeps its own message ("HTML body could not be
+ * converted: ..."), so it is never mistaken for a damaged file.
+ */
 function errorDetail(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
+  return shortDetail(error instanceof Error ? error.message : String(error));
+}
+
+function shortDetail(text: string): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, MAX_DETAIL_LENGTH) || 'unknown error';
 }
