@@ -18,7 +18,12 @@ export interface EmailAddress {
 export interface EmailDate {
   /** The true moment in time, in milliseconds since 1970-01-01 UTC (for sorting). null if missing/unparseable. */
   readonly utcMs: number | null;
-  /** The header text exactly as found (empty string if there was no Date header). */
+  /**
+   * The date as text. For .eml: the Date header text exactly as found. For a
+   * .msg date taken from a property (the file holds no date text): that
+   * instant in ISO 8601 form, e.g. "2025-04-02T09:00:00.000Z". Empty string
+   * if there was no date, or if a damaged .msg time property had no text to keep.
+   */
   readonly original: string;
   /** The sender's time-zone offset from UTC in minutes (e.g. +0200 -> 120), null if unknown. */
   readonly offsetMinutes: number | null;
@@ -51,7 +56,9 @@ export type ParseWarning =
   | 'html-only-body' // no plain-text part: body text was converted from HTML
   | 'rtf-only-body' // .msg with only an RTF body
   | 'no-body' // no body text found at all
-  | 'forwarded-message-not-expanded'; // inline forwarded message too deep (or unreadable): listed as an attachment, not in bodyText
+  // A forwarded message whose text was not expanded (.eml: nested too deep or
+  // unreadable; .msg: any attached Outlook item): listed as an attachment, not in bodyText.
+  | 'forwarded-message-not-expanded';
 
 /** One email in the normalized form. */
 export interface NormalizedMessage {

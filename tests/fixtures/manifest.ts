@@ -578,7 +578,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     tags: ['signature:carol'],
   }),
   msg('msg-09-dup-of-eml-order-2', {
-    description: 'Cross-format duplicate of eml 11/30 (same Message-ID; body identical up to CRLF line ends).',
+    description: 'Cross-format duplicate of eml 11/30 (same Message-ID; body identical up to CRLF line ends and the final line break).',
     ...ORDER_2_FIELDS,
     date: msgAt('2025-03-03T13:02:00Z'),
     thread: { id: 'order', position: 2 },

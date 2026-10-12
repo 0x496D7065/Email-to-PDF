@@ -34,15 +34,21 @@ export interface MsgMailboxSpec {
    * fallback property (sender: 0x5D01, recipient: 0x39FE).
    */
   readonly exchangeDn?: string;
+  /**
+   * Only with `exchangeDn`: false leaves out the separate SMTP property, so
+   * the X.500 DN is the only address in the file. Default: written.
+   */
+  readonly smtpFallback?: boolean;
 }
 
 export interface MsgRecipientSpec extends MsgMailboxSpec {
-  readonly type: 'to' | 'cc';
+  readonly type: 'to' | 'cc' | 'bcc';
 }
 
 export interface MsgAttachmentSpec {
   readonly fileName: string;
-  readonly mimeType: string;
+  /** PR_ATTACH_MIME_TAG (0x370E). Omit to leave the property out. */
+  readonly mimeType?: string;
   /** ASCII text content (kept tiny and readable). */
   readonly content: string;
 }
@@ -80,6 +86,34 @@ export interface MsgSpec {
   /** PR_TRANSPORT_MESSAGE_HEADERS (0x007D): the internet headers of a received message. */
   readonly transportHeaders?: string;
   readonly attachments?: readonly MsgAttachmentSpec[];
+  /**
+   * Outlook items attached as items (ATTACH_EMBEDDED_MSG), written after
+   * `attachments`: a display name on the attachment and a tiny inner message
+   * that has only a subject.
+   */
+  readonly attachedItems?: readonly { readonly displayName: string; readonly subject: string }[];
+  /**
+   * ASCII RTF text, stored as PR_RTF_COMPRESSED (0x10090102) in its
+   * "uncompressed" container form (compression type "MELA", see
+   * [MS-OXRTFCP]). Combine with no bodyText/bodyHtml for an RTF-only message.
+   */
+  readonly bodyRtf?: string;
+  /**
+   * Overrides the code page properties: `message` = PR_MESSAGE_CODEPAGE
+   * (0x3FFD), `internet` = PR_INTERNET_CPID (0x3FDE); null leaves the property
+   * out. The string bytes do not change: for 'ansi-1252' specs each character
+   * is still written as its Latin-1 byte, so a test can check how a reader
+   * decodes those bytes under another code page.
+   */
+  readonly codepages?: { readonly message?: number | null; readonly internet?: number | null };
+  /** Extra top-level string properties, e.g. PR_SENT_REPRESENTING_NAME (0x0042). Typed by `strings`. */
+  readonly extraStrings?: readonly { readonly propId: number; readonly value: string }[];
+  /**
+   * Extra top-level binary (type 0102) properties. Writing a property that
+   * should be a string as binary imitates a damaged file: msgreader then
+   * returns bytes where a string belongs (e.g. 0x1000, the plain-text body).
+   */
+  readonly extraBinaries?: readonly { readonly propId: number; readonly bytes: Uint8Array }[];
 }
 
 // ---------------------------------------------------------------- encoding
@@ -118,6 +152,23 @@ function ascii(text: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * RTF in the "uncompressed" PR_RTF_COMPRESSED container ([MS-OXRTFCP],
+ * header section): COMPSIZE, RAWSIZE, COMPTYPE "MELA" (0x414C454D), CRC 0,
+ * then the RTF bytes as they are.
+ */
+function uncompressedRtf(rtf: string): Uint8Array {
+  const raw = ascii(rtf);
+  const out = new Uint8Array(16 + raw.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, out.length - 4, true); // COMPSIZE: everything after this field
+  view.setUint32(4, raw.length, true); // RAWSIZE
+  view.setUint32(8, 0x414c454d, true); // COMPTYPE "MELA" = not compressed
+  view.setUint32(12, 0, true); // CRC: always 0 for MELA
+  out.set(raw, 16);
+  return out;
+}
+
 function utf8(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }
@@ -146,10 +197,11 @@ interface FixedProp {
 
 /**
  * __properties_version1.0: a header (32 bytes for the top-level message,
- * 8 bytes for recipients/attachments), then one 16-byte entry per property:
- * tag, flags, 8-byte value ([MS-OXMSG] 2.4).
+ * 24 for an attached Outlook item's message, 8 for recipients/attachments),
+ * then one 16-byte entry per property: tag, flags, 8-byte value
+ * ([MS-OXMSG] 2.4).
  */
-function propertiesStream(headerSize: 8 | 32, props: readonly FixedProp[], counts?: { recipients: number; attachments: number }): Uint8Array {
+function propertiesStream(headerSize: 8 | 24 | 32, props: readonly FixedProp[], counts?: { recipients: number; attachments: number }): Uint8Array {
   const out = new Uint8Array(headerSize + 16 * props.length);
   const view = new DataView(out.buffer);
   if (headerSize === 32 && counts) {
@@ -231,7 +283,9 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
   putString(root, mode, 0x0c1a, spec.sender.name);
   putString(root, mode, 0x0c1e, spec.sender.exchangeDn ? 'EX' : 'SMTP');
   putString(root, mode, 0x0c1f, spec.sender.exchangeDn ?? spec.sender.smtp);
-  if (spec.sender.exchangeDn) putString(root, mode, 0x5d01, spec.sender.smtp);
+  if (spec.sender.exchangeDn && spec.sender.smtpFallback !== false) putString(root, mode, 0x5d01, spec.sender.smtp);
+  for (const extra of spec.extraStrings ?? []) putString(root, mode, extra.propId, extra.value);
+  for (const extra of spec.extraBinaries ?? []) putBinary(root, extra.propId, extra.bytes);
 
   if (spec.bodyText !== undefined) putString(root, mode, 0x1000, spec.bodyText.replace(/\r?\n/g, '\r\n'));
   if (spec.bodyHtml !== undefined) {
@@ -243,21 +297,25 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
   if (spec.references !== undefined) putString(root, mode, 0x1039, spec.references);
   if (spec.transportHeaders !== undefined) putString(root, mode, 0x007d, spec.transportHeaders.replace(/\r?\n/g, '\r\n'));
 
+  if (spec.bodyRtf !== undefined) putBinary(root, 0x1009, uncompressedRtf(spec.bodyRtf));
+
   if (spec.submitTime !== undefined) fixed.push({ tag: 0x00390040, value: fileTime(spec.submitTime) });
   if (spec.deliveryTime !== undefined) fixed.push({ tag: 0x0e060040, value: fileTime(spec.deliveryTime) });
-  if (mode === 'ansi-1252') fixed.push({ tag: 0x3ffd0003, value: int32(CODEPAGE_1252) }); // PR_MESSAGE_CODEPAGE
-  fixed.push({ tag: 0x3fde0003, value: int32(mode === 'unicode' ? CODEPAGE_UTF8 : CODEPAGE_1252) }); // PR_INTERNET_CPID
+  const messageCodepage = spec.codepages?.message !== undefined ? spec.codepages.message : mode === 'ansi-1252' ? CODEPAGE_1252 : null;
+  const internetCodepage = spec.codepages?.internet !== undefined ? spec.codepages.internet : mode === 'unicode' ? CODEPAGE_UTF8 : CODEPAGE_1252;
+  if (messageCodepage !== null) fixed.push({ tag: 0x3ffd0003, value: int32(messageCodepage) }); // PR_MESSAGE_CODEPAGE
+  if (internetCodepage !== null) fixed.push({ tag: 0x3fde0003, value: int32(internetCodepage) }); // PR_INTERNET_CPID
 
   spec.recipients.forEach((recipient, i) => {
     const folder = newFolder();
     putString(folder, mode, 0x3001, recipient.name);
     putString(folder, mode, 0x3002, recipient.exchangeDn ? 'EX' : 'SMTP');
     putString(folder, mode, 0x3003, recipient.exchangeDn ?? recipient.smtp);
-    if (recipient.exchangeDn) putString(folder, mode, 0x39fe, recipient.smtp);
+    if (recipient.exchangeDn && recipient.smtpFallback !== false) putString(folder, mode, 0x39fe, recipient.smtp);
     folder.streams.set(
       '__properties_version1.0',
       propertiesStream(8, [
-        { tag: 0x0c150003, value: int32(recipient.type === 'to' ? 1 : 2) }, // PR_RECIPIENT_TYPE
+        { tag: 0x0c150003, value: int32({ to: 1, cc: 2, bcc: 3 }[recipient.type]) }, // PR_RECIPIENT_TYPE
         { tag: 0x30000003, value: int32(i) }, // PR_ROWID
       ]),
     );
@@ -271,7 +329,7 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
     putString(folder, mode, 0x3707, attachment.fileName); // long file name
     putString(folder, mode, 0x3704, attachment.fileName); // short file name (same, kept simple)
     putString(folder, mode, 0x3703, /\.[^.]*$/.exec(attachment.fileName)?.[0] ?? ''); // extension: last one only (a.b.txt -> .txt)
-    putString(folder, mode, 0x370e, attachment.mimeType);
+    if (attachment.mimeType !== undefined) putString(folder, mode, 0x370e, attachment.mimeType);
     putBinary(folder, 0x3701, data);
     folder.streams.set(
       '__properties_version1.0',
@@ -284,9 +342,33 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
     root.folders.set(`__attach_version1.0_#${i.toString(16).toUpperCase().padStart(8, '0')}`, folder);
   });
 
+  // Attached Outlook items: the attachment folder holds the inner message as
+  // a sub-folder "__substg1.0_3701000D" (type 000D = object), see
+  // [MS-OXMSG] "Embedded Message Object Storage".
+  const items = spec.attachedItems ?? [];
+  items.forEach((item, j) => {
+    const i = attachments.length + j;
+    const folder = newFolder();
+    putString(folder, mode, 0x3001, item.displayName); // PR_DISPLAY_NAME
+    const inner = newFolder();
+    putString(inner, mode, 0x001a, 'IPM.Note');
+    putString(inner, mode, 0x0037, item.subject);
+    inner.streams.set('__properties_version1.0', propertiesStream(24, []));
+    folder.folders.set('__substg1.0_3701000D', inner);
+    folder.streams.set(
+      '__properties_version1.0',
+      propertiesStream(8, [
+        { tag: 0x37050003, value: int32(5) }, // PR_ATTACH_METHOD = ATTACH_EMBEDDED_MSG
+        { tag: 0x0e210003, value: int32(i) }, // PR_ATTACH_NUM
+      ]),
+    );
+    root.folders.set(`__attach_version1.0_#${i.toString(16).toUpperCase().padStart(8, '0')}`, folder);
+  });
+
+  const attachmentCount = attachments.length + items.length;
   root.streams.set(
     '__properties_version1.0',
-    propertiesStream(32, fixed, { recipients: spec.recipients.length, attachments: attachments.length }),
+    propertiesStream(32, fixed, { recipients: spec.recipients.length, attachments: attachmentCount }),
   );
 
   return burn(toEntries(root));
