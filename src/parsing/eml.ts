@@ -1,13 +1,18 @@
 // The .eml adapter: turns one .eml file into a NormalizedMessage.
 //
 // postal-mime does the MIME work (headers, encoded words, quoted-printable,
-// base64, charsets, multipart trees). This file is the only place that knows
-// about postal-mime: everything it returns is copied into our own
-// NormalizedMessage shape, so the rest of the tool never sees the library and
-// the library can be swapped without touching anything else.
+// base64, charsets, multipart trees). This file and eml-tree.ts are the only
+// places that know about postal-mime: everything it returns is copied into
+// our own NormalizedMessage shape, so the rest of the tool never sees the
+// library and the library can be swapped without touching anything else.
+//
+// The body is built here, part by part, from the MIME parts tree (see
+// eml-tree.ts), never from postal-mime's joined `email.text` / `email.html`:
+// postal-mime converts some HTML parts to text with its own simple converter,
+// and it moves text parts ahead of forwarded messages.
 //
 // Email content is untrusted (README.md, rule R4):
-// - HTML is never rendered, loaded or evaluated here. An HTML-only body is
+// - HTML is never rendered, loaded or evaluated here. Every HTML body part is
 //   handed as a plain string to the injected `htmlToText` function.
 // - Attachments are reduced to name, size and type. Their contents are never
 //   opened, and no reference to the content bytes is kept in the result.
@@ -15,15 +20,9 @@
 //   "Content-Disposition: attachment"): its bytes are parsed again as an email
 //   so its text can join the body, then dropped.
 
-import PostalMime, {
-  addressParser,
-  decodeWords,
-  type Address,
-  type Attachment,
-  type Email,
-  type PostalMimeOptions,
-} from 'postal-mime';
+import { addressParser, decodeWords, type Address, type Attachment, type Email, type PostalMimeOptions } from 'postal-mime';
 import { parseEmailDate } from './date';
+import { parseEmlTree, PostalMimeInternalsError, type EmlPart, type EmlTree } from './eml-tree';
 import { sha256Hex } from './hash';
 import { convertHtmlBody } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
@@ -42,8 +41,13 @@ import type {
 /** What the .eml adapter needs from outside. */
 export interface EmlParserOptions {
   /**
-   * Converts an HTML body to plain text. Called when a message (or an inline
-   * forwarded message) has an HTML part but no plain-text part. It must be
+   * Converts an HTML body part to plain text. Called once for every HTML part
+   * whose text goes into the body: an HTML part in multipart/mixed (or
+   * related, or any multipart other than alternative), and the HTML of the
+   * first version holding HTML of a multipart/alternative in which no version
+   * is plain only (plain text and no HTML; whitespace-only text does not
+   * count), see alternativeHtmlVersion. Inline forwarded messages follow the
+   * same rules. It must be
    * inert: no rendering, no script execution, no loading of images or styles
    * (README.md, rule R4). Injected so that this adapter stays testable in Node
    * without a DOM. In the browser this is htmlToTextWithDomParser
@@ -53,16 +57,6 @@ export interface EmlParserOptions {
    * limit; a cut adds the 'html-body-truncated' warning. If it throws or
    * returns anything else, the file is reported as 'corrupt' with the detail
    * "HTML body could not be converted: ...", never as a damaged file.
-   *
-   * Known limitation: when a text/plain part and a SEPARATE text/html part
-   * sit side by side in multipart/mixed (not multipart/alternative),
-   * postal-mime converts that HTML itself with its own simple converter and
-   * appends the result to the plain text. This function is then not called
-   * and no 'html-only-body' warning is given, even when the HTML is the main
-   * body and the plain part is only a footer. That text can contain link
-   * targets and the contents of <style> blocks. Nothing is rendered, so this
-   * is a text-quality problem, not a security one. It is planned to go away
-   * when the adapter assembles the body part by part from the MIME tree.
    */
   readonly htmlToText: (html: string) => HtmlToTextResult;
 }
@@ -84,7 +78,7 @@ const POSTAL_MIME_OPTIONS: PostalMimeOptions = {
   // whose date is reformatted in the machine's locale and time zone, which
   // would rewrite the message text and make the output machine-dependent
   // (README.md, rule R6). This adapter expands inline forwarded messages
-  // itself instead, see expandForwarded.
+  // itself instead, see expandForwarded. (parseEmlTree also forces it on.)
   forceRfc822Attachments: true,
   // Attachment bytes as an ArrayBuffer: we only read its length (and, for an
   // inline forwarded message, parse it again).
@@ -131,8 +125,8 @@ async function parseEml(file: InputFile, options: EmlParserOptions): Promise<Par
   let sha256: string | null = null;
   try {
     sha256 = await sha256Hex(file.bytes);
-    const email = await PostalMime.parse(file.bytes, POSTAL_MIME_OPTIONS);
-    const message = await buildMessage(email, file.name, sha256, options);
+    const tree = await parseEmlTree(file.bytes, POSTAL_MIME_OPTIONS);
+    const message = await buildMessage(tree, file.name, sha256, options);
     return { ok: true, message };
   } catch (error) {
     return { ok: false, error: 'corrupt', detail: errorDetail(error), fileName: file.name, sha256 };
@@ -141,14 +135,15 @@ async function parseEml(file: InputFile, options: EmlParserOptions): Promise<Par
 
 /** Copies what we need out of postal-mime's result into a NormalizedMessage. */
 async function buildMessage(
-  email: Email,
+  tree: EmlTree,
   fileName: string,
   sha256: string,
   options: EmlParserOptions,
 ): Promise<NormalizedMessage> {
+  const { email } = tree;
   const messageId = parseSingleId(email.messageId);
   const date = readDate(email);
-  const content = await readContent(email, options, 0, { remaining: MAX_EXPANDED_FORWARDS });
+  const content = await readContent(tree, options, 0, { remaining: MAX_EXPANDED_FORWARDS });
 
   const warnings: ParseWarning[] = [...dateWarnings(date), ...content.warnings];
   if (messageId === null) warnings.push('missing-message-id');
@@ -219,56 +214,85 @@ interface MessageContent {
  * The body text and attachment list of one message. `depth` is 0 for the
  * file itself and grows by one for each level of inline forwarded message.
  *
- * The body is, in this order:
- * 1. the message's own text:
- *    - `email.text` if postal-mime found any text/plain part. postal-mime
- *      joins all inline text parts of the message there, see the known
- *      limitation on EmlParserOptions.htmlToText for an HTML part that sits
- *      next to a text/plain part in multipart/mixed;
- *    - otherwise the HTML, converted by the injected `htmlToText`
- *      ('html-only-body', plus 'html-body-truncated' if the text was cut);
- *    - otherwise nothing;
- * 2. then each inline forwarded message, in file order, see expandForwarded.
- * If both are empty, the text is '' with a 'no-body' warning.
+ * The body is built from the MIME parts tree, depth-first, in file order:
+ * - an inline text/plain part adds its text;
+ * - an inline text/html part adds its text converted by the injected
+ *   `htmlToText` ('html-converted-body', plus 'html-body-truncated' if cut);
+ * - an inline forwarded message adds its block where it sits in the file,
+ *   see expandForwarded;
+ * - multipart/alternative holds several versions of the same content: the
+ *   plain text of all versions is always used; if some version is plain only
+ *   (plain text, no HTML) no HTML is converted, otherwise the HTML of the
+ *   first version holding HTML, see alternativeHtmlVersion. So
+ *   alternative{plain, html} gives the plain text, and alternative{html,
+ *   mixed{html, plain notes}} gives the first HTML converted, then the
+ *   notes. Attachments and forwarded messages inside every
+ *   version are still listed or expanded, so nothing they hold is lost. A
+ *   forwarded message that sits in two versions is therefore expanded twice
+ *   (its block appears twice in the body): duplication is accepted over loss
+ *   (README.md, rule R6);
+ * - every other multipart (mixed, related, ...) gives the text of all its
+ *   parts, in order;
+ * - everything else is listed as an attachment.
+ * Empty text parts are skipped. Two text parts are joined by a line break;
+ * a forwarded message block is separated from what comes before and after
+ * it by a blank line. If there is no text and no forwarded block, the text is
+ * '' with a 'no-body' warning. An HTML part that converts to '' still counts
+ * as a body (no 'no-body'), as its 'html-converted-body' warning says where to look.
  *
- * Known limitation: because all of the message's own text parts come first
- * and every forwarded message is appended after them, the body is not in file
- * order when a text part comes after a forwarded message. "T1, forward A, T2,
- * forward B, T3" becomes "T1 T2 T3, A, B". Nothing is lost, only moved. This
- * is planned to be fixed by walking the MIME parts tree directly.
+ * postal-mime's own `email.text` and `email.html` are never used.
  *
  * `budget` is shared by the whole file, see MAX_EXPANDED_FORWARDS.
  */
 async function readContent(
-  email: Email,
+  tree: EmlTree,
   options: EmlParserOptions,
   depth: number,
   budget: ForwardBudget,
 ): Promise<MessageContent> {
-  const warnings: ParseWarning[] = [];
-  let text = '';
-  let hasOwnBody = true;
-  if (email.text !== undefined) {
-    text = email.text;
-  } else if (email.html !== undefined) {
-    const converted = convertHtmlBody(options.htmlToText, email.html);
-    text = converted.text;
-    warnings.push('html-only-body');
-    if (converted.truncated) warnings.push('html-body-truncated');
-  } else {
-    hasOwnBody = false;
-  }
-
   // A bounce or feedback report carries the original message as evidence:
   // it stays a listed attachment, as postal-mime itself would do.
-  const isReport = email.attachments.some((a) => REPORT_TYPES.has(a.mimeType));
+  const isReport = tree.email.attachments.some((a) => REPORT_TYPES.has(a.mimeType));
 
+  const segments: BodySegment[] = [];
   const attachments: AttachmentInfo[] = [];
+  const warnings: ParseWarning[] = [];
+  let hasOwnBody = false;
   let expandedAny = false;
-  for (const attachment of email.attachments) {
+
+  // `hideHtml` is true inside a multipart/alternative whose HTML is not used
+  // (see alternativeHtmlVersion): its HTML parts are skipped. Plain-text parts
+  // are never skipped.
+  const visit = async (part: EmlPart, hideHtml: boolean): Promise<void> => {
+    if (part.kind === 'multipart') {
+      if (part.subtype !== 'alternative') {
+        for (const child of part.children) await visit(child, hideHtml);
+        return;
+      }
+      // null: no version's HTML is used, so every child hides its HTML.
+      const htmlVersion = alternativeHtmlVersion(part.children);
+      for (const child of part.children) await visit(child, hideHtml || child !== htmlVersion);
+      return;
+    }
+
+    if (part.kind === 'text') {
+      if (part.text === '' || (part.type === 'html' && hideHtml)) return;
+      hasOwnBody = true;
+      if (part.type === 'plain') {
+        segments.push({ text: part.text, isBlock: false });
+        return;
+      }
+      const converted = convertHtmlBody(options.htmlToText, part.text);
+      addWarning(warnings, 'html-converted-body');
+      if (converted.truncated) addWarning(warnings, 'html-body-truncated');
+      if (converted.text !== '') segments.push({ text: converted.text, isBlock: false });
+      return;
+    }
+
+    const { attachment } = part;
     if (isReport || !isInlineForwarded(attachment)) {
       attachments.push(attachmentInfo(attachment));
-      continue;
+      return;
     }
     const inner = await expandForwarded(attachment, options, depth, budget);
     if (inner === null) {
@@ -276,16 +300,92 @@ async function readContent(
       // recoverable from the file.
       attachments.push(attachmentInfo(attachment));
       addWarning(warnings, 'forwarded-message-not-expanded');
-      continue;
+      return;
     }
-    text = appendBlock(text, inner.text);
+    segments.push({ text: inner.text, isBlock: true });
     attachments.push(...inner.attachments);
     for (const warning of inner.warnings) addWarning(warnings, warning);
     expandedAny = true;
-  }
+  };
+  await visit(tree.root, false);
 
   if (!hasOwnBody && !expandedAny) warnings.push('no-body');
-  return { text, attachments, warnings };
+  return { text: joinSegments(segments), attachments, warnings };
+}
+
+/** One piece of a body: the text of one part, or one forwarded message block. */
+interface BodySegment {
+  readonly text: string;
+  /** True for a forwarded message block (see expandForwarded). */
+  readonly isBlock: boolean;
+}
+
+/**
+ * Joins body pieces in order: text parts with one line break between them
+ * (as postal-mime joins them), a forwarded message block with a blank line
+ * before and after it (see appendBlock).
+ */
+function joinSegments(segments: readonly BodySegment[]): string {
+  let text = '';
+  let previousIsBlock = false;
+  for (const segment of segments) {
+    if (text === '') text = segment.text;
+    else if (segment.isBlock || previousIsBlock) text = appendBlock(text, segment.text);
+    else text = `${text}\n${segment.text}`;
+    previousIsBlock = segment.isBlock;
+  }
+  return text;
+}
+
+/**
+ * The one version of a multipart/alternative whose HTML goes into the body,
+ * or null if none does.
+ *
+ * "Holds" below means at any depth, and ignores text parts made only of
+ * spaces and line breaks (see holdsText).
+ *
+ * - If some version is a plain rendering, i.e. holds plain text and no HTML,
+ *   null: no HTML of this alternative is converted. Plain text is kept even
+ *   when it is only a short stub such as "view this message in a browser":
+ *   the HTML is never preferred over it.
+ * - Otherwise, the first version that holds HTML (then converted,
+ *   'html-converted-body'). The HTML of the other versions is dropped: they
+ *   are other renderings of the same content.
+ * In both cases EVERY inline text/plain part of ALL versions still goes into
+ * the body, in file order (readContent never skips a plain part). A plain
+ * part can sit next to the HTML inside one version (Apple Mail puts an
+ * inline text attachment or a plain footer there): skipping it would
+ * silently delete it, and letting it hide the HTML would silently delete the
+ * main body (README.md, rule R6).
+ *
+ * Examples:
+ * - alternative{plain, html} or alternative{html, plain} -> the plain text
+ *   only;
+ * - alternative{plain, mixed{html, plain notes.txt (inline), html}} (Apple
+ *   Mail) -> the plain text, then the notes text; no HTML converted;
+ * - alternative{html V1, mixed{html V2, plain notes.txt (inline)}} -> V1
+ *   converted, then the notes text;
+ * - alternative{whitespace-only plain, html} -> the HTML converted (the
+ *   whitespace part is still appended before it, as any plain part);
+ * - alternative{html A, html B} -> A converted, B dropped.
+ *
+ * Duplication is accepted over loss: alternative{plain, plain} gives both
+ * texts, one after the other, and alternative{html, alternative{plain, html}}
+ * gives the outer HTML converted, then the inner plain text.
+ */
+function alternativeHtmlVersion(versions: readonly EmlPart[]): EmlPart | null {
+  if (versions.some((v) => holdsText(v, 'plain') && !holdsText(v, 'html'))) return null;
+  return versions.find((v) => holdsText(v, 'html')) ?? null;
+}
+
+/**
+ * True if `part` holds, at any depth, a text part of `type` with more than
+ * spaces and line breaks (as the .msg adapter treats a whitespace-only body).
+ */
+function holdsText(part: EmlPart, type: 'plain' | 'html'): boolean {
+  if (part.kind === 'text') return part.type === type && part.text.trim() !== '';
+  if (part.kind === 'multipart') return part.children.some((child) => holdsText(child, type));
+  return false;
 }
 
 /** A message/rfc822 part meant to be shown in the body: no Content-Disposition, or "inline". */
@@ -334,14 +434,16 @@ async function expandForwarded(
   if (budget.remaining <= 0) return null;
   budget.remaining--;
 
-  let inner: Email;
+  let inner: EmlTree;
   try {
-    inner = await PostalMime.parse(content, POSTAL_MIME_OPTIONS);
-  } catch {
+    inner = await parseEmlTree(content, POSTAL_MIME_OPTIONS);
+  } catch (error) {
+    // A changed library must fail loudly, not hide as an unreadable forward.
+    if (error instanceof PostalMimeInternalsError) throw error;
     return null;
   }
   const body = await readContent(inner, options, depth + 1, budget);
-  const headerLines = forwardedHeaderLines(inner);
+  const headerLines = forwardedHeaderLines(inner.email);
   const noBody = body.warnings.includes('no-body');
   if (noBody && headerLines.length === 0 && body.attachments.length === 0) return null;
   const header = [FORWARDED_SEPARATOR, ...headerLines].join('\n');
@@ -349,7 +451,7 @@ async function expandForwarded(
     // No body: the block ends with the header lines, no trailing blank line.
     text: noBody ? header : `${header}\n\n${body.text}`,
     attachments: body.attachments,
-    // readContent only ever gives body warnings ('html-only-body',
+    // readContent only ever gives body warnings ('html-converted-body',
     // 'html-body-truncated', 'forwarded-message-not-expanded', and
     // 'no-body'). 'no-body' describes
     // the inner message only: the outer one now has this block as text, so it
@@ -358,7 +460,7 @@ async function expandForwarded(
     // against a body warning being added later without deciding whether it
     // applies to the outer message.
     warnings: body.warnings.filter(
-      (w) => w === 'html-only-body' || w === 'html-body-truncated' || w === 'forwarded-message-not-expanded',
+      (w) => w === 'html-converted-body' || w === 'html-body-truncated' || w === 'forwarded-message-not-expanded',
     ),
   };
 }

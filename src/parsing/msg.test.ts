@@ -354,7 +354,7 @@ describe('createMsgParser: body', () => {
     expect(htmlToText).not.toHaveBeenCalled();
   });
 
-  it('HTML only: hands the exact HTML string to htmlToText and warns "html-only-body"', async () => {
+  it('HTML only: hands the exact HTML string to htmlToText and warns "html-converted-body"', async () => {
     const htmlToText = vi.fn((html: string) => ({ text: `converted ${html.length}`, truncated: false }));
     const result = await createMsgParser({ htmlToText }).parse({
       name: 'a.msg',
@@ -364,7 +364,7 @@ describe('createMsgParser: body', () => {
     expect(htmlToText).toHaveBeenCalledTimes(1);
     expect(htmlToText).toHaveBeenCalledWith(HTML);
     expect(result.message.bodyText).toBe(`converted ${HTML.length}`);
-    expect(result.message.warnings).toEqual(['html-only-body']);
+    expect(result.message.warnings).toEqual(['html-converted-body']);
   });
 
   it('HTML only, cut at the converter limit: also warns "html-body-truncated" (the note stays in the text)', async () => {
@@ -375,13 +375,13 @@ describe('createMsgParser: body', () => {
     });
     if (!result.ok) throw new Error(result.detail);
     expect(result.message.bodyText).toBe('start\n\n[Text cut here: ...]');
-    expect(result.message.warnings).toEqual(['html-only-body', 'html-body-truncated']);
+    expect(result.message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
   });
 
   it('a plain body of only whitespace does not hide the HTML body', async () => {
     const message = await parseOk(spec({ bodyText: '\n \n', bodyHtml: HTML }));
     expect(message.bodyText).toBe(`[stub] ${HTML.length}`);
-    expect(message.warnings).toEqual(['html-only-body']);
+    expect(message.warnings).toEqual(['html-converted-body']);
   });
 
   it('RTF only: empty text with "rtf-only-body"; the RTF is neither converted nor copied', async () => {

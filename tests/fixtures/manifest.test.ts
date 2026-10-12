@@ -106,10 +106,17 @@ describe('manifest matches the .eml fixtures', () => {
 
     const warnings: ParseWarning[] = dateWarnings(date.utcMs, date.zoneKnown, dateHeader !== null);
     if (!email.messageId) warnings.push('missing-message-id');
-    if (email.text === undefined && email.html !== undefined) warnings.push('html-only-body');
+    if (email.text === undefined && email.html !== undefined) warnings.push('html-converted-body');
     if (email.text === undefined && email.html === undefined) warnings.push('no-body');
     expect(sorted(warnings)).toEqual(sorted(expected.warnings));
 
+    // postal-mime's own joined `email.text` is an independent reference for
+    // the body: it is right for the current fixtures, but NOT for every
+    // shape. It converts an HTML part next to a text part in multipart/mixed
+    // with its own converter, and puts text parts ahead of
+    // inline forwarded messages, while the adapter keeps file order and uses
+    // our converter (see src/parsing/eml.ts). A fixture of either shape must
+    // get an explicit expected body instead of this comparison.
     if (email.text !== undefined) checkBody(expected, email.text);
     else expect(email.html).toContain('<body'); // HTML-only: text conversion is task 2.4's job.
   });

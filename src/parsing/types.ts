@@ -53,7 +53,12 @@ export type ParseWarning =
   // `date.utcMs !== null && !date.zoneKnown`.
   | 'unknown-time-zone'
   | 'missing-message-id' // no Message-ID header (duplicate detection gets weaker)
-  | 'html-only-body' // no plain-text part: body text was converted from HTML
+  // Some or all of the body text was converted from HTML: an HTML part with no
+  // plain-text version (.msg: the whole body; .eml: any HTML body part that
+  // was used, e.g. an HTML-only message, or an HTML part next to a text part
+  // in multipart/mixed, so the body may also hold plain text). The converted
+  // text can differ from what the sender saw.
+  | 'html-converted-body'
   | 'html-body-truncated' // the converted HTML text hit the length limit and was cut (a note line says so)
   | 'rtf-only-body' // .msg with only an RTF body
   | 'no-body' // no body text found at all

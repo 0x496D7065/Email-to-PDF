@@ -395,7 +395,7 @@ interface MessageBody {
  * The body, in this order:
  * 1. the plain-text body (PidTagBody), if it has any text;
  * 2. otherwise the HTML body (PidTagHtml), converted by the injected
- *    `htmlToText` ('html-only-body', plus 'html-body-truncated' if the text
+ *    `htmlToText` ('html-converted-body', plus 'html-body-truncated' if the text
  *    was cut);
  * 3. otherwise, if there is only an RTF body (PidTagRtfCompressed): '' with
  *    'rtf-only-body'. It is not converted (no RTF reader is bundled); the
@@ -418,7 +418,7 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody {
   const html = htmlBody(fields);
   if (html !== undefined && html.trim() !== '') {
     const converted = convertHtmlBody(options.htmlToText, html);
-    return { text: converted.text, warnings: converted.truncated ? ['html-only-body', 'html-body-truncated'] : ['html-only-body'] };
+    return { text: converted.text, warnings: converted.truncated ? ['html-converted-body', 'html-body-truncated'] : ['html-converted-body'] };
   }
 
   const rtf: unknown = fields.compressedRtf;

@@ -328,7 +328,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     from: [NEWS],
     to: [ALICE],
     subject: 'Spring offer: office chairs',
-    warnings: ['html-only-body'],
+    warnings: ['html-converted-body'],
     bodyContains: ['Dear Alice,', 'Spring offer on office chairs', 'Book a visit'],
     bodyExcludes: ['SCRIPT-RAN', 'ONLOAD-RAN', 'CLICK-RAN', 'ONERROR-RAN', 'JS-LINK-RAN', 'tracker.invalid', 'font-family', '<p>'],
   }),

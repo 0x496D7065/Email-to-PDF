@@ -27,7 +27,7 @@ const parser = createEmlParser({
 });
 
 // Fixtures whose body is HTML-only: their converted text is checked in the
-// browser (see above). Every other field (and the 'html-only-body' warning)
+// browser (see above). Every other field (and the 'html-converted-body' warning)
 // is checked here.
 const BODY_CHECKS_NEED_HTML_TO_TEXT = new Set(['eml/50-html-only.eml']);
 

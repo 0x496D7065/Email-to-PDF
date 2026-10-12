@@ -214,7 +214,7 @@ describe('createEmlParser: body', () => {
     expect(htmlToText).not.toHaveBeenCalled();
   });
 
-  it('passes an HTML-only body to the injected htmlToText and warns html-only-body', async () => {
+  it('passes an HTML-only body to the injected htmlToText and warns html-converted-body', async () => {
     const htmlToText = vi.fn(() => ({ text: 'converted text', truncated: false }));
     const html = '<p>Hello <script>window.SCRIPT_RAN = 1</script></p>';
     const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n', html, '\r\n');
@@ -223,7 +223,7 @@ describe('createEmlParser: body', () => {
     expect(htmlToText).toHaveBeenCalledTimes(1);
     expect(htmlToText.mock.calls[0]).toEqual([`${html}\n`]);
     expect(result.message.bodyText).toBe('converted text');
-    expect(result.message.warnings).toEqual(['html-only-body']);
+    expect(result.message.warnings).toEqual(['html-converted-body']);
   });
 
   it('a converter result cut at its length limit adds html-body-truncated (the note stays in the text)', async () => {
@@ -232,7 +232,7 @@ describe('createEmlParser: body', () => {
     const result = await createEmlParser({ htmlToText }).parse({ name: 'cut.eml', bytes: data });
     if (!result.ok) throw new Error(result.detail);
     expect(result.message.bodyText).toBe('start\n\n[Text cut here: ...]');
-    expect(result.message.warnings).toEqual(['html-only-body', 'html-body-truncated']);
+    expect(result.message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
   });
 
   it('a message with no body at all gives "" and no-body', async () => {
@@ -302,7 +302,7 @@ describe('createEmlParser: attachments (metadata only)', () => {
     expect(everything).not.toContain(SECRET);
     expect(everything).not.toContain('Forwarded body.');
     // The HTML-only body went through htmlToText.
-    expect(message.warnings).toEqual(['html-only-body']);
+    expect(message.warnings).toEqual(['html-converted-body']);
   });
 
   it('an inline forwarded message (no Content-Disposition) joins the body; its attachments are listed', async () => {
@@ -419,7 +419,7 @@ describe('createEmlParser: inline forwarded messages', () => {
     expect(result.message.bodyText).toContain('converted inner text');
     expect(result.message.bodyText).not.toContain('<b>');
     // Part of bodyText was converted from HTML: flagged like an HTML-only body.
-    expect(result.message.warnings).toEqual(['html-only-body']);
+    expect(result.message.warnings).toEqual(['html-converted-body']);
   });
 
   it('a truncated HTML-only forwarded message passes html-body-truncated up to the outer message', async () => {
@@ -431,7 +431,7 @@ describe('createEmlParser: inline forwarded messages', () => {
     });
     if (!result.ok) throw new Error(result.detail);
     expect(result.message.bodyText).toContain('cut inner text');
-    expect(result.message.warnings).toEqual(['html-only-body', 'html-body-truncated']);
+    expect(result.message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
   });
 
   /** A chain of `levels` forwarded messages: level 1 forwards level 2, which forwards level 3... */
@@ -651,42 +651,56 @@ describe('createEmlParser: inline forwarded messages', () => {
   });
 });
 
-// Known limitation, to be replaced in 2.6b: text/plain and a SEPARATE text/html
-// part in multipart/mixed. postal-mime converts that HTML with its own regex
-// converter and appends it to the text; the injected htmlToText is bypassed.
-// And (P2) text parts that follow an inline forwarded message are placed
-// before it. These tests pin today's output so any change is deliberate.
-describe('createEmlParser: known limitation, to be replaced in 2.6b', () => {
+// The body is built part by part from the MIME tree, in file order, and every
+// HTML part goes through the injected htmlToText. postal-mime's own joined
+// text (and its own HTML-to-text conversion) is never used.
+describe('createEmlParser: body built from the MIME parts tree', () => {
   const mixed = (...parts: string[]): Uint8Array =>
     bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="m"\r\n\r\n', crlf(...parts.flatMap((p) => ['--m', p]), '--m--', ''));
 
-  it('P1: text/plain + text/html in multipart/mixed (htmlToText bypassed, style and link text leak)', async () => {
-    const htmlToText = vi.fn(stubHtmlToText);
-    const data = mixed(
-      'Content-Type: text/plain\r\n\r\nPlain part.',
-      'Content-Type: text/html\r\n\r\n<style>p{color:red}</style><p>HTML <a href="tracker.example.test/open?id=1">part</a></p>',
-    );
-    const result = await createEmlParser({ htmlToText }).parse({ name: 'p1.eml', bytes: data });
+  /** A spy converter: records every HTML string and returns "[html N]". */
+  function spyConverter(): { htmlToText: (html: string) => HtmlToTextResult; calls: string[] } {
+    const calls: string[] = [];
+    return { calls, htmlToText: (html) => ({ text: `[html ${String(calls.push(html))}]`, truncated: false }) };
+  }
+
+  async function parseWith(data: Uint8Array, htmlToText: (html: string) => HtmlToTextResult): Promise<NormalizedMessage> {
+    const result = await createEmlParser({ htmlToText }).parse({ name: 'tree.eml', bytes: data });
     if (!result.ok) throw new Error(result.detail);
-    expect(result.message.bodyText).toBe('Plain part.\n p{color:red} \n\nHTML (tracker.example.test/open?id=1) part\n');
-    expect(result.message.warnings).toEqual([]);
-    expect(htmlToText).not.toHaveBeenCalled();
+    return result.message;
+  }
+
+  const STYLED_HTML = '<style>p{color:red}</style><p>HTML <a href="tracker.example.invalid/open?id=1">part</a></p>';
+
+  it('P1: text/plain + text/html in multipart/mixed: the HTML goes through htmlToText, in file order', async () => {
+    const spy = spyConverter();
+    const message = await parseWith(
+      mixed('Content-Type: text/plain\r\n\r\nPlain part.', `Content-Type: text/html\r\n\r\n${STYLED_HTML}`),
+      spy.htmlToText,
+    );
+    expect(spy.calls).toEqual([STYLED_HTML]);
+    expect(message.bodyText).toBe('Plain part.\n[html 1]');
+    // Nothing from postal-mime's own converter: no style contents, no link target.
+    expect(message.bodyText).not.toContain('color');
+    expect(message.bodyText).not.toContain('tracker');
+    expect(message.warnings).toEqual(['html-converted-body']);
   });
 
-  it('P1b: HTML main body + inline text/plain footer (no html-only-body warning)', async () => {
-    const htmlToText = vi.fn(stubHtmlToText);
-    const data = mixed(
-      'Content-Type: text/html\r\n\r\n<p>Main HTML body.</p>',
-      'Content-Type: text/plain\r\nContent-Disposition: inline\r\n\r\nFooter text.',
+  it('P1b: HTML main body + inline text/plain footer: both in order, html-converted-body', async () => {
+    const spy = spyConverter();
+    const message = await parseWith(
+      mixed(
+        'Content-Type: text/html\r\n\r\n<p>Main HTML body.</p>',
+        'Content-Type: text/plain\r\nContent-Disposition: inline\r\n\r\nFooter text.',
+      ),
+      spy.htmlToText,
     );
-    const result = await createEmlParser({ htmlToText }).parse({ name: 'p1b.eml', bytes: data });
-    if (!result.ok) throw new Error(result.detail);
-    expect(result.message.bodyText).toBe('\nMain HTML body.\n\nFooter text.');
-    expect(result.message.warnings).toEqual([]);
-    expect(htmlToText).not.toHaveBeenCalled();
+    expect(spy.calls).toEqual(['<p>Main HTML body.</p>']);
+    expect(message.bodyText).toBe('[html 1]\nFooter text.');
+    expect(message.warnings).toEqual(['html-converted-body']);
   });
 
-  it('P2: text parts after a forwarded message come before it (not file order)', async () => {
+  it('P2: text parts and inline forwarded messages stay in file order', async () => {
     const forward = (name: string): string =>
       crlf('Content-Type: message/rfc822', '', `From: ${name}@example.test`, `Subject: ${name}`, '', `Body of ${name}.`);
     const data = mixed(
@@ -697,12 +711,9 @@ describe('createEmlParser: known limitation, to be replaced in 2.6b', () => {
       'Content-Type: text/plain\r\n\r\nT3',
     );
     const message = await parseOk(data);
-    // All outer text first, then FW-A, then FW-B. Nothing is lost, only moved.
     expect(message.bodyText).toBe(
       [
         'T1',
-        'T2 about FW-B below',
-        'T3',
         '',
         '---------- Forwarded message ----------',
         'From: fwa@example.test',
@@ -710,15 +721,499 @@ describe('createEmlParser: known limitation, to be replaced in 2.6b', () => {
         '',
         'Body of fwa.',
         '',
+        'T2 about FW-B below',
+        '',
         '---------- Forwarded message ----------',
         'From: fwb@example.test',
         'Subject: fwb',
         '',
-        'Body of fwb.\n',
+        'Body of fwb.',
+        '',
+        'T3',
       ].join('\n'),
     );
     expect(message.attachments).toEqual([]);
     expect(message.warnings).toEqual([]);
+  });
+
+  it('every HTML part of a multipart/mixed is converted, each once, in order', async () => {
+    const spy = spyConverter();
+    const message = await parseWith(
+      mixed(
+        'Content-Type: text/html\r\n\r\n<p>first</p>',
+        'Content-Type: text/plain\r\n\r\nmiddle',
+        'Content-Type: text/html\r\n\r\n<p>second</p>',
+      ),
+      spy.htmlToText,
+    );
+    expect(spy.calls).toEqual(['<p>first</p>', '<p>second</p>']);
+    expect(message.bodyText).toBe('[html 1]\nmiddle\n[html 2]');
+    expect(message.warnings).toEqual(['html-converted-body']);
+  });
+
+  it('an HTML part in multipart/related next to a text part is converted; its image is listed', async () => {
+    const spy = spyConverter();
+    const message = await parseWith(
+      mixed(
+        'Content-Type: text/plain\r\n\r\nIntro.',
+        crlf(
+          'Content-Type: multipart/related; boundary="r"',
+          '',
+          '--r',
+          'Content-Type: text/html',
+          '',
+          '<p><img src="cid:i@example.test"></p>',
+          '--r',
+          'Content-Type: image/png',
+          'Content-ID: <i@example.test>',
+          'Content-Transfer-Encoding: base64',
+          '',
+          'AAECAwQ=',
+          '--r--',
+        ),
+      ),
+      spy.htmlToText,
+    );
+    expect(spy.calls).toEqual(['<p><img src="cid:i@example.test"></p>']);
+    expect(message.bodyText).toBe('Intro.\n[html 1]');
+    expect(message.attachments).toEqual([{ fileName: '', size: 5, mimeType: 'image/png' }]);
+  });
+
+  it('a cut HTML part in multipart/mixed adds html-body-truncated', async () => {
+    const htmlToText = (): HtmlToTextResult => ({ text: 'cut [Text cut here: ...]', truncated: true });
+    const message = await parseWith(
+      mixed('Content-Type: text/plain\r\n\r\nPlain.', 'Content-Type: text/html\r\n\r\n<p>long</p>'),
+      htmlToText,
+    );
+    expect(message.bodyText).toBe('Plain.\ncut [Text cut here: ...]');
+    expect(message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
+  });
+
+  describe('multipart/alternative: plain text of every version, or one HTML version', () => {
+    const alternative = (...parts: string[]): string =>
+      crlf('Content-Type: multipart/alternative; boundary="a"', '', ...parts.flatMap((p) => ['--a', p]), '--a--');
+
+    it('keeps the plain version, even a short stub, and never converts the HTML', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        mixed(
+          alternative(
+            'Content-Type: text/plain\r\n\r\nView this message in a browser.',
+            `Content-Type: text/html\r\n\r\n${STYLED_HTML}`,
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('View this message in a browser.');
+      expect(message.warnings).toEqual([]);
+    });
+
+    it('uses the HTML version when the plain version is empty', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        mixed(alternative('Content-Type: text/plain\r\n', 'Content-Type: text/html\r\n\r\n<p>Only real text.</p>')),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>Only real text.</p>']);
+      expect(message.bodyText).toBe('[html 1]');
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    it('the plain version wins even when it comes after the HTML version', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        mixed(alternative('Content-Type: text/html\r\n\r\n<p>HTML first</p>', 'Content-Type: text/plain\r\n\r\nPlain second.')),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('Plain second.');
+    });
+
+    it('plain-only version present: no HTML converted; attachments in every version are still listed', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        mixed(
+          'Content-Type: text/plain\r\n\r\nBefore.',
+          alternative(
+            'Content-Type: text/plain\r\n\r\nPlain version.',
+            crlf(
+              'Content-Type: multipart/mixed; boundary="in"',
+              '',
+              '--in',
+              'Content-Type: text/html',
+              '',
+              '<p>HTML version.</p>',
+              '--in',
+              'Content-Type: application/pdf; name="only-in-html.pdf"',
+              'Content-Transfer-Encoding: base64',
+              '',
+              'AAAA',
+              '--in--',
+            ),
+          ),
+          'Content-Type: text/plain\r\n\r\nAfter.',
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('Before.\nPlain version.\nAfter.');
+      // An attachment inside the version that was not chosen is still listed.
+      expect(message.attachments).toEqual([{ fileName: 'only-in-html.pdf', size: 3, mimeType: 'application/pdf' }]);
+    });
+
+    /** A message whose whole body is one multipart/alternative. */
+    const alternativeOnly = (...parts: string[]): Uint8Array => bytes(HEADERS, '\r\n', alternative(...parts), '\r\n');
+
+    /** A multipart/mixed part (boundary "in") holding `parts`, to nest inside a version. */
+    const innerMixed = (...parts: string[]): string =>
+      crlf('Content-Type: multipart/mixed; boundary="in"', '', ...parts.flatMap((p) => ['--in', p]), '--in--');
+
+    it('Apple Mail shape: the inline text/plain inside the HTML version is kept (never deleted)', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/plain\r\n\r\nHi, notes attached.',
+          innerMixed(
+            'Content-Type: text/html\r\n\r\n<p>Hi, notes attached.</p>',
+            'Content-Type: text/plain; name="notes.txt"\r\nContent-Disposition: inline; filename="notes.txt"\r\n\r\nNOTES FILE CONTENT',
+            'Content-Type: text/html\r\n\r\n<p>end</p>',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('Hi, notes attached.\nNOTES FILE CONTENT');
+      expect(message.attachments).toEqual([]);
+      expect(message.warnings).toEqual([]);
+    });
+
+    it('a plain footer inside the HTML version is kept after the plain version', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/plain\r\n\r\nPlain version.',
+          innerMixed(
+            'Content-Type: text/html\r\n\r\n<p>HTML version.</p>',
+            'Content-Type: text/plain\r\nContent-Disposition: inline\r\n\r\nFooter text.',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('Plain version.\nFooter text.');
+      expect(message.warnings).toEqual([]);
+    });
+
+    it('HTML-only alternative: only the first HTML version is converted; the others are other renderings', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/html\r\n\r\n<p>First rendering.</p>',
+          innerMixed(
+            'Content-Type: text/html\r\n\r\n<p>Second rendering.</p>',
+            'Content-Type: image/png\r\nContent-Transfer-Encoding: base64\r\n\r\nAAECAwQ=',
+          ),
+          'Content-Type: text/html\r\n\r\n<p>Third rendering.</p>',
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>First rendering.</p>']);
+      expect(message.bodyText).toBe('[html 1]');
+      expect(message.attachments).toEqual([{ fileName: '', size: 5, mimeType: 'image/png' }]);
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    // The inner alternative holds HTML too, so it is not a plain-only version:
+    // the outer HTML is converted, and the inner plain text is still kept.
+    // That repeats the content, but duplication is preferred to loss (README.md,
+    // rule R6): a plain part next to HTML must never hide the HTML main body.
+    it('nested alternatives: outer HTML converted and inner plain kept (duplication, not loss)', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/html\r\n\r\n<p>Outer HTML.</p>',
+          crlf(
+            'Content-Type: multipart/alternative; boundary="a2"',
+            '',
+            '--a2',
+            'Content-Type: text/plain',
+            '',
+            'Inner plain.',
+            '--a2',
+            'Content-Type: text/html',
+            '',
+            '<p>Inner HTML.</p>',
+            '--a2--',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>Outer HTML.</p>']);
+      expect(message.bodyText).toBe('[html 1]\nInner plain.');
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    // Regressions: plain text that is not a plain rendering of the message
+    // (whitespace only, or an inline part next to HTML in the same version)
+    // must never hide the HTML main body (README.md, rule R6).
+    it('a whitespace-only plain version does not hide the HTML version', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly('Content-Type: text/plain\r\n\r\n   \r\n  ', 'Content-Type: text/html\r\n\r\n<p>REAL HTML CONTENT</p>'),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>REAL HTML CONTENT</p>']);
+      // The whitespace part is still appended, as any plain part: harmless, nothing dropped.
+      expect(message.bodyText).toBe('   \n  \n[html 1]');
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    it('HTML-only first version + a version with HTML and inline notes: V1 converted, notes kept', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/html\r\n\r\n<p>MAIN HTML V1</p>',
+          innerMixed(
+            'Content-Type: text/html\r\n\r\n<p>MAIN HTML V2</p>',
+            'Content-Type: text/plain; name="notes.txt"\r\nContent-Disposition: inline; filename="notes.txt"\r\n\r\nINLINE NOTES',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>MAIN HTML V1</p>']);
+      expect(message.bodyText).toBe('[html 1]\nINLINE NOTES');
+      expect(message.attachments).toEqual([]);
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    it('HTML-only first version + related{html, plain}: V1 converted, the plain text kept', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/html\r\n\r\n<p>HTML ONLY V1</p>',
+          crlf(
+            'Content-Type: multipart/related; boundary="r"',
+            '',
+            '--r',
+            'Content-Type: text/html',
+            '',
+            '<p>HTML V2</p>',
+            '--r',
+            'Content-Type: text/plain',
+            '',
+            'PLAIN IN RELATED',
+            '--r--',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>HTML ONLY V1</p>']);
+      expect(message.bodyText).toBe('[html 1]\nPLAIN IN RELATED');
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    it('alternative{related{html, image}, plain}: the plain text, the image listed', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          crlf(
+            'Content-Type: multipart/related; boundary="r"',
+            '',
+            '--r',
+            'Content-Type: text/html',
+            '',
+            '<p>Related HTML.</p>',
+            '--r',
+            'Content-Type: image/png',
+            'Content-Transfer-Encoding: base64',
+            '',
+            'AAECAwQ=',
+            '--r--',
+          ),
+          'Content-Type: text/plain\r\n\r\nPlain rendering.',
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('Plain rendering.');
+      expect(message.attachments).toEqual([{ fileName: '', size: 5, mimeType: 'image/png' }]);
+      expect(message.warnings).toEqual([]);
+    });
+
+    it('inside a forwarded message, the same rule applies: HTML main body + inline notes both kept', async () => {
+      const spy = spyConverter();
+      const inner = crlf(
+        'From: carol@example.test',
+        'Subject: Inner',
+        'Content-Type: multipart/alternative; boundary="a"',
+        '',
+        '--a',
+        'Content-Type: text/html',
+        '',
+        '<p>FORWARDED HTML V1</p>',
+        '--a',
+        innerMixed(
+          'Content-Type: text/html\r\n\r\n<p>FORWARDED HTML V2</p>',
+          'Content-Type: text/plain\r\nContent-Disposition: inline\r\n\r\nFORWARDED NOTES',
+        ),
+        '--a--',
+      );
+      const message = await parseWith(
+        mixed('Content-Type: text/plain\r\n\r\nOuter.', crlf('Content-Type: message/rfc822', '', inner)),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>FORWARDED HTML V1</p>']);
+      expect(message.bodyText).toBe(
+        [
+          'Outer.',
+          '',
+          '---------- Forwarded message ----------',
+          'From: carol@example.test',
+          'Subject: Inner',
+          '',
+          '[html 1]',
+          'FORWARDED NOTES',
+        ].join('\n'),
+      );
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    it('nested HTML-only alternatives: only the first HTML of the first version is converted', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          crlf(
+            'Content-Type: multipart/alternative; boundary="a2"',
+            '',
+            '--a2',
+            'Content-Type: text/html',
+            '',
+            '<p>Inner first.</p>',
+            '--a2',
+            'Content-Type: text/html',
+            '',
+            '<p>Inner second.</p>',
+            '--a2--',
+          ),
+          'Content-Type: text/html\r\n\r\n<p>Outer second.</p>',
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual(['<p>Inner first.</p>']);
+      expect(message.bodyText).toBe('[html 1]');
+      expect(message.warnings).toEqual(['html-converted-body']);
+    });
+
+    it('plain beside a nested HTML-only alternative: the plain is used, the nested HTML stays hidden', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          'Content-Type: text/plain\r\n\r\nP',
+          crlf(
+            'Content-Type: multipart/alternative; boundary="a2"',
+            '',
+            '--a2',
+            'Content-Type: text/html',
+            '',
+            '<p>Nested A.</p>',
+            '--a2',
+            'Content-Type: text/html',
+            '',
+            '<p>Nested B.</p>',
+            '--a2--',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('P');
+      expect(message.warnings).not.toContain('html-converted-body');
+      expect(message.warnings).toEqual([]);
+    });
+
+    it('an alternative whose only HTML is whitespace-only: no body, converter not called', async () => {
+      const spy = spyConverter();
+      const message = await parseWith(alternativeOnly('Content-Type: text/html\r\n\r\n   '), spy.htmlToText);
+      expect(spy.calls).toEqual([]);
+      expect(message.bodyText).toBe('');
+      expect(message.warnings).toContain('no-body');
+      expect(message.warnings).not.toContain('html-converted-body');
+    });
+
+    it('two plain versions are both kept: duplication is preferred to loss', async () => {
+      const message = await parseOk(
+        alternativeOnly('Content-Type: text/plain\r\n\r\nSame text.', 'Content-Type: text/plain\r\n\r\nSame text.'),
+      );
+      expect(message.bodyText).toBe('Same text.\nSame text.');
+    });
+
+    it('a forwarded message present in two versions is expanded twice (duplication, not loss)', async () => {
+      const forward = crlf('Content-Type: message/rfc822', '', 'From: fwd@example.test', 'Subject: fwd', '', 'Body of fwd.');
+      const spy = spyConverter();
+      const message = await parseWith(
+        alternativeOnly(
+          innerMixed('Content-Type: text/plain\r\n\r\nPlain version.', forward),
+          crlf(
+            'Content-Type: multipart/mixed; boundary="in2"',
+            '',
+            '--in2',
+            'Content-Type: text/html',
+            '',
+            '<p>HTML version.</p>',
+            '--in2',
+            forward,
+            '--in2--',
+          ),
+        ),
+        spy.htmlToText,
+      );
+      const block = ['---------- Forwarded message ----------', 'From: fwd@example.test', 'Subject: fwd', '', 'Body of fwd.'];
+      expect(spy.calls).toEqual([]);
+      // Each inner body keeps its final line break; the blank-line join absorbs the first one.
+      expect(message.bodyText).toBe(['Plain version.', '', ...block, '', ...block, ''].join('\n'));
+      expect(message.attachments).toEqual([]);
+      expect(message.warnings).toEqual([]);
+    });
+  });
+
+  it('an inline forwarded message with text/plain + text/html in mixed converts its HTML too', async () => {
+    const spy = spyConverter();
+    const inner = crlf(
+      'From: carol@example.test',
+      'Subject: Inner',
+      'Content-Type: multipart/mixed; boundary="in"',
+      '',
+      '--in',
+      'Content-Type: text/plain',
+      '',
+      'Inner plain.',
+      '--in',
+      'Content-Type: text/html',
+      '',
+      STYLED_HTML,
+      '--in--',
+    );
+    const message = await parseWith(
+      mixed('Content-Type: text/plain\r\n\r\nOuter.', crlf('Content-Type: message/rfc822', '', inner)),
+      spy.htmlToText,
+    );
+    expect(spy.calls).toEqual([STYLED_HTML]);
+    expect(message.bodyText).toBe(
+      [
+        'Outer.',
+        '',
+        '---------- Forwarded message ----------',
+        'From: carol@example.test',
+        'Subject: Inner',
+        '',
+        'Inner plain.',
+        '[html 1]',
+      ].join('\n'),
+    );
+    expect(message.bodyText).not.toContain('color');
+    expect(message.bodyText).not.toContain('tracker');
+    expect(message.warnings).toEqual(['html-converted-body']);
   });
 });
 
