@@ -138,8 +138,9 @@ const MAX_DEPTH = 3;
  * Every view of a file that must be scanned: the raw text with
  * quoted-printable soft line breaks joined, its =XX escapes decoded,
  * RFC 2047 words decoded (after header unfolding), HTML character
- * references and percent-encoding decoded (on the raw text and on the
- * quoted-printable decoded text), and each base64 MIME part decoded. A decoded
+ * references and percent-encoding decoded (on the raw text, on the
+ * quoted-printable decoded text and on the RFC 2047 decoded text), and each
+ * base64 MIME part decoded. A decoded
  * base64 part is itself expanded the same way, so an attached message
  * (message/rfc822), encoded or not, is covered with its own base64 parts.
  */
@@ -147,7 +148,7 @@ export function decodedViews(text: string, depth = 0): string[] {
   // QP soft line breaks: "=" at the end of a line joins it to the next one.
   const joined = text.replace(/=\r?\n/g, '');
   const qp = decodeQpEscapes(joined);
-  // RFC 2047 words are NOT decoded from `joined`: joining soft breaks there
+  // The main RFC 2047 view is NOT decoded from `joined`: joining soft breaks there
   // eats the "=" of a closing "?=" at the end of a line. Here soft breaks are
   // joined except right after "?" (a "?=" line end closes an encoded word;
   // `joined` above already covers a body line ending in "?="), so a URL split
@@ -156,14 +157,27 @@ export function decodedViews(text: string, depth = 0): string[] {
   // dropped (RFC 2047 section 6.2), so an address split over two words comes
   // back in one piece:
   // `=?UTF-8?Q?a=40?=` + line break + ` =?UTF-8?Q?b.test?=` becomes `a@b.test`.
+  // A second RFC 2047 view is decoded from `joined` (ALL soft breaks joined),
+  // so a word split by a soft break right after one of its own "?"
+  // (`=?UTF-8?=` + line break + `B?...?=`) is decoded too. Known limit: a word
+  // split that way AND ending its line (`?=` + line end) is cut in both views.
+  // Both decoded views are also run through HTML-reference and percent
+  // decoding (an encoded word can hide `a&#64;b` or `a%40b`).
   const headerText = text
     .replace(/(?<!\?)=\r?\n/g, '')
     .replace(/\r?\n[ \t]+/g, ' ')
     .replace(/(\?=)\s+(?==\?)/g, '$1');
+  const words = decodeEncodedWords(headerText);
+  const joinedWords = decodeEncodedWords(joined.replace(/\r?\n[ \t]+/g, ' ').replace(/(\?=)\s+(?==\?)/g, '$1'));
   const views = [
     joined,
     qp,
-    decodeEncodedWords(headerText),
+    words,
+    joinedWords,
+    decodeHtmlEntities(words),
+    decodePercent(words),
+    decodeHtmlEntities(joinedWords),
+    decodePercent(joinedWords),
     decodeHtmlEntities(joined),
     decodePercent(joined),
     // Layered encodings: QP first, then entities or percent (`a=26#64;b` is QP for `a&#64;b`).

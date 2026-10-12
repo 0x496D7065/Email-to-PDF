@@ -1,5 +1,5 @@
 // SHA-256 of a file's bytes, printed on the PDF cover page so a reader can
-// check that the source files were not altered (PROJECT_BRIEF.md section 8.5).
+// check that the source files were not altered (an integrity check).
 //
 // Uses the Web Crypto API (`crypto.subtle`), built into every modern browser
 // and into Node 22 as a global, so no hashing library is needed. It runs

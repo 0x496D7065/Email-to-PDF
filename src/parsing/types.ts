@@ -1,4 +1,4 @@
-// The normalized message structure (PROJECT_BRIEF.md section 8.2).
+// The normalized message structure: the one shape every parser produces.
 //
 // Every parser (.eml, .msg, later maybe .mbox) turns its file into exactly
 // this shape, so the rest of the tool (de-duplication, sorting, folding, PDF)
@@ -112,7 +112,7 @@ export interface InputFile {
 }
 
 /**
- * The seam around each parsing library (PROJECT_BRIEF.md section 10): the
+ * The seam around each parsing library: the
  * .eml and .msg adapters both implement this, so a library can be swapped
  * without touching the rest of the tool.
  */

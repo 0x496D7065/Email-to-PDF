@@ -170,6 +170,21 @@ describe('synthetic fixture guard rules (self-test)', () => {
     expect(findForbiddenHosts(`Subject: ${b('a@example')}\r\n ${q('.test')}\r\n`)).toEqual([]);
   });
 
+  it('decodes an RFC 2047 word split by a QP soft break right after one of its own "?"', () => {
+    const data = btoa(hiddenAddress);
+    expect(findForbiddenHosts(`From: =?UTF-8?=\nB?${data}?= <a@example.test>\n`)).not.toEqual([]);
+    expect(findForbiddenHosts(`From: =?UTF-8?B?=\r\n${data}?= <a@example.test>\r\n`)).not.toEqual([]);
+    // The same split around a clean word stays clean.
+    expect(findForbiddenHosts(`From: =?UTF-8?=\nB?${btoa('a@example.test')}?= <a@example.test>\n`)).toEqual([]);
+  });
+
+  it('decodes HTML references and percent-encoding inside RFC 2047 words', () => {
+    const b = (s: string): string => `=?UTF-8?B?${btoa(s)}?=`;
+    expect(findForbiddenHosts(`Subject: ${b(hiddenAddress.replace('@', '&#64;'))}\n`)).not.toEqual([]);
+    expect(findForbiddenHosts(`Subject: ${b(hiddenAddress.replace('@', '%40'))}\n`)).not.toEqual([]);
+    expect(findForbiddenHosts(`Subject: ${b('a&#64;example.test 10%40off')}\n`)).toEqual([]);
+  });
+
   it('decodes layered encodings: HTML references or percent-encoding inside quoted-printable', () => {
     expect(findForbiddenHosts(hiddenAddress.replace('@', '=26#64;'))).not.toEqual([]);
     expect(findForbiddenHosts(`mailto:${hiddenAddress.replace('@', '=2540')}`)).not.toEqual([]);

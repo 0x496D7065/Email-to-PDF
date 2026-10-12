@@ -413,7 +413,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     from: [ALICE],
     to: [BOB],
     subject: 'Parking',
-    bodyContains: ['park the van in front of the office'],
+    bodyContains: ['park the van in front of the office on Monday'],
   }),
   eml('75-missing-from-to-subject.eml', {
     description: 'No From, no To and no Subject header (Date and Message-ID present).',
