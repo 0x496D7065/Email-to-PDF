@@ -10,7 +10,7 @@ import {
   REFERRER_POLICY,
 } from './src/security/headers.ts';
 
-// Adds the security headers (PROJECT_BRIEF.md 6.2) to the PRODUCTION BUILD only.
+// Adds the security headers (README.md, rule R2) to the PRODUCTION BUILD only.
 //
 // Why build-only: the dev server (`npm run dev`) injects CSS with <style> tags
 // and uses a WebSocket for hot reload. Our strict CSP blocks both, so applying
@@ -44,7 +44,7 @@ export default defineConfig({
   plugins: [securityHeaders()],
   build: {
     // Vite normally injects a small "modulepreload" polyfill that calls fetch().
-    // Every browser we target supports modulepreload natively, and the brief
+    // Every browser we target supports modulepreload natively, and README.md, rule R1
     // forbids network APIs in the shipped code, so we turn the polyfill off.
     modulePreload: { polyfill: false },
   },
@@ -63,7 +63,7 @@ export default defineConfig({
   test: {
     // Unit tests sit next to the code they test, e.g. src/lib/foo.test.ts.
     // They run in Node (no browser DOM): detection and parsing logic is kept
-    // as pure functions (PROJECT_BRIEF.md 8.3). The production build never
+    // as pure functions (README.md, rule R7). The production build never
     // includes them because nothing in index.html/main.ts imports them.
     // scripts/ holds the self-test of the "no network" build check.
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],

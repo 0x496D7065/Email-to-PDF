@@ -6,7 +6,7 @@
 //     hosts that cannot set headers (e.g. GitHub Pages).
 // Keeping the policy here once means the two copies can never drift apart.
 //
-// PROJECT_BRIEF.md 6.2: TIGHTEN ONLY. Do not add 'unsafe-inline',
+// README.md, rule R2: TIGHTEN ONLY. Do not add 'unsafe-inline',
 // 'unsafe-eval', hashes, nonces or remote hosts without the user's approval.
 
 /** The Content Security Policy, one directive per entry: [name, sources]. */

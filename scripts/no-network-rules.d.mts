@@ -6,7 +6,7 @@ export interface Finding {
   line: number;
   /** The exact text that matched. */
   match: string;
-  /** Which rule was broken, with the PROJECT_BRIEF.md reference. */
+  /** Which rule was broken, with the README.md rule reference. */
   reason: string;
 }
 

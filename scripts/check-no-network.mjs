@@ -1,4 +1,4 @@
-// The "no network" build check (PROJECT_BRIEF.md 6.3).
+// The "no network" build check (README.md, rule R3).
 // Run: npm run check:network   (also runs automatically at the end of npm run build)
 //
 // Fails (exit code 1) if the source or the built site contains a network API,
@@ -78,7 +78,7 @@ for (const [path, check] of [
   [headersFile, checkHeadersFile],
 ]) {
   if (!existsSync(path)) {
-    errors.push(`${display(path)}: file is missing (PROJECT_BRIEF.md 6.2)`);
+    errors.push(`${display(path)}: file is missing (README.md, rule R2)`);
     continue;
   }
   for (const problem of check(readFileSync(path, 'utf8'))) {

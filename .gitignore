@@ -14,7 +14,7 @@ playwright/.cache/
 Thumbs.db
 *.log
 
-# Local planning files (private, never commit)
+# Local planning files (never committed)
 PROJECT_BRIEF.md
 STATUS.md
 CLAUDE.md

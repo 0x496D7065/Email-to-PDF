@@ -1,5 +1,5 @@
 # Continuous integration: runs every check on each push and pull request.
-# If any step fails, the run fails (PROJECT_BRIEF.md 6.3 and 12).
+# If any step fails, the run fails (README.md, rule R3).
 name: CI
 
 on:

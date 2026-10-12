@@ -2,7 +2,7 @@
 //
 // The tests in e2e/ load the BUILT site (what we publish) and check the
 // "no network" guarantee and the Content Security Policy
-// (PROJECT_BRIEF.md 6.1, 6.2 and 12).
+// (README.md, rules R1, R2 and R3).
 import { defineConfig, devices } from '@playwright/test';
 
 // Fixed address so the tests know which origin is "ours". 127.0.0.1 instead

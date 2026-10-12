@@ -1,4 +1,4 @@
-// Pure matching logic for the "no network" build check (PROJECT_BRIEF.md 6.3).
+// Pure matching logic for the "no network" build check (README.md, rule R3).
 //
 // No file system access here: every function takes a string and returns a
 // list of findings, so it can be unit tested with synthetic strings
@@ -11,7 +11,7 @@
  * http:// and https:// URLs that are allowed to appear anywhere in src/,
  * index.html or dist/. Compared EXACTLY (after trimming trailing punctuation).
  *
- * PROJECT_BRIEF.md 6.3: the ONLY URLs ever allowed here are
+ * README.md, rule R3: the ONLY URLs ever allowed here are
  *   - the donation link (a plain <a href> the user clicks deliberately),
  *   - the GitHub repository link,
  *   - license links in comments.
@@ -21,8 +21,8 @@
  */
 export const URL_ALLOWLIST = [];
 
-const network = 'Network API (PROJECT_BRIEF.md 6.1, 6.3)';
-const storage = 'Browser storage API: message data must stay in memory (PROJECT_BRIEF.md 6.5)';
+const network = 'Network API (README.md, rules R1 and R3)';
+const storage = 'Browser storage API: message data must stay in memory (README.md, rule R5)';
 const testCode = 'Test code in the build output (tests must never ship)';
 
 /**
@@ -47,10 +47,10 @@ export const RULES = [
 ];
 
 // A URL runs until whitespace, a quote, a backtick, <, > or a closing bracket.
-// Schemes: http(s) and ws(s) (WebSocket, PROJECT_BRIEF.md 6.1). Each slash may be
+// Schemes: http(s) and ws(s) (WebSocket, README.md rule R1). Each slash may be
 // escaped as \/ (minified bundles, embedded JSON); normalizeUrl() undoes that.
 const URL_PATTERN = /(?:https?|wss?):(?:\\?\/){2}[^\s"'`<>)\]]*/gi;
-const URL_REASON = 'URL not in the allowlist in scripts/no-network-rules.mjs (PROJECT_BRIEF.md 6.3)';
+const URL_REASON = 'URL not in the allowlist in scripts/no-network-rules.mjs (README.md, rule R3)';
 
 /**
  * Turns a raw URL match into the form compared against URL_ALLOWLIST:
@@ -100,19 +100,19 @@ export function checkBuiltHtml(html) {
   const metaStart = '<meta http-equiv="Content-Security-Policy"';
   const metaIndex = html.indexOf(metaStart);
   if (metaIndex === -1) {
-    return [`missing ${metaStart} ... > (PROJECT_BRIEF.md 6.2)`];
+    return [`missing ${metaStart} ... > (README.md, rule R2)`];
   }
   // A <meta> CSP only protects what comes AFTER it in the document.
   for (const tag of ['<script', '<link']) {
     const tagIndex = html.indexOf(tag);
     if (tagIndex !== -1 && tagIndex < metaIndex) {
-      problems.push(`the CSP <meta> must come before the first ${tag} tag (PROJECT_BRIEF.md 6.2)`);
+      problems.push(`the CSP <meta> must come before the first ${tag} tag (README.md, rule R2)`);
     }
   }
   const content = /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html)?.[1] ?? '';
   for (const directive of ["default-src 'none'", "connect-src 'none'"]) {
     if (!content.includes(directive)) {
-      problems.push(`the CSP <meta> is missing "${directive}" (PROJECT_BRIEF.md 6.2)`);
+      problems.push(`the CSP <meta> is missing "${directive}" (README.md, rule R2)`);
     }
   }
   return problems;
@@ -128,19 +128,19 @@ export function checkHeadersFile(text) {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   const csp = lines.find((line) => line.startsWith('Content-Security-Policy:'));
   if (csp === undefined) {
-    problems.push('missing Content-Security-Policy: header (PROJECT_BRIEF.md 6.2)');
+    problems.push('missing Content-Security-Policy: header (README.md, rule R2)');
   } else {
     for (const directive of ["default-src 'none'", "connect-src 'none'", "frame-ancestors 'none'"]) {
       if (!csp.includes(directive)) {
-        problems.push(`Content-Security-Policy header is missing "${directive}" (PROJECT_BRIEF.md 6.2)`);
+        problems.push(`Content-Security-Policy header is missing "${directive}" (README.md, rule R2)`);
       }
     }
   }
   if (!lines.includes('Referrer-Policy: no-referrer')) {
-    problems.push('missing "Referrer-Policy: no-referrer" header (PROJECT_BRIEF.md 6.2)');
+    problems.push('missing "Referrer-Policy: no-referrer" header (README.md, rule R2)');
   }
   if (!lines.some((line) => line.startsWith('Permissions-Policy:'))) {
-    problems.push('missing Permissions-Policy: header (PROJECT_BRIEF.md 6.2)');
+    problems.push('missing Permissions-Policy: header (README.md, rule R2)');
   }
   return problems;
 }

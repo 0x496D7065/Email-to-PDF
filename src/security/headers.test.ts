@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cloudflareHeadersFile, cspForHeader, cspForMeta, PERMISSIONS_POLICY } from './headers';
 
-// The exact policy from PROJECT_BRIEF.md 6.2. If this test fails, the policy
+// The exact policy documented in README.md, rule R2. If this test fails, the policy
 // was changed: loosening it needs the user's explicit approval.
 const EXPECTED: Record<string, string> = {
   'default-src': "'none'",
@@ -28,7 +28,7 @@ function parse(policy: string): Record<string, string> {
 }
 
 describe('Content Security Policy', () => {
-  it('meta version is exactly the brief policy', () => {
+  it('meta version is exactly the documented policy', () => {
     expect(parse(cspForMeta())).toEqual(EXPECTED);
   });
 

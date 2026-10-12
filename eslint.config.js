@@ -1,17 +1,17 @@
 // ESLint "flat config". Run with: npm run lint
 //
 // The extra rules below are an EARLY WARNING for the hard rules in
-// PROJECT_BRIEF.md section 6 (no network, no storage, no innerHTML).
+// README.md, rules R1, R4 and R5 (no network, no innerHTML, no storage).
 // They catch mistakes while coding; the real guarantee is the build check
-// on the bundled output (Task 1.5) plus the Content Security Policy.
+// on the bundled output (scripts/check-no-network.mjs) plus the Content Security Policy.
 import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 // APIs that can send data over the network or store data in the browser.
-const network = 'Network APIs are forbidden in the tool page (PROJECT_BRIEF.md 6.1).';
-const storage = 'Message data must stay in memory only (PROJECT_BRIEF.md 6.5).';
-const html = 'Email content is untrusted: use textContent, never HTML injection (PROJECT_BRIEF.md 6.4).';
+const network = 'Network APIs are forbidden in the tool page (README.md, rule R1).';
+const storage = 'Message data must stay in memory only (README.md, rule R5).';
+const html = 'Email content is untrusted: use textContent, never HTML injection (README.md, rule R4).';
 
 const forbiddenGlobals = {
   fetch: network,
@@ -48,7 +48,7 @@ export default defineConfig(
   // package is needed.
   { files: ['scripts/**/*.mjs'], languageOptions: { globals: { console: 'readonly' } } },
 
-  // Privacy/security early-warning rules (PROJECT_BRIEF.md section 6).
+  // Privacy/security early-warning rules (README.md, rules R1, R4 and R5).
   {
     rules: {
       // Bare use: fetch(...), new WebSocket(...), localStorage.setItem(...)

@@ -1,5 +1,5 @@
 // Browser test of the "no network" guarantee and the Content Security Policy
-// (PROJECT_BRIEF.md 6.1, 6.2 and 12). Runs against the built site served by
+// (README.md, rules R1, R2 and R3). Runs against the built site served by
 // `vite preview` (see playwright.config.ts).
 //
 // Only reserved `.invalid` domains are used: they can never resolve to a real
