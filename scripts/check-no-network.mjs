@@ -62,7 +62,10 @@ for (const [files, isDist] of [
   [distFiles, true],
 ]) {
   for (const path of files) {
-    for (const { line, match, reason } of findViolations(readFileSync(path, 'utf8'), { isDist })) {
+    // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
+    // used by the per-file URL allowlist.
+    const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
+    for (const { line, match, reason } of findViolations(readFileSync(path, 'utf8'), { isDist, distFile })) {
       // Minified lines can be huge; cap what we print.
       const shown = match.length > 80 ? `${match.slice(0, 80)}...` : match;
       errors.push(`${display(path)}:${line}: "${shown}" -> ${reason}`);

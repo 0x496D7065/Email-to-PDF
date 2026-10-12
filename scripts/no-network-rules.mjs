@@ -8,8 +8,9 @@
 // so the check never scans the scripts/ folder itself.
 
 /**
- * http:// and https:// URLs that are allowed to appear anywhere in src/,
+ * URLs (http, https, ws, wss) that are allowed to appear anywhere in src/,
  * index.html or dist/. Compared EXACTLY (after trimming trailing punctuation).
+ * See also FILE_URL_ALLOWLIST below, for URLs allowed in one dist/ file only.
  *
  * README.md, rule R3: the ONLY URLs ever allowed here are
  *   - the donation link (a plain <a href> the user clicks deliberately),
@@ -20,6 +21,32 @@
  *   'https://github.com/OWNER/REPO',
  */
 export const URL_ALLOWLIST = [];
+
+/**
+ * URLs allowed ONLY inside one specific file of dist/ (path relative to dist/).
+ * Anywhere else (src/, index.html, any other dist/ file) they are still errors.
+ *
+ * The two Apache links are part of the Apache-2.0 license text of
+ * @kenjiuno/msgreader, which must be shipped unchanged in the third-party
+ * notices (public/THIRD_PARTY_NOTICES.txt, copied to dist/ by Vite).
+ * They are plain text there, never loaded by the page.
+ */
+export const FILE_URL_ALLOWLIST = [
+  { url: 'http://www.apache.org/licenses/', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
+  { url: 'http://www.apache.org/licenses/LICENSE-2.0', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
+];
+
+/**
+ * Is `url` allowed in this file?
+ * @param {string} url  Already normalized (see normalizeUrl).
+ * @param {string | undefined} distFile  Path relative to dist/ with forward
+ *   slashes, e.g. 'THIRD_PARTY_NOTICES.txt'; undefined for files outside dist/.
+ * @returns {boolean}
+ */
+export function isUrlAllowed(url, distFile) {
+  if (URL_ALLOWLIST.includes(url)) return true;
+  return FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === distFile);
+}
 
 const network = 'Network API (README.md, rules R1 and R3)';
 const storage = 'Browser storage API: message data must stay in memory (README.md, rule R5)';
@@ -67,10 +94,12 @@ export function normalizeUrl(raw) {
 /**
  * Finds every forbidden pattern and non-allowlisted URL in `text`.
  * @param {string} text  File contents.
- * @param {{ isDist: boolean }} options  isDist enables the dist-only rules.
+ * @param {{ isDist: boolean, distFile?: string }} options  isDist enables the
+ *   dist-only rules. distFile (dist/ files only) is the path relative to dist/,
+ *   used for FILE_URL_ALLOWLIST.
  * @returns {{ line: number, match: string, reason: string }[]}  line is 1-based.
  */
-export function findViolations(text, { isDist }) {
+export function findViolations(text, { isDist, distFile }) {
   const findings = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((lineText, index) => {
@@ -82,7 +111,8 @@ export function findViolations(text, { isDist }) {
     }
     for (const m of lineText.matchAll(URL_PATTERN)) {
       const url = normalizeUrl(m[0]);
-      if (!URL_ALLOWLIST.includes(url)) {
+      // A file-scoped entry only counts for dist/ files, never for src/.
+      if (!isUrlAllowed(url, isDist ? distFile : undefined)) {
         findings.push({ line: index + 1, match: url, reason: URL_REASON });
       }
     }

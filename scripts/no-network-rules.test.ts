@@ -1,7 +1,13 @@
 // Self-test for the "no network" check: feeds it synthetic strings with
 // planted violations and checks that each one is reported.
 import { describe, expect, it } from 'vitest';
-import { checkBuiltHtml, checkHeadersFile, findViolations, normalizeUrl } from './no-network-rules.mjs';
+import {
+  checkBuiltHtml,
+  checkHeadersFile,
+  findViolations,
+  normalizeUrl,
+  URL_ALLOWLIST,
+} from './no-network-rules.mjs';
 
 const src = { isDist: false };
 const dist = { isDist: true };
@@ -57,6 +63,53 @@ describe('findViolations', () => {
     const code = 'import "vitest"; describe("x", () => {});';
     expect(findViolations(code, src)).toEqual([]);
     expect(findViolations(code, dist).map((f) => f.match)).toEqual(['vitest', 'describe(']);
+  });
+});
+
+describe('file-scoped URL allowlist (third-party notices)', () => {
+  const apache = 'Apache License\n   http://www.apache.org/licenses/\n   http://www.apache.org/licenses/LICENSE-2.0\n';
+  const notices = { isDist: true, distFile: 'THIRD_PARTY_NOTICES.txt' };
+
+  it('keeps the global allowlist empty', () => {
+    expect(URL_ALLOWLIST).toEqual([]);
+  });
+
+  it('accepts the Apache license URLs inside dist/THIRD_PARTY_NOTICES.txt', () => {
+    expect(findViolations(apache, notices)).toEqual([]);
+  });
+
+  it('still rejects other URLs inside the notices file', () => {
+    const found = findViolations('see https://example.invalid/x', notices);
+    expect(found.map((f) => f.match)).toEqual(['https://example.invalid/x']);
+  });
+
+  it('rejects the Apache license URLs in any other dist/ file', () => {
+    for (const distFile of ['assets/index-abc123.js', 'index.html', 'sub/THIRD_PARTY_NOTICES.txt']) {
+      expect(findViolations(apache, { isDist: true, distFile })).toHaveLength(2);
+    }
+    expect(findViolations(apache, dist)).toHaveLength(2);
+  });
+
+  it('rejects the Apache license URLs in src/, even with a notices file name', () => {
+    expect(findViolations(apache, src)).toHaveLength(2);
+    expect(findViolations(apache, { isDist: false, distFile: 'THIRD_PARTY_NOTICES.txt' })).toHaveLength(2);
+  });
+
+  it('does not allow a longer URL that merely starts with an allowed one', () => {
+    expect(findViolations('http://www.apache.org/licenses/x.js', notices)).toHaveLength(1);
+  });
+
+  it('rejects an uppercase Apache URL inside the notices file (no case folding)', () => {
+    const found = findViolations('HTTP://WWW.APACHE.ORG/licenses/', notices);
+    expect(found.map((f) => f.match)).toEqual(['HTTP://WWW.APACHE.ORG/licenses/']);
+  });
+
+  it('rejects the Apache URLs in a notices file name with different case', () => {
+    expect(findViolations(apache, { isDist: true, distFile: 'third_party_notices.txt' })).toHaveLength(2);
+  });
+
+  it('rejects the Apache URLs in a backslash path ending in the notices file name', () => {
+    expect(findViolations(apache, { isDist: true, distFile: 'sub\\THIRD_PARTY_NOTICES.txt' })).toHaveLength(2);
   });
 });
 

@@ -67,9 +67,13 @@ fallback because browsers ignore it there.
 
 - `npm run build` fails if the source or the built site contains a network
   API, a browser storage API, an `http(s)://` or `ws(s)://` URL that is not on
-  a tiny allowlist (currently empty; it may only ever hold the donation link,
-  the project's repository link and license links in comments), test code, or
-  missing security headers.
+  a tiny allowlist, test code, or missing security headers. The allowlist may
+  only ever hold the donation link, the project's repository link, and license
+  links, only in code comments or in the shipped third-party license notices
+  file. Today it holds only the Apache License links
+  `http://www.apache.org/licenses/` and
+  `http://www.apache.org/licenses/LICENSE-2.0`, allowed only inside
+  `THIRD_PARTY_NOTICES.txt` and rejected anywhere else.
 - A browser test (Playwright, Chromium) loads the built site and fails if it
   makes any request outside its own site or triggers any CSP violation.
 - CI runs `npm audit`, type checking, lint, unit tests, the build check and
@@ -171,6 +175,9 @@ Tested with Node.js 22 (the version CI uses).
 ## License
 
 MIT, copyright 0x496D7065. See `LICENSE`.
+
+Licenses of the bundled third-party libraries are in
+`public/THIRD_PARTY_NOTICES.txt`, shipped with the site as `THIRD_PARTY_NOTICES.txt`.
 
 This tool is provided as is, without warranty, and is not legal advice. Always
 check the generated PDF before relying on it.

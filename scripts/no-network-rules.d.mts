@@ -12,12 +12,17 @@ export interface Finding {
 
 export const URL_ALLOWLIST: readonly string[];
 
+/** URLs allowed only inside one dist/ file (`onlyIn`, relative to dist/). */
+export const FILE_URL_ALLOWLIST: readonly { url: string; onlyIn: string }[];
+
+export function isUrlAllowed(url: string, distFile: string | undefined): boolean;
+
 export const RULES: readonly { pattern: RegExp; reason: string; distOnly?: boolean }[];
 
 /** Unescapes \/ and trims trailing punctuation, before the allowlist comparison. */
 export function normalizeUrl(raw: string): string;
 
-export function findViolations(text: string, options: { isDist: boolean }): Finding[];
+export function findViolations(text: string, options: { isDist: boolean; distFile?: string }): Finding[];
 
 export function checkBuiltHtml(html: string): string[];
 

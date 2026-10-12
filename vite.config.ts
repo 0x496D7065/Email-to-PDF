@@ -40,8 +40,24 @@ function securityHeaders(): Plugin {
   };
 }
 
+// Absolute path of the iconv-lite shim (see resolve.alias below). It must be
+// absolute so it also works for packages pre-bundled by Vitest.
+// Same as Node's fileURLToPath(), written by hand because the project does not
+// install Node's type definitions: "file:///C:/my%20dir/x.ts" -> "C:/my dir/x.ts"
+// on Windows, "file:///home/me/x.ts" -> "/home/me/x.ts" on Linux (CI).
+const shimUrl = new URL('./src/shims/iconv-lite.ts', import.meta.url);
+const iconvLiteShim = decodeURIComponent(shimUrl.pathname).replace(/^\/([A-Za-z]:)/, '$1');
+
 export default defineConfig({
   plugins: [securityHeaders()],
+  resolve: {
+    // @kenjiuno/msgreader (the .msg parser) requires 'iconv-lite', which needs
+    // Node's Buffer and crashes in the browser. Every import of exactly
+    // 'iconv-lite' is redirected to a tiny browser version built on
+    // TextDecoder (see the comments in that file). Top-level `resolve`
+    // applies to both `vite build` and Vitest.
+    alias: [{ find: /^iconv-lite$/, replacement: iconvLiteShim }],
+  },
   build: {
     // Vite normally injects a small "modulepreload" polyfill that calls fetch().
     // Every browser we target supports modulepreload natively, and README.md, rule R1
@@ -68,5 +84,15 @@ export default defineConfig({
     // scripts/ holds the self-test of the "no network" build check.
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     environment: 'node',
+    // Vitest normally hands packages from node_modules straight to Node, whose
+    // require('iconv-lite') would skip the alias above and load the real
+    // package. Pre-bundling msgreader (like `vite build` does) applies the
+    // alias, so the tests run the same shim as the shipped site.
+    // lib/DataStream is listed too because a test imports it directly.
+    deps: {
+      optimizer: {
+        ssr: { enabled: true, include: ['@kenjiuno/msgreader', '@kenjiuno/msgreader/lib/DataStream'] },
+      },
+    },
   },
 });
