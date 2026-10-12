@@ -1,0 +1,25 @@
+Return-Path: <alice@example.test>
+Date: Fri, 28 Feb 2025 18:45:10 +0100
+From: Alice Example <alice@example.test>
+Reply-To: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>
+Cc: Carol Test <carol@sample.invalid>
+Subject: Office key for next week
+Message-ID: <plain-1.alice@example.test>
+User-Agent: ExampleMail/1.0 (synthetic)
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hi Bob,
+
+I will leave the office key at the front desk on Monday, so your team can
+start whenever suits you. The old desks are already in the storage room.
+
+Have a good weekend,
+Alice
+
+-- 
+Alice Example
+Sent from my laptop

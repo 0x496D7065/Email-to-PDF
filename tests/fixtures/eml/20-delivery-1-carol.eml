@@ -1,0 +1,20 @@
+Date: Tue, 4 Mar 2025 11:20:00 +0100
+From: =?UTF-8?Q?Carol_Test_-_=C3=89quipe_Livraisons?= <carol@sample.invalid>
+To: Alice Example <alice@example.test>
+Cc: Bob Sample <bob@furniture.example.test>
+Subject: Livraison des bureaux
+Message-ID: <delivery-1.carol@sample.invalid>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Bonjour Madame Example,
+
+Les bureaux et chaises d'essai pour votre =C3=A9quipe
+seront livr=C3=A9s le jeudi 6 mars entre 8h et 12h.
+Merci de confirmer que quelqu'un sera pr=C3=A9sent.
+
+Cordialement,
+Carol Test
+=C3=89quipe Livraisons, Mobilier Exemple (fictional company)

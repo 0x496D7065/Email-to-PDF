@@ -1,0 +1,13 @@
+Date: not a date
+From: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>
+Subject: Cable trays
+Message-ID: <baddate-1.alice@example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Could you also look at the cable trays next autumn?
+
+Alice

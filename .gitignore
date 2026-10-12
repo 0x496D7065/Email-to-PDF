@@ -11,10 +11,10 @@ playwright/.cache/
 *.[mM][sS][gG]
 *.[mM][bB][oO][xX]
 *.[pP][sS][tT]
-# Narrow exception: hand-written SYNTHETIC test emails (see tests/fixtures/README.md).
+# Narrow exception: hand-written SYNTHETIC .eml test emails (see tests/fixtures/README.md).
+# No .msg exception: .msg fixtures are built in memory, never stored.
 # Real emails stay ignored everywhere else. Must come after the rules above.
 !tests/fixtures/**/*.[eE][mM][lL]
-!tests/fixtures/**/*.[mM][sS][gG]
 # Local junk
 .DS_Store
 Thumbs.db

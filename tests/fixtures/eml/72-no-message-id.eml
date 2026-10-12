@@ -1,0 +1,13 @@
+Date: Sat, 15 Mar 2025 10:20:00 +0100
+From: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>
+Subject: Thank you
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Thanks again for the quick confirmation. See you on Monday for the delivery
+of the desks.
+
+Alice

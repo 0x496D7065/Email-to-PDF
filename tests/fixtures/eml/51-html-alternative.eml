@@ -1,0 +1,51 @@
+Date: Fri, 14 Mar 2025 09:45:00 +0100
+From: =?UTF-8?Q?Carol_Test_-_=C3=89quipe_Livraisons?= <carol@sample.invalid>
+To: Alice Example <alice@example.test>
+Subject: Nouveau catalogue
+Message-ID: <catalogue-1.carol@sample.invalid>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_alt_boundary_synthetic_51"
+
+This is a multi-part message in MIME format.
+
+--=_alt_boundary_synthetic_51
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Bonjour Alice,
+
+Notre nouveau catalogue de bureaux est disponible.
+Remise de 5 % jusqu'=C3=A0 fin mars.
+
+Cordialement,
+Carol Test
+=C3=89quipe Livraisons, Mobilier Exemple (fictional company)
+
+--=_alt_boundary_synthetic_51
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><head>
+<link rel=3D"stylesheet" href=3D"https://cdn.invalid/style.css">
+<style>.box { background-image: url('https://tracker.invalid/bg.png'); }</s=
+tyle>
+</head>
+<body onmouseover=3D"alert('HOVER-RAN')">
+<div class=3D"box">
+<p>Bonjour Alice,</p>
+<p>Notre <b>nouveau catalogue</b> de bureaux est disponible.<br>
+Remise de 5&nbsp;% jusqu'&agrave; fin mars.</p>
+<script type=3D"text/javascript">new Image().src =3D 'https://tracker.inval=
+id/js.png';</script>
+<iframe src=3D"https://frame.invalid/embed" width=3D"1" height=3D"1"></ifra=
+me>
+<form action=3D"https://form.invalid/submit" method=3D"post"><input name=3D=
+"q" value=3D"x"></form>
+<img src=3D"https://tracker.invalid/p.png" width=3D"1" height=3D"1" alt=3D"=
+">
+<p>Cordialement,<br>Carol Test, &Eacute;quipe Livraisons</p>
+</div>
+</body></html>
+
+--=_alt_boundary_synthetic_51--

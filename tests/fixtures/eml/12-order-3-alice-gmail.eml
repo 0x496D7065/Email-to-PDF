@@ -1,0 +1,55 @@
+Date: Mon, 3 Mar 2025 15:40:12 +0100
+From: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>
+Subject: Re: Office desks and chairs
+Message-ID: <order-3.alice@example.test>
+In-Reply-To: <order-2.bob@furniture.example.test>
+References: <order-1.alice@example.test>
+ <order-2.bob@furniture.example.test>
+User-Agent: ExampleMail/1.0 (synthetic)
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Wednesday at 10:00 works for me. See you then.
+
+Alice
+
+-- 
+Alice Example
+Sent from my laptop
+
+On Mon, 3 Mar 2025 at 14:02, Bob Sample <bob@furniture.example.test> wrote:
+> Hello Alice,
+>
+> Thank you for your message. I can come by on Wednesday 5 March at 10:00
+> to measure the room. The quote will follow after the visit.
+>
+> Met vriendelijke groeten,
+> Bob Sample
+> Sample Furniture (fictional company)
+>
+> DISCLAIMER: This e-mail and any attachments are confidential and intended
+> solely for the addressee. If you have received it in error, please notify
+> the sender and delete it. Sample Furniture accepts no liability for its
+> content.
+>
+> ________________________________
+> From: Alice Example <alice@example.test>
+> Sent: Monday, March 3, 2025 9:15 AM
+> To: Bob Sample <bob@furniture.example.test>
+> Subject: Office desks and chairs
+>
+> Hi Bob,
+>
+> We are furnishing a small office for four people and need four desks
+> and four chairs. Could you send me a quote? Someone is at the office
+> most mornings if you want to see the room first.
+>
+> Thanks,
+> Alice
+>
+> -- 
+> Alice Example
+> Sent from my laptop

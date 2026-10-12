@@ -1,0 +1,4 @@
+# Synthetic email fixtures (tests/fixtures/): keep their exact bytes, with no
+# LF/CRLF conversion, so line endings and file hashes are identical on every
+# platform (some fixtures use LF, one uses CRLF on purpose).
+tests/fixtures/**/*.[eE][mM][lL] -text

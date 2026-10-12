@@ -1,0 +1,34 @@
+Date: Tue, 10 Jun 2025 08:30:00 -0500
+From: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>, =?UTF-8?Q?Carol_Test_-_=C3=89quipe_Livraisons?= <carol@sample.invalid>
+Subject: Re: Setup check on Thursday
+Message-ID: <setup-2.alice@example.test>
+In-Reply-To: <setup-1.bob@furniture.example.test>
+References: <setup-1.bob@furniture.example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Thursday 9:00 is fine, I will be back from my trip by then.
+
+Alice
+
+-- 
+Alice Example
+Sent from my laptop
+
+On Tue, Jun 10, 2025 at 8:00 AM Bob Sample <bob@furniture.example.test> wrote:
+> Hello both,
+>
+> Can we meet at the office on Thursday 12 June at 9:00 to check the
+> assembled desks together?
+>
+> Met vriendelijke groeten,
+> Bob Sample
+> Sample Furniture (fictional company)
+>
+> DISCLAIMER: This e-mail and any attachments are confidential and intended
+> solely for the addressee. If you have received it in error, please notify
+> the sender and delete it. Sample Furniture accepts no liability for its
+> content.

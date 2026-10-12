@@ -82,8 +82,14 @@ export default defineConfig({
     // as pure functions (README.md, rule R7). The production build never
     // includes them because nothing in index.html/main.ts imports them.
     // scripts/ holds the self-test of the "no network" build check.
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
+    // tests/ holds the synthetic fixture set and its privacy guard test.
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/**/*.test.ts'],
     environment: 'node',
+    // Vitest's persistent transform cache (node_modules/.vitest-cache) does
+    // not notice NEW files matched by import.meta.glob, so the privacy guard
+    // (tests/fixtures/synthetic-guard.test.ts) could silently skip a newly
+    // added fixture on a developer machine. Off: always transform fresh.
+    fsModuleCache: false,
     // Vitest normally hands packages from node_modules straight to Node, whose
     // require('iconv-lite') would skip the alias above and load the real
     // package. Pre-bundling msgreader (like `vite build` does) applies the

@@ -1,0 +1,38 @@
+Date: Fri, 21 Mar 2025 11:00:00 +0100
+From: Bob Sample <bob@furniture.example.test>
+To: Alice Example <alice@example.test>
+Subject: Delivery note 2025-017
+Message-ID: <deliverynote-2025-017.bob@furniture.example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_mixed_boundary_synthetic_60"
+
+This is a multi-part message in MIME format.
+
+--=_mixed_boundary_synthetic_60
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Dear Alice,
+
+Please find attached the delivery note for the desks and chairs.
+
+Met vriendelijke groeten,
+Bob Sample
+Sample Furniture (fictional company)
+
+DISCLAIMER: This e-mail and any attachments are confidential and intended
+solely for the addressee. If you have received it in error, please notify
+the sender and delete it. Sample Furniture accepts no liability for its
+content.
+
+--=_mixed_boundary_synthetic_60
+Content-Type: text/plain; name="delivery-note-2025-017.txt"
+Content-Disposition: attachment; filename="delivery-note-2025-017.txt"
+Content-Transfer-Encoding: base64
+
+U1lOVEhFVElDIFRFU1QgRE9DVU1FTlQgLSBOT1QgQSBSRUFMIERPQ1VNRU5UCkRlbGl2ZXJ5IG5v
+dGUgMjAyNS0wMTcKNCB4IG9mZmljZSBkZXNrCjQgeCBvZmZpY2UgY2hhaXIKVG90YWw6IDEsMjUw
+LjAwIEVVUiwgVkFUIGluY2x1ZGVkCg==
+
+--=_mixed_boundary_synthetic_60--

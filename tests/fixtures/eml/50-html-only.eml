@@ -1,0 +1,31 @@
+Date: Wed, 12 Mar 2025 07:30:00 +0000
+From: Sample Furniture News <news@furniture.example.test>
+To: Alice Example <alice@example.test>
+Subject: Spring offer: office chairs
+Message-ID: <news-2025-03@furniture.example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html>
+<html><head><meta charset=3D"utf-8"><title>Spring offer</title>
+<style>body { font-family: sans-serif; } .preheader { display: none; }</sty=
+le>
+<script>document.title =3D 'SCRIPT-RAN'; fetch('https://tracker.inv=
+alid/collect');</script>
+</head>
+<body onload=3D"alert('ONLOAD-RAN')">
+<p class=3D"preheader">Hidden preheader text</p>
+<p>Dear Alice,</p>
+<p>Spring offer on office chairs: order before 31 March and
+get 10&nbsp;% off. Caf&eacute; tables &amp; meeting chairs included.</p>
+<p><a href=3D"https://shop.example.invalid/spring?ref=3D42" onclick=3D"aler=
+t('CLICK-RAN')">Book a visit</a></p>
+<img src=3D"https://tracker.invalid/p.png" width=3D"1" height=3D"1" alt=3D"=
+">
+<img src=3D"cid:missing@example.test" onerror=3D"alert('ONERROR-RAN')" alt=
+=3D"">
+<p>Sample Furniture &ndash; <a href=3D"javascript:alert('JS-LINK-RAN')">uns=
+ubscribe</a></p>
+</body></html>

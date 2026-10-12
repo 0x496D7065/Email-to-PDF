@@ -1,0 +1,38 @@
+From: Alice Example <alice@example.test>
+Subject: Re: Livraison des bureaux
+Date: Tue, 4 Mar 2025 13:05:30 +0100
+References: <delivery-1.carol@sample.invalid>
+Cc: Bob Sample <bob@furniture.example.test>
+To: =?UTF-8?Q?Carol_Test_-_=C3=89quipe_Livraisons?= <carol@sample.invalid>
+In-Reply-To: <delivery-1.carol@sample.invalid>
+Message-Id: <delivery-2.alice@example.test>
+X-Mailer: Example Apple Mail (synthetic)
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Hello Carol,
+
+Yes, I will be at the office on Thursday morning. Please ring at the side d=
+oor.
+
+Best regards,
+Alice
+
+--=20
+Alice Example
+Sent from my laptop
+
+> On 4 Mar 2025, at 11:20, Carol Test - =C3=89quipe Livraisons <carol@sampl=
+e.invalid> wrote:
+>=20
+> Bonjour Madame Example,
+>
+> Les bureaux et chaises d'essai pour votre =C3=A9quipe
+> seront livr=C3=A9s le jeudi 6 mars entre 8h et 12h.
+> Merci de confirmer que quelqu'un sera pr=C3=A9sent.
+>
+> Cordialement,
+> Carol Test
+> =C3=89quipe Livraisons, Mobilier Exemple (fictional company)

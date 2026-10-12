@@ -1,0 +1,23 @@
+Date: Mon, 3 Mar 2025 09:15:00 +0100
+From: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>
+Subject: Office desks and chairs
+Message-ID: <order-1.alice@example.test>
+User-Agent: ExampleMail/1.0 (synthetic)
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hi Bob,
+
+We are furnishing a small office for four people and need four desks
+and four chairs. Could you send me a quote? Someone is at the office
+most mornings if you want to see the room first.
+
+Thanks,
+Alice
+
+-- 
+Alice Example
+Sent from my laptop
