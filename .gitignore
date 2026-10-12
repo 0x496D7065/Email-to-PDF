@@ -1,5 +1,10 @@
 node_modules/
 dist/
+# Playwright output (test runs, reports, browser cache)
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 *.eml
 *.msg
 *.mbox

@@ -21,6 +21,7 @@
   },
   // scripts/ is included for the check-no-network self-test and its .d.mts
   // types. The .mjs files themselves are not type-checked (no allowJs).
-  "include": ["src", "scripts", "vite.config.ts"],
+  // e2e/ and playwright.config.ts: browser tests, type-checked but never shipped.
+  "include": ["src", "scripts", "e2e", "vite.config.ts", "playwright.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

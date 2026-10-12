@@ -2,7 +2,13 @@
 // the `test` section below, so one file configures both the build and tests.
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { cloudflareHeadersFile, cspForMeta, REFERRER_POLICY } from './src/security/headers.ts';
+import {
+  cloudflareHeadersFile,
+  cspForHeader,
+  cspForMeta,
+  PERMISSIONS_POLICY,
+  REFERRER_POLICY,
+} from './src/security/headers.ts';
 
 // Adds the security headers (PROJECT_BRIEF.md 6.2) to the PRODUCTION BUILD only.
 //
@@ -41,6 +47,18 @@ export default defineConfig({
     // Every browser we target supports modulepreload natively, and the brief
     // forbids network APIs in the shipped code, so we turn the polyfill off.
     modulePreload: { polyfill: false },
+  },
+  // `npm run preview` serves the BUILT site (dist/). These are the same HTTP
+  // headers Cloudflare Pages sends from dist/_headers, so the browser test in
+  // e2e/ checks the real header CSP, not only the <meta> fallback.
+  // Only the preview server gets them: `npm run dev` stays without CSP
+  // (see securityHeaders() above for why).
+  preview: {
+    headers: {
+      'Content-Security-Policy': cspForHeader(),
+      'Referrer-Policy': REFERRER_POLICY,
+      'Permissions-Policy': PERMISSIONS_POLICY,
+    },
   },
   test: {
     // Unit tests sit next to the code they test, e.g. src/lib/foo.test.ts.

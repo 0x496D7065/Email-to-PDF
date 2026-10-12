@@ -77,4 +77,16 @@ export default defineConfig(
       ],
     },
   },
+  // e2e/ browser tests deliberately try forbidden things (fetch, remote
+  // images) inside the page to PROVE the CSP blocks them. That code runs
+  // only in the test browser and is never shipped, so the early-warning
+  // rules above are switched off for e2e/ only.
+  {
+    files: ['e2e/**'],
+    rules: {
+      'no-restricted-globals': 'off',
+      'no-restricted-properties': 'off',
+      'no-restricted-syntax': 'off',
+    },
+  },
 );
