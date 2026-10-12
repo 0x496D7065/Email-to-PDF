@@ -40,7 +40,13 @@ export default defineConfig(
   // This file (and any other plain .js config) is not part of tsconfig.json,
   // so type-aware rules are switched off for .js files instead of widening
   // the TypeScript project just to include tooling config.
-  { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
+  // Same for the plain-JS build scripts in scripts/*.mjs.
+  { files: ['**/*.js', '**/*.mjs'], ...tseslint.configs.disableTypeChecked },
+
+  // scripts/*.mjs run in Node, not the browser. `process` is imported from
+  // 'node:process'; `console` is declared here by hand so no extra globals
+  // package is needed.
+  { files: ['scripts/**/*.mjs'], languageOptions: { globals: { console: 'readonly' } } },
 
   // Privacy/security early-warning rules (PROJECT_BRIEF.md section 6).
   {

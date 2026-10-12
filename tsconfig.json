@@ -19,6 +19,8 @@
     // which Vite's future native config loader requires. Safe: tsc never emits.
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "vite.config.ts"],
+  // scripts/ is included for the check-no-network self-test and its .d.mts
+  // types. The .mjs files themselves are not type-checked (no allowJs).
+  "include": ["src", "scripts", "vite.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

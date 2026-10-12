@@ -47,7 +47,8 @@ export default defineConfig({
     // They run in Node (no browser DOM): detection and parsing logic is kept
     // as pure functions (PROJECT_BRIEF.md 8.3). The production build never
     // includes them because nothing in index.html/main.ts imports them.
-    include: ['src/**/*.test.ts'],
+    // scripts/ holds the self-test of the "no network" build check.
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     environment: 'node',
   },
 });
