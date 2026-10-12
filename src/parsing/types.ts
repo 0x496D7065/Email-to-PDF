@@ -50,7 +50,8 @@ export type ParseWarning =
   | 'missing-message-id' // no Message-ID header (duplicate detection gets weaker)
   | 'html-only-body' // no plain-text part: body text was converted from HTML
   | 'rtf-only-body' // .msg with only an RTF body
-  | 'no-body'; // no body text found at all
+  | 'no-body' // no body text found at all
+  | 'forwarded-message-not-expanded'; // inline forwarded message too deep (or unreadable): listed as an attachment, not in bodyText
 
 /** One email in the normalized form. */
 export interface NormalizedMessage {
