@@ -1,0 +1,63 @@
+# Continuous integration: runs every check on each push and pull request.
+# If any step fails, the run fails (PROJECT_BRIEF.md 6.3 and 12).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Least privilege: the workflow can only read the repository, nothing else.
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR cancels the older, now outdated run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    # A stuck run must not burn the private repo's limited CI minutes.
+    timeout-minutes: 15
+    steps:
+      # Actions are pinned to a full commit SHA: a tag can be moved, a SHA can't.
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Do not leave the GitHub token in .git/config for later steps.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      # Clean install exactly what package-lock.json says.
+      - name: Install dependencies
+        run: npm ci
+
+      # Strict on purpose: a newly published advisory can fail CI with no code change; then update the package (or consciously raise --audit-level).
+      - name: Audit dependencies
+        run: npm audit
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # Also runs scripts/check-no-network.mjs on the built output.
+      - name: Build and no-network check
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # End-to-end: no network requests and no CSP violations.
+      - name: End-to-end tests
+        run: npm run test:e2e
