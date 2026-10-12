@@ -14,7 +14,10 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    // Lets vite.config.ts import "./src/security/headers.ts" with its extension,
+    // which Vite's future native config loader requires. Safe: tsc never emits.
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "vite.config.ts"],
   "exclude": ["dist", "node_modules"]
