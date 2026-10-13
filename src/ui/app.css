@@ -153,6 +153,101 @@ body {
   cursor: not-allowed;
 }
 
+/* Step 1: the drop zone. Dashed like a "put things here" box; the
+   step 1 text "drop them on the dashed box" refers to this border. */
+.drop-zone {
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border: 2px dashed var(--accent);
+  border-radius: 0.5rem;
+  background-color: var(--surface);
+  text-align: center;
+}
+
+.drop-zone-text {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+/* Files are being dragged over the zone: solid border, tinted background
+   (text stays dark on a light tint, well above 4.5:1). */
+.drop-zone[data-state='over'] {
+  border-style: solid;
+  background-color: #e8eefc;
+}
+
+/* While files are being read, the button is aria-disabled: show a wait cursor. */
+.step-body[aria-busy='true'] .drop-zone {
+  cursor: progress;
+}
+
+.notice {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--accent);
+}
+
+.progress {
+  margin-top: 1rem;
+}
+
+.progress label {
+  display: block;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 1rem;
+}
+
+.summary {
+  margin-top: 1rem;
+}
+
+.summary-text {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Dark red, about 7:1 against white. */
+.error-message {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #a4161a;
+  color: #a4161a;
+}
+
+.failed-title {
+  margin: 1rem 0 0;
+  font-size: 1.0625rem;
+}
+
+.failed-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.failed-file + .failed-file {
+  margin-top: 0.5rem;
+}
+
+.failed-reason,
+.failed-detail {
+  margin: 0;
+  /* Long file names without spaces must not widen the page. */
+  overflow-wrap: anywhere;
+}
+
+.failed-detail {
+  color: var(--text-muted);
+}
+
+summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
 /* A clear outline for keyboard users on everything focusable. */
 :focus-visible {
   outline: 3px solid var(--focus);

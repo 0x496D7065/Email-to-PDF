@@ -6,6 +6,10 @@
 // This fake implements exactly those and RECORDS them, so a test can also
 // prove that nothing else (such as innerHTML) was used: any other property
 // set on a fake element throws.
+// For the interactive parts (src/ui/add-files.ts) it also has event
+// listeners (addEventListener + a test-side `fire`), click(), contains(), and
+// the `value` / `files` fields of a file input. FakeEventTarget stands in for
+// `window` (page-wide drag-and-drop listeners).
 // The real page is checked in a real browser by the e2e tests.
 
 export class FakeText {
@@ -15,10 +19,80 @@ export class FakeText {
 
 export type FakeNode = FakeElement | FakeText;
 
+/** A test event: any plain object; `fire` adds `type`, `target` and preventDefault(). */
+export interface FakeEvent {
+  type: string;
+  target: unknown;
+  defaultPrevented: boolean;
+  preventDefault(): void;
+  [key: string]: unknown;
+}
+
+type FakeListener = (event: FakeEvent) => void;
+
+/** Listeners by event type, shared by FakeElement and FakeEventTarget. */
+class Listeners {
+  private readonly byType = new Map<string, FakeListener[]>();
+
+  add(type: string, listener: FakeListener): void {
+    this.byType.set(type, [...(this.byType.get(type) ?? []), listener]);
+  }
+
+  remove(type: string, listener: FakeListener): void {
+    this.byType.set(
+      type,
+      (this.byType.get(type) ?? []).filter((l) => l !== listener),
+    );
+  }
+
+  count(type: string): number {
+    return this.byType.get(type)?.length ?? 0;
+  }
+
+  /** Calls every listener of `type` with a FakeEvent built from `init`; returns the event. */
+  fire(type: string, target: unknown, init: Record<string, unknown>): FakeEvent {
+    const event: FakeEvent = {
+      target,
+      ...init,
+      type,
+      defaultPrevented: false,
+      preventDefault() {
+        event.defaultPrevented = true;
+      },
+    };
+    for (const listener of this.byType.get(type) ?? []) listener(event);
+    return event;
+  }
+}
+
+/** Stands in for `window`: only event listeners. */
+export class FakeEventTarget {
+  readonly listeners = new Listeners();
+
+  addEventListener(type: string, listener: FakeListener): void {
+    this.listeners.add(type, listener);
+  }
+
+  removeEventListener(type: string, listener: FakeListener): void {
+    this.listeners.remove(type, listener);
+  }
+
+  /** Test side: dispatches an event to this target's listeners (target defaults to this). */
+  fire(type: string, init: Record<string, unknown> = {}): FakeEvent {
+    return this.listeners.fire(type, this, init);
+  }
+}
+
 export class FakeElement {
   readonly nodeType = 1;
   readonly attributes = new Map<string, string>();
   children: FakeNode[] = [];
+  /** A file input's value (code may only clear it) and chosen files. */
+  value = '';
+  files: unknown = null;
+  /** How many times click() was called. */
+  clicks = 0;
+  readonly listeners = new Listeners();
   // Text set with textContent (a plain field: a #private field would not work
   // through the Proxy below).
   private ownText = '';
@@ -70,6 +144,30 @@ export class FakeElement {
     this.ownText = '';
     this.children = [];
     this.append(...nodes);
+  }
+
+  addEventListener(type: string, listener: FakeListener): void {
+    this.listeners.add(type, listener);
+  }
+
+  removeEventListener(type: string, listener: FakeListener): void {
+    this.listeners.remove(type, listener);
+  }
+
+  /** Like the real click(): fires 'click' at this element. */
+  click(): void {
+    this.clicks++;
+    this.listeners.fire('click', this, {});
+  }
+
+  /** Test side: fires an event at this element's own listeners (target = this). */
+  fire(type: string, init: Record<string, unknown> = {}): FakeEvent {
+    return this.listeners.fire(type, this, init);
+  }
+
+  /** True for this element itself or any node below it (like Node.contains). */
+  contains(node: unknown): boolean {
+    return node === this || this.children.some((c) => c === node || (c instanceof FakeElement && c.contains(node)));
   }
 
   /** Every element below this one, depth first, in document order. */

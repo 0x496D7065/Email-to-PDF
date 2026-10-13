@@ -52,11 +52,31 @@ export const en = {
   },
 
   drop: {
-    zone: 'Drop your email files here',
-    or: 'or',
-    accepted: 'Accepted: .eml and .msg files.',
+    zone: 'Drag your email files here, or choose them.',
+    accepted: 'Accepted: .eml and .msg files. You can add more files at any time.',
     reading: 'Reading file {done} of {total}...',
     organizing: 'Putting your emails in order...',
+    // Files added while others are still being read.
+    queued: 'More files were added. They will be read as soon as the current ones are done.',
+    // Files dropped somewhere on the page other than the drop zone.
+    outside: 'Nothing was added. To add files, drop them on the dashed box in step 1.',
+    // A drop with no file in it (a link or some text).
+    nothing: 'Nothing was added: only files can be dropped here.',
+    folders: {
+      one: '{count} folder could not be added. Open it and add the email files inside it instead.',
+      other: '{count} folders could not be added. Open them and add the email files inside them instead.',
+    },
+  },
+
+  // Step 1 after the files were read: a short summary, then the files that failed.
+  added: {
+    files: { one: '{count} file added.', other: '{count} files added.' },
+    failed: { one: '{count} could not be read.', other: '{count} could not be read.' },
+    messages: { one: '{count} email found.', other: '{count} emails found.' },
+    merged: { one: '{count} identical copy merged.', other: '{count} identical copies merged.' },
+    failedTitle: 'Files that could not be read',
+    details: 'Technical details',
+    noName: '(file without a name)',
   },
 
   preview: {
@@ -142,7 +162,7 @@ export const en = {
   },
 
   actions: {
-    chooseFiles: 'Choose files',
+    chooseFiles: 'Choose email files',
     downloadPdf: 'Download PDF',
     clearEverything: 'Clear everything',
     showFolded: 'Show folded text',
