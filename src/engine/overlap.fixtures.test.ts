@@ -4,51 +4,11 @@
 // each message is folded and checks the key expectations (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { FIXTURES } from '../../tests/fixtures/manifest';
-import { buildMsg } from '../../tests/fixtures/msg/builder';
-import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
-import { createEmlParser } from '../parsing/eml';
-import type { HtmlToTextResult } from '../parsing/html-to-text';
-import { createMsgParser } from '../parsing/msg';
-import type { NormalizedMessage } from '../parsing/types';
+import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { dedupe } from './dedupe';
 import { orderMessages } from './order';
 import { detectQuotedOverlap } from './overlap';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
-
-// Node has no DOMParser, so HTML bodies go through a stub (as in the adapter
-// manifest tests). The stub is NOT a converter and must never be used outside tests.
-const htmlToText = (html: string): HtmlToTextResult => ({ text: `[stub html-to-text] ${html.length} chars`, truncated: false });
-const emlParser = createEmlParser({ htmlToText });
-const msgParser = createMsgParser({ htmlToText });
-
-const emlFiles = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-});
-
-/** Parses every fixture, in manifest order. The file name is the manifest id. */
-async function parseAll(): Promise<NormalizedMessage[]> {
-  const messages: NormalizedMessage[] = [];
-  for (const f of FIXTURES) {
-    let bytes: Uint8Array;
-    if (f.kind === 'eml') {
-      const raw = emlFiles[`../../tests/fixtures/${f.id}`];
-      if (raw === undefined) throw new Error(`missing file for ${f.id}`);
-      bytes = new TextEncoder().encode(raw); // fixtures are 7-bit ASCII
-    } else {
-      const spec = MSG_SPECS.find((s) => s.id === f.id);
-      if (spec === undefined) throw new Error(`missing spec for ${f.id}`);
-      bytes = buildMsg(spec);
-    }
-    const parser = f.kind === 'eml' ? emlParser : msgParser;
-    const result = await parser.parse({ name: f.id, bytes });
-    if (!result.ok) throw new Error(`${f.id} failed to parse: ${result.detail}`);
-    messages.push(result.message);
-  }
-  return messages;
-}
 
 interface Measured {
   readonly file: string;
@@ -61,7 +21,7 @@ interface Measured {
 
 /** Parse, de-duplicate, order, detect: the same steps as the app's pipeline. */
 async function measure(): Promise<Map<string, Measured>> {
-  const messages = await parseAll();
+  const messages = await parseAllFixtures();
   const ordered = orderMessages(dedupe(messages).kept);
   const results = detectQuotedOverlap(
     ordered.map(({ item }) => ({

@@ -23,6 +23,7 @@
 import { addressParser, decodeWords, type Address, type Attachment, type Email, type PostalMimeOptions } from 'postal-mime';
 import { parseEmailDate } from './date';
 import { parseEmlTree, PostalMimeInternalsError, type EmlPart, type EmlTree } from './eml-tree';
+import { FORWARDED_SEPARATOR } from './forwarded-block';
 import { sha256Hex } from './hash';
 import { convertHtmlBody } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
@@ -105,9 +106,6 @@ const MAX_EXPANDED_FORWARDS = 200;
 interface ForwardBudget {
   remaining: number;
 }
-
-/** The line that starts each expanded forwarded message in bodyText. */
-const FORWARDED_SEPARATOR = '---------- Forwarded message ----------';
 
 /** MIME types that mark a delivery or feedback report (a bounce, an abuse report). */
 const REPORT_TYPES: ReadonlySet<string> = new Set(['message/delivery-status', 'message/feedback-report']);
@@ -496,6 +494,10 @@ async function expandForwarded(
  * Sender and Bcc follow the same rules as for a top-level message: a Sender
  * line only when that mailbox is not one of the From mailboxes (see
  * senderIfDifferent), a Bcc line only when the header is there.
+ *
+ * Keep the labels and their order in sync with FORWARDED_HEADER_LABELS
+ * (forwarded-block.ts): the reply-header detector relies on them to skip
+ * this block (its tests check the real output).
  */
 function forwardedHeaderLines(email: Email): string[] {
   const first = (key: string): string | undefined => email.headers.find((h) => h.key === key)?.value;
