@@ -132,7 +132,7 @@ export const MAX_RELATED = 20;
  * The body text as compared for de-duplication. Deliberately conservative,
  * so only differences that come from the file format are ignored:
  * - CRLF and lone CR line ends become LF (.msg stores CRLF, .eml often LF),
- * - Unicode NFC (an "é" stored as one code point or as "e" + accent is the same text),
+ * - Unicode NFC (an "e" with an acute accent stored as one code point or as "e" + accent is the same text),
  * - trailing spaces/tabs at the end of each line are dropped (mail software
  *   adds or strips them, e.g. format=flowed),
  * - blank lines at the very start and end are dropped (an .eml body ends
@@ -501,7 +501,8 @@ export function dedupe(messages: readonly NormalizedMessage[]): DedupeResult {
   const buckets = new Map<string, Prepared[]>();
   for (const p of [...prepared].sort(canonicalOrder)) pushTo(buckets, p.bucketKey, p);
   const groups: Group[] = [];
-  for (const bucket of buckets.values()) groups.push(...groupBucket(bucket));
+  // Appended one by one: a spread into push overflows the stack for very long lists.
+  for (const bucket of buckets.values()) for (const group of groupBucket(bucket)) groups.push(group);
 
   const sameId = sameIdDifferentContent(prepared);
   const reps = groups.map((group) => {

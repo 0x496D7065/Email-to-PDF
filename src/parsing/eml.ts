@@ -320,7 +320,8 @@ async function readContent(
       return;
     }
     segments.push({ text: inner.text, isBlock: true });
-    attachments.push(...inner.attachments);
+    // One by one: a spread into push overflows the stack for very long lists.
+    for (const item of inner.attachments) attachments.push(item);
     for (const warning of inner.warnings) addWarning(warnings, warning);
     expandedAny = true;
   };
