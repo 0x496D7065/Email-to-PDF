@@ -552,27 +552,29 @@ describe('createMsgParser: broken files never throw', () => {
     expect(detail).toBe('not an Outlook message: no message properties found');
   });
 
-  it('a throwing htmlToText becomes a "corrupt" result, not an exception', async () => {
+  // A converter failure is not a damaged file: the message is still read with
+  // an EMPTY body (nothing invented) and 'html-body-unreadable', so the
+  // preview can say part of it could not be shown (README.md, rule R6).
+  it('a throwing htmlToText gives an empty body with html-body-unreadable; headers and attachments are still read', async () => {
     const throwing = createMsgParser({
       htmlToText: () => {
         throw new Error('converter failed\non two lines');
       },
     });
-    const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
+    const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>', attachments: [{ fileName: 'plan.pdf', content: 'x' }] }));
     const result = await throwing.parse({ name: 'x.msg', bytes: data });
-    expect(result).toEqual({
-      ok: false,
-      error: 'corrupt',
-      detail: 'HTML body could not be converted: converter failed on two lines',
-      fileName: 'x.msg',
-      sha256: await sha256Hex(data),
-    });
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.bodyText).toBe('');
+    expect(result.message.warnings).toEqual(['html-body-unreadable']);
+    expect(result.message.subject).toBe('Test message');
+    expect(result.message.attachments.map((a) => a.fileName)).toEqual(['plan.pdf']);
+    expect(result.message.source).toEqual({ fileName: 'x.msg', sha256: await sha256Hex(data), kind: 'msg' });
   });
 
   it.each([
-    ['a TypeError', new TypeError('x.trim is not a function'), 'x.trim is not a function'],
-    ['a RangeError (e.g. a stack overflow)', new RangeError('Maximum call stack size exceeded'), 'Maximum call stack size exceeded'],
-  ])('%s thrown by htmlToText is a conversion failure, never "damaged property"', async (_label, thrown, reason) => {
+    ['a TypeError', new TypeError('x.trim is not a function')],
+    ['a RangeError (e.g. a stack overflow)', new RangeError('Maximum call stack size exceeded')],
+  ])('%s thrown by htmlToText gives html-body-unreadable, never "damaged property"', async (_label, thrown) => {
     const throwing = createMsgParser({
       htmlToText: () => {
         throw thrown;
@@ -580,18 +582,16 @@ describe('createMsgParser: broken files never throw', () => {
     });
     const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
     const result = await throwing.parse({ name: 'x.msg', bytes: data });
-    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: `HTML body could not be converted: ${reason}` });
+    expect(result.ok && result.message.warnings).toEqual(['html-body-unreadable']);
+    expect(result.ok && result.message.bodyText).toBe('');
   });
 
-  it('an htmlToText that returns something other than a { text, truncated } result is a conversion failure', async () => {
+  it('an htmlToText that returns something other than a { text, truncated } result gives html-body-unreadable', async () => {
     const broken = createMsgParser({ htmlToText: () => null as unknown as HtmlToTextResult });
     const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
     const result = await broken.parse({ name: 'x.msg', bytes: data });
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'corrupt',
-      detail: 'HTML body could not be converted: the converter returned no text',
-    });
+    expect(result.ok && result.message.warnings).toEqual(['html-body-unreadable']);
+    expect(result.ok && result.message.bodyText).toBe('');
   });
 
   it('a damaged directory entry (msgreader fails inside with a TypeError) gives a plain detail', async () => {

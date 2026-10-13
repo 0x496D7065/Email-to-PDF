@@ -58,8 +58,9 @@ export interface MsgParserOptions {
    *
    * It returns the text and whether it was cut at the converter's length
    * limit; a cut adds the 'html-body-truncated' warning. If it throws or
-   * returns anything else, the file is reported as 'corrupt' with the detail
-   * "HTML body could not be converted: ...", never as a damaged file.
+   * returns anything else, the body is left empty (nothing is put in its
+   * place) with the 'html-body-unreadable' warning, and the rest of the
+   * message (headers, attachment list) is still read.
    */
   readonly htmlToText: (html: string) => HtmlToTextResult;
 }
@@ -435,7 +436,8 @@ interface MessageBody {
  * 1. the plain-text body (PidTagBody), if it has any text;
  * 2. otherwise the HTML body (PidTagHtml), converted by the injected
  *    `htmlToText` ('html-converted-body', plus 'html-body-truncated' if the text
- *    was cut);
+ *    was cut). If the converter fails: '' with 'html-body-unreadable' (no
+ *    invented text; the preview says part of the email could not be shown);
  * 3. otherwise, if there is only an RTF body (PidTagRtfCompressed): '' with
  *    'rtf-only-body'. It is not converted (no RTF reader is bundled); the
  *    text stays in the original file and the preview flags the message;
@@ -456,7 +458,16 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody {
 
   const html = htmlBody(fields);
   if (html !== undefined && html.trim() !== '') {
-    const converted = convertHtmlBody(options.htmlToText, html);
+    let converted: HtmlToTextResult;
+    try {
+      converted = convertHtmlBody(options.htmlToText, html);
+    } catch (error) {
+      // Only a converter failure becomes a warning; anything else still fails the file.
+      if (!(error instanceof HtmlConversionError)) throw error;
+      // Even if an RTF body is also present, only 'html-body-unreadable' is
+      // given: the content is flagged as missing either way.
+      return { text: '', warnings: ['html-body-unreadable'] };
+    }
     return { text: converted.text, warnings: converted.truncated ? ['html-converted-body', 'html-body-truncated'] : ['html-converted-body'] };
   }
 
@@ -557,7 +568,8 @@ class DamagedPropertyError extends Error {
  * - A failure of the injected HTML converter keeps its own message ("HTML
  *   body could not be converted: ..."): it is not damage in the file. It is
  *   checked first, so a TypeError or RangeError from inside the converter is
- *   never mistaken for one from msgreader.
+ *   never mistaken for one from msgreader. (readBody already turns such a
+ *   failure into the 'html-body-unreadable' warning; this is a safety net.)
  * - A TypeError ("x.trim is not a function", "Cannot read properties of
  *   undefined") or a RangeError ("Offset is outside the bounds of the
  *   DataView", from a cut-off file) is a JavaScript internal that means

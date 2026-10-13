@@ -16,12 +16,19 @@
 // 2. Their subjects are equal after `subjectKey` (only spaces are tidied).
 // 3. Their attachments have the same file names, counted with repeats
 //    (sizes and types are ignored: .eml and .msg encode them differently).
-// 4. Their whole From lists are equal (see `fromKey`), and
+// 4. Either both or neither have the parser warning 'html-body-unreadable',
+//    either both or neither have 'html-body-truncated', and either both or
+//    neither have 'rtf-only-body'. A copy whose HTML body could not be read,
+//    or was cut, may hold text the other copy shows, and an RTF-only .msg has
+//    an empty text like a copy with no body at all; merging would hide that
+//    this copy's content is missing or cannot be shown (README.md, rule R6),
+//    because a merged copy keeps no parser warnings.
+// 5. Their whole From lists are equal (see `fromKey`), and
 //    a. they have the same non-null Message-ID, and their dates are at most
 //       DATE_TOLERANCE_MS apart if both have one (rule "message-id"), or
 //    b. both have an author (see `authorKey`) and they have the same
 //       non-null date (rule "author-date-body").
-// 5. One copy's header data covers the other's, so keeping that copy loses
+// 6. One copy's header data covers the other's, so keeping that copy loses
 //    nothing (see `covers`): its To, Cc and Bcc sets are each a superset of
 //    the other copy's, it has the same `sender` or the other has none, the
 //    same In-Reply-To or the other has none, all of the other's References,
@@ -45,7 +52,8 @@ export type DuplicateRule = 'message-id' | 'author-date-body';
 /** Why the engine did NOT merge messages that look alike. Shown in the preview. */
 export type DedupeWarningCode =
   // Another message has the same Message-ID but a different body, subject,
-  // attachment names or From list. Merging would lose text, so both are kept.
+  // attachment names or From list, or only one of them has a body-missing
+  // parser warning (rule 4). Merging would lose text, so both are kept.
   | 'same-id-different-content'
   // Another message has the same Message-ID and content, but the dates are
   // more than DATE_TOLERANCE_MS apart; or one copy has no date and the dated
@@ -199,8 +207,9 @@ interface Prepared {
   readonly message: NormalizedMessage;
   readonly index: number;
   /**
-   * Body, subject, attachment names and From list together: two messages
-   * can only be duplicates if these are equal, so they are bucketed by it.
+   * Body, subject, attachment names, From list and the body-missing parser
+   * warnings together: two messages can only be duplicates if these are
+   * equal, so they are bucketed by it.
    */
   readonly bucketKey: string;
   readonly author: string;
@@ -224,7 +233,15 @@ function prepare(message: NormalizedMessage, index: number): Prepared {
   // is in memory anyway, and comparing strings cannot collide. JSON quotes
   // and escapes each part, so the combined key is unambiguous.
   const names = message.attachments.map((a) => a.fileName).sort();
-  const bucketKey = JSON.stringify([names, fromKey(message), subjectKey(message.subject), normalizeBody(message.bodyText)]);
+  const bucketKey = JSON.stringify([
+    names,
+    fromKey(message),
+    subjectKey(message.subject),
+    normalizeBody(message.bodyText),
+    message.warnings.includes('html-body-unreadable'),
+    message.warnings.includes('html-body-truncated'),
+    message.warnings.includes('rtf-only-body'),
+  ]);
   const author = authorKey(message);
   const to = new Set(message.to.map(mailboxKey));
   const cc = new Set(message.cc.map(mailboxKey));
@@ -304,7 +321,10 @@ function whyNotCovered(a: Prepared, b: Prepared): DedupeWarningCode {
  */
 type Comparison = { readonly rule: DuplicateRule } | { readonly warning: DedupeWarningCode | null };
 
-/** Compares two messages of the SAME bucket (so body, subject, attachment names and From are already equal). */
+/**
+ * Compares two messages of the SAME bucket (so body, subject, attachment
+ * names, From and the body-missing warnings are already equal).
+ */
 function compareInBucket(a: Prepared, b: Prepared): Comparison {
   const sameId = a.message.messageId !== null && a.message.messageId === b.message.messageId;
   const aMs = a.message.date.utcMs;

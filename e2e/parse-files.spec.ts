@@ -1,16 +1,19 @@
 // Browser test of the parse pipeline (README.md, rules R1, R2 and R4): every
 // dropped file is parsed in its own Web Worker with a time limit, and broken,
 // huge or hostile files give a clear per-file result without ever crashing
-// the batch or the page. Runs in Chromium against the site served by
-// `vite preview` (see playwright.config.ts).
+// the batch or the page. The engine then organizes the results in its own
+// worker (src/pipeline/engine-worker.ts), also with a time limit; processFiles
+// (src/pipeline/process-files.ts) chains it all from browser File objects.
+// Runs in Chromium against the site served by `vite preview` (see
+// playwright.config.ts).
 //
 // How the code gets into the page without shipping a test hook:
-// the parser is not wired into the page yet (that comes with the preview UI),
-// so the built site does not contain it. beforeAll bundles
+// the pipeline is not wired into the page yet (that comes with the preview
+// UI), so the built site does not contain it. beforeAll bundles
 // e2e/support/parse-entry.ts IN MEMORY (`write: false`) with the project's
 // own vite.config.ts, the same configuration as the production build. Vite
-// emits the parse worker as a separate script file, exactly as it will in
-// dist/. A Playwright route serves the bundle at /__e2e__/... on the site's
+// emits the parse worker and the engine worker as separate script files,
+// exactly as it will in dist/. A Playwright route serves the bundle at /__e2e__/... on the site's
 // own origin, WITH the site's real security headers: a worker takes its CSP
 // from its own script's response (the page's <meta> CSP does not apply to
 // it), and in production every file is sent with the CSP header (dist/_headers,
@@ -43,7 +46,7 @@ declare global {
     __e2eViolations: string[];
     /** Keeps a test worker alive for the positive controls. */
     __e2eKeep: unknown;
-    /** Whether the stuck test worker's file is still being parsed ('running') or has its result ('settled'). */
+    /** Whether the stuck test worker's job is still running ('running') or has its result ('settled'). */
     __e2eHang: 'running' | 'settled' | undefined;
   }
 }
@@ -59,6 +62,7 @@ const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'sty
 const bundle = new Map<string, string>();
 let entryUrl = '';
 let parseWorkerFile = '';
+let engineWorkerFile = '';
 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
@@ -81,9 +85,11 @@ test.beforeAll(async () => {
     bundle.set(item.fileName, code);
     if (item.type === 'chunk' && item.isEntry) entryUrl = `${BUNDLE_PATH}${item.fileName}`;
     if (/^assets\/parse-worker-[\w-]+\.js$/.test(item.fileName)) parseWorkerFile = item.fileName;
+    if (/^assets\/engine-worker-[\w-]+\.js$/.test(item.fileName)) engineWorkerFile = item.fileName;
   }
   expect(entryUrl).not.toBe('');
   expect(parseWorkerFile).not.toBe('');
+  expect(engineWorkerFile).not.toBe('');
 });
 
 let origin = '';
@@ -199,6 +205,8 @@ function requestsAfterLoad(): string[] {
 
 /** The parse workers (not the test's misbehaving worker) seen so far. */
 const parseWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => w.url() === `${origin}${BUNDLE_PATH}${parseWorkerFile}`);
+/** The engine workers seen so far. */
+const engineWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => w.url() === `${origin}${BUNDLE_PATH}${engineWorkerFile}`);
 
 /**
  * After processing has finished: waits a quiet period, then asserts that
@@ -233,22 +241,25 @@ interface Summary {
   readonly hashed: boolean;
 }
 
-test('the parse worker is a separate same-origin script file with no network code', () => {
-  // Same configuration as the production build: the worker must be its own
+test('the parse and engine workers are separate same-origin script files with no network code', () => {
+  // Same configuration as the production build: each worker must be its own
   // file (allowed by `worker-src 'self'`), never inlined as a blob: or data:
   // URL, and must pass the same no-network/URL scan as every dist/ file.
-  const workerCode = bundle.get(parseWorkerFile) ?? '';
-  expect(workerCode.length).toBeGreaterThan(1000);
-  expect(findViolations(workerCode, { isDist: true, distFile: parseWorkerFile })).toEqual([]);
-  // One self-contained file: no module imports, no script loading, no eval
-  // (each would need more than `script-src 'self'`, or a request).
-  expect(workerCode).not.toMatch(/\bimport\s*[({"'*]|\bimportScripts\b|(?<![\w$.])eval\s*\(|\bnew Function\b/);
+  for (const file of [parseWorkerFile, engineWorkerFile]) {
+    const workerCode = bundle.get(file) ?? '';
+    expect(workerCode.length, file).toBeGreaterThan(1000);
+    expect(findViolations(workerCode, { isDist: true, distFile: file }), file).toEqual([]);
+    // One self-contained file: no module imports, no script loading, no eval
+    // (each would need more than `script-src 'self'`, or a request).
+    expect(workerCode, file).not.toMatch(/\bimport\s*[({"'*]|\bimportScripts\b|(?<![\w$.])eval\s*\(|\bnew Function\b/);
+  }
 
   // Every worker the entry starts is a bundled file on the site's own origin.
   const entryCode = bundle.get(entryUrl.slice(BUNDLE_PATH.length)) ?? '';
   const allWorkers = entryCode.match(/new Worker\(/g) ?? [];
   const fileWorkers = [...entryCode.matchAll(/new Worker\(new URL\(`(\/__e2e__\/assets\/[\w-]+\.js)`/g)].map((m) => m[1]);
   expect(fileWorkers).toContain(`${BUNDLE_PATH}${parseWorkerFile}`);
+  expect(fileWorkers).toContain(`${BUNDLE_PATH}${engineWorkerFile}`);
   expect(fileWorkers).toHaveLength(allWorkers.length);
 });
 
@@ -406,13 +417,135 @@ test('a stuck worker is stopped at its time limit and a crashed one fails alone;
   await expectNoNetworkAndPageAlive(page);
 });
 
-/** Starts an idle parse worker in the page (kept alive on window) and returns its Playwright handle. */
-async function startIdleParseWorker(page: Page): Promise<Worker> {
-  const started = page.waitForEvent('worker', (w) => w.url().endsWith(parseWorkerFile));
-  await page.evaluate(async (url) => {
+test('processFiles: File objects in, organized messages out; every worker ends and nothing leaves the page', async ({ page }) => {
+  test.setTimeout(60_000);
+  await serveBundle(page);
+  await open(page);
+
+  const outcome = await page.evaluate(async (url) => {
     const entry = (await import(url)) as typeof Entry;
-    window.__e2eKeep = entry.createBrowserWorker({ message: () => undefined, failure: () => undefined });
+    const file = (name: string, text: string): File => new File([text], name);
+    // A 51 MB file made of one 1 MB blob listed 51 times: the browser knows
+    // its size without 51 MB being allocated, and reading it would be seen.
+    const chunk = new Blob([new Uint8Array(1024 * 1024)]);
+    const huge = new File(Array.from({ length: 51 }, () => chunk), 'huge.eml');
+    let hugeRead = false;
+    huge.arrayBuffer = () => {
+      hugeRead = true;
+      return Blob.prototype.arrayBuffer.call(huge);
+    };
+    const files = [
+      file('order-1.eml', entry.FIXTURE_ORDER_1),
+      file('order-2.eml', entry.FIXTURE_ORDER_2),
+      file('order-2-copy.eml', entry.FIXTURE_ORDER_2_COPY),
+      file('notes.txt', 'Order notes, not an email.'),
+      huge,
+      file('order-3.eml', entry.FIXTURE_ORDER_3),
+      new File([entry.goodMsg().slice()], 'good.msg'),
+    ];
+    const progress: Entry.ProcessProgress[] = [];
+    const result = await entry.processFiles(files, { onProgress: (p) => progress.push(p) });
+    if (!result.ok) return { ok: false as const, detail: result.detail };
+    return {
+      ok: true as const,
+      hugeRead,
+      progress,
+      counts: result.engine.counts,
+      kept: result.engine.messages.map((m) => m.message.source.fileName),
+      duplicateOf2: result.engine.messages.find((m) => m.message.source.fileName === 'order-2.eml')?.duplicates.map((d) => d.source.fileName),
+      failed: result.engine.failed.map((f) => [f.index, f.fileName, f.error, f.detail]),
+      tooLargeDetail: entry.FILE_TOO_LARGE_DETAIL,
+    };
   }, entryUrl);
+
+  if (!outcome.ok) throw new Error(outcome.detail);
+  expect(outcome.hugeRead).toBe(false);
+  expect(outcome.counts).toMatchObject({ filesGiven: 7, messagesFound: 5, duplicatesMerged: 1, filesFailed: 2 });
+  expect(outcome.kept).toHaveLength(4);
+  // The thread keeps its chronological order.
+  const thread = outcome.kept.filter((name) => name.startsWith('order-'));
+  expect(thread).toEqual(['order-1.eml', 'order-2.eml', 'order-3.eml']);
+  expect(outcome.duplicateOf2).toEqual(['order-2-copy.eml']);
+  expect(outcome.failed).toEqual([
+    [3, 'notes.txt', 'unsupported-type', 'not an email file: only .eml and .msg files can be read'],
+    [4, 'huge.eml', 'too-large', outcome.tooLargeDetail],
+  ]);
+  expect(outcome.progress.at(0)).toEqual({ stage: 'reading', filesDone: 0, filesTotal: 7 });
+  expect(outcome.progress.at(-2)).toEqual({ stage: 'reading', filesDone: 7, filesTotal: 7 });
+  expect(outcome.progress.at(-1)).toEqual({ stage: 'organizing', filesDone: 7, filesTotal: 7 });
+
+  // One parse worker per email file that was read (not notes.txt, not the
+  // huge one), one engine worker, and every one of them terminated.
+  expect(parseWorkers(workers)).toHaveLength(5);
+  expect(engineWorkers(workers)).toHaveLength(1);
+  await expect.poll(() => closedWorkers.length).toBe(workers.length);
+  expect(workers).toHaveLength(6);
+
+  await expectNoNetworkAndPageAlive(page);
+});
+
+test('a stuck engine worker is stopped at its time limit and a crashed one fails cleanly: a batch error, never a frozen page', async ({ page }) => {
+  test.setTimeout(60_000);
+  await serveBundle(page);
+  await open(page);
+
+  const stuckStarted = page.waitForEvent('worker', (w) => w.url().includes('misbehaving-worker'));
+  const batch = page.evaluate(async (url) => {
+    const entry = (await import(url)) as typeof Entry;
+    const limits = { maxFileBytes: entry.MAX_FILE_BYTES, maxBatchBytes: entry.MAX_FILE_BYTES * 10 };
+    const files = [new File([entry.FIXTURE_PLAIN], 'plain.eml')];
+    const started = performance.now();
+    window.__e2eHang = 'running';
+    // The real reading and parse workers; the engine worker replaced by one
+    // that spins forever, with a 4 s limit instead of 60 s.
+    const hang = await entry.processFilesWith(files, {
+      parse: entry.parseFiles,
+      organize: (results) => entry.runEngineInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('hang'), timeoutMs: 4000 }),
+      limits,
+    });
+    window.__e2eHang = 'settled';
+    const elapsedMs = performance.now() - started;
+    const crash = await entry.processFilesWith(files, {
+      parse: entry.parseFiles,
+      organize: (results) =>
+        entry.runEngineInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('crash'), timeoutMs: entry.ENGINE_TIMEOUT_MS }),
+      limits,
+    });
+    const summary = (r: Entry.ProcessResult) => (r.ok ? { ok: true } : { ok: false, error: r.error, detail: r.detail, parsed: r.parsed.map((p) => p.ok) });
+    return { elapsedMs, hang: summary(hang), crash: summary(crash), timeoutDetail: entry.ENGINE_TIMEOUT_DETAIL, failedDetail: entry.ENGINE_FAILED_DETAIL };
+  }, entryUrl);
+
+  // While the engine worker spins, the page still answers at once (checked
+  // about 1 s after that worker started, well before its 4 s limit).
+  const stuck = await stuckStarted;
+  await page.waitForTimeout(1000);
+  const before = Date.now();
+  const during = await page.evaluate(() => ({ title: document.title, hang: window.__e2eHang }));
+  expect(Date.now() - before).toBeLessThan(1000);
+  expect(during).toEqual({ title: 'Email to PDF', hang: 'running' });
+
+  const { elapsedMs, hang, crash, timeoutDetail, failedDetail } = await batch;
+  expect(hang).toEqual({ ok: false, error: 'engine-timeout', detail: timeoutDetail, parsed: [true] });
+  expect(crash).toEqual({ ok: false, error: 'engine-failed', detail: failedDetail, parsed: [true] });
+  expect(elapsedMs).toBeLessThan(15_000);
+  await expect.poll(() => closedWorkers.includes(stuck)).toBe(true);
+  await expect.poll(() => closedWorkers.length).toBe(workers.length);
+
+  await expectNoNetworkAndPageAlive(page);
+});
+
+/** Starts an idle parse or engine worker in the page (kept alive on window) and returns its Playwright handle. */
+async function startIdleWorker(page: Page, which: 'parse' | 'engine'): Promise<Worker> {
+  const file = which === 'parse' ? parseWorkerFile : engineWorkerFile;
+  const started = page.waitForEvent('worker', (w) => w.url().endsWith(file));
+  await page.evaluate(
+    async ({ url, kind }) => {
+      const entry = (await import(url)) as typeof Entry;
+      const events = { message: () => undefined, failure: () => undefined };
+      window.__e2eKeep = kind === 'parse' ? entry.createBrowserWorker(events) : entry.createBrowserEngineWorker(events);
+    },
+    { url: entryUrl, kind: which },
+  );
   return started;
 }
 
@@ -437,42 +570,45 @@ function tryFetchesInWorker(worker: Worker): Promise<{ outcomes: string[]; viola
   });
 }
 
-// Positive control for the checks above: the worker really runs under the
-// site's strict CSP, and its violations really reach the detector used
-// after each batch (worker log entries over CDP), so "no violation" above
-// means something.
-test('the parse worker runs under the strict CSP, and the detectors see its violations', async ({ page }) => {
-  await serveBundle(page);
-  await open(page);
-  const worker = await startIdleParseWorker(page);
-  const { outcomes, violations } = await tryFetchesInWorker(worker);
+// Positive controls for the checks above, for each kind of worker the
+// pipeline starts (parse and engine).
+for (const which of ['parse', 'engine'] as const) {
+  // The worker really runs under the site's strict CSP, and its violations
+  // really reach the detector used after each batch (worker log entries over
+  // CDP), so "no violation" above means something.
+  test(`the ${which} worker runs under the strict CSP, and the detectors see its violations`, async ({ page }) => {
+    await serveBundle(page);
+    await open(page);
+    const worker = await startIdleWorker(page, which);
+    const { outcomes, violations } = await tryFetchesInWorker(worker);
 
-  expect(outcomes).toEqual(['rejected', 'rejected']);
-  const policy = cspForHeader();
-  expect(violations.sort()).toEqual(
-    [`connect-src https://example.invalid/from-worker | ${policy}`, `connect-src ${origin}/same-origin-from-worker | ${policy}`].sort(),
-  );
-  // The detector used after each batch (worker log entries over CDP) sees them.
-  await expect.poll(() => workerCspReports().filter((line) => line.includes('example.invalid/from-worker')).length).toBeGreaterThan(0);
-  await expect.poll(() => workerCspReports().filter((line) => line.includes('/same-origin-from-worker')).length).toBeGreaterThan(0);
-  // Blocked by the CSP before any request was made.
-  expect(requestsAfterLoad()).toEqual([]);
-  // The page itself saw nothing: its listener does not see worker violations.
-  expect(await page.evaluate(() => window.__e2eViolations)).toEqual([]);
-});
+    expect(outcomes).toEqual(['rejected', 'rejected']);
+    const policy = cspForHeader();
+    expect(violations.sort()).toEqual(
+      [`connect-src https://example.invalid/from-worker | ${policy}`, `connect-src ${origin}/same-origin-from-worker | ${policy}`].sort(),
+    );
+    // The detector used after each batch (worker log entries over CDP) sees them.
+    await expect.poll(() => workerCspReports().filter((line) => line.includes('example.invalid/from-worker')).length).toBeGreaterThan(0);
+    await expect.poll(() => workerCspReports().filter((line) => line.includes('/same-origin-from-worker')).length).toBeGreaterThan(0);
+    // Blocked by the CSP before any request was made.
+    expect(requestsAfterLoad()).toEqual([]);
+    // The page itself saw nothing: its listener does not see worker violations.
+    expect(await page.evaluate(() => window.__e2eViolations)).toEqual([]);
+  });
 
-// Positive control: context-level request tracking sees requests made by a
-// worker. The worker script is served WITHOUT its CSP header here, so its
-// fetch really becomes a request (aborted by the safety net, never sent).
-test('request tracking sees requests made inside a worker', async ({ page }) => {
-  await serveBundle(page, [parseWorkerFile]);
-  await open(page);
-  const worker = await startIdleParseWorker(page);
-  const { outcomes, violations } = await tryFetchesInWorker(worker);
+  // Context-level request tracking sees requests made by the worker. Its
+  // script is served WITHOUT its CSP header here, so its fetch really becomes
+  // a request (aborted by the safety net, never sent).
+  test(`request tracking sees requests made inside the ${which} worker`, async ({ page }) => {
+    await serveBundle(page, [which === 'parse' ? parseWorkerFile : engineWorkerFile]);
+    await open(page);
+    const worker = await startIdleWorker(page, which);
+    const { outcomes, violations } = await tryFetchesInWorker(worker);
 
-  expect(outcomes).toEqual(['rejected', 'resolved']);
-  expect(violations).toEqual([]);
-  await expect.poll(() => requestsAfterLoad().sort()).toEqual(
-    ['https://example.invalid/from-worker', `${origin}/same-origin-from-worker`].sort(),
-  );
-});
+    expect(outcomes).toEqual(['rejected', 'resolved']);
+    expect(violations).toEqual([]);
+    await expect.poll(() => requestsAfterLoad().sort()).toEqual(
+      ['https://example.invalid/from-worker', `${origin}/same-origin-from-worker`].sort(),
+    );
+  });
+}

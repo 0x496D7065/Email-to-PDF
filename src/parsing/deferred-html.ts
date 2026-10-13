@@ -18,9 +18,11 @@
 // never on a converted text). So pass 3 sees exactly what a direct call to
 // the real converter would have returned, and every rule of the adapter
 // (how texts are joined, empty conversions, 'html-converted-body',
-// 'html-body-truncated', "HTML body could not be converted: ...") applies
-// unchanged. The replaying converter also checks that it is handed the
-// same HTML it recorded, so a mismatch can never put a text in the wrong place.
+// 'html-body-truncated', 'html-body-unreadable' for a part the converter
+// failed on) applies unchanged. The replaying converter also checks that it
+// is handed the same HTML it recorded, so a mismatch can never put a text in
+// the wrong place: a mismatch fails the whole file (it would be a bug, and
+// the file's text could not be trusted to be complete).
 //
 // Why not placeholders (return a unique marker in pass 1, then replace the
 // markers in the finished text on the page)? The adapter decides things
@@ -48,8 +50,8 @@ export type ConversionOutcome =
 /** Sends HTML strings to the page and waits for their conversions, in the same order. */
 export type ConvertOnPage = (htmls: readonly string[]) => Promise<readonly ConversionOutcome[]>;
 
-/** Thrown by the replaying converter when the page's answer does not match what was recorded. */
-const MISMATCH_REASON = 'the converted text did not come back from the page';
+/** Detail of a file whose page answer did not match what was recorded (a bug, never a bad file). */
+export const MISMATCH_DETAIL = 'HTML body could not be converted: the converted text did not come back from the page';
 
 function parserFor(kind: FileKind, htmlToText: (html: string) => HtmlToTextResult): EmailParser {
   return kind === 'eml' ? createEmlParser({ htmlToText }) : createMsgParser({ htmlToText });
@@ -81,16 +83,27 @@ export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, con
   // win over a later problem in the file, exactly as with a direct converter.
   const outcomes = await convertOnPage(recorded);
   let next = 0;
+  let mismatch = false;
   const replaying = (html: string): HtmlToTextResult => {
     const outcome = outcomes[next];
-    if (outcome === undefined || recorded[next] !== html) throw new Error(MISMATCH_REASON);
+    if (mismatch || outcome === undefined || recorded[next] !== html) {
+      // Once out of step, every later answer is suspect too.
+      mismatch = true;
+      throw new Error('mismatch');
+    }
     next++;
-    // convertHtmlBody (inside the adapter) adds the "HTML body could not be
-    // converted: " prefix to this reason, as it does for a direct converter.
+    // The adapter turns this into its 'html-body-unreadable' warning, exactly
+    // as it does when a direct converter throws.
     if (!outcome.ok) throw new Error(outcome.reason);
     return { text: outcome.text, truncated: outcome.truncated };
   };
-  return parserFor(kind, replaying).parse(file);
+  const result = await parserFor(kind, replaying).parse(file);
+  // The adapter would have read a mismatch as one unreadable part; it is not
+  // (see the top of this file), so the file fails instead.
+  if (mismatch) {
+    return { ok: false, error: 'corrupt', detail: MISMATCH_DETAIL, fileName: file.name, sha256: await sha256Hex(file.bytes) };
+  }
+  return result;
 }
 
 /**
@@ -98,8 +111,8 @@ export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, con
  * converter (`htmlToText`, htmlToTextWithDomParser in the browser). Uses
  * convertHtmlBody, so a converter that throws or returns something that is
  * not a { text, truncated } result gives the same reason as in a direct
- * call. Stops at the first failure: the adapter stops there too, so later
- * strings would never be used.
+ * call. A failure does not stop the list: the adapter leaves that one part
+ * out and goes on with the next ones, so every string gets an outcome.
  */
 export function convertHtmlList(htmls: readonly string[], htmlToText: (html: string) => HtmlToTextResult): ConversionOutcome[] {
   const outcomes: ConversionOutcome[] = [];
@@ -111,7 +124,6 @@ export function convertHtmlList(htmls: readonly string[], htmlToText: (html: str
       const reason =
         error instanceof HtmlConversionError ? error.reason : error instanceof Error ? error.message : String(error);
       outcomes.push({ ok: false, reason });
-      break;
     }
   }
   return outcomes;

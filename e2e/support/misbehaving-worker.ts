@@ -2,8 +2,10 @@
 // e2e/support/parse-entry.ts starts it, and that entry is bundled in memory
 // by the spec, never into dist/.
 //
-// It stands in for a parser that goes wrong in ways try/catch cannot handle,
-// chosen by the file name in the parse request:
+// It stands in for a parser (or the engine) that goes wrong in ways
+// try/catch cannot handle, chosen by the `name` field of the first message
+// (the file name of a parse request; parse-entry.ts sends 'hang' or 'crash'
+// as the name when it stands in for the engine worker):
 // - a name containing "hang": spins forever without allocating (like a parser
 //   stuck in a loop), so only terminate() can stop it;
 // - any other name: throws an uncaught error (like a parser crash), which

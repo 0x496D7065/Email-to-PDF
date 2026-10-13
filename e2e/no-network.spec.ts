@@ -47,8 +47,9 @@ let websockets: string[] = [];
  * here: once routed, Playwright substitutes the page's WebSocket, so it may
  * produce neither a `page.on('websocket')` event nor a CSP violation.
  * WebSockets opened inside workers are not covered by routeWebSocket (and
- * their CSP violations fire inside the worker): the parse worker is checked
- * by e2e/parse-files.spec.ts, with detectors that do see worker activity.
+ * their CSP violations fire inside the worker): the parse and engine workers
+ * are checked by e2e/parse-files.spec.ts, with detectors that do see worker
+ * activity.
  */
 async function watchNetwork(context: BrowserContext): Promise<void> {
   context.on('request', (request) => requests.push(request));

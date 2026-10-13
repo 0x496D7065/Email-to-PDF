@@ -9,7 +9,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
 import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
-import { convertHtmlList, parseWithDeferredHtml, type ConversionOutcome } from './deferred-html';
+import { convertHtmlList, MISMATCH_DETAIL, parseWithDeferredHtml, type ConversionOutcome } from './deferred-html';
 import { createEmlParser } from './eml';
 import type { FileKind } from './file-type';
 import type { HtmlToTextResult } from './html-to-text';
@@ -189,22 +189,47 @@ describe('parseWithDeferredHtml: the page round trip', () => {
     }
   });
 
-  it("reports a page failure as 'HTML body could not be converted: ...', never as a damaged file", async () => {
+  it("a page failure leaves the HTML body out with 'html-body-unreadable', never a failed file (.eml and .msg)", async () => {
     for (const c of CASES.filter((x) => x.label === 'html-only' || x.label === HTML_ONLY_MSG.id)) {
       const result = await parseWithDeferredHtml(c.file, c.kind, () => Promise.resolve([{ ok: false, reason: 'too deep' }]));
-      expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: 'HTML body could not be converted: too deep' });
+      expect(result.ok && result.message.bodyText).toBe('');
+      expect(result.ok && result.message.warnings).toContain('html-body-unreadable');
+      expect(result.ok && result.message.warnings).not.toContain('html-converted-body');
     }
   });
 
-  it('a page answer with missing conversions fails the file with a plain detail', async () => {
+  it('a page failure on one part only: the other parts are kept, in order', async () => {
+    const c = CASES.find((x) => x.label === 'html, forwarded message with html, html');
+    if (c === undefined) throw new Error('missing case');
+    const result = await parseWithDeferredHtml(c.file, 'eml', (htmls) =>
+      Promise.resolve(
+        htmls.map((h, i): ConversionOutcome => (i === 1 ? { ok: false, reason: 'too deep' } : { ok: true, text: h.replace(/<[^>]*>/g, '').trim(), truncated: false })),
+      ),
+    );
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.bodyText).toMatch(/^Before\n[\s\S]*\n\nAfter$/);
+    expect(result.message.bodyText).not.toContain('Forwarded HTML');
+    expect(result.message.warnings).toEqual(expect.arrayContaining(['html-converted-body', 'html-body-unreadable']));
+  });
+
+  it('a page answer with missing conversions fails the file with a plain detail (a bug, never a silent gap)', async () => {
     const c = CASES.find((x) => x.label === 'plain, html, plain');
     if (c === undefined) throw new Error('missing case');
     const result = await parseWithDeferredHtml(c.file, 'eml', () => Promise.resolve([]));
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'corrupt',
-      detail: 'HTML body could not be converted: the converted text did not come back from the page',
-    });
+    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: MISMATCH_DETAIL });
+    expect(MISMATCH_DETAIL).toBe('HTML body could not be converted: the converted text did not come back from the page');
+  });
+
+  it('a page answer missing only its last conversion still fails the whole file, never one silent gap', async () => {
+    const c = CASES.find((x) => x.label === 'html, forwarded message with html, html');
+    if (c === undefined) throw new Error('missing case');
+    // Two answers for three HTML strings: the first two are used during the
+    // replay, then the third has none. That is a bug, not an unreadable part.
+    const result = await parseWithDeferredHtml(c.file, 'eml', (htmls) =>
+      Promise.resolve(htmls.slice(0, 2).map((): ConversionOutcome => ({ ok: true, text: 'x', truncated: false }))),
+    );
+    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: MISMATCH_DETAIL });
+    expect(!result.ok && result.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('email text that looks like a marker or a converted text is never touched', async () => {
@@ -228,16 +253,17 @@ describe('convertHtmlList (on the page)', () => {
     ]);
   });
 
-  it('stops at the first failure, with the bare reason', () => {
+  it('goes on after a failure (the adapter leaves only that part out), with the bare reason', () => {
     const converter = vi.fn((h: string): HtmlToTextResult => {
       if (h === 'bad') throw new TypeError('broken');
       return { text: h, truncated: false };
     });
-    expect(convertHtmlList(['ok', 'bad', 'never'], converter)).toEqual([
+    expect(convertHtmlList(['ok', 'bad', 'after'], converter)).toEqual([
       { ok: true, text: 'ok', truncated: false },
       { ok: false, reason: 'broken' },
+      { ok: true, text: 'after', truncated: false },
     ]);
-    expect(converter).toHaveBeenCalledTimes(2);
+    expect(converter).toHaveBeenCalledTimes(3);
   });
 
   it('a result that is not { text, truncated } is a failure with the same reason as a direct call', () => {

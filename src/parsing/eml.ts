@@ -25,7 +25,7 @@ import { parseEmailDate } from './date';
 import { parseEmlTree, PostalMimeInternalsError, type EmlPart, type EmlTree } from './eml-tree';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
 import { sha256Hex } from './hash';
-import { convertHtmlBody } from './html-conversion';
+import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
 import { senderIfDifferent } from './mailbox';
@@ -57,8 +57,9 @@ export interface EmlParserOptions {
    *
    * It returns the text and whether it was cut at the converter's length
    * limit; a cut adds the 'html-body-truncated' warning. If it throws or
-   * returns anything else, the file is reported as 'corrupt' with the detail
-   * "HTML body could not be converted: ...", never as a damaged file.
+   * returns anything else, that part's text is left out (nothing is put in
+   * its place), the 'html-body-unreadable' warning is added, and the rest of
+   * the message is still read: one bad HTML part never fails the whole file.
    */
   readonly htmlToText: (html: string) => HtmlToTextResult;
 }
@@ -234,7 +235,9 @@ interface MessageContent {
  * The body is built from the MIME parts tree, depth-first, in file order:
  * - an inline text/plain part adds its text;
  * - an inline text/html part adds its text converted by the injected
- *   `htmlToText` ('html-converted-body', plus 'html-body-truncated' if cut);
+ *   `htmlToText` ('html-converted-body', plus 'html-body-truncated' if cut).
+ *   If the converter fails on it, the part adds no text and the message gets
+ *   'html-body-unreadable' instead (it still counts as a body: no 'no-body');
  * - an inline forwarded message adds its block where it sits in the file,
  *   see expandForwarded;
  * - multipart/alternative holds several versions of the same content: the
@@ -299,7 +302,18 @@ async function readContent(
         segments.push({ text: part.text, isBlock: false });
         return;
       }
-      const converted = convertHtmlBody(options.htmlToText, part.text);
+      let converted: HtmlToTextResult;
+      try {
+        converted = convertHtmlBody(options.htmlToText, part.text);
+      } catch (error) {
+        // Only a converter failure is turned into a warning; anything else is
+        // a real problem with the file and still fails it.
+        if (!(error instanceof HtmlConversionError)) throw error;
+        // No text is invented for the missing part; the warning tells the
+        // preview that content is missing (README.md, rule R6).
+        addWarning(warnings, 'html-body-unreadable');
+        return;
+      }
       addWarning(warnings, 'html-converted-body');
       if (converted.truncated) addWarning(warnings, 'html-body-truncated');
       if (converted.text !== '') segments.push({ text: converted.text, isBlock: false });
@@ -470,15 +484,19 @@ async function expandForwarded(
     text: noBody ? header : `${header}\n\n${body.text}`,
     attachments: body.attachments,
     // readContent only ever gives body warnings ('html-converted-body',
-    // 'html-body-truncated', 'forwarded-message-not-expanded', and
-    // 'no-body'). 'no-body' describes
+    // 'html-body-truncated', 'html-body-unreadable',
+    // 'forwarded-message-not-expanded', and 'no-body'). 'no-body' describes
     // the inner message only: the outer one now has this block as text, so it
     // is dropped here. Date and Message-ID warnings come from buildMessage,
     // which never runs for an inner message. This allow-list also guards
     // against a body warning being added later without deciding whether it
     // applies to the outer message.
     warnings: body.warnings.filter(
-      (w) => w === 'html-converted-body' || w === 'html-body-truncated' || w === 'forwarded-message-not-expanded',
+      (w) =>
+        w === 'html-converted-body' ||
+        w === 'html-body-truncated' ||
+        w === 'html-body-unreadable' ||
+        w === 'forwarded-message-not-expanded',
     ),
   };
 }
@@ -553,11 +571,7 @@ function attachmentInfo(attachment: Attachment): AttachmentInfo {
   };
 }
 
-/**
- * A short, single-line message for the preview's error list. A failure of the
- * injected HTML converter keeps its own message ("HTML body could not be
- * converted: ..."), so it is never mistaken for a damaged file.
- */
+/** A short, single-line message for the preview's error list. */
 function errorDetail(error: unknown): string {
   return shortDetail(error instanceof Error ? error.message : String(error));
 }

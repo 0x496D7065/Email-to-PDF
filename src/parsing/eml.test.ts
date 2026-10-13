@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEmlParser } from './eml';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';
-import type { NormalizedMessage, ParseResult } from './types';
+import type { EmailParser, NormalizedMessage, ParseResult } from './types';
 
 // decodeWords is wrapped in a spy that calls the real function, so that one
 // test can simulate a library that leaves a line break in a decoded header.
@@ -1418,38 +1418,79 @@ describe('createEmlParser: malformed input never throws', () => {
     expect(!result.ok && result.detail.length).toBeGreaterThan(0);
   });
 
-  it('a failing htmlToText becomes a corrupt result that names the conversion, not an exception', async () => {
-    const failing = createEmlParser({
-      htmlToText: () => {
-        throw new Error('converter failed');
-      },
-    });
-    const data = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
-    const result = await failing.parse({ name: 'h.eml', bytes: data });
-    expect(result).toEqual({
-      ok: false,
-      error: 'corrupt',
-      detail: 'HTML body could not be converted: converter failed',
-      fileName: 'h.eml',
-      sha256: await sha256Hex(data),
-    });
-  });
-
-  it.each([
-    ['a TypeError', new TypeError('x.trim is not a function'), 'x.trim is not a function'],
-    ['a RangeError (e.g. a stack overflow)', new RangeError('Maximum call stack size exceeded'), 'Maximum call stack size exceeded'],
-    ['a thrown non-Error value', 'plain string', 'plain string'],
-    ['an Error with an empty message', new Error(''), 'unknown error'],
-  ])('%s thrown by htmlToText is reported as a conversion failure', async (_label, thrown: unknown, reason) => {
-    const failing = createEmlParser({
+  // A converter failure is not a damaged file: the message is still read,
+  // the failed HTML part adds NO text (nothing is invented in its place), and
+  // 'html-body-unreadable' tells the preview content is missing (README.md, rule R6).
+  const throwingParser = (thrown: unknown) =>
+    createEmlParser({
       htmlToText: () => {
         // Typed unknown: a converter may throw anything, not only an Error.
         throw thrown;
       },
     });
-    const data = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
-    const result = await failing.parse({ name: 'h.eml', bytes: data });
-    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: `HTML body could not be converted: ${reason}` });
+  const HTML_ONLY = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
+
+  /** Parses `data` and returns the message, failing the test if the file failed. */
+  async function readWith(p: EmailParser, data: Uint8Array): Promise<NormalizedMessage> {
+    const result = await p.parse({ name: 'h.eml', bytes: data });
+    if (!result.ok) throw new Error(`unexpected failure: ${result.detail}`);
+    return result.message;
+  }
+
+  it('a failing htmlToText leaves the HTML part out with html-body-unreadable; the rest of the message is read', async () => {
+    const message = await readWith(throwingParser(new Error('converter failed')), HTML_ONLY);
+    expect(message.bodyText).toBe('');
+    // No 'no-body': there was a body, it could not be shown.
+    expect(message.warnings).toEqual(['html-body-unreadable']);
+    expect(message.subject).toBe('Test message');
+    expect(message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
+    expect(message.source).toEqual({ fileName: 'h.eml', sha256: await sha256Hex(HTML_ONLY), kind: 'eml' });
+  });
+
+  it('only the failed HTML part is missing: other text parts and attachments stay', async () => {
+    const data = bytes(
+      HEADERS,
+      '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n',
+      '--b\r\nContent-Type: text/plain\r\n\r\nIntro\r\n',
+      '--b\r\nContent-Type: text/html\r\n\r\n<p>lost</p>\r\n',
+      '--b\r\nContent-Type: text/plain\r\n\r\nOutro\r\n',
+      '--b\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename="plan.pdf"\r\n',
+      'Content-Transfer-Encoding: base64\r\n\r\nAAEC\r\n--b--\r\n',
+    );
+    const message = await readWith(throwingParser(new RangeError('Maximum call stack size exceeded')), data);
+    expect(message.bodyText).toBe('Intro\nOutro');
+    expect(message.attachments.map((a) => a.fileName)).toEqual(['plan.pdf']);
+    expect(message.warnings).toEqual(['html-body-unreadable']);
+  });
+
+  it('a converter failing on one HTML part only: the other part is converted, and both warnings are set', async () => {
+    let calls = 0;
+    const flaky = createEmlParser({
+      htmlToText: (html) => {
+        if (++calls === 2) throw new Error('second part failed');
+        return { text: `[stub] ${html.length}`, truncated: false };
+      },
+    });
+    const data = bytes(
+      HEADERS,
+      '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n',
+      '--b\r\nContent-Type: text/html\r\n\r\n<p>one</p>\r\n',
+      '--b\r\nContent-Type: text/html\r\n\r\n<p>two</p>\r\n--b--\r\n',
+    );
+    const message = await readWith(flaky, data);
+    expect(message.bodyText).toMatch(/^\[stub\] \d+$/);
+    expect(message.warnings).toEqual(['html-converted-body', 'html-body-unreadable']);
+  });
+
+  it.each([
+    ['a TypeError', new TypeError('x.trim is not a function')],
+    ['a RangeError (e.g. a stack overflow)', new RangeError('Maximum call stack size exceeded')],
+    ['a thrown non-Error value', 'plain string'],
+    ['an Error with an empty message', new Error('')],
+  ])('%s thrown by htmlToText gives html-body-unreadable, never a failed file', async (_label, thrown: unknown) => {
+    const message = await readWith(throwingParser(thrown), HTML_ONLY);
+    expect(message.warnings).toEqual(['html-body-unreadable']);
+    expect(message.bodyText).toBe('');
   });
 
   it.each([
@@ -1457,30 +1498,24 @@ describe('createEmlParser: malformed input never throws', () => {
     ['a bare string', 'text'],
     ['no truncated flag', { text: 'text' }],
     ['a non-string text', { text: 42, truncated: false }],
-  ])('an htmlToText that returns %s (not a { text, truncated } result) is a conversion failure', async (_label, value: unknown) => {
-    const broken = createEmlParser({ htmlToText: () => value as HtmlToTextResult });
-    const data = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
-    const result = await broken.parse({ name: 'h.eml', bytes: data });
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'corrupt',
-      detail: 'HTML body could not be converted: the converter returned no text',
-    });
+  ])('an htmlToText that returns %s (not a { text, truncated } result) gives html-body-unreadable', async (_label, value: unknown) => {
+    const message = await readWith(createEmlParser({ htmlToText: () => value as HtmlToTextResult }), HTML_ONLY);
+    expect(message.warnings).toEqual(['html-body-unreadable']);
+    // Nothing the broken converter returned ends up in the text.
+    expect(message.bodyText).toBe('');
   });
 
-  it('a failing htmlToText inside an inline forwarded message is reported the same way', async () => {
-    const failing = createEmlParser({
-      htmlToText: () => {
-        throw new TypeError('inner failure');
-      },
-    });
+  it('a failing htmlToText inside an inline forwarded message: the block stays, the warning reaches the outer message', async () => {
     const inner = crlf('From: carol@example.test', 'Subject: inner', 'Content-Type: text/html', '', '<p>inner</p>');
     const data = bytes(
       HEADERS,
       '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nouter\r\n',
       `--b\r\nContent-Type: message/rfc822\r\n\r\n${inner}\r\n--b--\r\n`,
     );
-    const result = await failing.parse({ name: 'f.eml', bytes: data });
-    expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: 'HTML body could not be converted: inner failure' });
+    const message = await readWith(throwingParser(new TypeError('inner failure')), data);
+    expect(message.bodyText).toContain('outer');
+    expect(message.bodyText).toContain('Subject: inner');
+    expect(message.bodyText).not.toContain('<p>');
+    expect(message.warnings).toEqual(['html-body-unreadable']);
   });
 });

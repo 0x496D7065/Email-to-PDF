@@ -1,6 +1,7 @@
 // Calls the injected HTML-to-text converter for both adapters (.eml, .msg),
 // so that a converter failure is reported as what it is, never as a damaged
-// file.
+// file: the adapters catch HtmlConversionError, leave that HTML part out and
+// add the 'html-body-unreadable' warning (the rest of the message is kept).
 //
 // Without this wrapper a TypeError or RangeError thrown inside the converter
 // (for example a stack overflow on a hostile document) would reach the
@@ -13,8 +14,8 @@ import type { HtmlToTextResult } from './html-to-text';
 export class HtmlConversionError extends Error {
   /**
    * The converter's own reason, without the "HTML body could not be
-   * converted: " prefix. Lets the worker path (deferred-html.ts) hand the
-   * reason back to the adapter, which adds the prefix once.
+   * converted: " prefix. The worker path (deferred-html.ts) sends this
+   * reason from the page back to the worker.
    */
   readonly reason: string;
 

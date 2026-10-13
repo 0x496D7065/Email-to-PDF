@@ -60,6 +60,13 @@ export type ParseWarning =
   // text can differ from what the sender saw.
   | 'html-converted-body'
   | 'html-body-truncated' // the converted HTML text hit the length limit and was cut (a note line says so)
+  // An HTML body part could not be converted (the converter failed on it, for
+  // example a document nested too deeply). The rest of the message (headers,
+  // other text parts, attachment list) is still read, but that part's text is
+  // MISSING from bodyText: nothing is put in its place (no invented text). The
+  // preview must say that part of the email could not be shown (README.md,
+  // rule R6). The text stays in the original file.
+  | 'html-body-unreadable'
   | 'rtf-only-body' // .msg with only an RTF body
   | 'no-body' // no body text found at all
   // A forwarded message whose text was not expanded (.eml: nested too deep or
@@ -123,9 +130,9 @@ export type ParseErrorCode =
   | 'unsupported-type' // not an .eml/.msg file
   // The file could not be read: damaged, the parser failed on it, or its
   // worker was stopped (time limit) or failed, or its bytes had already been
-  // handed over to an earlier worker. `detail` says which; an HTML body the
-  // converter could not handle says "HTML body could not be converted: ..."
-  // instead of "damaged file structure: ...".
+  // handed over to an earlier worker. `detail` says which. (An HTML body the
+  // converter could not handle is NOT a failed file: the message is read
+  // without it and gets the 'html-body-unreadable' warning.)
   | 'corrupt';
 
 /**

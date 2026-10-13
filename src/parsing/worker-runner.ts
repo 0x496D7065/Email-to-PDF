@@ -50,9 +50,13 @@ export function isDetached(bytes: Uint8Array): boolean {
   return buffer instanceof ArrayBuffer && 'detached' in buffer && buffer.detached === true;
 }
 
-/** What the page needs from a worker. */
-export interface WorkerHandle {
-  send(message: ToWorker, transfer: Transferable[]): void;
+/**
+ * What the page needs from a worker. `M` is the type of the messages the
+ * page sends: parse requests here, engine requests for the engine worker
+ * (src/pipeline/engine-runner.ts), which reuses connectWorker below.
+ */
+export interface WorkerHandle<M = ToWorker> {
+  send(message: M, transfer: Transferable[]): void;
   terminate(): void;
 }
 
@@ -189,7 +193,7 @@ export const createBrowserWorker: WorkerFactory = (events) =>
   connectWorker(new Worker(new URL('./parse-worker.ts', import.meta.url), { type: 'module' }), events);
 
 /** Connects a started browser Worker to `events` and wraps it as a WorkerHandle. */
-export function connectWorker(worker: Worker, events: WorkerEvents): WorkerHandle {
+export function connectWorker<M = ToWorker>(worker: Worker, events: WorkerEvents): WorkerHandle<M> {
   worker.addEventListener('message', (event: MessageEvent<unknown>) => events.message(event.data));
   worker.addEventListener('error', (event) => {
     // Handled here: keeps the browser from also reporting it as an uncaught error.

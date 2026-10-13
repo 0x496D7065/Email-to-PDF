@@ -146,11 +146,11 @@ describe('normalizeBody', () => {
   });
 
   it('applies Unicode NFC', () => {
-    expect(normalizeBody('café')).toBe('café');
+    expect(normalizeBody('cafe\u0301')).toBe('caf\u00E9');
   });
 
   it('keeps inner blank lines, inner spaces, leading spaces, case and quotes', () => {
-    const text = 'A\n\n\nb  c\n  > Quoted\nNON-BREAKING ';
+    const text = 'A\n\n\nb  c\n  > Quoted\nNON-BREAKING\u00A0';
     expect(normalizeBody(text)).toBe(text);
   });
 
@@ -162,7 +162,7 @@ describe('normalizeBody', () => {
 describe('subjectKey', () => {
   it('trims, collapses inner whitespace and applies NFC, nothing else', () => {
     expect(subjectKey('  Re:\t Office\r\n  desks  ')).toBe('Re: Office desks');
-    expect(subjectKey('Café')).toBe('Café');
+    expect(subjectKey('Cafe\u0301')).toBe('Caf\u00E9');
     expect(subjectKey('RE: [External] Desks')).toBe('RE: [External] Desks');
   });
 });
@@ -611,6 +611,40 @@ describe('dedupe: groups', () => {
 
   it('handles an empty input', () => {
     expect(dedupe([])).toEqual({ kept: [], mergedCount: 0 });
+  });
+
+  it('never merges a copy flagged html-body-unreadable or html-body-truncated with an unflagged one', () => {
+    for (const warning of ['html-body-unreadable', 'html-body-truncated'] as const) {
+      // Same text: e.g. copy A had a text/plain part "Intro" plus an HTML part
+      // the converter failed on (or cut), copy B only the "Intro" part.
+      const flagged = make({ bodyText: 'Intro', warnings: [warning] });
+      const plain = make({ bodyText: 'Intro' });
+      for (const input of [[flagged, plain], [plain, flagged]]) {
+        const result = run(input);
+        expect(result.mergedCount, warning).toBe(0);
+        expect(result.kept.map((k) => k.message.warnings), warning).toEqual(input.map((m) => m.warnings));
+        // Same Message-ID, different content: both say so.
+        for (const k of result.kept) expect(codes(k), warning).toEqual(['same-id-different-content']);
+      }
+      // Two copies with the same warning still merge.
+      expect(run([flagged, make({ bodyText: 'Intro', warnings: [warning] })]).mergedCount, warning).toBe(1);
+    }
+  });
+
+  it('never merges an RTF-only copy (empty text, flagged rtf-only-body) with a copy that has no body', () => {
+    // Both have an empty bodyText: the .msg has an RTF body that cannot be
+    // shown, the other copy really has no body. Keeping the no-body copy
+    // would hide that content exists.
+    const rtfOnly = make({ bodyText: '', warnings: ['rtf-only-body'] });
+    const noBody = make({ bodyText: '' });
+    for (const input of [[rtfOnly, noBody], [noBody, rtfOnly]]) {
+      const result = run(input);
+      expect(result.mergedCount).toBe(0);
+      expect(result.kept.map((k) => k.message.warnings)).toEqual(input.map((m) => m.warnings));
+      for (const k of result.kept) expect(codes(k)).toEqual(['same-id-different-content']);
+    }
+    // Two RTF-only copies still merge.
+    expect(run([rtfOnly, make({ bodyText: '', warnings: ['rtf-only-body'] })]).mergedCount).toBe(1);
   });
 
   it('keeps parser warnings untouched on the representative', () => {
