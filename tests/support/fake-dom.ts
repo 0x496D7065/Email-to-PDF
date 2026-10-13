@@ -1,0 +1,91 @@
+// A tiny stand-in for the browser DOM, for unit tests that run in Node.
+//
+// Why not jsdom: it would be a new dependency, and our UI code only ever uses
+// a handful of DOM calls on purpose (createElement, setAttribute,
+// removeAttribute, textContent, append, replaceChildren; see src/ui/dom.ts).
+// This fake implements exactly those and RECORDS them, so a test can also
+// prove that nothing else (such as innerHTML) was used: any other property
+// set on a fake element throws.
+// The real page is checked in a real browser by the e2e tests.
+
+export class FakeText {
+  readonly nodeType = 3;
+  constructor(readonly data: string) {}
+}
+
+export type FakeNode = FakeElement | FakeText;
+
+export class FakeElement {
+  readonly nodeType = 1;
+  readonly attributes = new Map<string, string>();
+  children: FakeNode[] = [];
+  // Text set with textContent (a plain field: a #private field would not work
+  // through the Proxy below).
+  private ownText = '';
+
+  constructor(readonly tagName: string) {
+    // Freeze the shape: setting any property this fake does not know about
+    // (innerHTML, outerHTML, onclick, ...) throws instead of passing silently.
+    return new Proxy(this, {
+      set(target, property, value, receiver) {
+        if (typeof property === 'string' && !(property in target)) {
+          throw new Error(`fake DOM: setting "${property}" is not allowed`);
+        }
+        return Reflect.set(target, property, value, receiver);
+      },
+    });
+  }
+
+  get textContent(): string {
+    return this.ownText + this.children.map((c) => (c instanceof FakeText ? c.data : c.textContent)).join('');
+  }
+
+  set textContent(value: string) {
+    this.children = [];
+    this.ownText = value;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  hasAttribute(name: string): boolean {
+    return this.attributes.has(name);
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
+  append(...nodes: (FakeNode | string)[]): void {
+    // Like the real append(): a string becomes a text node, never markup.
+    for (const node of nodes) this.children.push(typeof node === 'string' ? new FakeText(node) : node);
+  }
+
+  replaceChildren(...nodes: (FakeNode | string)[]): void {
+    this.ownText = '';
+    this.children = [];
+    this.append(...nodes);
+  }
+
+  /** Every element below this one, depth first, in document order. */
+  descendants(): FakeElement[] {
+    return this.children.flatMap((c) => (c instanceof FakeElement ? [c, ...c.descendants()] : []));
+  }
+}
+
+export class FakeDocument {
+  title = '';
+  readonly documentElement = new FakeElement('html');
+  readonly created: FakeElement[] = [];
+
+  createElement(tag: string): FakeElement {
+    const element = new FakeElement(tag);
+    this.created.push(element);
+    return element;
+  }
+}

@@ -13,6 +13,21 @@ const network = 'Network APIs are forbidden in the tool page (README.md, rule R1
 const storage = 'Message data must stay in memory only (README.md, rule R5).';
 const html = 'Email content is untrusted: use textContent, never HTML injection (README.md, rule R4).';
 
+// Properties and methods that turn a string into HTML (README.md, rule R4).
+// The build check (scripts/no-network-rules.mjs) looks for the same names in
+// the bundled output.
+const htmlSinks = [
+  'innerHTML',
+  'outerHTML',
+  'insertAdjacentHTML',
+  'createContextualFragment',
+  'srcdoc',
+  'setHTMLUnsafe',
+  'parseHTMLUnsafe',
+];
+// The same list as a regex for the AST selectors below, e.g. /^(innerHTML|...)$/
+const htmlSinkPattern = `/^(${htmlSinks.join('|')})$/`;
+
 const forbiddenGlobals = {
   fetch: network,
   XMLHttpRequest: network,
@@ -64,17 +79,43 @@ export default defineConfig(
         ),
         { object: 'navigator', property: 'sendBeacon', message: network },
         { object: 'document', property: 'cookie', message: storage },
-        { property: 'insertAdjacentHTML', message: html },
+        // Every way to turn a string into markup, read or written: x.innerHTML,
+        // x.outerHTML, x.insertAdjacentHTML(), range.createContextualFragment(),
+        // frame.srcdoc, el.setHTMLUnsafe(), Document.parseHTMLUnsafe(),
+        // document.write()/writeln(). write/writeln are banned on any object,
+        // so an alias such as `const d = document; d.write(x)` is caught too.
+        ...htmlSinks.map((property) => ({ property, message: html })),
+        { property: 'write', message: html },
+        { property: 'writeln', message: html },
       ],
       'no-restricted-syntax': [
         'error',
-        // el.innerHTML = ..., el.outerHTML += ..., el['innerHTML'] = ...
+        // The same names written as el['innerHTML'] (computed access) or as an
+        // object key, e.g. Object.assign(el, { innerHTML: x }).
         {
-          selector:
-            'AssignmentExpression > MemberExpression.left:matches([property.name=/^(inner|outer)HTML$/], [property.value=/^(inner|outer)HTML$/])',
+          selector: `MemberExpression[computed=true][property.value=${htmlSinkPattern}]`,
           message: html,
         },
+        { selector: `Property[key.name=${htmlSinkPattern}]`, message: html },
+        { selector: `Property[key.value=${htmlSinkPattern}]`, message: html },
+        // el.setAttribute('onclick', ...) / ('srcdoc', ...) when the name is
+        // written as a literal or a template literal (`on${x}`: its first
+        // text part is checked). Names built at run time are caught by
+        // src/ui/dom.ts (el / setSafeAttribute), which refuses them.
+        ...[
+          ['setAttribute', 0],
+          ['setAttributeNS', 1],
+        ].flatMap(([method, index]) =>
+          [`arguments.${index}.value`, `arguments.${index}.quasis.0.value.cooked`].map((path) => ({
+            selector: `CallExpression[callee.property.name='${method}'][${path}=/^(on|srcdoc$)/i]`,
+            message: `${html} Event handler and srcdoc attributes are forbidden; use addEventListener.`,
+          })),
+        ),
       ],
+      // Running strings as code (the CSP forbids it too, README.md, rule R2).
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
     },
   },
   // e2e/ browser tests deliberately try forbidden things (fetch, remote

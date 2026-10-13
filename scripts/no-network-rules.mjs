@@ -51,6 +51,7 @@ export function isUrlAllowed(url, distFile) {
 const network = 'Network API (README.md, rules R1 and R3)';
 const storage = 'Browser storage API: message data must stay in memory (README.md, rule R5)';
 const testCode = 'Test code in the build output (tests must never ship)';
+const htmlInjection = 'HTML injection API in the build output: use textContent (README.md, rule R4)';
 
 /**
  * Forbidden patterns. `distOnly` rules are applied to dist/ only.
@@ -71,6 +72,19 @@ export const RULES = [
   { pattern: /(?<![\w$])caches\s*\./g, reason: storage },
   { pattern: /\bvitest\b/g, reason: testCode, distOnly: true },
   { pattern: /(?<![\w$])describe\s*\(/g, reason: testCode, distOnly: true },
+  // HTML injection (README.md, rule R4). dist/ only, because comments in src/
+  // legitimately say "never innerHTML"; the source is covered by ESLint
+  // (eslint.config.js), and minified dist/ code has no comments left.
+  // Stricter than "innerHTML=": ANY mention of these names fails, because a
+  // minifier can write an assignment in many shapes (e.g. Object.assign).
+  // If a bundled library ever needs one, do not loosen this: add a narrow,
+  // file-scoped exception with a comment saying where and why.
+  { pattern: /\b(?:inner|outer)HTML\b/g, reason: htmlInjection, distOnly: true },
+  { pattern: /\binsertAdjacentHTML\b/g, reason: htmlInjection, distOnly: true },
+  { pattern: /\bcreateContextualFragment\b/g, reason: htmlInjection, distOnly: true },
+  { pattern: /\bsrcdoc\b/g, reason: htmlInjection, distOnly: true },
+  { pattern: /\b(?:setHTMLUnsafe|parseHTMLUnsafe)\b/g, reason: htmlInjection, distOnly: true },
+  { pattern: /\bdocument\s*\.\s*write(?:ln)?\s*\(/g, reason: htmlInjection, distOnly: true },
 ];
 
 // A URL runs until whitespace, a quote, a backtick, <, > or a closing bracket.

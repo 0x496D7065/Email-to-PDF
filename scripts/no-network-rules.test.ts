@@ -66,6 +66,45 @@ describe('findViolations', () => {
   });
 });
 
+describe('HTML injection APIs (README.md, rule R4)', () => {
+  it('flags every HTML injection API in dist/, in minified shapes', () => {
+    const code = [
+      'e.innerHTML=t;',
+      'e.outerHTML+=t;',
+      'e["innerHTML"]=t;',
+      'Object.assign(e,{innerHTML:t});',
+      'e.insertAdjacentHTML("beforeend",t);',
+      'r.createContextualFragment(t);',
+      'f.srcdoc=t;',
+      'e.setHTMLUnsafe(t);Document.parseHTMLUnsafe(t);',
+      'document.write(t);document . writeln (t);',
+    ].join('\n');
+    expect(findViolations(code, dist).map((f) => [f.line, f.match])).toEqual([
+      [1, 'innerHTML'],
+      [2, 'outerHTML'],
+      [3, 'innerHTML'],
+      [4, 'innerHTML'],
+      [5, 'insertAdjacentHTML'],
+      [6, 'createContextualFragment'],
+      [7, 'srcdoc'],
+      [8, 'setHTMLUnsafe'],
+      [8, 'parseHTMLUnsafe'],
+      [9, 'document.write('],
+      [9, 'document . writeln ('],
+    ]);
+    expect(findViolations(code, dist).every((f) => f.reason.includes('rule R4'))).toBe(true);
+  });
+
+  it('does not flag them in src/ (comments there say "never innerHTML"; ESLint covers the source)', () => {
+    expect(findViolations('// never use innerHTML here\ne.textContent = t;', src)).toEqual([]);
+  });
+
+  it('does not flag safe look-alikes', () => {
+    const code = 'e.textContent=t;e.innerText=t;writer.write(t);e.myinnerHTMLx=1;e.srcdocument=1;';
+    expect(findViolations(code, dist)).toEqual([]);
+  });
+});
+
 describe('file-scoped URL allowlist (third-party notices)', () => {
   const apache = 'Apache License\n   http://www.apache.org/licenses/\n   http://www.apache.org/licenses/LICENSE-2.0\n';
   const notices = { isDist: true, distFile: 'THIRD_PARTY_NOTICES.txt' };

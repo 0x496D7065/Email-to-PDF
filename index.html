@@ -6,10 +6,16 @@
     <title>Email to PDF</title>
   </head>
   <body>
-    <main>
-      <h1>Email to PDF</h1>
-      <p id="status"></p>
-    </main>
+    <!--
+      The page is built by src/ui/app.ts, with every visible word taken from
+      src/ui/i18n/. The <title> above (shown before the script runs) and the
+      <noscript> text below are the only words written here: without
+      JavaScript the strings module cannot run.
+    -->
+    <div id="app"></div>
+    <noscript>
+      <p class="noscript">This tool needs JavaScript to work. It runs only on your computer: please turn JavaScript on for this page.</p>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -7,6 +7,7 @@
 // local preview server, so even a broken CSP could not reach the internet.
 import { expect, test, type BrowserContext, type Page, type Request } from '@playwright/test';
 import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
+import { en } from '../src/ui/i18n/en.ts';
 
 /** What we keep from each `securitypolicyviolation` event. */
 interface Violation {
@@ -116,9 +117,9 @@ test('sends the security headers and the meta CSP', async ({ page }) => {
   await expect(meta).toHaveAttribute('content', cspForMeta());
 });
 
-test('shows the placeholder status text', async ({ page }) => {
+test('shows the app shell with its privacy promise', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toHaveText(/Everything stays in your browser/);
+  await expect(page.getByRole('banner')).toContainText(en.app.promise);
 });
 
 /** Does forbidden things inside the page: a fetch() and a remote image. */

@@ -18,8 +18,12 @@ are **not built yet**, so the tool is **not usable yet**.
 These rules are non-negotiable and override convenience. The IDs (`R1` to `R7`)
 are stable: the code and tests cite them, e.g. `README.md, rule R1`.
 
-R1 to R3 are enforced today. R4 to R7 are design rules for features not built
-yet: all future code must follow them.
+R1 to R3 are enforced mechanically, by the build check, lint and browser
+tests. R4 and R5 are partly enforced the same way (HTML injection and
+browser storage APIs are banned by lint and the build check); the rest of them
+is followed by design. R6 and R7 are followed by design and checked by the
+unit tests of the detection code in `src/engine/`. All code must follow every
+rule.
 
 ### R1: No network requests after the page loads
 
@@ -74,6 +78,9 @@ fallback because browsers ignore it there.
   `http://www.apache.org/licenses/` and
   `http://www.apache.org/licenses/LICENSE-2.0`, allowed only inside
   `THIRD_PARTY_NOTICES.txt` and rejected anywhere else.
+- The same build check also fails if the built site contains an HTML
+  injection API (such as `innerHTML`, `outerHTML`, `insertAdjacentHTML` or
+  `document.write`), as a backstop for rule R4.
 - A browser test (Playwright, Chromium) loads the built site and fails if it
   makes any request outside its own site or triggers any CSP violation.
 - CI runs `npm audit`, type checking, lint, unit tests, the build check and
@@ -92,6 +99,11 @@ file is checked, size-limited, and read in a separate worker that is stopped
 after a time limit. One known limit: a file that makes a parser exhaust
 memory can still crash the tab, which is why `.msg` files get a structure
 check before they are read.
+
+ESLint rejects every HTML injection API and every way to run a string as code
+(`eval`, `new Function`, string timers). The one way the interface builds
+elements is `src/ui/dom.ts`, which sets text only through `textContent` and
+refuses event handler attributes and unsafe URLs.
 
 ### R5: In memory only
 

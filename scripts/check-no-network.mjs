@@ -3,8 +3,9 @@
 //
 // Fails (exit code 1) if the source or the built site contains a network API,
 // a browser storage API, an http(s) URL that is not allowlisted, or test code,
-// or if the built security headers are missing. The matching rules live in
-// no-network-rules.mjs.
+// if the built site contains an HTML injection API such as innerHTML
+// (README.md, rule R4), or if the built security headers are missing. The
+// matching rules live in no-network-rules.mjs.
 //
 // Plain JavaScript using only Node built-ins: no extra dependency or
 // TypeScript runner is needed to run it.
