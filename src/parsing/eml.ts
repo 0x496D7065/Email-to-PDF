@@ -27,6 +27,7 @@ import { sha256Hex } from './hash';
 import { convertHtmlBody } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
+import { senderIfDifferent } from './mailbox';
 import type {
   AttachmentInfo,
   EmailAddress,
@@ -148,14 +149,19 @@ async function buildMessage(
   const warnings: ParseWarning[] = [...dateWarnings(date), ...content.warnings];
   if (messageId === null) warnings.push('missing-message-id');
 
+  const from = readFrom(email);
+  const sender = senderIfDifferent(readSender(email), from);
   return {
     messageId,
     inReplyTo: parseSingleId(email.inReplyTo),
     references: parseIdList(email.references),
     date: date.value,
-    from: readFrom(email),
+    from,
+    // Only when it adds something: absent, not undefined, otherwise.
+    ...(sender === undefined ? {} : { sender }),
     to: mailboxes(email.to),
     cc: mailboxes(email.cc),
+    bcc: mailboxes(email.bcc),
     // A missing Subject header (and an empty one) becomes ''. NormalizedMessage
     // keeps `subject: string` so later steps never need a null check.
     subject: email.subject ?? '',
@@ -191,6 +197,19 @@ function readFrom(email: Email): EmailAddress[] {
   const header = email.headers.find((h) => h.key === 'from');
   if (header === undefined || header.value.trim() === '') return [];
   return mailboxes(addressParser(header.value));
+}
+
+/**
+ * The first mailbox of the first Sender header (RFC 5322: the one mailbox
+ * that actually sent the message, e.g. on behalf of the From author), or
+ * undefined. The header allows one mailbox only; should a malformed one hold
+ * more, the rest stay in the original file. Whether it is kept depends on
+ * the From mailboxes, see senderIfDifferent.
+ */
+function readSender(email: Email): EmailAddress | undefined {
+  const header = email.headers.find((h) => h.key === 'sender');
+  if (header === undefined || header.value.trim() === '') return undefined;
+  return mailboxes(addressParser(header.value))[0];
 }
 
 /**
@@ -470,6 +489,13 @@ async function expandForwarded(
  * strings: encoded words (=?utf-8?...?=) are decoded, nothing else is
  * reformatted. The Date line is the header text exactly as in the file, never
  * a date reformatted for a locale or time zone. Missing headers are skipped.
+ *
+ * The lines are the address and summary fields a top-level message keeps in
+ * NormalizedMessage, in this order: From, Sender, Date, Subject, To, Cc, Bcc.
+ * The block is the only place an expanded message's headers are kept, so
+ * Sender and Bcc follow the same rules as for a top-level message: a Sender
+ * line only when that mailbox is not one of the From mailboxes (see
+ * senderIfDifferent), a Bcc line only when the header is there.
  */
 function forwardedHeaderLines(email: Email): string[] {
   const first = (key: string): string | undefined => email.headers.find((h) => h.key === key)?.value;
@@ -486,10 +512,12 @@ function forwardedHeaderLines(email: Email): string[] {
     lines.push(`${label}: ${shown}`);
   };
   add('From', first('from'), true);
+  if (senderIfDifferent(readSender(email), readFrom(email)) !== undefined) add('Sender', first('sender'), true);
   add('Date', first('date'), false);
   add('Subject', first('subject'), true);
   add('To', all('to'), true);
   add('Cc', all('cc'), true);
+  add('Bcc', all('bcc'), true);
   return lines;
 }
 

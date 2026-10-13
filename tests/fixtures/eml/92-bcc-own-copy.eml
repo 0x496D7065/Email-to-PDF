@@ -1,0 +1,17 @@
+Date: Wed, 19 Mar 2025 16:20:00 +0100
+From: Alice Example <alice@example.test>
+To: Bob Sample <bob@furniture.example.test>
+Bcc: Carol Test <carol@sample.invalid>,
+ Sample Furniture Planning <planning@furniture.example.test>
+Subject: Spare keys for the delivery team
+Message-ID: <keys-1.alice@example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hi Bob,
+
+The spare keys for the delivery team are at the front desk.
+
+Alice

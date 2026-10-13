@@ -43,9 +43,9 @@ async function parseFixture(id: string): Promise<NormalizedMessage> {
 }
 
 describe('.eml adapter matches the manifest', () => {
-  it('covers all 30 .eml fixtures', () => {
-    expect(emlFixtures).toHaveLength(30);
-    expect(Object.keys(files)).toHaveLength(30);
+  it('covers all 33 .eml fixtures', () => {
+    expect(emlFixtures).toHaveLength(33);
+    expect(Object.keys(files)).toHaveLength(33);
   });
 
   it.each(emlFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) => {
@@ -62,6 +62,10 @@ describe('.eml adapter matches the manifest', () => {
     expect(message.from).toEqual(expected.from);
     expect(message.to).toEqual(expected.to);
     expect(message.cc).toEqual(expected.cc);
+    expect(message.bcc).toEqual(expected.bcc);
+    // `sender` is either a mailbox or no key at all, never `sender: undefined`.
+    expect('sender' in message).toBe(expected.sender !== undefined);
+    expect(message.sender).toEqual(expected.sender);
     // The manifest writes a MISSING Subject header as null (fixture 75); the
     // adapter stores it as '' (NormalizedMessage keeps `subject: string`).
     expect(message.subject).toBe(expected.subject ?? '');

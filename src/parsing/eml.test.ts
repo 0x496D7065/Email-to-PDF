@@ -143,6 +143,59 @@ describe('createEmlParser: basic fields', () => {
   });
 });
 
+describe('createEmlParser: Sender ("on behalf of") and Bcc', () => {
+  const withHeaders = (...extra: string[]): Uint8Array =>
+    bytes(HEADERS, extra.length > 0 ? `\r\n${crlf(...extra)}` : '', '\r\n\r\nx\r\n');
+
+  it('keeps a Sender whose address is not a From address', async () => {
+    const message = await parseOk(withHeaders('Sender: Carol Test <carol@example.test>'));
+    expect(message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
+    expect(message.sender).toEqual({ name: 'Carol Test', address: 'carol@example.test' });
+  });
+
+  it('no sender key at all when there is no Sender header, or it is empty', async () => {
+    expect('sender' in (await parseOk(withHeaders()))).toBe(false);
+    expect('sender' in (await parseOk(withHeaders('Sender:   ')))).toBe(false);
+  });
+
+  it('no sender key when the Sender names a From mailbox, letter case and display name ignored', async () => {
+    expect('sender' in (await parseOk(withHeaders('Sender: "A. Example" <ALICE@Example.Test>')))).toBe(false);
+    const twoAuthors = bytes(
+      HEADERS.replace('From: Alice Example <alice@example.test>', 'From: Alice Example <alice@example.test>, bob@example.test'),
+      '\r\nSender: bob@example.test\r\n\r\nx\r\n',
+    );
+    expect('sender' in (await parseOk(twoAuthors))).toBe(false);
+  });
+
+  it('keeps the Sender when there is no From header', async () => {
+    const noFrom = bytes(
+      HEADERS.replace('From: Alice Example <alice@example.test>\r\n', ''),
+      '\r\nSender: Carol Test <carol@example.test>\r\n\r\nx\r\n',
+    );
+    const message = await parseOk(noFrom);
+    expect(message.from).toEqual([]);
+    expect(message.sender).toEqual({ name: 'Carol Test', address: 'carol@example.test' });
+  });
+
+  it('a malformed Sender with several mailboxes gives its first (groups flattened, encoded words decoded)', async () => {
+    const message = await parseOk(withHeaders('Sender: Desk: =?utf-8?Q?Caf=C3=A9_Desk?= <desk@example.test>, other@example.test;'));
+    expect(message.sender).toEqual({ name: 'Café Desk', address: 'desk@example.test' });
+  });
+
+  it('reads every mailbox of every Bcc header, groups flattened; [] without one', async () => {
+    const message = await parseOk(
+      withHeaders('Bcc: Carol Test <carol@example.test>,', ' Team: dave@example.test;', 'Bcc: erin@example.test'),
+    );
+    expect(message.bcc).toEqual([
+      { name: 'Carol Test', address: 'carol@example.test' },
+      { name: '', address: 'dave@example.test' },
+      { name: '', address: 'erin@example.test' },
+    ]);
+    expect((await parseOk(withHeaders())).bcc).toEqual([]);
+    expect((await parseOk(withHeaders('Bcc:'))).bcc).toEqual([]);
+  });
+});
+
 describe('createEmlParser: charsets', () => {
   it('reads raw 8-bit UTF-8 headers and body (RFC 6532)', async () => {
     const data = bytes(
@@ -551,6 +604,52 @@ describe('createEmlParser: inline forwarded messages', () => {
         spy.mockImplementation(real);
       }
     });
+  });
+
+  it('the header block lists a differing Sender after From, and Bcc after Cc', async () => {
+    const inner = crlf(
+      'From: Carol Test <carol@example.test>',
+      'Sender: =?utf-8?Q?Caf=C3=A9_Desk?= <desk@example.test>',
+      'Date: Mon, 2 Jun 2025 23:30:00 +0000',
+      'Subject: Inner',
+      'To: dave@example.test',
+      'Bcc: erin@example.test,',
+      ' frank@example.test',
+      '',
+      'Inner body text.',
+    );
+    const message = await parseOk(withParts('See below.', rfc822Part(inner)));
+    expect(message.bodyText).toContain(
+      [
+        '---------- Forwarded message ----------',
+        'From: Carol Test <carol@example.test>',
+        'Sender: Café Desk <desk@example.test>',
+        'Date: Mon, 2 Jun 2025 23:30:00 +0000',
+        'Subject: Inner',
+        'To: dave@example.test',
+        'Bcc: erin@example.test, frank@example.test',
+        '',
+        'Inner body text.',
+      ].join('\n'),
+    );
+    // The inner Sender and Bcc do not become the outer message's.
+    expect('sender' in message).toBe(false);
+    expect(message.bcc).toEqual([]);
+  });
+
+  it('the header block has no Sender line when the Sender is a From mailbox, and no line for an empty Bcc', async () => {
+    const inner = crlf(
+      'From: Carol Test <carol@example.test>',
+      'Sender: CAROL@example.test',
+      'Date: Mon, 2 Jun 2025 23:30:00 +0000',
+      'Bcc:',
+      '',
+      'Inner body text.',
+    );
+    const message = await parseOk(withParts('See below.', rfc822Part(inner)));
+    expect(message.bodyText).not.toContain('Sender:');
+    expect(message.bodyText).not.toContain('Bcc:');
+    expect(message.bodyText).toContain('From: Carol Test <carol@example.test>\nDate: Mon, 2 Jun 2025 23:30:00 +0000\n\nInner body text.');
   });
 
   it('the forwarded Date line is the raw header text, even when it looks like an encoded word', async () => {

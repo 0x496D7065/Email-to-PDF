@@ -23,6 +23,7 @@ import { sha256Hex } from './hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
+import { senderIfDifferent } from './mailbox';
 import type {
   AttachmentInfo,
   EmailAddress,
@@ -185,6 +186,7 @@ function buildMessage(
   const date = readDate(fields, headers);
   const body = readBody(fields, options);
   const attachments = fields.attachments ?? [];
+  const senders = readSenders(fields);
 
   const warnings: ParseWarning[] = [...date.warnings, ...body.warnings];
   if (messageId === null) warnings.push('missing-message-id');
@@ -201,7 +203,9 @@ function buildMessage(
     inReplyTo: parseSingleId(rawString(fields, '1042') ?? headerValue(headers, 'in-reply-to')),
     references: parseIdList(rawString(fields, '1039') ?? headerValue(headers, 'references')),
     date: date.value,
-    from: readFrom(fields),
+    from: senders.from,
+    // Only when it adds something: absent, not undefined, otherwise.
+    ...(senders.sender === undefined ? {} : { sender: senders.sender }),
     ...readRecipients(fields),
     // A missing subject becomes '', like in the .eml adapter.
     subject: asString(fields.subject) ?? '',
@@ -304,68 +308,103 @@ function propertyTime(text: string | undefined): EmailDate | null {
   return { utcMs, original: new Date(utcMs).toISOString(), offsetMinutes: null, zoneKnown: true };
 }
 
+/** The author(s) and, when it is someone else, the actual sender (see NormalizedMessage.sender). */
+interface Senders {
+  readonly from: EmailAddress[];
+  readonly sender: EmailAddress | undefined;
+}
+
 /**
- * The From mailbox.
+ * The From mailbox and the actual sender.
  *
  * Outlook keeps two senders: "sent representing" (PidTagSentRepresenting*,
  * the mailbox the message is FROM, what an .eml From header shows) and
  * "sender" (PidTagSender*, who actually pressed Send, e.g. an assistant
- * sending on behalf of a manager). The first is used when present; it is
- * usually the same person as the second.
+ * sending on behalf of a manager). msgreader names only the sender's
+ * properties (senderName, senderEmail, senderAddressType, senderSmtpAddress)
+ * and PidTagSentRepresentingSmtpAddress; the other "sent representing"
+ * properties are read from the raw list.
+ *
+ * - With a "sent representing" mailbox: it is `from`, and the sender is
+ *   `sender` unless it is the same mailbox (same stored address, or same
+ *   SMTP address, letter case ignored; see senderIfDifferent).
+ * - Without one: the sender is `from`, and there is no `sender`.
+ * - With an EMPTY "sent representing" mailbox (properties present but no
+ *   name and no address): treated like the .eml "Sender without From" case,
+ *   `from` stays [] and the actual sender goes to `sender`, so nothing is lost.
+ * Both addresses go through the same X.500 -> SMTP fallback (smtpAddress).
  */
-function readFrom(fields: FieldsData): EmailAddress[] {
+function readSenders(fields: FieldsData): Senders {
   const senderEmail = asString(fields.senderEmail);
   const senderName = asString(fields.senderName);
   const repName = rawString(fields, '0042'); // PidTagSentRepresentingName
   const repEmail = rawString(fields, '0065'); // PidTagSentRepresentingEmailAddress
 
-  let mailbox: EmailAddress;
-  if (repName !== undefined || repEmail !== undefined) {
-    const sameAsSender =
-      repEmail !== undefined && senderEmail !== undefined && repEmail.toLowerCase() === senderEmail.toLowerCase();
-    mailbox = {
-      name: repName ?? (sameAsSender ? (senderName ?? '') : ''),
-      address: smtpAddress(repEmail, rawString(fields, '0064'), [
-        asString(fields.sentRepresentingSmtpAddress),
-        sameAsSender ? asString(fields.senderSmtpAddress) : undefined,
-      ]),
-    };
-  } else {
-    mailbox = {
+  if (repName === undefined && repEmail === undefined) {
+    const mailbox = {
       name: senderName ?? '',
       address: smtpAddress(senderEmail, asString(fields.senderAddressType), [
         asString(fields.senderSmtpAddress),
         asString(fields.sentRepresentingSmtpAddress),
       ]),
     };
+    return { from: nonEmptyMailbox(mailbox), sender: undefined };
   }
-  // An unsent draft can have no sender at all.
+
+  const sameAsSender =
+    repEmail !== undefined && senderEmail !== undefined && repEmail.toLowerCase() === senderEmail.toLowerCase();
+  const represented = {
+    name: repName ?? (sameAsSender ? (senderName ?? '') : ''),
+    // 0x0064: PidTagSentRepresentingAddressType.
+    address: smtpAddress(repEmail, rawString(fields, '0064'), [
+      asString(fields.sentRepresentingSmtpAddress),
+      sameAsSender ? asString(fields.senderSmtpAddress) : undefined,
+    ]),
+  };
+  const from = nonEmptyMailbox(represented);
+  // A represented mailbox with a name but no address never matches a sender
+  // that has an address (no address equals ''), so that sender is then always
+  // reported: this may over-report, but never loses data.
+  if (sameAsSender) return { from, sender: undefined };
+  const actual = {
+    name: senderName ?? '',
+    // Only the sender's own SMTP property: PidTagSentRepresentingSmtpAddress
+    // belongs to the represented mailbox.
+    address: smtpAddress(senderEmail, asString(fields.senderAddressType), [asString(fields.senderSmtpAddress)]),
+  };
+  return { from, sender: senderIfDifferent(actual, from) };
+}
+
+/** [mailbox], or [] if it has neither a name nor an address (an unsent draft can have no sender at all). */
+function nonEmptyMailbox(mailbox: EmailAddress): EmailAddress[] {
   return mailbox.name === '' && mailbox.address === '' ? [] : [mailbox];
 }
 
 /**
- * The To and Cc mailboxes, in file order. Bcc recipients (only present in a
- * sender's own copy) are not part of NormalizedMessage and are skipped. A
- * recipient of unknown type is listed under To, so that no recipient is
- * silently dropped. A recipient with neither a name nor an address (only
- * possible in a damaged file) holds nothing to show and is skipped, as an
- * empty sender is in readFrom.
+ * The To, Cc and Bcc mailboxes, in file order. Bcc recipients are usually
+ * only present in a sender's own copy. A recipient of unknown type is listed
+ * under To, so that no recipient is silently dropped. A recipient with
+ * neither a name nor an address (only possible in a damaged file) holds
+ * nothing to show and is skipped, as an empty sender is in readSenders.
+ *
+ * PidTagDisplayTo / DisplayCc / DisplayBcc are not read: Outlook derives
+ * these name-only summaries from the recipients, which are read here.
  */
-function readRecipients(fields: FieldsData): { to: EmailAddress[]; cc: EmailAddress[] } {
+function readRecipients(fields: FieldsData): { to: EmailAddress[]; cc: EmailAddress[]; bcc: EmailAddress[] } {
   const to: EmailAddress[] = [];
   const cc: EmailAddress[] = [];
+  const bcc: EmailAddress[] = [];
   for (const recipient of fields.recipients ?? []) {
     // Typed as 'to' | 'cc' | 'bcc', but msgreader passes any other number through unchanged.
     const type: unknown = recipient.recipType;
-    if (type === 'bcc') continue;
     const mailbox = {
       name: asString(recipient.name) ?? '',
       address: smtpAddress(asString(recipient.email), asString(recipient.addressType), [asString(recipient.smtpAddress)]),
     };
     if (mailbox.name === '' && mailbox.address === '') continue;
-    (type === 'cc' ? cc : to).push(mailbox);
+    (type === 'cc' ? cc : type === 'bcc' ? bcc : to).push(mailbox);
   }
-  return { to, cc };
+  return { to, cc, bcc };
 }
 
 /**

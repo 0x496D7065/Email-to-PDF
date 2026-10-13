@@ -13,6 +13,12 @@ const BOB: MsgMailboxSpec = {
   smtp: 'bob@furniture.example.test',
   exchangeDn: '/O=EXAMPLE TEST ORGANIZATION/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=BOB.SAMPLE',
 };
+/** The planning desk of Bob's (fictional) company: a shared Exchange mailbox that sends on Bob's behalf. */
+const PLANNING: MsgMailboxSpec = {
+  name: 'Sample Furniture Planning',
+  smtp: 'planning@furniture.example.test',
+  exchangeDn: '/O=EXAMPLE TEST ORGANIZATION/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=PLANNING',
+};
 
 // Same signature/disclaimer text as Bob's .eml fixtures, so the repeated-block
 // detection (Milestone 3) can be tested across both formats.
@@ -257,5 +263,68 @@ ${CAROL_SIG}`,
     messageId: '<order-2.bob@furniture.example.test>',
     inReplyTo: '<order-1.alice@example.test>',
     references: '<order-1.alice@example.test>',
+  },
+  {
+    id: 'msg-10-on-behalf',
+    description:
+      'Sent on behalf of: the planning mailbox (PR_SENDER_*) sends for Bob (PR_SENT_REPRESENTING_*), both Exchange users with SMTP fallbacks.',
+    strings: 'unicode',
+    subject: 'Levering vergadertafel',
+    sender: PLANNING,
+    sentRepresenting: BOB,
+    recipients: [{ ...ALICE, type: 'to' }],
+    bodyText: `Beste Alice,
+
+De vergadertafel en de zes stoelen worden op maandag 5 mei tussen 9:00 en
+11:00 geleverd.
+
+${BOB_SIG}
+
+${BOB_DISCLAIMER}`,
+    submitTime: '2025-04-28T07:45:00Z',
+    messageId: '<msg-levering-1.planning@furniture.example.test>',
+  },
+  {
+    id: 'msg-11-bcc-own-copy',
+    description: "The sender's own copy (Sent Items): To Bob, Bcc Carol, plus an empty Bcc row that must be skipped.",
+    strings: 'unicode',
+    subject: 'Chairs for the meeting room',
+    sender: ALICE,
+    // PR_SENT_REPRESENTING_* equal to the sender, as Outlook writes it for
+    // one's own mailbox: no separate sender.
+    sentRepresenting: ALICE,
+    recipients: [
+      { ...BOB, type: 'to' },
+      { ...CAROL, type: 'bcc' },
+      { name: '', smtp: '', type: 'bcc' },
+    ],
+    bodyText: `Hello Bob,
+
+Could you add two extra chairs for the meeting room to the delivery?
+
+Alice
+
+${ALICE_SIG}`,
+    submitTime: '2025-04-29T09:10:00Z',
+    messageId: '<msg-chairs-1.alice@example.test>',
+  },
+  {
+    id: 'msg-12-represented-is-sender',
+    description:
+      'PR_SENT_REPRESENTING_* names the same Exchange mailbox as PR_SENDER_* (no SMTP fallback of its own): no separate sender.',
+    strings: 'unicode',
+    subject: 'Stoelen vergaderzaal',
+    sender: BOB,
+    sentRepresenting: { ...BOB, smtpFallback: false },
+    recipients: [{ ...ALICE, type: 'to' }],
+    bodyText: `Beste Alice,
+
+Twee extra stoelen zijn geen probleem.
+
+${BOB_SIG}
+
+${BOB_DISCLAIMER}`,
+    submitTime: '2025-04-29T11:30:00Z',
+    messageId: '<msg-stoelen-1.bob@furniture.example.test>',
   },
 ];

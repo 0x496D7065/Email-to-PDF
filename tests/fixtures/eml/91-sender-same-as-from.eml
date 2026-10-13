@@ -1,0 +1,14 @@
+Date: Tue, 18 Mar 2025 10:05:00 +0100
+From: Alice Example <alice@example.test>
+Sender: Alice Example <ALICE@Example.test>
+To: Bob Sample <bob@furniture.example.test>
+Subject: Delivery slot on Thursday
+Message-ID: <slot-2.alice@example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Thursday afternoon is fine, thank you.
+
+Alice

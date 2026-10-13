@@ -1,0 +1,17 @@
+Date: Tue, 18 Mar 2025 08:30:00 +0100
+From: Bob Sample <bob@furniture.example.test>
+Sender: Sample Furniture Planning <planning@furniture.example.test>
+To: Alice Example <alice@example.test>
+Subject: Delivery slot confirmed
+Message-ID: <slot-1.planning@furniture.example.test>
+X-Synthetic-Fixture: true
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hello Alice,
+
+On behalf of Bob: the delivery slot for the remaining chairs is Thursday
+20 March between 13:00 and 15:00.
+
+Sample Furniture Planning

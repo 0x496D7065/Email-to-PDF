@@ -10,8 +10,11 @@
 // - ids (messageId, inReplyTo, references) are WITHOUT < >.
 // - `date.utcMs` is null when the date is missing or unparseable.
 // - `subject` is null when the Subject header is MISSING (an empty
-//   "Subject:" header would be ''). `from` / `to` / `cc` are [] when the
-//   header is missing. How the parser stores a missing subject in the
+//   "Subject:" header would be ''). `from` / `to` / `cc` / `bcc` are [] when
+//   the header is missing.
+// - `sender` is undefined when the normalized message must have NO sender
+//   key: no Sender header (.msg: no separate PR_SENDER_* mailbox), or one
+//   that is the same mailbox as a From mailbox (address, letter case ignored). How the parser stores a missing subject in the
 //   normalized message is the parser task's decision; the manifest only
 //   records that the header was absent.
 // - `warnings` is a set: compare it sorted, order is not meaningful.
@@ -54,6 +57,9 @@ export interface FixtureExpectation {
   readonly from: readonly ExpectedAddress[];
   readonly to: readonly ExpectedAddress[];
   readonly cc: readonly ExpectedAddress[];
+  readonly bcc: readonly ExpectedAddress[];
+  /** The actual sender when it differs from From ("on behalf of"); undefined = absent (see the header comment). */
+  readonly sender?: ExpectedAddress;
   /** null = no Subject header at all (see the header comment). */
   readonly subject: string | null;
   readonly attachments: readonly ExpectedAttachment[];
@@ -87,18 +93,18 @@ const NO_THREAD_IDS = { inReplyTo: null, references: [] } as const;
 /** A plain .eml entry: most fields shared, overrides per fixture. */
 function eml(
   file: string,
-  fields: Omit<FixtureExpectation, 'id' | 'kind' | 'attachments' | 'cc' | 'warnings' | 'tags'> &
-    Partial<Pick<FixtureExpectation, 'attachments' | 'cc' | 'warnings' | 'tags'>>,
+  fields: Omit<FixtureExpectation, 'id' | 'kind' | 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'> &
+    Partial<Pick<FixtureExpectation, 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'>>,
 ): FixtureExpectation {
-  return { id: `eml/${file}`, kind: 'eml', attachments: [], cc: [], warnings: [], tags: [], ...fields };
+  return { id: `eml/${file}`, kind: 'eml', attachments: [], cc: [], bcc: [], warnings: [], tags: [], ...fields };
 }
 
 function msg(
   id: string,
-  fields: Omit<FixtureExpectation, 'id' | 'kind' | 'attachments' | 'cc' | 'warnings' | 'tags'> &
-    Partial<Pick<FixtureExpectation, 'attachments' | 'cc' | 'warnings' | 'tags'>>,
+  fields: Omit<FixtureExpectation, 'id' | 'kind' | 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'> &
+    Partial<Pick<FixtureExpectation, 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'>>,
 ): FixtureExpectation {
-  return { id, kind: 'msg', attachments: [], cc: [], warnings: [], tags: [], ...fields };
+  return { id, kind: 'msg', attachments: [], cc: [], bcc: [], warnings: [], tags: [], ...fields };
 }
 
 /** Zone known, with its offset in minutes. */
@@ -479,6 +485,40 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     tags: ['quote:gmail-en', 'signature:alice-dashdash', ...BOB_BLOCKS],
   }),
 
+  // Sender and Bcc.
+  eml('90-sender-on-behalf.eml', {
+    description: 'Sent on behalf of: Sender (the planning mailbox) differs from From (Bob), so `sender` is kept.',
+    messageId: 'slot-1.planning@furniture.example.test',
+    ...NO_THREAD_IDS,
+    date: at('2025-03-18T07:30:00Z', 60),
+    from: [BOB],
+    sender: PLANNING,
+    to: [ALICE],
+    subject: 'Delivery slot confirmed',
+    bodyContains: ['On behalf of Bob: the delivery slot for the remaining chairs'],
+  }),
+  eml('91-sender-same-as-from.eml', {
+    description: 'Sender header naming the From mailbox in other letter case: no `sender`.',
+    messageId: 'slot-2.alice@example.test',
+    ...NO_THREAD_IDS,
+    date: at('2025-03-18T09:05:00Z', 60),
+    from: [ALICE],
+    to: [BOB],
+    subject: 'Delivery slot on Thursday',
+    bodyContains: ['Thursday afternoon is fine'],
+  }),
+  eml('92-bcc-own-copy.eml', {
+    description: "The sender's own copy with a Bcc header folded over two lines (two mailboxes).",
+    messageId: 'keys-1.alice@example.test',
+    ...NO_THREAD_IDS,
+    date: at('2025-03-19T15:20:00Z', 60),
+    from: [ALICE],
+    to: [BOB],
+    bcc: [{ name: 'Carol Test', address: 'carol@sample.invalid' }, PLANNING],
+    subject: 'Spare keys for the delivery team',
+    bodyContains: ['The spare keys for the delivery team are at the front desk.'],
+  }),
+
   // ------------------------------------------------------------------ .msg (built from msg/specs.ts)
   msg('msg-01-plain-unicode', {
     description: 'Plain Unicode .msg, To + Cc.',
@@ -582,5 +622,40 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     ...ORDER_2_FIELDS,
     date: msgAt('2025-03-03T13:02:00Z'),
     thread: { id: 'order', position: 2 },
+  }),
+  msg('msg-10-on-behalf', {
+    description: 'Sent on behalf of: from = the represented mailbox (Bob), sender = the planning mailbox; both via the SMTP fallback.',
+    messageId: 'msg-levering-1.planning@furniture.example.test',
+    ...NO_THREAD_IDS,
+    date: msgAt('2025-04-28T07:45:00Z'),
+    from: [BOB],
+    sender: PLANNING,
+    to: [ALICE],
+    subject: 'Levering vergadertafel',
+    bodyContains: ['worden op maandag 5 mei tussen 9:00 en'],
+    tags: [...BOB_BLOCKS],
+  }),
+  msg('msg-11-bcc-own-copy', {
+    description: "Sender's own copy: one Bcc recipient kept, the empty Bcc row skipped; represented = sender, so no `sender`.",
+    messageId: 'msg-chairs-1.alice@example.test',
+    ...NO_THREAD_IDS,
+    date: msgAt('2025-04-29T09:10:00Z'),
+    from: [ALICE],
+    to: [BOB],
+    bcc: [CAROL],
+    subject: 'Chairs for the meeting room',
+    bodyContains: ['two extra chairs for the meeting room'],
+    tags: ['signature:alice-dashdash'],
+  }),
+  msg('msg-12-represented-is-sender', {
+    description: 'Represented mailbox = sender (same X.500 address): no `sender`; from borrows the sender SMTP address.',
+    messageId: 'msg-stoelen-1.bob@furniture.example.test',
+    ...NO_THREAD_IDS,
+    date: msgAt('2025-04-29T11:30:00Z'),
+    from: [BOB],
+    to: [ALICE],
+    subject: 'Stoelen vergaderzaal',
+    bodyContains: ['Twee extra stoelen zijn geen probleem.'],
+    tags: [...BOB_BLOCKS],
   }),
 ];

@@ -95,6 +95,11 @@ describe('manifest matches the .eml fixtures', () => {
     expect(mailboxes(email.from ? [email.from] : [])).toEqual(expected.from);
     expect(mailboxes(email.to)).toEqual(expected.to);
     expect(mailboxes(email.cc)).toEqual(expected.cc);
+    expect(mailboxes(email.bcc)).toEqual(expected.bcc);
+    // Sender: kept only if its address is not a From address (letter case ignored).
+    const fromAddresses = expected.from.map((f) => f.address.toLowerCase());
+    const sender = email.sender && !fromAddresses.includes((email.sender.address ?? '').toLowerCase()) ? email.sender : undefined;
+    expect(sender && { name: sender.name, address: sender.address ?? '' }).toEqual(expected.sender);
     expect(email.subject ?? null).toBe(expected.subject); // missing Subject header: null in the manifest
     expect(
       email.attachments.map((a) => ({
@@ -154,13 +159,26 @@ describe('manifest matches the .msg builder specs', () => {
     expect(time !== undefined, 'zoneKnown must be true exactly when the .msg has a time').toBe(expected.date.zoneKnown);
 
     // Exchange senders: senderEmail is the X.500 DN, the SMTP fallback is senderSmtpAddress.
-    expect([{ name: data.senderName, address: data.senderSmtpAddress ?? data.senderEmail }]).toEqual(expected.from);
-    const recipients = (type: 'to' | 'cc'): ExpectedAddress[] =>
+    const actual = { name: data.senderName, address: data.senderSmtpAddress ?? data.senderEmail };
+    // "Sent representing" (0x0042 name, 0x0065 address, SMTP fallback
+    // sentRepresentingSmtpAddress) is the From when present; a missing SMTP
+    // fallback means the same mailbox as the sender in these specs.
+    const repName = rawString('0042');
+    const represented =
+      repName === undefined
+        ? undefined
+        : { name: repName, address: data.sentRepresentingSmtpAddress ?? (rawString('0065') === data.senderEmail ? actual.address : rawString('0065')) };
+    expect([represented ?? actual]).toEqual(expected.from);
+    const onBehalf = represented !== undefined && represented.address?.toLowerCase() !== actual.address?.toLowerCase();
+    expect(onBehalf ? actual : undefined).toEqual(expected.sender);
+    const recipients = (type: 'to' | 'cc' | 'bcc'): ExpectedAddress[] =>
       (data.recipients ?? [])
         .filter((r) => r.recipType === type)
         .map((r) => ({ name: r.name ?? '', address: r.smtpAddress ?? r.email ?? '' }));
     expect(recipients('to')).toEqual(expected.to);
     expect(recipients('cc')).toEqual(expected.cc);
+    // Simplest mapping: an empty recipient row (no name, no address) is not a recipient.
+    expect(recipients('bcc').filter((r) => r.name !== '' || r.address !== '')).toEqual(expected.bcc);
     expect(data.subject ?? null).toBe(expected.subject);
     expect(
       (data.attachments ?? []).map((a) => ({ fileName: a.fileName, mimeType: a.attachMimeTag, size: a.contentLength })),

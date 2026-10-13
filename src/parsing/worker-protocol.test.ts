@@ -43,6 +43,21 @@ const HTML_EML = [
   '<p>Three chair models</p>',
 ].join('\r\n');
 
+/** Sent on behalf of someone, with Bcc recipients: the optional `sender` and `bcc` must survive the copy. */
+const ON_BEHALF_EML = [
+  'X-Synthetic-Fixture: true',
+  'From: Alice Example <alice@example.test>',
+  'Sender: Carol Test <carol@example.test>',
+  'To: Bob Sample <bob@example.test>',
+  'Bcc: Sample Furniture Planning <planning@example.test>, erin@example.test',
+  'Subject: Desk delivery, on behalf of Alice',
+  'Date: Thu, 05 Jun 2025 09:00:00 +0200',
+  'Message-ID: <proto-on-behalf@example.test>',
+  'Content-Type: text/plain; charset=utf-8',
+  '',
+  'Sent for Alice: the desks arrive on Thursday.',
+].join('\r\n');
+
 const stubConverter = (html: string): HtmlToTextResult => ({ text: html.replace(/<[^>]*>/g, ''), truncated: false });
 
 describe('isToWorker / isFromWorker', () => {
@@ -164,6 +179,7 @@ describe('round trip: runInWorker + createWorkerSide', () => {
   it.each([
     ['plain .eml', 'plain.eml', 'eml', () => encode(PLAIN_EML)],
     ['HTML-only .eml', 'html.eml', 'eml', () => encode(HTML_EML)],
+    ['on-behalf .eml with Bcc', 'on-behalf.eml', 'eml', () => encode(ON_BEHALF_EML)],
     ...MSG_SPECS.map((spec) => [spec.id, `${spec.id}.msg`, 'msg', () => buildMsg(spec)] as const),
   ] as const)('%s gives exactly the result of a direct parse', async (_label, name, kind, make) => {
     const direct = await (kind === 'eml' ? createEmlParser({ htmlToText: stubConverter }) : createMsgParser({ htmlToText: stubConverter })).parse({
@@ -171,6 +187,34 @@ describe('round trip: runInWorker + createWorkerSide', () => {
       bytes: make(),
     });
     expect(await viaWorker(name, kind, make())).toEqual(direct);
+  });
+
+  it('carries sender and bcc through the worker (.eml and .msg), and no sender key when there is none', async () => {
+    const eml = await viaWorker('on-behalf.eml', 'eml', encode(ON_BEHALF_EML));
+    if (!eml.ok) throw new Error(eml.detail);
+    expect(eml.message.sender).toEqual({ name: 'Carol Test', address: 'carol@example.test' });
+    expect(eml.message.bcc).toEqual([
+      { name: 'Sample Furniture Planning', address: 'planning@example.test' },
+      { name: '', address: 'erin@example.test' },
+    ]);
+
+    const spec = (id: string) => {
+      const found = MSG_SPECS.find((s) => s.id === id);
+      if (found === undefined) throw new Error(`missing spec ${id}`);
+      return found;
+    };
+    const onBehalf = await viaWorker('a.msg', 'msg', buildMsg(spec('msg-10-on-behalf')));
+    if (!onBehalf.ok) throw new Error(onBehalf.detail);
+    expect(onBehalf.message.sender).toEqual({ name: 'Sample Furniture Planning', address: 'planning@furniture.example.test' });
+    const bcc = await viaWorker('b.msg', 'msg', buildMsg(spec('msg-11-bcc-own-copy')));
+    if (!bcc.ok) throw new Error(bcc.detail);
+    expect(bcc.message.bcc).toEqual([{ name: 'Carol Test - Équipe Livraisons', address: 'carol@sample.invalid' }]);
+    expect('sender' in bcc.message).toBe(false);
+
+    const plain = await viaWorker('plain.eml', 'eml', encode(PLAIN_EML));
+    if (!plain.ok) throw new Error(plain.detail);
+    expect('sender' in plain.message).toBe(false);
+    expect(plain.message.bcc).toEqual([]);
   });
 
   it("the caller's bytes are moved to the worker (the array is empty afterwards)", async () => {

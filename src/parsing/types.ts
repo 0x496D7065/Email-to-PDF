@@ -80,9 +80,30 @@ export interface NormalizedMessage {
   /** References ids in header order, each stored like `messageId`: without < >, trimmed. */
   readonly references: readonly string[];
   readonly date: EmailDate;
+  /**
+   * The author(s): the From header (.eml), or the mailbox the message was
+   * sent on behalf of (.msg: PidTagSentRepresenting*, else PidTagSender*).
+   * [] if missing.
+   */
   readonly from: readonly EmailAddress[];
+  /**
+   * The mailbox that actually sent the message, when it is not one of `from`
+   * ("sent on behalf of": an assistant sending for a manager, a shared
+   * mailbox, a list server). .eml: the first mailbox of the Sender header.
+   * .msg: PidTagSender* when PidTagSentRepresenting* is a different mailbox.
+   * Absent (no key at all) when the file has no such sender or it is the same
+   * mailbox as one of `from` (same address, letter case ignored).
+   */
+  readonly sender?: EmailAddress;
+  /** To recipients in file order, address groups flattened. [] if missing. */
   readonly to: readonly EmailAddress[];
+  /** Cc recipients, like `to`. [] if missing. */
   readonly cc: readonly EmailAddress[];
+  /**
+   * Bcc recipients, like `to`. Usually only the sender's own copy has them
+   * (.eml: Bcc header; .msg: recipients of type Bcc). [] if missing.
+   */
+  readonly bcc: readonly EmailAddress[];
   readonly subject: string;
   /** Plain-text body, never HTML (README.md, rule R4). */
   readonly bodyText: string;

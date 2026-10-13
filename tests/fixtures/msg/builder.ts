@@ -67,7 +67,15 @@ export interface MsgSpec {
    */
   readonly strings: 'unicode' | 'ansi-1252';
   readonly subject: string;
+  /** The actual sender (PR_SENDER_*: who pressed Send). */
   readonly sender: MsgMailboxSpec;
+  /**
+   * The mailbox the message is sent on behalf of (PR_SENT_REPRESENTING_*:
+   * name 0x0042, address type 0x0064, address 0x0065, SMTP fallback 0x5D02).
+   * Omit to leave all four out, as for a message sent from one's own mailbox
+   * by a writer that does not repeat the sender there.
+   */
+  readonly sentRepresenting?: MsgMailboxSpec;
   readonly recipients: readonly MsgRecipientSpec[];
   /** Plain-text body with "\n" line ends; written with "\r\n" like Outlook does. */
   readonly bodyText?: string;
@@ -284,6 +292,14 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
   putString(root, mode, 0x0c1e, spec.sender.exchangeDn ? 'EX' : 'SMTP');
   putString(root, mode, 0x0c1f, spec.sender.exchangeDn ?? spec.sender.smtp);
   if (spec.sender.exchangeDn && spec.sender.smtpFallback !== false) putString(root, mode, 0x5d01, spec.sender.smtp);
+  // Sent representing (PR_SENT_REPRESENTING_*), same layout as the sender.
+  const represented = spec.sentRepresenting;
+  if (represented !== undefined) {
+    putString(root, mode, 0x0042, represented.name);
+    putString(root, mode, 0x0064, represented.exchangeDn ? 'EX' : 'SMTP');
+    putString(root, mode, 0x0065, represented.exchangeDn ?? represented.smtp);
+    if (represented.exchangeDn && represented.smtpFallback !== false) putString(root, mode, 0x5d02, represented.smtp);
+  }
   for (const extra of spec.extraStrings ?? []) putString(root, mode, extra.propId, extra.value);
   for (const extra of spec.extraBinaries ?? []) putBinary(root, extra.propId, extra.bytes);
 

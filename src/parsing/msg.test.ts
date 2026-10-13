@@ -240,6 +240,43 @@ describe('createMsgParser: sender and recipients', () => {
       }),
     );
     expect(message.from).toEqual([{ name: 'Carol Test', address: 'carol@example.test' }]);
+    // The assistant is kept as the actual sender, with its SMTP address.
+    expect(message.sender).toEqual({ name: 'Dave Demo', address: 'dave@example.test' });
+  });
+
+  it('on behalf of: the sender keeps its X.500 address when it has no SMTP property (never the represented one)', async () => {
+    const message = await parseOk(
+      spec({
+        sender: { ...DAVE, exchangeDn: DN('DAVE'), smtpFallback: false },
+        sentRepresenting: { ...CAROL, exchangeDn: DN('CAROL') },
+      }),
+    );
+    expect(message.from).toEqual([{ name: 'Carol Test', address: 'carol@example.test' }]);
+    expect(message.sender).toEqual({ name: 'Dave Demo', address: DN('DAVE') });
+  });
+
+  it('no sender key without "sent representing" properties: the sender is the From', async () => {
+    const message = await parseOk(spec({}));
+    expect(message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
+    expect('sender' in message).toBe(false);
+  });
+
+  it('no sender key when "sent representing" is the same SMTP address in other letter case', async () => {
+    const message = await parseOk(spec({ sentRepresenting: { name: 'Alice E.', smtp: 'ALICE@example.test' } }));
+    expect(message.from).toEqual([{ name: 'Alice E.', address: 'ALICE@example.test' }]);
+    expect('sender' in message).toBe(false);
+  });
+
+  it('no sender key when the Exchange sender resolves to the represented SMTP address', async () => {
+    const message = await parseOk(spec({ sender: { ...BOB, exchangeDn: DN('BOB') }, sentRepresenting: BOB }));
+    expect(message.from).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
+    expect('sender' in message).toBe(false);
+  });
+
+  it('keeps the sender when the "sent representing" mailbox is empty (it is then the only author information)', async () => {
+    const message = await parseOk(spec({ sentRepresenting: { name: '', smtp: '' } }));
+    expect(message.from).toEqual([]);
+    expect(message.sender).toEqual({ name: 'Alice Example', address: 'alice@example.test' });
   });
 
   it('a "sent representing" mailbox equal to the sender borrows the sender\'s SMTP address', async () => {
@@ -254,9 +291,10 @@ describe('createMsgParser: sender and recipients', () => {
       }),
     );
     expect(message.from).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
+    expect('sender' in message).toBe(false);
   });
 
-  it('splits recipients into To and Cc in file order, skips Bcc, resolves Exchange recipients', async () => {
+  it('splits recipients into To, Cc and Bcc in file order, resolves Exchange recipients', async () => {
     const message = await parseOk(
       spec({
         recipients: [
@@ -265,9 +303,14 @@ describe('createMsgParser: sender and recipients', () => {
           { ...DAVE, type: 'to' },
           { name: 'Hidden Copy', smtp: 'hidden@example.test', type: 'bcc' },
           { name: '', smtp: 'noname@example.test', type: 'cc' },
+          { name: 'Erin Archive', smtp: 'erin@example.test', exchangeDn: DN('ERIN'), type: 'bcc' },
         ],
       }),
     );
+    expect(message.bcc).toEqual([
+      { name: 'Hidden Copy', address: 'hidden@example.test' },
+      { name: 'Erin Archive', address: 'erin@example.test' },
+    ]);
     expect(message.to).toEqual([
       { name: 'Bob Sample', address: 'bob@example.test' },
       { name: 'Dave Demo', address: 'dave@example.test' },
@@ -286,11 +329,13 @@ describe('createMsgParser: sender and recipients', () => {
           { ...BOB, type: 'to' },
           { name: 'Name Only', smtp: '', type: 'cc' },
           { name: '', smtp: '', type: 'cc' },
+          { name: '', smtp: '', type: 'bcc' },
         ],
       }),
     );
     expect(message.to).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
     expect(message.cc).toEqual([{ name: 'Name Only', address: '' }]);
+    expect(message.bcc).toEqual([]);
   });
 });
 
@@ -618,6 +663,8 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
     expect(message.bodyText).toBe('Body text.\n');
     expect(message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
     expect(message.to).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
+    expect(message.bcc).toEqual([]);
+    expect('sender' in message).toBe(false);
     expect(message.messageId).toBe('m1@example.test');
     expect(message.warnings).toEqual([]);
   });
@@ -645,6 +692,26 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
   it('one wrongly typed sender field does not hide the others', () => {
     const message = ok(damaged({ senderName: BYTES }));
     expect(message.from).toEqual([{ name: '', address: 'alice@example.test' }]);
+  });
+
+  it('on behalf of: wrongly typed sender fields are treated as absent, the represented From is kept', () => {
+    const represented = [
+      { propertyTag: '0042001f', value: 'Carol Test' },
+      { propertyTag: '0065001f', value: 'carol@example.test' },
+    ];
+    const message = ok(damaged({ rawProps: represented, senderName: BYTES }));
+    expect(message.from).toEqual([{ name: 'Carol Test', address: 'carol@example.test' }]);
+    expect(message.sender).toEqual({ name: '', address: 'alice@example.test' });
+    const noSender = ok(damaged({ rawProps: represented, senderName: BYTES, senderEmail: 7 }));
+    expect('sender' in noSender).toBe(false);
+  });
+
+  it('a recipient type msgreader did not map (a raw number) is listed under To, never dropped', () => {
+    const message = ok(
+      damaged({ recipients: [{ dataType: 'recipient', name: 'Odd Type', email: 'odd@example.test', recipType: 7 as unknown as 'to' }] }),
+    );
+    expect(message.to).toEqual([{ name: 'Odd Type', address: 'odd@example.test' }]);
+    expect(message.bcc).toEqual([]);
   });
 
   it('recipient fields of the wrong type are treated as absent; an empty recipient is skipped', () => {

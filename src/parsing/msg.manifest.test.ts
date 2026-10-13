@@ -47,9 +47,9 @@ async function parseEmlFixture(id: string): Promise<NormalizedMessage> {
 }
 
 describe('.msg adapter matches the manifest', () => {
-  it('covers all 9 .msg specs', () => {
-    expect(msgFixtures).toHaveLength(9);
-    expect(MSG_SPECS).toHaveLength(9);
+  it('covers all 12 .msg specs', () => {
+    expect(msgFixtures).toHaveLength(12);
+    expect(MSG_SPECS).toHaveLength(12);
   });
 
   it.each(msgFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) => {
@@ -68,6 +68,10 @@ describe('.msg adapter matches the manifest', () => {
     expect(message.from).toEqual(expected.from);
     expect(message.to).toEqual(expected.to);
     expect(message.cc).toEqual(expected.cc);
+    expect(message.bcc).toEqual(expected.bcc);
+    // `sender` is either a mailbox or no key at all, never `sender: undefined`.
+    expect('sender' in message).toBe(expected.sender !== undefined);
+    expect(message.sender).toEqual(expected.sender);
     expect(message.subject).toBe(expected.subject ?? '');
 
     expect(message.attachments).toEqual(expected.attachments);
@@ -110,6 +114,8 @@ describe('cross-format duplicates normalize alike', () => {
     expect(fromMsg.from).toEqual(fromEml.from);
     expect(fromMsg.to).toEqual(fromEml.to);
     expect(fromMsg.cc).toEqual(fromEml.cc);
+    expect(fromMsg.bcc).toEqual(fromEml.bcc);
+    expect(fromMsg.sender).toEqual(fromEml.sender);
     expect(fromMsg.subject).toBe(fromEml.subject);
     expect(fromMsg.attachments).toEqual(fromEml.attachments);
     // Same text and same line ends. Only the final line break may differ:
