@@ -87,7 +87,11 @@ Email content is treated as untrusted input. HTML bodies are converted to plain
 text with an inert parser (one that runs no scripts and loads nothing) and
 shown with `textContent`, never injected as HTML. Attachments are never
 opened, executed or processed: they are only listed (name, size, type).
-Broken or huge files produce a clear error message instead of a crash.
+Broken or huge files produce a clear error message instead of a crash: each
+file is checked, size-limited, and read in a separate worker that is stopped
+after a time limit. One known limit: a file that makes a parser exhaust
+memory can still crash the tab, which is why `.msg` files get a structure
+check before they are read.
 
 ### R5: In memory only
 
@@ -150,6 +154,12 @@ the `_headers` file that the build writes for Cloudflare Pages) and as a
 Browsers **ignore** some directives in a `<meta>` tag (`frame-ancestors`,
 `report-uri`, `sandbox`). This means protection against other sites embedding
 the page in a frame only exists when the HTTP header is served.
+
+The tool parses each file in a Web Worker loaded from its own script file.
+Such a worker takes its CSP from that file's HTTP header, not from the page's
+`<meta>` tag. The header is sent with every file of the site, so the workers
+are covered by the same policy; on a host that can only use the `<meta>`
+fallback, they would not be.
 
 The referrer policy is covered by both: the build also adds
 `<meta name="referrer" content="no-referrer">` to the page. `Permissions-Policy`

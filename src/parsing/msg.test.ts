@@ -573,15 +573,17 @@ describe('createMsgParser: broken files never throw', () => {
     expect(message.bodyText).toBe('Hello.\nSecond line.');
   });
 
-  // Not tested: some damaged files make msgreader use up all memory, which
-  // try/catch cannot stop. Two known causes: a sector chain that loops back
-  // on itself (msgreader follows chains without a loop check), and a damaged
-  // size field, which makes msgreader reserve a huge buffer
-  // (`new Uint8Array(size)` in its Reader.js). The second is not rare: in a
-  // fuzzing run, about 3 in 560 randomly damaged .msg files did it. Parsing in
-  // a Web Worker with a memory and time guard is planned before .msg files can
-  // be opened from the page.
-  it.todo('a .msg that would exhaust memory is rejected instead of crashing the page');
+  // Not tested HERE: some damaged files make msgreader loop forever or use up
+  // all memory, which try/catch cannot stop. Two known causes: a sector chain
+  // or directory tree that loops back on itself (msgreader follows them
+  // without a loop check), and a damaged size field, which makes msgreader
+  // reserve a huge buffer (`new Uint8Array(size)` in its Reader.js). The
+  // second is not rare: in a fuzzing run, about 3 in 560 randomly damaged .msg
+  // files did it. This adapter does not guard against them itself: files
+  // reach it through the dispatcher (parse-files.ts), which first runs the
+  // Compound File check (cfb-check.ts, tested in cfb-check.test.ts) and
+  // parses each file in a Web Worker with a time limit (worker-runner.ts,
+  // tested in worker-runner.test.ts and e2e/parse-files.spec.ts).
 });
 
 describe('resultFromFields: wrongly typed properties from a damaged file', () => {

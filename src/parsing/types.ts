@@ -100,7 +100,12 @@ export interface NormalizedMessage {
 export type ParseErrorCode =
   | 'too-large' // over the size limit (README.md, rule R4: guard against huge files)
   | 'unsupported-type' // not an .eml/.msg file
-  | 'corrupt'; // the parser library failed on it
+  // The file could not be read: damaged, the parser failed on it, or its
+  // worker was stopped (time limit) or failed, or its bytes had already been
+  // handed over to an earlier worker. `detail` says which; an HTML body the
+  // converter could not handle says "HTML body could not be converted: ..."
+  // instead of "damaged file structure: ...".
+  | 'corrupt';
 
 /**
  * The result of parsing one file. A "tagged union": check `ok` first, then

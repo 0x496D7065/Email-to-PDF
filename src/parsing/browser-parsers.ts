@@ -1,6 +1,11 @@
 // The production parsers: both adapters wired to the browser's inert HTML
 // converter (html-dom.ts). Unit tests create the adapters with their own
 // converter instead, since Node has no DOMParser.
+//
+// The page must not read dropped files with these directly: use parseFiles
+// (parse-files.ts), which adds the size limits, the file type decision, the
+// Compound File check before msgreader, and a Web Worker with a time limit
+// (README.md, rule R4). These run on the page's own thread, unguarded.
 
 import { createEmlParser } from './eml';
 import { htmlToTextWithDomParser } from './html-dom';

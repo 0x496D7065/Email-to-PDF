@@ -11,9 +11,17 @@ import type { HtmlToTextResult } from './html-to-text';
 
 /** The injected converter threw, or returned something that is not a { text, truncated } result. */
 export class HtmlConversionError extends Error {
+  /**
+   * The converter's own reason, without the "HTML body could not be
+   * converted: " prefix. Lets the worker path (deferred-html.ts) hand the
+   * reason back to the adapter, which adds the prefix once.
+   */
+  readonly reason: string;
+
   constructor(reason: string) {
     super(`HTML body could not be converted: ${reason.trim() === '' ? 'unknown error' : reason}`);
     this.name = 'HtmlConversionError';
+    this.reason = reason;
   }
 }
 
