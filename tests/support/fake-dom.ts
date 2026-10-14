@@ -6,10 +6,11 @@
 // This fake implements exactly those and RECORDS them, so a test can also
 // prove that nothing else (such as innerHTML) was used: any other property
 // set on a fake element throws.
-// For the interactive parts (src/ui/add-files.ts) it also has event
-// listeners (addEventListener + a test-side `fire`), click(), contains(), and
-// the `value` / `files` fields of a file input. FakeEventTarget stands in for
-// `window` (page-wide drag-and-drop listeners).
+// For the interactive parts (src/ui/add-files.ts, src/ui/preview.ts) it also
+// has event listeners (addEventListener + a test-side `fire`), click(),
+// contains(), the `value` / `files` fields of a file input or select, and a
+// checkbox's `checked`. FakeEventTarget stands in for `window` (page-wide
+// drag-and-drop listeners).
 // The real page is checked in a real browser by the e2e tests.
 
 export class FakeText {
@@ -90,6 +91,8 @@ export class FakeElement {
   /** A file input's value (code may only clear it) and chosen files. */
   value = '';
   files: unknown = null;
+  /** A checkbox's state (the user ticks it in a test by setting it, then firing 'change'). */
+  checked = false;
   /** How many times click() was called. */
   clicks = 0;
   readonly listeners = new Listeners();

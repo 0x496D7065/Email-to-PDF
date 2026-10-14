@@ -1,0 +1,609 @@
+// Unit tests for step 2, the preview, in Node with the recording fake DOM
+// (tests/support/fake-dom.ts). Synthetic messages only, run through the real
+// engine so the folds are the ones the page will show. The real page is
+// checked in Chromium by e2e/preview.spec.ts.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
+import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { runEngine, type EngineResult } from '../engine/engine';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
+import type { DisplayBlock } from '../ui-model/display-blocks';
+import { t } from './i18n';
+import {
+  attachmentText,
+  dateTexts,
+  foldSummaryText,
+  lineCount,
+  mailboxListText,
+  mailboxText,
+  MAX_CHUNK_CHARS,
+  mountPreview,
+  relatedNumbers,
+  sizeText,
+  zoneLabel,
+  type Preview,
+  type PreviewOptions,
+} from './preview';
+
+// ------------------------------------------------------------------ factory
+
+const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
+const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
+
+let counter = 0;
+
+/** A synthetic message from Alice to Bob; `fields` overrides any field. */
+function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage {
+  counter++;
+  return {
+    messageId: `p${counter}@example.test`,
+    inReplyTo: null,
+    references: [],
+    date: { utcMs: Date.parse('2025-03-03T08:15:00Z') + counter * 60_000, original: 'synthetic', offsetMinutes: 60, zoneKnown: true },
+    from: [ALICE],
+    to: [BOB],
+    cc: [],
+    bcc: [],
+    subject: `Desks ${counter}`,
+    bodyText: `Hello Bob,\n\nThe desks arrive on Monday, note ${counter}.\n\nAlice\n`,
+    attachments: [],
+    source: { fileName: `file-${counter}.eml`, sha256: counter.toString(16).padStart(64, '0'), kind: 'eml' },
+    warnings: [],
+    ...fields,
+  };
+}
+
+const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
+  runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
+
+const dateAt = (iso: string, offsetMinutes: number | null = 60, zoneKnown = true): NormalizedMessage['date'] => ({
+  utcMs: Date.parse(iso),
+  original: 'synthetic',
+  offsetMinutes,
+  zoneKnown,
+});
+const NO_DATE: NormalizedMessage['date'] = { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false };
+
+// Alice asks; Bob replies above a full copy of her text (folded by the overlap detector).
+const ASK =
+  'Hi Bob,\n\nWe are furnishing a small office for four people and need four desks and four chairs. ' +
+  'Could you send me a quote? Someone is at the office most mornings if you want to see the room first.\n\nThanks,\nAlice\n';
+let threads = 0;
+/** A new thread each call (its own day, so two threads are never merged as identical copies). */
+function thread(): NormalizedMessage[] {
+  threads++;
+  const day = Date.parse('2025-03-03T08:15:00Z') + threads * 86_400_000;
+  const ask = make({ subject: 'Office desks', bodyText: ASK, date: { ...dateAt('2025-03-03T08:15:00Z'), utcMs: day } });
+  const reply = make({
+    subject: 'RE: Office desks',
+    from: [BOB],
+    to: [ALICE],
+    inReplyTo: ask.messageId,
+    references: [ask.messageId ?? ''],
+    bodyText: `Hello Alice,\n\nI can come by on Wednesday to measure the room.\n\nBob\n\n${ASK}`,
+    date: { ...dateAt('2025-03-03T08:15:00Z'), utcMs: day + 5 * 3_600_000 },
+  });
+  return [reply, ask];
+}
+
+// ------------------------------------------------------------------ fake page
+
+let doc: FakeDocument;
+let area: FakeElement;
+let preview: Preview;
+
+const ZONES = ['Asia/Tokyo', 'Europe/Brussels', 'UTC'];
+
+function mount(options: PreviewOptions = {}): Preview {
+  area = new FakeElement('div');
+  preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, { zones: ZONES, initialZone: 'Europe/Brussels', ...options });
+  return preview;
+}
+
+beforeEach(() => {
+  doc = new FakeDocument();
+  vi.stubGlobal('document', doc);
+  mount();
+});
+
+afterEach(() => {
+  // No chunk may run after the fake document is gone.
+  preview.reset();
+  vi.unstubAllGlobals();
+});
+
+const fake = (e: Element | Node): FakeElement => e as unknown as FakeElement;
+
+function byId(id: string): FakeElement {
+  const found = area.descendants().find((e) => e.getAttribute('id') === id);
+  if (!found) throw new Error(`no element with id ${id}`);
+  return found;
+}
+
+const hasClass = (e: FakeElement, name: string): boolean => (e.getAttribute('class') ?? '').split(' ').includes(name);
+const withClass = (root: FakeElement, name: string): FakeElement[] => root.descendants().filter((e) => hasClass(e, name));
+const one = (root: FakeElement, name: string): FakeElement => {
+  const found = withClass(root, name);
+  if (found.length !== 1) throw new Error(`expected one .${name}, found ${String(found.length)}`);
+  return found[0]!;
+};
+
+const items = (): FakeElement[] => byId('preview-list').children.filter((c): c is FakeElement => c instanceof FakeElement);
+/** The body text as the page holds it: every shown and folded text block, in order (labels excluded). */
+const renderedBody = (item: FakeElement): string =>
+  withClass(one(item, 'message-body'), 'body-text')
+    .map((e) => e.textContent)
+    .join('');
+/** The value of one details row ("date", "to", ...) of an item, or null if absent. */
+function meta(item: FakeElement, name: string): string | null {
+  const dd = item.descendants().find((e) => e.tagName === 'dd' && hasClass(e, `meta-${name}`));
+  return dd === undefined ? null : dd.textContent;
+}
+const label = (item: FakeElement, name: string): string | undefined =>
+  item.descendants().find((e) => e.tagName === 'dt' && hasClass(e, `meta-${name}`))?.textContent;
+
+function chooseZone(zone: string): void {
+  const select = byId('preview-zone');
+  select.value = zone;
+  select.fire('change');
+}
+
+function setShowFolded(on: boolean): void {
+  const box = byId('preview-show-folded');
+  box.checked = on;
+  box.fire('change');
+}
+
+const folds = (): FakeElement[] => area.descendants().filter((e) => e.tagName === 'details');
+
+// ------------------------------------------------------------------ pure helpers
+
+describe('helpers', () => {
+  it('writes mailboxes with whatever parts exist, untouched', () => {
+    expect(mailboxText(ALICE)).toBe('Alice Example <alice@example.test>');
+    expect(mailboxText({ name: '', address: 'bob@example.test' })).toBe('bob@example.test');
+    expect(mailboxText({ name: ' Carol ', address: ' ' })).toBe(' Carol ');
+    expect(mailboxListText([ALICE, { name: '', address: '' }, BOB])).toBe(
+      'Alice Example <alice@example.test>, Bob Sample <bob@furniture.example.test>',
+    );
+    expect(mailboxListText([{ name: ' ', address: '' }])).toBe('');
+  });
+
+  it('writes sizes for people', () => {
+    expect(sizeText(null)).toBe('size unknown');
+    expect(sizeText(Number.NaN)).toBe('size unknown');
+    expect(sizeText(-1)).toBe('size unknown');
+    expect(sizeText(1)).toBe('1 byte');
+    expect(sizeText(512)).toBe('512 bytes');
+    expect(sizeText(1024)).toBe('1 KB');
+    expect(sizeText(1434)).toBe('1.4 KB');
+    expect(sizeText(12_800)).toBe('13 KB');
+    expect(sizeText(1.5 * 1024 * 1024)).toBe('1.5 MB');
+    expect(sizeText(40 * 1024 * 1024)).toBe('40 MB');
+  });
+
+  it('lists attachments as metadata only', () => {
+    expect(attachmentText({ fileName: 'quote.pdf', size: 2048, mimeType: 'application/pdf' })).toBe('quote.pdf (2 KB, application/pdf)');
+    expect(attachmentText({ fileName: 'notes.txt', size: null, mimeType: '' })).toBe('notes.txt (size unknown)');
+    expect(attachmentText({ fileName: '  ', size: 3, mimeType: 'text/plain' })).toBe(`${t('preview.noAttachmentName')} (3 bytes, text/plain)`);
+  });
+
+  it('counts lines', () => {
+    expect(lineCount('')).toBe(0);
+    expect(lineCount('a')).toBe(1);
+    expect(lineCount('a\nb')).toBe(2);
+    expect(lineCount('a\nb\n')).toBe(2);
+    expect(lineCount('a\r\nb\r\n')).toBe(2);
+    expect(lineCount('\n\n')).toBe(2);
+  });
+
+  it('turns related input positions into list numbers, without the email itself', () => {
+    const block: DisplayBlock = { start: 0, end: 4, text: 'a\nb\n', folded: true, reasons: ['quoted-overlap'], related: [0, 2, 3, 9], label: 'quoted-overlap', collapsed: true };
+    // Input 0 -> list position 1 (#2), 2 -> 0 (the email itself), 3 -> 1 again, 9 unknown.
+    expect(relatedNumbers(block, 0, [1, null, 0, 1])).toEqual([2]);
+    expect(foldSummaryText(block, 0, [1, null, 0, 1])).toBe(`${t('preview.fold.quoted-overlap')}, 2 lines, from email #2`);
+    expect(foldSummaryText({ ...block, related: [0, 1] }, 5, [0, 2])).toBe(`${t('preview.fold.quoted-overlap')}, 2 lines, from emails #1, #3`);
+    expect(foldSummaryText({ ...block, related: [], label: 'signature', text: 'x' }, 0, [])).toBe(`${t('preview.fold.signature')}, 1 line`);
+    expect(foldSummaryText({ ...block, related: [], label: null }, 0, [])).toBe(`${t('preview.foldOther')}, 2 lines`);
+  });
+
+  it('names zones readably and marks this computer', () => {
+    expect(zoneLabel('America/New_York', 'Europe/Brussels')).toBe('America/New York');
+    expect(zoneLabel('Europe/Brussels', 'Europe/Brussels')).toBe('Europe/Brussels (this computer)');
+  });
+
+  it('shows dates in the zone, the sender time only when known and different', () => {
+    const date = dateAt('2025-03-03T08:15:00Z', 60);
+    expect(dateTexts(date, 'Europe/Brussels')).toEqual({ main: '2025-03-03 09:15:00 UTC+01:00', iso: '2025-03-03T08:15:00.000Z', senderLocal: null });
+    expect(dateTexts(date, 'Asia/Tokyo')).toEqual({
+      main: '2025-03-03 17:15:00 UTC+09:00',
+      iso: '2025-03-03T08:15:00.000Z',
+      senderLocal: "Sender's local time: 2025-03-03 09:15:00 UTC+01:00",
+    });
+    expect(dateTexts(dateAt('2025-03-03T08:15:00Z', null, false), 'Asia/Tokyo').senderLocal).toBeNull();
+    expect(dateTexts(NO_DATE, 'UTC')).toEqual({ main: t('preview.noDate'), iso: null, senderLocal: null });
+    expect(dateTexts({ ...NO_DATE, utcMs: 1e18 }, 'UTC').main).toBe(t('preview.noDate'));
+  });
+});
+
+// ------------------------------------------------------------------ the page
+
+describe('mountPreview', () => {
+  it('builds a labelled time-zone list and a labelled checkbox', () => {
+    const select = byId('preview-zone');
+    expect(select.tagName).toBe('select');
+    expect(select.value).toBe('Europe/Brussels');
+    const options = select.children as FakeElement[];
+    expect(options.map((o) => o.getAttribute('value'))).toEqual(ZONES);
+    expect(options.filter((o) => o.hasAttribute('selected')).map((o) => o.getAttribute('value'))).toEqual(['Europe/Brussels']);
+    expect(options.map((o) => o.textContent)).toContain('Europe/Brussels (this computer)');
+    const labels = area.descendants().filter((e) => e.tagName === 'label');
+    expect(labels.map((l) => [l.getAttribute('for'), l.textContent])).toEqual([
+      ['preview-zone', t('preview.zone')],
+      ['preview-show-folded', t('preview.showFolded')],
+    ]);
+    expect(byId('preview-show-folded').getAttribute('type')).toBe('checkbox');
+    expect(byId('preview-list').getAttribute('aria-label')).toBe(t('preview.listLabel'));
+    expect(preview.zone()).toBe('Europe/Brussels');
+  });
+
+  it('adds the starting zone to the list if it is missing', () => {
+    mount({ zones: ['UTC'], initialZone: 'Asia/Tokyo' });
+    expect((byId('preview-zone').children as FakeElement[]).map((o) => o.getAttribute('value'))).toEqual(['Asia/Tokyo', 'UTC']);
+  });
+
+  it('shows the emails in the engine order, numbered', () => {
+    const late = make({ subject: 'Late', date: dateAt('2025-03-05T10:00:00Z') });
+    const early = make({ subject: 'Early', date: dateAt('2025-03-01T10:00:00Z') });
+    const undated = make({ subject: 'Undated', date: NO_DATE });
+    const middle = make({ subject: 'Middle', date: dateAt('2025-03-03T10:00:00Z') });
+    const result = engineOf([undated, late, early, middle]);
+    preview.show(result);
+    expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(result.messages.map((m) => m.message.subject));
+    expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(['Early', 'Middle', 'Late', 'Undated']);
+    expect(items().map((i) => one(i, 'message-number').textContent)).toEqual(['#1', '#2', '#3', '#4']);
+    expect(items().map((i) => i.getAttribute('data-position'))).toEqual(['0', '1', '2', '3']);
+    for (const item of items()) expect(item.descendants().find((e) => e.tagName === 'h3')?.textContent).toMatch(/^#\d /);
+  });
+
+  it('shows author, recipients and dates; the sender time only when it differs', () => {
+    const carol: EmailAddress = { name: '', address: 'carol@example.test' };
+    preview.show(engineOf([make({ cc: [carol], bcc: [BOB], date: dateAt('2025-03-03T08:15:00Z', 60) })]));
+    const item = items()[0]!;
+    expect(label(item, 'author')).toBe(t('preview.author.from'));
+    expect(meta(item, 'author')).toBe('Alice Example <alice@example.test>');
+    expect(meta(item, 'to')).toBe('Bob Sample <bob@furniture.example.test>');
+    expect(meta(item, 'cc')).toBe('carol@example.test');
+    expect(meta(item, 'bcc')).toBe('Bob Sample <bob@furniture.example.test>');
+    expect(label(item, 'bcc')).toBe(t('preview.bcc'));
+    const time = one(item, 'message-date');
+    expect(time.tagName).toBe('time');
+    expect(time.textContent).toBe('2025-03-03 09:15:00 UTC+01:00');
+    expect(time.getAttribute('datetime')).toBe('2025-03-03T08:15:00.000Z');
+    expect(one(item, 'sender-time').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('leaves out empty To, Cc and Bcc rows', () => {
+    preview.show(engineOf([make({ to: [], cc: [{ name: ' ', address: '' }] })]));
+    const item = items()[0]!;
+    expect([meta(item, 'to'), meta(item, 'cc'), meta(item, 'bcc'), meta(item, 'attachments'), meta(item, 'also-in')]).toEqual([null, null, null, null, null]);
+  });
+
+  it('uses the "sent by" mailbox when there is no From', () => {
+    const sender: EmailAddress = { name: 'Assistant', address: 'assistant@example.test' };
+    preview.show(engineOf([make({ from: [], sender })]));
+    expect(label(items()[0]!, 'author')).toBe(t('preview.author.sender'));
+    expect(meta(items()[0]!, 'author')).toBe('Assistant <assistant@example.test>');
+  });
+
+  it('handles an email with no subject, no date, no author and no text', () => {
+    preview.show(engineOf([make({ subject: '   ', date: NO_DATE, from: [], to: [], bodyText: '' })]));
+    const item = items()[0]!;
+    const subject = one(item, 'message-subject');
+    expect(subject.textContent).toBe(t('preview.noSubject'));
+    expect(hasClass(subject, 'placeholder')).toBe(true);
+    expect(one(item, 'message-date').textContent).toBe(t('preview.noDate'));
+    expect(one(item, 'message-date').hasAttribute('datetime')).toBe(false);
+    expect(label(item, 'author')).toBe(t('preview.from'));
+    expect(meta(item, 'author')).toBe(t('preview.author.none'));
+    expect(withClass(item, 'body-text')).toEqual([]);
+    expect(one(item, 'body-empty').textContent).toBe(t('preview.noText'));
+  });
+
+  it('lists attachments as text only: no link, no image, no file access', () => {
+    preview.show(
+      engineOf([
+        make({
+          attachments: [
+            { fileName: 'quote.pdf', size: 2048, mimeType: 'application/pdf' },
+            { fileName: 'photo.jpg', size: null, mimeType: 'image/jpeg' },
+          ],
+        }),
+      ]),
+    );
+    const item = items()[0]!;
+    expect(withClass(item, 'attachment').map((e) => e.textContent)).toEqual(['quote.pdf (2 KB, application/pdf)', 'photo.jpg (size unknown, image/jpeg)']);
+    expect(label(item, 'attachments')).toBe(t('preview.attachments'));
+    for (const e of doc.created) {
+      expect(['a', 'img']).not.toContain(e.tagName);
+      expect(e.hasAttribute('href') || e.hasAttribute('src')).toBe(false);
+    }
+  });
+
+  it('names the files of merged identical copies', () => {
+    const original = make({ messageId: 'same@example.test' });
+    const copy = { ...original, source: { ...original.source, fileName: 'copy-from-sent.eml', sha256: 'e'.repeat(64) } };
+    const result = engineOf([original, copy]);
+    expect(result.counts.duplicatesMerged).toBe(1);
+    preview.show(result);
+    expect(items()).toHaveLength(1);
+    expect(label(items()[0]!, 'also-in')).toBe(t('preview.alsoIn'));
+    expect(meta(items()[0]!, 'also-in')).toBe('copy-from-sent.eml');
+  });
+
+  it('folds quoted text in a labelled <details>, with the email it repeats', () => {
+    const result = engineOf(thread());
+    preview.show(result);
+    const [ask, reply] = items();
+    expect(folds()).toHaveLength(1);
+    expect(withClass(ask!, 'fold')).toEqual([]);
+    const details = one(reply!, 'fold');
+    expect(details.tagName).toBe('details');
+    expect(details.hasAttribute('open')).toBe(false);
+    const summary = details.children[0] as FakeElement;
+    expect(summary.tagName).toBe('summary');
+    expect(summary.textContent).toBe(`${t('preview.fold.quoted-overlap')}, ${String(lineCount(ASK))} lines, from email #1`);
+    expect(one(details, 'body-folded').textContent).toBe(ASK);
+    // The reply's own words are shown outside the fold.
+    expect(withClass(one(reply!, 'message-body'), 'body-text')[0]?.textContent).toContain('I can come by on Wednesday');
+  });
+
+  it('opens and closes every fold with the checkbox; new folds follow it', () => {
+    preview.show(engineOf([...thread(), ...thread()]));
+    expect(folds().length).toBeGreaterThanOrEqual(2);
+    expect(folds().every((d) => !d.hasAttribute('open'))).toBe(true);
+    setShowFolded(true);
+    expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
+    preview.show(engineOf(thread()));
+    expect(folds().length).toBeGreaterThanOrEqual(1);
+    expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
+    setShowFolded(false);
+    expect(folds().every((d) => !d.hasAttribute('open'))).toBe(true);
+  });
+
+  it('keeps every character of every body in the page (collapse, never delete)', () => {
+    const messages = [
+      ...thread(),
+      make({ bodyText: 'Line one\r\n> quoted\r\n> more quoted\r\n\r\n-- \r\nAlice\r\n' }),
+      make({ bodyText: '   leading spaces\n\n\n\ttabs\t\nno final break' }),
+      make({ bodyText: '' }),
+    ];
+    const result = engineOf(messages);
+    preview.show(result);
+    setShowFolded(true);
+    items().forEach((item, k) => expect(renderedBody(item)).toBe(result.messages[k]!.message.bodyText));
+    expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
+  });
+
+  it('keeps every character of every synthetic fixture, run through the engine', async () => {
+    const parsed = await parseAllFixtures();
+    const result = runEngine(parsed.map((message): ParseResult => ({ ok: true, message })));
+    expect(result.counts.withFolds).toBeGreaterThan(5);
+    mount({ chunkSize: result.messages.length });
+    preview.show(result);
+    setShowFolded(true);
+    expect(items()).toHaveLength(result.messages.length);
+    items().forEach((item, k) => {
+      const m = result.messages[k]!;
+      expect(renderedBody(item), m.message.source.fileName).toBe(m.message.bodyText);
+      expect(one(item, 'message-subject').textContent === m.message.subject || m.message.subject.trim() === '').toBe(true);
+    });
+    expect(folds().length).toBeGreaterThan(5);
+    expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
+  });
+
+  it('rewrites only the dates when the zone changes', () => {
+    const result = engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', 60) }), make({ date: NO_DATE }), ...thread()]);
+    preview.show(result);
+    const bodies = items().map((i) => one(i, 'message-body'));
+    const bodyNodes = bodies.map((b) => [...b.descendants()]);
+    const created = doc.created.length;
+
+    chooseZone('Asia/Tokyo');
+    expect(preview.zone()).toBe('Asia/Tokyo');
+    const first = items()[0]!;
+    expect(one(first, 'message-date').textContent).toBe('2025-03-03 17:15:00 UTC+09:00');
+    expect(one(first, 'sender-time').textContent).toBe("Sender's local time: 2025-03-03 09:15:00 UTC+01:00");
+    expect(one(first, 'sender-time').hasAttribute('hidden')).toBe(false);
+    expect(items().map((i) => one(i, 'message-date').textContent).filter((d) => d === t('preview.noDate'))).toHaveLength(1);
+    // Same body elements, same children, nothing new built.
+    expect(items().map((i) => one(i, 'message-body'))).toEqual(bodies);
+    items().forEach((i, k) => expect(one(i, 'message-body').descendants()).toEqual(bodyNodes[k]));
+    expect(doc.created.length).toBe(created);
+
+    chooseZone('UTC');
+    expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
+    // The zone stays for the next result.
+    preview.show(engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', 60) })]));
+    expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
+  });
+
+  it('shows hostile content as literal text and builds no element from it', () => {
+    const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
+    preview.show(
+      engineOf([
+        make({
+          subject: evil,
+          from: [{ name: evil, address: '"><svg onload=alert(3)>@example.test' }],
+          to: [{ name: '<b>bold</b>', address: 'x@example.test' }],
+          bodyText: `Before\n${evil}\n> <iframe srcdoc="<script>alert(4)</script>">\nAfter`,
+          attachments: [{ fileName: '<img src=x onerror=alert(5)>.pdf', size: 1, mimeType: 'text/html"><script>' }],
+        }),
+      ]),
+    );
+    setShowFolded(true);
+    const item = items()[0]!;
+    expect(one(item, 'message-subject').textContent).toBe(evil);
+    expect(meta(item, 'author')).toBe(`${evil} <"><svg onload=alert(3)>@example.test>`);
+    expect(renderedBody(item)).toContain(evil);
+    expect(one(item, 'attachment').textContent).toContain('<img src=x onerror=alert(5)>.pdf');
+    const tags = new Set(doc.created.map((e) => e.tagName));
+    for (const tag of ['img', 'script', 'svg', 'iframe', 'b']) expect(tags.has(tag), tag).toBe(false);
+    for (const e of doc.created) for (const name of e.attributes.keys()) expect(name).not.toMatch(/^(on|src|href|style)/);
+  });
+
+  it('calls the decorate hook once per email, after building its item', () => {
+    const seen: [string, number, string][] = [];
+    mount({ decorate: (item, m, position) => seen.push([m.message.subject, position, fake(item).tagName]) });
+    const result = engineOf(thread());
+    preview.show(result);
+    expect(seen).toEqual(result.messages.map((m, k) => [m.message.subject, k, 'li']));
+  });
+});
+
+describe('chunked building', () => {
+  let tasks: { task: () => void; handle: number }[];
+  let cancelled: number[];
+
+  beforeEach(() => {
+    tasks = [];
+    cancelled = [];
+    let next = 0;
+    mount({
+      chunkSize: 2,
+      schedule: (task) => {
+        const handle = ++next;
+        tasks.push({ task, handle });
+        return handle;
+      },
+      cancel: (handle) => cancelled.push(handle as number),
+    });
+  });
+
+  /** Runs the oldest scheduled task. */
+  function runNext(): void {
+    const next = tasks.shift();
+    if (next === undefined) throw new Error('nothing scheduled');
+    next.task();
+  }
+
+  const many = (n: number): EngineResult => engineOf(Array.from({ length: n }, (_, k) => make({ subject: `Mail ${String(k)}` })));
+
+  it('builds the first chunk at once and the rest later, in order', () => {
+    const result = many(5);
+    preview.show(result);
+    expect(items()).toHaveLength(2);
+    expect(preview.isRendering()).toBe(true);
+    expect(byId('preview-list').getAttribute('aria-busy')).toBe('true');
+    runNext();
+    expect(items()).toHaveLength(4);
+    runNext();
+    expect(items()).toHaveLength(5);
+    expect(tasks).toEqual([]);
+    expect(preview.isRendering()).toBe(false);
+    expect(byId('preview-list').hasAttribute('aria-busy')).toBe(false);
+    expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(result.messages.map((m) => m.message.subject));
+  });
+
+  it('builds later chunks with the zone and fold state of the moment', () => {
+    preview.show(engineOf([...thread(), ...thread(), ...thread()]));
+    chooseZone('Asia/Tokyo');
+    setShowFolded(true);
+    while (tasks.length > 0) runNext();
+    expect(items()).toHaveLength(6);
+    expect(items().every((i) => one(i, 'message-date').textContent.endsWith('UTC+09:00'))).toBe(true);
+    // Folds built in the later chunks (emails 3 to 6) are open too.
+    expect(items().slice(2).flatMap((i) => withClass(i, 'fold')).length).toBeGreaterThanOrEqual(2);
+    expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
+  });
+
+  it('a new result cancels the chunks of the old one', () => {
+    preview.show(many(5));
+    const stale = tasks[0]!;
+    preview.show(many(3));
+    expect(cancelled).toEqual([stale.handle]);
+    // Even if the old task still ran, it adds nothing.
+    stale.task();
+    expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(['Mail 0', 'Mail 1']);
+    tasks = tasks.filter((x) => x !== stale);
+    runNext();
+    expect(items()).toHaveLength(3);
+  });
+
+  it('reset() empties the list and cancels waiting chunks', () => {
+    preview.show(many(5));
+    const stale = tasks[0]!;
+    preview.reset();
+    expect(cancelled).toEqual([stale.handle]);
+    expect(items()).toEqual([]);
+    expect(preview.isRendering()).toBe(false);
+    stale.task();
+    expect(items()).toEqual([]);
+  });
+
+  it('a failed batch (no engine result) empties the list too', () => {
+    preview.showResult({ ok: true, engine: many(5) });
+    expect(items()).toHaveLength(2);
+    preview.showResult({ ok: false, error: 'engine-failed', detail: 'synthetic', parsed: [] });
+    expect(items()).toEqual([]);
+    expect(cancelled).toHaveLength(1);
+  });
+
+  it('an email whose item fails to build gets a stand-in; every other email is still built', () => {
+    // Fails for "Mail 3": in the second chunk (chunk size 2), so later chunks must still come.
+    mount({
+      chunkSize: 2,
+      schedule: (task) => {
+        const handle = tasks.length + 100;
+        tasks.push({ task, handle });
+        return handle;
+      },
+      cancel: () => undefined,
+      decorate: (_item, m) => {
+        if (m.message.subject === 'Mail 3') throw new Error('synthetic decorate failure');
+      },
+    });
+    const result = engineOf(Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n> quoted ${String(k)}\n` })));
+    preview.show(result);
+    while (tasks.length > 0) runNext();
+    expect(preview.isRendering()).toBe(false);
+    const list = items();
+    expect(list).toHaveLength(6);
+    expect(list.map((i) => i.getAttribute('data-position'))).toEqual(['0', '1', '2', '3', '4', '5']);
+    expect(list.map((i) => one(i, 'message-number').textContent)).toEqual(['#1', '#2', '#3', '#4', '#5', '#6']);
+    const failed = list[3]!;
+    expect(hasClass(failed, 'message-failed')).toBe(true);
+    expect(one(failed, 'message-failed-note').textContent).toBe(t('preview.itemFailed'));
+    // Its text is still in the page, whole (README.md, rule R6).
+    expect(renderedBody(failed)).toBe(result.messages[3]!.message.bodyText);
+    for (const [k, item] of list.entries()) {
+      if (k === 3) continue;
+      expect(hasClass(item, 'message-failed')).toBe(false);
+      expect(one(item, 'message-subject').textContent).toBe(`Mail ${String(k)}`);
+    }
+    // The half-built item left nothing behind: changing the zone still works.
+    chooseZone('UTC');
+    expect(list.filter((i) => i !== failed).every((i) => one(i, 'message-date').textContent === t('preview.noDate') || one(i, 'message-date').textContent.endsWith('UTC+00:00'))).toBe(true);
+  });
+
+  it('a stand-in for an email without text has no body text', () => {
+    mount({
+      decorate: () => {
+        throw new Error('synthetic decorate failure');
+      },
+    });
+    preview.show(engineOf([make({ subject: 'Empty', bodyText: '' })]));
+    const failed = items()[0]!;
+    expect(hasClass(failed, 'message-failed')).toBe(true);
+    expect(withClass(failed, 'body-text')).toEqual([]);
+  });
+
+  it('ends a chunk early when its bodies are very long, but always builds one email', () => {
+    preview.show(engineOf([make({ bodyText: 'a'.repeat(MAX_CHUNK_CHARS) }), make({ bodyText: 'b'.repeat(MAX_CHUNK_CHARS) }), make()]));
+    expect(items()).toHaveLength(1);
+    runNext();
+    expect(items()).toHaveLength(2);
+    runNext();
+    expect(items()).toHaveLength(3);
+  });
+});

@@ -5,9 +5,10 @@
 //
 // No accessibility library (such as axe-core) is used, to avoid a new
 // dependency: landmarks, names, keyboard order, focus outlines and colour
-// contrast are checked explicitly below.
+// contrast are checked explicitly below (contrast: e2e/support/contrast.ts).
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
+import { contrastFailures } from './support/contrast.ts';
 
 declare global {
   interface Window {
@@ -142,46 +143,7 @@ test('reaches every interactive element with Tab, in page order, with a visible 
 
 test('has enough colour contrast for every text (WCAG AA)', async ({ page }) => {
   await open(page);
-
-  const failures = await page.evaluate(() => {
-    type Rgba = [number, number, number, number];
-    const parse = (color: string): Rgba => {
-      const n = color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
-      return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1];
-    };
-    const luminance = ([r, g, b]: Rgba): number => {
-      const channel = (v: number): number => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-    };
-    // The first ancestor with an opaque background colour (white if none).
-    const background = (start: Element): Rgba => {
-      for (let e: Element | null = start; e; e = e.parentElement) {
-        const bg = parse(getComputedStyle(e).backgroundColor);
-        if (bg[3] > 0) return bg;
-      }
-      return [255, 255, 255, 1];
-    };
-
-    const found: string[] = [];
-    let checked = 0;
-    for (const element of document.querySelectorAll('body *')) {
-      const ownText = [...element.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim());
-      if (!ownText || element.getClientRects().length === 0) continue;
-      const style = getComputedStyle(element);
-      const fg = luminance(parse(style.color));
-      const bg = luminance(background(element));
-      const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
-      const size = Number.parseFloat(style.fontSize);
-      const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
-      checked++;
-      if (ratio < (large ? 3 : 4.5)) found.push(`${element.tagName} "${element.textContent}" ${ratio.toFixed(2)}:1`);
-    }
-    return checked > 5 ? found : [`only ${String(checked)} texts checked`];
-  });
-  expect(failures).toEqual([]);
+  expect(await contrastFailures(page)).toEqual([]);
 });
 
 test('fits a narrow phone screen without sideways scrolling', async ({ page }) => {

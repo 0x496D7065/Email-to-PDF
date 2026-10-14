@@ -83,11 +83,45 @@ export const en = {
     from: 'From',
     to: 'To',
     cc: 'Cc',
+    bcc: 'Bcc',
     date: 'Date',
     subject: 'Subject',
     attachments: 'Attachments',
     noSubject: '(no subject)',
     noDate: '(no date)',
+    noText: '(no text)',
+    // An email whose item could not be built: its text is still shown under this note.
+    itemFailed: 'Something went wrong while showing this email. Its text, if it has any, is shown below as it is.',
+    // The toolbar above the list.
+    zone: 'Show dates in this time zone',
+    zoneThisComputer: '{zone} (this computer)',
+    showFolded: 'Show quoted text and signatures',
+    // Accessible name of the list of emails.
+    listLabel: 'Your emails, oldest first',
+    // An email's number in the list, e.g. "#3".
+    messageNumber: '#{number}',
+    // Shown under the date when the sender's own clock showed another time.
+    senderTime: "Sender's local time: {time}",
+    // One mailbox with both parts, e.g. "Alice Example <alice@example.test>".
+    mailbox: '{name} <{address}>',
+    // Files this email was also found in (identical copies merged into it).
+    alsoIn: 'Also in',
+    // One attachment: listed only, never opened.
+    attachment: '{name} ({size}, {type})',
+    attachmentNoType: '{name} ({size})',
+    noAttachmentName: '(attachment without a name)',
+    size: {
+      bytes: { one: '{count} byte', other: '{count} bytes' },
+      kb: '{size} KB',
+      mb: '{size} MB',
+      unknown: 'size unknown',
+    },
+    // Parts of a folded block's label, e.g. "Quoted text, 12 lines, from email #3".
+    foldLines: { one: '{count} line', other: '{count} lines' },
+    foldFromOne: 'from email {list}',
+    foldFromMany: 'from emails {list}',
+    // A folded block without a known reason (not expected; a safe default).
+    foldOther: 'Folded text',
     // How the shown author was found (see src/ui-model/display-author.ts).
     author: {
       from: 'From',
@@ -176,8 +210,6 @@ export const en = {
     chooseFiles: 'Choose email files',
     downloadPdf: 'Download PDF',
     clearEverything: 'Clear everything',
-    showFolded: 'Show folded text',
-    hideFolded: 'Fold quoted text again',
     include: 'Include in the PDF',
   },
 
