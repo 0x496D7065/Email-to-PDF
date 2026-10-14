@@ -112,7 +112,10 @@ export interface NormalizedMessage {
    */
   readonly bcc: readonly EmailAddress[];
   readonly subject: string;
-  /** Plain-text body, never HTML (README.md, rule R4). */
+  /**
+   * Plain-text body, never HTML (README.md, rule R4). Line ends are LF only:
+   * both adapters turn CRLF and lone CR into LF (src/parsing/line-endings.ts).
+   */
   readonly bodyText: string;
   readonly attachments: readonly AttachmentInfo[];
   /** Which dropped file this came from, and the SHA-256 of that file's bytes (for the PDF cover page). */

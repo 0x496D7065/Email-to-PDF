@@ -448,6 +448,39 @@ describe('createMsgParser: body', () => {
     expect(message.bodyText).toBe('');
     expect(message.warnings).toEqual(['no-body']);
   });
+
+  describe('line ends: LF only, only CR is changed', () => {
+    // The builder writes each "\n" as CRLF and leaves a lone "\r" as it is.
+    it('CRLF (as Outlook writes it) becomes LF', async () => {
+      const message = await parseOk(spec({ bodyText: 'one\ntwo\n\nthree\n' }));
+      expect(message.bodyText).toBe('one\ntwo\n\nthree\n');
+    });
+
+    it('a lone CR becomes LF, also mixed with CRLF, doubled, and at the start or end', async () => {
+      const message = await parseOk(spec({ bodyText: '\rone\rtwo\nthree\r\rfour\r' }));
+      expect(message.bodyText).toBe('\none\ntwo\nthree\n\nfour\n');
+    });
+
+    it('a whitespace-only body ("no-body") is kept with LF line ends', async () => {
+      const message = await parseOk(spec({ bodyText: ' \r\t\n' }));
+      expect(message.bodyText).toBe(' \n\t\n');
+      expect(message.warnings).toEqual(['no-body']);
+    });
+
+    it('converted HTML text with CR becomes LF', async () => {
+      const htmlToText = (): HtmlToTextResult => ({ text: 'a\rb\r\nc\u2028d', truncated: false });
+      const result = await createMsgParser({ htmlToText }).parse({ name: 'a.msg', bytes: buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' })) });
+      if (!result.ok) throw new Error(result.detail);
+      expect(result.message.bodyText).toBe('a\nb\nc\u2028d');
+    });
+
+    it('the SHA-256 is still the one of the file bytes', async () => {
+      const data = buildMsg(spec({ bodyText: 'one\rtwo' }));
+      const result = await parse(data);
+      if (!result.ok) throw new Error(result.detail);
+      expect(result.message.source.sha256).toBe(await sha256Hex(data));
+    });
+  });
 });
 
 describe('createMsgParser: attachments (metadata only, README.md rule R4)', () => {

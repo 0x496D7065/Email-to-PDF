@@ -118,6 +118,25 @@ export default defineConfig(
       'no-new-func': 'error',
     },
   },
+  // The app runs in the browser only. e2e/support/node-fs.d.ts declares
+  // 'node:fs' for the browser tests, and tsconfig.json covers src/ and e2e/
+  // together, so typecheck alone would not stop app code importing it.
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:*'],
+              message: 'The app runs in the browser only; node: modules are for tests and scripts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // e2e/ browser tests deliberately try forbidden things (fetch, remote
   // images) inside the page to PROVE the CSP blocks them. That code runs
   // only in the test browser and is never shipped, so the early-warning

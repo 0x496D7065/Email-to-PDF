@@ -23,6 +23,7 @@ import { sha256Hex } from './hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
+import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
 import type {
   AttachmentInfo,
@@ -443,9 +444,11 @@ interface MessageBody {
  *    text stays in the original file and the preview flags the message;
  * 4. otherwise '' with 'no-body'.
  *
- * Outlook writes line ends as CRLF. They become LF, as in the .eml adapter,
- * so the same message from both formats has the same text; no other
- * character is changed.
+ * Outlook writes line ends as CRLF. Every CRLF and every lone CR becomes LF
+ * (toLfLineEndings, line-endings.ts, shared with the .eml adapter), in the
+ * plain-text body and in the converted HTML alike, so the same message from
+ * both formats has the same text. No character other than CR is changed
+ * (README.md, rule R6).
  *
  * A body property of the wrong type (a damaged file) is NOT treated as
  * absent, since that would silently lose the message text (README.md, rule
@@ -454,7 +457,7 @@ interface MessageBody {
 function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody {
   const plain: unknown = fields.body;
   if (plain !== undefined && typeof plain !== 'string') throw new DamagedPropertyError('plain-text body');
-  if (plain !== undefined && plain.trim() !== '') return { text: plain.replace(/\r\n/g, '\n'), warnings: [] };
+  if (plain !== undefined && plain.trim() !== '') return { text: toLfLineEndings(plain), warnings: [] };
 
   const html = htmlBody(fields);
   if (html !== undefined && html.trim() !== '') {
@@ -468,7 +471,8 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody {
       // given: the content is flagged as missing either way.
       return { text: '', warnings: ['html-body-unreadable'] };
     }
-    return { text: converted.text, warnings: converted.truncated ? ['html-converted-body', 'html-body-truncated'] : ['html-converted-body'] };
+    const text = toLfLineEndings(converted.text);
+    return { text, warnings: converted.truncated ? ['html-converted-body', 'html-body-truncated'] : ['html-converted-body'] };
   }
 
   const rtf: unknown = fields.compressedRtf;
@@ -477,7 +481,7 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody {
     return { text: '', warnings: ['rtf-only-body'] };
   }
   // A body made only of spaces and line breaks is kept as it is.
-  return { text: (plain ?? '').replace(/\r\n/g, '\n'), warnings: ['no-body'] };
+  return { text: toLfLineEndings(plain ?? ''), warnings: ['no-body'] };
 }
 
 /**

@@ -115,7 +115,11 @@ export function dateTexts(date: EmailDate, zone: string): DateTexts {
   return { main: shown.text, iso: new Date(Math.floor(date.utcMs)).toISOString(), senderLocal };
 }
 
-/** Lines in a block of text: "a\nb" is 2, "a\nb\n" too (a final line break starts no new line). */
+/**
+ * Lines in a block of text: "a\nb" is 2, "a\nb\n" too (a final line break
+ * starts no new line). Only LF is counted: bodyText has LF line ends only
+ * (src/parsing/line-endings.ts), so this matches the engine's lines.
+ */
 export function lineCount(text: string): number {
   if (text === '') return 0;
   const breaks = text.split('\n').length - 1;
@@ -175,8 +179,11 @@ export interface PreviewOptions {
   /** The zone selected at the start, also marked "this computer" (default: browserTimeZone()). */
   readonly initialZone?: string;
   /**
-   * Hook for later tasks (warnings, include/exclude): called once for each
-   * email's list item, after it is built.
+   * Hook for later tasks (warnings, include/exclude): called for each
+   * email's list item after it is built. If building or decorating fails,
+   * it is called again with that email's stand-in (`.message-failed`), so
+   * it must not assume one call per position and must not keep references
+   * from a call that threw.
    */
   readonly decorate?: (item: HTMLLIElement, message: EngineMessage, position: number) => void;
 }
@@ -333,8 +340,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
    * Stand-in for an email whose item could not be built (a bug, or a
    * `decorate` hook that failed): its number, a calm note and its whole text
    * unfolded, so no email is ever silently missing from the list (README.md,
-   * rule R6). Built from the plainest parts only, and `decorate` is not
-   * called again for it.
+   * rule R6). Built from the plainest parts only. See decoratedFallbackOf
+   * for the `decorate` hook.
    */
   function fallbackItemOf(m: EngineMessage | undefined, position: number): HTMLLIElement {
     const text = typeof m?.message?.bodyText === 'string' ? m.message.bodyText : '';
@@ -351,6 +358,24 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     });
   }
 
+  /**
+   * The stand-in, passed to `decorate` too, so what later tasks add to each
+   * item (warnings, include/exclude) covers every email, this one included.
+   * If `decorate` fails again, a fresh, undecorated stand-in is used, so a
+   * half-done decoration never reaches the page. Without a message (only a
+   * bug can cause that) there is nothing to hand to `decorate`.
+   */
+  function decoratedFallbackOf(m: EngineMessage | undefined, position: number): HTMLLIElement {
+    const item = fallbackItemOf(m, position);
+    if (m === undefined || options.decorate === undefined) return item;
+    try {
+      options.decorate(item, m, position);
+      return item;
+    } catch {
+      return fallbackItemOf(m, position);
+    }
+  }
+
   /** One email's item, or its stand-in if building it failed. Never throws for one bad email. */
   function safeItemOf(m: EngineMessage | undefined, position: number, result: EngineResult): HTMLLIElement {
     const slotCount = slots.length;
@@ -362,7 +387,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       // Forget the half-built item's dates and folds: they are not in the page.
       slots.length = slotCount;
       folds.length = foldCount;
-      return fallbackItemOf(m, position);
+      return decoratedFallbackOf(m, position);
     }
   }
 

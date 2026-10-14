@@ -28,6 +28,7 @@ import { sha256Hex } from './hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
+import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
 import type {
   AttachmentInfo,
@@ -254,6 +255,13 @@ interface MessageContent {
  * - every other multipart (mixed, related, ...) gives the text of all its
  *   parts, in order;
  * - everything else is listed as an attachment.
+ * Line ends are LF only: postal-mime turns CRLF into LF but leaves a lone
+ * CR, so each part's text (plain, or HTML converted) goes through
+ * toLfLineEndings (line-endings.ts) before it is joined. Only CR changes, no
+ * other character (README.md, rule R6). The forwarded header lines hold no
+ * line break (see forwardedHeaderLines) and the joins below add only LF, so
+ * the whole body, forwarded blocks included, is LF only.
+ *
  * Empty text parts are skipped. Two text parts are joined by a line break;
  * a forwarded message block is separated from what comes before and after
  * it by a blank line. If there is no text and no forwarded block, the text is
@@ -299,7 +307,7 @@ async function readContent(
       if (part.text === '' || (part.type === 'html' && hideHtml)) return;
       hasOwnBody = true;
       if (part.type === 'plain') {
-        segments.push({ text: part.text, isBlock: false });
+        segments.push({ text: toLfLineEndings(part.text), isBlock: false });
         return;
       }
       let converted: HtmlToTextResult;
@@ -316,7 +324,7 @@ async function readContent(
       }
       addWarning(warnings, 'html-converted-body');
       if (converted.truncated) addWarning(warnings, 'html-body-truncated');
-      if (converted.text !== '') segments.push({ text: converted.text, isBlock: false });
+      if (converted.text !== '') segments.push({ text: toLfLineEndings(converted.text), isBlock: false });
       return;
     }
 

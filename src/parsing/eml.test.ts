@@ -295,6 +295,92 @@ describe('createEmlParser: body', () => {
   });
 });
 
+describe('createEmlParser: line ends in bodyText are LF only (only CR is changed)', () => {
+  /** A single text/plain body, written as given (8bit, so a lone CR reaches postal-mime as is). */
+  const plainBody = (body: string): Uint8Array =>
+    bytes(HEADERS, '\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n', body);
+
+  it('a lone CR inside a line becomes LF (postal-mime itself keeps it)', async () => {
+    const message = await parseOk(plainBody('line one\rline two\r\n'));
+    expect(message.bodyText).toBe('line one\nline two\n');
+  });
+
+  it('CRLF becomes LF', async () => {
+    const message = await parseOk(plainBody('one\r\ntwo\r\n\r\nthree\r\n'));
+    expect(message.bodyText).toBe('one\ntwo\n\nthree\n');
+  });
+
+  it('mixed CRLF, lone CR, doubled CR and LF all become LF', async () => {
+    const message = await parseOk(plainBody('a\rb\r\nc\nd\r\re\r\n'));
+    expect(message.bodyText).toBe('a\nb\nc\nd\n\ne\n');
+  });
+
+  it('a CR at the very end of the file becomes LF', async () => {
+    const message = await parseOk(plainBody('last line\r'));
+    expect(message.bodyText).toBe('last line\n');
+  });
+
+  it('a CR from quoted-printable (=0D) becomes LF; other characters stay as they are', async () => {
+    const data = bytes(
+      HEADERS,
+      '\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n',
+      'caf=C3=A9=0Dna=C3=AFve\t=E2=80=A8end\r\n',
+    );
+    const message = await parseOk(data);
+    expect(message.bodyText).toBe('café\nnaïve\t\u2028end\n');
+  });
+
+  it('converted HTML text with CR becomes LF', async () => {
+    const htmlToText = (): HtmlToTextResult => ({ text: 'a\rb\r\nc', truncated: false });
+    const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>x</p>\r\n');
+    const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: data });
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.bodyText).toBe('a\nb\nc');
+  });
+
+  it('in an inline forwarded message, and before its block: the blank line around the block stays one blank line', async () => {
+    const inner = crlf('From: carol@example.test', 'Subject: Inner', 'Content-Type: text/plain', '', 'inner one\rinner two\r');
+    const data = bytes(
+      HEADERS,
+      '\r\nContent-Type: multipart/mixed; boundary="fw"\r\n\r\n',
+      crlf(
+        '--fw',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'outer one\router two\r',
+        '--fw',
+        'Content-Type: message/rfc822',
+        '',
+        inner,
+        '--fw--',
+        '',
+      ),
+    );
+    const message = await parseOk(data);
+    expect(message.bodyText).toBe(
+      [
+        'outer one',
+        'outer two',
+        '',
+        '---------- Forwarded message ----------',
+        'From: carol@example.test',
+        'Subject: Inner',
+        '',
+        'inner one',
+        'inner two',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('the SHA-256 is still the one of the file bytes', async () => {
+    const data = plainBody('one\rtwo\r\n');
+    const result = await parse(data);
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.message.source.sha256).toBe(await sha256Hex(data));
+  });
+});
+
 describe('createEmlParser: attachments (metadata only)', () => {
   const SECRET = 'ATTACHMENT-CONTENT-MUST-NOT-BE-KEPT';
   const FORWARDED = crlf('From: carol@example.test', 'Subject: Forwarded', '', 'Forwarded body.');

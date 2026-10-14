@@ -551,6 +551,8 @@ describe('chunked building', () => {
 
   it('an email whose item fails to build gets a stand-in; every other email is still built', () => {
     // Fails for "Mail 3": in the second chunk (chunk size 2), so later chunks must still come.
+    // The full item built for it before the failure is kept, to check that it left nothing behind.
+    let halfBuilt: FakeElement | undefined;
     mount({
       chunkSize: 2,
       schedule: (task) => {
@@ -559,11 +561,14 @@ describe('chunked building', () => {
         return handle;
       },
       cancel: () => undefined,
-      decorate: (_item, m) => {
-        if (m.message.subject === 'Mail 3') throw new Error('synthetic decorate failure');
+      decorate: (item, m) => {
+        if (m.message.subject !== 'Mail 3') return;
+        // Fails on the full item and on its stand-in too.
+        if (!hasClass(fake(item), 'message-failed')) halfBuilt = fake(item);
+        throw new Error('synthetic decorate failure');
       },
     });
-    const result = engineOf(Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n> quoted ${String(k)}\n` })));
+    const result = engineOf(Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n\n-- \nSender ${String(k)}\n` })));
     preview.show(result);
     while (tasks.length > 0) runNext();
     expect(preview.isRendering()).toBe(false);
@@ -581,9 +586,18 @@ describe('chunked building', () => {
       expect(hasClass(item, 'message-failed')).toBe(false);
       expect(one(item, 'message-subject').textContent).toBe(`Mail ${String(k)}`);
     }
-    // The half-built item left nothing behind: changing the zone still works.
+    // The half-built item left nothing behind: changing the zone and showing
+    // the folded sections still work, and no longer reach that item.
+    expect(halfBuilt).toBeDefined();
+    const halfBuiltDate = one(halfBuilt!, 'message-date').textContent;
+    const halfBuiltFolds = withClass(halfBuilt!, 'fold');
+    expect(halfBuiltFolds.length).toBeGreaterThan(0);
     chooseZone('UTC');
+    setShowFolded(true);
     expect(list.filter((i) => i !== failed).every((i) => one(i, 'message-date').textContent === t('preview.noDate') || one(i, 'message-date').textContent.endsWith('UTC+00:00'))).toBe(true);
+    expect(one(halfBuilt!, 'message-date').textContent).toBe(halfBuiltDate);
+    expect(halfBuiltDate.endsWith('UTC+00:00')).toBe(false);
+    expect(halfBuiltFolds.every((d) => !d.hasAttribute('open'))).toBe(true);
   });
 
   it('a stand-in for an email without text has no body text', () => {
@@ -596,6 +610,61 @@ describe('chunked building', () => {
     const failed = items()[0]!;
     expect(hasClass(failed, 'message-failed')).toBe(true);
     expect(withClass(failed, 'body-text')).toEqual([]);
+  });
+
+  it('the stand-in is passed to decorate too, so later controls cover every email', () => {
+    const calls: [string, number, boolean][] = [];
+    mount({
+      decorate: (item, m, position) => {
+        const isStandIn = hasClass(fake(item), 'message-failed');
+        calls.push([m.message.subject, position, isStandIn]);
+        // Fails on the full item of "Mail 1" only; its stand-in is decorated.
+        if (m.message.subject === 'Mail 1' && !isStandIn) throw new Error('synthetic decorate failure');
+        item.setAttribute('data-decorated', 'yes');
+      },
+    });
+    const result = engineOf([make({ subject: 'Mail 0' }), make({ subject: 'Mail 1' }), make({ subject: 'Mail 2' })]);
+    preview.show(result);
+    expect(calls).toEqual([
+      ['Mail 0', 0, false],
+      ['Mail 1', 1, false],
+      ['Mail 1', 1, true],
+      ['Mail 2', 2, false],
+    ]);
+    const list = items();
+    expect(list.map((i) => hasClass(i, 'message-failed'))).toEqual([false, true, false]);
+    expect(list.map((i) => i.getAttribute('data-decorated'))).toEqual(['yes', 'yes', 'yes']);
+    expect(renderedBody(list[1]!)).toBe(result.messages[1]!.message.bodyText);
+  });
+
+  it('if decorate fails on the stand-in too, an undecorated stand-in is shown (no half-done decoration)', () => {
+    let calls = 0;
+    mount({
+      decorate: (item) => {
+        calls++;
+        item.setAttribute('data-half-done', 'yes');
+        throw new Error('synthetic decorate failure');
+      },
+    });
+    const result = engineOf([make({ subject: 'Only', bodyText: 'Kept text.\n' })]);
+    preview.show(result);
+    expect(calls).toBe(2);
+    const failed = items()[0]!;
+    expect(hasClass(failed, 'message-failed')).toBe(true);
+    expect(failed.hasAttribute('data-half-done')).toBe(false);
+    expect(one(failed, 'message-number').textContent).toBe('#1');
+    expect(renderedBody(failed)).toBe('Kept text.\n');
+  });
+
+  it('a missing message gets a stand-in without calling decorate (there is nothing to hand it)', () => {
+    const decorate = vi.fn();
+    mount({ decorate });
+    const result = engineOf([make({ subject: 'Mail 0' })]);
+    preview.show({ ...result, messages: [result.messages[0]!, undefined as unknown as EngineResult['messages'][number]] });
+    expect(decorate).toHaveBeenCalledTimes(1);
+    const list = items();
+    expect(list.map((i) => hasClass(i, 'message-failed'))).toEqual([false, true]);
+    expect(one(list[1]!, 'message-number').textContent).toBe('#2');
   });
 
   it('ends a chunk early when its bodies are very long, but always builds one email', () => {
