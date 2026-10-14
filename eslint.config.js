@@ -28,6 +28,42 @@ const htmlSinks = [
 // The same list as a regex for the AST selectors below, e.g. /^(innerHTML|...)$/
 const htmlSinkPattern = `/^(${htmlSinks.join('|')})$/`;
 
+// AST selectors for 'no-restricted-syntax' (README.md, rule R4). A named
+// list because flat config REPLACES a rule's options in each block that sets
+// it: the src/ block below repeats these and adds its own.
+const restrictedSyntax = [
+  // The same names written as el['innerHTML'] (computed access) or as an
+  // object key, e.g. Object.assign(el, { innerHTML: x }).
+  {
+    selector: `MemberExpression[computed=true][property.value=${htmlSinkPattern}]`,
+    message: html,
+  },
+  { selector: `Property[key.name=${htmlSinkPattern}]`, message: html },
+  { selector: `Property[key.value=${htmlSinkPattern}]`, message: html },
+  // el.setAttribute('onclick', ...) / ('srcdoc', ...) when the name is
+  // written as a literal or a template literal (`on${x}`: its first
+  // text part is checked). Names built at run time are caught by
+  // src/ui/dom.ts (el / setSafeAttribute), which refuses them.
+  ...[
+    ['setAttribute', 0],
+    ['setAttributeNS', 1],
+  ].flatMap(([method, index]) =>
+    [`arguments.${index}.value`, `arguments.${index}.quasis.0.value.cooked`].map((path) => ({
+      selector: `CallExpression[callee.property.name='${method}'][${path}=/^(on|srcdoc$)/i]`,
+      message: `${html} Event handler and srcdoc attributes are forbidden; use addEventListener.`,
+    })),
+  ),
+];
+
+// The app runs in the browser only: node: modules are for tests and scripts.
+const nodeOnly = 'The app runs in the browser only; node: modules are for tests and scripts.';
+// import('node:fs') written as a string or a template literal. Static
+// imports are caught by 'no-restricted-imports' in the src/ block below.
+const dynamicNodeImports = [
+  { selector: 'ImportExpression[source.value=/^node:/]', message: nodeOnly },
+  { selector: 'ImportExpression[source.quasis.0.value.cooked=/^node:/]', message: nodeOnly },
+];
+
 const forbiddenGlobals = {
   fetch: network,
   XMLHttpRequest: network,
@@ -88,30 +124,8 @@ export default defineConfig(
         { property: 'write', message: html },
         { property: 'writeln', message: html },
       ],
-      'no-restricted-syntax': [
-        'error',
-        // The same names written as el['innerHTML'] (computed access) or as an
-        // object key, e.g. Object.assign(el, { innerHTML: x }).
-        {
-          selector: `MemberExpression[computed=true][property.value=${htmlSinkPattern}]`,
-          message: html,
-        },
-        { selector: `Property[key.name=${htmlSinkPattern}]`, message: html },
-        { selector: `Property[key.value=${htmlSinkPattern}]`, message: html },
-        // el.setAttribute('onclick', ...) / ('srcdoc', ...) when the name is
-        // written as a literal or a template literal (`on${x}`: its first
-        // text part is checked). Names built at run time are caught by
-        // src/ui/dom.ts (el / setSafeAttribute), which refuses them.
-        ...[
-          ['setAttribute', 0],
-          ['setAttributeNS', 1],
-        ].flatMap(([method, index]) =>
-          [`arguments.${index}.value`, `arguments.${index}.quasis.0.value.cooked`].map((path) => ({
-            selector: `CallExpression[callee.property.name='${method}'][${path}=/^(on|srcdoc$)/i]`,
-            message: `${html} Event handler and srcdoc attributes are forbidden; use addEventListener.`,
-          })),
-        ),
-      ],
+      // See restrictedSyntax above.
+      'no-restricted-syntax': ['error', ...restrictedSyntax],
       // Running strings as code (the CSP forbids it too, README.md, rule R2).
       'no-eval': 'error',
       'no-implied-eval': 'error',
@@ -121,20 +135,14 @@ export default defineConfig(
   // The app runs in the browser only. e2e/support/node-fs.d.ts declares
   // 'node:fs' for the browser tests, and tsconfig.json covers src/ and e2e/
   // together, so typecheck alone would not stop app code importing it.
+  // 'no-restricted-imports' sees static imports only, so dynamic import()
+  // is caught by 'no-restricted-syntax', which must repeat the shared
+  // selectors (this block replaces that rule's options for src/).
   {
     files: ['src/**/*.ts'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['node:*'],
-              message: 'The app runs in the browser only; node: modules are for tests and scripts.',
-            },
-          ],
-        },
-      ],
+      'no-restricted-imports': ['error', { patterns: [{ group: ['node:*'], message: nodeOnly }] }],
+      'no-restricted-syntax': ['error', ...restrictedSyntax, ...dynamicNodeImports],
     },
   },
   // e2e/ browser tests deliberately try forbidden things (fetch, remote

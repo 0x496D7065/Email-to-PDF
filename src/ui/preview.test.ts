@@ -530,6 +530,37 @@ describe('chunked building', () => {
     expect(items()).toHaveLength(3);
   });
 
+  it('calls onRendered once the last item is in the page, never for a replaced list, and survives it throwing', () => {
+    const queue: (() => void)[] = [];
+    const seen: { result: EngineResult; count: number }[] = [];
+    mount({
+      chunkSize: 2,
+      schedule: (task) => queue.push(task),
+      cancel: () => undefined,
+      onRendered: (result) => {
+        seen.push({ result, count: items().length });
+        throw new Error('synthetic hook failure');
+      },
+    });
+    const replaced = many(5);
+    preview.show(replaced);
+    const stale = queue.shift()!;
+    const result = many(3);
+    preview.show(result);
+    stale(); // the replaced list's chunk: does nothing
+    expect(seen).toEqual([]);
+    while (queue.length > 0) queue.shift()!();
+    expect(seen).toEqual([{ result, count: 3 }]);
+    expect(preview.isRendering()).toBe(false);
+    // A list built in one go, and an empty one, are complete at once.
+    const small = many(1);
+    preview.show(small);
+    const empty = engineOf([]);
+    preview.show(empty);
+    expect(seen.map((s) => s.result)).toEqual([result, small, empty]);
+    expect(items()).toEqual([]);
+  });
+
   it('reset() empties the list and cancels waiting chunks', () => {
     preview.show(many(5));
     const stale = tasks[0]!;

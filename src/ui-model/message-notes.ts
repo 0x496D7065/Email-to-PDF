@@ -1,0 +1,116 @@
+// The notes of one email in the preview: everything the tool was unsure
+// about or had to work around for it (a missing date, an unknown time zone,
+// text converted from HTML, a look-alike email that was not merged, a fold
+// detector that failed, ...). The words come from the strings module
+// (src/ui/i18n/en.ts); this file only decides WHICH notes an email gets, in
+// which order, and which other emails they point to.
+//
+// Every code has a label: the lists below must name every code of its type
+// (a compile-time check fails otherwise), and en.ts types each label group
+// with `satisfies Record<Code, string>`.
+//
+// Pure functions, no DOM (README.md, rule R7).
+
+import type { DedupeWarningCode } from '../engine/dedupe';
+import type { EngineMessage, EngineWarningCode } from '../engine/engine';
+import type { ParseWarning } from '../parsing/types';
+
+/**
+ * Compile-time check that `List` names every member of `Union`: resolves to
+ * `true` when complete, to `never` otherwise (so assigning `true` fails).
+ */
+type Complete<Union, List extends readonly unknown[]> = [Exclude<Union, List[number]>] extends [never] ? true : never;
+
+/** Date notes, shown first (the "placed at the end" note follows them). */
+const DATE_WARNINGS = ['missing-date', 'unparseable-date', 'unknown-time-zone'] as const satisfies readonly ParseWarning[];
+
+/** Every parser warning, in the order shown: date notes first, then the rest. */
+export const PARSE_WARNINGS = [
+  ...DATE_WARNINGS,
+  'html-body-unreadable',
+  'html-body-truncated',
+  'rtf-only-body',
+  'html-converted-body',
+  'forwarded-message-not-expanded',
+  'no-body',
+  'missing-message-id',
+] as const satisfies readonly ParseWarning[];
+const parseWarningsComplete: Complete<ParseWarning, typeof PARSE_WARNINGS> = true;
+
+/** Every de-duplication warning, in the order shown. */
+export const DEDUPE_WARNINGS = [
+  'same-id-different-content',
+  'possible-duplicate-not-merged',
+  'duplicate-date-differs',
+  'duplicate-recipients-differ',
+  'duplicate-sender-differs',
+  'duplicate-threading-differs',
+] as const satisfies readonly DedupeWarningCode[];
+const dedupeWarningsComplete: Complete<DedupeWarningCode, typeof DEDUPE_WARNINGS> = true;
+
+/** Every engine warning, in the order shown. */
+export const ENGINE_WARNINGS = ['detector-failed', 'folding-disabled', 'dedupe-failed'] as const satisfies readonly EngineWarningCode[];
+const engineWarningsComplete: Complete<EngineWarningCode, typeof ENGINE_WARNINGS> = true;
+
+// Read once so the checks above are not "unused" (they matter at compile time only).
+void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete];
+
+/** One note of one email. */
+export type MessageNote =
+  | { readonly kind: 'parse'; readonly code: ParseWarning }
+  // Placed after the dated emails, in file order (no usable date).
+  | { readonly kind: 'order'; readonly code: 'file-order' }
+  | {
+      readonly kind: 'dedupe';
+      readonly code: DedupeWarningCode;
+      /** The other emails' numbers in the list (1-based), ascending; never this email. */
+      readonly related: readonly number[];
+      /**
+       * How many more FILES are involved but not listed (the engine caps its
+       * list). Files, not emails: several files can be one merged email,
+       * possibly one already listed, so this is never worded as emails.
+       */
+      readonly more: number;
+    }
+  | { readonly kind: 'engine'; readonly code: EngineWarningCode };
+
+/**
+ * The list numbers (1-based) of the emails a warning points to: input
+ * positions turned into list positions with `positionByIndex`, without this
+ * email itself, failed files or unknown positions; ascending, unique.
+ */
+export function relatedListNumbers(related: readonly number[], ownPosition: number, positionByIndex: readonly (number | null)[]): number[] {
+  const numbers = new Set<number>();
+  for (const index of related) {
+    const position = positionByIndex[index];
+    if (typeof position === 'number' && position !== ownPosition) numbers.add(position + 1);
+  }
+  return [...numbers].sort((a, b) => a - b);
+}
+
+/** The notes of the email at `position` (0-based) in the list, in the order shown. [] if none. */
+export function messageNotes(m: EngineMessage, position: number, positionByIndex: readonly (number | null)[]): MessageNote[] {
+  const notes: MessageNote[] = [];
+  const parse = new Set<ParseWarning>(m.parserWarnings);
+  for (const code of PARSE_WARNINGS) {
+    if (parse.has(code)) notes.push({ kind: 'parse', code });
+    // The "placed at the end" note right after the date notes.
+    if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && m.order === 'file-order') notes.push({ kind: 'order', code: 'file-order' });
+  }
+  for (const code of DEDUPE_WARNINGS) {
+    for (const w of m.dedupeWarnings) {
+      if (w.code !== code) continue;
+      // relatedTotal counts input files (src/engine/dedupe.ts), like `related`.
+      const total = Number.isInteger(w.relatedTotal) ? w.relatedTotal : w.related.length;
+      notes.push({
+        kind: 'dedupe',
+        code,
+        related: relatedListNumbers(w.related, position, positionByIndex),
+        more: Math.max(0, total - w.related.length),
+      });
+    }
+  }
+  const engine = new Set<EngineWarningCode>(m.engineWarnings);
+  for (const code of ENGINE_WARNINGS) if (engine.has(code)) notes.push({ kind: 'engine', code });
+  return notes;
+}

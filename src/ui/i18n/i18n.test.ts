@@ -95,11 +95,12 @@ describe('t', () => {
   });
 
   it('picks the English plural form', () => {
-    expect(t('counts.filesRead', { count: 1 })).toBe('1 file read');
-    expect(t('counts.filesRead', { count: 0 })).toBe('0 files read');
-    expect(t('counts.filesRead', { count: 2 })).toBe('2 files read');
+    expect(t('counts.files', { count: 1 })).toBe('1 file');
+    expect(t('counts.files', { count: 0 })).toBe('0 files');
+    expect(t('counts.files', { count: 2 })).toBe('2 files');
     expect(t('counts.duplicatesMerged', { count: 1 })).toBe('1 identical copy merged');
-    expect(t('counts.undated', { count: 3 })).toBe('3 emails have no date');
+    expect(t('counts.included', { included: 2, count: 3 })).toBe('2 of 3 emails will be in the PDF.');
+    expect(t('counts.included', { included: 0, count: 1 })).toBe('0 of 1 email will be in the PDF.');
   });
 
   it('fills every placeholder of every entry when given its params', () => {
@@ -132,7 +133,7 @@ describe('t', () => {
     // @ts-expect-error misspelled placeholder
     t('drop.reading', { done: 1, totl: 2 });
     // @ts-expect-error a plural count must be a number
-    t('counts.filesRead', { count: '2' });
+    t('counts.files', { count: '2' });
     // @ts-expect-error no params for a string without placeholders
     t('app.name', { x: 1 });
     expect(true).toBe(true);
@@ -163,7 +164,7 @@ describe('helpers', () => {
 
   it('lookup walks own keys only', () => {
     expect(lookup(en, 'steps.add.title')).toBe('Add your emails');
-    expect(lookup(en, 'counts.filesRead')).toEqual(en.counts.filesRead);
+    expect(lookup(en, 'counts.files')).toEqual(en.counts.files);
     expect(lookup(en, 'steps.add')).toBeUndefined();
     expect(lookup(en, 'toString')).toBeUndefined();
     expect(lookup(en, '__proto__.x')).toBeUndefined();

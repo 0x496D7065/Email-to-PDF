@@ -6,6 +6,8 @@
 // This fake implements exactly those and RECORDS them, so a test can also
 // prove that nothing else (such as innerHTML) was used: any other property
 // set on a fake element throws.
+// src/ui/review.ts also uses insertBefore (its box goes right after an
+// email's heading).
 // For the interactive parts (src/ui/add-files.ts, src/ui/preview.ts) it also
 // has event listeners (addEventListener + a test-side `fire`), click(),
 // contains(), the `value` / `files` fields of a file input or select, and a
@@ -141,6 +143,15 @@ export class FakeElement {
   append(...nodes: (FakeNode | string)[]): void {
     // Like the real append(): a string becomes a text node, never markup.
     for (const node of nodes) this.children.push(typeof node === 'string' ? new FakeText(node) : node);
+  }
+
+  /** Like the real insertBefore(): `node` goes before `reference`, or at the end when it is null. */
+  insertBefore(node: FakeNode, reference: FakeNode | null): FakeNode {
+    const at = reference === null ? -1 : this.children.indexOf(reference);
+    if (reference !== null && at < 0) throw new Error('fake DOM: insertBefore reference is not a child');
+    if (at < 0) this.children.push(node);
+    else this.children.splice(at, 0, node);
+    return node;
   }
 
   replaceChildren(...nodes: (FakeNode | string)[]): void {

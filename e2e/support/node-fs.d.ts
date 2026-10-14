@@ -3,8 +3,8 @@
 // package, and the tests run in Node through Playwright, so this states just
 // that function. Test-only: tsconfig.json also covers src/, so this
 // declaration would let app code type-check an import of node:fs; the
-// no-restricted-imports rule for src/ in eslint.config.js refuses any
-// node: import there.
+// no-restricted-imports and no-restricted-syntax rules for src/ in
+// eslint.config.js refuse any node: import there, static or import().
 declare module 'node:fs' {
   export function readFileSync(path: string, encoding: 'utf8'): string;
 }

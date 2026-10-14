@@ -289,6 +289,22 @@ summary {
   background-color: var(--surface);
 }
 
+/* Step 2 counts, above the toolbar. */
+.review-summary {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--accent);
+  background-color: var(--page-bg);
+}
+
+.review-line {
+  margin: 0;
+}
+
+.review-included {
+  font-weight: 600;
+}
+
 .message-list {
   margin: 1rem 0 0;
   padding: 0;
@@ -298,6 +314,50 @@ summary {
 .message {
   padding: 1rem 0;
   border-top: 1px solid var(--border);
+}
+
+/* An email left out of the PDF: still in the list with all its text, only
+   dimmed (README.md, rule R6). Grey text on the page background is 7.3:1,
+   so it stays readable (WCAG AA); the "Not in the PDF" mark says it in words
+   too, not only with colour. */
+.message[data-included='false'] {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  color: var(--text-muted);
+  background-color: var(--page-bg);
+}
+
+.message-review {
+  margin-top: 0.5rem;
+}
+
+.message-include {
+  flex-wrap: wrap;
+}
+
+.message-include label {
+  font-weight: 600;
+}
+
+.excluded-note {
+  padding: 0 0.5rem;
+  border: 1px solid var(--text-muted);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Things the tool was unsure about for this email: calm, small, with a bar. */
+.message-notes {
+  margin: 0.5rem 0 0;
+  padding: 0.25rem 0.75rem 0.25rem 1.75rem;
+  border-left: 4px solid var(--border);
+  font-size: 0.9375rem;
+}
+
+.message-note {
+  overflow-wrap: anywhere;
 }
 
 .message-heading {

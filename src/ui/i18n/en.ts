@@ -128,9 +128,11 @@ export const en = {
       sender: 'Sent by',
       none: 'Unknown sender',
     } satisfies Record<AuthorSource, string>,
-    // Why a message sits where it is. Only 'file-order' needs a note.
+    // Why a message sits where it is. Only 'file-order' needs a note. It is
+    // shown after any note about the date, but carries its own reason: a
+    // date outside the years 1 to 9999 gets this note without a date note.
     order: {
-      'file-order': 'Date missing or unreadable: placed at the end, in the order the files were added.',
+      'file-order': 'No usable date: placed at the end of the list, in the order the files were added.',
     } satisfies Record<Exclude<OrderReason, 'by-date'>, string>,
     // Label on a folded part of an email (README.md, rule R6).
     fold: {
@@ -141,20 +143,48 @@ export const en = {
     } satisfies Record<FoldReason, string>,
   },
 
+  // The summary at the top of step 2, e.g. "12 files, 1 could not be read".
   counts: {
-    filesRead: { one: '{count} file read', other: '{count} files read' },
+    // A line made of the parts below joined, e.g. "{12 files, 1 could not be read}."
+    sentence: '{text}.',
+    files: { one: '{count} file', other: '{count} files' },
+    filesFailed: { one: '{count} could not be read', other: '{count} could not be read' },
+    // Points to the list of failed files (with the reasons) in step 1.
+    seeFailed: 'See why in step 1.',
     messagesFound: { one: '{count} email found', other: '{count} emails found' },
     duplicatesMerged: { one: '{count} identical copy merged', other: '{count} identical copies merged' },
-    filesFailed: { one: '{count} file could not be read', other: '{count} files could not be read' },
-    undated: { one: '{count} email has no date', other: '{count} emails have no date' },
+    // Updated (and announced) each time an email is ticked or unticked. {count} is the total.
+    included: {
+      one: '{included} of {count} email will be in the PDF.',
+      other: '{included} of {count} emails will be in the PDF.',
+    },
+    withNotes: {
+      one: '{count} email has notes, shown with it below.',
+      other: '{count} emails have notes, shown with each email below.',
+    },
+  },
+
+  // Per email in step 2: the include checkbox and the notes.
+  review: {
+    // Shown on an email that was unticked: it stays in the list, dimmed.
+    excluded: 'Not in the PDF',
+    // Accessible name of an email's list of notes.
+    notesLabel: 'Notes about this email',
+    // After a note about look-alike emails: which ones, e.g. "See emails #3, #5".
+    relatedOne: 'See email {list}.',
+    relatedMany: 'See emails {list}.',
+    // When the list was cut, the rest is counted in FILES, not emails:
+    // several files can be one merged email (maybe one already listed).
+    relatedMoreFiles: { one: '{count} more file is involved.', other: '{count} more files are involved.' },
+    relatedOnlyMore: { one: '{count} other file is involved.', other: '{count} other files are involved.' },
   },
 
   warnings: {
     // Things the file reader was unsure about (one email).
     parse: {
-      'missing-date': 'This email has no date.',
+      'missing-date': 'No date was found in this email.',
       'unparseable-date': 'The date of this email could not be read.',
-      'unknown-time-zone': 'The time zone is not given, so the time may be off by a few hours.',
+      'unknown-time-zone': "The sender's time zone is not given, so the time may be off by a few hours.",
       'missing-message-id': 'This email has no hidden reference number, so identical copies are harder to spot.',
       'html-converted-body': 'This email was turned into plain text from its formatted version. The layout may look different.',
       'html-body-truncated': 'This email is very long, so its text was cut short here. The full text is still in the original file.',

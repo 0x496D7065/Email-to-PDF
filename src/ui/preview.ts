@@ -28,8 +28,10 @@
 // takes its place and the rest of the list is still built: no email is ever
 // silently missing.
 //
-// Not here (later tasks): warnings, include/exclude checkboxes and counts.
-// `decorate` is the hook they use to add to each email's item.
+// Not here: the counts, the include/exclude checkboxes and the notes
+// (src/ui/review.ts). They reach the page through three options: `header`
+// (nodes above the toolbar), `decorate` (adds to each email's item) and
+// `onRendered` (told when a list is complete).
 
 import type { EngineMessage, EngineResult } from '../engine/engine';
 import { browserTimeZone, formatInZone, formatSenderLocal, isDisplayableMs, listTimeZones } from '../engine/time-format';
@@ -158,6 +160,11 @@ export function foldSummaryText(block: DisplayBlock, ownPosition: number, positi
   return joinList(parts);
 }
 
+/** The id of an email's heading in the list (unique: one item per position). */
+export function headingId(position: number): string {
+  return `message-${String(position)}-title`;
+}
+
 /** The shown time-zone name: underscores as spaces, and the browser's own zone marked. */
 export function zoneLabel(zone: string, browserZone: string): string {
   const name = zone.replaceAll('_', ' ');
@@ -178,14 +185,24 @@ export interface PreviewOptions {
   readonly zones?: readonly string[];
   /** The zone selected at the start, also marked "this computer" (default: browserTimeZone()). */
   readonly initialZone?: string;
+  /** Nodes shown above the toolbar (the counts of src/ui/review.ts). Default: none. */
+  readonly header?: readonly Node[];
   /**
-   * Hook for later tasks (warnings, include/exclude): called for each
-   * email's list item after it is built. If building or decorating fails,
-   * it is called again with that email's stand-in (`.message-failed`), so
-   * it must not assume one call per position and must not keep references
-   * from a call that threw.
+   * Hook that adds to each email's list item (src/ui/review.ts: include
+   * checkbox, notes), called after the item is built, with the result it
+   * belongs to. If building or decorating fails, it is called again with
+   * that email's stand-in (`.message-failed`), so it must not assume one
+   * call per position and must not keep references from a call that threw.
+   * Each item's heading has the id `message-<position>-title`.
    */
-  readonly decorate?: (item: HTMLLIElement, message: EngineMessage, position: number) => void;
+  readonly decorate?: (item: HTMLLIElement, message: EngineMessage, position: number, result: EngineResult) => void;
+  /**
+   * Called once the last item of a result is in the page (src/ui/review.ts:
+   * an email with no decorated item then counts as included). Not called
+   * for a list replaced or reset before it was finished. If it throws, the
+   * list is not affected.
+   */
+  readonly onRendered?: (result: EngineResult) => void;
 }
 
 export interface Preview {
@@ -254,7 +271,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
 
   // role="list": some screen readers drop the list role when the numbers are hidden by CSS.
   const list = el('ol', { attrs: { id: 'preview-list', class: 'message-list', role: 'list', 'aria-label': t('preview.listLabel') } });
-  shell.checkArea.replaceChildren(toolbar, list);
+  shell.checkArea.replaceChildren(...(options.header ?? []), toolbar, list);
 
   // --- Building one email ---------------------------------------------------
   function applyDate(slot: DateSlot): void {
@@ -287,7 +304,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     const message = m.message;
     const hasSubject = message.subject.trim() !== '';
     const heading = el('h3', {
-      attrs: { class: 'message-heading' },
+      attrs: { id: headingId(position), class: 'message-heading' },
       children: [
         el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) }),
         ' ',
@@ -332,7 +349,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       attrs: { class: 'message', 'data-position': String(position) },
       children: [heading, el('dl', { attrs: { class: 'message-meta' }, children: meta }), bodyOf(m, position, result.positionByIndex)],
     });
-    options.decorate?.(item, m, position);
+    options.decorate?.(item, m, position, result);
     return item;
   }
 
@@ -349,7 +366,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       attrs: { class: 'message message-failed', 'data-position': String(position) },
       children: [
         el('h3', {
-          attrs: { class: 'message-heading' },
+          attrs: { id: headingId(position), class: 'message-heading' },
           children: [el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) })],
         }),
         el('p', { attrs: { class: 'note message-failed-note' }, text: t('preview.itemFailed') }),
@@ -365,11 +382,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
    * half-done decoration never reaches the page. Without a message (only a
    * bug can cause that) there is nothing to hand to `decorate`.
    */
-  function decoratedFallbackOf(m: EngineMessage | undefined, position: number): HTMLLIElement {
+  function decoratedFallbackOf(m: EngineMessage | undefined, position: number, result: EngineResult): HTMLLIElement {
     const item = fallbackItemOf(m, position);
     if (m === undefined || options.decorate === undefined) return item;
     try {
-      options.decorate(item, m, position);
+      options.decorate(item, m, position, result);
       return item;
     } catch {
       return fallbackItemOf(m, position);
@@ -387,7 +404,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       // Forget the half-built item's dates and folds: they are not in the page.
       slots.length = slotCount;
       folds.length = foldCount;
-      return decoratedFallbackOf(m, position);
+      return decoratedFallbackOf(m, position, result);
     }
   }
 
@@ -434,6 +451,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
           pending = { handle: schedule(buildChunk) };
         } else {
           setSafeAttribute(list, 'aria-busy', false);
+          try {
+            options.onRendered?.(result);
+          } catch {
+            // The list is complete either way.
+          }
         }
       }
     };
