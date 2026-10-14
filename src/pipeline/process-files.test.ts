@@ -122,7 +122,7 @@ describe('processFilesWith', () => {
     const files = [textFile('bad.eml', fixture('01-plain-english.eml')).file, textFile('good.eml', fixture('70-no-date.eml')).file];
     const result = await processFilesWith(files, steps);
     if (!result.ok) throw new Error(result.detail);
-    expect(result.engine.failed).toEqual([{ index: 0, fileName: 'bad.eml', sha256: null, error: 'corrupt', detail: UNEXPECTED_FILE_DETAIL }]);
+    expect(result.engine.failed).toEqual([{ index: 0, fileName: 'bad.eml', sha256: null, error: 'tool-error', detail: UNEXPECTED_FILE_DETAIL }]);
     expect(result.engine.messages.map((m) => m.message.source.fileName)).toEqual(['good.eml']);
   });
 

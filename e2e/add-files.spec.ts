@@ -1,8 +1,8 @@
 // Browser test of step 1, adding email files (README.md, rules R1, R2, R4
 // and R5), in Chromium against the BUILT site served by `vite preview` (see
 // playwright.config.ts). The real pipeline runs: the parse and engine
-// workers are the files in dist/assets/, sent with the site's security
-// headers.
+// workers are inlined in the page's script and started from blob: URLs, under
+// the page's own CSP.
 //
 // Files: synthetic fixtures from tests/fixtures/eml (given to the browser by
 // path) and a synthetic .msg built in memory from tests/fixtures/msg (given
@@ -11,15 +11,20 @@
 // file from the operating system.
 //
 // Every test also checks, once processing has settled, that nothing (page or
-// worker) made a request other than loading the worker scripts from the
-// site itself, that there was no CSP violation (page or worker), and that
-// there was no console error. See e2e/support/watch.ts for the detectors.
+// worker) made a request other than starting the inlined workers from their
+// blob: URLs (memory, not network), that there was no CSP violation (page or
+// worker), and that there was no console error. See e2e/support/watch.ts for
+// the detectors.
+//
+// The offline tests at the end switch the network off right after the page
+// has loaded, then use the tool: the way a user checks that nothing needs
+// the internet (README.md, "how to verify").
 import { expect, test, type FileChooser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import { en } from '../src/ui/i18n/en.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
-import { watchPage, workerCspReports, type Watch } from './support/watch.ts';
+import { watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -182,17 +187,23 @@ async function dropFiles(page: Page, selector: string, paths: readonly string[],
 /** Requests since the page loaded. */
 const requestsAfterLoad = (): string[] => watch.requests.slice(loadedAt);
 
+/** The parse / engine workers started so far. */
+const parseWorkers = (): number => workersNamed(watch, watch.workers, 'parse-worker').length;
+const engineWorkers = (): number => workersNamed(watch, watch.workers, 'engine-worker').length;
+
 /**
- * After processing has settled (a quiet period): the only requests after
- * load are the worker scripts, from the site itself, nothing else; no
- * WebSocket; no CSP violation in the page or any worker; every worker ended;
- * no console error; the page is still the app.
+ * After processing has settled (a quiet period): the only "requests" after
+ * load are the blob: URLs the inlined workers start from (on the site's own
+ * origin, read from memory), nothing else; no WebSocket; no CSP violation in
+ * the page or any worker; every worker ended and is a parse or engine
+ * worker; no console error; the page is still the app.
  */
 async function expectNothingLeftThePage(page: Page): Promise<void> {
   await page.waitForTimeout(1000);
   const workerUrls = new Set(watch.workers.map((w) => w.url()));
-  for (const url of workerUrls) expect(url).toMatch(new RegExp(`^${origin}/assets/(parse|engine)-worker-[\\w-]+\\.js$`));
+  for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
   expect(requestsAfterLoad().filter((url) => !workerUrls.has(url))).toEqual([]);
+  expect(parseWorkers() + engineWorkers()).toBe(watch.workers.length);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
   expect(await page.evaluate(() => window.__addViolations)).toEqual([]);
@@ -227,8 +238,8 @@ test('choose files: progress is shown, the summary is right and step 2 opens', a
   expect(seen.statuses).toContain('Reading file 4 of 4...');
   expect(seen.statuses).toContain(en.drop.organizing);
   // One parse worker per file read (3, then all 4 again), one engine worker per round.
-  expect(watch.workers.filter((w) => w.url().includes('/parse-worker-'))).toHaveLength(7);
-  expect(watch.workers.filter((w) => w.url().includes('/engine-worker-'))).toHaveLength(2);
+  expect(parseWorkers()).toBe(7);
+  expect(engineWorkers()).toBe(2);
   expect(page.url()).toBe(url);
 
   await expectNothingLeftThePage(page);
@@ -276,7 +287,7 @@ test('files dropped outside the zone are not added and the page does not navigat
   // The work so far is intact and nothing new was read.
   await expect(page.locator('#add-summary-text')).toHaveText('1 file added. 1 email found.');
   await expectCheckReady(page);
-  expect(watch.workers.filter((w) => w.url().includes('/parse-worker-'))).toHaveLength(1);
+  expect(parseWorkers()).toBe(1);
 
   await expectNothingLeftThePage(page);
 });
@@ -310,7 +321,7 @@ test('an unsupported and an oversized file are listed with readable reasons; the
   await items.nth(1).getByText(en.added.details).click();
   await expect(detail).toHaveText('the file is larger than 50 MB, the limit for one file');
   // Neither failed file reached a parse worker.
-  expect(watch.workers.filter((w) => w.url().includes('/parse-worker-'))).toHaveLength(2);
+  expect(parseWorkers()).toBe(2);
 
   await expectNothingLeftThePage(page);
 });
@@ -328,7 +339,7 @@ test('adding more files later re-reads the whole list; the same file added twice
   await expectSummary(page, '3 files added. 3 emails found. 1 identical copy merged.');
   await expectCheckReady(page);
   // Each round reads every file of the list: 1 + 2 + 3 parse workers.
-  expect(watch.workers.filter((w) => w.url().includes('/parse-worker-'))).toHaveLength(6);
+  expect(parseWorkers()).toBe(6);
 
   await expectNothingLeftThePage(page);
 });
@@ -365,4 +376,48 @@ test('keyboard: Tab reaches the button first, and Enter or Space opens the file 
   await expectSummary(page, '2 files added. 2 emails found.');
 
   await expectNothingLeftThePage(page);
+});
+
+test.describe('offline right after the page has loaded', () => {
+  test('.eml files and a .msg give the full result, with no request possible', async ({ page, context }) => {
+    test.setTimeout(60_000);
+    await open(page);
+    // From here on the browser has no network at all, as if the cable were pulled.
+    await context.setOffline(true);
+
+    await page.locator('#file-input').setInputFiles([ORDER_1, ORDER_2, ORDER_2_COPY]);
+    await expectSummary(page, '3 files added. 3 emails found. 1 identical copy merged.');
+    await page
+      .locator('#file-input')
+      .setInputFiles([{ name: 'good.msg', mimeType: 'application/vnd.ms-outlook', buffer: NodeBuffer.from(goodMsg()) as never }]);
+    await expectSummary(page, '4 files added. 4 emails found. 1 identical copy merged.');
+
+    await expectCheckReady(page);
+    await expect(page.locator('#add-failed')).toBeHidden();
+    await expect(page.locator('#add-batch-error')).toBeHidden();
+    // Every worker really started: one parse worker per file read, one engine worker per round.
+    expect(parseWorkers()).toBe(7);
+    expect(engineWorkers()).toBe(2);
+    // Nothing after load but the workers' blob: URLs (never the network).
+    expect(requestsAfterLoad().every((url) => url.startsWith(`blob:${origin}/`))).toBe(true);
+    await expectNothingLeftThePage(page);
+  });
+
+  test('a damaged file still gets a calm message of its own; the other file is read', async ({ page, context }) => {
+    test.setTimeout(60_000);
+    await open(page);
+    await context.setOffline(true);
+
+    // A .msg cut short: its structure is broken (a real damaged file).
+    await dropFiles(page, '#drop-zone', [ORDER_1], [{ name: 'cut-off.msg', bytes: goodMsg().slice(0, 700) }]);
+    await expectSummary(page, '2 files added. 1 could not be read. 1 email found.');
+    await expectCheckReady(page);
+    const items = page.locator('#add-failed-list > li');
+    await expect(items).toHaveCount(1);
+    await expect(items.nth(0).locator('.failed-reason')).toHaveText(`cut-off.msg ${en.errors.file.corrupt}`);
+    await expect(items.nth(0).locator('.failed-detail')).toHaveText(/^damaged file structure: /);
+    await expect(page.locator('#add-batch-error')).toBeHidden();
+    expect(parseWorkers()).toBe(2);
+    await expectNothingLeftThePage(page);
+  });
 });

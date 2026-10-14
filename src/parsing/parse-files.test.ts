@@ -207,7 +207,7 @@ describe('parseFilesWith: bytes given twice', () => {
       runJob,
     );
     expect(jobs.map((j) => j.name)).toEqual(['a.eml']);
-    expect(results[1]).toEqual({ ok: false, fileName: 'again.eml', sha256: null, error: 'corrupt', detail: DETACHED_DETAIL });
+    expect(results[1]).toEqual({ ok: false, fileName: 'again.eml', sha256: null, error: 'tool-error', detail: DETACHED_DETAIL });
   });
 
   it('two views of one buffer: the second is reported the same way', async () => {
@@ -292,7 +292,7 @@ describe('parseFilesWith: never throws, keeps going, keeps order', () => {
     const sha = await sha256Hex(bytes);
     expect(results.map((r) => (r.ok ? r.message.source.fileName : r.fileName))).toEqual(['throws.eml', 'ok-1.eml', 'rejects.eml', 'ok-2.eml']);
     for (const index of [0, 2]) {
-      expect(results[index]).toMatchObject({ ok: false, error: 'corrupt', detail: 'could not be read (unexpected error)', sha256: sha });
+      expect(results[index]).toMatchObject({ ok: false, error: 'tool-error', detail: 'could not be read (unexpected error)', sha256: sha });
     }
     expect(results[1]?.ok && results[3]?.ok).toBe(true);
   });

@@ -28,7 +28,8 @@
 //   gets a calm message; elsewhere it fails as an unreadable file.
 // - While files are being read, the area is aria-busy and the button is
 //   aria-disabled (still focusable, see app.ts). Files dropped meanwhile wait
-//   in a queue and are read in one more round once the current one is done.
+//   in a queue and are read in one more round once the current one is done;
+//   a visible notice says so until that round starts.
 //
 // Every word comes from i18n/ and goes into the page with textContent
 // through el() (README.md, rule R4). File names are untrusted: text only.
@@ -216,7 +217,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       input,
     ],
   });
-  // A message about the last drop (folders left out), kept until the next one.
+  // A visible message about the last addition: folders left out (kept until
+  // the next addition), and/or files waiting for the current round.
   const notice = el('p', { attrs: { id: 'add-notice', class: 'notice', hidden: true } });
 
   const progressLabel = el('label', { attrs: { id: 'add-progress-label', for: 'add-progress-bar' } });
@@ -238,6 +240,9 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   let files: FileLike[] = [];
   let pending: FileLike[] = [];
   let busy = false;
+  // The two parts of the notice (see showNotice).
+  let folderNotice = '';
+  let queuedNotice = false;
   // Increased by reset(): a run that started before it throws its result away.
   let generation = 0;
 
@@ -252,7 +257,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     setSafeAttribute(progressBox, 'hidden', !value);
   }
 
-  function showNotice(text: string): void {
+  // The queued message lives here, not only in the status line: progress
+  // updates replace the status line at once, so it would vanish unread.
+  function showNotice(): void {
+    const text = [folderNotice, queuedNotice ? t('drop.queued') : ''].filter((part) => part !== '').join(' ');
     notice.textContent = text;
     setSafeAttribute(notice, 'hidden', text === '');
   }
@@ -307,6 +315,11 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     do {
       files = [...files, ...pending];
       pending = [];
+      // The waiting files are being read now: the queued message is done.
+      if (queuedNotice) {
+        queuedNotice = false;
+        showNotice();
+      }
       const batch = [...files];
       try {
         result = await processBatch(batch, {
@@ -328,6 +341,9 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     if (newFiles.length === 0) return;
     pending = [...pending, ...newFiles];
     if (busy) {
+      queuedNotice = true;
+      showNotice();
+      // Announced once too; the next progress update replaces it.
       shell.setStatus(t('drop.queued'));
       return;
     }
@@ -343,7 +359,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     const chosen = input.files === null ? [] : Array.from(input.files);
     // Cleared so that choosing the same file again still counts as a change.
     input.value = '';
-    showNotice('');
+    folderNotice = '';
+    showNotice();
     add(chosen);
   });
 
@@ -372,7 +389,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     }
     const { files: dropped, folders } = filesFromDrop(drag.dataTransfer);
     const folderText = folders > 0 ? t('drop.folders', { count: folders }) : '';
-    showNotice(folderText);
+    folderNotice = folderText;
+    showNotice();
     if (dropped.length > 0) add(dropped);
     else shell.setStatus(folderText === '' ? t('drop.nothing') : folderText);
   };
@@ -392,7 +410,9 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       pending = [];
       setBusy(false);
       setDragOver(false);
-      showNotice('');
+      folderNotice = '';
+      queuedNotice = false;
+      showNotice();
       progressLabel.textContent = '';
       summaryLine.textContent = '';
       batchError.textContent = '';

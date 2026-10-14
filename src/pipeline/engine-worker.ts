@@ -13,11 +13,12 @@
 //
 // Like the parse worker, it has no network access paths: no network API, no
 // script loading, no remote URL. Vite bundles this file and everything it
-// imports into one separate same-origin script file (allowed by
-// `worker-src 'self'`; never a blob: or data: URL). A worker takes its CSP
-// from the HTTP header sent with its own script; the site sends the CSP
-// header with every file (dist/_headers), so `connect-src 'none'` applies
-// here too.
+// imports into one piece of code, inlined as a string in the page's own
+// script (`?worker&inline`, see engine-runner.ts), and started from a
+// `blob:` URL (allowed by `worker-src 'self' blob:`). A blob: worker takes
+// the CSP of the page that started it (header and <meta>), so
+// `connect-src 'none'` applies here too. The build check scans this code
+// inside the page's script (scripts/check-no-network.mjs).
 
 import { createEngineWorkerSide, type FromEngineWorker } from './engine-protocol';
 

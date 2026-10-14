@@ -134,6 +134,119 @@ export function findViolations(text, { isDist, distFile }) {
   return findings;
 }
 
+// One JavaScript string escape: \u{1F600}, \u00e9, \x41, a line
+// continuation (backslash + line break), or backslash + any other character.
+const ESCAPE_PATTERN = /\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(\r\n|[\s\S]))/g;
+const SIMPLE_ESCAPES = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', 0: '\0' };
+
+/**
+ * Undoes JavaScript string escapes everywhere in `text`, in one pass.
+ *
+ * Why: the web workers are inlined into the page's script (Vite
+ * `?worker&inline`), each as ONE string literal holding the worker's whole
+ * code. Inside that string a line break is written `\n` and a quote `\"`.
+ * Seen as raw text, `\nXMLHttpRequest` does not match /\bXMLHttpRequest\b/
+ * (the "n" before it looks like part of the word), so worker code could
+ * hide from the rules. Scanning the decoded text sees the worker code as the
+ * browser will run it. Decoding is done on the whole file, not only inside
+ * strings: it can only reveal more matches, and a false alarm is fixed by
+ * looking at it, not by loosening the check.
+ * @param {string} text
+ * @returns {string}
+ */
+export function decodeJsEscapes(text) {
+  return text.replace(ESCAPE_PATTERN, (_all, braced, hex4, hex2, other) => {
+    if (braced !== undefined) {
+      const code = Number.parseInt(braced, 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : '';
+    }
+    if (hex4 !== undefined) return String.fromCharCode(Number.parseInt(hex4, 16));
+    if (hex2 !== undefined) return String.fromCharCode(Number.parseInt(hex2, 16));
+    if (other === '\n' || other === '\r' || other === '\r\n' || other === '\u2028' || other === '\u2029') return '';
+    return Object.hasOwn(SIMPLE_ESCAPES, other) ? SIMPLE_ESCAPES[other] : other;
+  });
+}
+
+/**
+ * Findings that only appear once string escapes are undone (decodeJsEscapes):
+ * code embedded as a string, such as an inlined worker. Findings already
+ * visible in the raw text are left out (findViolations reports those), so
+ * nothing is reported twice. `line` is a line of the DECODED text.
+ * @param {string} text  File contents.
+ * @param {{ isDist: boolean, distFile?: string }} options  As for findViolations.
+ * @returns {{ line: number, match: string, reason: string }[]}
+ */
+export function findEmbeddedViolations(text, options) {
+  const decoded = decodeJsEscapes(text);
+  if (decoded === text) return [];
+  const key = (finding) => `${finding.reason}\u0000${finding.match}`;
+  // How many times each (reason, match) is already reported in the raw text.
+  const seen = new Map();
+  for (const finding of findViolations(text, options)) seen.set(key(finding), (seen.get(key(finding)) ?? 0) + 1);
+  const extra = [];
+  for (const finding of findViolations(decoded, options)) {
+    const left = seen.get(key(finding)) ?? 0;
+    if (left > 0) seen.set(key(finding), left - 1);
+    else extra.push({ ...finding, reason: `${finding.reason} [inside a string, e.g. inlined worker code; decoded line ${finding.line}]` });
+  }
+  return extra;
+}
+
+/** Shortest run of base64 characters treated as an opaque payload. */
+export const OPAQUE_PAYLOAD_MIN_LENGTH = 10000;
+
+/**
+ * Finds long base64-looking runs ([A-Za-z0-9+/], optional '=' padding) of at
+ * least OPAQUE_PAYLOAD_MIN_LENGTH characters. Code hidden that way (for
+ * example a worker inlined as base64, which older Vite versions did) cannot
+ * be seen by the rules above, not even after decodeJsEscapes, so the build
+ * must fail and a person must look.
+ *
+ * Why this guard rather than counting Vite's inline-worker wrapper marker:
+ * it does not depend on Vite's wrapper wording or on the number of workers
+ * (no false alarm on a harmless upgrade, no edit when a worker is added), and
+ * it catches the actual risk whatever produced it and however it is decoded
+ * later (atob, a hand-written decoder, ...), not only Vite's own format.
+ * Ordinary minified code never has 10k characters without punctuation.
+ *
+ * Linear scan (no regex backtracking on large bundles).
+ * @param {string} text
+ * @param {number} [minLength]
+ * @returns {{ line: number, match: string, reason: string }[]}
+ */
+export function findOpaquePayloads(text, minLength = OPAQUE_PAYLOAD_MIN_LENGTH) {
+  const isBase64 = (code) =>
+    (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 43 || code === 47;
+  const findings = [];
+  let line = 1;
+  let start = -1;
+  let startLine = 1;
+  for (let i = 0; i <= text.length; i += 1) {
+    const code = i < text.length ? text.charCodeAt(i) : -1;
+    if (isBase64(code)) {
+      if (start < 0) {
+        start = i;
+        startLine = line;
+      }
+      continue;
+    }
+    if (start >= 0) {
+      let end = i;
+      while (end < text.length && end - i < 2 && text.charCodeAt(end) === 61) end += 1; // '=' padding
+      if (end - start >= minLength) {
+        findings.push({
+          line: startLine,
+          match: text.slice(start, end),
+          reason: `a ${end - start}-character base64-looking literal: code hidden this way (e.g. a worker inlined as base64) escapes every check (README.md, rule R3)`,
+        });
+      }
+      start = -1;
+    }
+    if (code === 10) line += 1;
+  }
+  return findings;
+}
+
 /**
  * Structural checks on dist/index.html. Returns a list of problems (empty = OK).
  * @param {string} html

@@ -27,3 +27,15 @@ export function findViolations(text: string, options: { isDist: boolean; distFil
 export function checkBuiltHtml(html: string): string[];
 
 export function checkHeadersFile(text: string): string[];
+
+/** Undoes JavaScript string escapes (\n, \", \uXXXX, ...) everywhere in `text`. */
+export function decodeJsEscapes(text: string): string;
+
+/** Shortest base64-looking run reported by findOpaquePayloads (10000). */
+export const OPAQUE_PAYLOAD_MIN_LENGTH: number;
+
+/** Long base64-looking literals (opaque payloads the other rules cannot see into). */
+export function findOpaquePayloads(text: string, minLength?: number): Finding[];
+
+/** Findings visible only after decodeJsEscapes (code embedded in strings, e.g. inlined workers). */
+export function findEmbeddedViolations(text: string, options: { isDist: boolean; distFile?: string }): Finding[];

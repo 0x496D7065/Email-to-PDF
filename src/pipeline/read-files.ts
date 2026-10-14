@@ -32,7 +32,11 @@ export type ReadOutcome =
   | { readonly ok: true; readonly input: InputFile }
   | { readonly ok: false; readonly result: ParseResult };
 
-/** Detail for a file the browser could not read (moved, deleted or changed since it was dropped). */
+/**
+ * Detail for a file the browser could not read (moved, deleted or changed
+ * since it was dropped). Its code is 'unreadable', never 'corrupt': the file
+ * itself may be fine.
+ */
 export const UNREADABLE_DETAIL = 'could not be read from your computer (it may have been moved or changed); add it again';
 
 const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
@@ -45,13 +49,13 @@ export function createFileReader(limits: Limits = DEFAULT_LIMITS): (file: FileLi
   let acceptedBytes = 0;
   return async (file) => {
     const name = typeof file.name === 'string' ? file.name : '';
-    const failed = (error: 'too-large' | 'corrupt', detail: string): ReadOutcome => ({
+    const failed = (error: 'too-large' | 'unreadable', detail: string): ReadOutcome => ({
       ok: false,
       // sha256 null: the file was never read, so it has no hash.
       result: { ok: false, fileName: name, sha256: null, error, detail },
     });
     const size: unknown = file.size;
-    if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return failed('corrupt', UNREADABLE_DETAIL);
+    if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return failed('unreadable', UNREADABLE_DETAIL);
     if (size > limits.maxFileBytes) return failed('too-large', FILE_TOO_LARGE_DETAIL);
     if (acceptedBytes + size > limits.maxBatchBytes) return failed('too-large', BATCH_TOO_LARGE_DETAIL);
 
@@ -65,7 +69,7 @@ export function createFileReader(limits: Limits = DEFAULT_LIMITS): (file: FileLi
     }
     if (!(buffer instanceof ArrayBuffer)) {
       acceptedBytes -= size;
-      return failed('corrupt', UNREADABLE_DETAIL);
+      return failed('unreadable', UNREADABLE_DETAIL);
     }
     // The file may have changed on disk since its size was taken: the limits
     // are checked again on what was actually read, and the reservation is

@@ -3,7 +3,7 @@
 // files and real workers are checked in Chromium by e2e/add-files.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineResult } from '../engine/engine';
-import type { ParseResult } from '../parsing/types';
+import type { ParseErrorCode, ParseResult } from '../parsing/types';
 import type { ProcessOptions, ProcessResult } from '../pipeline/process-files';
 import type { FileLike } from '../pipeline/read-files';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../tests/support/fake-dom';
@@ -32,7 +32,7 @@ function fileItem(file: FileLike, isDirectory = false): DataTransferItemLike {
 }
 
 /** An engine result with the given counts and failed files (no real messages needed here). */
-function engineResult(given: number, found: number, merged: number, failed: { fileName: string; error: 'too-large' | 'unsupported-type' | 'corrupt'; detail: string }[]): ProcessResult {
+function engineResult(given: number, found: number, merged: number, failed: { fileName: string; error: ParseErrorCode; detail: string }[]): ProcessResult {
   const kept = found - merged;
   const engine = {
     messages: Array.from({ length: kept }, () => ({})),
@@ -344,6 +344,40 @@ describe('mountAddFiles: results', () => {
     expect(checkReady).toEqual([true]);
   });
 
+  it('a worker failure or a time limit is not shown as a damaged file', async () => {
+    choose('a.eml', 'b.msg', 'c.eml');
+    control.calls[0]?.resolve(
+      engineResult(3, 1, 0, [
+        { fileName: 'b.msg', error: 'tool-error', detail: 'the reading step stopped unexpectedly (worker failed)' },
+        { fileName: 'c.eml', error: 'timeout', detail: 'took too long to read (stopped)' },
+      ]),
+    );
+    await settle();
+    const items = byId('add-failed-list').children as FakeElement[];
+    expect(items[0]?.textContent).toContain(`b.msg ${t('errors.file.tool-error')}`);
+    expect(items[1]?.textContent).toContain(`c.eml ${t('errors.file.timeout')}`);
+    expect(t('errors.file.tool-error')).toBe(
+      'The tool could not read this file. To try again, reconnect to the internet, reload the page and add it again. If it fails again, the tool cannot read this file.',
+    );
+    for (const item of items) expect(item.textContent).not.toContain(t('errors.file.corrupt'));
+  });
+
+  it('a file the browser could not open is not shown as a damaged file', async () => {
+    choose('a.eml', 'moved.eml');
+    control.calls[0]?.resolve(engineResult(2, 1, 0, [{ fileName: 'moved.eml', error: 'unreadable', detail: 'could not be read from your computer' }]));
+    await settle();
+    const items = byId('add-failed-list').children as FakeElement[];
+    expect(items[0]?.textContent).toContain(`moved.eml ${t('errors.file.unreadable')}`);
+    expect(items[0]?.textContent).not.toContain(t('errors.file.corrupt'));
+    expect(t('errors.file.unreadable')).toBe('Your browser could not open this file. It may have been moved or changed since you chose it. Add it again.');
+  });
+
+  it('every piece of reload advice says the internet is needed (an offline page cannot reload)', () => {
+    const keys = ['errors.file.timeout', 'errors.file.tool-error', 'errors.batch.engine-timeout', 'errors.batch.engine-failed', 'errors.batch.unexpected'] as const;
+    for (const key of keys) expect(t(key)).toContain('reconnect to the internet, reload the page');
+    for (const key of ['errors.file.unreadable', 'errors.file.corrupt'] as const) expect(t(key)).not.toMatch(/reload/i);
+  });
+
   it('does not open step 2 when no email was found', async () => {
     choose('notes.txt');
     control.calls[0]?.resolve(engineResult(1, 0, 0, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'x' }]));
@@ -399,14 +433,22 @@ describe('mountAddFiles: adding more files', () => {
     choose('a.eml');
     choose('b.eml');
     expect(lastStatus()).toBe(t('drop.queued'));
+    // Also in the visible notice, which progress updates do not overwrite.
+    expect(byId('add-notice').hasAttribute('hidden')).toBe(false);
+    expect(byId('add-notice').textContent).toBe(t('drop.queued'));
+    control.calls[0]?.options.onProgress?.({ stage: 'reading', filesDone: 0, filesTotal: 1 });
+    expect(byId('add-notice').textContent).toBe(t('drop.queued'));
     drop([fileItem(fakeFile('c.msg'))]);
     expect(control.calls).toHaveLength(1);
+    expect(byId('add-notice').textContent).toBe(t('drop.queued'));
 
     control.calls[0]?.resolve(engineResult(1, 1, 0, []));
     await settle();
     // The stale result is not shown; one more round with every file.
     expect(results).toEqual([]);
     expect(control.calls).toHaveLength(2);
+    // That round reads the waiting files: the notice has done its job.
+    expect(byId('add-notice').hasAttribute('hidden')).toBe(true);
     expect(control.calls[1]?.files.map((f) => f.name)).toEqual(['a.eml', 'b.eml', 'c.msg']);
     expect(shell.addArea.getAttribute('aria-busy')).toBe('true');
 
@@ -416,6 +458,17 @@ describe('mountAddFiles: adding more files', () => {
     expect(results).toEqual([final]);
     expect(control.calls).toHaveLength(2);
     expect(shell.addArea.hasAttribute('aria-busy')).toBe(false);
+  });
+});
+
+describe('mountAddFiles: the queued notice', () => {
+  it('keeps the folder message next to it, and reset() clears both', () => {
+    choose('a.eml');
+    drop([fileItem(fakeFile('Mail'), true), fileItem(fakeFile('b.eml'))]);
+    expect(byId('add-notice').textContent).toBe(`${t('drop.folders', { count: 1 })} ${t('drop.queued')}`);
+    addFiles.reset();
+    expect(byId('add-notice').hasAttribute('hidden')).toBe(true);
+    expect(byId('add-notice').textContent).toBe('');
   });
 });
 
@@ -532,5 +585,35 @@ describe('mountAddFiles: reset', () => {
     expect(results).toEqual([]);
     expect(byId('add-summary').hasAttribute('hidden')).toBe(true);
     expect(lastStatus()).toBe('');
+  });
+
+  it('reset, then a new run starts, then the OLD run resolves: the old result is ignored', async () => {
+    choose('a.eml');
+    const old = control.calls[0];
+    addFiles.reset();
+    choose('b.eml');
+    const current = control.calls[1];
+    expect(current?.files.map((f) => f.name)).toEqual(['b.eml']);
+    expect(shell.addArea.getAttribute('aria-busy')).toBe('true');
+    const statusesBefore = statuses.length;
+
+    // The old run reports progress and finishes while the new one is going.
+    old?.options.onProgress?.({ stage: 'organizing', filesDone: 1, filesTotal: 1 });
+    old?.resolve(engineResult(1, 1, 0, [{ fileName: 'a.eml', error: 'corrupt', detail: 'old' }]));
+    await settle();
+    expect(results).toEqual([]);
+    expect(statuses.length).toBe(statusesBefore);
+    expect(byId('add-summary').hasAttribute('hidden')).toBe(true);
+    // The new run is untouched: still busy, and no extra round was started.
+    expect(shell.addArea.getAttribute('aria-busy')).toBe('true');
+    expect(control.calls).toHaveLength(2);
+
+    const final = engineResult(1, 1, 0, []);
+    current?.resolve(final);
+    await settle();
+    expect(results).toEqual([final]);
+    expect(byId('add-summary-text').textContent).toBe('1 file added. 1 email found.');
+    expect(byId('add-failed').hasAttribute('hidden')).toBe(true);
+    expect(shell.addArea.hasAttribute('aria-busy')).toBe(false);
   });
 });

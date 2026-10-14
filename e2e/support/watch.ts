@@ -1,6 +1,13 @@
 // Detectors for browser tests that run the real pipeline in the BUILT site:
 // every request (pages AND their workers), WebSockets, the workers
-// themselves, and the CSP reports of each worker.
+// themselves (with their names), and the CSP reports of each worker.
+//
+// The parse and engine workers are inlined in the page's script and start
+// from `blob:` URLs (see src/parsing/worker-runner.ts). Chromium lists the
+// loading of a blob: worker script as a request to that blob: URL; it never
+// goes to the network. Every blob: URL looks alike, so workers are told
+// apart by the name they are started with ('parse-worker', 'engine-worker'),
+// which CDP reports as the worker target's title.
 //
 // These are the same detectors as in e2e/parse-files.spec.ts, which also
 // holds their positive controls (proof that they really see a request or a
@@ -22,11 +29,13 @@ export interface Watch {
   readonly closedWorkers: Worker[];
   /** Worker log entries, as "source level | text". */
   readonly workerLog: string[];
+  /** Worker URL -> the name it was started with (CDP target title). */
+  readonly workerNames: Map<string, string>;
 }
 
 /** Starts watching. Call before the page is opened. `origin` is the preview server's origin. */
 export async function watchPage(context: BrowserContext, page: Page, origin: string): Promise<Watch> {
-  const watch: Watch = { requests: [], websockets: [], workers: [], closedWorkers: [], workerLog: [] };
+  const watch: Watch = { requests: [], websockets: [], workers: [], closedWorkers: [], workerLog: [], workerNames: new Map() };
 
   context.on('request', (request) => watch.requests.push(request.url()));
   await context.route('**/*', (route) =>
@@ -53,7 +62,11 @@ export async function watchPage(context: BrowserContext, page: Page, origin: str
         .send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: ++nextId, method, params: {} }) })
         .catch(() => undefined); // the worker may already be gone
     };
-    if (targetInfo.type === 'worker') send('Log.enable');
+    if (targetInfo.type === 'worker') {
+      // Recorded before the worker is let run, so before it can do anything.
+      watch.workerNames.set(targetInfo.url, targetInfo.title);
+      send('Log.enable');
+    }
     send('Runtime.runIfWaitingForDebugger');
   });
   cdp.on('Target.receivedMessageFromTarget', ({ message }) => {
@@ -64,6 +77,11 @@ export async function watchPage(context: BrowserContext, page: Page, origin: str
   await cdp.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: false });
 
   return watch;
+}
+
+/** The workers in `list` that were started with this name. */
+export function workersNamed(watch: Watch, list: readonly Worker[], name: 'parse-worker' | 'engine-worker'): Worker[] {
+  return list.filter((worker) => watch.workerNames.get(worker.url()) === name);
 }
 
 /** Worker log entries that report a CSP violation. */

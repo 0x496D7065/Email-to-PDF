@@ -2,8 +2,8 @@
 // index.html and src/main.ts do not import it, so `vite build` (dist/) never
 // contains it. The spec bundles it in memory with the project's own Vite
 // config, so the parse worker (src/parsing/parse-worker.ts) and the engine
-// worker (src/pipeline/engine-worker.ts) are emitted as separate script
-// files exactly as in the production build, and serves the bundle on the
+// worker (src/pipeline/engine-worker.ts) are inlined and started from blob:
+// URLs exactly as in the production build, and serves the bundle on the
 // site's own origin with the site's real security headers.
 
 import { buildMsg } from '../../tests/fixtures/msg/builder';

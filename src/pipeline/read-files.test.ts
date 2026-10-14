@@ -66,7 +66,7 @@ describe('createFileReader', () => {
     const gone = fakeFile('moved.eml', 10, () => Promise.reject(new Error('NotReadableError')));
     expect(await read(gone.file)).toEqual({
       ok: false,
-      result: { ok: false, fileName: 'moved.eml', sha256: null, error: 'corrupt', detail: UNREADABLE_DETAIL },
+      result: { ok: false, fileName: 'moved.eml', sha256: null, error: 'unreadable', detail: UNREADABLE_DETAIL },
     });
     // Its 10 bytes were given back: two more 10-byte files and a 5-byte one fit.
     for (const name of ['x.eml', 'y.eml']) expect((await read(fakeFile(name, 10).file)).ok).toBe(true);
@@ -114,13 +114,13 @@ describe('createFileReader', () => {
     ['not a number', '3' as unknown as number],
   ])('a size that is %s is reported as unreadable, without reading', async (_label, size) => {
     const { file, arrayBuffer } = fakeFile('odd.eml', size, new ArrayBuffer(1));
-    expect(await createFileReader(LIMITS)(file)).toMatchObject({ ok: false, result: { error: 'corrupt', detail: UNREADABLE_DETAIL } });
+    expect(await createFileReader(LIMITS)(file)).toMatchObject({ ok: false, result: { error: 'unreadable', detail: UNREADABLE_DETAIL } });
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
   it('arrayBuffer resolving to something that is not an ArrayBuffer is unreadable', async () => {
     const { file } = fakeFile('odd.eml', 3, () => Promise.resolve('text' as unknown as ArrayBuffer));
-    expect(await createFileReader(LIMITS)(file)).toMatchObject({ ok: false, result: { error: 'corrupt', detail: UNREADABLE_DETAIL } });
+    expect(await createFileReader(LIMITS)(file)).toMatchObject({ ok: false, result: { error: 'unreadable', detail: UNREADABLE_DETAIL } });
   });
 
   it('uses the real limits by default (50 MB per file)', async () => {

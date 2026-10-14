@@ -152,12 +152,23 @@ export const en = {
       'too-large': 'This file is too large to read.',
       'unsupported-type': 'This is not an email file (.eml or .msg).',
       corrupt: 'This file could not be read. It may be damaged.',
+      // Stopped at the time limit: says what happened without calling the file damaged.
+      timeout: 'Reading this file took too long, so it was stopped. To try again, reconnect to the internet, reload the page and add it again. If it stops again, the file may be damaged.',
+      // The tool failed, not the file. Ends like 'timeout': a hostile file
+      // that crashes the reading step gets an honest answer without being
+      // called damaged.
+      'tool-error': 'The tool could not read this file. To try again, reconnect to the internet, reload the page and add it again. If it fails again, the tool cannot read this file.',
+      // The browser could not open the file (moved, deleted or changed on
+      // disk since it was chosen): not a damaged file, and no reload needed.
+      unreadable: 'Your browser could not open this file. It may have been moved or changed since you chose it. Add it again.',
     } satisfies Record<ParseErrorCode, string>,
-    // Why a whole batch has no result.
+    // Why a whole batch has no result. Only actions that exist on the page
+    // today are suggested (there is no "try again" button yet). Reload
+    // advice always mentions the internet: an offline page cannot reload.
     batch: {
-      'engine-timeout': 'Putting your emails in order took too long. Please try again with fewer files.',
-      'engine-failed': 'Your emails could not be put in order. Please try again.',
-      unexpected: 'Something went wrong. Please try again.',
+      'engine-timeout': 'Putting your emails in order took too long. To try again, reconnect to the internet, reload the page and add fewer files.',
+      'engine-failed': 'Your emails could not be put in order. To try again, reconnect to the internet, reload the page and add your files again.',
+      unexpected: 'Something went wrong. To try again, reconnect to the internet, reload the page and add your files again.',
     } satisfies Record<ProcessErrorCode, string>,
   },
 

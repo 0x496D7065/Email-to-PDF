@@ -128,12 +128,25 @@ export interface NormalizedMessage {
 export type ParseErrorCode =
   | 'too-large' // over the size limit (README.md, rule R4: guard against huge files)
   | 'unsupported-type' // not an .eml/.msg file
-  // The file could not be read: damaged, the parser failed on it, or its
-  // worker was stopped (time limit) or failed, or its bytes had already been
-  // handed over to an earlier worker. `detail` says which. (An HTML body the
-  // converter could not handle is NOT a failed file: the message is read
-  // without it and gets the 'html-body-unreadable' warning.)
-  | 'corrupt';
+  // The file itself could not be read: damaged, or the parser rejected it.
+  // `detail` says what was wrong. (An HTML body the converter could not
+  // handle is NOT a failed file: the message is read without it and gets the
+  // 'html-body-unreadable' warning.)
+  | 'corrupt'
+  // Reading the file took longer than the time limit, so its worker was
+  // stopped. Kept apart from 'corrupt' because a valid file on a slow
+  // computer could hit it too: the preview must not call the file damaged,
+  // only say it was stopped.
+  | 'timeout'
+  // The TOOL failed, not the file: its worker could not start or stopped
+  // unexpectedly, the bytes had already been handed over to an earlier
+  // worker, or an unexpected error (a bug). Reloading the page and adding
+  // the file again is the honest advice.
+  | 'tool-error'
+  // The BROWSER could not open the file (moved, deleted or changed on disk
+  // since it was chosen, or a folder in older browsers). Kept apart from
+  // 'corrupt': nothing says the file is damaged; adding it again may work.
+  | 'unreadable';
 
 /**
  * The result of parsing one file. A "tagged union": check `ok` first, then

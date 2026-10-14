@@ -121,6 +121,7 @@ async function readAndParse(file: FileLike, read: ReturnType<typeof createFileRe
     if (result === undefined) throw new Error('no result');
     return result;
   } catch {
-    return { ok: false, fileName: name, sha256: null, error: 'corrupt', detail: UNEXPECTED_FILE_DETAIL };
+    // A bug in the tool, never a bad file: not reported as damaged.
+    return { ok: false, fileName: name, sha256: null, error: 'tool-error', detail: UNEXPECTED_FILE_DETAIL };
   }
 }

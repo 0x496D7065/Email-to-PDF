@@ -8,16 +8,19 @@
 // playwright.config.ts).
 //
 // How the code gets into the page without shipping a test hook:
-// the pipeline is not wired into the page yet (that comes with the preview
-// UI), so the built site does not contain it. beforeAll bundles
-// e2e/support/parse-entry.ts IN MEMORY (`write: false`) with the project's
-// own vite.config.ts, the same configuration as the production build. Vite
-// emits the parse worker and the engine worker as separate script files,
-// exactly as it will in dist/. A Playwright route serves the bundle at /__e2e__/... on the site's
-// own origin, WITH the site's real security headers: a worker takes its CSP
-// from its own script's response (the page's <meta> CSP does not apply to
-// it), and in production every file is sent with the CSP header (dist/_headers,
-// `/*`). Nothing is written to dist/ and the CSP is unchanged.
+// beforeAll bundles e2e/support/parse-entry.ts IN MEMORY (`write: false`)
+// with the project's own vite.config.ts, the same configuration as the
+// production build. As in dist/, the parse worker and the engine worker are
+// inlined into that bundle (`?worker&inline`) and start from blob: URLs. A
+// small capture plugin also keeps each worker's own code, so the first test
+// can prove that the build check really sees that code inside the bundle.
+// A Playwright route serves the bundle at /__e2e__/... on the site's own
+// origin, with the site's real security headers. A blob: worker takes the
+// CSP of the PAGE that starts it (header and <meta> alike), so the positive
+// controls below change the page's CSP (both, <meta> only, none). Nothing is
+// written to dist/ and the CSP is unchanged. (The misbehaving test worker is
+// still a separate script file: it stands in for a broken worker and is
+// never part of the site.)
 //
 // What these tests rely on to see worker activity (the page-level
 // `securitypolicyviolation` listener and `routeWebSocket` do NOT see what a
@@ -29,15 +32,17 @@
 // - a CDP session that attaches to every worker of the page before its script
 //   runs and enables the `Log` domain, where Chromium reports each CSP
 //   violation of that worker ("Refused to connect ..."). Playwright's worker
-//   'console' event does not carry these reports (seen in Chromium);
+//   'console' event does not carry these reports (seen in Chromium). The
+//   same session gives each worker's name (its target title), which tells
+//   the parse and engine workers apart: their blob: URLs all look alike;
 // - a `securitypolicyviolation` listener installed INSIDE a worker with
 //   worker.evaluate, for the positive control.
 // Requests are re-checked after processing has finished and a quiet period,
 // not only at page load.
 import { expect, test, type BrowserContext, type Page, type Worker } from '@playwright/test';
-import { build, type Rolldown } from 'vite';
-import { findViolations } from '../scripts/no-network-rules.mjs';
-import { cspForHeader, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
+import { build, type Plugin, type Rolldown } from 'vite';
+import { decodeJsEscapes, findEmbeddedViolations, findViolations } from '../scripts/no-network-rules.mjs';
+import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
 import type * as Entry from './support/parse-entry.ts';
 
 declare global {
@@ -61,8 +66,26 @@ const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'sty
 /** The in-memory test bundle: path below BUNDLE_PATH -> file contents. */
 const bundle = new Map<string, string>();
 let entryUrl = '';
-let parseWorkerFile = '';
-let engineWorkerFile = '';
+
+/** The code of each worker bundle Vite builds, by entry file name ('parse-worker', 'engine-worker', ...). */
+const workerSources = new Map<string, string>();
+
+/**
+ * Keeps a copy of each worker bundle while Vite builds it (Vite runs a
+ * separate build for each worker; `worker.plugins` take part in it). For an
+ * inline worker, this is the exact code Vite then puts in the page's script
+ * as a string.
+ */
+const captureWorkerCode: Plugin = {
+  name: 'e2e-capture-worker-code',
+  generateBundle(_options, output) {
+    for (const item of Object.values(output)) {
+      if (item.type !== 'chunk' || !item.isEntry || item.facadeModuleId === null) continue;
+      const file = item.facadeModuleId.split('?')[0]?.split('/').pop() ?? '';
+      workerSources.set(file.replace(/[.]ts$/, ''), item.code);
+    }
+  },
+};
 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
@@ -72,6 +95,7 @@ test.beforeAll(async () => {
     mode: 'production',
     logLevel: 'warn',
     base: BUNDLE_PATH,
+    worker: { plugins: () => [captureWorkerCode] },
     build: {
       write: false, // in memory only: dist/ is never touched
       emptyOutDir: false,
@@ -84,12 +108,10 @@ test.beforeAll(async () => {
     const code = item.type === 'chunk' ? item.code : typeof item.source === 'string' ? item.source : new TextDecoder().decode(item.source);
     bundle.set(item.fileName, code);
     if (item.type === 'chunk' && item.isEntry) entryUrl = `${BUNDLE_PATH}${item.fileName}`;
-    if (/^assets\/parse-worker-[\w-]+\.js$/.test(item.fileName)) parseWorkerFile = item.fileName;
-    if (/^assets\/engine-worker-[\w-]+\.js$/.test(item.fileName)) engineWorkerFile = item.fileName;
   }
   expect(entryUrl).not.toBe('');
-  expect(parseWorkerFile).not.toBe('');
-  expect(engineWorkerFile).not.toBe('');
+  expect(workerSources.get('parse-worker')?.length ?? 0).toBeGreaterThan(1000);
+  expect(workerSources.get('engine-worker')?.length ?? 0).toBeGreaterThan(1000);
 });
 
 let origin = '';
@@ -101,6 +123,8 @@ let workers: Worker[] = [];
 let closedWorkers: Worker[] = [];
 /** Log entries (CSP reports, ...) of every worker, as "source level | text". */
 let workerLog: string[] = [];
+/** Worker URL -> the name it was started with (CDP target title); blob: URLs all look alike. */
+let workerNames = new Map<string, string>();
 
 /** Records every request of the context (pages and their workers); aborts anything that leaves the preview server. */
 async function watchNetwork(context: BrowserContext): Promise<void> {
@@ -121,12 +145,8 @@ const SITE_HEADERS = {
   'Permissions-Policy': PERMISSIONS_POLICY,
 };
 
-/**
- * Serves the in-memory test bundle on the site's own origin, with the site's
- * security headers. `withoutCspFor` names bundle files sent WITHOUT the CSP
- * header (positive control only).
- */
-async function serveBundle(page: Page, withoutCspFor: readonly string[] = []): Promise<void> {
+/** Serves the in-memory test bundle on the site's own origin, with the site's security headers. */
+async function serveBundle(page: Page): Promise<void> {
   await page.route(`**${BUNDLE_PATH}**`, async (route) => {
     const name = new URL(route.request().url()).pathname.slice(BUNDLE_PATH.length);
     const code = bundle.get(name);
@@ -134,10 +154,35 @@ async function serveBundle(page: Page, withoutCspFor: readonly string[] = []): P
       await route.fulfill({ status: 404, headers: SITE_HEADERS });
       return;
     }
-    const headers: Record<string, string> = { ...SITE_HEADERS };
-    if (withoutCspFor.includes(name)) delete headers['Content-Security-Policy'];
-    await route.fulfill({ body: code, contentType: 'text/javascript', headers });
+    await route.fulfill({ body: code, contentType: 'text/javascript', headers: SITE_HEADERS });
   });
+}
+
+/**
+ * Which CSP the PAGE gets (positive controls only): 'meta' drops the CSP
+ * header from the page's response, as on a host that cannot send headers;
+ * 'none' also removes the <meta> CSP tag. The blob: workers the page starts
+ * take whatever the page has.
+ */
+type PageCsp = 'header and meta' | 'meta' | 'none';
+
+async function servePageWith(page: Page, csp: PageCsp): Promise<void> {
+  if (csp === 'header and meta') return;
+  await page.route(
+    (url) => url.origin === origin && url.pathname === '/',
+    async (route) => {
+      const response = await route.fetch();
+      const headers = { ...response.headers() };
+      delete headers['content-security-policy'];
+      let body = await response.text();
+      if (csp === 'none') {
+        const tag = /<meta http-equiv="Content-Security-Policy"[^>]*>/;
+        expect(body).toMatch(tag);
+        body = body.replace(tag, '');
+      }
+      await route.fulfill({ response, headers, body });
+    },
+  );
 }
 
 /**
@@ -161,7 +206,11 @@ async function watchWorkers(context: BrowserContext, page: Page): Promise<void> 
         .send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: ++nextId, method, params: {} }) })
         .catch(() => undefined); // the worker may already be gone
     };
-    if (targetInfo.type === 'worker') send('Log.enable');
+    if (targetInfo.type === 'worker') {
+      // Recorded before the worker is let run, so before it can do anything.
+      workerNames.set(targetInfo.url, targetInfo.title);
+      send('Log.enable');
+    }
     send('Runtime.runIfWaitingForDebugger');
   });
   cdp.on('Target.receivedMessageFromTarget', ({ message }) => {
@@ -183,6 +232,7 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   workers = [];
   closedWorkers = [];
   workerLog = [];
+  workerNames = new Map();
   await watchNetwork(context);
   await watchWorkers(context, page);
   await page.addInitScript(() => {
@@ -198,15 +248,23 @@ async function open(page: Page): Promise<void> {
   loadedAt = requestUrls.length;
 }
 
-/** Requests since the page loaded, except the test bundle's own files. */
+/**
+ * Requests since the page loaded, except the test bundle's own files and the
+ * blob: URLs the workers start from (Chromium lists loading a blob: worker
+ * script as a request; it is read from memory, never from the network).
+ */
 function requestsAfterLoad(): string[] {
-  return requestUrls.slice(loadedAt).filter((url) => !(new URL(url).origin === origin && new URL(url).pathname.startsWith(BUNDLE_PATH)));
+  const workerUrls = new Set(workers.map((w) => w.url()));
+  return requestUrls
+    .slice(loadedAt)
+    .filter((url) => !workerUrls.has(url))
+    .filter((url) => !(new URL(url).origin === origin && new URL(url).pathname.startsWith(BUNDLE_PATH)));
 }
 
 /** The parse workers (not the test's misbehaving worker) seen so far. */
-const parseWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => w.url() === `${origin}${BUNDLE_PATH}${parseWorkerFile}`);
+const parseWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => workerNames.get(w.url()) === 'parse-worker');
 /** The engine workers seen so far. */
-const engineWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => w.url() === `${origin}${BUNDLE_PATH}${engineWorkerFile}`);
+const engineWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => workerNames.get(w.url()) === 'engine-worker');
 
 /**
  * After processing has finished: waits a quiet period, then asserts that
@@ -241,26 +299,40 @@ interface Summary {
   readonly hashed: boolean;
 }
 
-test('the parse and engine workers are separate same-origin script files with no network code', () => {
-  // Same configuration as the production build: each worker must be its own
-  // file (allowed by `worker-src 'self'`), never inlined as a blob: or data:
-  // URL, and must pass the same no-network/URL scan as every dist/ file.
-  for (const file of [parseWorkerFile, engineWorkerFile]) {
-    const workerCode = bundle.get(file) ?? '';
-    expect(workerCode.length, file).toBeGreaterThan(1000);
-    expect(findViolations(workerCode, { isDist: true, distFile: file }), file).toEqual([]);
-    // One self-contained file: no module imports, no script loading, no eval
-    // (each would need more than `script-src 'self'`, or a request).
-    expect(workerCode, file).not.toMatch(/\bimport\s*[({"'*]|\bimportScripts\b|(?<![\w$.])eval\s*\(|\bnew Function\b/);
+test('the parse and engine workers are inlined in the page script, and the build check sees their code', () => {
+  // As in dist/: no separate parse or engine worker file. A worker file is
+  // fetched each time a worker starts, which fails once the network is off.
+  expect([...bundle.keys()].filter((file) => /(parse|engine)-worker/.test(file))).toEqual([]);
+  const allCode = [...bundle.entries()]
+    .filter(([file]) => file.endsWith('.js'))
+    .map(([, code]) => code)
+    .join('BUNDLE-FILE-SEPARATOR');
+  const decoded = decodeJsEscapes(allCode);
+  for (const name of ['parse-worker', 'engine-worker']) {
+    const workerCode = workerSources.get(name) ?? '';
+    // The worker's own code passes the same scan as every dist/ file.
+    expect(findViolations(workerCode, { isDist: true, distFile: `${name}.js` }), name).toEqual([]);
+    // One self-contained script: no module imports, no script loading, no
+    // eval (each would need more than the CSP allows, or a request).
+    expect(workerCode, name).not.toMatch(/\bimport\s*[({"'*]|\bimportScripts\b|(?<![\w$.])eval\s*\(|\bnew Function\b/);
+    // It sits in the bundle as a string. Once its escapes are undone (what
+    // scripts/check-no-network.mjs does for every dist/ file), it reads
+    // exactly as the worker's code: the build check scans what the worker runs.
+    expect(decoded.includes(workerCode), name).toBe(true);
   }
-
-  // Every worker the entry starts is a bundled file on the site's own origin.
-  const entryCode = bundle.get(entryUrl.slice(BUNDLE_PATH.length)) ?? '';
-  const allWorkers = entryCode.match(/new Worker\(/g) ?? [];
-  const fileWorkers = [...entryCode.matchAll(/new Worker\(new URL\(`(\/__e2e__\/assets\/[\w-]+\.js)`/g)].map((m) => m[1]);
-  expect(fileWorkers).toContain(`${BUNDLE_PATH}${parseWorkerFile}`);
-  expect(fileWorkers).toContain(`${BUNDLE_PATH}${engineWorkerFile}`);
-  expect(fileWorkers).toHaveLength(allWorkers.length);
+  // The whole bundle is not scanned here: this TEST bundle also holds the
+  // synthetic fixture emails, whose tracker URLs are there on purpose. The
+  // real dist/ is scanned, raw and decoded, by the build check. The decoded
+  // scan still flags network code hidden in the worker string:
+  // (the worker's code plus one line, stored as a string the way Vite inlines it)
+  const planted = JSON.stringify([workerSources.get('engine-worker') ?? '', 'XMLHttpRequest;'].join(String.fromCharCode(10)));
+  expect(findViolations(planted, { isDist: true }).map((f) => f.match)).not.toContain('XMLHttpRequest');
+  expect(findEmbeddedViolations(planted, { isDist: true }).map((f) => f.match)).toContain('XMLHttpRequest');
+  // The only worker still started from a script file is the test's own
+  // misbehaving worker; the real ones start from blob: URLs.
+  const fileWorkers = [...allCode.matchAll(/new Worker[(]new URL[(]`([^`]+)`/g)].map((m) => m[1]);
+  expect(fileWorkers.length).toBeGreaterThan(0);
+  for (const url of fileWorkers) expect(url).toMatch(/misbehaving-worker/);
 });
 
 test('a batch with broken, huge and unsupported files: one result per file, in order, and the page survives', async ({ page }) => {
@@ -404,8 +476,10 @@ test('a stuck worker is stopped at its time limit and a crashed one fails alone;
   const { elapsedMs, results, timeoutDetail, failedDetail } = await batch;
   expect(results).toEqual([
     { fileName: 'first.eml', ok: true },
-    { fileName: 'hang.eml', ok: false, error: 'corrupt', detail: timeoutDetail },
-    { fileName: 'crash.eml', ok: false, error: 'corrupt', detail: failedDetail },
+    // Neither is called a damaged file: the time limit and the worker failure
+    // have codes of their own.
+    { fileName: 'hang.eml', ok: false, error: 'timeout', detail: timeoutDetail },
+    { fileName: 'crash.eml', ok: false, error: 'tool-error', detail: failedDetail },
     { fileName: 'after.msg', ok: true },
   ]);
   expect(timeoutDetail).toBe('took too long to read (stopped)');
@@ -536,8 +610,9 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
 
 /** Starts an idle parse or engine worker in the page (kept alive on window) and returns its Playwright handle. */
 async function startIdleWorker(page: Page, which: 'parse' | 'engine'): Promise<Worker> {
-  const file = which === 'parse' ? parseWorkerFile : engineWorkerFile;
-  const started = page.waitForEvent('worker', (w) => w.url().endsWith(file));
+  // Only one worker is started here, so the next one seen is it (its blob:
+  // URL is not known in advance); its name is checked once it is known.
+  const started = page.waitForEvent('worker');
   await page.evaluate(
     async ({ url, kind }) => {
       const entry = (await import(url)) as typeof Entry;
@@ -546,18 +621,25 @@ async function startIdleWorker(page: Page, which: 'parse' | 'engine'): Promise<W
     },
     { url: entryUrl, kind: which },
   );
-  return started;
+  const worker = await started;
+  expect(worker.url()).toMatch(new RegExp(`^blob:${origin}/`));
+  await expect.poll(() => workerNames.get(worker.url())).toBe(`${which}-worker`);
+  return worker;
 }
 
-/** From inside `worker`: a remote and a same-origin fetch; returns how each ended and the CSP violations seen there. */
-function tryFetchesInWorker(worker: Worker): Promise<{ outcomes: string[]; violations: string[] }> {
-  return worker.evaluate(async () => {
+/**
+ * From inside `worker`: a remote and a same-origin fetch; returns how each
+ * ended and the CSP violations seen there. The same-origin URL is absolute:
+ * a relative one cannot be resolved against a blob: URL.
+ */
+function tryFetchesInWorker(worker: Worker, siteOrigin: string): Promise<{ outcomes: string[]; violations: string[] }> {
+  return worker.evaluate(async (base) => {
     const violations: string[] = [];
     self.addEventListener('securitypolicyviolation', (event) => {
       violations.push(`${event.effectiveDirective} ${event.blockedURI} | ${event.originalPolicy}`);
     });
     const outcomes: string[] = [];
-    for (const target of ['https://example.invalid/from-worker', '/same-origin-from-worker']) {
+    for (const target of ['https://example.invalid/from-worker', `${base}/same-origin-from-worker`]) {
       try {
         await fetch(target);
         outcomes.push('resolved');
@@ -567,43 +649,55 @@ function tryFetchesInWorker(worker: Worker): Promise<{ outcomes: string[]; viola
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
     return { outcomes, violations };
-  });
+  }, siteOrigin);
 }
 
 // Positive controls for the checks above, for each kind of worker the
-// pipeline starts (parse and engine).
+// pipeline starts (parse and engine). A blob: worker takes the CSP of the page
+// that starts it, so these change the PAGE's CSP. Seen in Chromium: with the
+// header and the <meta> tag, the worker is bound by BOTH policies (each
+// reports the violation); with the <meta> tag alone, by that one. So unlike a
+// worker loaded from its own file, a blob: worker stays covered on a host
+// that can only use the <meta> fallback.
 for (const which of ['parse', 'engine'] as const) {
-  // The worker really runs under the site's strict CSP, and its violations
-  // really reach the detector used after each batch (worker log entries over
-  // CDP), so "no violation" above means something.
-  test(`the ${which} worker runs under the strict CSP, and the detectors see its violations`, async ({ page }) => {
-    await serveBundle(page);
-    await open(page);
-    const worker = await startIdleWorker(page, which);
-    const { outcomes, violations } = await tryFetchesInWorker(worker);
+  for (const csp of ['header and meta', 'meta'] as const) {
+    // The worker really runs under the site's strict CSP, and its violations
+    // really reach the detector used after each batch (worker log entries
+    // over CDP), so "no violation" above means something.
+    test(`the ${which} worker runs under the page's strict CSP (${csp}), and the detectors see its violations`, async ({ page }) => {
+      await serveBundle(page);
+      await servePageWith(page, csp);
+      await open(page);
+      const worker = await startIdleWorker(page, which);
+      const { outcomes, violations } = await tryFetchesInWorker(worker, origin);
 
-    expect(outcomes).toEqual(['rejected', 'rejected']);
-    const policy = cspForHeader();
-    expect(violations.sort()).toEqual(
-      [`connect-src https://example.invalid/from-worker | ${policy}`, `connect-src ${origin}/same-origin-from-worker | ${policy}`].sort(),
-    );
-    // The detector used after each batch (worker log entries over CDP) sees them.
-    await expect.poll(() => workerCspReports().filter((line) => line.includes('example.invalid/from-worker')).length).toBeGreaterThan(0);
-    await expect.poll(() => workerCspReports().filter((line) => line.includes('/same-origin-from-worker')).length).toBeGreaterThan(0);
-    // Blocked by the CSP before any request was made.
-    expect(requestsAfterLoad()).toEqual([]);
-    // The page itself saw nothing: its listener does not see worker violations.
-    expect(await page.evaluate(() => window.__e2eViolations)).toEqual([]);
-  });
+      expect(outcomes).toEqual(['rejected', 'rejected']);
+      const policies = csp === 'meta' ? [cspForMeta()] : [cspForHeader(), cspForMeta()];
+      const expected = policies.flatMap((policy) => [
+        `connect-src https://example.invalid/from-worker | ${policy}`,
+        `connect-src ${origin}/same-origin-from-worker | ${policy}`,
+      ]);
+      expect(violations.sort()).toEqual(expected.sort());
+      // The detector used after each batch (worker log entries over CDP) sees them.
+      await expect.poll(() => workerCspReports().filter((line) => line.includes('example.invalid/from-worker')).length).toBeGreaterThan(0);
+      await expect.poll(() => workerCspReports().filter((line) => line.includes('/same-origin-from-worker')).length).toBeGreaterThan(0);
+      // Blocked by the CSP before any request was made.
+      expect(requestsAfterLoad()).toEqual([]);
+      // The page itself saw nothing: its listener does not see worker violations.
+      expect(await page.evaluate(() => window.__e2eViolations)).toEqual([]);
+    });
+  }
 
-  // Context-level request tracking sees requests made by the worker. Its
-  // script is served WITHOUT its CSP header here, so its fetch really becomes
-  // a request (aborted by the safety net, never sent).
+  // Context-level request tracking sees requests made by the worker. The
+  // page is served with NO CSP at all here (no header, no <meta>), so the
+  // worker has none either and its fetches really become requests (the
+  // remote one is aborted by the safety net, never sent).
   test(`request tracking sees requests made inside the ${which} worker`, async ({ page }) => {
-    await serveBundle(page, [which === 'parse' ? parseWorkerFile : engineWorkerFile]);
+    await serveBundle(page);
+    await servePageWith(page, 'none');
     await open(page);
     const worker = await startIdleWorker(page, which);
-    const { outcomes, violations } = await tryFetchesInWorker(worker);
+    const { outcomes, violations } = await tryFetchesInWorker(worker, origin);
 
     expect(outcomes).toEqual(['rejected', 'resolved']);
     expect(violations).toEqual([]);

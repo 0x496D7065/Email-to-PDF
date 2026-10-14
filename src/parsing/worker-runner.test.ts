@@ -13,6 +13,7 @@ import {
   runInWorker,
   TIMEOUT_DETAIL,
   WORKER_FAILED_DETAIL,
+  WORKER_START_DETAIL,
   type WorkerEvents,
   type WorkerFactory,
   type WorkerJob,
@@ -117,14 +118,14 @@ describe('runInWorker: normal end', () => {
 });
 
 describe('runInWorker: time limit', () => {
-  it('a worker that never answers is terminated at the limit; the file gets a clear corrupt result', async () => {
+  it('a worker that never answers is terminated at the limit; the file gets a timeout result, not corrupt', async () => {
     const fake = fakeWorker();
     const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
     vi.advanceTimersByTime(TIMEOUT_MS - 1);
     expect(await settled(pending)).toBe(false);
     expect(fake.terminate).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
-    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'corrupt', detail: TIMEOUT_DETAIL });
+    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'timeout', detail: TIMEOUT_DETAIL });
     expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 
@@ -133,12 +134,13 @@ describe('runInWorker: time limit', () => {
     const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
     vi.advanceTimersByTime(TIMEOUT_MS);
     fake.worker().message({ type: 'result', result: FAILED_IN_WORKER });
-    await expect(pending).resolves.toMatchObject({ detail: TIMEOUT_DETAIL });
+    await expect(pending).resolves.toMatchObject({ error: 'timeout', detail: TIMEOUT_DETAIL });
   });
 
   it('the details are plain words', () => {
     expect(TIMEOUT_DETAIL).toBe('took too long to read (stopped)');
-    expect(WORKER_FAILED_DETAIL).toBe('could not be read (worker failed)');
+    expect(WORKER_START_DETAIL).toBe('the reading step could not start (worker not started)');
+    expect(WORKER_FAILED_DETAIL).toBe('the reading step stopped unexpectedly (worker failed)');
   });
 });
 
@@ -151,15 +153,15 @@ describe('runInWorker: worker failures', () => {
     ['an unknown message type', (e) => e.message({ type: 'progress' })],
   ];
 
-  it.each(failures)('%s -> corrupt, worker failed, terminated', async (_label, act) => {
+  it.each(failures)('%s -> tool-error (not corrupt), worker failed, terminated', async (_label, act) => {
     const fake = fakeWorker();
     const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
     act(fake.worker());
-    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'corrupt', detail: WORKER_FAILED_DETAIL });
+    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: WORKER_FAILED_DETAIL });
     expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 
-  it('a worker that cannot be started -> corrupt, never a throw', async () => {
+  it('a worker that cannot be started -> tool-error with its own detail, never a throw', async () => {
     const pending = runInWorker(job(), {
       createWorker: () => {
         throw new Error('SecurityError: worker blocked');
@@ -167,13 +169,13 @@ describe('runInWorker: worker failures', () => {
       htmlToText: neverConvert,
       timeoutMs: TIMEOUT_MS,
     });
-    await expect(pending).resolves.toMatchObject({ ok: false, error: 'corrupt', detail: WORKER_FAILED_DETAIL });
+    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: WORKER_START_DETAIL });
   });
 
-  it('a request that cannot be sent -> corrupt, and the worker is terminated', async () => {
+  it('a request that cannot be sent -> tool-error, and the worker is terminated', async () => {
     const fake = fakeWorker({ sendThrows: true });
     const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
-    await expect(pending).resolves.toMatchObject({ ok: false, detail: WORKER_FAILED_DETAIL });
+    await expect(pending).resolves.toMatchObject({ ok: false, error: 'tool-error', detail: WORKER_FAILED_DETAIL });
     expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 
@@ -183,7 +185,7 @@ describe('runInWorker: worker failures', () => {
     expect(isDetached(bytes)).toBe(true);
     const createWorker = vi.fn<WorkerFactory>();
     const pending = runInWorker(job(bytes), { createWorker, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
-    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'corrupt', detail: DETACHED_DETAIL });
+    await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: DETACHED_DETAIL });
     expect(createWorker).not.toHaveBeenCalled();
   });
 
@@ -269,7 +271,7 @@ describe('runInWorker: HTML converted on the page', () => {
     expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 
-  it('conversions that cannot be sent -> corrupt, worker failed', async () => {
+  it('conversions that cannot be sent -> tool-error, worker failed', async () => {
     let calls = 0;
     const fake = fakeWorker({
       onSend: () => {
@@ -278,7 +280,7 @@ describe('runInWorker: HTML converted on the page', () => {
     });
     const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: () => ({ text: 't', truncated: false }), timeoutMs: TIMEOUT_MS });
     fake.worker().message({ type: 'html', htmls: ['<p>x</p>'] });
-    await expect(pending).resolves.toMatchObject({ ok: false, detail: WORKER_FAILED_DETAIL });
+    await expect(pending).resolves.toMatchObject({ ok: false, error: 'tool-error', detail: WORKER_FAILED_DETAIL });
     expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 });

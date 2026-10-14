@@ -16,6 +16,13 @@
 //   - dist/ (every file, including _headers): the code that is actually
 //     published. This is the real guarantee, because it also covers code
 //     added by Vite or by any future dependency.
+//     The web workers have no file of their own: Vite inlines each one into
+//     the page's script as a string literal (`?worker&inline`, so they start
+//     offline). Each dist/ file is therefore scanned twice: as it is, and
+//     with its string escapes undone (decodeJsEscapes), so the worker code is
+//     checked as the browser will run it. A long base64-looking literal
+//     fails the check (findOpaquePayloads): that format would hide the
+//     worker code from both scans.
 // What is NOT scanned:
 //   - scripts/: these check files must contain the banned words to look for them.
 //   - src/**/*.test.ts: tests legitimately mention banned words as strings
@@ -27,7 +34,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
-import { checkBuiltHtml, checkHeadersFile, findViolations } from './no-network-rules.mjs';
+import { checkBuiltHtml, checkHeadersFile, findEmbeddedViolations, findOpaquePayloads, findViolations } from './no-network-rules.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = join(root, 'dist');
@@ -66,7 +73,14 @@ for (const [files, isDist] of [
     // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
     // used by the per-file URL allowlist.
     const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
-    for (const { line, match, reason } of findViolations(readFileSync(path, 'utf8'), { isDist, distFile })) {
+    const text = readFileSync(path, 'utf8');
+    const findings = findViolations(text, { isDist, distFile });
+    // dist/ only: code embedded in strings (the inlined workers, see the top).
+    if (isDist) findings.push(...findEmbeddedViolations(text, { isDist, distFile }));
+    // dist/ only: a long base64 literal would hide code from both scans above
+    // (e.g. if a future Vite inlined workers as base64): fail so a person looks.
+    if (isDist) findings.push(...findOpaquePayloads(text));
+    for (const { line, match, reason } of findings) {
       // Minified lines can be huge; cap what we print.
       const shown = match.length > 80 ? `${match.slice(0, 80)}...` : match;
       errors.push(`${display(path)}:${line}: "${shown}" -> ${reason}`);

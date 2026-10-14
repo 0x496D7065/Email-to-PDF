@@ -2,14 +2,17 @@
 // HTML when the worker asks (DOMParser exists only on the page, see
 // deferred-html.ts), enforces a time limit, and always terminates the worker.
 //
-// Every way a worker can go wrong becomes a 'corrupt' result for that file
-// only, with a plain detail (README.md, rule R4):
-// - it takes longer than the time limit (a parser stuck in a loop): the
-//   worker is terminated -> "took too long to read (stopped)";
-// - it fails: an 'error' event (for example its script could not load), a
+// Every way a worker can go wrong becomes a failed result for that file
+// only, with a plain detail (README.md, rule R4). None of them is reported
+// as 'corrupt' (a damaged file): the parsers report real damage themselves,
+// inside a normal 'result' message.
+// - it takes longer than the time limit (a parser stuck in a loop, or a very
+//   slow computer): the worker is terminated -> 'timeout';
+// - it cannot be started (the factory throws) -> 'tool-error';
+// - it fails: an 'error' event (for example its script could not run), a
 //   'messageerror' event (a message could not be copied), a malformed
-//   message, or a 'failed' message (an error thrown inside the parse)
-//   -> "could not be read (worker failed)".
+//   message, or a 'failed' message (an error thrown inside the parse, which
+//   the adapters never do for a bad file) -> 'tool-error'.
 //
 // Known limit: memory. Typed-array allocations that are too large and
 // array-length overflows become catchable errors inside the worker (so a
@@ -26,16 +29,19 @@ import { convertHtmlList } from './deferred-html';
 import type { FileKind } from './file-type';
 import type { HtmlToTextResult } from './html-to-text';
 import type { ParseResult } from './types';
+import ParseWorker from './parse-worker?worker&inline';
 import { isFromWorker, type ToWorker } from './worker-protocol';
 
-/** Detail of a file whose worker was stopped at the time limit. */
+/** Detail of a file whose worker was stopped at the time limit ('timeout'). */
 export const TIMEOUT_DETAIL = 'took too long to read (stopped)';
-/** Detail of a file whose worker failed (error event, bad message, ...). */
-export const WORKER_FAILED_DETAIL = 'could not be read (worker failed)';
+/** Detail of a file whose worker could not be created ('tool-error'). */
+export const WORKER_START_DETAIL = 'the reading step could not start (worker not started)';
+/** Detail of a file whose worker failed: error event, bad message, ... ('tool-error'). */
+export const WORKER_FAILED_DETAIL = 'the reading step stopped unexpectedly (worker failed)';
 /**
  * Detail of a file whose bytes were already moved to an earlier worker (the
  * same array, or another view of the same buffer, given twice). Not damage:
- * reading the file again fixes it.
+ * reading the file again fixes it ('tool-error').
  */
 export const DETACHED_DETAIL = 'the file data was already handed over; read the file again';
 
@@ -113,17 +119,18 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
       }
       resolve(result);
     };
-    const fail = (detail: string): void =>
-      finish({ ok: false, error: 'corrupt', detail, fileName: job.name, sha256: job.sha256 });
+    const fail = (error: 'timeout' | 'tool-error', detail: string): void =>
+      finish({ ok: false, error, detail, fileName: job.name, sha256: job.sha256 });
+    const toolError = (detail: string = WORKER_FAILED_DETAIL): void => fail('tool-error', detail);
     const startClock = (): void => {
       clearTimeout(timer);
-      timer = setTimeout(() => fail(TIMEOUT_DETAIL), options.timeoutMs);
+      timer = setTimeout(() => fail('timeout', TIMEOUT_DETAIL), options.timeoutMs);
     };
 
     const onMessage = (data: unknown): void => {
       if (settled) return;
       if (!isFromWorker(data) || data.type === 'failed') {
-        fail(WORKER_FAILED_DETAIL);
+        toolError();
         return;
       }
       if (data.type === 'result') {
@@ -137,23 +144,28 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
       try {
         worker?.send({ type: 'conversions', outcomes }, []);
       } catch {
-        fail(WORKER_FAILED_DETAIL);
+        toolError();
       }
     };
 
     if (isDetached(job.bytes)) {
       // Nothing left to send; say so instead of "the file is empty" or a
       // worker failure, which would read like a damaged file.
-      fail(DETACHED_DETAIL);
+      toolError(DETACHED_DETAIL);
       return;
     }
     try {
-      worker = options.createWorker({ message: onMessage, failure: () => fail(WORKER_FAILED_DETAIL) });
+      worker = options.createWorker({ message: onMessage, failure: () => toolError() });
+    } catch {
+      toolError(WORKER_START_DETAIL);
+      return;
+    }
+    try {
       const bytes = ownedCopy(job.bytes);
       startClock();
       worker.send({ type: 'parse', name: job.name, kind: job.kind, bytes }, [bytes.buffer]);
     } catch {
-      fail(WORKER_FAILED_DETAIL);
+      toolError();
     }
   });
 }
@@ -179,9 +191,25 @@ export function coversWholeBuffer(bytes: Uint8Array): bytes is Uint8Array<ArrayB
 }
 
 /**
- * The browser's worker: one new module worker per file, built by Vite from
- * parse-worker.ts into a separate same-origin script file (allowed by the
- * CSP's `worker-src 'self'`; never a blob: or data: URL).
+ * The browser's worker: one new worker per file, started from parse-worker.ts.
+ *
+ * Why inline (`?worker&inline`): the tool must keep working after the
+ * network is switched off, right after the page loaded (that is how users
+ * check the privacy promise). A worker in its own script file is fetched
+ * from the server each time one starts, which fails offline. With
+ * `?worker&inline`, Vite bundles the worker's code as a text string inside
+ * the page's own script, so it is already in memory. Each call puts that
+ * string in a Blob and starts the worker from a `blob:` URL (allowed by the
+ * CSP's `worker-src 'self' blob:`). A blob worker also takes the page's own
+ * CSP, header and <meta> alike, so `connect-src 'none'` applies inside it.
+ *
+ * Blob URL lifetime: Vite keeps ONE Blob per worker type for the page's life
+ * (it holds only the tool's own code, never email data) and makes a fresh
+ * blob: URL for each worker. The worker revokes its own URL as its very first
+ * statement, and the page revokes it if the worker fails to start, so no URL
+ * piles up per file. (Vite's wrapper falls back to a data: URL if the blob:
+ * URL throws; our CSP blocks data: workers, so that path can only end in a
+ * 'tool-error' result, never in loaded code.)
  *
  * Why one worker per file instead of one reused worker: a worker that timed
  * out or failed must be terminated anyway, and a fresh worker per file means
@@ -190,7 +218,8 @@ export function coversWholeBuffer(bytes: Uint8Array): bytes is Uint8Array<ArrayB
  * file.
  */
 export const createBrowserWorker: WorkerFactory = (events) =>
-  connectWorker(new Worker(new URL('./parse-worker.ts', import.meta.url), { type: 'module' }), events);
+  // The name shows in DevTools (and lets the browser tests tell workers apart).
+  connectWorker(new ParseWorker({ name: 'parse-worker' }), events);
 
 /** Connects a started browser Worker to `events` and wraps it as a WorkerHandle. */
 export function connectWorker<M = ToWorker>(worker: Worker, events: WorkerEvents): WorkerHandle<M> {

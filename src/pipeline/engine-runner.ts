@@ -18,6 +18,7 @@ import type { EngineResult } from '../engine/engine';
 import type { ParseResult } from '../parsing/types';
 import { connectWorker, type WorkerEvents, type WorkerHandle } from '../parsing/worker-runner';
 import { isFromEngineWorker, type ToEngineWorker } from './engine-protocol';
+import EngineWorker from './engine-worker?worker&inline';
 
 /**
  * Time limit for organizing one batch: 60 seconds. A normal batch takes well
@@ -93,11 +94,13 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
 }
 
 /**
- * The browser's engine worker: a new module worker per batch, built by Vite
- * from engine-worker.ts into a separate same-origin script file (allowed by
- * the CSP's `worker-src 'self'`; never a blob: or data: URL). A fresh worker
- * per batch: one that timed out or failed must be terminated anyway, and no
- * state from an earlier batch can leak into the next.
+ * The browser's engine worker: a new worker per batch, started from
+ * engine-worker.ts. Inlined in the page's script and started from a `blob:`
+ * URL, so it also starts with the network switched off; see
+ * createBrowserWorker in src/parsing/worker-runner.ts for why, and for how
+ * the blob: URLs are cleaned up. A fresh worker per batch: one that timed out
+ * or failed must be terminated anyway, and no state from an earlier batch can
+ * leak into the next.
  */
 export const createBrowserEngineWorker: EngineWorkerFactory = (events) =>
-  connectWorker<ToEngineWorker>(new Worker(new URL('./engine-worker.ts', import.meta.url), { type: 'module' }), events);
+  connectWorker<ToEngineWorker>(new EngineWorker({ name: 'engine-worker' }), events);

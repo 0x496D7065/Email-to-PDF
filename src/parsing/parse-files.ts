@@ -3,8 +3,8 @@
 //
 // For each file, in order:
 // 0. Bytes already handed over to an earlier worker (the same array, or a
-//    view of the same buffer, given twice) -> 'corrupt' with a detail that
-//    says so, not "the file is empty".
+//    view of the same buffer, given twice) -> 'tool-error' with a detail that
+//    says so, not "the file is empty" (the file is not damaged).
 // 1. Over MAX_FILE_BYTES -> 'too-large', before anything is read or hashed.
 // 2. The file type, by name AND first bytes (file-type.ts). A file that no
 //    parser takes -> 'unsupported-type' or 'corrupt'.
@@ -28,7 +28,7 @@
 import { detectFileType } from './file-type';
 import { sha256Hex } from './hash';
 import { htmlToTextWithDomParser } from './html-dom';
-import type { InputFile, ParseResult } from './types';
+import type { InputFile, ParseErrorCode, ParseResult } from './types';
 import {
   coversWholeBuffer,
   createBrowserWorker,
@@ -111,7 +111,7 @@ export async function parseFilesWith(
   // file. Works even where ArrayBuffer.prototype.detached does not exist.
   const handedOver = new WeakSet<ArrayBufferLike>();
   for (const file of files) {
-    const failure = (error: 'too-large' | 'unsupported-type' | 'corrupt', detail: string, sha256: string | null): ParseResult => ({
+    const failure = (error: ParseErrorCode, detail: string, sha256: string | null): ParseResult => ({
       ok: false,
       fileName: file.name,
       sha256,
@@ -122,7 +122,7 @@ export async function parseFilesWith(
     try {
       const size = file.bytes.byteLength;
       if (isDetached(file.bytes) || (size === 0 && handedOver.has(file.bytes.buffer))) {
-        results.push(failure('corrupt', DETACHED_DETAIL, null));
+        results.push(failure('tool-error', DETACHED_DETAIL, null));
         continue;
       }
       if (size > limits.maxFileBytes) {
@@ -145,8 +145,9 @@ export async function parseFilesWith(
       if (coversWholeBuffer(file.bytes)) handedOver.add(file.bytes.buffer);
       results.push(await runJob({ name: file.name, kind: decision.kind, bytes: file.bytes, sha256 }));
     } catch {
-      // Not expected (runInWorker never rejects); one file's bug must not stop the batch.
-      results.push(failure('corrupt', UNEXPECTED_DETAIL, sha256));
+      // Not expected (runInWorker never rejects); one file's bug must not
+      // stop the batch. A bug in the tool, so never called a damaged file.
+      results.push(failure('tool-error', UNEXPECTED_DETAIL, sha256));
     }
   }
   return results;

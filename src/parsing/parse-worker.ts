@@ -11,12 +11,13 @@
 //
 // The worker has no network access paths: no network API, no script
 // loading, no remote URL. Vite bundles this file and everything it imports
-// into one separate same-origin script file (allowed by `worker-src 'self'`).
-// A worker takes its CSP from the HTTP header sent with its own script, not
-// from the page's <meta> tag; the site sends the CSP header with every file
-// (dist/_headers), so `connect-src 'none'` applies here too. Once the page
-// uses this worker, the build check scans the bundled worker file in dist/
-// like any other built file.
+// into one piece of code, inlined as a string in the page's own script
+// (`?worker&inline`, see worker-runner.ts), and started from a `blob:` URL
+// (allowed by `worker-src 'self' blob:`), so it also starts offline. A blob:
+// worker takes the CSP of the page that started it (the HTTP header and the
+// <meta> tag), so `connect-src 'none'` applies here too. The build check
+// scans this code inside the page's script, after undoing the string
+// escapes (scripts/check-no-network.mjs).
 
 import { createWorkerSide, type FromWorker } from './worker-protocol';
 

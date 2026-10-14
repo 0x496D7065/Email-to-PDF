@@ -81,8 +81,13 @@ fallback because browsers ignore it there.
 - The same build check also fails if the built site contains an HTML
   injection API (such as `innerHTML`, `outerHTML`, `insertAdjacentHTML` or
   `document.write`), as a backstop for rule R4.
+- The Web Worker code is built into the page's script as text (see the CSP
+  note), so the check scans each built file twice: as it is, and with its
+  text escapes (such as `\n`) undone, so the worker code is checked too.
 - A browser test (Playwright, Chromium) loads the built site and fails if it
-  makes any request outside its own site or triggers any CSP violation.
+  makes any request outside its own site or triggers any CSP violation. It
+  also switches the network off right after loading and checks that adding
+  files still gives the full result.
 - CI runs `npm audit`, type checking, lint, unit tests, the build check and
   the browser test on every push.
 - Dependencies are kept minimal, pinned to exact versions, with a committed
@@ -150,9 +155,12 @@ can check:
 
 1. **Watch the network:** open your browser's DevTools, go to the Network tab,
    then use the tool. After the page has loaded, no new requests should appear.
-2. **Run it offline:** load the page, then disconnect from the network (or
-   enable "Offline" in DevTools) without reloading. The tool should keep
-   working, because it never needs the network after loading.
+2. **Run it offline:** open the page, disconnect from the internet (or
+   enable "Offline" in DevTools), then add your files: everything still
+   works, because the tool never needs the network once the page has loaded.
+   Do not reload the page while offline: reloading has to download the page
+   again, which needs the network (a version that can also start offline may
+   come later).
 3. **Read the source:** the code is MIT-licensed; once the repository is
    public you can read it. The security headers live in
    `src/security/headers.ts`, the build check in `scripts/`, and the browser
@@ -167,11 +175,13 @@ Browsers **ignore** some directives in a `<meta>` tag (`frame-ancestors`,
 `report-uri`, `sandbox`). This means protection against other sites embedding
 the page in a frame only exists when the HTTP header is served.
 
-The tool parses each file in a Web Worker loaded from its own script file.
-Such a worker takes its CSP from that file's HTTP header, not from the page's
-`<meta>` tag. The header is sent with every file of the site, so the workers
-are covered by the same policy; on a host that can only use the `<meta>`
-fallback, they would not be.
+The tool reads each file in a Web Worker (a separate, stoppable background
+task). The worker code is built into the page's own script and started from a
+`blob:` URL, which `worker-src 'self' blob:` allows; this is what lets the
+tool keep working offline right after the page has loaded. A worker started
+this way takes the CSP of the page that started it, from the HTTP header and
+from the `<meta>` tag alike, so the workers are covered by the same policy
+even on a host that can only use the `<meta>` fallback.
 
 The referrer policy is covered by both: the build also adds
 `<meta name="referrer" content="no-referrer">` to the page. `Permissions-Policy`

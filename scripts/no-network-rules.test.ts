@@ -4,8 +4,12 @@ import { describe, expect, it } from 'vitest';
 import {
   checkBuiltHtml,
   checkHeadersFile,
+  decodeJsEscapes,
+  findEmbeddedViolations,
+  findOpaquePayloads,
   findViolations,
   normalizeUrl,
+  OPAQUE_PAYLOAD_MIN_LENGTH,
   URL_ALLOWLIST,
 } from './no-network-rules.mjs';
 
@@ -160,6 +164,47 @@ describe('normalizeUrl', () => {
   });
 });
 
+describe('decodeJsEscapes', () => {
+  it('undoes every kind of string escape, in one pass', () => {
+    // B is one backslash, written as a char code to keep these strings readable.
+    const B = String.fromCharCode(92);
+    const NL = String.fromCharCode(10);
+    const TAB = String.fromCharCode(9);
+    expect(decodeJsEscapes(`a${B}nb${B}tc${B}"d${B}'e${B}${B}f${B}/g`)).toBe(`a${NL}b${TAB}c"d'e${B}f/g`);
+    expect(decodeJsEscapes(`${B}x66${B}u0065${B}u{74}ch`)).toBe('fetch');
+    // A double backslash is ONE literal backslash: it does not start an escape.
+    expect(decodeJsEscapes(`x${B}${B}ny`)).toBe(`x${B}ny`);
+    // A line continuation (backslash, then a real line break) disappears.
+    expect(decodeJsEscapes(`a${B}${NL}b`)).toBe('ab');
+    expect(decodeJsEscapes('no escapes here')).toBe('no escapes here');
+  });
+});
+
+describe('findEmbeddedViolations (code inlined as a string, e.g. a worker)', () => {
+  // The shape Vite gives an inlined worker: its whole code in ONE string
+  // literal, where each line break is written \n.
+  const inlined = (workerCode: string): string => `const jsContent=${JSON.stringify(workerCode)};new Blob([jsContent]);`;
+
+  it('finds network APIs that the raw scan misses right after an escaped line break', () => {
+    const bundle = inlined('let a=1;\nXMLHttpRequest;\nfetch("x");\nindexedDB.open("x");');
+    // The raw text has "\nXMLHttpRequest": the "n" hides the word boundary.
+    expect(findViolations(bundle, dist)).toEqual([]);
+    expect(findEmbeddedViolations(bundle, dist).map((f) => f.match)).toEqual(['XMLHttpRequest', 'fetch(', 'indexedDB']);
+    expect(findEmbeddedViolations(bundle, dist)[0]?.reason).toMatch(/inside a string/);
+  });
+
+  it('finds HTML injection APIs and URLs written with escapes', () => {
+    const bundle = inlined('x;\ninnerHTML=1;') + String.raw`const u="\x68ttps://example.invalid/a";`;
+    expect(findEmbeddedViolations(bundle, dist).map((f) => f.match)).toEqual(['innerHTML', 'https://example.invalid/a']);
+  });
+
+  it('does not repeat findings the raw scan already reports, and accepts clean code', () => {
+    expect(findEmbeddedViolations('fetch("x");', dist)).toEqual([]);
+    expect(findEmbeddedViolations(`fetch("x");${inlined('a;\nfetch("y");')}`, dist).map((f) => f.match)).toEqual(['fetch(']);
+    expect(findEmbeddedViolations(inlined('const a = 1;\nself.onmessage = (e) => self.postMessage(e.data);'), dist)).toEqual([]);
+  });
+});
+
 describe('checkBuiltHtml', () => {
   const meta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'" />`;
 
@@ -190,5 +235,50 @@ describe('checkHeadersFile', () => {
 
   it('reports every missing header', () => {
     expect(checkHeadersFile('/*\n')).toHaveLength(3);
+  });
+});
+
+describe('findOpaquePayloads (guards the worker inlining format)', () => {
+  // Synthetic base64-looking text of a given length (no real payload).
+  const run = (length: number): string => 'QUJD+/09'.repeat(Math.ceil(length / 8)).slice(0, length);
+
+  it('uses a 10k-character threshold', () => {
+    expect(OPAQUE_PAYLOAD_MIN_LENGTH).toBe(10000);
+  });
+
+  it('reports a worker inlined as base64 (atob of a long literal)', () => {
+    const bundle = `const a=1;
+const w=atob("${run(12000)}==");new Worker(URL.createObjectURL(new Blob([w])));`;
+    const findings = findOpaquePayloads(bundle);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.line).toBe(2);
+    expect(findings[0]?.match).toHaveLength(12002); // padding included
+    expect(findings[0]?.reason).toMatch(/base64/);
+  });
+
+  it('reports a long run even without atob (any decoder could be used)', () => {
+    expect(findOpaquePayloads(`x="${run(OPAQUE_PAYLOAD_MIN_LENGTH)}"`)).toHaveLength(1);
+  });
+
+  it('ignores runs just under the threshold and ordinary minified code', () => {
+    expect(findOpaquePayloads(`x="${run(OPAQUE_PAYLOAD_MIN_LENGTH - 1)}"`)).toEqual([]);
+    const minified = 'function a(b,c){return b+c}var d=a(1,2);'.repeat(5000);
+    expect(findOpaquePayloads(minified)).toEqual([]);
+    // Today's format: the worker as a plain (escaped) string literal.
+    expect(findOpaquePayloads('const s="self.onmessage=(e)=>{postMessage(e.data)};";'.repeat(2000))).toEqual([]);
+  });
+
+  it('reports each long run separately, with its line', () => {
+    const findings = findOpaquePayloads(`${run(10000)}
+;
+${run(11000)}`);
+    expect(findings.map((f) => [f.line, f.match.length])).toEqual([
+      [1, 10000],
+      [3, 11000],
+    ]);
+  });
+
+  it('accepts a custom threshold', () => {
+    expect(findOpaquePayloads('abc;abcdef', 6).map((f) => f.match)).toEqual(['abcdef']);
   });
 });
