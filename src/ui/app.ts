@@ -15,7 +15,13 @@
 // - The download button is NOT `disabled` but aria-disabled="true", linked to
 //   its "coming soon" note with aria-describedby. A disabled button cannot be
 //   reached with the Tab key, so a keyboard or screen reader user would never
-//   learn why it is unavailable.
+//   learn why it is unavailable. "Clear everything" uses the same pattern
+//   while there is nothing to clear.
+// - "Clear everything" sits at the end of step 1: right under the files the
+//   user added (where someone who wants them gone looks first), after the
+//   "choose" button in the Tab order, and away from the other actions so it
+//   is not pressed by mistake (it asks no confirmation). Its note says what
+//   it does. src/ui/page.ts gives it its action.
 //
 // Nothing here is stored anywhere (README.md, rule R5).
 
@@ -30,6 +36,10 @@ export interface AppShell {
   readonly checkArea: HTMLDivElement;
   /** Step 3 button. aria-disabled="true" until the PDF export exists. */
   readonly downloadButton: HTMLButtonElement;
+  /** "Clear everything", at the end of step 1. aria-disabled="true" until setClearAvailable(true). */
+  readonly clearButton: HTMLButtonElement;
+  /** Makes "Clear everything" available (there is something to clear) or not. */
+  setClearAvailable(available: boolean): void;
   /** Shows (and lets screen readers announce) a short status message. '' clears it. */
   setStatus(message: string): void;
   /** Switches step 2 between "waiting for emails" and showing its container. */
@@ -75,9 +85,25 @@ export function mountApp(root: HTMLElement): AppShell {
   const status = el('p', { attrs: { id: 'status', class: 'status', role: 'status', 'aria-live': 'polite' } });
 
   const addArea = el('div', { attrs: { id: 'add-area', class: 'step-body' } });
+  // Unavailable until there is something to clear (same aria-disabled
+  // pattern as the download button below).
+  const clearButton = el('button', {
+    attrs: {
+      type: 'button',
+      id: 'clear-everything',
+      class: 'button button-secondary',
+      'aria-disabled': 'true',
+      'aria-describedby': 'clear-note',
+    },
+    text: t('actions.clearEverything'),
+  });
   const addStep = stepSection('step-add', 1, t('steps.add.title'), [
     el('p', { attrs: { class: 'step-intro' }, text: t('steps.add.intro') }),
     addArea,
+    el('div', {
+      attrs: { id: 'clear-area', class: 'clear-area' },
+      children: [clearButton, el('p', { attrs: { id: 'clear-note', class: 'note' }, text: t('clear.note') })],
+    }),
   ]);
 
   const checkWaiting = el('p', { attrs: { id: 'check-waiting', class: 'note' }, text: t('steps.check.waiting') });
@@ -119,6 +145,10 @@ export function mountApp(root: HTMLElement): AppShell {
     addArea,
     checkArea,
     downloadButton,
+    clearButton,
+    setClearAvailable(available) {
+      setSafeAttribute(clearButton, 'aria-disabled', available ? false : 'true');
+    },
     setStatus(message) {
       status.textContent = message;
     },

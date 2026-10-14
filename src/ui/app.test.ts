@@ -110,6 +110,32 @@ describe('mountApp', () => {
     expect(byId(button.getAttribute('aria-describedby') ?? '').textContent).toBe(t('steps.download.comingSoon'));
   });
 
+  it('has a "Clear everything" button at the end of step 1, unavailable but focusable, described by its note', () => {
+    const button = byId('clear-everything');
+    expect(shell.clearButton).toBe(button);
+    expect(button.tagName).toBe('button');
+    expect(button.getAttribute('type')).toBe('button');
+    expect(button.textContent).toBe(t('actions.clearEverything'));
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.hasAttribute('disabled')).toBe(false);
+    expect(byId(button.getAttribute('aria-describedby') ?? '').textContent).toBe(t('clear.note'));
+    // In step 1, after the add area (so after the "choose" button in the Tab order).
+    const step = byId('step-add');
+    expect(step.descendants()).toContain(button);
+    const order = step.descendants();
+    expect(order.indexOf(button)).toBeGreaterThan(order.indexOf(byId('add-area')));
+    expect(byId('add-area').contains(button)).toBe(false);
+  });
+
+  it('setClearAvailable switches the button between available and aria-disabled', () => {
+    const button = byId('clear-everything');
+    shell.setClearAvailable(true);
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
+    shell.setClearAvailable(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.hasAttribute('disabled')).toBe(false);
+  });
+
   it('has no external links and no inline styles or handlers', () => {
     for (const element of doc.created) {
       for (const name of element.attributes.keys()) {

@@ -57,11 +57,21 @@ export interface AddFilesOptions {
   readonly process?: (files: readonly FileLike[], options: ProcessOptions) => Promise<ProcessResult>;
   /** Where the page-wide drag-and-drop listeners go. Default: window. */
   readonly listenerTarget?: ListenerTarget;
+  /** Called whenever hasFiles() may have changed (files added, reset()). */
+  readonly onFilesChange?: () => void;
 }
 
 export interface AddFiles {
-  /** Forgets every file and puts step 1 back as it was at the start (for "Clear everything"). */
+  /**
+   * Forgets every file and puts step 1 back as it was at the start (for
+   * "Clear everything"). A run still going is cancelled: its workers are
+   * terminated and its result is thrown away.
+   */
   reset(): void;
+  /** True once files were added (being read, waiting, or read), until reset(). */
+  hasFiles(): boolean;
+  /** Moves the keyboard focus to the "choose files" button. */
+  focus(): void;
   /** Removes the page-wide listeners (tests; the page keeps them for its whole life). */
   destroy(): void;
 }
@@ -245,6 +255,16 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   let queuedNotice = false;
   // Increased by reset(): a run that started before it throws its result away.
   let generation = 0;
+  // Cancels the current run's workers (reset()); one per run.
+  let controller: AbortController | null = null;
+
+  function filesChanged(): void {
+    try {
+      options.onFilesChange?.();
+    } catch {
+      // A broken listener must not stop step 1.
+    }
+  }
 
   function setDragOver(over: boolean): void {
     setSafeAttribute(zone, 'data-state', over ? 'over' : 'idle');
@@ -308,6 +328,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
 
   async function run(): Promise<void> {
     const myGeneration = generation;
+    const myController = new AbortController();
+    controller = myController;
     setBusy(true);
     let result: ProcessResult;
     // Files added during a round wait in `pending`; one more round then
@@ -326,12 +348,14 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
           onProgress: (progress) => {
             if (myGeneration === generation) showProgress(progress);
           },
+          signal: myController.signal,
         });
       } catch {
         result = unexpectedResult();
       }
       if (myGeneration !== generation) return; // reset() was pressed meanwhile
     } while (pending.length > 0);
+    controller = null;
     setBusy(false);
     showResult(result);
     options.onResult(result);
@@ -340,6 +364,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   function add(newFiles: readonly FileLike[]): void {
     if (newFiles.length === 0) return;
     pending = [...pending, ...newFiles];
+    filesChanged();
     if (busy) {
       queuedNotice = true;
       showNotice();
@@ -406,8 +431,13 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   return {
     reset() {
       generation++;
+      // Terminates the run's workers; its late result is ignored (generation).
+      controller?.abort();
+      controller = null;
       files = [];
       pending = [];
+      // Forgets the last choice in the file input too (README.md, rule R5).
+      input.value = '';
       setBusy(false);
       setDragOver(false);
       folderNotice = '';
@@ -422,6 +452,11 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       setSafeAttribute(summaryBox, 'hidden', true);
       shell.setStatus('');
       shell.setCheckReady(false);
+      filesChanged();
+    },
+    hasFiles: () => files.length > 0 || pending.length > 0,
+    focus() {
+      button.focus();
     },
     destroy() {
       for (const [type, listener] of listeners) target.removeEventListener(type, listener);

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.vite/
 # Playwright output (test runs, reports, browser cache)
 test-results/
 playwright-report/

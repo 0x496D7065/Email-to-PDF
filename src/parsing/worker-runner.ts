@@ -13,6 +13,8 @@
 //   'messageerror' event (a message could not be copied), a malformed
 //   message, or a 'failed' message (an error thrown inside the parse, which
 //   the adapters never do for a bad file) -> 'tool-error'.
+// The page can also cancel a parse (its `signal`, for "Clear everything"):
+// the worker is terminated at once and anything it sends later is ignored.
 //
 // Known limit: memory. Typed-array allocations that are too large and
 // array-length overflows become catchable errors inside the worker (so a
@@ -44,6 +46,12 @@ export const WORKER_FAILED_DETAIL = 'the reading step stopped unexpectedly (work
  * reading the file again fixes it ('tool-error').
  */
 export const DETACHED_DETAIL = 'the file data was already handed over; read the file again';
+/**
+ * Detail of a file whose parse was stopped because the page cancelled the
+ * batch ("Clear everything"). Never shown: the page throws a cancelled
+ * batch's results away ('tool-error').
+ */
+export const CANCELLED_DETAIL = 'stopped because the page was cleared';
 
 /**
  * True if the buffer under `bytes` has been moved away (transferred), so the
@@ -97,6 +105,12 @@ export interface RunOptions {
    * converting HTML is not counted: the page cannot be stopped anyway.
    */
   readonly timeoutMs: number;
+  /**
+   * Stops the parse ("Clear everything"): the worker is terminated at once
+   * and the result is a 'tool-error' with CANCELLED_DETAIL. Anything the
+   * worker sends afterwards is ignored. Already aborted: no worker is started.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /** Parses one file in its own worker. Never throws and never rejects. */
@@ -105,11 +119,13 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let worker: WorkerHandle | undefined;
+    const { signal } = options;
 
     const finish = (result: ParseResult): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       // Terminated in every case: a finished worker holds the file's data,
       // a stuck one holds the CPU.
       try {
@@ -122,6 +138,10 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
     const fail = (error: 'timeout' | 'tool-error', detail: string): void =>
       finish({ ok: false, error, detail, fileName: job.name, sha256: job.sha256 });
     const toolError = (detail: string = WORKER_FAILED_DETAIL): void => fail('tool-error', detail);
+    // A function declaration (hoisted): finish() above removes it.
+    function onAbort(): void {
+      toolError(CANCELLED_DETAIL);
+    }
     const startClock = (): void => {
       clearTimeout(timer);
       timer = setTimeout(() => fail('timeout', TIMEOUT_DETAIL), options.timeoutMs);
@@ -148,6 +168,11 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
       }
     };
 
+    if (signal?.aborted === true) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
     if (isDetached(job.bytes)) {
       // Nothing left to send; say so instead of "the file is empty" or a
       // worker failure, which would read like a damaged file.

@@ -9,7 +9,9 @@
 //   'messageerror' event, a malformed message, a 'failed' message (the engine
 //   threw), or the worker could not be started or sent the request
 //   -> 'engine-failed'.
-// Anything the worker sends after that is ignored.
+// The page can also cancel the run (its `signal`, for "Clear everything"):
+// the worker is terminated at once.
+// Anything the worker sends after any of these is ignored.
 //
 // The worker is hidden behind a factory so this logic is unit tested with a
 // fake worker.
@@ -48,7 +50,16 @@ export type EngineWorkerFactory = (events: WorkerEvents) => WorkerHandle<ToEngin
 export interface EngineRunOptions {
   readonly createWorker: EngineWorkerFactory;
   readonly timeoutMs: number;
+  /**
+   * Stops the run ("Clear everything"): the worker is terminated at once and
+   * the outcome is 'engine-failed' with ENGINE_CANCELLED_DETAIL (the page
+   * throws it away). Already aborted: no worker is started.
+   */
+  readonly signal?: AbortSignal;
 }
+
+/** Detail when the page cancelled the run. Never shown (see EngineRunOptions.signal). */
+export const ENGINE_CANCELLED_DETAIL = 'stopped because the page was cleared';
 
 /** Runs the engine on `results` in its own worker. Never throws and never rejects. */
 export function runEngineInWorker(results: readonly ParseResult[], options: EngineRunOptions): Promise<EngineOutcome> {
@@ -56,11 +67,13 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let worker: WorkerHandle<ToEngineWorker> | undefined;
+    const { signal } = options;
 
     const finish = (outcome: EngineOutcome): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       // Terminated in every case: a finished worker holds a copy of every
       // message, a stuck one holds the CPU.
       try {
@@ -72,6 +85,15 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
     };
     const fail = (error: EngineFailure): void =>
       finish({ ok: false, error, detail: error === 'engine-timeout' ? ENGINE_TIMEOUT_DETAIL : ENGINE_FAILED_DETAIL });
+    // A function declaration (hoisted): finish() above removes it.
+    function onAbort(): void {
+      finish({ ok: false, error: 'engine-failed', detail: ENGINE_CANCELLED_DETAIL });
+    }
+    if (signal?.aborted === true) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
 
     const onMessage = (data: unknown): void => {
       if (settled) return;

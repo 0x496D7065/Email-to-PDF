@@ -23,7 +23,9 @@
 //
 // Big batches: the list is built in chunks (the first one at once, the
 // others in later tasks), so the page stays responsive with thousands of
-// emails. A new result or reset() cancels the chunks still waiting. If one
+// emails. A new result or reset() cancels the chunks still waiting; reset()
+// ("Clear everything") also puts the zone and the checkbox back to their
+// defaults. If one
 // email's item cannot be built, a stand-in with its number and whole text
 // takes its place and the rest of the list is still built: no email is ever
 // silently missing.
@@ -210,7 +212,11 @@ export interface Preview {
   show(result: EngineResult): void;
   /** Shows a step 1 result: its emails, or nothing after a batch error. */
   showResult(result: ProcessResult): void;
-  /** Empties the list and cancels any chunk still waiting. */
+  /**
+   * Empties the list, cancels any chunk still waiting and puts the toolbar
+   * back to its defaults (the start zone, folded text closed), for "Clear
+   * everything".
+   */
   reset(): void;
   /** The selected time zone. */
   zone(): string;
@@ -478,7 +484,14 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       if (result.ok) show(result.engine);
       else clear();
     },
-    reset: clear,
+    reset() {
+      clear();
+      // Back to the start: the next person or batch begins from the defaults.
+      zone = homeZone;
+      zoneSelect.value = homeZone;
+      showFolded = false;
+      foldToggle.checked = false;
+    },
     zone: () => zone,
     isRendering: () => pending !== null,
   };

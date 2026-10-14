@@ -1,6 +1,6 @@
 // Unit tests for step 2's counts, include checkboxes and notes (review.ts),
 // in Node with the recording fake DOM (tests/support/fake-dom.ts), wired to
-// the real preview and the real engine like src/main.ts does. Synthetic
+// the real preview and the real engine like src/ui/page.ts does. Synthetic
 // messages only. The real page is checked in Chromium by e2e/review.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
@@ -53,7 +53,7 @@ let area: FakeElement;
 let preview: Preview;
 let review: Review;
 
-/** Builds step 2 like src/main.ts: the review's box as header, its decorate hook. */
+/** Builds step 2 like src/ui/page.ts: the review's box as header, its decorate hook. */
 function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}): void {
   area = new FakeElement('div');
   review = createReview(reviewOptions);
@@ -71,10 +71,10 @@ function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}):
   );
 }
 
-/** Shows a result like src/main.ts does. */
+/** Shows a result like src/ui/page.ts does: the review first, then the list. */
 function show(result: EngineResult): void {
-  preview.show(result);
   review.show(result);
+  preview.show(result);
 }
 
 beforeEach(() => {
@@ -452,13 +452,21 @@ describe('include checkboxes', () => {
     }
   });
 
-  it('shows the counts of an empty list given in the order of src/main.ts (rendered comes first)', () => {
+  it.each([
+    ['the review first, as src/ui/page.ts does (the list is then reported complete for the shown result)', true],
+    ['the list first (rendered comes before the review knows the result)', false],
+  ])('shows the counts of an empty list given in either order: %s', (_label, reviewFirst) => {
     show(engineOf([make(), make()]));
     const empty = engineOf([], [failedFile('notes.txt')]);
     expect(empty.messages).toHaveLength(0);
-    // main.ts: the preview first (an empty list is complete at once), then the review.
-    preview.showResult({ ok: true, engine: empty });
-    review.showResult({ ok: true, engine: empty });
+    // An empty list is complete at once.
+    if (reviewFirst) {
+      review.showResult({ ok: true, engine: empty });
+      preview.showResult({ ok: true, engine: empty });
+    } else {
+      preview.showResult({ ok: true, engine: empty });
+      review.showResult({ ok: true, engine: empty });
+    }
     expect(items()).toHaveLength(0);
     expect(byId('review-files-text').textContent).toBe('1 file, 1 could not be read.');
     expect(byId('review-messages').textContent).toBe('0 emails found.');

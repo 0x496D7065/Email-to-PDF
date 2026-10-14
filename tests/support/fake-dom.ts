@@ -10,7 +10,7 @@
 // email's heading).
 // For the interactive parts (src/ui/add-files.ts, src/ui/preview.ts) it also
 // has event listeners (addEventListener + a test-side `fire`), click(),
-// contains(), the `value` / `files` fields of a file input or select, and a
+// focus() (counted), contains(), the `value` / `files` fields of a file input or select, and a
 // checkbox's `checked`. FakeEventTarget stands in for `window` (page-wide
 // drag-and-drop listeners).
 // The real page is checked in a real browser by the e2e tests.
@@ -97,6 +97,8 @@ export class FakeElement {
   checked = false;
   /** How many times click() was called. */
   clicks = 0;
+  /** How many times focus() was called. */
+  focuses = 0;
   readonly listeners = new Listeners();
   // Text set with textContent (a plain field: a #private field would not work
   // through the Proxy below).
@@ -172,6 +174,11 @@ export class FakeElement {
   click(): void {
     this.clicks++;
     this.listeners.fire('click', this, {});
+  }
+
+  /** Like the real focus(), recorded only (the fake has no active element). */
+  focus(): void {
+    this.focuses++;
   }
 
   /** Test side: fires an event at this element's own listeners (target = this). */

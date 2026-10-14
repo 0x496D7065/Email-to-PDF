@@ -85,14 +85,18 @@ const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MA
  * The files' bytes are MOVED to the workers: after the call, each
  * `file.bytes` is empty (unless it was a view into a larger buffer). Read
  * each file into its own array and do not use it afterwards.
+ *
+ * `signal` cancels the parse ("Clear everything", see runInWorker): the
+ * running worker is terminated and no new one is started.
  */
-export function parseFiles(files: readonly InputFile[]): Promise<ParseResult[]> {
+export function parseFiles(files: readonly InputFile[], signal?: AbortSignal): Promise<ParseResult[]> {
   return parseFilesWith(files, (job) =>
     runInWorker(job, {
       createWorker: createBrowserWorker,
       // Wrapped so that the converter is always called with the default limits.
       htmlToText: (html) => htmlToTextWithDomParser(html),
       timeoutMs: PARSE_TIMEOUT_MS,
+      ...(signal === undefined ? {} : { signal }),
     }),
   );
 }

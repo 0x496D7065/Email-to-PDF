@@ -9,6 +9,7 @@ import type { ParseResult } from '../parsing/types';
 import type { WorkerEvents } from '../parsing/worker-runner';
 import type { ToEngineWorker } from './engine-protocol';
 import {
+  ENGINE_CANCELLED_DETAIL,
   ENGINE_FAILED_DETAIL,
   ENGINE_TIMEOUT_DETAIL,
   ENGINE_TIMEOUT_MS,
@@ -22,6 +23,7 @@ const RESULTS: ParseResult[] = [{ ok: false, fileName: 'notes.txt', sha256: null
 const ENGINE_RESULT = runEngine(RESULTS);
 const TIMEOUT: EngineOutcome = { ok: false, error: 'engine-timeout', detail: ENGINE_TIMEOUT_DETAIL };
 const FAILED: EngineOutcome = { ok: false, error: 'engine-failed', detail: ENGINE_FAILED_DETAIL };
+const CANCELLED: EngineOutcome = { ok: false, error: 'engine-failed', detail: ENGINE_CANCELLED_DETAIL };
 
 /** A fake worker: records what the page sends, lets the test play the worker's part. */
 function fakeWorker(options: { createThrows?: boolean; sendThrows?: boolean; terminateThrows?: boolean } = {}) {
@@ -127,6 +129,40 @@ describe('runEngineInWorker', () => {
     const pending = runEngineInWorker(RESULTS, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
     fake.worker().message({ type: 'result', result: ENGINE_RESULT });
     await expect(pending).resolves.toEqual({ ok: true, result: ENGINE_RESULT });
+  });
+
+  it('cancelled ("Clear everything"): the worker is terminated at once; a late result is ignored', async () => {
+    const fake = fakeWorker();
+    const controller = new AbortController();
+    const pending = runEngineInWorker(RESULTS, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+    controller.abort();
+    expect(fake.terminate).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    fake.worker().message({ type: 'result', result: ENGINE_RESULT });
+    fake.worker().failure();
+    await expect(pending).resolves.toEqual(CANCELLED);
+    expect(fake.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('already cancelled: no worker is started', async () => {
+    const factory = vi.fn(fakeWorker().factory);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(runEngineInWorker(RESULTS, { createWorker: factory, timeoutMs: TIMEOUT_MS, signal: controller.signal })).resolves.toEqual(CANCELLED);
+    expect(factory).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('an abort after the result changes nothing and leaves no listener behind', async () => {
+    const fake = fakeWorker();
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    const pending = runEngineInWorker(RESULTS, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+    fake.worker().message({ type: 'result', result: ENGINE_RESULT });
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    controller.abort();
+    await expect(pending).resolves.toEqual({ ok: true, result: ENGINE_RESULT });
+    expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 
   it('the time limit and details are as documented', () => {

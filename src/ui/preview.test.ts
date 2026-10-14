@@ -572,6 +572,42 @@ describe('chunked building', () => {
     expect(items()).toEqual([]);
   });
 
+  it('reset() during chunked building leaves an empty list, also after every stale chunk ran', () => {
+    preview.show(many(7));
+    runNext();
+    expect(items()).toHaveLength(4);
+    preview.reset();
+    expect(items()).toEqual([]);
+    expect(byId('preview-list').hasAttribute('aria-busy')).toBe(false);
+    while (tasks.length > 0) runNext();
+    expect(items()).toEqual([]);
+    expect(preview.isRendering()).toBe(false);
+  });
+
+  it('reset() puts the zone and the "show quoted text" checkbox back to their defaults', () => {
+    preview.show(engineOf([...thread(), ...thread()]));
+    chooseZone('Asia/Tokyo');
+    setShowFolded(true);
+    preview.reset();
+    expect(preview.zone()).toBe('America/New_York');
+    expect(byId('preview-zone').value).toBe('America/New_York');
+    expect(byId('preview-show-folded').checked).toBe(false);
+    // The next list follows the defaults: dates in the start zone, folds closed.
+    preview.show(engineOf(thread()));
+    // New York: UTC-05:00, or UTC-04:00 once summer time starts (the synthetic thread moves on a day per call).
+    expect(items().every((i) => /UTC-0[45]:00$/.test(one(i, 'message-date').textContent))).toBe(true);
+    expect(folds().length).toBeGreaterThan(0);
+    expect(folds().some((d) => d.hasAttribute('open'))).toBe(false);
+  });
+
+  it('a failed batch keeps the zone and checkbox (only reset() restores them)', () => {
+    chooseZone('Asia/Tokyo');
+    setShowFolded(true);
+    preview.showResult({ ok: false, error: 'engine-failed', detail: 'synthetic', parsed: [] });
+    expect(preview.zone()).toBe('Asia/Tokyo');
+    expect(byId('preview-show-folded').checked).toBe(true);
+  });
+
   it('a failed batch (no engine result) empties the list too', () => {
     preview.showResult({ ok: true, engine: many(5) });
     expect(items()).toHaveLength(2);

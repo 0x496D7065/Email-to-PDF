@@ -114,9 +114,9 @@ refuses event handler attributes and unsafe URLs.
 
 Message data, and anything derived from it, stays in memory only: no
 `localStorage`, `sessionStorage`, `IndexedDB`, cookies or cache storage.
-Closing or reloading the tab wipes everything, and a visible "Clear
-everything" button will do the same. If an offline (service worker) version is
-added, it caches only the app's own files, never your data.
+Closing or reloading the tab wipes everything, and the visible "Clear
+everything" button does the same at any time. If an offline (service worker)
+version is added, it caches only the app's own files, never your data.
 
 ### R6: Collapse, never delete
 

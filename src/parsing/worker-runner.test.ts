@@ -8,6 +8,7 @@ import type { HtmlToTextResult } from './html-to-text';
 import type { ParseResult } from './types';
 import type { ToWorker } from './worker-protocol';
 import {
+  CANCELLED_DETAIL,
   DETACHED_DETAIL,
   isDetached,
   runInWorker,
@@ -281,6 +282,51 @@ describe('runInWorker: HTML converted on the page', () => {
     const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: () => ({ text: 't', truncated: false }), timeoutMs: TIMEOUT_MS });
     fake.worker().message({ type: 'html', htmls: ['<p>x</p>'] });
     await expect(pending).resolves.toMatchObject({ ok: false, error: 'tool-error', detail: WORKER_FAILED_DETAIL });
+    expect(fake.terminate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runInWorker: cancelled by the page ("Clear everything")', () => {
+  const CANCELLED: ParseResult = { ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: CANCELLED_DETAIL };
+
+  it('terminates the worker at once and clears the clock; a late result or request is ignored', async () => {
+    const fake = fakeWorker();
+    const converter = vi.fn(neverConvert);
+    const controller = new AbortController();
+    const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: converter, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+    controller.abort();
+    expect(fake.terminate).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    fake.worker().message({ type: 'result', result: FAILED_IN_WORKER });
+    fake.worker().message({ type: 'html', htmls: ['<p>late</p>'] });
+    fake.worker().failure();
+    await expect(pending).resolves.toEqual(CANCELLED);
+    expect(converter).not.toHaveBeenCalled();
+    expect(fake.sent).toHaveLength(1);
+    expect(fake.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('already cancelled: no worker is started and the bytes are not moved', async () => {
+    const factory = vi.fn(fakeWorker().factory);
+    const controller = new AbortController();
+    controller.abort();
+    const bytes = new Uint8Array([1, 2, 3]);
+    const pending = runInWorker(job(bytes), { createWorker: factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+    await expect(pending).resolves.toEqual(CANCELLED);
+    expect(factory).not.toHaveBeenCalled();
+    expect(bytes.byteLength).toBe(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('an abort after the result changes nothing and leaves no listener behind', async () => {
+    const fake = fakeWorker();
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+    fake.worker().message({ type: 'result', result: FAILED_IN_WORKER });
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    controller.abort();
+    await expect(pending).resolves.toEqual(FAILED_IN_WORKER);
     expect(fake.terminate).toHaveBeenCalledTimes(1);
   });
 });

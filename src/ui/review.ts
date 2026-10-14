@@ -28,12 +28,14 @@
 // Safety: only our own words and numbers are added here, as text through
 // el() (README.md, rule R4).
 //
-// Use (src/main.ts): createReview(), then pass `element` as the preview's
-// `header`, `decorate` as its `decorate` and `rendered` as its
-// `onRendered`, and give each new result to review.showResult too.
-// decorate picks up a new result by itself, and showing the same result
-// twice changes nothing. rendered only completes the result already shown
-// (by decorate or showResult): it ignores any other.
+// Use (src/ui/page.ts): createReview(), then pass `element` as the
+// preview's `header`, `decorate` as its `decorate` and `rendered` as its
+// `onRendered`, and give each new result to review.showResult BEFORE
+// preview.showResult, so the review knows the result before the preview
+// reports it complete (an empty list is complete at once). decorate picks
+// up a new result by itself, and showing the same result twice changes
+// nothing. rendered only completes the result already shown (by decorate or
+// showResult): it ignores any other. reset() is for "Clear everything".
 
 import type { EngineCounts, EngineMessage, EngineResult } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
@@ -131,7 +133,7 @@ interface Entry {
 export interface ReviewOptions {
   /**
    * Called with the "N of M emails will be in the PDF" line after each tick
-   * or untick, so screen readers hear it (src/main.ts: the shell's status
+   * or untick, so screen readers hear it (src/ui/page.ts: the shell's status
    * line, the page's one live region).
    */
   readonly announce?: (text: string) => void;
@@ -288,12 +290,12 @@ export function createReview(options: ReviewOptions = {}): Review {
       emptyCounts();
     },
     rendered: (result) => {
-      // Only the result already shown can be complete: decorate (for every
-      // email) and showResult (src/main.ts) show it first. Anything else is
-      // an older or unknown list; adopting it would bring back old counts.
-      // (An empty list has no decorate call and may be reported before
-      // showResult: it has nothing to complete, and showResult gives its
-      // counts.)
+      // Only the result already shown can be complete: showResult
+      // (src/ui/page.ts calls it before the preview's) and decorate (for
+      // every email) show it first. Anything else is an older or unknown
+      // list; adopting it would bring back old counts. (Should an empty list
+      // ever be reported before showResult, it has nothing to complete, and
+      // showResult still gives its counts.)
       if (result !== current) return;
       renderedResult = result;
       showIncludedLine();

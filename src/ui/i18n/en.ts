@@ -233,7 +233,18 @@ export const en = {
       'engine-timeout': 'Putting your emails in order took too long. To try again, reconnect to the internet, reload the page and add fewer files.',
       'engine-failed': 'Your emails could not be put in order. To try again, reconnect to the internet, reload the page and add your files again.',
       unexpected: 'Something went wrong. To try again, reconnect to the internet, reload the page and add your files again.',
+      // Only after "Clear everything", which throws the stopped batch away:
+      // not expected on the page, a safe text all the same.
+      cancelled: 'Reading was stopped because everything was cleared.',
     } satisfies Record<ProcessErrorCode, string>,
+  },
+
+  // The "Clear everything" button in step 1 (src/ui/page.ts).
+  clear: {
+    // Under the button, also its accessible description.
+    note: 'Removes all your emails from this page at once. This page never saves them.',
+    // Announced (status line) after the button was pressed.
+    done: 'Everything was cleared.',
   },
 
   actions: {

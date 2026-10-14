@@ -12,6 +12,7 @@ import { FILE_TOO_LARGE_DETAIL, parseFilesWith } from '../parsing/parse-files';
 import type { InputFile, ParseResult } from '../parsing/types';
 import { ENGINE_TIMEOUT_DETAIL, type EngineOutcome } from './engine-runner';
 import {
+  CANCELLED_BATCH_DETAIL,
   processFilesWith,
   UNEXPECTED_BATCH_DETAIL,
   UNEXPECTED_FILE_DETAIL,
@@ -139,7 +140,7 @@ describe('processFilesWith', () => {
     const organizeSpy = vi.fn(organize);
     const result = await processFilesWith([], { ...STEPS, organize: organizeSpy });
     expect(result.ok && result.engine.counts.filesGiven).toBe(0);
-    expect(organizeSpy).toHaveBeenCalledWith([]);
+    expect(organizeSpy).toHaveBeenCalledWith([], undefined);
   });
 
   it('an HTML body the converter cannot handle: the message is listed with html-body-unreadable, not as a failed file', async () => {
@@ -156,5 +157,106 @@ describe('processFilesWith', () => {
     expect(result.engine.counts.filesFailed).toBe(0);
     expect(result.engine.messages[0]?.parserWarnings).toContain('html-body-unreadable');
     expect(result.engine.messages[0]?.message.bodyText).toBe('');
+  });
+});
+
+describe('processFilesWith: cancelling ("Clear everything")', () => {
+  const CANCELLED = { ok: false, error: 'cancelled', detail: CANCELLED_BATCH_DETAIL, parsed: [] };
+
+  it('passes the signal to both steps', async () => {
+    const controller = new AbortController();
+    const parseSpy = vi.fn<ProcessSteps['parse']>(parse);
+    const organizeSpy = vi.fn<ProcessSteps['organize']>(organize);
+    await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], { ...STEPS, parse: parseSpy, organize: organizeSpy }, { signal: controller.signal });
+    expect(parseSpy.mock.calls[0]?.[1]).toBe(controller.signal);
+    expect(organizeSpy.mock.calls[0]?.[1]).toBe(controller.signal);
+  });
+
+  it('already aborted: nothing is read, parsed or organized', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const file = textFile('plain.eml', fixture('01-plain-english.eml'));
+    const parseSpy = vi.fn(parse);
+    const organizeSpy = vi.fn(organize);
+    const progress: ProcessProgress[] = [];
+    const result = await processFilesWith([file.file], { ...STEPS, parse: parseSpy, organize: organizeSpy }, { signal: controller.signal, onProgress: (p) => progress.push(p) });
+    expect(result).toEqual(CANCELLED);
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    expect(parseSpy).not.toHaveBeenCalled();
+    expect(organizeSpy).not.toHaveBeenCalled();
+    expect(progress).toEqual([]);
+  });
+
+  it('aborted while a file is parsed: no further file is read, the engine never runs, nothing is kept', async () => {
+    const controller = new AbortController();
+    const files = [textFile('a.eml', fixture('10-order-1-alice.eml')), textFile('b.eml', fixture('11-order-2-bob-outlook-en.eml'))];
+    const organizeSpy = vi.fn(organize);
+    const progress: ProcessProgress[] = [];
+    const steps: ProcessSteps = {
+      ...STEPS,
+      organize: organizeSpy,
+      parse: async (inputs, signal) => {
+        controller.abort(); // "Clear everything" while the first file is in its worker
+        expect(signal?.aborted).toBe(true);
+        return parse(inputs);
+      },
+    };
+    const result = await processFilesWith(
+      files.map((f) => f.file),
+      steps,
+      { signal: controller.signal, onProgress: (p) => progress.push(p) },
+    );
+    expect(result).toEqual(CANCELLED);
+    expect(files[1]?.arrayBuffer).not.toHaveBeenCalled();
+    expect(organizeSpy).not.toHaveBeenCalled();
+    // Only the start was reported: nothing after the abort.
+    expect(progress).toEqual([{ stage: 'reading', filesDone: 0, filesTotal: 2 }]);
+  });
+
+  it('aborted while the browser reads a file: its bytes are never parsed', async () => {
+    const controller = new AbortController();
+    const parseSpy = vi.fn(parse);
+    const file: FileLike = {
+      name: 'slow.eml',
+      size: 10,
+      arrayBuffer: () => {
+        controller.abort();
+        return Promise.resolve(new ArrayBuffer(10));
+      },
+    };
+    const result = await processFilesWith([file], { ...STEPS, parse: parseSpy }, { signal: controller.signal });
+    expect(result).toEqual(CANCELLED);
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
+  it('aborted while organizing: the engine result that still comes is thrown away', async () => {
+    const controller = new AbortController();
+    const steps: ProcessSteps = {
+      ...STEPS,
+      organize: (results) => {
+        controller.abort();
+        return organize(results);
+      },
+    };
+    const result = await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], steps, { signal: controller.signal });
+    expect(result).toEqual(CANCELLED);
+  });
+
+  it('a step that rejects after the abort still gives the cancelled result', async () => {
+    const controller = new AbortController();
+    const steps: ProcessSteps = {
+      ...STEPS,
+      organize: () => {
+        controller.abort();
+        return Promise.reject(new Error('worker terminated'));
+      },
+    };
+    const result = await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], steps, { signal: controller.signal });
+    expect(result).toEqual(CANCELLED);
+  });
+
+  it('a signal that is never aborted changes nothing', async () => {
+    const result = await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], STEPS, { signal: new AbortController().signal });
+    expect(result.ok).toBe(true);
   });
 });

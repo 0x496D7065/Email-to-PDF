@@ -63,6 +63,7 @@ let checkReady: boolean[];
 let results: ProcessResult[];
 let control: ReturnType<typeof controlledProcess>;
 let addFiles: AddFiles;
+let filesChanges: number;
 
 function byId(id: string): FakeElement {
   const found = root.descendants().find((e) => e.getAttribute('id') === id);
@@ -110,10 +111,12 @@ beforeEach(() => {
   };
   win = new FakeEventTarget();
   control = controlledProcess();
+  filesChanges = 0;
   addFiles = mountAddFiles(shell, {
     onResult: (r) => results.push(r),
     process: control.process,
     listenerTarget: win as unknown as ListenerTarget,
+    onFilesChange: () => filesChanges++,
   });
 });
 
@@ -615,5 +618,110 @@ describe('mountAddFiles: reset', () => {
     expect(byId('add-summary-text').textContent).toBe('1 file added. 1 email found.');
     expect(byId('add-failed').hasAttribute('hidden')).toBe(true);
     expect(shell.addArea.hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('cancels the run still going: its signal is aborted (workers terminated), a new run gets a fresh one', () => {
+    choose('a.eml');
+    const old = control.calls[0];
+    expect(old?.options.signal?.aborted).toBe(false);
+    addFiles.reset();
+    expect(old?.options.signal?.aborted).toBe(true);
+    choose('b.eml');
+    expect(control.calls[1]?.options.signal?.aborted).toBe(false);
+    expect(control.calls[1]?.options.signal).not.toBe(old?.options.signal);
+  });
+
+  it('cancels during a queued second round too', async () => {
+    choose('a.eml');
+    choose('b.eml'); // queued
+    control.calls[0]?.resolve(engineResult(1, 1, 0, []));
+    await settle();
+    const second = control.calls[1];
+    expect(second?.files.map((f) => f.name)).toEqual(['a.eml', 'b.eml']);
+    addFiles.reset();
+    expect(second?.options.signal?.aborted).toBe(true);
+    second?.resolve(engineResult(2, 2, 0, []));
+    await settle();
+    expect(results).toEqual([]);
+    expect(addFiles.hasFiles()).toBe(false);
+  });
+
+  it('empties the file input', () => {
+    choose('a.eml');
+    input().value = 'C:\\fakepath\\a.eml'; // as if the browser still showed it
+    addFiles.reset();
+    expect(input().value).toBe('');
+  });
+
+  it('does not abort a finished run again, and reset() with nothing added is harmless', async () => {
+    addFiles.reset();
+    choose('a.eml');
+    const call = control.calls[0];
+    call?.resolve(engineResult(1, 1, 0, []));
+    await settle();
+    addFiles.reset();
+    // The run had finished: its signal was never needed.
+    expect(call?.options.signal?.aborted).toBe(false);
+  });
+});
+
+describe('mountAddFiles: hasFiles, onFilesChange and focus', () => {
+  it('has no files at first; files being read, waiting or read count; reset() forgets them', async () => {
+    expect(addFiles.hasFiles()).toBe(false);
+    expect(filesChanges).toBe(0);
+    choose('a.eml');
+    expect(addFiles.hasFiles()).toBe(true);
+    expect(filesChanges).toBe(1);
+    choose('b.eml'); // queued while busy
+    expect(filesChanges).toBe(2);
+    control.calls[0]?.resolve(engineResult(1, 1, 0, []));
+    await settle();
+    control.calls[1]?.resolve(engineResult(2, 2, 0, []));
+    await settle();
+    expect(addFiles.hasFiles()).toBe(true);
+    addFiles.reset();
+    expect(addFiles.hasFiles()).toBe(false);
+    expect(filesChanges).toBe(3);
+  });
+
+  it('a batch where every file failed still has files (the failed list is shown)', async () => {
+    choose('notes.txt');
+    control.calls[0]?.resolve(engineResult(1, 0, 0, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'x' }]));
+    await settle();
+    expect(addFiles.hasFiles()).toBe(true);
+  });
+
+  it('an empty choice, a folder-only drop or a drop outside the zone adds nothing', () => {
+    input().files = [];
+    input().fire('change');
+    drop([fileItem(fakeFile('Mail'), true)]);
+    drop([fileItem(fakeFile('a.eml'))], null);
+    expect(addFiles.hasFiles()).toBe(false);
+    expect(filesChanges).toBe(0);
+  });
+
+  it('a listener that throws does not stop step 1', () => {
+    addFiles.destroy();
+    root = new FakeElement('div');
+    const real = mountApp(root as unknown as HTMLElement);
+    const local = controlledProcess();
+    const broken = mountAddFiles(real, {
+      onResult: () => undefined,
+      process: local.process,
+      listenerTarget: new FakeEventTarget() as unknown as ListenerTarget,
+      onFilesChange: () => {
+        throw new Error('synthetic listener failure');
+      },
+    });
+    choose('a.eml');
+    expect(local.calls).toHaveLength(1);
+    expect(() => broken.reset()).not.toThrow();
+    broken.destroy();
+  });
+
+  it('focus() moves the focus to the "choose" button', () => {
+    expect(button().focuses).toBe(0);
+    addFiles.focus();
+    expect(button().focuses).toBe(1);
   });
 });

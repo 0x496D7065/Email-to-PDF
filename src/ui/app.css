@@ -146,6 +146,21 @@ body {
   background-color: var(--accent);
 }
 
+/* A less prominent action ("Clear everything"): outlined, accent text
+   (about 6.7:1 against white). */
+.button-secondary {
+  color: var(--accent);
+  background-color: var(--surface);
+  border-color: var(--accent);
+}
+
+/* "Clear everything" at the end of step 1, set apart by a thin line. */
+.clear-area {
+  margin-top: 1.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
 /* Unavailable (aria-disabled, still focusable): grey, but readable. */
 .button[aria-disabled='true'] {
   color: var(--text-muted);
