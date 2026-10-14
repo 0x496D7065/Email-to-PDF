@@ -429,6 +429,44 @@ describe('include checkboxes', () => {
     expect(review.includedPositions()).toEqual([0, 1]);
   });
 
+  it('ignores rendered() for a result that is not the one shown (an older or unknown list)', () => {
+    const older = engineOf([make(), make(), make()]);
+    show(older);
+    const result = engineOf([make({ subject: 'One' }), make({ subject: 'Two' })]);
+    show(result);
+    toggle(items()[1]!, false);
+    const before = {
+      files: byId('review-files-text').textContent,
+      messages: byId('review-messages').textContent,
+      included: includedLine(),
+      positions: review.includedPositions(),
+    };
+    expect(before.included).toBe('1 of 2 emails will be in the PDF.');
+    for (const stale of [older, engineOf([make(), make(), make(), make()])]) {
+      review.rendered(stale);
+      expect(byId('review-files-text').textContent).toBe(before.files);
+      expect(byId('review-messages').textContent).toBe(before.messages);
+      expect(includedLine()).toBe(before.included);
+      expect(review.includedPositions()).toEqual(before.positions);
+      expect(review.includedMessages().map((m) => m.message.subject)).toEqual(['One']);
+    }
+  });
+
+  it('shows the counts of an empty list given in the order of src/main.ts (rendered comes first)', () => {
+    show(engineOf([make(), make()]));
+    const empty = engineOf([], [failedFile('notes.txt')]);
+    expect(empty.messages).toHaveLength(0);
+    // main.ts: the preview first (an empty list is complete at once), then the review.
+    preview.showResult({ ok: true, engine: empty });
+    review.showResult({ ok: true, engine: empty });
+    expect(items()).toHaveLength(0);
+    expect(byId('review-files-text').textContent).toBe('1 file, 1 could not be read.');
+    expect(byId('review-messages').textContent).toBe('0 emails found.');
+    expect(includedLine()).toBe('0 of 0 emails will be in the PDF.');
+    expect(review.includedPositions()).toEqual([]);
+    expect(review.includedMessages()).toEqual([]);
+  });
+
   it('works with emails built in later chunks', () => {
     const queue: (() => void)[] = [];
     mount({ chunkSize: 1, schedule: (task) => queue.push(task), cancel: () => undefined });

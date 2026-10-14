@@ -48,7 +48,8 @@ describe('formatOffset', () => {
     [-210, 'UTC-03:30'],
     [840, 'UTC+14:00'],
     [-720, 'UTC-12:00'],
-    [17.5, 'UTC+00:17:30'], // historical local mean time with seconds
+    [-0.5, 'UTC-00:00:30'], // between -1 and 0 minutes: still a minus sign
+    [33_539 / 60, 'UTC+09:18:59'], // historical local mean time with seconds (Asia/Tokyo before 1888)
   ])('%d minutes -> %s', (minutes, expected) => {
     expect(formatOffset(minutes)).toBe(expected);
   });
@@ -68,23 +69,23 @@ describe('formatInZone', () => {
   it('shows seconds, cutting milliseconds off without rounding up (never "60")', () => {
     expect(textOf(formatInZone(T('2025-04-02T09:00:42Z'), 'UTC'))).toBe('2025-04-02 09:00:42 UTC+00:00');
     expect(textOf(formatInZone(T('2025-04-02T09:00:59.999Z'), 'UTC'))).toBe('2025-04-02 09:00:59 UTC+00:00');
-    const brussels = formatInZone(T('2025-04-02T09:00:59.999Z'), 'Europe/Brussels');
-    expect(textOf(brussels)).toBe('2025-04-02 11:00:59 UTC+02:00');
+    const tokyo = formatInZone(T('2025-04-02T09:00:59.999Z'), 'Asia/Tokyo');
+    expect(textOf(tokyo)).toBe('2025-04-02 18:00:59 UTC+09:00');
   });
 
   it('crosses the 59-second boundary into the next minute, hour and day', () => {
     expect(textOf(formatInZone(T('2025-04-02T09:00:59Z'), 'UTC'))).toBe('2025-04-02 09:00:59 UTC+00:00');
     expect(textOf(formatInZone(T('2025-04-02T09:01:00Z'), 'UTC'))).toBe('2025-04-02 09:01:00 UTC+00:00');
-    const lastMoment = formatInZone(T('2024-12-31T22:59:59.999Z'), 'Europe/Brussels');
-    expect(textOf(lastMoment)).toBe('2024-12-31 23:59:59 UTC+01:00');
-    expect(textOf(formatInZone(T('2024-12-31T23:00:00Z'), 'Europe/Brussels'))).toBe('2025-01-01 00:00:00 UTC+01:00');
+    const lastMoment = formatInZone(T('2024-12-31T14:59:59.999Z'), 'Asia/Tokyo');
+    expect(textOf(lastMoment)).toBe('2024-12-31 23:59:59 UTC+09:00');
+    expect(textOf(formatInZone(T('2024-12-31T15:00:00Z'), 'Asia/Tokyo'))).toBe('2025-01-01 00:00:00 UTC+09:00');
   });
 
   it('gives two messages sent in the same minute different text', () => {
-    const first = textOf(formatInZone(T('2025-04-02T09:00:05Z'), 'Europe/Brussels'));
-    const second = textOf(formatInZone(T('2025-04-02T09:00:48Z'), 'Europe/Brussels'));
-    expect(first).toBe('2025-04-02 11:00:05 UTC+02:00');
-    expect(second).toBe('2025-04-02 11:00:48 UTC+02:00');
+    const first = textOf(formatInZone(T('2025-04-02T09:00:05Z'), 'Asia/Tokyo'));
+    const second = textOf(formatInZone(T('2025-04-02T09:00:48Z'), 'Asia/Tokyo'));
+    expect(first).toBe('2025-04-02 18:00:05 UTC+09:00');
+    expect(second).toBe('2025-04-02 18:00:48 UTC+09:00');
     expect(first).not.toBe(second);
   });
 
@@ -102,37 +103,37 @@ describe('formatInZone', () => {
       text: '1969-12-31 23:59:59 UTC+00:00',
       offsetMinutes: 0,
     });
-    expect(formatInZone(-1000.5, 'Europe/Brussels')).toMatchObject({
+    expect(formatInZone(-1000.5, 'Asia/Tokyo')).toMatchObject({
       kind: 'date',
-      text: '1970-01-01 00:59:58 UTC+01:00',
-      offsetMinutes: 60,
+      text: '1970-01-01 08:59:58 UTC+09:00',
+      offsetMinutes: 540,
     });
   });
 
   it('keeps the two passes of a repeated (DST overlap) time apart, to the second', () => {
-    const zone = 'Europe/Brussels';
-    const summer = textOf(formatInZone(T('2025-10-26T00:30:15Z'), zone));
-    const winter = textOf(formatInZone(T('2025-10-26T01:30:15Z'), zone));
-    expect(summer).toBe('2025-10-26 02:30:15 UTC+02:00');
-    expect(winter).toBe('2025-10-26 02:30:15 UTC+01:00');
+    const zone = 'America/New_York';
+    const summer = textOf(formatInZone(T('2025-11-02T05:30:15Z'), zone));
+    const winter = textOf(formatInZone(T('2025-11-02T06:30:15Z'), zone));
+    expect(summer).toBe('2025-11-02 01:30:15 UTC-04:00');
+    expect(winter).toBe('2025-11-02 01:30:15 UTC-05:00');
     expect(summer).not.toBe(winter);
   });
 
   it('shows a historical offset with seconds next to the wall-clock seconds', () => {
-    // Before 1892 Brussels used local mean time, UTC+00:17:30.
-    const result = formatInZone(T('1880-06-01T12:00:00Z'), 'Europe/Brussels');
-    expect(result).toMatchObject({ kind: 'date', text: '1880-06-01 12:17:30 UTC+00:17:30', offsetMinutes: 17.5 });
+    // Before 18 November 1883 New York used local mean time, UTC-04:56:02 (-17,762 seconds).
+    const result = formatInZone(T('1880-06-01T12:00:00Z'), 'America/New_York');
+    expect(result).toMatchObject({ kind: 'date', text: '1880-06-01 07:03:58 UTC-04:56:02', offsetMinutes: -17_762 / 60 });
   });
 
-  describe('Europe/Brussels across daylight saving time (last Sunday of March and October)', () => {
-    const zone = 'Europe/Brussels';
+  describe('America/New_York across daylight saving time in 2024 (second Sunday of March, first Sunday of November)', () => {
+    const zone = 'America/New_York';
     it.each([
-      ['2025-03-30T00:59:00Z', '2025-03-30 01:59:00 UTC+01:00', 60], // last minute of winter time
-      ['2025-03-30T01:00:00Z', '2025-03-30 03:00:00 UTC+02:00', 120], // clocks jump 02:00 -> 03:00
-      ['2025-07-15T12:00:00Z', '2025-07-15 14:00:00 UTC+02:00', 120],
-      // 02:30 happens twice on 26 October: only the offset tells them apart.
-      ['2025-10-26T00:30:00Z', '2025-10-26 02:30:00 UTC+02:00', 120],
-      ['2025-10-26T01:30:00Z', '2025-10-26 02:30:00 UTC+01:00', 60],
+      ['2024-03-10T06:59:00Z', '2024-03-10 01:59:00 UTC-05:00', -300], // last minute of winter time
+      ['2024-03-10T07:00:00Z', '2024-03-10 03:00:00 UTC-04:00', -240], // clocks jump 02:00 -> 03:00
+      ['2024-07-15T12:00:00Z', '2024-07-15 08:00:00 UTC-04:00', -240],
+      // 01:30 happens twice on 3 November: only the offset tells them apart.
+      ['2024-11-03T05:30:00Z', '2024-11-03 01:30:00 UTC-04:00', -240],
+      ['2024-11-03T06:30:00Z', '2024-11-03 01:30:00 UTC-05:00', -300],
     ])('%s -> %s', (iso, expected, offset) => {
       expect(formatInZone(T(iso), zone)).toMatchObject({ kind: 'date', text: expected, offsetMinutes: offset, zone });
     });
@@ -150,6 +151,22 @@ describe('formatInZone', () => {
     });
   });
 
+  describe('Australia/Sydney across daylight saving time in 2025 (positive offsets, southern hemisphere)', () => {
+    // Summer time (UTC+11:00) ends on the first Sunday of April and starts on the first Sunday of October.
+    const zone = 'Australia/Sydney';
+    it.each([
+      ['2025-01-15T00:00:00Z', '2025-01-15 11:00:00 UTC+11:00', 660], // mid summer
+      // 6 April: clocks go back 03:00 -> 02:00, so 02:30 happens twice: only the offset tells them apart.
+      ['2025-04-05T15:30:00Z', '2025-04-06 02:30:00 UTC+11:00', 660],
+      ['2025-04-05T16:30:00Z', '2025-04-06 02:30:00 UTC+10:00', 600],
+      ['2025-07-15T00:00:00Z', '2025-07-15 10:00:00 UTC+10:00', 600], // mid winter
+      ['2025-10-04T15:59:00Z', '2025-10-05 01:59:00 UTC+10:00', 600], // last minute of winter time
+      ['2025-10-04T16:00:00Z', '2025-10-05 03:00:00 UTC+11:00', 660], // clocks jump 02:00 -> 03:00
+    ])('%s -> %s', (iso, expected, offset) => {
+      expect(formatInZone(T(iso), zone)).toMatchObject({ kind: 'date', text: expected, offsetMinutes: offset, zone });
+    });
+  });
+
   it.each([
     ['Asia/Kolkata', '2025-04-02 14:30:00 UTC+05:30', 330],
     ['Asia/Kathmandu', '2025-04-02 14:45:00 UTC+05:45', 345],
@@ -159,8 +176,8 @@ describe('formatInZone', () => {
   });
 
   it.each([
-    ['2024-12-31T22:59:00Z', 'Europe/Brussels', '2024-12-31 23:59:00 UTC+01:00'],
-    ['2024-12-31T23:00:00Z', 'Europe/Brussels', '2025-01-01 00:00:00 UTC+01:00'], // midnight is 00, never 24
+    ['2024-12-31T14:59:00Z', 'Asia/Tokyo', '2024-12-31 23:59:00 UTC+09:00'],
+    ['2024-12-31T15:00:00Z', 'Asia/Tokyo', '2025-01-01 00:00:00 UTC+09:00'], // midnight is 00, never 24
     ['2025-01-01T03:00:00Z', 'America/New_York', '2024-12-31 22:00:00 UTC-05:00'], // still last year there
     ['2024-12-31T20:00:00Z', 'Asia/Kathmandu', '2025-01-01 01:45:00 UTC+05:45'],
   ])('crosses the year boundary: %s in %s', (iso, zone, expected) => {
@@ -168,12 +185,12 @@ describe('formatInZone', () => {
   });
 
   it('handles 29 February and dates before 1970', () => {
-    expect(textOf(formatInZone(T('2024-02-29T23:30:00Z'), 'Europe/Brussels'))).toBe('2024-03-01 00:30:00 UTC+01:00');
+    expect(textOf(formatInZone(T('2024-02-29T15:30:00Z'), 'Asia/Tokyo'))).toBe('2024-03-01 00:30:00 UTC+09:00');
     expect(textOf(formatInZone(T('1969-07-20T20:17:00Z'), 'UTC'))).toBe('1969-07-20 20:17:00 UTC+00:00');
   });
 
   it('falls back to UTC for an invalid zone and says so, without throwing', () => {
-    for (const bad of ['Mars/Olympus_Mons', '', 'not a zone', 'Europe/Brussels; drop']) {
+    for (const bad of ['Mars/Olympus_Mons', '', 'not a zone', 'Asia/Tokyo; drop']) {
       expect(formatInZone(T('2025-04-02T09:00:00Z'), bad)).toMatchObject({
         kind: 'date',
         text: '2025-04-02 09:00:00 UTC+00:00',
@@ -184,16 +201,16 @@ describe('formatInZone', () => {
   });
 
   it('reports the zone name as Intl spells it', () => {
-    expect(formatInZone(T('2025-04-02T09:00:00Z'), 'europe/brussels')).toMatchObject({
-      zone: 'Europe/Brussels',
-      text: '2025-04-02 11:00:00 UTC+02:00',
+    expect(formatInZone(T('2025-04-02T09:00:00Z'), 'asia/tokyo')).toMatchObject({
+      zone: 'Asia/Tokyo',
+      text: '2025-04-02 18:00:00 UTC+09:00',
       zoneFallback: false,
     });
   });
 
   it('returns no-date for a missing or impossible moment, never "Invalid Date"', () => {
     for (const bad of [null, Number.NaN, Number.POSITIVE_INFINITY, 9e15, -9e15]) {
-      expect(formatInZone(bad, 'Europe/Brussels')).toEqual({ kind: 'no-date' });
+      expect(formatInZone(bad, 'Asia/Tokyo')).toEqual({ kind: 'no-date' });
     }
   });
 
@@ -212,7 +229,7 @@ describe('formatInZone', () => {
     ['the largest Date, in a zone west of UTC', 8.64e15, 'America/New_York'],
     ['the smallest Date', -8.64e15, 'America/New_York'],
     ['the smallest Date, in a zone east of UTC', -8.64e15, 'Asia/Tokyo'],
-    ['year 0', T('0000-06-15T12:00:00Z'), 'Europe/Brussels'],
+    ['year 0', T('0000-06-15T12:00:00Z'), 'Asia/Tokyo'],
     ['the last millisecond of year 0', T('0001-01-01T00:00:00Z') - 1, 'Asia/Shanghai'],
     ['1e20 (beyond any Date)', 1e20, 'UTC'],
     ['one millisecond below the range', MIN_DISPLAYABLE_MS - 1, 'UTC'],
@@ -243,30 +260,31 @@ describe('formatInZone', () => {
 
   it('never throws for a locale that is not a string, and uses the default language', () => {
     const utcMs = T('2025-04-02T09:00:00Z');
-    const reference = formatInZone(utcMs, 'Europe/Brussels');
+    const reference = formatInZone(utcMs, 'Asia/Tokyo');
     if (reference.kind !== 'date') throw new Error('expected a date');
     for (const locale of [Symbol('not a locale'), 42, null, {}, ['fr']]) {
       // The type says string; JavaScript callers can still pass anything.
-      const result = formatInZone(utcMs, 'Europe/Brussels', locale as unknown as string);
-      expect(result).toMatchObject({ kind: 'date', text: '2025-04-02 11:00:00 UTC+02:00' });
+      const result = formatInZone(utcMs, 'Asia/Tokyo', locale as unknown as string);
+      expect(result).toMatchObject({ kind: 'date', text: '2025-04-02 18:00:00 UTC+09:00' });
       if (result.kind === 'date') expect(result.localized).toBe(reference.localized);
     }
   });
 
   it('keeps returning correct results after the caches overflow', () => {
     const utcMs = T('2025-04-02T09:00:00Z');
-    // 1,200 distinct casings of one zone and 1,200 distinct locale strings: more than the cache holds.
-    const name = 'europe/brussels';
+    // 640 distinct casings of one zone (bit 7 toggles the '/', which changes nothing) and 1,200 distinct
+    // locale strings: more than the 500 formatters each cache holds.
+    const name = 'america/new_york';
     for (let i = 0; i < 1200; i++) {
       const casing = [...name].map((c, k) => ((i >> k) & 1 ? c.toUpperCase() : c)).join('');
       expect(isValidTimeZone(casing)).toBe(true);
       formatInZone(utcMs, 'UTC', `en-x-p${i}`);
     }
-    expect(textOf(formatInZone(utcMs, 'Europe/Brussels'))).toBe('2025-04-02 11:00:00 UTC+02:00');
+    expect(textOf(formatInZone(utcMs, 'America/New_York'))).toBe('2025-04-02 05:00:00 UTC-04:00');
   });
 
   it('includes seconds in the localized string', () => {
-    const result = formatInZone(T('2025-04-02T09:00:42Z'), 'Europe/Brussels', 'en');
+    const result = formatInZone(T('2025-04-02T09:00:42Z'), 'Asia/Tokyo', 'en');
     if (result.kind !== 'date') throw new Error('expected a date');
     expect(result.localized).toContain('42');
   });
@@ -274,19 +292,19 @@ describe('formatInZone', () => {
   it('gives a localized string in the requested language, and survives an invalid locale', () => {
     const utcMs = T('2025-04-02T09:00:00Z');
     for (const locale of ['en', 'fr', 'de', 'nl', 'this is not a locale']) {
-      const result = formatInZone(utcMs, 'Europe/Brussels', locale);
+      const result = formatInZone(utcMs, 'Asia/Tokyo', locale);
       if (result.kind !== 'date') throw new Error('expected a date');
       expect(result.localized).not.toBe('');
       expect(result.localized).not.toContain('Invalid');
       expect(result.localized).toContain('2025');
-      expect(result.text).toBe('2025-04-02 11:00:00 UTC+02:00'); // the fixed form ignores the locale
+      expect(result.text).toBe('2025-04-02 18:00:00 UTC+09:00'); // the fixed form ignores the locale
     }
   });
 
   it('formats 10,000 dates in one zone quickly (formatters are reused)', () => {
     const base = T('2025-01-01T00:00:00Z');
     const start = performance.now();
-    for (let i = 0; i < 10_000; i++) formatInZone(base + i * 3_600_000, 'Europe/Brussels');
+    for (let i = 0; i < 10_000; i++) formatInZone(base + i * 3_600_000, 'America/New_York');
     // Generous bound: well under a second in practice.
     expect(performance.now() - start).toBeLessThan(5000);
   });
@@ -401,7 +419,7 @@ describe('formatSenderLocal', () => {
 });
 
 describe('isValidTimeZone', () => {
-  it.each(['UTC', 'Europe/Brussels', 'America/New_York', 'Asia/Kathmandu', 'europe/brussels'])('accepts %s', (zone) => {
+  it.each(['UTC', 'Asia/Tokyo', 'America/New_York', 'Asia/Kathmandu', 'asia/tokyo'])('accepts %s', (zone) => {
     expect(isValidTimeZone(zone)).toBe(true);
   });
 
@@ -438,7 +456,7 @@ describe('listTimeZones', () => {
   it('lists zones sorted, without repeats, including UTC and the browser zone', () => {
     const zones = listTimeZones();
     expect(zones).toContain('UTC');
-    expect(zones).toContain('Europe/Brussels');
+    expect(zones).toContain('Asia/Tokyo');
     // Engines differ on old spellings: Node lists "Asia/Katmandu", newer data "Asia/Kathmandu".
     expect(zones.some((zone) => zone === 'Asia/Kathmandu' || zone === 'Asia/Katmandu')).toBe(true);
     expect(zones).toContain(browserTimeZone());
@@ -453,7 +471,7 @@ describe('listTimeZones', () => {
     });
     const zones = listTimeZones();
     expect(zones).toContain('UTC');
-    expect(zones).toContain('Europe/Brussels');
+    expect(zones).toContain('Asia/Tokyo');
     expect(zones.length).toBeLessThan(30);
     expect(zones.every((zone) => isValidTimeZone(zone))).toBe(true);
   });

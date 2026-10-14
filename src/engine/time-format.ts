@@ -73,7 +73,7 @@ const FALLBACK_ZONE_LIST = [
   'America/New_York',
   'America/Sao_Paulo',
   'Europe/London',
-  'Europe/Brussels',
+  'Africa/Lagos',
   'Europe/Moscow',
   'Africa/Johannesburg',
   'Asia/Dubai',
@@ -94,7 +94,7 @@ export type ZonedDateTime =
       /** The same moment in the reader's language, e.g. "Apr 2, 2025, 11:00:42 GMT+2". Wording varies by browser. */
       readonly localized: string;
       /**
-       * The zone actually used, as this engine names it (e.g. "Europe/Brussels",
+       * The zone actually used, as this engine names it (e.g. "Asia/Tokyo",
        * or "UTC" after a fallback). May be an old spelling of the asked-for
        * zone: Node reports "Asia/Kolkata" as "Asia/Calcutta".
        */
@@ -195,7 +195,7 @@ function wallClockText(year: number, month: number, day: number, hour: number, m
 /**
  * An offset in minutes as "UTC+02:00", "UTC-05:00", "UTC+05:45" or
  * "UTC+00:00". Historical local mean times (before about 1900) can have
- * seconds, e.g. "UTC+00:17:30".
+ * seconds, e.g. "UTC+09:18:59".
  */
 export function formatOffset(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? '-' : '+'; // 0 and -0 both give "+"
@@ -206,7 +206,7 @@ export function formatOffset(offsetMinutes: number): string {
   return `UTC${sign}${pad2(hours)}:${pad2(minutes)}${seconds === 0 ? '' : `:${pad2(seconds)}`}`;
 }
 
-/** The browser's time zone (e.g. "Europe/Brussels"), or "UTC" if it reports none or an invalid one. */
+/** The browser's time zone (e.g. "Asia/Tokyo"), or "UTC" if it reports none or an invalid one. */
 export function browserTimeZone(): string {
   try {
     const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -219,7 +219,7 @@ export function browserTimeZone(): string {
 /**
  * True if Intl accepts `zone` as a time zone (an IANA name such as
  * "America/New_York", "UTC", or an offset such as "+02:00" in newer engines).
- * Intl ignores letter case: "europe/brussels" is accepted.
+ * Intl ignores letter case: "asia/tokyo" is accepted.
  */
 export function isValidTimeZone(zone: unknown): zone is string {
   if (typeof zone !== 'string' || zone === '') return false;
@@ -298,7 +298,7 @@ export function formatInZone(utcMs: number | null, zone: string, locale: string 
     // Intl already cuts the moment to whole seconds (rounding down, also before 1970).
     text: `${wallClockText(year, month, day, hour, minute, second)} ${formatOffset(offsetMinutes)}`,
     localized: localizedFormatter(usedZone, locale).format(utcMs),
-    // The name as Intl spells it (e.g. "europe/brussels" -> "Europe/Brussels").
+    // The name as Intl spells it (e.g. "asia/tokyo" -> "Asia/Tokyo").
     zone: formatter.resolvedOptions().timeZone,
     offsetMinutes,
     zoneFallback,

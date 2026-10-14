@@ -30,9 +30,10 @@
 //
 // Use (src/main.ts): createReview(), then pass `element` as the preview's
 // `header`, `decorate` as its `decorate` and `rendered` as its
-// `onRendered`, and give each new result to review.showResult too. The
-// order does not matter: decorate and rendered pick up a new result by
-// themselves, and showing the same result twice changes nothing.
+// `onRendered`, and give each new result to review.showResult too.
+// decorate picks up a new result by itself, and showing the same result
+// twice changes nothing. rendered only completes the result already shown
+// (by decorate or showResult): it ignores any other.
 
 import type { EngineCounts, EngineMessage, EngineResult } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
@@ -200,6 +201,8 @@ export function createReview(options: ReviewOptions = {}): Review {
 
   function emptyCounts(): void {
     current = null;
+    // Defensive only: each run gives a new result object, so an old
+    // renderedResult could never match a later `current` anyway.
     renderedResult = null;
     entries = new Map();
     filesLine.textContent = '';
@@ -285,7 +288,13 @@ export function createReview(options: ReviewOptions = {}): Review {
       emptyCounts();
     },
     rendered: (result) => {
-      if (result !== current) show(result);
+      // Only the result already shown can be complete: decorate (for every
+      // email) and showResult (src/main.ts) show it first. Anything else is
+      // an older or unknown list; adopting it would bring back old counts.
+      // (An empty list has no decorate call and may be reported before
+      // showResult: it has nothing to complete, and showResult gives its
+      // counts.)
+      if (result !== current) return;
       renderedResult = result;
       showIncludedLine();
     },

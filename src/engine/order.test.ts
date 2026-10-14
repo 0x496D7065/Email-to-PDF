@@ -54,10 +54,10 @@ describe('orderMessages', () => {
   });
 
   it('orders by the true instant, not by the local clock time of each sender', () => {
-    // 10:00 in Brussels (+02:00) is 08:00 UTC; 05:00 in New York (-04:00) is 09:00 UTC.
+    // 10:00 in Tokyo (+09:00) is 01:00 UTC; 05:00 in New York (-04:00) is 09:00 UTC.
     // The parser already turned both into utcMs, so the "later-looking" 10:00 comes first.
-    const input = items(['ny-0500', T('2025-04-02T05:00:00-04:00')], ['brussels-1000', T('2025-04-02T10:00:00+02:00')]);
-    expect(labels(orderMessages(input))).toEqual(['brussels-1000', 'ny-0500']);
+    const input = items(['ny-0500', T('2025-04-02T05:00:00-04:00')], ['tokyo-1000', T('2025-04-02T10:00:00+09:00')]);
+    expect(labels(orderMessages(input))).toEqual(['tokyo-1000', 'ny-0500']);
   });
 
   it('breaks ties on the same instant by the lower input index', () => {

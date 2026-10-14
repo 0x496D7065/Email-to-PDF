@@ -75,8 +75,8 @@ describe('parseEmailDate: valid headers', () => {
   it('handles a date that crosses midnight in UTC (both directions)', () => {
     // Late evening in New York is already the next day (and year) in UTC.
     expect(parseEmailDate('Tue, 31 Dec 2024 23:30:00 -0500').utcMs).toBe(utc('2025-01-01T04:30:00Z'));
-    // Just after midnight in Brussels is still the previous day in UTC.
-    expect(parseEmailDate('Wed, 1 Jan 2025 00:30:00 +0100').utcMs).toBe(utc('2024-12-31T23:30:00Z'));
+    // Just after midnight in Tokyo is still the previous day in UTC.
+    expect(parseEmailDate('Wed, 1 Jan 2025 00:30:00 +0900').utcMs).toBe(utc('2024-12-31T15:30:00Z'));
   });
 
   it('understands legacy named zones', () => {

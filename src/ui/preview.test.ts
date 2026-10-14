@@ -56,7 +56,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage {
 const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
   runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
 
-const dateAt = (iso: string, offsetMinutes: number | null = 60, zoneKnown = true): NormalizedMessage['date'] => ({
+const dateAt = (iso: string, offsetMinutes: number | null = -300, zoneKnown = true): NormalizedMessage['date'] => ({
   utcMs: Date.parse(iso),
   original: 'synthetic',
   offsetMinutes,
@@ -92,11 +92,11 @@ let doc: FakeDocument;
 let area: FakeElement;
 let preview: Preview;
 
-const ZONES = ['Asia/Tokyo', 'Europe/Brussels', 'UTC'];
+const ZONES = ['America/New_York', 'Asia/Tokyo', 'UTC'];
 
 function mount(options: PreviewOptions = {}): Preview {
   area = new FakeElement('div');
-  preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, { zones: ZONES, initialZone: 'Europe/Brussels', ...options });
+  preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, { zones: ZONES, initialZone: 'America/New_York', ...options });
   return preview;
 }
 
@@ -208,17 +208,17 @@ describe('helpers', () => {
   });
 
   it('names zones readably and marks this computer', () => {
-    expect(zoneLabel('America/New_York', 'Europe/Brussels')).toBe('America/New York');
-    expect(zoneLabel('Europe/Brussels', 'Europe/Brussels')).toBe('Europe/Brussels (this computer)');
+    expect(zoneLabel('America/New_York', 'Asia/Tokyo')).toBe('America/New York');
+    expect(zoneLabel('America/New_York', 'America/New_York')).toBe('America/New York (this computer)');
   });
 
   it('shows dates in the zone, the sender time only when known and different', () => {
-    const date = dateAt('2025-03-03T08:15:00Z', 60);
-    expect(dateTexts(date, 'Europe/Brussels')).toEqual({ main: '2025-03-03 09:15:00 UTC+01:00', iso: '2025-03-03T08:15:00.000Z', senderLocal: null });
+    const date = dateAt('2025-03-03T08:15:00Z', -300);
+    expect(dateTexts(date, 'America/New_York')).toEqual({ main: '2025-03-03 03:15:00 UTC-05:00', iso: '2025-03-03T08:15:00.000Z', senderLocal: null });
     expect(dateTexts(date, 'Asia/Tokyo')).toEqual({
       main: '2025-03-03 17:15:00 UTC+09:00',
       iso: '2025-03-03T08:15:00.000Z',
-      senderLocal: "Sender's local time: 2025-03-03 09:15:00 UTC+01:00",
+      senderLocal: "Sender's local time: 2025-03-03 03:15:00 UTC-05:00",
     });
     expect(dateTexts(dateAt('2025-03-03T08:15:00Z', null, false), 'Asia/Tokyo').senderLocal).toBeNull();
     expect(dateTexts(NO_DATE, 'UTC')).toEqual({ main: t('preview.noDate'), iso: null, senderLocal: null });
@@ -232,11 +232,11 @@ describe('mountPreview', () => {
   it('builds a labelled time-zone list and a labelled checkbox', () => {
     const select = byId('preview-zone');
     expect(select.tagName).toBe('select');
-    expect(select.value).toBe('Europe/Brussels');
+    expect(select.value).toBe('America/New_York');
     const options = select.children as FakeElement[];
     expect(options.map((o) => o.getAttribute('value'))).toEqual(ZONES);
-    expect(options.filter((o) => o.hasAttribute('selected')).map((o) => o.getAttribute('value'))).toEqual(['Europe/Brussels']);
-    expect(options.map((o) => o.textContent)).toContain('Europe/Brussels (this computer)');
+    expect(options.filter((o) => o.hasAttribute('selected')).map((o) => o.getAttribute('value'))).toEqual(['America/New_York']);
+    expect(options.map((o) => o.textContent)).toContain('America/New York (this computer)');
     const labels = area.descendants().filter((e) => e.tagName === 'label');
     expect(labels.map((l) => [l.getAttribute('for'), l.textContent])).toEqual([
       ['preview-zone', t('preview.zone')],
@@ -244,7 +244,7 @@ describe('mountPreview', () => {
     ]);
     expect(byId('preview-show-folded').getAttribute('type')).toBe('checkbox');
     expect(byId('preview-list').getAttribute('aria-label')).toBe(t('preview.listLabel'));
-    expect(preview.zone()).toBe('Europe/Brussels');
+    expect(preview.zone()).toBe('America/New_York');
   });
 
   it('adds the starting zone to the list if it is missing', () => {
@@ -268,7 +268,7 @@ describe('mountPreview', () => {
 
   it('shows author, recipients and dates; the sender time only when it differs', () => {
     const carol: EmailAddress = { name: '', address: 'carol@example.test' };
-    preview.show(engineOf([make({ cc: [carol], bcc: [BOB], date: dateAt('2025-03-03T08:15:00Z', 60) })]));
+    preview.show(engineOf([make({ cc: [carol], bcc: [BOB], date: dateAt('2025-03-03T08:15:00Z', -300) })]));
     const item = items()[0]!;
     expect(label(item, 'author')).toBe(t('preview.author.from'));
     expect(meta(item, 'author')).toBe('Alice Example <alice@example.test>');
@@ -278,7 +278,7 @@ describe('mountPreview', () => {
     expect(label(item, 'bcc')).toBe(t('preview.bcc'));
     const time = one(item, 'message-date');
     expect(time.tagName).toBe('time');
-    expect(time.textContent).toBe('2025-03-03 09:15:00 UTC+01:00');
+    expect(time.textContent).toBe('2025-03-03 03:15:00 UTC-05:00');
     expect(time.getAttribute('datetime')).toBe('2025-03-03T08:15:00.000Z');
     expect(one(item, 'sender-time').hasAttribute('hidden')).toBe(true);
   });
@@ -403,7 +403,7 @@ describe('mountPreview', () => {
   });
 
   it('rewrites only the dates when the zone changes', () => {
-    const result = engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', 60) }), make({ date: NO_DATE }), ...thread()]);
+    const result = engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) }), make({ date: NO_DATE }), ...thread()]);
     preview.show(result);
     const bodies = items().map((i) => one(i, 'message-body'));
     const bodyNodes = bodies.map((b) => [...b.descendants()]);
@@ -413,7 +413,7 @@ describe('mountPreview', () => {
     expect(preview.zone()).toBe('Asia/Tokyo');
     const first = items()[0]!;
     expect(one(first, 'message-date').textContent).toBe('2025-03-03 17:15:00 UTC+09:00');
-    expect(one(first, 'sender-time').textContent).toBe("Sender's local time: 2025-03-03 09:15:00 UTC+01:00");
+    expect(one(first, 'sender-time').textContent).toBe("Sender's local time: 2025-03-03 03:15:00 UTC-05:00");
     expect(one(first, 'sender-time').hasAttribute('hidden')).toBe(false);
     expect(items().map((i) => one(i, 'message-date').textContent).filter((d) => d === t('preview.noDate'))).toHaveLength(1);
     // Same body elements, same children, nothing new built.
@@ -424,7 +424,7 @@ describe('mountPreview', () => {
     chooseZone('UTC');
     expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
     // The zone stays for the next result.
-    preview.show(engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', 60) })]));
+    preview.show(engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) })]));
     expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
   });
 

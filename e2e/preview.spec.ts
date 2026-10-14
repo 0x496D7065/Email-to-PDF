@@ -3,9 +3,10 @@
 // playwright.config.ts). The real pipeline runs on synthetic fixtures from
 // tests/fixtures/eml, added through the file input.
 //
-// The browser's time zone is fixed to Europe/Brussels so the default dates
-// are known. Every test also checks, once everything has settled, that
-// nothing left the page (only the inlined workers' blob: URLs), that there
+// The browser's time zone is fixed to Africa/Lagos (UTC+01:00 all year, no
+// daylight saving time) so the default dates are known, and match the +0100
+// of the fixtures, so the sender's own time is hidden. Every test also
+// checks, once everything has settled, that nothing left the page (only the inlined workers' blob: URLs), that there
 // was no CSP violation (page or worker) and no console error. See
 // e2e/support/watch.ts for the detectors.
 import { readFileSync } from 'node:fs';
@@ -54,7 +55,7 @@ const SUBJECTS_IN_ORDER = [
   'Spare chair', // 70: no date
 ];
 
-test.use({ timezoneId: 'Europe/Brussels' });
+test.use({ timezoneId: 'Africa/Lagos' });
 
 let origin = '';
 let watch: Watch;
@@ -113,7 +114,7 @@ test('lists the emails by date, with their details, in the browser zone', async 
   await expect(items.locator('h3')).toHaveCount(6);
 
   const zone = page.getByLabel(en.preview.zone);
-  await expect(zone).toHaveValue('Europe/Brussels');
+  await expect(zone).toHaveValue('Africa/Lagos');
   await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 09:15:00 UTC+01:00');
   await expect(items.nth(0).locator('.sender-time')).toBeHidden();
   await expect(items.nth(0).locator('dd.meta-author')).toHaveText('Alice Example <alice@example.test>');
