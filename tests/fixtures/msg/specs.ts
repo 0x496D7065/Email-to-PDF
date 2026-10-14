@@ -109,6 +109,22 @@ const CATALOGUE_HTML = `<html><head>
 <a href="javascript:alert('MSG-JS-LINK-RAN')">Se d&eacute;sinscrire</a>
 </body></html>`;
 
+/**
+ * HTML-only body (no plain-text body), as it would arrive in the same batch
+ * as everything else: its text must come from the inert converter, with
+ * nothing in it run or loaded (README.md, rules R1 and R4).
+ */
+const SHOWROOM_HTML = `<html><head>
+<link rel="stylesheet" href="https://cdn.invalid/msg13.css">
+<script>document.title = 'MSG13-SCRIPT-RAN';</script>
+</head><body>
+<p>Hello Alice,</p>
+<p>The showroom visit is on <b>Friday 25 April</b> at 14:00.</p>
+<img src="https://tracker.invalid/msg13-pixel.png" width="1" height="1" alt="" onerror="document.title = 'MSG13-ONERROR-RAN'">
+<p><a href="https://shop.invalid/route">Plan your route</a></p>
+<p>Carol</p>
+</body></html>`;
+
 export const MSG_SPECS: readonly MsgSpec[] = [
   {
     id: 'msg-01-plain-unicode',
@@ -326,5 +342,16 @@ ${BOB_SIG}
 ${BOB_DISCLAIMER}`,
     submitTime: '2025-04-29T11:30:00Z',
     messageId: '<msg-stoelen-1.bob@furniture.example.test>',
+  },
+  {
+    id: 'msg-13-html-only',
+    description: 'HTML-only body (no plain body): remote stylesheet, script, tracking pixel with an onerror handler, link.',
+    strings: 'unicode',
+    subject: 'Showroom visit on Friday',
+    sender: { name: 'Carol Test', smtp: 'carol@sample.invalid' },
+    recipients: [{ ...ALICE, type: 'to' }],
+    bodyHtml: SHOWROOM_HTML,
+    submitTime: '2025-04-22T09:00:00Z',
+    messageId: '<msg-showroom-1.carol@sample.invalid>',
   },
 ];

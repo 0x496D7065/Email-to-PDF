@@ -24,23 +24,30 @@
 // they are parsed. An inline event handler attribute, a <style> block or a
 // <base> element in the email HTML is REPORTED as a CSP violation
 // ('script-src-attr', 'style-src-elem', 'base-uri'), and so is the `src` of
-// a <track> element ('media-src', tolerated for that one URL only), although
-// nothing runs and nothing is loaded: these are checks, not attempts. Like
-// 'script-src-attr', a 'media-src' report alone cannot prove inertness (see
-// below). Such reports stay in the browser (the CSP has no report-uri). Under the CSP, only these
-// parse-time reports are tolerated; any other violation (img-src,
-// connect-src, script-src-elem, frame-src, ...) would mean a load or an
-// execution was attempted, and fails the test.
+// a <track> element ('media-src'), although nothing runs and nothing is
+// loaded: these are checks, not attempts. Like 'script-src-attr', a
+// 'media-src' report alone cannot prove inertness (see below). Such reports
+// stay in the browser (the CSP has no report-uri). Each report is recorded
+// as "directive blockedURI parse|live": "parse" when it is fired at the
+// document itself, "live" when fired at an element. An inline report
+// (blockedURI "inline") made while parsing is fired at the document (the
+// parsed element is in no live page); a blocked inline handler or style in
+// the LIVE page is fired at its element. A blocked LOAD is fired at the
+// document wherever the element is (see the first positive control), so for
+// URL reports the label proves nothing. Under the CSP, only these parse-time
+// reports are tolerated: inline reports labelled "parse" for the directives
+// above, and the <base> and <track> reports for their one URL each.
+// Anything else (any "live" report, img-src, connect-src, script-src-elem,
+// frame-src, ...) would mean a load or an execution was attempted, and fails
+// the test.
 //
-// Why BOTH runs must stay: tolerating those parse-time reports means the
-// with-CSP run alone cannot tell a harmless parse-time check apart from a
-// real attempt to run an inline handler, or to load a <track>, that the CSP
-// then blocked (for example, if a node were ever inserted into the live
-// page). Both give the same 'script-src-attr' or 'media-src' report. Only the
-// without-CSP run, where nothing would block such an attempt, proves that
-// nothing is ever attempted: there, any handler that ran would push a flag,
-// and any track load would show up as a request, and fail the test (see the
-// positive controls at the end of this file).
+// Why BOTH runs must stay: the with-CSP run tells a parse-time check apart
+// from a blocked attempt in the live page only by where the report is fired
+// (the document, or a live element), which is how Chromium behaves today, not
+// a guarantee. Only the without-CSP run, where nothing would block
+// such an attempt, proves that nothing is ever attempted: there, any handler
+// that ran would push a flag, and any track load would show up as a request,
+// and fail the test (see the positive controls at the end of this file).
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { build, type Rolldown } from 'vite';
 import { FIXTURES } from '../tests/fixtures/manifest.ts';
@@ -48,7 +55,7 @@ import type * as Entry from './support/html-entry.ts';
 
 declare global {
   interface Window {
-    /** "directive blockedURI" of each CSP violation (separate from no-network.spec.ts's list). */
+    /** "directive blockedURI parse|live" of each CSP violation (separate from no-network.spec.ts's list). */
     __e2eViolations: string[];
     /** Pushed to by code in the hostile HTML: must stay empty. */
     __e2eFlags: string[];
@@ -59,17 +66,22 @@ declare global {
 const ROOT = decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 const BUNDLE_PATH = '/__e2e__/';
 
-/** CSP reports Chromium makes while PARSING inline handlers, styles and <base> (see the header). */
-const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr', 'base-uri']);
+/** Directives of the inline CSP reports Chromium makes while PARSING handlers and styles (see the header). */
+const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
 
 /**
- * Single parse-time reports tolerated as exact "directive URL" strings, never
- * as a whole directive. Chromium checks the `src` of a <track> element
- * against media-src as soon as the element is parsed, then does not load it
- * (the DOMParser document has no browsing context). The without-CSP run
- * proves no request for it is ever made.
+ * Single parse-time reports tolerated as exact "directive URL parse" strings,
+ * never as a whole directive. Chromium checks the `href` of a <base> element
+ * against base-uri and the `src` of a <track> element against media-src as
+ * soon as the element is parsed, then neither uses the base nor loads the
+ * track (the DOMParser document has no browsing context). The without-CSP
+ * run proves no request for the track is ever made.
  */
-const PARSE_TIME_REPORTS = new Set(['media-src https://track.invalid/t.vtt']);
+const PARSE_TIME_REPORTS = new Set(['base-uri https://base.invalid/ parse', 'media-src https://track.invalid/t.vtt parse']);
+
+/** True for a recorded report ("directive blockedURI parse|live") that DOMParser makes while parsing (see the header). */
+const isParseTimeReport = (record: string): boolean =>
+  (PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse')) || PARSE_TIME_REPORTS.has(record);
 
 /** The in-memory test bundle: file name -> code. */
 const bundle = new Map<string, string>();
@@ -156,8 +168,10 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__e2eViolations = [];
     window.__e2eFlags = [];
+    // An inline report made while DOMParser parses is fired at the document;
+    // an inline one about the live page at the element concerned (see the header).
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${event.target === document ? 'parse' : 'live'}`);
     });
   });
 });
@@ -190,7 +204,7 @@ async function expectNothingHappened(page: Page): Promise<void> {
   expect(requestsAfterLoad()).toEqual([]);
   expect(websockets).toEqual([]);
   const violations = await page.evaluate(() => window.__e2eViolations);
-  expect(violations.filter((v) => !PARSE_TIME_DIRECTIVES.has(v.split(' ')[0] ?? '') && !PARSE_TIME_REPORTS.has(v))).toEqual([]);
+  expect(violations.filter((v) => !isParseTimeReport(v))).toEqual([]);
 }
 
 /** Converts `html` in the page with the production DOMParser converter (default limits unless given). */
@@ -342,9 +356,15 @@ test('control, with CSP: email images moved into the live page are blocked AND r
     const parsed = new DOMParser().parseFromString(html, 'text/html');
     for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
   }, HOSTILE_HTML);
-  await expect
-    .poll(() => page.evaluate(() => window.__e2eViolations))
-    .toEqual(expect.arrayContaining(['img-src https://tracker.invalid/p.png']));
+  // Two reports about the LIVE page: the blocked remote image, and the
+  // blocked inline handler of an image (fired at that element, so "live").
+  // Chromium fires a blocked load's report at the document wherever the
+  // element is, so the image's report says "parse": that label tells inline
+  // reports apart only, and img-src is never tolerated whatever its label.
+  const live = ['img-src https://tracker.invalid/p.png parse', 'script-src-attr inline live'];
+  await expect.poll(() => page.evaluate(() => window.__e2eViolations)).toEqual(expect.arrayContaining(live));
+  // The filter of expectNothingHappened rejects both.
+  expect((await page.evaluate(() => window.__e2eViolations)).filter((v) => !isParseTimeReport(v))).toEqual(expect.arrayContaining(live));
   expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
 });
 
@@ -372,7 +392,7 @@ test('control, without CSP: an email <track> moved into the live page requests i
   });
   // The safety net aborts the remote request, but it is still seen. This
   // proves the request listener would catch a real track load, so tolerating
-  // the parse-time 'media-src https://track.invalid/t.vtt' report is safe.
+  // the parse-time 'media-src https://track.invalid/t.vtt parse' report is safe.
   await expect.poll(() => requestsAfterLoad()).toEqual(expect.arrayContaining(['https://track.invalid/t.vtt']));
   await page.evaluate(() => document.getElementById('e2e-track-control')?.remove());
 });

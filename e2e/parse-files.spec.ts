@@ -47,7 +47,7 @@ import type * as Entry from './support/parse-entry.ts';
 
 declare global {
   interface Window {
-    /** "directive blockedURI" of each CSP violation in the page. */
+    /** "directive blockedURI parse|live" of each CSP violation in the page. */
     __e2eViolations: string[];
     /** Keeps a test worker alive for the positive controls. */
     __e2eKeep: unknown;
@@ -60,8 +60,23 @@ declare global {
 const ROOT = decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 const BUNDLE_PATH = '/__e2e__/';
 
-/** CSP reports Chromium makes while DOMParser PARSES inline handlers, styles and <base> (nothing runs). */
-const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr', 'base-uri']);
+/**
+ * Directives of the CSP reports Chromium makes while DOMParser PARSES inline
+ * handlers and styles (nothing runs). The HTML parsed here has no <base>
+ * element, so 'base-uri' is not among them.
+ */
+const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
+
+/**
+ * True for a recorded report ("directive blockedURI parse|live") made while
+ * DOMParser parses: blockedURI "inline", fired at the document itself (the
+ * parsed element is in no live page). The same directive fired at an element
+ * is an inline handler or style in the LIVE page. (A blocked load is fired at
+ * the document wherever it happens: never tolerated, see
+ * e2e/html-to-text.spec.ts.)
+ */
+const isParseTimeReport = (record: string): boolean =>
+  PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
 
 /** The in-memory test bundle: path below BUNDLE_PATH -> file contents. */
 const bundle = new Map<string, string>();
@@ -237,8 +252,10 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await watchWorkers(context, page);
   await page.addInitScript(() => {
     window.__e2eViolations = [];
+    // An inline report made while DOMParser parses is fired at the document;
+    // an inline one about the live page at the element concerned.
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${event.target === document ? 'parse' : 'live'}`);
     });
   });
 });
@@ -276,11 +293,12 @@ async function expectNoNetworkAndPageAlive(page: Page): Promise<void> {
   expect(requestsAfterLoad()).toEqual([]);
   expect(websockets).toEqual([]);
   // In the page, only the parse-time reports DOMParser makes for inline
-  // handlers, <style> blocks and <base> in email HTML are expected: nothing
-  // runs or loads (see e2e/html-to-text.spec.ts, which proves it with and
-  // without the CSP). Anything else would be an attempted load or execution.
+  // handlers and <style> blocks in email HTML are expected: nothing runs or
+  // loads (see e2e/html-to-text.spec.ts, which proves it with and without the
+  // CSP). Anything else, including the same directive fired at a live
+  // element, would be an attempted load or execution.
   const pageViolations = await page.evaluate(() => window.__e2eViolations);
-  expect(pageViolations.filter((v) => !PARSE_TIME_DIRECTIVES.has(v.split(' ')[0] ?? ''))).toEqual([]);
+  expect(pageViolations.filter((v) => !isParseTimeReport(v))).toEqual([]);
   expect(workerCspReports()).toEqual([]);
   expect(await page.title()).toBe('Email to PDF');
   expect(await page.evaluate(() => 6 * 7)).toBe(42);

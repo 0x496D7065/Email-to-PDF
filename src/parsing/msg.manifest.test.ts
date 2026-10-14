@@ -17,7 +17,9 @@ import type { NormalizedMessage } from './types';
 // checked in Chromium by e2e/html-to-text.spec.ts. The stub is NOT a
 // converter and must never be used outside tests.
 const STUB_PREFIX = '[stub html-to-text]';
-const htmlToText = (html: string): HtmlToTextResult => ({ text: `${STUB_PREFIX} ${html.length} chars`, truncated: false });
+/** Every HTML string handed to the stub; the stub's output names the index (as in eml.manifest.test.ts). */
+const htmlCalls: string[] = [];
+const htmlToText = (html: string): HtmlToTextResult => ({ text: `${STUB_PREFIX} #${String(htmlCalls.push(html) - 1)}`, truncated: false });
 const msgParser = createMsgParser({ htmlToText });
 const emlParser = createEmlParser({ htmlToText });
 
@@ -26,6 +28,11 @@ const emlFiles = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', {
   import: 'default',
   eager: true,
 });
+
+// Fixtures whose body is HTML-only: their converted text is checked in the
+// browser (e2e/full-flow.spec.ts, with the real converter). Every other field
+// (and the 'html-converted-body' warning) is checked here.
+const BODY_CHECKS_NEED_HTML_TO_TEXT = new Set(['msg-13-html-only']);
 
 const msgFixtures = FIXTURES.filter((f) => f.kind === 'msg');
 
@@ -47,9 +54,9 @@ async function parseEmlFixture(id: string): Promise<NormalizedMessage> {
 }
 
 describe('.msg adapter matches the manifest', () => {
-  it('covers all 12 .msg specs', () => {
-    expect(msgFixtures).toHaveLength(12);
-    expect(MSG_SPECS).toHaveLength(12);
+  it('covers all 13 .msg specs', () => {
+    expect(msgFixtures).toHaveLength(13);
+    expect(MSG_SPECS).toHaveLength(13);
   });
 
   it.each(msgFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) => {
@@ -81,6 +88,15 @@ describe('.msg adapter matches the manifest', () => {
     expect(message.source.kind).toBe('msg');
     expect(message.source.sha256).toMatch(/^[0-9a-f]{64}$/);
 
+    if (BODY_CHECKS_NEED_HTML_TO_TEXT.has(id)) {
+      // The stub was used, and was handed the HTML body as stored, which holds
+      // the snippets that need no tag removal.
+      expect(message.bodyText.startsWith(STUB_PREFIX)).toBe(true);
+      const html = htmlCalls[Number(message.bodyText.slice(STUB_PREFIX.length + 2))] ?? '';
+      expect(html).toContain('<p>Hello Alice,</p>');
+      expect(html).toContain('Plan your route');
+      return;
+    }
     for (const snippet of expected.bodyContains) expect(message.bodyText).toContain(snippet);
     for (const snippet of expected.bodyExcludes ?? []) expect(message.bodyText).not.toContain(snippet);
     // Outlook stores CRLF; the adapter gives LF line ends like the .eml adapter.

@@ -66,6 +66,9 @@ function checkTags(expected: FixtureExpectation, body: string): void {
   }
 }
 
+/** HTML-only .msg snippets that the raw HTML splits with inline tags (e.g. `<b>`). */
+const SNIPPETS_NEEDING_TAG_REMOVAL = new Set(['The showroom visit is on Friday 25 April at 14:00.']);
+
 function checkBody(expected: FixtureExpectation, body: string): void {
   for (const snippet of expected.bodyContains) expect(body, `body should contain "${snippet}"`).toContain(snippet);
   for (const snippet of expected.bodyExcludes ?? []) expect(body, `body must not contain "${snippet}"`).not.toContain(snippet);
@@ -186,9 +189,22 @@ describe('manifest matches the .msg builder specs', () => {
 
     const warnings: ParseWarning[] = time === undefined ? ['missing-date'] : [];
     if (!data.messageId) warnings.push('missing-message-id');
+    // The builder writes an HTML body as UTF-8 bytes (PidTagHtml).
+    const html = data.html === undefined ? undefined : new TextDecoder().decode(data.html);
+    const htmlOnly = (data.body ?? '').trim() === '' && html !== undefined;
+    if (htmlOnly) warnings.push('html-converted-body');
     expect(sorted(warnings)).toEqual(sorted(expected.warnings));
 
-    checkBody(expected, data.body ?? '');
+    if (htmlOnly) {
+      // HTML-only: text conversion is checked by the adapter tests and e2e.
+      // Here only the snippets that appear verbatim in the raw HTML are checked;
+      // the ones split by inline tags exist only after conversion.
+      expect(html).toContain('<body');
+      for (const snippet of expected.bodyContains) {
+        if (SNIPPETS_NEEDING_TAG_REMOVAL.has(snippet)) continue;
+        expect(html, `stored HTML should contain "${snippet}"`).toContain(snippet);
+      }
+    } else checkBody(expected, data.body ?? '');
   });
 
   it('the cross-format duplicate has the same body as its .eml twin (up to line ends)', async () => {
