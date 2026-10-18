@@ -2,6 +2,7 @@
 // the `test` section below, so one file configures both the build and tests.
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { isBytesImportAllowed } from './scripts/font-rules.mjs';
 import {
   cloudflareHeadersFile,
   cspForHeader,
@@ -40,6 +41,38 @@ function securityHeaders(): Plugin {
   };
 }
 
+// `import bytes from './X.woff?bytes'` gives the file's exact bytes as a
+// Uint8Array, written in the bundle as `new Uint8Array([119,79,70,70,...])`.
+// Used for the PDF fonts (src/pdf/fonts.ts). Why not Vite's built-in ways:
+// `?url` would load the file later with fetch(), which the CSP forbids
+// (connect-src 'none'); `?inline` writes base64, which the build check
+// rejects (it could hide code); `?raw` reads the file as UTF-8 text, which
+// corrupts binary data. A plain number array is readable, and the build
+// check proves each one is exactly a committed font (scripts/font-rules.mjs).
+// Only .woff files directly in this project's src/fonts/ may be imported
+// this way (fontsDir, built like iconvLiteShim below; the check itself is
+// isBytesImportAllowed in scripts/font-rules.mjs, which has a self-test).
+// `enforce: 'pre'` runs this before Vite's own asset handling of .woff files.
+const BYTES_SUFFIX = '?bytes';
+const fontsDir = decodeURIComponent(new URL('./src/fonts/', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
+function bytesImport(): Plugin {
+  return {
+    name: 'bytes-import',
+    enforce: 'pre',
+    async load(id) {
+      if (!id.endsWith(BYTES_SUFFIX)) return null;
+      const file = id.slice(0, -BYTES_SUFFIX.length);
+      if (!isBytesImportAllowed(file, fontsDir)) {
+        throw new Error(`${BYTES_SUFFIX} is only for the .woff files in src/fonts/, not ${file}`);
+      }
+      this.addWatchFile(file);
+      const bytes = await this.fs.readFile(file);
+      // moduleSideEffects: false: a font nobody imports is left out.
+      return { code: `export default new Uint8Array([${bytes.join(',')}]);\n`, moduleSideEffects: false };
+    },
+  };
+}
+
 // Absolute path of the iconv-lite shim (see resolve.alias below). It must be
 // absolute so it also works for packages pre-bundled by Vitest.
 // Same as Node's fileURLToPath(), written by hand because the project does not
@@ -49,7 +82,7 @@ const shimUrl = new URL('./src/shims/iconv-lite.ts', import.meta.url);
 const iconvLiteShim = decodeURIComponent(shimUrl.pathname).replace(/^\/([A-Za-z]:)/, '$1');
 
 export default defineConfig({
-  plugins: [securityHeaders()],
+  plugins: [bytesImport(), securityHeaders()],
   resolve: {
     // @kenjiuno/msgreader (the .msg parser) requires 'iconv-lite', which needs
     // Node's Buffer and crashes in the browser. Every import of exactly
@@ -63,6 +96,25 @@ export default defineConfig({
     // Every browser we target supports modulepreload natively, and README.md, rule R1
     // forbids network APIs in the shipped code, so we turn the polyfill off.
     modulePreload: { polyfill: false },
+    // The font chunk (below) is about 1.2 MB of numbers, which is expected;
+    // the limit (in kB) is raised just above it so a warning still means
+    // something unexpected grew.
+    chunkSizeWarningLimit: 1300,
+    rolldownOptions: {
+      output: {
+        // The PDF fonts (the `?bytes` modules, about 1.2 MB of numbers) get a
+        // chunk of their own, assets/pdf-fonts-[hash].js: the main script
+        // stays small, and the build check knows the one file where long
+        // number arrays are allowed (scripts/font-rules.mjs). The page entry
+        // imports it statically (src/main.ts), so the browser loads it with
+        // the page, as a normal script under `script-src 'self'`.
+        // This option applies to the page only; the inlined workers are
+        // built separately and never import the fonts.
+        codeSplitting: {
+          groups: [{ name: 'pdf-fonts', test: (id) => id.endsWith(BYTES_SUFFIX) }],
+        },
+      },
+    },
   },
   // `npm run preview` serves the BUILT site (dist/). These are the same HTTP
   // headers Cloudflare Pages sends from dist/_headers, so the browser test in

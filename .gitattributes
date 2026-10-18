@@ -2,3 +2,9 @@
 # LF/CRLF conversion, so line endings and file hashes are identical on every
 # platform (some fixtures use LF, one uses CRLF on purpose).
 tests/fixtures/**/*.[eE][mM][lL] -text
+# Bundled PDF fonts (src/fonts/): official IBM Plex files, kept byte for byte
+# (the build check compares their SHA-256). "binary" = no line-ending
+# conversion and no text diff. The license text next to them is kept
+# unchanged too.
+src/fonts/*.woff binary
+src/fonts/LICENSE.txt -text

@@ -382,6 +382,12 @@ test.describe('offline right after the page has loaded', () => {
   test('.eml files and a .msg give the full result, with no request possible', async ({ page, context }) => {
     test.setTimeout(60_000);
     await open(page);
+    // The PDF fonts came with the page, before going offline: their chunk
+    // was requested once during the load, and the page entry has checked
+    // them (src/main.ts sets the flag only after reading their headers).
+    const fontChunk = /^\/assets\/pdf-fonts-[\w-]+\.js$/;
+    expect(watch.requests.slice(0, loadedAt).filter((url) => fontChunk.test(new URL(url).pathname))).toHaveLength(1);
+    await expect(page.locator('html')).toHaveAttribute('data-pdf-fonts', 'ready');
     // From here on the browser has no network at all, as if the cable were pulled.
     await context.setOffline(true);
 

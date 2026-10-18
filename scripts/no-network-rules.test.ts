@@ -5,11 +5,13 @@ import {
   checkBuiltHtml,
   checkHeadersFile,
   decodeJsEscapes,
+  FILE_URL_ALLOWLIST,
   findEmbeddedViolations,
   findOpaquePayloads,
   findViolations,
   normalizeUrl,
   OPAQUE_PAYLOAD_MIN_LENGTH,
+  SOURCE_FILE_URL_ALLOWLIST,
   URL_ALLOWLIST,
 } from './no-network-rules.mjs';
 
@@ -153,6 +155,51 @@ describe('file-scoped URL allowlist (third-party notices)', () => {
 
   it('rejects the Apache URLs in a backslash path ending in the notices file name', () => {
     expect(findViolations(apache, { isDist: true, distFile: 'sub\\THIRD_PARTY_NOTICES.txt' })).toHaveLength(2);
+  });
+});
+
+describe('file-scoped URL allowlist (font license)', () => {
+  const ofl = 'This license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n';
+  const notices = { isDist: true, distFile: 'THIRD_PARTY_NOTICES.txt' };
+  const licenseFile = { isDist: false, sourceFile: 'src/fonts/LICENSE.txt' };
+
+  it('lists exactly the one SIL link, for the notices file and the license file only', () => {
+    expect(FILE_URL_ALLOWLIST.filter((entry) => entry.url.includes('sil.org'))).toEqual([
+      { url: 'http://scripts.sil.org/OFL', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
+    ]);
+    expect(SOURCE_FILE_URL_ALLOWLIST).toEqual([{ url: 'http://scripts.sil.org/OFL', onlyIn: 'src/fonts/LICENSE.txt' }]);
+  });
+
+  it('accepts the SIL link inside dist/THIRD_PARTY_NOTICES.txt and src/fonts/LICENSE.txt', () => {
+    expect(findViolations(ofl, notices)).toEqual([]);
+    expect(findViolations(ofl, licenseFile)).toEqual([]);
+  });
+
+  it('rejects the SIL link in any other dist/ or source file', () => {
+    for (const distFile of ['assets/index-abc123.js', 'assets/pdf-fonts-abc.js', 'index.html', 'src/fonts/LICENSE.txt']) {
+      expect(findViolations(ofl, { isDist: true, distFile }), distFile).toHaveLength(1);
+    }
+    for (const sourceFile of ['src/pdf/fonts.ts', 'src/fonts/license.txt', 'src/LICENSE.txt', 'index.html', 'THIRD_PARTY_NOTICES.txt']) {
+      expect(findViolations(ofl, { isDist: false, sourceFile }), sourceFile).toHaveLength(1);
+    }
+    expect(findViolations(ofl, src)).toHaveLength(1);
+    expect(findViolations(ofl, dist)).toHaveLength(1);
+  });
+
+  it('does not let a source-file entry count for dist/, or a dist/ entry for the source', () => {
+    expect(findViolations(ofl, { isDist: true, distFile: 'x.js', sourceFile: 'src/fonts/LICENSE.txt' })).toHaveLength(1);
+    expect(findViolations(ofl, { isDist: false, distFile: 'THIRD_PARTY_NOTICES.txt', sourceFile: 'src/x.ts' })).toHaveLength(1);
+  });
+
+  it('rejects variants of the SIL link even in the license file', () => {
+    for (const url of ['https://scripts.sil.org/OFL', 'http://scripts.sil.org/OFL/x.js', 'http://scripts.sil.org/', 'https://openfontlicense.org']) {
+      expect(findViolations(url, licenseFile), url).toHaveLength(1);
+      expect(findViolations(url, notices), url).toHaveLength(1);
+    }
+  });
+
+  it('keeps the Apache links out of the font license file', () => {
+    expect(findViolations('http://www.apache.org/licenses/', licenseFile)).toHaveLength(1);
   });
 });
 

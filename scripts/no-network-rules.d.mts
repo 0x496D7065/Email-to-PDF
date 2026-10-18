@@ -15,14 +15,25 @@ export const URL_ALLOWLIST: readonly string[];
 /** URLs allowed only inside one dist/ file (`onlyIn`, relative to dist/). */
 export const FILE_URL_ALLOWLIST: readonly { url: string; onlyIn: string }[];
 
-export function isUrlAllowed(url: string, distFile: string | undefined): boolean;
+/** URLs allowed only inside one source file (`onlyIn`, relative to the project root). */
+export const SOURCE_FILE_URL_ALLOWLIST: readonly { url: string; onlyIn: string }[];
+
+export function isUrlAllowed(url: string, distFile: string | undefined, sourceFile?: string): boolean;
 
 export const RULES: readonly { pattern: RegExp; reason: string; distOnly?: boolean }[];
 
 /** Unescapes \/ and trims trailing punctuation, before the allowlist comparison. */
 export function normalizeUrl(raw: string): string;
 
-export function findViolations(text: string, options: { isDist: boolean; distFile?: string }): Finding[];
+export interface ScanOptions {
+  isDist: boolean;
+  /** dist/ files only: path relative to dist/. */
+  distFile?: string;
+  /** Source files only: path relative to the project root. */
+  sourceFile?: string;
+}
+
+export function findViolations(text: string, options: ScanOptions): Finding[];
 
 export function checkBuiltHtml(html: string): string[];
 
@@ -38,4 +49,4 @@ export const OPAQUE_PAYLOAD_MIN_LENGTH: number;
 export function findOpaquePayloads(text: string, minLength?: number): Finding[];
 
 /** Findings visible only after decodeJsEscapes (code embedded in strings, e.g. inlined workers). */
-export function findEmbeddedViolations(text: string, options: { isDist: boolean; distFile?: string }): Finding[];
+export function findEmbeddedViolations(text: string, options: ScanOptions): Finding[];

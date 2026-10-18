@@ -73,11 +73,28 @@ fallback because browsers ignore it there.
   API, a browser storage API, an `http(s)://` or `ws(s)://` URL that is not on
   a tiny allowlist, test code, or missing security headers. The allowlist may
   only ever hold the donation link, the project's repository link, and license
-  links, only in code comments or in the shipped third-party license notices
-  file. Today it holds only the Apache License links
+  links, only in code comments, in the shipped third-party license notices
+  file, or in a license file kept next to the bundled files it covers.
+  Today it holds only license links: the Apache License links
   `http://www.apache.org/licenses/` and
   `http://www.apache.org/licenses/LICENSE-2.0`, allowed only inside
-  `THIRD_PARTY_NOTICES.txt` and rejected anywhere else.
+  `THIRD_PARTY_NOTICES.txt`, and the SIL Open Font License link
+  `http://scripts.sil.org/OFL`, allowed only inside
+  `THIRD_PARTY_NOTICES.txt` and `src/fonts/LICENSE.txt`. Each is rejected
+  anywhere else.
+- The PDF fonts are built into the site as plain lists of numbers (see
+  "Bundled fonts" below). A long list of numbers could hide code just as
+  well, so the build check fails if one appears anywhere but the font file,
+  if a list there is not exactly one of the official font files (compared by
+  SHA-256), if a font file in `src/fonts/` was changed, or if the page does
+  not load the font file at startup. Any way of writing a number counts
+  (negative, decimal, hex, and so on). This makes hiding code in lists of
+  numbers harder, but it is not the real barrier: that is the CSP
+  (`connect-src 'none'` and `script-src 'self'`, so hidden code could
+  neither send anything out nor load more code) together with the scans for
+  network APIs above. This check does not catch every possible way of
+  writing data down, for example many short lists joined together, or
+  numbers written as text.
 - The same build check also fails if the built site contains an HTML
   injection API (such as `innerHTML`, `outerHTML`, `insertAdjacentHTML` or
   `document.write`), as a backstop for rule R4.
@@ -188,6 +205,23 @@ The referrer policy is covered by both: the build also adds
 has no `<meta>` form at all, so it only applies when the HTTP headers are
 served.
 
+## Bundled fonts
+
+The PDF uses the IBM Plex fonts (Sans Regular, Bold and Italic, and Mono
+Regular), stored in `src/fonts/` as the official, unmodified WOFF files,
+with their license (SIL Open Font License 1.1) in `src/fonts/LICENSE.txt`.
+They are not used to display the page itself.
+
+The build turns each font file into a list of numbers (its exact bytes) in a
+script file of its own, `assets/pdf-fonts-[hash].js` (about 1.2 MB, 440 kB
+compressed), and the page's main script imports it, so the browser loads it
+together with the page, like any other script of the site. Why this way:
+the tool never downloads anything once the page has loaded (the CSP's
+`connect-src 'none'` would block it anyway), so the fonts have to arrive with
+the page. The build check rejects long encoded text (such as base64) because
+it could hide code; the lists of numbers are checked instead, and must be
+exactly the official font files and nothing else (see rule R3).
+
 ## Development
 
 Tested with Node.js 22 (the version CI uses).
@@ -208,8 +242,10 @@ Tested with Node.js 22 (the version CI uses).
 
 MIT, copyright 0x496D7065. See `LICENSE`.
 
-Licenses of the bundled third-party libraries are in
+Licenses of the bundled third-party libraries and fonts are in
 `public/THIRD_PARTY_NOTICES.txt`, shipped with the site as `THIRD_PARTY_NOTICES.txt`.
+The IBM Plex fonts are under the SIL Open Font License 1.1, copyright 2017
+IBM Corp., with Reserved Font Name "Plex" (see `src/fonts/LICENSE.txt`).
 
 This tool is provided as is, without warranty, and is not legal advice. Always
 check the generated PDF before relying on it.

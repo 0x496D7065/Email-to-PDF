@@ -23,6 +23,13 @@
 //     checked as the browser will run it. A long base64-looking literal
 //     fails the check (findOpaquePayloads): that format would hide the
 //     worker code from both scans.
+//   - The PDF fonts (scripts/font-rules.mjs): src/fonts/*.woff are binary,
+//     so they are not scanned as text but must have their pinned SHA-256.
+//     In the build they are long number arrays, allowed only in the font
+//     chunk (dist/assets/pdf-fonts-*.js) and only if each one is exactly a
+//     committed font; anywhere else (src/ included) a long number array
+//     fails, like a long base64 literal. The page's entry script must
+//     import the font chunk statically, so it loads with the page.
 // What is NOT scanned:
 //   - scripts/: these check files must contain the banned words to look for them.
 //   - src/**/*.test.ts: tests legitimately mention banned words as strings
@@ -34,6 +41,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
+import { checkFontChunkLoadedAtStartup, checkNumberArrays, checkSourceFonts, findNumberArrays, isFontFile } from './font-rules.mjs';
 import { checkBuiltHtml, checkHeadersFile, findEmbeddedViolations, findOpaquePayloads, findViolations } from './no-network-rules.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -57,13 +65,17 @@ if (!existsSync(dist)) {
   process.exit(1);
 }
 
-const sourceFiles = [
-  ...listFiles(join(root, 'src')).filter((path) => !path.endsWith('.test.ts')),
-  join(root, 'index.html'),
-];
+// Font files (src/fonts/*.woff) are binary: they are not scanned as text but
+// checked against their pinned SHA-256 (scripts/font-rules.mjs).
+const srcFiles = listFiles(join(root, 'src')).filter((path) => !path.endsWith('.test.ts'));
+const fontFiles = srcFiles.filter((path) => isFontFile(path));
+const sourceFiles = [...srcFiles.filter((path) => !isFontFile(path)), join(root, 'index.html')];
 const distFiles = listFiles(dist);
 
 const errors = [];
+
+// Every dist/ file as text, for the font checks after the loop.
+const distTexts = [];
 
 for (const [files, isDist] of [
   [sourceFiles, false],
@@ -71,10 +83,20 @@ for (const [files, isDist] of [
 ]) {
   for (const path of files) {
     // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
-    // used by the per-file URL allowlist.
+    // used by the per-file URL allowlist. For source files: the path from
+    // the project root (e.g. 'src/fonts/LICENSE.txt'), same purpose.
     const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
+    const sourceFile = isDist ? undefined : display(path);
     const text = readFileSync(path, 'utf8');
-    const findings = findViolations(text, { isDist, distFile });
+    if (isDist) distTexts.push({ path: distFile, text });
+    // Source only: no long number array at all (the fonts are .woff files
+    // there; in dist/ they are checked by checkNumberArrays below).
+    if (!isDist) {
+      for (const array of findNumberArrays(text)) {
+        errors.push(`${display(path)}:${array.line}: a ${array.values.length}-number array: data hidden this way escapes every other check (README.md, rule R3)`);
+      }
+    }
+    const findings = findViolations(text, { isDist, distFile, sourceFile });
     // dist/ only: code embedded in strings (the inlined workers, see the top).
     if (isDist) findings.push(...findEmbeddedViolations(text, { isDist, distFile }));
     // dist/ only: a long base64 literal would hide code from both scans above
@@ -86,6 +108,15 @@ for (const [files, isDist] of [
       errors.push(`${display(path)}:${line}: "${shown}" -> ${reason}`);
     }
   }
+}
+
+// The bundled PDF fonts (scripts/font-rules.mjs): the committed files are the
+// official ones, long number arrays appear only in the font chunk and are
+// exactly those fonts, and the page loads that chunk at startup.
+errors.push(...checkSourceFonts(fontFiles.map((path) => ({ path: display(path), bytes: readFileSync(path) }))));
+errors.push(...checkNumberArrays(distTexts));
+if (existsSync(join(dist, 'index.html'))) {
+  errors.push(...checkFontChunkLoadedAtStartup(readFileSync(join(dist, 'index.html'), 'utf8'), distTexts));
 }
 
 // Structural checks on the built security headers.
@@ -110,4 +141,4 @@ if (errors.length > 0) {
   for (const error of errors) console.error(`  ${error}`);
   process.exit(1);
 }
-console.log(`check-no-network: OK (${scanned} files scanned, security headers present).`);
+console.log(`check-no-network: OK (${scanned} files scanned, ${fontFiles.length} fonts verified, security headers present).`);

@@ -30,22 +30,40 @@ export const URL_ALLOWLIST = [];
  * @kenjiuno/msgreader, which must be shipped unchanged in the third-party
  * notices (public/THIRD_PARTY_NOTICES.txt, copied to dist/ by Vite).
  * They are plain text there, never loaded by the page.
+ *
+ * The SIL link is part of the copyright and license text of the IBM Plex
+ * fonts (SIL Open Font License 1.1), which must be shipped with the fonts:
+ * same file, same reason.
  */
 export const FILE_URL_ALLOWLIST = [
   { url: 'http://www.apache.org/licenses/', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
   { url: 'http://www.apache.org/licenses/LICENSE-2.0', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
+  { url: 'http://scripts.sil.org/OFL', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
 ];
+
+/**
+ * URLs allowed ONLY inside one specific SOURCE file (path relative to the
+ * project root, forward slashes). Anywhere else they are still errors.
+ *
+ * src/fonts/LICENSE.txt is the fonts' license file, kept unchanged next to
+ * them, as the license requires; its SIL link is plain text, never loaded.
+ */
+export const SOURCE_FILE_URL_ALLOWLIST = [{ url: 'http://scripts.sil.org/OFL', onlyIn: 'src/fonts/LICENSE.txt' }];
 
 /**
  * Is `url` allowed in this file?
  * @param {string} url  Already normalized (see normalizeUrl).
  * @param {string | undefined} distFile  Path relative to dist/ with forward
  *   slashes, e.g. 'THIRD_PARTY_NOTICES.txt'; undefined for files outside dist/.
+ * @param {string | undefined} [sourceFile]  Path relative to the project
+ *   root with forward slashes, e.g. 'src/fonts/LICENSE.txt'; undefined for
+ *   dist/ files.
  * @returns {boolean}
  */
-export function isUrlAllowed(url, distFile) {
+export function isUrlAllowed(url, distFile, sourceFile) {
   if (URL_ALLOWLIST.includes(url)) return true;
-  return FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === distFile);
+  if (distFile !== undefined && FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === distFile)) return true;
+  return sourceFile !== undefined && SOURCE_FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === sourceFile);
 }
 
 const network = 'Network API (README.md, rules R1 and R3)';
@@ -108,12 +126,14 @@ export function normalizeUrl(raw) {
 /**
  * Finds every forbidden pattern and non-allowlisted URL in `text`.
  * @param {string} text  File contents.
- * @param {{ isDist: boolean, distFile?: string }} options  isDist enables the
- *   dist-only rules. distFile (dist/ files only) is the path relative to dist/,
- *   used for FILE_URL_ALLOWLIST.
+ * @param {{ isDist: boolean, distFile?: string, sourceFile?: string }} options
+ *   isDist enables the dist-only rules. distFile (dist/ files only) is the
+ *   path relative to dist/, used for FILE_URL_ALLOWLIST. sourceFile (source
+ *   files only) is the path relative to the project root, used for
+ *   SOURCE_FILE_URL_ALLOWLIST.
  * @returns {{ line: number, match: string, reason: string }[]}  line is 1-based.
  */
-export function findViolations(text, { isDist, distFile }) {
+export function findViolations(text, { isDist, distFile, sourceFile }) {
   const findings = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((lineText, index) => {
@@ -125,8 +145,9 @@ export function findViolations(text, { isDist, distFile }) {
     }
     for (const m of lineText.matchAll(URL_PATTERN)) {
       const url = normalizeUrl(m[0]);
-      // A file-scoped entry only counts for dist/ files, never for src/.
-      if (!isUrlAllowed(url, isDist ? distFile : undefined)) {
+      // A dist/ file-scoped entry only counts for dist/ files, a source
+      // file-scoped entry only for source files.
+      if (!isUrlAllowed(url, isDist ? distFile : undefined, isDist ? undefined : sourceFile)) {
         findings.push({ line: index + 1, match: url, reason: URL_REASON });
       }
     }
