@@ -19,7 +19,10 @@ describe('copyLayerText', () => {
       '\u{E9} \u{E7} \u{DF} \u{153} \u{20AC} \u{201C} \u{201D} \u{AB} \u{BB} \u{2013} \u{2026} \u{142} \u{151}',
     ],
     ['a combining mark stays a separate code point', 'e\u{301}', 'e\u{301}'],
-    ['soft hyphen kept', 'mes\u{AD}sage', 'mes\u{AD}sage'],
+    ['soft hyphen dropped (not seen; at a line break the layout gives "-")', 'mes\u{AD}sage', 'message'],
+    ['two soft hyphens dropped', '\u{AD}a\u{AD}\u{AD}b\u{AD}', 'ab'],
+    ['VS16 after a soft hyphen dropped', 'a\u{AD}\u{FE0F}b', 'ab'],
+    ['a plain hyphen kept', 'well-known', 'well-known'],
     ['emoji kept', '\u{1F600}', '\u{1F600}'],
     ['U+FFFD kept', FFFD, FFFD],
     ['ZWSP dropped', 'a\u{200B}b', 'ab'],
@@ -93,8 +96,9 @@ describe('copyLayerText', () => {
   });
 
   // Random strings from a pool of tricky code points (fixed seed): the
-  // output never holds group 1, and holds group 2 only as emoji parts.
-  it('never lets group 1 through, and group 2 only as emoji parts (fuzz)', () => {
+  // output never holds group 1 or a soft hyphen, and holds group 2 only as
+  // emoji parts.
+  it('never lets group 1 or a soft hyphen through, and group 2 only as emoji parts (fuzz)', () => {
     const pool = [
       0x41, 0x65, 0x301, 0x20, 0x1f469, 0x1f4bb, 0x2764, 0x1f3fd, 0x1f3f4, 0x200d, 0xfe0f, 0xfe0e, 0xfe00, 0x200b, 0x200e, 0xfeff,
       0xe0067, 0xe0062, 0xe0065, 0xe006e, 0xe007f, 0xe0041, 0x0, 0x9, 0x202e, 0xd800, 0xdc00, 0xfffe, 0xad, 0x34f,
@@ -120,6 +124,7 @@ describe('copyLayerText', () => {
           continue;
         }
         expect(isGroup1(cp)).toBe(false);
+        expect(cp).not.toBe(0xad);
         if (cp === 0x200d || cp === 0xfe0e || cp === 0xfe0f) continue;
         expect(isDrawnAsNothing(cp)).toBe(false);
       }

@@ -18,15 +18,19 @@
 //     VS16 and one skin tone modifier, and the one after it are
 //     Extended_Pictographic),
 //   * one VS15 / VS16 (U+FE0E / U+FE0F) right after an ordinary character
-//     (not after another variation selector or any group 2 character),
+//     (not after another variation selector, any group 2 character or a
+//     soft hyphen),
 //   * the tags of exactly the three kept flags (KEPT_FLAG_TAGS), with their
 //     U+1F3F4 and U+E007F;
-// - group 3 (soft hyphen) and every other character are kept as they are.
-//   Combining marks stay separate code points ("e" + U+0301).
+// - group 3 (soft hyphen U+00AD) is dropped: it is drawn only where the
+//   line breaks at it, and there the layout already gives "-" as the copy
+//   text, so a soft hyphen that reaches this point is one that is not seen;
+// - every other character is kept as it is. Combining marks stay separate
+//   code points ("e" + U+0301).
 //
 // The neighbours looked at are those in the INPUT, so the result never
 // depends on what was dropped. Pure (README.md, rule R7).
-import { isDrawnAsNothing, KEPT_FLAG_TAGS } from '../text';
+import { isDrawnAsNothing, KEPT_FLAG_TAGS, SOFT_HYPHEN } from '../text';
 
 const REPLACEMENT = 0xfffd;
 const ZWJ = 0x200d;
@@ -77,9 +81,9 @@ function keptFlagAt(cps: readonly number[], at: number): number {
   return KEPT_FLAG_TAGS.includes(spelled) ? 7 : 0;
 }
 
-/** An ordinary character: one a variation selector may follow. */
+/** An ordinary character: one a variation selector may follow (not a soft hyphen, which is dropped). */
 function isOrdinary(codePoint: number | undefined): boolean {
-  return codePoint !== undefined && !isGroup1(codePoint) && !isDrawnAsNothing(codePoint);
+  return codePoint !== undefined && !isGroup1(codePoint) && !isDrawnAsNothing(codePoint) && codePoint !== SOFT_HYPHEN;
 }
 
 /** Is the code point before index `at` the end of an emoji (skipping one VS16, then one skin tone)? */
@@ -166,7 +170,7 @@ export function copyLayerText(text: string): string {
       if (isKeptZwj(cps, i)) out.push(cp);
     } else if (cp === VS15 || cp === VS16) {
       if (isOrdinary(cps[i - 1])) out.push(cp);
-    } else if (!isDrawnAsNothing(cp)) {
+    } else if (!isDrawnAsNothing(cp) && cp !== SOFT_HYPHEN) {
       out.push(cp);
     }
   }

@@ -275,6 +275,8 @@ export const en = {
       dateAsWritten: 'Date as written in the email: {text}',
       keptAllEmpty: 'The whole email is shown: the tool could not tell its own text from the quote.',
       fallback: 'The whole email is shown: the tool could not work out which parts to leave out.',
+      // The footer of every page, e.g. "Page 3 of 12".
+      pageFooter: 'Page {page} of {total}',
     },
   },
 

@@ -17,6 +17,10 @@ export interface PdfStrings {
   /** BCP 47 tag of the language, for sorting names and joining lists. */
   readonly locale: string;
   readonly title: string;
+  /** The tool's name, written as the PDF's producer. */
+  readonly producer: string;
+  /** The footer of every page: "Page 3 of 12" (both 1-based). */
+  pageFooter(page: number, total: number): string;
 
   // Cover page.
   readonly datesLabel: string;
@@ -110,6 +114,9 @@ export function createPdfStrings(): PdfStrings {
   return {
     locale: LOCALE,
     title: t('pdf.document.title'),
+    producer: t('app.name'),
+    // Strings, like the email numbers below.
+    pageFooter: (page, total) => t('pdf.document.pageFooter', { page: String(page), total: String(total) }),
     datesLabel: t('pdf.document.dates'),
     dateRange: (first, last) => t('pdf.document.dateRange', { first, last }),
     noDates: t('pdf.document.noDates'),

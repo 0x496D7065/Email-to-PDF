@@ -64,7 +64,9 @@
 //    Scotland, Wales: at most 6 tags, never free text; if the font cannot
 //    draw the flag, the black flag U+1F3F4 is drawn and the tags are not).
 // 3. Soft hyphen U+00AD (SOFT_HYPHEN): kept; the renderer draws a hyphen
-//    only where it breaks the line there, nothing otherwise.
+//    only where it breaks the line there, nothing otherwise. The copy layer
+//    follows what is drawn: "-" where the line breaks there, nothing
+//    otherwise (src/pdf/writer/copy-text.ts).
 //
 // Pure functions, no DOM (README.md, rule R7). Email text stays plain data:
 // it is never read as markup or code (README.md, rule R4).
