@@ -143,6 +143,44 @@ removed, so a wrong guess loses nothing. Message text is never rewritten. Only
 **provably identical** duplicate messages are merged, and the preview says how
 many were merged. You can choose to include everything unfolded.
 
+One deliberate exception, in the PDF only: by default the PDF shows what
+each writer actually wrote.
+
+- Left out: the quoted history the mail app adds under a reply header
+  ("On ... wrote:", or an Outlook-style "From: / Sent: / To:" block), and a
+  signature or disclaimer a sender repeats (it is shown the first time).
+  Add the earlier emails themselves if you want them in the PDF.
+- Also left out: text pasted at the very end of an email, without "> "
+  marks or a reply header, when it comes from another person's email that
+  is in the PDF too (it is already in the PDF once).
+- Kept: the writer's own text, quotes pasted without a reply header
+  (except the case just above), forwarded emails, and answers typed between
+  or below quoted lines. For an Outlook-style quote, which has no "> "
+  marks, the tool checks the quote against the quoted email: when that email
+  is in the PDF and anything between the "From: / Sent:" lines and the end
+  of the email (a signature aside) is not part of it (or of the emails it
+  quotes), the whole email is kept, quote included. One word, number or
+  emoji is enough; a line of only punctuation (such as "--") does not
+  count. A short line such as "Yes." or "Thanks," counts as part of the
+  quote only where it stands, in the same order, in the quoted email (or
+  in one email it quotes). Text that only repeats the quoted emails is
+  left out with the quote, even when the email it first came from is not
+  in the PDF.
+  An email is never left empty: if nothing else would remain, it is shown
+  in full.
+- Known limit: when the email quoted in an Outlook-style quote is not in the
+  PDF, or is too short to check (a line or two), the tool cannot tell where
+  the quote ends, so text typed inside or below such a quote is left out
+  with it. Also rare: a one-word answer such as "OK" typed right under a
+  quoted line ending in "ok?" can be taken for part of the quote, and a
+  paragraph repeated from an earlier email of your own, placed between the
+  "From: / Sent:" lines and the quote, is left out with the quote even when
+  that earlier email is not in the PDF. Check the preview.
+
+Nothing is changed in the text itself: the preview still shows every email
+in full, your files are untouched, and the "include everything" option puts
+all text in the PDF (see `src/engine/output-plan.ts`).
+
 ### R7: Detection logic is pure and testable
 
 Detection logic (quotes, signatures, duplicates, ordering) is written as pure

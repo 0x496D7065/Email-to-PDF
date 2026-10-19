@@ -211,19 +211,53 @@ function clean(text: string, from: number, to: number): string {
 }
 
 /**
+ * One header found by `findReplyHeaders`: the same range as the fold
+ * `detectReplyHeaders` returns for it, plus what kind of header it is.
+ * - kind 'forward': a forward header (rule 4: a forward marker intro, or the
+ *   first unmarked block of a message with a forward subject). Its range
+ *   covers the header lines only, never the forwarded content.
+ * - kind 'reply': everything else (attributions, reply blocks, a separator
+ *   alone). A reply block's range may run to the end of the body (rule 3).
+ * - marked: the header's first line is inside a ">" quote.
+ * - headEnd: where the header's OWN lines end (the attribution line or
+ *   lines, or the intro and label lines of a block), line break included.
+ *   [start, headEnd) is the header itself; [headEnd, end) is the quoted text
+ *   the fold also covers (empty for a forward, a lone separator, or an
+ *   attribution with no ">" block after it).
+ */
+export interface FoundHeader {
+  readonly start: number;
+  readonly end: number;
+  readonly headEnd: number;
+  readonly kind: 'reply' | 'forward';
+  readonly marked: boolean;
+}
+
+/**
  * Finds reply-header and forward-header blocks in `bodyText` and returns
  * fold ranges (reason 'reply-header', no `related`), sorted by position.
  * `subject` is the message subject, used only to recognize a forward.
  * Never throws: a non-string body gives [].
  */
 export function detectReplyHeaders(bodyText: string, subject?: string): FoldRange[] {
+  return findReplyHeaders(bodyText, subject).map((h) => ({ start: h.start, end: h.end, reason: 'reply-header' }));
+}
+
+/**
+ * The same search as `detectReplyHeaders` (same ranges, same order), but
+ * each range also says whether it is a reply or a forward header (see
+ * FoundHeader). Used by the PDF output plan (output-plan.ts) to tell
+ * forwarded content from quoted history. Never throws: a non-string body
+ * gives [].
+ */
+export function findReplyHeaders(bodyText: string, subject?: string): FoundHeader[] {
   if (typeof (bodyText as unknown) !== 'string') return [];
   const text = bodyText;
   const lines = lineRanges(text).map((range) => readLine(text, range));
   const n = lines.length;
-  const folds: FoldRange[] = [];
-  const fold = (start: number, end: number): void => {
-    if (start < end) folds.push({ start, end, reason: 'reply-header' });
+  const folds: FoundHeader[] = [];
+  const fold = (start: number, end: number, headEnd: number, kind: FoundHeader['kind'], marked: boolean): void => {
+    if (start < end) folds.push({ start, end, headEnd: Math.min(headEnd, end), kind, marked });
   };
   const at = (i: number): LineInfo => {
     const line = lines[i];
@@ -329,7 +363,7 @@ export function detectReplyHeaders(bodyText: string, subject?: string): FoldRang
       } else {
         // Rule 4, last part: a separator or marker alone folds alone; a row
         // of underscores alone stays shown.
-        if (!isRule) fold(line.range.start, line.range.end);
+        if (!isRule) fold(line.range.start, line.range.end, line.range.end, isForwardMarker ? 'forward' : 'reply', line.marked);
         i++;
         continue;
       }
@@ -360,13 +394,13 @@ export function detectReplyHeaders(bodyText: string, subject?: string): FoldRang
           forward = true;
           forwardSubjectPending = false;
         }
-        fold(start, forward ? at(last).range.end : replyEnd(first, last));
+        fold(start, forward ? at(last).range.end : replyEnd(first, last), at(last).range.end, forward ? 'forward' : 'reply', marked);
         i = j;
         continue;
       }
       if (intro >= 0) {
         // A forward marker with a short label list: still header lines only.
-        if (isForwardMarker) fold(line.range.start, at(last).range.end);
+        if (isForwardMarker) fold(line.range.start, at(last).range.end, at(last).range.end, 'forward', line.marked);
         i = j;
         continue;
       }
@@ -412,8 +446,8 @@ export function detectReplyHeaders(bodyText: string, subject?: string): FoldRang
         while (k < n && at(k).gap && !at(k).marked) k++;
         if (k < n && at(k).marked) blockEnd = runEnd[k] ?? k;
       }
-      if (blockEnd >= 0) fold(line.range.start, at(blockEnd).range.end);
-      else if (strong && ATTRIBUTION_EVIDENCE.test(attribution)) fold(line.range.start, at(lastLine).range.end);
+      if (blockEnd >= 0) fold(line.range.start, at(blockEnd).range.end, at(lastLine).range.end, 'reply', line.marked);
+      else if (strong && ATTRIBUTION_EVIDENCE.test(attribution)) fold(line.range.start, at(lastLine).range.end, at(lastLine).range.end, 'reply', line.marked);
       i = lastLine + 1;
       continue;
     }

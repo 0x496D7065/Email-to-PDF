@@ -195,6 +195,21 @@ function normalizeLine(raw: string): string {
   return raw.normalize('NFC').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * A block of text as the frequency rule compares it: each line normalized
+ * (see normalizeLine), blank lines dropped, joined with "\n". Two blocks are
+ * "the same signature" when their keys are equal. Used by the PDF output
+ * plan (output-plan.ts) to recognize a repeated signature.
+ */
+export function signatureBlockKey(text: string): string {
+  const keys: string[] = [];
+  for (const line of lineRanges(text)) {
+    const key = normalizeLine(text.slice(line.start, line.contentEnd));
+    if (key !== '') keys.push(key);
+  }
+  return keys.join('\n');
+}
+
 function prepare(input: SignatureInput): Prepared | null {
   if (typeof (input as unknown) !== 'object' || (input as unknown) === null) return null;
   const body: unknown = input.bodyText;

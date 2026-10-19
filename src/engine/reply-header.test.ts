@@ -8,6 +8,7 @@ import { htmlTreeToText, type HtmlNode, type HtmlToTextResult } from '../parsing
 import {
   ATTRIBUTION_MAX_LENGTH,
   detectReplyHeaders,
+  findReplyHeaders,
   isForwardSubject,
   MIN_HEADER_LINES,
 } from './reply-header';
@@ -613,4 +614,78 @@ describe('detectReplyHeaders: robustness', () => {
       expect(performance.now() - t).toBeLessThan(1000);
     });
   }
+});
+
+describe('findReplyHeaders: kind, marked and headEnd (used by the PDF output plan)', () => {
+  /** [text of the header lines, text of the whole range, kind, marked] for each header found. */
+  const describeAll = (body: string, subject?: string): [string, string, string, boolean][] =>
+    findReplyHeaders(body, subject).map((h) => [body.slice(h.start, h.headEnd), body.slice(h.start, h.end), h.kind, h.marked]);
+
+  it('gives the same ranges as detectReplyHeaders', () => {
+    const body = lines('Own text.', '', 'On Mon, 3 Mar 2025 at 14:02, Alice <alice@example.test> wrote:', ...QUOTE, '');
+    expect(findReplyHeaders(body).map((h) => ({ start: h.start, end: h.end, reason: 'reply-header' }))).toEqual(detect(body));
+  });
+
+  it('an attribution with its ">" block: header lines = the attribution, range = with the block', () => {
+    const attribution = 'On Mon, 3 Mar 2025 at 14:02, Alice <alice@example.test> wrote:\n';
+    const body = `Own text.\n\n${attribution}${lines(...QUOTE)}\n\nMore own text.\n`;
+    expect(describeAll(body)).toEqual([[attribution, `${attribution}${lines(...QUOTE)}\n`, 'reply', false]]);
+  });
+
+  it('a strong attribution alone: header lines = range', () => {
+    const attribution = 'On Mon, 3 Mar 2025 at 14:02, Alice <alice@example.test> wrote:\n';
+    expect(describeAll(`Own.\n\n${attribution}Unmarked quote.\n`)).toEqual([[attribution, attribution, 'reply', false]]);
+  });
+
+  it('an attribution inside a ">" quote is marked', () => {
+    const body = lines('Own.', '', '> On Mon, 3 Mar 2025 at 14:02, Carol <carol@example.test> wrote:', '> > old line', '');
+    expect(describeAll(body)).toEqual([
+      ['> On Mon, 3 Mar 2025 at 14:02, Carol <carol@example.test> wrote:\n', '> On Mon, 3 Mar 2025 at 14:02, Carol <carol@example.test> wrote:\n> > old line\n', 'reply', true],
+    ]);
+  });
+
+  it('an Outlook reply block: header lines = intro + labels, range = to the end of the body', () => {
+    const head = lines(
+      '-----Original Message-----',
+      'From: Alice <alice@example.test>',
+      'Sent: Monday, March 3, 2025 9:15 AM',
+      'To: Bob <bob@example.test>',
+      'Subject: Desks',
+      '',
+    );
+    const body = `Own.\n\n${head}Quoted text.\n\nText below.\n`;
+    expect(describeAll(body, 'RE: Desks')).toEqual([[head, fromHere(body, '-----Original'), 'reply', false]]);
+    // The same block with a forward subject is a forward: header lines only.
+    expect(describeAll(body, 'FW: Desks')).toEqual([[head, head, 'forward', false]]);
+  });
+
+  it('a lone separator: reply, marked or not', () => {
+    expect(describeAll('Own.\n\n-----Original Message-----\nText.\n')).toEqual([
+      ['-----Original Message-----\n', '-----Original Message-----\n', 'reply', false],
+    ]);
+    expect(describeAll('Own.\n\n> -----Original Message-----\n> Text.\n')).toEqual([
+      ['> -----Original Message-----\n', '> -----Original Message-----\n', 'reply', true],
+    ]);
+  });
+
+  it('a forward marker: forward, marked inside a ">" quote', () => {
+    const fwd = lines(
+      '---------- Forwarded message ---------',
+      'From: Carol <carol@example.test>',
+      'Date: Mon, 3 Mar 2025 at 10:00',
+      'Subject: Stock',
+      'To: Alice <alice@example.test>',
+      '',
+    );
+    const quotedFwd = fwd
+      .split('\n')
+      .map((l) => (l === '' ? l : `> ${l}`))
+      .join('\n');
+    expect(describeAll(`See below.\n\n${fwd}In stock.\n`)).toEqual([[fwd, fwd, 'forward', false]]);
+    expect(describeAll(`See below.\n\n${quotedFwd}> In stock.\n`)).toEqual([[quotedFwd, quotedFwd, 'forward', true]]);
+    // A lone forward marker (no header lines after it).
+    expect(describeAll('See below.\n\n> ---------- Forwarded message ---------\n> In stock.\n')).toEqual([
+      ['> ---------- Forwarded message ---------\n', '> ---------- Forwarded message ---------\n', 'forward', true],
+    ]);
+  });
 });
