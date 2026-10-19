@@ -221,6 +221,61 @@ export const en = {
     repeatedFromMany: 'same signature as in emails {list}',
     // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
     messageFailed: 'The tool could not show what the PDF leaves out for this email.',
+    // The texts written in the PDF itself (src/pdf/model.ts, through src/pdf/strings.ts).
+    document: {
+      title: 'Email correspondence',
+      // Cover page: the rows of the summary.
+      dates: 'Dates',
+      // E.g. "2025-03-01 09:00:00 UTC+01:00 to 2025-04-02 11:00:42 UTC+02:00".
+      dateRange: '{first} to {last}',
+      noDates: 'No email in this PDF has a usable date.',
+      undated: {
+        one: '{count} email has no usable date. It is placed after the dated emails, in the order the files were added.',
+        other: '{count} emails have no usable date. They are placed after the dated emails, in the order the files were added.',
+      },
+      emails: 'Emails',
+      emailCount: { one: '{count} email', other: '{count} emails' },
+      generated: 'Made on',
+      timeZone: 'Dates shown in',
+      // The time zone asked for was not valid: UTC was used.
+      zoneFallback: '{zone} (the chosen time zone was not recognized)',
+      people: 'People',
+      sources: 'Source files',
+      sourcesIntro:
+        'Every file that gave an email in this PDF, with its SHA-256 fingerprint. A file with the same fingerprint is exactly the same file.',
+      // After a source file's name: which email it gave.
+      sourceEmail: 'email {number}',
+      // A file whose email was an identical copy of another file's email, merged into it.
+      sourceCopy: 'email {number} (identical copy, merged)',
+      unreadable: 'Files that could not be read',
+      unreadableIntro: 'These files were added but could not be read. Nothing from them is in this PDF.',
+      noFingerprint: 'no fingerprint (the file was not read)',
+      controlChars: {
+        one: '{count} control or broken character in the emails is shown as a code such as [U+0000].',
+        other: '{count} control or broken characters in the emails are shown as codes such as [U+0000].',
+      },
+      // The index (table of contents).
+      index: 'Index',
+      column: {
+        number: 'No.',
+        date: 'Date',
+        from: 'From',
+        subject: 'Subject',
+        attachments: 'Attachments',
+        page: 'Page',
+      },
+      // One email.
+      emailHeading: 'Email {number}',
+      // The file the email came from (its fingerprint is on the cover page).
+      file: 'File',
+      // After an attachment's name (listed only, never opened), e.g. "(12 KB, application/pdf)".
+      attachment: '({size}, {type})',
+      attachmentNoType: '({size})',
+      // A date the tool could not read, shown as it was written.
+      dateAsWritten: 'Date as written in the email: {text}',
+      keptAllEmpty: 'The whole email is shown: the tool could not tell its own text from the quote.',
+      fallback: 'The whole email is shown: the tool could not work out which parts to leave out.',
+    },
   },
 
   warnings: {
