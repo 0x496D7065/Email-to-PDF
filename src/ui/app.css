@@ -447,6 +447,54 @@ summary {
   color: var(--text-muted);
 }
 
+/* What the PDF does with a folded part: always said in words; the colour and
+   the bar only repeat it. Dark red is about 8:1 and dark green about 9:1 on
+   the page background (AA). */
+.pdf-label {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pdf-label[data-pdf='out'],
+.pdf-label[data-pdf='partly'] {
+  color: #8a1c1c;
+}
+
+.pdf-label[data-pdf='in'] {
+  color: #14532d;
+}
+
+/* Shown text the PDF leaves out: never expected, said all the same. */
+.pdf-label-shown {
+  margin: 0.5rem 0 0;
+}
+
+/* Above the email's text: "The whole email will be in the PDF: ...". */
+.pdf-note {
+  margin: 0.75rem 0 0;
+}
+
+/* Never a stale label (src/ui/preview.ts): while the PDF plans are worked
+   out again, every PDF label and note is hidden, from screen readers too.
+   `visibility` rather than `display`: the labels keep their place, so the
+   list does not jump under the reader's pointer when they tick an email
+   (and the browser has no long list to lay out again). */
+.message-list:not([data-pdf-labels='ready']) .pdf-label,
+.message-list:not([data-pdf-labels='ready']) .pdf-note {
+  visibility: hidden;
+}
+
+/* "Checking what goes in the PDF...": one line high even when empty, and
+   shown (empty or not) whenever a list is (src/ui/preview.ts, setPdfState),
+   so its text coming and going never moves the list below it. The failure
+   text may wrap on a narrow screen; only a bug shows it. */
+.pdf-labels-status {
+  flex-basis: 100%;
+  margin: 0;
+  min-height: 1.5em;
+}
+
 .body-empty {
   margin: 0;
 }

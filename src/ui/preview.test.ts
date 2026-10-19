@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
 import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { runEngine, type EngineResult } from '../engine/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import type { DisplayBlock } from '../ui-model/display-blocks';
+import { signatureSources } from '../ui-model/pdf-plan';
 import { t } from './i18n';
 import {
   attachmentText,
@@ -18,11 +20,15 @@ import {
   mailboxText,
   MAX_CHUNK_CHARS,
   mountPreview,
+  PDF_CHUNK_FACTOR,
+  pdfLabelText,
+  pdfReasonText,
   relatedNumbers,
   sizeText,
   zoneLabel,
   type Preview,
   type PreviewOptions,
+  type PreviewPdfPlans,
 } from './preview';
 
 // ------------------------------------------------------------------ factory
@@ -741,5 +747,330 @@ describe('chunked building', () => {
     expect(items()).toHaveLength(2);
     runNext();
     expect(items()).toHaveLength(3);
+  });
+});
+
+// ------------------------------------------------------------------ PDF labels
+
+describe('PDF labels', () => {
+  let tasks: (() => void)[];
+
+  beforeEach(() => {
+    tasks = [];
+    mount({ chunkSize: 1, schedule: (task) => tasks.push(task), cancel: () => undefined });
+  });
+
+  const runAll = (): void => {
+    while (tasks.length > 0) tasks.shift()?.();
+  };
+  const list = (): FakeElement => byId('preview-list');
+  const state = (): string | null => list().getAttribute('data-pdf-labels');
+  /** The PDF label texts of an item, trimmed; '' for a folded block without a label. */
+  const labelsOf = (item: FakeElement): string[] =>
+    withClass(item, 'pdf-label').map((e) => (e.hasAttribute('hidden') ? '' : e.textContent.trim()));
+
+  const BOB_SIGNATURE = '-- \nBob Sample\nBench Workshop (fictional company)\n';
+  const ALICE_SIGNATURE = '-- \nAlice Example\nGarden Benches (fictional company)\n';
+  const QUESTION = 'Could you paint the garden bench green before Friday, please? The old paint is coming off.\n';
+  /** Alice asks (signed); Bob answers above a quote of her email (signed); Alice writes again (same signature). */
+  function benchThread(): NormalizedMessage[] {
+    const ask = make({ subject: 'Bench', bodyText: `${QUESTION}\n${ALICE_SIGNATURE}`, date: dateAt('2025-03-03T08:00:00Z') });
+    const quoted = `${QUESTION}\n${ALICE_SIGNATURE}`
+      .split('\n')
+      .map((l) => (l === '' ? '>' : `> ${l}`))
+      .join('\n');
+    const reply = make({
+      subject: 'Re: Bench',
+      from: [BOB],
+      to: [ALICE],
+      bodyText: `Yes, green it is. It will be ready on Thursday.\n\n${BOB_SIGNATURE}\nOn Mon, 3 Mar 2025 at 09:00, Alice Example wrote:\n${quoted}\n`,
+      date: dateAt('2025-03-03T10:00:00Z'),
+    });
+    const again = make({ subject: 'Bench delivery', bodyText: `Thursday is fine, thank you.\n\n${ALICE_SIGNATURE}`, date: dateAt('2025-03-03T12:00:00Z') });
+    return [ask, reply, again];
+  }
+  /** The plans of `positions` of a result, as src/ui/pdf-labels.ts makes them. */
+  function plansFor(result: EngineResult, positions: readonly number[], unfoldEverything = false): PreviewPdfPlans {
+    const plans = planOutput(
+      positions.map((p) => result.messages[p]!),
+      { ...DEFAULT_OUTPUT_POLICY, unfoldEverything },
+    );
+    const sources = signatureSources(
+      positions.map((p) => ({ message: result.messages[p]!.message, position: p })),
+      plans,
+    );
+    return { result, views: new Map(positions.map((p, k) => [p, { plan: plans[k]!, signatureFrom: sources.get(p) ?? new Map<number, number>() }])) };
+  }
+
+  it('helpers: label and reason texts', () => {
+    expect(pdfLabelText({ status: 'out', reasons: ['app-quoted-history'], signaturesFrom: [] })).toBe(
+      'Not in the PDF: earlier email quoted by the mail app',
+    );
+    expect(pdfLabelText({ status: 'in', reasons: ['forwarded'], signaturesFrom: [] })).toBe('In the PDF: forwarded email');
+    expect(pdfLabelText({ status: 'out', reasons: ['repeated-signature', 'app-quoted-history'], signaturesFrom: [3] })).toBe(
+      'Not in the PDF: same signature as in email #3, earlier email quoted by the mail app',
+    );
+    // Signatures kept in two different emails: both are named.
+    expect(pdfLabelText({ status: 'out', reasons: ['repeated-signature'], signaturesFrom: [1, 3] })).toBe(
+      'Not in the PDF: same signature as in emails #1, #3',
+    );
+    expect(pdfLabelText({ status: 'out', reasons: ['repeated-signature'], signaturesFrom: [] })).toBe('Not in the PDF: repeated signature');
+    expect(pdfLabelText({ status: 'partly', reasons: [], signaturesFrom: [] })).toBe('Partly in the PDF: text written in this email');
+    expect(pdfReasonText('writer-quote', [])).toBe("quote that is part of the writer's text");
+    expect(pdfReasonText('signature', [2])).toBe('signature');
+  });
+
+  it('starts "off": no labels, no status text; the fold texts are unchanged', () => {
+    expect(byId('pdf-labels-status').hasAttribute('hidden')).toBe(true); // no list yet
+    preview.show(engineOf(benchThread()));
+    runAll();
+    expect(state()).toBe('off');
+    expect(preview.pdfLabelState()).toBe('off');
+    // The line takes its place with the list (empty), so a tick later does not move the list.
+    expect(byId('pdf-labels-status').hasAttribute('hidden')).toBe(false);
+    expect(byId('pdf-labels-status').textContent).toBe('');
+    for (const item of items()) expect(labelsOf(item).every((s) => s === '')).toBe(true);
+  });
+
+  it('the status line keeps its place through updating and ready (only its text changes)', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    const status = byId('pdf-labels-status');
+    const seen: [string | null, boolean, string][] = [];
+    const look = (): void => {
+      seen.push([state(), status.hasAttribute('hidden'), status.textContent]);
+    };
+    preview.setPdfPlans(null);
+    look();
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    look();
+    preview.setPdfPlans(null);
+    look();
+    preview.setPdfPlans(plansFor(result, [1, 2]));
+    runAll();
+    look();
+    expect(seen).toEqual([
+      ['updating', false, 'Checking what goes in the PDF...'],
+      ['ready', false, ''],
+      ['updating', false, 'Checking what goes in the PDF...'],
+      ['ready', false, ''],
+    ]);
+    // An empty list: no line at all.
+    preview.show(engineOf([]));
+    expect(status.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('an email whose labels cannot be updated says so (never silent), and is tried again next time', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    const plans = plansFor(result, [0, 1, 2]);
+    const v = plans.views.get(1)!;
+    const views = new Map(plans.views);
+    // A plan that cannot even be read (a bug): only email #2 is affected.
+    const broken = Object.defineProperty({ ...v.plan }, 'ranges', {
+      get: () => {
+        throw new Error('synthetic broken plan');
+      },
+    });
+    views.set(1, { ...v, plan: broken });
+    preview.setPdfPlans({ result, views });
+    runAll();
+    expect(state()).toBe('ready');
+    const [ask, reply, again] = items();
+    expect(labelsOf(reply!).every((s) => s === '')).toBe(true);
+    const note = one(reply!, 'pdf-note');
+    expect(note.hasAttribute('hidden')).toBe(false);
+    expect(note.textContent).toBe(t('pdf.messageFailed'));
+    expect(note.textContent).toBe('The tool could not show what the PDF leaves out for this email.');
+    // The other emails have their labels.
+    expect(labelsOf(ask!)).toEqual(['In the PDF: signature']);
+    expect(labelsOf(again!)).toEqual(['Not in the PDF: same signature as in email #1']);
+    expect(renderedBody(reply!)).toBe(result.messages[1]!.message.bodyText);
+    // Good plans next time: the labels come back, the note goes.
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    expect(labelsOf(reply!)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
+    expect(one(reply!, 'pdf-note').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('a stand-in of an email in the PDF says its labels cannot be shown; not when it is left out', () => {
+    mount({
+      chunkSize: 1,
+      schedule: (task) => tasks.push(task),
+      cancel: () => undefined,
+      decorate: (item, m) => {
+        if (m.message.subject === 'Re: Bench' && !hasClass(fake(item), 'message-failed')) throw new Error('synthetic decorate failure');
+      },
+    });
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    const standIn = items()[1]!;
+    expect(hasClass(standIn, 'message-failed')).toBe(true);
+    const note = one(standIn, 'pdf-note');
+    expect(note.textContent).toBe(t('pdf.messageFailed'));
+    expect(note.hasAttribute('hidden')).toBe(true); // no plans yet
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    expect(state()).toBe('ready');
+    expect(note.hasAttribute('hidden')).toBe(false);
+    // Unticked (not in the plans): the whole email is already marked "Not in the PDF" by the review.
+    preview.setPdfPlans(plansFor(result, [0, 2]));
+    runAll();
+    expect(note.hasAttribute('hidden')).toBe(true);
+    // Its whole text is still there, unfolded.
+    expect(renderedBody(standIn)).toBe(result.messages[1]!.message.bodyText);
+  });
+
+  it('shows the plans as labels, cutting a block that is partly in the PDF', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    preview.setPdfPlans(null);
+    expect(state()).toBe('updating');
+    const status = byId('pdf-labels-status');
+    expect(status.hasAttribute('hidden')).toBe(false);
+    expect(status.textContent).toBe('Checking what goes in the PDF...');
+
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    expect(state()).toBe('ready');
+    expect(status.hasAttribute('hidden')).toBe(false); // keeps its place, empty
+    expect(status.textContent).toBe('');
+    const [ask, reply, again] = items();
+    expect(labelsOf(ask!)).toEqual(['In the PDF: signature']);
+    // Bob's first signature (kept) and the quote below it (left out) were one folded block: now two.
+    expect(labelsOf(reply!)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
+    expect(labelsOf(again!)).toEqual(['Not in the PDF: same signature as in email #1']);
+    // The label is part of the fold's summary, before its own description.
+    const summary = withClass(reply!, 'fold-label')[1]!;
+    expect(summary.textContent).toMatch(/^Not in the PDF: earlier email quoted by the mail app \S/);
+    expect(one(withClass(reply!, 'fold')[1]!, 'pdf-label').getAttribute('data-pdf')).toBe('out');
+    // Nothing removed: every character is still in the page.
+    items().forEach((item, k) => expect(renderedBody(item)).toBe(result.messages[k]!.message.bodyText));
+  });
+
+  it('an email left out of the PDF (not in the plans) gets no labels; plans for another result are ignored', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    preview.setPdfPlans(plansFor(result, [1, 2]));
+    runAll();
+    expect(labelsOf(items()[0]!).every((s) => s === '')).toBe(true);
+    // #3 now holds Alice's first kept signature.
+    expect(labelsOf(items()[2]!)).toEqual(['In the PDF: signature']);
+
+    preview.setPdfPlans(plansFor(engineOf(benchThread()), [0, 1, 2]));
+    expect(state()).toBe('updating');
+    expect(preview.pdfLabelState()).toBe('updating');
+  });
+
+  it('updates labels in place when the blocks stay the same, and keeps what the reader opened when they change', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    const third = items()[2]!;
+    const fold = one(third, 'fold');
+    preview.setPdfPlans(plansFor(result, [1, 2]));
+    runAll();
+    expect(state()).toBe('ready');
+    expect(one(third, 'fold')).toBe(fold); // same element, new label
+    expect(labelsOf(third)).toEqual(['In the PDF: signature']);
+
+    // Bob's reply: the reader opens the quote; a new shape (one block, all in) keeps it open.
+    const reply = items()[1]!;
+    const quote = withClass(reply, 'fold')[1]!;
+    quote.setAttribute('open', '');
+    preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
+    runAll();
+    const after = withClass(reply, 'fold');
+    expect(after).toHaveLength(1);
+    expect(after[0]).not.toBe(quote);
+    expect(after[0]!.hasAttribute('open')).toBe(true);
+    expect(labelsOf(reply)).toEqual(['In the PDF: signature, earlier email quoted by the mail app']);
+    expect(renderedBody(reply)).toBe(result.messages[1]!.message.bodyText);
+    // The "show quoted text" checkbox still reaches the new block.
+    setShowFolded(true);
+    setShowFolded(false);
+    expect(after[0]!.hasAttribute('open')).toBe(false);
+    // "Put everything in": every label says "In the PDF".
+    for (const item of items()) for (const text of labelsOf(item)) expect(text.startsWith('In the PDF: ')).toBe(true);
+  });
+
+  it('applies new plans in chunks, and emails built later get their labels as they are built', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    expect(items()).toHaveLength(1);
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    expect(state()).toBe('ready'); // the one email built so far is done
+    expect(labelsOf(items()[0]!)).toEqual(['In the PDF: signature']);
+    runAll();
+    expect(labelsOf(items()[2]!)).toEqual(['Not in the PDF: same signature as in email #1']);
+
+    // Every email built: PDF_CHUNK_FACTOR emails per chunk (chunk size 1); ready only at the end.
+    const many = engineOf(
+      Array.from({ length: PDF_CHUNK_FACTOR + 2 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Note ${String(k)}.\n\n${ALICE_SIGNATURE}` })),
+    );
+    preview.show(many);
+    runAll();
+    const all = many.messages.map((_, p) => p);
+    preview.setPdfPlans(plansFor(many, all));
+    expect(state()).toBe('updating');
+    expect(tasks).toHaveLength(1);
+    // A newer change before the next chunk: the old chunk does nothing.
+    preview.setPdfPlans(null);
+    runAll();
+    expect(state()).toBe('updating');
+    preview.setPdfPlans(plansFor(many, all));
+    runAll();
+    expect(state()).toBe('ready');
+    expect(labelsOf(items().at(-1)!)).toEqual(['Not in the PDF: same signature as in email #1']);
+  });
+
+  it('notes an email the PDF keeps whole', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    const plans = plansFor(result, [0, 1, 2]);
+    const v = plans.views.get(1)!;
+    const views = new Map(plans.views);
+    views.set(1, { ...v, plan: { ...v.plan, ranges: v.plan.ranges.map((r) => ({ ...r, keep: true })), keptAllBecauseEmpty: true } });
+    preview.setPdfPlans({ result, views });
+    runAll();
+    const note = one(items()[1]!, 'pdf-note');
+    expect(note.hasAttribute('hidden')).toBe(false);
+    expect(note.textContent).toBe('The whole email will be in the PDF: the tool could not tell its own text from the quote.');
+    expect(one(items()[0]!, 'pdf-note').hasAttribute('hidden')).toBe(true);
+    // The note is not part of the email's text.
+    expect(renderedBody(items()[1]!)).toBe(result.messages[1]!.message.bodyText);
+  });
+
+  it('failed plans: labels hidden, a note says so; reset() turns everything off', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    preview.pdfPlansFailed();
+    expect(state()).toBe('failed');
+    expect(byId('pdf-labels-status').textContent).toBe(t('pdf.failed'));
+    expect(byId('pdf-labels-status').hasAttribute('hidden')).toBe(false);
+    preview.reset();
+    expect(state()).toBe('off');
+    expect(byId('pdf-labels-status').hasAttribute('hidden')).toBe(true);
+    expect(items()).toHaveLength(0);
+  });
+
+  it('adds the toolbar items at the end of the toolbar', () => {
+    const extra = doc.createElement('div');
+    mount({ toolbarItems: [extra as unknown as Node] });
+    const toolbar = byId('preview-toolbar');
+    expect(toolbar.children.at(-2)).toBe(extra);
+    expect(toolbar.children.at(-1)).toBe(byId('pdf-labels-status'));
   });
 });

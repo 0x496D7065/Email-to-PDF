@@ -17,6 +17,10 @@
 //   folded segments is absorbed into the folded block. It holds no words, so
 //   folding it hides nothing a reader could miss.
 // - Everything else stays as it is.
+// - Optional `breaks`: offsets where a new block must start (a segment is cut
+//   there if needed, each part keeping its reasons and links). The preview
+//   uses them so that a folded block is either all in the PDF or all left
+//   out of it (src/ui-model/pdf-plan.ts).
 //
 // Collapse, never delete (README.md, rule R6): blocks only group segments.
 // Their texts are slices of the body, so joining all blocks always gives the
@@ -57,9 +61,40 @@ export interface DisplayBlock {
   readonly collapsed: boolean;
 }
 
-/** True for a shown segment that may be absorbed between two folded ones. */
-function isTinyWhitespace(text: string, s: Segment): boolean {
+/** A segment, or a part of one cut at a break. */
+interface Part {
+  readonly start: number;
+  readonly end: number;
+  readonly folded: boolean;
+  readonly reasons: readonly FoldReason[];
+  readonly related: readonly number[];
+  /** A block must start here (a break). */
+  readonly breakBefore: boolean;
+}
+
+/** True for a shown part that may be absorbed between two folded ones. */
+function isTinyWhitespace(text: string, s: Part): boolean {
   return !s.folded && s.end - s.start <= MAX_ABSORBED_WHITESPACE && /^\s+$/.test(text.slice(s.start, s.end));
+}
+
+/** The segments cut at every break that falls strictly inside one. */
+function cutAtBreaks(segments: readonly Segment[], breaks: readonly number[]): Part[] {
+  const cuts = new Set(breaks);
+  const points = [...cuts].sort((a, b) => a - b);
+  const parts: Part[] = [];
+  let c = 0;
+  for (const s of segments) {
+    let from = s.start;
+    while (c < points.length && (points[c] ?? 0) <= from) c++;
+    while (c < points.length && (points[c] ?? 0) < s.end) {
+      const at = points[c] ?? s.end;
+      parts.push({ start: from, end: at, folded: s.folded, reasons: s.reasons, related: s.related, breakBefore: cuts.has(from) });
+      from = at;
+      c++;
+    }
+    parts.push({ start: from, end: s.end, folded: s.folded, reasons: s.reasons, related: s.related, breakBefore: cuts.has(from) });
+  }
+  return parts;
 }
 
 interface Group {
@@ -79,21 +114,30 @@ function labelOf(weight: ReadonlyMap<FoldReason, number>): FoldReason | null {
 }
 
 /** The display blocks of `text` (see the rules at the top of this file). */
-export function displayBlocks(text: string, segments: readonly Segment[], options: { readonly unfoldAll: boolean }): DisplayBlock[] {
+export function displayBlocks(
+  text: string,
+  segments: readonly Segment[],
+  options: { readonly unfoldAll: boolean; readonly breaks?: readonly number[] },
+): DisplayBlock[] {
   if (checkSegments(text, segments).length > 0) {
     if (text.length === 0) return [];
     return [{ start: 0, end: text.length, text, folded: false, reasons: [], related: [], label: null, collapsed: false }];
   }
 
+  const parts = cutAtBreaks(segments, options.breaks ?? []);
   const groups: Group[] = [];
-  segments.forEach((s, i) => {
+  parts.forEach((s, i) => {
     const last = groups[groups.length - 1];
-    const next = segments[i + 1];
-    // A folded segment joins a folded block; a shown one only if it is tiny
-    // whitespace with folded segments on both sides. (Two shown neighbours
-    // cannot occur: valid segments are merged when they look the same.)
+    const next = parts[i + 1];
+    // A folded part joins a folded block; a shown one only if it is tiny
+    // whitespace with folded parts on both sides. Never across a break.
+    // (Two shown neighbours only occur at a break: valid segments are
+    // merged when they look the same.)
     const joinsLast =
-      last !== undefined && last.folded && (s.folded || (next?.folded === true && isTinyWhitespace(text, s)));
+      last !== undefined &&
+      last.folded &&
+      !s.breakBefore &&
+      (s.folded || (next?.folded === true && isTinyWhitespace(text, s)));
     if (last !== undefined && joinsLast) {
       last.end = s.end;
     } else {

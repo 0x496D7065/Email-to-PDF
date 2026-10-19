@@ -30,17 +30,46 @@
 // takes its place and the rest of the list is still built: no email is ever
 // silently missing.
 //
+// What the PDF leaves out: each folded block also carries a text label, "In
+// the PDF: ..." or "Not in the PDF: ...", from the PDF's own plan
+// (src/engine/output-plan.ts, mapped by src/ui-model/pdf-plan.ts). The plans
+// are worked out by src/ui/pdf-labels.ts and handed over with setPdfPlans().
+// Rules:
+// - A folded block is all in the PDF or all left out: when the plan changes
+//   inside one, the block is cut in two (its text is not changed).
+// - Never a stale label: setPdfPlans(null) marks the list as updating
+//   (`data-pdf-labels="updating"` on the list), which hides every label and
+//   PDF note at once (app.css) and shows "Checking what goes in the PDF...".
+//   New plans are applied in chunks; the labels show again only once every
+//   email built so far has its new labels. Emails built later get them as
+//   they are built.
+// - An email left out of the PDF (unticked) gets no PDF labels: the whole
+//   email is already marked "Not in the PDF" (src/ui/review.ts).
+// - An email the plan keeps whole (rules 4 and 5 of output-plan.ts) gets a
+//   short note above its text (src/ui-model/message-notes.ts, pdfPlanNote).
+// - Never silent: when one email's labels cannot be shown (a failed update,
+//   or a stand-in item of an email that is in the PDF), a note above its
+//   text says so (pdf.messageFailed).
+// - The status line keeps its place while a list is shown, so ticking an
+//   email never moves the list under the reader's pointer.
+// The labels only add words: every character stays in the page.
+//
 // Not here: the counts, the include/exclude checkboxes and the notes
 // (src/ui/review.ts). They reach the page through three options: `header`
 // (nodes above the toolbar), `decorate` (adds to each email's item) and
-// `onRendered` (told when a list is complete).
+// `onRendered` (told when a list is complete). `toolbarItems` adds controls
+// to the toolbar (the "Put everything in the PDF" checkbox of
+// src/ui/pdf-labels.ts).
 
 import type { EngineMessage, EngineResult } from '../engine/engine';
+import type { PlanReason } from '../engine/output-plan';
 import { browserTimeZone, formatInZone, formatSenderLocal, isDisplayableMs, listTimeZones } from '../engine/time-format';
 import type { AttachmentInfo, EmailAddress, EmailDate } from '../parsing/types';
 import type { ProcessResult } from '../pipeline/process-files';
 import { displayAuthor } from '../ui-model/display-author';
-import { displayBlocks, type DisplayBlock } from '../ui-model/display-blocks';
+import type { DisplayBlock } from '../ui-model/display-blocks';
+import { pdfPlanNote } from '../ui-model/message-notes';
+import { pdfBlocks, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
 import { LOCALE, t } from './i18n';
@@ -49,6 +78,12 @@ import { LOCALE, t } from './i18n';
 export const DEFAULT_CHUNK_SIZE = 40;
 /** A chunk also ends once its bodies hold this many characters, so a few huge emails do not freeze the page. */
 export const MAX_CHUNK_CHARS = 500_000;
+/**
+ * New PDF labels are applied to this many times `chunkSize` emails per chunk
+ * (also capped by MAX_CHUNK_CHARS): updating a label is much cheaper than
+ * building an email's item.
+ */
+export const PDF_CHUNK_FACTOR = 4;
 
 // ---------------------------------------------------------------------------
 // Pure helpers (no DOM; unit tested directly).
@@ -162,6 +197,32 @@ export function foldSummaryText(block: DisplayBlock, ownPosition: number, positi
   return joinList(parts);
 }
 
+/**
+ * One reason of a PDF label: "earlier email quoted by the mail app", "same
+ * signature as in email #2", "same signature as in emails #1, #3".
+ * `signaturesFrom`: the list numbers of the emails where the repeated
+ * signatures are kept (see PdfLabel).
+ */
+export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly number[]): string {
+  if (reason !== 'repeated-signature' || signaturesFrom.length === 0) return t(`pdf.reason.${reason}`);
+  const list = joinList(signaturesFrom.map(messageNumberText));
+  return signaturesFrom.length === 1 ? t('pdf.repeatedFrom', { number: list }) : t('pdf.repeatedFromMany', { list });
+}
+
+/** A block's PDF label: "Not in the PDF: earlier email quoted by the mail app". */
+export function pdfLabelText(label: PdfLabel): string {
+  const list = label.reasons.length === 0 ? ['text' as const] : label.reasons;
+  const reasons = joinList(list.map((r) => pdfReasonText(r, label.signaturesFrom)));
+  switch (label.status) {
+    case 'in':
+      return t('pdf.label.in', { reasons });
+    case 'out':
+      return t('pdf.label.out', { reasons });
+    case 'partly':
+      return t('pdf.label.partly', { reasons });
+  }
+}
+
 /** The id of an email's heading in the list (unique: one item per position). */
 export function headingId(position: number): string {
   return `message-${String(position)}-title`;
@@ -205,7 +266,24 @@ export interface PreviewOptions {
    * list is not affected.
    */
   readonly onRendered?: (result: EngineResult) => void;
+  /** Controls added at the end of the toolbar (src/ui/pdf-labels.ts). Default: none. */
+  readonly toolbarItems?: readonly Node[];
 }
+
+/** The PDF plans of a result, for the labels (see the top of this file). */
+export interface PreviewPdfPlans {
+  /** The result they were made for: plans for another result are ignored. */
+  readonly result: EngineResult;
+  /** List position -> its plan. An email that is not in the map is not in the PDF (no labels). */
+  readonly views: ReadonlyMap<number, PdfView>;
+}
+
+/**
+ * The state of the PDF labels: 'off' (no plans asked for yet), 'updating'
+ * (labels hidden), 'ready' (every label shown is up to date), 'failed' (the
+ * plans could not be worked out; labels hidden, a note says so).
+ */
+export type PdfLabelState = 'off' | 'updating' | 'ready' | 'failed';
 
 export interface Preview {
   /** Shows the emails of a result (replacing what was shown). */
@@ -222,6 +300,52 @@ export interface Preview {
   zone(): string;
   /** True while chunks are still waiting to be built. */
   isRendering(): boolean;
+  /**
+   * New PDF plans for the labels, or null while they are being worked out
+   * again (the labels are hidden at once). Plans for another result than
+   * the one shown count as null.
+   */
+  setPdfPlans(plans: PreviewPdfPlans | null): void;
+  /** The plans could not be worked out: labels hidden, a note says so. */
+  pdfPlansFailed(): void;
+  /** See PdfLabelState. */
+  pdfLabelState(): PdfLabelState;
+}
+
+/** One block of a shown body, as built (to update its label in place). */
+interface BuiltBlock {
+  readonly start: number;
+  readonly end: number;
+  readonly details: HTMLDetailsElement | null;
+  /** The PDF label element (a folded block always has one, hidden when there is no label). */
+  readonly label: HTMLElement | null;
+}
+
+/** One email's body in the page, redrawn when its PDF plan changes. */
+interface BodySlot {
+  readonly m: EngineMessage;
+  readonly position: number;
+  readonly positionByIndex: readonly (number | null)[];
+  readonly body: HTMLDivElement;
+  readonly note: HTMLParagraphElement;
+  /** viewKey of the view drawn. */
+  key: string;
+  /** The blocks' places and kinds (see shapeOf). */
+  shape: string;
+  blocks: BuiltBlock[];
+}
+
+/** Where the blocks are and which of them carry a label element: equal shapes can be updated in place. */
+function shapeOf(blocks: readonly PdfBlock[]): string {
+  return blocks.map((b) => `${String(b.block.start)}:${String(b.block.end)}:${b.block.folded ? 'f' : b.label === null ? 's' : 'l'}`).join(',');
+}
+
+/** Sets a PDF label element's text and state (hidden without a label). */
+function applyLabel(element: HTMLElement, label: PdfLabel | null): void {
+  // The trailing space keeps the label and the fold's own text apart when read as one line.
+  element.textContent = label === null ? '' : `${pdfLabelText(label)} `;
+  setSafeAttribute(element, 'data-pdf', label === null ? false : label.status);
+  setSafeAttribute(element, 'hidden', label === null);
 }
 
 /** One email's date element, rewritten when the zone changes. */
@@ -249,10 +373,22 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   let zone = homeZone;
   let showFolded = false;
   let slots: DateSlot[] = [];
-  let folds: HTMLDetailsElement[] = [];
+  let folds = new Set<HTMLDetailsElement>();
   let pending: { handle: unknown } | null = null;
   // Increased by each show() and reset(): a chunk of an older list does nothing.
   let generation = 0;
+  // The result shown (null when the list is empty).
+  let currentResult: EngineResult | null = null;
+  // The bodies built so far, by list position.
+  let bodies = new Map<number, BodySlot>();
+  // The PDF notes of the stand-ins in the page, by list position.
+  let standIns = new Map<number, HTMLParagraphElement>();
+  // The PDF plans in use (null: none, or being worked out again), and their state.
+  let pdfPlans: PreviewPdfPlans | null = null;
+  let pdfState: PdfLabelState = 'off';
+  let pdfPending: { handle: unknown } | null = null;
+  // Increased by each setPdfPlans() and clear(): a chunk of older plans does nothing.
+  let pdfGeneration = 0;
 
   // --- Toolbar --------------------------------------------------------------
   const zoneSelect = el('select', {
@@ -272,12 +408,32 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         attrs: { class: 'field field-checkbox' },
         children: [foldToggle, el('label', { attrs: { for: 'preview-show-folded' }, text: t('preview.showFolded') })],
       }),
+      ...(options.toolbarItems ?? []),
     ],
   });
+  // Not a live region: the labels it stands for are hidden meanwhile, so nothing wrong can be read.
+  // Shown (with or without text) whenever a list is shown, and one line high
+  // even when empty (app.css): ticking an email never moves the list below.
+  const pdfStatus = el('p', { attrs: { id: 'pdf-labels-status', class: 'note pdf-labels-status', hidden: true } });
+  toolbar.append(pdfStatus);
 
   // role="list": some screen readers drop the list role when the numbers are hidden by CSS.
   const list = el('ol', { attrs: { id: 'preview-list', class: 'message-list', role: 'list', 'aria-label': t('preview.listLabel') } });
   shell.checkArea.replaceChildren(...(options.header ?? []), toolbar, list);
+
+  /**
+   * Shows the PDF label state on the list (app.css hides every label unless
+   * 'ready') and in the status line. The line is hidden only when no email
+   * is shown (it changes with the list itself, never on a tick); otherwise it
+   * keeps its place and only its text changes, so the list does not move.
+   */
+  function setPdfState(state: PdfLabelState): void {
+    pdfState = state;
+    setSafeAttribute(list, 'data-pdf-labels', state);
+    pdfStatus.textContent = state === 'updating' ? t('pdf.updating') : state === 'failed' ? t('pdf.failed') : '';
+    setSafeAttribute(pdfStatus, 'hidden', currentResult === null || currentResult.messages.length === 0);
+  }
+  setPdfState('off');
 
   // --- Building one email ---------------------------------------------------
   function applyDate(slot: DateSlot): void {
@@ -288,22 +444,99 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     setSafeAttribute(slot.senderNote, 'hidden', texts.senderLocal === null);
   }
 
-  function bodyOf(m: EngineMessage, position: number, positionByIndex: readonly (number | null)[]): HTMLDivElement {
-    const blocks = displayBlocks(m.message.bodyText, m.segments, { unfoldAll: false });
-    const children: Node[] = blocks.map((block) => {
-      if (!block.folded) return el('div', { attrs: { class: 'body-text' }, text: block.text });
+  /** The PDF view of one email under the plans in use; null: no labels (not in the PDF, or no plans). */
+  function viewFor(position: number): PdfView | null {
+    if (pdfPlans === null || pdfPlans.result !== currentResult) return null;
+    return pdfPlans.views.get(position) ?? null;
+  }
+
+  /**
+   * Draws the blocks of a body (all of it). A new folded block is open when
+   * "show quoted text" is ticked, or when a block it overlaps was open in
+   * the body drawn before (`wasOpen`), so redrawing never closes what the
+   * reader opened.
+   */
+  function drawBlocks(slot: BodySlot, blocks: readonly PdfBlock[], wasOpen: readonly { start: number; end: number }[]): void {
+    const built: BuiltBlock[] = [];
+    const children: Node[] = [];
+    for (const { block, label } of blocks) {
+      if (!block.folded) {
+        const text = el('div', { attrs: { class: 'body-text' }, text: block.text });
+        if (label === null) {
+          children.push(text);
+          built.push({ start: block.start, end: block.end, details: null, label: null });
+          continue;
+        }
+        // Shown text the plan leaves out (a bug, never expected): said all the same.
+        const mark = el('p', { attrs: { class: 'pdf-label pdf-label-shown' } });
+        applyLabel(mark, label);
+        children.push(mark, text);
+        built.push({ start: block.start, end: block.end, details: null, label: mark });
+        continue;
+      }
+      const mark = el('span', { attrs: { class: 'pdf-label' } });
+      applyLabel(mark, label);
+      const open = showFolded || wasOpen.some((o) => o.start < block.end && block.start < o.end);
       const details = el('details', {
-        attrs: { class: 'fold', open: showFolded },
+        attrs: { class: 'fold', open },
         children: [
-          el('summary', { attrs: { class: 'fold-label' }, text: foldSummaryText(block, position, positionByIndex) }),
+          el('summary', {
+            attrs: { class: 'fold-label' },
+            children: [mark, el('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, slot.position, slot.positionByIndex) })],
+          }),
           el('div', { attrs: { class: 'body-text body-folded' }, text: block.text }),
         ],
       });
-      folds.push(details);
-      return details;
-    });
-    if (children.length === 0) children.push(el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }));
-    return el('div', { attrs: { class: 'message-body' }, children });
+      children.push(details);
+      built.push({ start: block.start, end: block.end, details, label: mark });
+    }
+    if (blocks.length === 0) children.push(el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }));
+    slot.body.replaceChildren(...children);
+    // Recorded only once in the page: a build that threw above leaves nothing behind.
+    for (const b of slot.blocks) if (b.details !== null) folds.delete(b.details);
+    for (const b of built) if (b.details !== null) folds.add(b.details);
+    slot.blocks = built;
+  }
+
+  /** Brings one body up to date with the plans in use: labels in place when the blocks stay the same, else redrawn. */
+  function updateBody(slot: BodySlot): void {
+    const view = viewFor(slot.position);
+    const key = viewKey(view);
+    if (key === slot.key) return;
+    const m = slot.m;
+    const blocks = pdfBlocks(m.message.bodyText, m.segments, view);
+    const shape = shapeOf(blocks);
+    if (shape === slot.shape) {
+      blocks.forEach((b, i) => {
+        const element = slot.blocks[i]?.label ?? null;
+        if (element !== null) applyLabel(element, b.label);
+      });
+    } else {
+      const wasOpen = slot.blocks.filter((b) => b.details?.hasAttribute('open') === true);
+      drawBlocks(slot, blocks, wasOpen);
+      slot.shape = shape;
+    }
+    const note = view === null ? null : pdfPlanNote(view.plan);
+    slot.note.textContent = note === null ? '' : t(`review.pdfNote.${note}`);
+    setSafeAttribute(slot.note, 'hidden', note === null);
+    slot.key = key;
+  }
+
+  /** An email's body, with its PDF note (placed just above the body, outside the email's text). */
+  function bodyOf(m: EngineMessage, position: number, positionByIndex: readonly (number | null)[]): BodySlot {
+    const slot: BodySlot = {
+      m,
+      position,
+      positionByIndex,
+      body: el('div', { attrs: { class: 'message-body' } }),
+      note: el('p', { attrs: { class: 'note pdf-note', hidden: true } }),
+      key: '',
+      shape: 'not drawn yet', // never a real shape, so the first update draws
+      blocks: [],
+    };
+    updateBody(slot);
+    bodies.set(position, slot);
+    return slot;
   }
 
   function itemOf(m: EngineMessage, position: number, result: EngineResult): HTMLLIElement {
@@ -351,9 +584,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       meta.push(...row('also-in', t('preview.alsoIn'), [joinList(names)]));
     }
 
+    const body = bodyOf(m, position, result.positionByIndex);
     const item = el('li', {
       attrs: { class: 'message', 'data-position': String(position) },
-      children: [heading, el('dl', { attrs: { class: 'message-meta' }, children: meta }), bodyOf(m, position, result.positionByIndex)],
+      children: [heading, el('dl', { attrs: { class: 'message-meta' }, children: meta }), body.note, body.body],
     });
     options.decorate?.(item, m, position, result);
     return item;
@@ -368,6 +602,12 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
    */
   function fallbackItemOf(m: EngineMessage | undefined, position: number): HTMLLIElement {
     const text = typeof m?.message?.bodyText === 'string' ? m.message.bodyText : '';
+    // Its text is shown whole, without PDF labels: when the email is in the
+    // PDF, a note says so (hidden while the labels are, see app.css).
+    const pdfNote = el('p', { attrs: { class: 'note pdf-note', hidden: true }, text: t('pdf.messageFailed') });
+    updateStandIn(position, pdfNote);
+    // The last stand-in built for a position is the one in the page (see decoratedFallbackOf).
+    standIns.set(position, pdfNote);
     return el('li', {
       attrs: { class: 'message message-failed', 'data-position': String(position) },
       children: [
@@ -376,6 +616,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
           children: [el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) })],
         }),
         el('p', { attrs: { class: 'note message-failed-note' }, text: t('preview.itemFailed') }),
+        pdfNote,
         el('div', { attrs: { class: 'message-body' }, children: text === '' ? [] : [el('div', { attrs: { class: 'body-text' }, text })] }),
       ],
     });
@@ -402,14 +643,15 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   /** One email's item, or its stand-in if building it failed. Never throws for one bad email. */
   function safeItemOf(m: EngineMessage | undefined, position: number, result: EngineResult): HTMLLIElement {
     const slotCount = slots.length;
-    const foldCount = folds.length;
     try {
       if (m === undefined) throw new Error('missing message');
       return itemOf(m, position, result);
     } catch {
-      // Forget the half-built item's dates and folds: they are not in the page.
+      // Forget the half-built item's dates, body and folds: they are not in the page.
       slots.length = slotCount;
-      folds.length = foldCount;
+      const body = bodies.get(position);
+      if (body !== undefined) for (const b of body.blocks) if (b.details !== null) folds.delete(b.details);
+      bodies.delete(position);
       return decoratedFallbackOf(m, position, result);
     }
   }
@@ -421,16 +663,87 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     setSafeAttribute(list, 'aria-busy', false);
   }
 
+  function stopPdfPending(): void {
+    if (pdfPending !== null) cancel(pdfPending.handle);
+    pdfPending = null;
+  }
+
   function clear(): void {
     stopPending();
+    stopPdfPending();
     generation++;
+    pdfGeneration++;
     slots = [];
-    folds = [];
+    folds = new Set();
+    bodies = new Map();
+    standIns = new Map();
+    currentResult = null;
+    pdfPlans = null;
+    setPdfState('off');
     list.replaceChildren();
+  }
+
+  /**
+   * updateBody, never throwing: on a failure that email's labels are hidden
+   * (never a stale one), its note says the labels could not be shown (so
+   * the preview never silently says nothing), and it is tried again next time.
+   */
+  function safeUpdateBody(slot: BodySlot): void {
+    try {
+      updateBody(slot);
+    } catch {
+      for (const b of slot.blocks) if (b.label !== null) applyLabel(b.label, null);
+      slot.note.textContent = t('pdf.messageFailed');
+      setSafeAttribute(slot.note, 'hidden', false);
+      slot.key = 'failed';
+    }
+  }
+
+  /** A stand-in's PDF note: shown when its email is in the PDF plans (its text is shown whole, unlabelled). */
+  function updateStandIn(position: number, note: HTMLParagraphElement): void {
+    setSafeAttribute(note, 'hidden', viewFor(position) === null);
+  }
+
+  function setPdfPlans(plans: PreviewPdfPlans | null): void {
+    stopPdfPending();
+    pdfGeneration++;
+    if (plans === null || currentResult === null || plans.result !== currentResult) {
+      // Hidden at once; the bodies keep their old labels until new plans come.
+      pdfPlans = null;
+      setPdfState(currentResult === null ? 'off' : 'updating');
+      return;
+    }
+    pdfPlans = plans;
+    setPdfState('updating');
+    // Stand-ins are few (only a bug makes one) and cheap: updated at once.
+    for (const [position, note] of standIns) updateStandIn(position, note);
+    const myGeneration = pdfGeneration;
+    // The bodies built so far; those built later get the new labels as they are built.
+    const todo = [...bodies.values()];
+    let next = 0;
+    const applyChunk = (): void => {
+      if (myGeneration !== pdfGeneration) return; // newer plans, or clear(), came meanwhile
+      pdfPending = null;
+      let chars = 0;
+      const first = next;
+      const stop = Math.min(todo.length, next + chunkSize * PDF_CHUNK_FACTOR);
+      while (next < stop && (next === first || chars < MAX_CHUNK_CHARS)) {
+        const slot = todo[next];
+        next++;
+        if (slot === undefined) continue;
+        safeUpdateBody(slot);
+        chars += slot.m.message.bodyText.length;
+      }
+      if (next < todo.length) pdfPending = { handle: schedule(applyChunk) };
+      else setPdfState('ready');
+    };
+    applyChunk();
   }
 
   function show(result: EngineResult): void {
     clear();
+    currentResult = result;
+    setPdfState(pdfState); // the status line takes its place now, before any tick
     const myGeneration = generation;
     const messages = result.messages;
     let next = 0;
@@ -494,5 +807,13 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     },
     zone: () => zone,
     isRendering: () => pending !== null,
+    setPdfPlans,
+    pdfPlansFailed() {
+      stopPdfPending();
+      pdfGeneration++;
+      pdfPlans = null;
+      setPdfState(currentResult === null ? 'off' : 'failed');
+    },
+    pdfLabelState: () => pdfState,
   };
 }

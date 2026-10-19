@@ -13,6 +13,7 @@
 
 import type { DedupeWarningCode } from '../engine/dedupe';
 import type { EngineMessage, EngineWarningCode } from '../engine/engine';
+import type { MessagePlan } from '../engine/output-plan';
 import type { ParseWarning } from '../parsing/types';
 
 /**
@@ -54,6 +55,23 @@ const engineWarningsComplete: Complete<EngineWarningCode, typeof ENGINE_WARNINGS
 
 // Read once so the checks above are not "unused" (they matter at compile time only).
 void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete];
+
+/**
+ * Notes about the PDF plan of one email (src/engine/output-plan.ts, rules 4
+ * and 5): the whole email goes into the PDF because the tool could not tell
+ * what to leave out. They depend on which emails are included, so the
+ * preview shows them with its PDF labels (src/ui/preview.ts), not with the
+ * notes above.
+ */
+export const PDF_NOTES = ['pdf-kept-all-empty', 'pdf-fallback'] as const;
+export type PdfNoteCode = (typeof PDF_NOTES)[number];
+
+/** The PDF note of a plan, or null. */
+export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>): PdfNoteCode | null {
+  if (plan.fallback) return 'pdf-fallback';
+  if (plan.keptAllBecauseEmpty) return 'pdf-kept-all-empty';
+  return null;
+}
 
 /** One note of one email. */
 export type MessageNote =

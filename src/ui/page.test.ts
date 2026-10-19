@@ -69,21 +69,25 @@ function mount(chunkSize = 1000): void {
   control = controlledProcess();
   tasks = [];
   let next = 0;
+  // One queue for the list's chunks and the PDF labels' planning (the delay is ignored: tests run tasks by hand).
+  const schedule = (task: () => void): number => {
+    const handle = ++next;
+    tasks.push({ task, handle });
+    return handle;
+  };
+  const cancel = (handle: unknown): void => {
+    tasks = tasks.filter((x) => x.handle !== handle);
+  };
   page = mountPage(root as unknown as HTMLElement, {
     addFiles: { process: control.process, listenerTarget: new FakeEventTarget() as unknown as ListenerTarget },
     preview: {
       zones: ['America/New_York', 'Asia/Tokyo', 'UTC'],
       initialZone: 'America/New_York',
       chunkSize,
-      schedule: (task) => {
-        const handle = ++next;
-        tasks.push({ task, handle });
-        return handle;
-      },
-      cancel: (handle) => {
-        tasks = tasks.filter((x) => x.handle !== handle);
-      },
+      schedule,
+      cancel,
     },
+    pdfLabels: { schedule, cancel },
   });
 }
 
@@ -95,6 +99,7 @@ beforeEach(() => {
 afterEach(() => {
   page.addFiles.destroy();
   page.preview.reset();
+  page.pdfLabels.reset();
   vi.unstubAllGlobals();
 });
 
@@ -159,6 +164,11 @@ function expectEmpty(texts: readonly string[]): void {
   expect(page.review.includedMessages()).toEqual([]);
   expect(page.review.includedPositions()).toEqual([]);
   expect(clearButton().getAttribute('aria-disabled')).toBe('true');
+  // The PDF labels: checkbox unticked, no plans, nothing waiting.
+  expect(byId('pdf-everything').checked).toBe(false);
+  expect(page.pdfLabels.currentPlans()).toBeNull();
+  expect(page.pdfLabels.getPdfPolicy().unfoldEverything).toBe(false);
+  expect(page.preview.pdfLabelState()).toBe('off');
 }
 
 // ------------------------------------------------------------------ tests
@@ -182,6 +192,44 @@ describe('mountPage', () => {
     expect(items()).toHaveLength(result.messages.length);
     expect(byId('review-included').textContent).toBe('2 of 2 emails will be in the PDF.');
     expect(byId('add-failed-list').children).toHaveLength(1);
+  });
+
+  it('marks what the PDF leaves out; an untick moves the "first" signature; the checkbox puts everything in', async () => {
+    const signature = '\n-- \nAlice Example\nGarden Benches (fictional company)\n';
+    const messages = [make({ bodyText: `The bench is green.\n${signature}` }), make({ bodyText: `The bench is delivered.\n${signature}` })];
+    choose(...messages.map((m) => m.source.fileName));
+    control.calls.at(-1)?.resolve({ ok: true, engine: engineOf(messages) });
+    await settle();
+    expect(page.preview.pdfLabelState()).toBe('updating');
+    while (tasks.length > 0) tasks.shift()?.task();
+    expect(page.preview.pdfLabelState()).toBe('ready');
+    const labelOf = (k: number): string =>
+      items()[k]!.descendants().find((e) => hasClass(e, 'pdf-label'))?.textContent.trim() ?? '';
+    expect(labelOf(0)).toBe('In the PDF: signature');
+    expect(labelOf(1)).toBe('Not in the PDF: same signature as in email #1');
+    expect(page.pdfLabels.currentPlans()?.positions).toEqual([0, 1]);
+
+    const box = items()[0]!.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
+    box.checked = false;
+    box.fire('change');
+    expect(page.preview.pdfLabelState()).toBe('updating'); // hidden at once
+    expect(page.pdfLabels.currentPlans()).toBeNull();
+    while (tasks.length > 0) tasks.shift()?.task();
+    expect(page.preview.pdfLabelState()).toBe('ready');
+    expect(labelOf(1)).toBe('In the PDF: signature');
+    expect(page.pdfLabels.currentPlans()?.positions).toEqual([1]);
+
+    const everything = byId('pdf-everything');
+    everything.checked = true;
+    everything.fire('change');
+    while (tasks.length > 0) tasks.shift()?.task();
+    expect(page.pdfLabels.getPdfPolicy().unfoldEverything).toBe(true);
+    expect(page.pdfLabels.currentPlans()?.policy.unfoldEverything).toBe(true);
+    expect(labelOf(1)).toBe('In the PDF: signature');
+
+    // Clear everything: the checkbox and the plans are gone too (see expectEmpty).
+    clearButton().click();
+    expectEmpty([]);
   });
 
   it('an empty list (no email found) gets its counts too', async () => {

@@ -672,6 +672,16 @@ function push(ranges: PlanRange[], range: PlanRange): void {
  * same order. Never throws for one bad email (it is kept whole).
  */
 export function planOutput(messages: readonly PlanInput[], policy: OutputPolicy = DEFAULT_OUTPUT_POLICY): MessagePlan[] {
+  return Array.from(planOutputSteps(messages, policy));
+}
+
+/**
+ * planOutput one email at a time: yields the plan of each email, in order
+ * (the same plans, by the same code). The page uses it to spread the work
+ * over several short tasks (src/ui/pdf-labels.ts), so it never freezes. The
+ * caller must not change `messages` while it runs.
+ */
+export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputPolicy = DEFAULT_OUTPUT_POLICY): Generator<MessagePlan, void, undefined> {
   const senderKeys = messages.map((m) => {
     try {
       return senderKeyOf(m.message);
@@ -710,7 +720,9 @@ export function planOutput(messages: readonly PlanInput[], policy: OutputPolicy 
   // Sender key -> signature blocks (signatureBlockKey) kept so far.
   const keptSignatures = new Map<string, Set<string>>();
 
-  return messages.map((m, k): MessagePlan => {
+  for (const [k, m] of messages.entries()) yield planOne(m, k);
+
+  function planOne(m: PlanInput, k: number): MessagePlan {
     const body = m.message.bodyText;
     if (body.length === 0) return wholeBody(body, false);
     const sender = senderKeys[k] ?? '';
@@ -775,5 +787,5 @@ export function planOutput(messages: readonly PlanInput[], policy: OutputPolicy 
     }
 
     return { ranges, tailStart: classified.tailStart, omittedSignatures, keptAllBecauseEmpty, fallback: false };
-  });
+  }
 }

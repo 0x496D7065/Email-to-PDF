@@ -1,0 +1,247 @@
+// Step 2: works out what the PDF will leave out, for the preview's labels
+// (src/ui/preview.ts), and holds the "Put everything in the PDF (leave
+// nothing out)" checkbox (OutputPolicy.unfoldEverything, off by default).
+//
+// The plans are the PDF's own: planOutput's rules (planOutputSteps,
+// src/engine/output-plan.ts) on the INCLUDED emails, in list order, with the
+// current policy. The PDF step uses the same plans (currentPlans) and the
+// same policy (getPdfPolicy), so the preview shows exactly what the PDF does.
+//
+// When they are worked out again: a new result (files added), an email
+// ticked or unticked (which signature comes "first" can change, and which
+// quoted emails are in the PDF), the list finished (an email the page could
+// not decorate then counts as included, see src/ui/review.ts), the checkbox.
+// Each time (src/ui/page.ts calls show / refresh):
+// - the labels are hidden at once (preview.setPdfPlans(null)), so a label
+//   that may be wrong is never shown; ticking an email back so that the
+//   inputs are those of the plans already made shows those plans again;
+// - after a short pause (DEBOUNCE_MS, so ticking several emails in a row
+//   works the plans out once), the plans are made one email at a time, in
+//   tasks of about SLICE_MS each, so the page never freezes. 2000 emails
+//   take about 0.2 to 0.6 s of work in total, spread over many tasks;
+// - when done, and only if the inputs did not change meanwhile, the preview
+//   gets them (and applies them in chunks of its own). A newer change
+//   cancels the work in progress.
+// Why on the page and not in the engine worker: the plans need the emails,
+// which are already here; sending thousands of emails to a worker on each
+// tick would cost about as much as working the plans out, and the worker is
+// stopped once its run is over. Short slices keep the page responsive.
+//
+// Memory only (README.md, rule R5): the checkbox, the policy and the plans
+// live in this page; reset() ("Clear everything") unticks the checkbox and
+// drops every plan.
+
+import type { EngineMessage, EngineResult } from '../engine/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutputSteps, type MessagePlan, type OutputPolicy } from '../engine/output-plan';
+import { signatureSources, type PdfView, type PlannedEmail } from '../ui-model/pdf-plan';
+import { el } from './dom';
+import { t } from './i18n';
+import type { PreviewPdfPlans } from './preview';
+
+/** Pause after a change before the plans are worked out (ms). */
+export const DEBOUNCE_MS = 150;
+/** About how long one task of planning may run (ms) before it lets the page breathe. */
+export const SLICE_MS = 12;
+
+/** The PDF plans of the included emails, as the PDF step needs them. */
+export interface PdfPlans {
+  readonly result: EngineResult;
+  readonly policy: OutputPolicy;
+  /** List positions of the included emails, in list order (a position without an email is not in it). */
+  readonly positions: readonly number[];
+  /** One plan per position, same order. */
+  readonly plans: readonly MessagePlan[];
+}
+
+export interface PdfLabelsOptions {
+  /** The included emails' list positions, in list order (src/ui/review.ts). */
+  readonly includedPositions: () => readonly number[];
+  /** Hands the plans to the preview (null: hide the labels). */
+  readonly setPdfPlans: (plans: PreviewPdfPlans | null) => void;
+  /** Tells the preview the plans could not be made. */
+  readonly failed: () => void;
+  /** Runs a task later (default: setTimeout). Returns a handle for `cancel`. */
+  readonly schedule?: (task: () => void, delayMs: number) => unknown;
+  readonly cancel?: (handle: unknown) => void;
+  /** A clock in ms (default: performance.now). */
+  readonly now?: () => number;
+}
+
+export interface PdfLabels {
+  /** The checkbox field, for the preview's toolbar. */
+  readonly element: HTMLDivElement;
+  /** A new result is shown (null: none). */
+  show(result: EngineResult | null): void;
+  /** The included emails may have changed: works the plans out again if needed. */
+  refresh(): void;
+  /** For "Clear everything": unticks the checkbox, cancels the work, drops the plans. */
+  reset(): void;
+  /** The policy the PDF must use. */
+  getPdfPolicy(): OutputPolicy;
+  /** The plans of the current inputs, or null while they are being worked out (or there are none). */
+  currentPlans(): PdfPlans | null;
+}
+
+/** The input of one planning: everything the plans depend on. */
+interface Inputs {
+  readonly result: EngineResult;
+  readonly policy: OutputPolicy;
+  readonly positions: readonly number[];
+  readonly key: string;
+}
+
+export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
+  const schedule = options.schedule ?? ((task: () => void, delayMs: number): unknown => setTimeout(task, delayMs));
+  const cancel = options.cancel ?? ((handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  const now = options.now ?? ((): number => performance.now());
+
+  // --- State (memory only, README.md, rule R5) ------------------------------
+  let result: EngineResult | null = null;
+  // The last plans made, and whether they match the current inputs.
+  let made: { readonly inputs: Inputs; readonly plans: PdfPlans; readonly preview: PreviewPdfPlans } | null = null;
+  let upToDate = false;
+  // The planning waiting or in progress.
+  let job: { readonly inputs: Inputs; handle: unknown } | null = null;
+
+  const checkbox = el('input', { attrs: { type: 'checkbox', id: 'pdf-everything' } });
+  const element = el('div', {
+    attrs: { class: 'field field-checkbox' },
+    children: [checkbox, el('label', { attrs: { for: 'pdf-everything' }, text: t('pdf.everything') })],
+  });
+
+  function policy(): OutputPolicy {
+    return Object.freeze({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: checkbox.checked });
+  }
+
+  function inputsNow(r: EngineResult): Inputs {
+    const p = policy();
+    const positions = [...options.includedPositions()];
+    const key = `${p.appQuotedHistory}|${p.signatures}|${p.unfoldEverything ? 'all' : ''}|${positions.join(',')}`;
+    return { result: r, policy: p, positions, key };
+  }
+
+  function stopJob(): void {
+    if (job !== null) cancel(job.handle);
+    job = null;
+  }
+
+  /**
+   * The plans for the preview and for the PDF step. `planned` and `plans`
+   * are in the same order (plans[k] is the plan of planned[k]); if their
+   * lengths differ (a bug), nothing is shown rather than a label of another
+   * email.
+   */
+  function finish(inputs: Inputs, planned: readonly PlannedEmail[], plans: MessagePlan[]): void {
+    if (plans.length !== planned.length) {
+      options.failed();
+      return;
+    }
+    const sources = signatureSources(planned, plans);
+    const views = new Map<number, PdfView>();
+    planned.forEach(({ position }, k) => {
+      const plan = plans[k];
+      if (plan !== undefined) views.set(position, { plan, signatureFrom: sources.get(position) ?? new Map() });
+    });
+    const preview: PreviewPdfPlans = { result: inputs.result, views };
+    const positions = planned.map((e) => e.position);
+    made = { inputs, plans: { result: inputs.result, policy: inputs.policy, positions, plans }, preview };
+    upToDate = true;
+    options.setPdfPlans(preview);
+  }
+
+  /** Works the plans out for `inputs`, in slices, after the pause. */
+  function start(inputs: Inputs): void {
+    stopJob();
+    // The included emails that exist (a position without an email, a bug, is
+    // skipped here once): the plans are made from this list and matched back
+    // to it in the same order, so plans[k] always belongs to planned[k].
+    const planned: PlannedEmail[] = [];
+    const messages: EngineMessage[] = [];
+    for (const position of inputs.positions) {
+      const m = inputs.result.messages[position];
+      if (m === undefined) continue;
+      planned.push({ message: m.message, position });
+      messages.push(m);
+    }
+    let steps: Generator<MessagePlan, void, undefined> | null = null;
+    const plans: MessagePlan[] = [];
+    const mine = { inputs, handle: null as unknown };
+    const slice = (): void => {
+      if (job !== mine) return; // cancelled or replaced meanwhile
+      try {
+        steps ??= planOutputSteps(messages, inputs.policy);
+        const until = now() + SLICE_MS;
+        for (;;) {
+          const step = steps.next();
+          if (step.done === true) break;
+          plans.push(step.value);
+          if (now() >= until) {
+            mine.handle = schedule(slice, 0);
+            return;
+          }
+        }
+      } catch {
+        // Not expected (planOutput keeps a bad email whole instead of throwing).
+        job = null;
+        options.failed();
+        return;
+      }
+      job = null;
+      // Defensive: the inputs changed without a refresh(): start again.
+      if (result !== inputs.result || inputsNow(inputs.result).key !== inputs.key) {
+        refresh();
+        return;
+      }
+      finish(inputs, planned, plans);
+    };
+    job = mine;
+    mine.handle = schedule(slice, DEBOUNCE_MS);
+  }
+
+  function refresh(): void {
+    if (result === null) {
+      stopJob();
+      upToDate = false;
+      options.setPdfPlans(null);
+      return;
+    }
+    const inputs = inputsNow(result);
+    if (made !== null && made.inputs.result === result && made.inputs.key === inputs.key) {
+      // Back to the inputs of the plans already made (an email ticked back): shown again at once.
+      stopJob();
+      if (!upToDate) {
+        upToDate = true;
+        options.setPdfPlans(made.preview);
+      }
+      return;
+    }
+    if (job !== null && job.inputs.result === result && job.inputs.key === inputs.key) return; // already on its way
+    upToDate = false;
+    options.setPdfPlans(null);
+    start(inputs);
+  }
+
+  checkbox.addEventListener('change', refresh);
+
+  return {
+    element,
+    show(next) {
+      if (next === result) return;
+      result = next;
+      made = null;
+      upToDate = false;
+      refresh();
+    },
+    refresh,
+    reset() {
+      stopJob();
+      result = null;
+      made = null;
+      upToDate = false;
+      checkbox.checked = false;
+      options.setPdfPlans(null);
+    },
+    getPdfPolicy: policy,
+    currentPlans: () => (upToDate && made !== null && made.inputs.result === result ? made.plans : null),
+  };
+}

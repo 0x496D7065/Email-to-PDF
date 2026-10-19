@@ -8,10 +8,21 @@ there is no server, no account, and no upload.
 
 ## Status
 
-Early development. Milestone 1 (project skeleton with security checks) is in
-place: an empty page, a strict Content Security Policy, and automated checks
-that no network code is shipped. Email parsing, the preview and the PDF export
-are **not built yet**, so the tool is **not usable yet**.
+In development. Done so far:
+
+- Security base: a strict Content Security Policy and automated checks that no
+  network code is shipped.
+- Reading emails: `.eml` and `.msg` files are read in the browser, in a
+  worker, and nothing is uploaded.
+- Ordering: duplicates are merged, emails are put in date order, and quoted
+  history and repeated signatures are found.
+- Preview: every email with its date, people, attachments (names only) and
+  text. Quoted text and signatures are folded, never deleted. Each folded part
+  says whether it will be in the PDF or not, and why, and a checkbox puts
+  everything in the PDF. Each email can be left out of the PDF.
+
+In progress: the PDF download. Until it is done, the tool shows the preview
+but **cannot make a PDF yet**.
 
 ## Privacy & security rules
 
@@ -180,6 +191,11 @@ each writer actually wrote.
 Nothing is changed in the text itself: the preview still shows every email
 in full, your files are untouched, and the "include everything" option puts
 all text in the PDF (see `src/engine/output-plan.ts`).
+
+The preview marks, on each folded part, in words, whether it will be in the
+PDF ("In the PDF" or "Not in the PDF", and why), using the same rules as the
+PDF itself; the "Put everything in the PDF (leave nothing out)" checkbox
+puts every part in.
 
 ### R7: Detection logic is pure and testable
 

@@ -267,6 +267,16 @@ describe('include checkboxes', () => {
     expect(announced).toEqual(['1 of 2 emails will be in the PDF.', '2 of 2 emails will be in the PDF.']);
   });
 
+  it('tells onChange after each tick or untick, once the choice is recorded (the PDF labels are worked out again)', () => {
+    const seen: (readonly number[])[] = [];
+    mount({}, { onChange: () => seen.push(review.includedPositions()) });
+    show(engineOf([make(), make()]));
+    expect(seen).toEqual([]);
+    toggle(items()[0]!, false);
+    toggle(items()[0]!, true);
+    expect(seen).toEqual([[1], [0, 1]]);
+  });
+
   it('keeps the choices when more files are added (the whole set runs again)', () => {
     const one = make({ subject: 'One' });
     const two = make({ subject: 'Two' });

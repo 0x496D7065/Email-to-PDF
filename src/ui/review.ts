@@ -137,6 +137,11 @@ export interface ReviewOptions {
    * line, the page's one live region).
    */
   readonly announce?: (text: string) => void;
+  /**
+   * Called after each tick or untick, once the choice is recorded
+   * (src/ui/page.ts: the PDF labels are worked out again, src/ui/pdf-labels.ts).
+   */
+  readonly onChange?: () => void;
 }
 
 export function createReview(options: ReviewOptions = {}): Review {
@@ -258,6 +263,7 @@ export function createReview(options: ReviewOptions = {}): Review {
       for (const entry of entries.values()) apply(entry);
       showIncludedLine();
       options.announce?.(includedLine.textContent);
+      options.onChange?.();
     });
     // Right after the heading (the item's first child), before the details.
     item.insertBefore(el('div', { attrs: { class: 'message-review' }, children }), item.children[1] ?? null);

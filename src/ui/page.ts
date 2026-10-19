@@ -4,7 +4,9 @@
 // fake DOM (page.test.ts) and in Chromium (e2e/clear.spec.ts).
 //
 // Results: step 1 hands each new result to step 2, the review FIRST, then
-// the list (see showResultInStep2).
+// the list (see showResultInStep2), then the PDF labels (src/ui/pdf-labels.ts),
+// which are worked out again on each tick or untick and once the list is
+// complete.
 //
 // "Clear everything" (README.md, rule R5: in memory only). The button is
 // available as soon as files were added, also while they are being read and
@@ -17,7 +19,8 @@
 // - step 2 (preview.reset, review.reset): empties the list, cancels the
 //   chunks still waiting, puts the time zone and the "show quoted text"
 //   checkbox back to their defaults, forgets every include choice and
-//   empties the counts;
+//   empties the counts; (pdfLabels.reset) unticks "Put everything in the
+//   PDF", stops the planning still going and drops every plan;
 // - says "Everything was cleared." in the status line (the page's one live
 //   region) and moves the focus to step 1's "choose" button, so a keyboard
 //   or screen reader user is not left on a button that is now unavailable.
@@ -32,6 +35,7 @@ import type { ProcessResult } from '../pipeline/process-files';
 import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files';
 import { mountApp, type AppShell } from './app';
 import { t } from './i18n';
+import { createPdfLabels, type PdfLabels, type PdfLabelsOptions } from './pdf-labels';
 import { mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, type Review } from './review';
 
@@ -40,6 +44,8 @@ export interface PageOptions {
   readonly addFiles?: Pick<AddFilesOptions, 'process' | 'listenerTarget'>;
   /** Passed to step 2 (unit tests: fixed zones, chunk scheduling). */
   readonly preview?: Pick<PreviewOptions, 'chunkSize' | 'schedule' | 'cancel' | 'zones' | 'initialZone'>;
+  /** Passed to the PDF labels (unit tests: scheduling and clock). */
+  readonly pdfLabels?: Pick<PdfLabelsOptions, 'schedule' | 'cancel' | 'now'>;
 }
 
 export interface Page {
@@ -47,6 +53,8 @@ export interface Page {
   readonly addFiles: AddFiles;
   readonly preview: Preview;
   readonly review: Review;
+  /** What the PDF leaves out: getPdfPolicy() and currentPlans() for the PDF step. */
+  readonly pdfLabels: PdfLabels;
   /** What "Clear everything" does (see the top of this file). */
   clearEverything(): void;
 }
@@ -65,12 +73,33 @@ export function showResultInStep2(result: ProcessResult, review: Pick<Review, 's
 export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
   const shell = mountApp(root);
   // The "N of M emails will be in the PDF" line is announced through the status line.
-  const review = createReview({ announce: (text) => shell.setStatus(text) });
-  const preview = mountPreview(shell, { ...options.preview, header: [review.element], decorate: review.decorate, onRendered: review.rendered });
+  // Each tick or untick also works the PDF labels out again.
+  const review = createReview({ announce: (text) => shell.setStatus(text), onChange: () => pdfLabels.refresh() });
+  // The PDF labels of step 2 (src/ui/pdf-labels.ts): their checkbox sits in the preview's toolbar.
+  const pdfLabels = createPdfLabels({
+    ...options.pdfLabels,
+    includedPositions: () => review.includedPositions(),
+    setPdfPlans: (plans) => preview.setPdfPlans(plans),
+    failed: () => preview.pdfPlansFailed(),
+  });
+  const preview = mountPreview(shell, {
+    ...options.preview,
+    header: [review.element],
+    toolbarItems: [pdfLabels.element],
+    decorate: review.decorate,
+    onRendered: (result) => {
+      review.rendered(result);
+      // Once the list is complete, an email without a decorated item counts as included (src/ui/review.ts).
+      pdfLabels.refresh();
+    },
+  });
   // Step 1 opens or closes step 2 itself; step 2 shows each new result.
   const addFiles = mountAddFiles(shell, {
     ...options.addFiles,
-    onResult: (result) => showResultInStep2(result, review, preview),
+    onResult: (result) => {
+      showResultInStep2(result, review, preview);
+      pdfLabels.show(result.ok ? result.engine : null);
+    },
     onFilesChange: () => shell.setClearAvailable(addFiles.hasFiles()),
   });
 
@@ -78,6 +107,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     addFiles.reset();
     preview.reset();
     review.reset();
+    pdfLabels.reset();
     // Defensive: reset() already does this (through onFilesChange).
     shell.setClearAvailable(false);
     shell.setStatus(t('clear.done'));
@@ -90,5 +120,5 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     clearEverything();
   });
 
-  return { shell, addFiles, preview, review, clearEverything };
+  return { shell, addFiles, preview, review, pdfLabels, clearEverything };
 }

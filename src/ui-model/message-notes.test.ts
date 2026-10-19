@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { DedupeWarning } from '../engine/dedupe';
 import { runEngine, type EngineMessage } from '../engine/engine';
 import type { NormalizedMessage, ParseResult } from '../parsing/types';
-import { DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, relatedListNumbers } from './message-notes';
+import { t } from '../ui/i18n';
+import { DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, relatedListNumbers } from './message-notes';
 
 let counter = 0;
 function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage {
@@ -45,6 +46,16 @@ function engineMessage(fields: Partial<EngineMessage> = {}): EngineMessage {
 describe('code lists', () => {
   it('name each code once', () => {
     for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, ENGINE_WARNINGS]) expect(new Set(list).size).toBe(list.length);
+  });
+});
+
+describe('pdfPlanNote', () => {
+  it('says when the PDF keeps a whole email, and why', () => {
+    expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: false })).toBeNull();
+    expect(pdfPlanNote({ keptAllBecauseEmpty: true, fallback: false })).toBe('pdf-kept-all-empty');
+    expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: true })).toBe('pdf-fallback');
+    expect(new Set(PDF_NOTES).size).toBe(PDF_NOTES.length);
+    for (const code of PDF_NOTES) expect(t(`review.pdfNote.${code}`)).toMatch(/^The whole email will be in the PDF: /);
   });
 });
 

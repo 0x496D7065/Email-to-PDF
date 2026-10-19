@@ -21,10 +21,13 @@
 import type { DedupeWarningCode } from '../../engine/dedupe';
 import type { EngineWarningCode } from '../../engine/engine';
 import type { OrderReason } from '../../engine/order';
+import type { PlanReason } from '../../engine/output-plan';
 import type { FoldReason } from '../../engine/segments';
 import type { ParseErrorCode, ParseWarning } from '../../parsing/types';
 import type { ProcessErrorCode } from '../../pipeline/process-files';
 import type { AuthorSource } from '../../ui-model/display-author';
+import type { PdfNoteCode } from '../../ui-model/message-notes';
+import type { PdfStatus } from '../../ui-model/pdf-plan';
 
 export const en = {
   app: {
@@ -177,6 +180,47 @@ export const en = {
     // several files can be one merged email (maybe one already listed).
     relatedMoreFiles: { one: '{count} more file is involved.', other: '{count} more files are involved.' },
     relatedOnlyMore: { one: '{count} other file is involved.', other: '{count} other files are involved.' },
+    // Shown at the top of an email's text when its PDF plan keeps it whole.
+    pdfNote: {
+      'pdf-kept-all-empty': 'The whole email will be in the PDF: the tool could not tell its own text from the quote.',
+      'pdf-fallback': 'The whole email will be in the PDF: the tool could not work out which parts to leave out.',
+    } satisfies Record<PdfNoteCode, string>,
+  },
+
+  // What the PDF will leave out, shown on each folded part in step 2
+  // (src/ui/preview.ts, src/ui-model/pdf-plan.ts). Always words, not only colour.
+  pdf: {
+    // The checkbox in the step 2 toolbar (the "include everything" option).
+    everything: 'Put everything in the PDF (leave nothing out)',
+    // Shown while the labels are being worked out again (they are hidden meanwhile).
+    // The line keeps its place when empty, so the list below never moves.
+    updating: 'Checking what goes in the PDF...',
+    // Not expected: the labels could not be worked out, so none is shown.
+    failed: 'The tool could not work out which parts the PDF leaves out, so the folded parts are not marked.',
+    // A folded part's label, e.g. "Not in the PDF: earlier email quoted by the mail app".
+    // `as const` here too: a bare `satisfies` would widen the texts to string
+    // and t() would no longer check the {reasons} placeholder.
+    label: {
+      in: 'In the PDF: {reasons}',
+      out: 'Not in the PDF: {reasons}',
+      // Not expected (the preview cuts such parts in two): a safe text all the same.
+      partly: 'Partly in the PDF: {reasons}',
+    } as const satisfies Record<PdfStatus, string>,
+    // The reasons, joined into {reasons} above.
+    reason: {
+      text: 'text written in this email',
+      'writer-quote': "quote that is part of the writer's text",
+      forwarded: 'forwarded email',
+      'app-quoted-history': 'earlier email quoted by the mail app',
+      signature: 'signature',
+      'repeated-signature': 'repeated signature',
+    } satisfies Record<PlanReason, string>,
+    // A repeated signature when the email where it is kept is known, e.g. "same signature as in email #2".
+    repeatedFrom: 'same signature as in email {number}',
+    // The same, when a part holds signatures kept in several emails, e.g. "same signature as in emails #1, #3".
+    repeatedFromMany: 'same signature as in emails {list}',
+    // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
+    messageFailed: 'The tool could not show what the PDF leaves out for this email.',
   },
 
   warnings: {

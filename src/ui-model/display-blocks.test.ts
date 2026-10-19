@@ -149,6 +149,44 @@ describe('displayBlocks: exact cases', () => {
     ]);
     expect(displayBlocks('', gap, SHOWN)).toEqual([]);
   });
+
+  it('breaks: a new block starts at each break, cutting a segment if needed; the body stays whole', () => {
+    // A signature, a blank line, then a quote: one folded block without breaks.
+    const text = 'Own\n-- \nBob\n\n> a\n> b\n';
+    const folds: FoldRange[] = [
+      { start: 4, end: 12, reason: 'signature' },
+      { start: 13, end: 21, reason: 'quote-marker', related: 2 },
+    ];
+    const segments = buildSegments(text, folds);
+    expect(brief(displayBlocks(text, segments, SHOWN))).toEqual([
+      ['Own\n', false, [], [], null],
+      ['-- \nBob\n\n> a\n> b\n', true, ['quote-marker', 'signature'], [2], 'signature'], // a tie (8 and 8): primaryReason order
+    ]);
+    // A break where the quote starts: the blank line stays with the signature.
+    expect(brief(displayBlocks(text, segments, { unfoldAll: false, breaks: [13] }))).toEqual([
+      ['Own\n', false, [], [], null],
+      ['-- \nBob\n\n', true, ['signature'], [], 'signature'],
+      ['> a\n> b\n', true, ['quote-marker'], [2], 'quote-marker'],
+    ]);
+    // A break inside a folded segment: both parts keep its reasons and links.
+    const inside = displayBlocks(text, segments, { unfoldAll: false, breaks: [17, 17, 0, text.length] });
+    expect(brief(inside)).toEqual([
+      ['Own\n', false, [], [], null],
+      ['-- \nBob\n\n> a\n', true, ['quote-marker', 'signature'], [2], 'signature'],
+      ['> b\n', true, ['quote-marker'], [2], 'quote-marker'],
+    ]);
+    expect(inside.map((b) => b.text).join('')).toBe(text);
+    expect(inside.map((b) => [b.start, b.end])).toEqual([
+      [0, 4],
+      [4, 17],
+      [17, 21],
+    ]);
+    // A break inside shown text: two shown blocks, nothing else changes.
+    expect(brief(displayBlocks(text, segments, { unfoldAll: false, breaks: [2] })).slice(0, 2)).toEqual([
+      ['Ow', false, [], [], null],
+      ['n\n', false, [], [], null],
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
