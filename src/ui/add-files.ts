@@ -27,9 +27,16 @@
 //   folder is recognised where the browser can tell (webkitGetAsEntry) and
 //   gets a calm message; elsewhere it fails as an unreadable file.
 // - While files are being read, the area is aria-busy and the button is
-//   aria-disabled (still focusable, see app.ts). Files dropped meanwhile wait
+//   aria-disabled (still focusable, see app.ts), described by the progress
+//   line so it says why. Files dropped meanwhile wait
 //   in a queue and are read in one more round once the current one is done;
 //   a visible notice says so until that round starts.
+// - The progress line and bar follow every file. The status line (the
+//   page's one live region, also visible) gets one stable text per round with
+//   no file number ("Reading 120 files..."), then "putting in order", then the
+//   result: a screen reader does not read out hundreds of updates, and the
+//   visible status never shows a file number that looks stuck while the
+//   progress line moves on.
 //
 // Every word comes from i18n/ and goes into the page with textContent
 // through el() (README.md, rule R4). File names are untrusted: text only.
@@ -185,6 +192,14 @@ export function summaryText(summary: BatchSummary): string {
   return parts.join(' ');
 }
 
+/**
+ * The status line while a round of `total` files is read: set once at the
+ * start of the round, with no file number (the progress line has those).
+ */
+export function readingStatusText(total: number): string {
+  return total === 1 ? t('drop.readingOne') : t('drop.readingMany', { total });
+}
+
 /** The progress line: which file is being read, then "putting in order". */
 export function progressText(progress: ProcessProgress): string {
   if (progress.stage === 'organizing') return t('drop.organizing');
@@ -259,6 +274,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   let generation = 0;
   // Cancels the current run's workers (reset()); one per run.
   let controller: AbortController | null = null;
+  // Whether this round already put "putting in order" in the status line.
+  let organizingAnnounced = false;
 
   function filesChanged(): void {
     try {
@@ -276,11 +293,15 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     busy = value;
     setSafeAttribute(shell.addArea, 'aria-busy', value ? 'true' : false);
     setSafeAttribute(button, 'aria-disabled', value ? 'true' : false);
+    // While unavailable, the button's description starts with why: the
+    // progress line ("Reading file 3 of 10..."), then the usual note.
+    setSafeAttribute(button, 'aria-describedby', value ? 'add-progress-label drop-accepted' : 'drop-accepted');
     setSafeAttribute(progressBox, 'hidden', !value);
   }
 
-  // The queued message lives here, not only in the status line: progress
-  // updates replace the status line at once, so it would vanish unread.
+  // The queued message lives here, not only in the status line: "putting in
+  // order" or the next round may replace the status line soon after, so it
+  // could vanish unread.
   function showNotice(): void {
     const text = [folderNotice, queuedNotice ? t('drop.queued') : ''].filter((part) => part !== '').join(' ');
     notice.textContent = text;
@@ -297,18 +318,32 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       // No value: an "in progress" bar with no percentage (the engine gives none).
       setSafeAttribute(progressBar, 'value', false);
     }
-    shell.setStatus(text);
+    // The status line (the page's one live region) does not follow the files
+    // (it got its text when the round started, see run()); it only changes
+    // once more, for "putting in order".
+    if (progress.stage === 'organizing' && !organizingAnnounced) {
+      organizingAnnounced = true;
+      shell.setStatus(text);
+    }
   }
 
-  function failedItem(entry: FailedEntry): HTMLLIElement {
+  function failedItem(entry: FailedEntry, index: number): HTMLLIElement {
+    const reasonId = `add-failed-${String(index)}-reason`;
     return el('li', {
       attrs: { class: 'failed-file' },
       children: [
         el('p', {
-          attrs: { class: 'failed-reason' },
+          attrs: { id: reasonId, class: 'failed-reason' },
           children: [el('strong', { text: entry.fileName === '' ? t('added.noName') : entry.fileName }), ' ', t(`errors.file.${entry.error}`)],
         }),
-        el('details', { children: [el('summary', { text: t('added.details') }), el('p', { attrs: { class: 'failed-detail' }, text: entry.detail })] }),
+        el('details', {
+          children: [
+            // Every file has its own "Technical details": described by its
+            // file name and reason, so each one says which file it is about.
+            el('summary', { attrs: { 'aria-describedby': reasonId }, text: t('added.details') }),
+            el('p', { attrs: { class: 'failed-detail' }, text: entry.detail }),
+          ],
+        }),
       ],
     });
   }
@@ -320,7 +355,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     const errorText = summary.batchError === null ? '' : t(`errors.batch.${summary.batchError}`);
     batchError.textContent = errorText;
     setSafeAttribute(batchError, 'hidden', errorText === '');
-    failedList.replaceChildren(...summary.failed.map(failedItem));
+    failedList.replaceChildren(...summary.failed.map((entry, index) => failedItem(entry, index)));
     setSafeAttribute(failedBox, 'hidden', summary.failed.length === 0);
     setSafeAttribute(summaryBox, 'hidden', false);
     shell.setStatus(errorText === '' ? line : `${errorText} ${line}`);
@@ -345,6 +380,9 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
         showNotice();
       }
       const batch = [...files];
+      // One stable status text for the whole round (see the top of this file).
+      organizingAnnounced = false;
+      shell.setStatus(readingStatusText(batch.length));
       try {
         result = await processBatch(batch, {
           onProgress: (progress) => {
@@ -370,7 +408,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       filesChanged();
       queuedNotice = true;
       showNotice();
-      // Announced once too; the next progress update replaces it.
+      // Announced once too; the status line keeps it until "putting in
+      // order", the next round's start or the result replaces it.
       shell.setStatus(t('drop.queued'));
       return;
     }

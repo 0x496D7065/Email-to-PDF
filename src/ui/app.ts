@@ -18,7 +18,8 @@
 //   says why (at first: add your emails). A disabled button cannot be
 //   reached with the Tab key, so a keyboard or screen reader user would never
 //   learn why it is unavailable. "Clear everything" uses the same pattern
-//   while there is nothing to clear.
+//   while there is nothing to clear: a visible reason in front of its note,
+//   read first in its description.
 // - "Clear everything" sits at the end of step 1: right under the files the
 //   user added (where someone who wants them gone looks first), after the
 //   "choose" button in the Tab order, and away from the other actions so it
@@ -165,23 +166,26 @@ export function mountApp(root: HTMLElement): AppShell {
 
   const addArea = el('div', { attrs: { id: 'add-area', class: 'step-body' } });
   // Unavailable until there is something to clear (same aria-disabled
-  // pattern as the download button below).
+  // pattern as the download button below). Meanwhile a visible reason sits
+  // in front of the note, and the button's description reads it first.
+  const CLEAR_DESCRIBED_UNAVAILABLE = 'clear-unavailable clear-note';
   const clearButton = el('button', {
     attrs: {
       type: 'button',
       id: 'clear-everything',
       class: 'button button-secondary',
       'aria-disabled': 'true',
-      'aria-describedby': 'clear-note',
+      'aria-describedby': CLEAR_DESCRIBED_UNAVAILABLE,
     },
     text: t('actions.clearEverything'),
   });
+  const clearUnavailable = el('p', { attrs: { id: 'clear-unavailable', class: 'note clear-unavailable' }, text: t('clear.unavailable') });
   const addStep = stepSection('step-add', 1, t('steps.add.title'), [
     el('p', { attrs: { class: 'step-intro' }, text: t('steps.add.intro') }),
     addArea,
     el('div', {
       attrs: { id: 'clear-area', class: 'clear-area' },
-      children: [clearButton, el('p', { attrs: { id: 'clear-note', class: 'note' }, text: t('clear.note') })],
+      children: [clearButton, clearUnavailable, el('p', { attrs: { id: 'clear-note', class: 'note' }, text: t('clear.note') })],
     }),
   ]);
 
@@ -232,6 +236,8 @@ export function mountApp(root: HTMLElement): AppShell {
     clearButton,
     setClearAvailable(available) {
       setSafeAttribute(clearButton, 'aria-disabled', available ? false : 'true');
+      setSafeAttribute(clearButton, 'aria-describedby', available ? 'clear-note' : CLEAR_DESCRIBED_UNAVAILABLE);
+      setSafeAttribute(clearUnavailable, 'hidden', available);
     },
     setStatus(message) {
       status.textContent = message;

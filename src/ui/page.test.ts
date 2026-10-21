@@ -11,7 +11,7 @@ import type { ProcessOptions, ProcessResult } from '../pipeline/process-files';
 import type { FileLike } from '../pipeline/read-files';
 import type { ListenerTarget } from './add-files';
 import { t } from './i18n';
-import { mountPage, showResultInStep2, type Page } from './page';
+import { focusedControlWasRemoved, mountPage, showResultInStep2, type Page } from './page';
 
 // ------------------------------------------------------------------ synthetic data
 
@@ -91,8 +91,11 @@ function mount(chunkSize = 1000): void {
   });
 }
 
+let doc: FakeDocument;
+
 beforeEach(() => {
-  vi.stubGlobal('document', new FakeDocument());
+  doc = new FakeDocument();
+  vi.stubGlobal('document', doc);
   mount();
 });
 
@@ -232,6 +235,83 @@ describe('mountPage', () => {
     expectEmpty([]);
   });
 
+  /** The user focuses `element` (the browser fires 'focusin' at the document). */
+  const focusOn = (element: FakeElement): void => {
+    doc.activeElement = element;
+    doc.fire('focusin', { target: element });
+  };
+  const firstCheckbox = (): FakeElement => items()[0]!.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
+
+  it('a new result moves the focus to the "choose" button only when the focused control was removed', async () => {
+    await addAndShow();
+    // Focus on an include checkbox; the new result rebuilds the list and takes
+    // it away, and the browser puts the focus on <body>.
+    const box = firstCheckbox();
+    focusOn(box);
+    box.isConnected = false;
+    doc.activeElement = doc.body;
+    await addAndShow();
+    expect(chooseButton().focuses).toBe(1);
+  });
+
+  it('a focus on <body> that no removal caused is left alone (page just loaded, nothing focused yet)', async () => {
+    doc.activeElement = doc.body;
+    await addAndShow();
+    expect(chooseButton().focuses).toBe(0);
+  });
+
+  it('a focus on <body> after a click on plain text is left alone, even when the control it left is then removed', async () => {
+    await addAndShow();
+    const box = firstCheckbox();
+    focusOn(box);
+    // A click on plain text: a press, and the focus leaves the box (still in the page) for <body>.
+    doc.fire('pointerdown', { target: byId('preview-list') });
+    doc.activeElement = doc.body;
+    box.isConnected = false; // the new result removes it
+    await addAndShow();
+    expect(chooseButton().focuses).toBe(0);
+  });
+
+  it('a control that lost the focus to <body> but is still in the page: left alone', async () => {
+    await addAndShow();
+    focusOn(byId('preview-zone'));
+    doc.activeElement = doc.body; // blurred, not removed
+    await addAndShow();
+    expect(chooseButton().focuses).toBe(0);
+  });
+
+  it('a focus elsewhere on the page is left alone', async () => {
+    await addAndShow();
+    focusOn(byId('preview-zone'));
+    firstCheckbox().isConnected = false;
+    await addAndShow();
+    expect(chooseButton().focuses).toBe(0);
+  });
+
+  it('"Clear everything" forgets the control the focus was last on', async () => {
+    await addAndShow();
+    const box = firstCheckbox();
+    focusOn(box);
+    clearButton().click();
+    expect(chooseButton().focuses).toBe(1);
+    box.isConnected = false;
+    doc.activeElement = doc.body;
+    await addAndShow();
+    expect(chooseButton().focuses).toBe(1);
+  });
+
+  it('focusedControlWasRemoved: only for focus on <body> with the last focused control gone', () => {
+    const body = {};
+    const removed = { isConnected: false };
+    const present = { isConnected: true };
+    expect(focusedControlWasRemoved({ activeElement: body, body }, removed)).toBe(true);
+    expect(focusedControlWasRemoved({ activeElement: body, body }, present)).toBe(false);
+    expect(focusedControlWasRemoved({ activeElement: body, body }, null)).toBe(false);
+    expect(focusedControlWasRemoved({ activeElement: {}, body }, removed)).toBe(false);
+    expect(focusedControlWasRemoved({ activeElement: null, body }, removed)).toBe(false);
+    expect(focusedControlWasRemoved({ activeElement: null, body: null }, removed)).toBe(false);
+  });
+
   it('an empty list (no email found) gets its counts too', async () => {
     choose('notes.txt');
     control.calls[0]?.resolve({ ok: true, engine: engineOf([], [failedFile('notes.txt')]) });
@@ -330,7 +410,8 @@ describe('"Clear everything": while processing', () => {
     choose(...messages.map((m) => m.source.fileName));
     const run = control.calls[0]!;
     run.options.onProgress?.({ stage: 'reading', filesDone: 1, filesTotal: 2 });
-    expect(status()).toBe('Reading file 2 of 2...');
+    expect(status()).toBe(t('drop.readingMany', { total: 2 }));
+    expect(byId('add-progress-label').textContent).toBe('Reading file 2 of 2...');
 
     clearButton().click();
     expect(run.options.signal?.aborted).toBe(true);

@@ -12,7 +12,10 @@
 // has event listeners (addEventListener + a test-side `fire`), click(),
 // focus() (counted), contains(), the `value` / `files` fields of a file input or select, and a
 // checkbox's `checked`. FakeEventTarget stands in for `window` (page-wide
-// drag-and-drop listeners).
+// drag-and-drop listeners). FakeDocument has a `body`, an `activeElement`
+// and event listeners ('focusin', 'pointerdown'), and FakeElement an
+// `isConnected`, which a test sets itself (src/ui/page.ts checks whether the
+// focused control was removed).
 // The real page is checked in a real browser by the e2e tests.
 
 export class FakeText {
@@ -99,6 +102,8 @@ export class FakeElement {
   clicks = 0;
   /** How many times focus() was called. */
   focuses = 0;
+  /** Set by a test (the fake has no real tree): false stands for "removed from the page". */
+  isConnected = true;
   readonly listeners = new Listeners();
   // Text set with textContent (a plain field: a #private field would not work
   // through the Proxy below).
@@ -200,7 +205,24 @@ export class FakeElement {
 export class FakeDocument {
   title = '';
   readonly documentElement = new FakeElement('html');
+  readonly body = new FakeElement('body');
+  /** Set by a test (focus() does not change it): `body` stands for "focus lost". */
+  activeElement: FakeElement | null = null;
   readonly created: FakeElement[] = [];
+  readonly listeners = new Listeners();
+
+  addEventListener(type: string, listener: FakeListener): void {
+    this.listeners.add(type, listener);
+  }
+
+  removeEventListener(type: string, listener: FakeListener): void {
+    this.listeners.remove(type, listener);
+  }
+
+  /** Test side: dispatches an event to the document's listeners (pass `target` in `init`, e.g. for 'focusin'). */
+  fire(type: string, init: Record<string, unknown> = {}): FakeEvent {
+    return this.listeners.fire(type, this, init);
+  }
 
   createElement(tag: string): FakeElement {
     const element = new FakeElement(tag);

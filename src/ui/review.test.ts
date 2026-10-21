@@ -221,8 +221,10 @@ describe('include checkboxes', () => {
       const id = box.getAttribute('id') ?? '';
       const label = item.descendants().find((e) => e.tagName === 'label' && e.getAttribute('for') === id);
       expect(label?.textContent).toBe(t('actions.include'));
-      // Described by the email's heading ("#2 Lamps ..."), which exists in the item.
-      expect(box.getAttribute('aria-describedby')).toBe(headingId(position));
+      // Named by its label, then the email's heading ("#2 Lamps ..."), which exists in the item.
+      expect(label?.getAttribute('id')).toBe(`${id}-label`);
+      expect(box.getAttribute('aria-labelledby')).toBe(`${id}-label ${headingId(position)}`);
+      expect(box.hasAttribute('aria-describedby')).toBe(false);
       const children = item.children as FakeElement[];
       expect(children[0]!.getAttribute('id')).toBe(headingId(position));
       expect(hasClass(children[1]!, 'message-review')).toBe(true);

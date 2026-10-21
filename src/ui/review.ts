@@ -239,12 +239,19 @@ export function createReview(options: ReviewOptions = {}): Review {
   /** Builds the checkbox and notes of one item (only once per item). */
   function build(item: HTMLLIElement, m: EngineMessage, position: number, result: EngineResult): Pick<Entry, 'checkbox' | 'excludedNote'> {
     const id = `include-${String(position)}`;
-    const checkbox = el('input', { attrs: { type: 'checkbox', id, class: 'include-checkbox', 'aria-describedby': headingId(position) } });
+    const labelId = `${id}-label`;
+    // Named by its visible label AND the email's heading: "Include in the PDF
+    // #3 Desks for the office". Each checkbox's name then says which email it
+    // is for, also in a screen reader's list of form controls, where only
+    // names are shown. The visible words come first (WCAG 2.5.3).
+    const checkbox = el('input', {
+      attrs: { type: 'checkbox', id, class: 'include-checkbox', 'aria-labelledby': `${labelId} ${headingId(position)}` },
+    });
     const excludedNote = el('span', { attrs: { class: 'excluded-note', hidden: true }, text: t('review.excluded') });
     const children: Node[] = [
       el('div', {
         attrs: { class: 'field field-checkbox message-include' },
-        children: [checkbox, el('label', { attrs: { for: id }, text: t('actions.include') }), excludedNote],
+        children: [checkbox, el('label', { attrs: { id: labelId, for: id }, text: t('actions.include') }), excludedNote],
       }),
     ];
     const notes = safeNotes(m, position, result.positionByIndex);

@@ -519,8 +519,8 @@ test('keyboard only: every control is reached in order, shows its focus and work
   expect(controlCount).toBeGreaterThan(10);
   for (const control of await controls.all()) await expect(control).toHaveAccessibleName(/\S/);
   for (const box of await page.getByRole('checkbox', { name: en.actions.include }).all()) {
-    // Each include checkbox also says which email it is for.
-    await expect(box).toHaveAccessibleDescription(/^#\d+ \S/);
+    // Each include checkbox's name also says which email it is for.
+    await expect(box).toHaveAccessibleName(new RegExp(`^${en.actions.include} #\\d+ \\S`));
   }
   // checkVisibility(), not getClientRects(): the headings of the privacy
   // panel, closed again above, keep their boxes inside the closed <details>.

@@ -7,7 +7,12 @@
     with that margin and the browser test checks every text on the page.
   - Every focusable element shows a clear focus outline.
   - Animations are turned off for people who ask for reduced motion.
-  - One column that fits any screen width.
+  - One column that fits any screen width (320 px, 400% zoom), also with
+    larger text spacing; long words wrap.
+  - Controls are at least 24 x 24 CSS pixels.
+  - Forced colours (Windows High Contrast) keep focus outlines and borders,
+    and still show which buttons are unavailable.
+  e2e/accessibility.spec.ts checks these in the browser.
 */
 
 :root {
@@ -208,6 +213,11 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* While there is nothing to clear, its reason comes first; the note follows closely. */
+.clear-unavailable:not([hidden]) + .note {
+  margin-top: 0.25rem;
+}
+
 /* Unavailable (aria-disabled, still focusable): grey, but readable. */
 .button[aria-disabled='true'] {
   color: var(--text-muted);
@@ -320,6 +330,14 @@ summary {
   margin-top: 1rem;
 }
 
+/* min-width: 0 lets a field be narrower than its widest content: the time
+   zone list (as wide as its longest zone name) then shrinks to the screen
+   instead of widening the page (320 px wide, or with larger text spacing). */
+.field {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .field label {
   display: block;
   font-weight: 600;
@@ -335,9 +353,12 @@ summary {
   display: inline;
 }
 
+/* At least 24 x 24 CSS pixels (WCAG 2.5.8), and never squeezed by a long
+   label on a narrow screen. */
 .field-checkbox input {
-  width: 1.125rem;
-  height: 1.125rem;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
   margin: 0;
 }
 
@@ -564,9 +585,10 @@ summary {
   min-height: 4.5em;
 }
 
+/* 1.75em: the height of the link with its padding (see .download-link). */
 .download-again {
   margin: 0.75rem 0 0;
-  min-height: 1.5em;
+  min-height: 1.75em;
 }
 
 /* "Provided as is, not legal advice": calm, smaller, set apart by a thin line. */
@@ -576,9 +598,14 @@ summary {
   font-size: 0.9375rem;
 }
 
+/* Alone on its line, so not a link inside a sentence: an inline-block with
+   a little padding makes it at least 24 px high (WCAG 2.5.8). */
 .download-link {
+  display: inline-block;
+  padding: 0.125rem 0;
   font-weight: 600;
   color: var(--accent);
+  overflow-wrap: anywhere;
 }
 
 /* A clear outline for keyboard users on everything focusable. */
@@ -604,6 +631,16 @@ summary {
   padding: 1rem;
   border: 2px solid var(--accent);
   background-color: var(--surface);
+}
+
+/* Windows High Contrast and other forced colours: the browser replaces our
+   colours with the user's, so an unavailable button would look like an
+   available one. GrayText is the system colour for unavailable controls. */
+@media (forced-colors: active) {
+  .button[aria-disabled='true'] {
+    color: GrayText;
+    border-color: GrayText;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

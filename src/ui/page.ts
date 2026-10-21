@@ -9,6 +9,19 @@
 // which are worked out again on each tick or untick and once the list is
 // complete.
 //
+// Focus after a new result: the result rebuilds step 1's failed-files list
+// and step 2's list, so a control the keyboard focus was on (an include
+// checkbox, a "Technical details") may be gone, and the browser then puts
+// the focus back on <body>, at the top of the page. Only in that case (the
+// focus is on <body> AND the control it was last on is no longer in the
+// page) the focus goes to step 1's "choose" button (where files are added,
+// right above the new summary). Focus anywhere else is never moved, and
+// neither is a focus on <body> that no removal caused: after the page
+// loads, or after a mouse click on plain text (a mouse or touch press makes
+// the page forget the control the focus was on), so a mouse
+// user reading far down the list is not scrolled back up. The page keeps a
+// reference only to that one control, and forgets it on "Clear everything".
+//
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what
 // goes into the PDF drops a PDF made or being made (choicesChanged): files
@@ -99,12 +112,37 @@ export function showResultInStep2(result: ProcessResult, review: Pick<Review, 's
   preview.showResult(result);
 }
 
+/**
+ * True when the focused control was removed: the focus fell back to the
+ * page's <body> AND the control it was last on (`lastFocused`, null: none)
+ * is no longer in the page. A focus on <body> for any other reason (page
+ * just loaded, a click on plain text) gives false.
+ */
+export function focusedControlWasRemoved(
+  doc: { readonly activeElement: unknown; readonly body: unknown },
+  lastFocused: { readonly isConnected: boolean } | null,
+): boolean {
+  const onBody = doc.body !== null && doc.body !== undefined && doc.activeElement === doc.body;
+  return onBody && lastFocused !== null && !lastFocused.isConnected;
+}
+
 /** Builds the page inside `root` and wires its parts together. */
 export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
   const shell = mountApp(root);
   // The result shown in step 2 (null: none), and whether its PDF plans failed.
   let shown: EngineResult | null = null;
   let plansFailed = false;
+  // The control the focus was last on (null: none). See the top of this file.
+  // A mouse or touch press forgets it first: a press on a control focuses
+  // that control right after (focusin), a press on plain text focuses
+  // nothing, so the control left behind is not taken for a removed one.
+  let lastFocused: Node | null = null;
+  document.addEventListener('pointerdown', () => {
+    lastFocused = null;
+  });
+  document.addEventListener('focusin', (event) => {
+    lastFocused = event.target as Node | null;
+  });
   // Step 3 is mounted last (it asks the other steps for their state at
   // once); the hooks below only run later, on the user's actions.
   /** A choice that goes into the PDF changed: a PDF made or being made is dropped. */
@@ -165,6 +203,8 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       showResultInStep2(result, review, preview);
       pdfLabels.show(shown);
       choicesChanged();
+      // The rebuilt lists may have taken the focused control with them (see the top of this file).
+      if (focusedControlWasRemoved(document, lastFocused)) addFiles.focus();
     },
     // Files added (or cleared): the emails of a PDF made before are no longer the ones shown.
     onFilesChange: () => {
@@ -225,6 +265,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     // Defensive: reset() already does this (through onFilesChange).
     shell.setClearAvailable(false);
     shell.setStatus(t('clear.done'));
+    lastFocused = null;
     addFiles.focus();
   }
 

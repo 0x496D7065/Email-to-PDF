@@ -234,8 +234,10 @@ test('choose files: progress is shown, the summary is right and step 2 opens', a
 
   const seen = await page.evaluate(() => window.__addSeen);
   expect(seen.progressShown).toBe(true);
-  expect(seen.statuses).toContain('Reading file 1 of 4...');
-  expect(seen.statuses).toContain('Reading file 4 of 4...');
+  // The status line: one text per round with no file number (the progress line has those).
+  expect(seen.statuses).toContain(en.drop.readingMany.replace('{total}', '3'));
+  expect(seen.statuses).toContain(en.drop.readingMany.replace('{total}', '4'));
+  expect(seen.statuses.filter((s) => s.startsWith('Reading file'))).toEqual([]);
   expect(seen.statuses).toContain(en.drop.organizing);
   // One parse worker per file read (3, then all 4 again), one engine worker per round.
   expect(parseWorkers()).toBe(7);

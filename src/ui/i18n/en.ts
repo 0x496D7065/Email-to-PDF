@@ -136,7 +136,12 @@ export const en = {
   drop: {
     zone: 'Drag your email files here, or choose them.',
     accepted: 'Accepted: .eml and .msg files. You can add more files at any time.',
+    // The visible progress line, which follows every file.
     reading: 'Reading file {done} of {total}...',
+    // The status line while files are read: set once per round, with no
+    // file number, so it never looks stuck while the progress line moves on.
+    readingOne: 'Reading your file...',
+    readingMany: 'Reading {total} files. This can take a moment; the progress bar below shows how far it is.',
     organizing: 'Putting your emails in order...',
     // Files added while others are still being read.
     queued: 'More files were added. They will be read as soon as the current ones are done.',
@@ -429,6 +434,9 @@ export const en = {
   clear: {
     // Under the button, also its accessible description.
     note: 'Removes all your emails from this page at once. This page never saves them.',
+    // Shown in front of the note (and read first in the button's description)
+    // while the button is unavailable.
+    unavailable: 'There is nothing to clear: no emails have been added.',
     // Announced (status line) after the button was pressed.
     done: 'Everything was cleared.',
   },

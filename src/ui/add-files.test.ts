@@ -12,6 +12,7 @@ import {
   filesFromDrop,
   mountAddFiles,
   progressText,
+  readingStatusText,
   summarize,
   summaryText,
   type AddFiles,
@@ -223,6 +224,14 @@ describe('progressText', () => {
   });
 });
 
+describe('readingStatusText', () => {
+  it('gives the number of files, never a file number', () => {
+    expect(readingStatusText(1)).toBe('Reading your file...');
+    expect(readingStatusText(2)).toBe('Reading 2 files. This can take a moment; the progress bar below shows how far it is.');
+    expect(readingStatusText(1500)).toBe('Reading 1,500 files. This can take a moment; the progress bar below shows how far it is.');
+  });
+});
+
 // --- The interface ----------------------------------------------------------------
 
 describe('mountAddFiles: elements', () => {
@@ -276,13 +285,17 @@ describe('mountAddFiles: choosing files', () => {
     expect(button().getAttribute('aria-disabled')).toBe('true');
     expect(button().hasAttribute('disabled')).toBe(false);
     expect(byId('add-progress').hasAttribute('hidden')).toBe(false);
+    // Its description says why first: the progress line, then the usual note.
+    expect(button().getAttribute('aria-describedby')).toBe('add-progress-label drop-accepted');
+    // The status line says what is going on, once, with no file number.
+    expect(statuses).toEqual([readingStatusText(2)]);
 
     const { options, resolve } = control.calls[0] ?? expect.unreachable();
     options.onProgress?.({ stage: 'reading', filesDone: 0, filesTotal: 2 });
     expect(byId('add-progress-label').textContent).toBe('Reading file 1 of 2...');
     expect(byId('add-progress-bar').getAttribute('max')).toBe('2');
     expect(byId('add-progress-bar').getAttribute('value')).toBe('0');
-    expect(lastStatus()).toBe('Reading file 1 of 2...');
+    expect(lastStatus()).toBe(readingStatusText(2));
     options.onProgress?.({ stage: 'reading', filesDone: 1, filesTotal: 2 });
     expect(byId('add-progress-bar').getAttribute('value')).toBe('1');
     options.onProgress?.({ stage: 'organizing', filesDone: 2, filesTotal: 2 });
@@ -303,6 +316,38 @@ describe('mountAddFiles: choosing files', () => {
     expect(byId('add-failed').hasAttribute('hidden')).toBe(true);
     expect(lastStatus()).toBe('2 files added. 2 emails found.');
     expect(checkReady).toEqual([true]);
+    expect(button().getAttribute('aria-describedby')).toBe('drop-accepted');
+  });
+
+  it('shows every progress update, but the status line changes only at the start, for "putting in order" and for the result', async () => {
+    choose(...Array.from({ length: 10 }, (_, i) => `${String(i)}.eml`));
+    const { options, resolve } = control.calls[0] ?? expect.unreachable();
+    for (let done = 0; done <= 10; done++) {
+      options.onProgress?.({ stage: 'reading', filesDone: done, filesTotal: 10 });
+      // The visible line follows every file.
+      expect(byId('add-progress-label').textContent).toBe(`Reading file ${String(Math.min(done + 1, 10))} of 10...`);
+      expect(byId('add-progress-bar').getAttribute('value')).toBe(String(done));
+    }
+    options.onProgress?.({ stage: 'organizing', filesDone: 10, filesTotal: 10 });
+    // A repeated report is not announced again.
+    options.onProgress?.({ stage: 'organizing', filesDone: 10, filesTotal: 10 });
+    expect(statuses).toEqual([readingStatusText(10), t('drop.organizing')]);
+    resolve(engineResult(10, 10, 0, []));
+    await settle();
+    expect(statuses).toEqual([readingStatusText(10), t('drop.organizing'), '10 files added. 10 emails found.']);
+  });
+
+  it('a second round (files added meanwhile) gets its own start text and its own "putting in order"', async () => {
+    choose('a.eml');
+    const first = control.calls[0] ?? expect.unreachable();
+    first.options.onProgress?.({ stage: 'organizing', filesDone: 1, filesTotal: 1 });
+    choose('b.eml', 'c.eml');
+    first.resolve(engineResult(1, 1, 0, []));
+    await settle();
+    const second = control.calls[1] ?? expect.unreachable();
+    second.options.onProgress?.({ stage: 'reading', filesDone: 0, filesTotal: 3 });
+    second.options.onProgress?.({ stage: 'organizing', filesDone: 3, filesTotal: 3 });
+    expect(statuses).toEqual([readingStatusText(1), t('drop.organizing'), t('drop.queued'), readingStatusText(3), t('drop.organizing')]);
   });
 
   it('ignores an empty choice (dialog cancelled)', () => {
@@ -345,6 +390,14 @@ describe('mountAddFiles: results', () => {
     expect(items[1]?.textContent).toContain(t('errors.file.too-large'));
     expect(byId('add-summary-text').textContent).toBe('3 files added. 2 could not be read. 1 email found.');
     expect(checkReady).toEqual([true]);
+    // Each "Technical details" is described by its own file name and reason.
+    items.forEach((item, index) => {
+      const summary = item.descendants().find((e) => e.tagName === 'summary');
+      const reason = byId(summary?.getAttribute('aria-describedby') ?? '');
+      expect(reason.getAttribute('id')).toBe(`add-failed-${String(index)}-reason`);
+      expect(item.contains(reason)).toBe(true);
+      expect(reason.getAttribute('class')).toBe('failed-reason');
+    });
   });
 
   it('a worker failure or a time limit is not shown as a damaged file', async () => {

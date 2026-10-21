@@ -124,7 +124,13 @@ describe('mountApp', () => {
     expect(button.textContent).toBe(t('actions.clearEverything'));
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.hasAttribute('disabled')).toBe(false);
-    expect(byId(button.getAttribute('aria-describedby') ?? '').textContent).toBe(t('clear.note'));
+    // Described by why it is unavailable first, then its note; both visible.
+    expect(button.getAttribute('aria-describedby')).toBe('clear-unavailable clear-note');
+    expect(byId('clear-unavailable').textContent).toBe(t('clear.unavailable'));
+    expect(byId('clear-unavailable').hasAttribute('hidden')).toBe(false);
+    expect(byId('clear-note').textContent).toBe(t('clear.note'));
+    const area = byId('clear-area').children;
+    expect(area.indexOf(byId('clear-unavailable'))).toBe(area.indexOf(byId('clear-note')) - 1);
     // In step 1, after the add area (so after the "choose" button in the Tab order).
     const step = byId('step-add');
     expect(step.descendants()).toContain(button);
@@ -137,9 +143,14 @@ describe('mountApp', () => {
     const button = byId('clear-everything');
     shell.setClearAvailable(true);
     expect(button.hasAttribute('aria-disabled')).toBe(false);
+    // Available: the reason is gone, the note alone describes it.
+    expect(button.getAttribute('aria-describedby')).toBe('clear-note');
+    expect(byId('clear-unavailable').hasAttribute('hidden')).toBe(true);
     shell.setClearAvailable(false);
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.hasAttribute('disabled')).toBe(false);
+    expect(button.getAttribute('aria-describedby')).toBe('clear-unavailable clear-note');
+    expect(byId('clear-unavailable').hasAttribute('hidden')).toBe(false);
   });
 
   describe('privacy panel', () => {

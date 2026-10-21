@@ -119,8 +119,8 @@ test('unticking an email leaves it in the list, dimmed, with its text; the count
 
   const second = items.nth(1);
   const box = second.getByRole('checkbox', { name: en.actions.include });
-  // Described by the email's heading, so each checkbox says which email it is for.
-  await expect(box).toHaveAccessibleDescription(/^#2 /);
+  // Named by its label and the email's heading, so each checkbox says which email it is for.
+  await expect(box).toHaveAccessibleName(`${en.actions.include} #2 RE: Office desks and chairs`);
   await box.focus();
   await page.keyboard.press('Space');
   await expect(box).not.toBeChecked();

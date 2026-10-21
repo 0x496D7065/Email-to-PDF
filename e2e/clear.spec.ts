@@ -150,6 +150,8 @@ async function expectEmptyApp(page: Page): Promise<void> {
   await expect(page.locator('#add-progress')).toBeHidden();
   for (const id of ['review-files-text', 'review-messages', 'review-included', 'review-notes']) await expect(page.locator(`#${id}`)).toHaveText('');
   await expect(page.locator('#clear-everything')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('#clear-unavailable')).toBeVisible();
+  await expect(page.locator('#clear-everything')).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
 }
 
 /** Nothing left the page, no CSP violation, no console error (see e2e/review.spec.ts). */
@@ -171,7 +173,10 @@ test('"Clear everything" is there from the start, unavailable but focusable and 
   await expect(clear).toBeVisible();
   await expect(clear).toHaveAttribute('aria-disabled', 'true');
   await expect(clear).toBeDisabled(); // as assistive technology sees it...
-  await expect(clear).toHaveAccessibleDescription(en.clear.note);
+  // Why it is unavailable, shown and read first, then what it does.
+  await expect(page.locator('#clear-unavailable')).toBeVisible();
+  await expect(page.locator('#clear-unavailable')).toHaveText(en.clear.unavailable);
+  await expect(clear).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
   // ...yet reachable with Tab, right after the "choose" button, and pressing it does nothing.
   // The privacy panel's summary in the header is the first stop.
   await page.keyboard.press('Tab');
@@ -222,6 +227,9 @@ test('after adding files, Clear removes every email text, file name and count; a
 
   const clear = page.getByRole('button', { name: en.actions.clearEverything });
   await expect(clear).not.toHaveAttribute('aria-disabled', /.*/);
+  // Available: no "nothing to clear" reason, only the note.
+  await expect(page.locator('#clear-unavailable')).toBeHidden();
+  await expect(clear).toHaveAccessibleDescription(en.clear.note);
   // The available button (and step 1 with its summary) meet the contrast rules.
   expect(await contrastFailures(page, '#step-add', 6)).toEqual([]);
   await clear.click();
