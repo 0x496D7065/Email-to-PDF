@@ -34,10 +34,10 @@ describe('parseEmailDate: valid headers', () => {
     expect(d.utcMs).toBe(utc('2025-06-03T12:05:00Z'));
   });
 
-  it('ignores comments such as (CEST), even nested ones', () => {
-    expect(parseEmailDate('Tue, 3 Jun 2025 14:05:09 +0200 (CEST)').utcMs).toBe(utc('2025-06-03T12:05:09Z'));
-    expect(parseEmailDate('Tue, 3 Jun 2025 14:05:09 +0200 (Paris (summer))').utcMs).toBe(
-      utc('2025-06-03T12:05:09Z'),
+  it('ignores comments such as (JST), even nested ones', () => {
+    expect(parseEmailDate('Tue, 3 Jun 2025 14:05:09 +0900 (JST)').utcMs).toBe(utc('2025-06-03T05:05:09Z'));
+    expect(parseEmailDate('Tue, 3 Jun 2025 14:05:09 +0900 (local (standard time))').utcMs).toBe(
+      utc('2025-06-03T05:05:09Z'),
     );
   });
 
@@ -202,15 +202,15 @@ describe('parseEmailDate: boundary cases', () => {
   });
 
   it('uses the numeric offset that follows an unknown zone name', () => {
-    expect(parseEmailDate('6 Jan 2025 12:00:00 CEST +0200')).toMatchObject({
-      utcMs: utc('2025-01-06T10:00:00Z'),
-      offsetMinutes: 120,
+    expect(parseEmailDate('6 Jan 2025 12:00:00 JST +0900')).toMatchObject({
+      utcMs: utc('2025-01-06T03:00:00Z'),
+      offsetMinutes: 540,
       zoneKnown: true,
     });
   });
 
   it('keeps an unknown zone name alone as zoneKnown false', () => {
-    expect(parseEmailDate('6 Jan 2025 12:00:00 CEST')).toMatchObject({
+    expect(parseEmailDate('6 Jan 2025 12:00:00 JST')).toMatchObject({
       utcMs: utc('2025-01-06T12:00:00Z'),
       offsetMinutes: null,
       zoneKnown: false,

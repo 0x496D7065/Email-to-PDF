@@ -28,7 +28,7 @@
 // worker that ended.
 //
 // Test data is made up: tests/fixtures/eml and emails written here
-// (invented people, example.com/.org addresses).
+// (invented people, *.test addresses).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
@@ -73,13 +73,13 @@ const FILE_COUNT = FILES.length;
 function syntheticEmail(i: number): InputFile {
   const n = String(i);
   const day = new Date(Date.UTC(2024, 0, 1, 9, i % 60) + i * 86_400_000).toUTCString().replace('GMT', '+0000');
-  const from = i % 2 === 0 ? 'Alice Example <alice@example.com>' : 'Carol Test <carol@example.org>';
+  const from = i % 2 === 0 ? 'Alice Example <alice@example.test>' : 'Carol Test <carol@other.test>';
   const text = [
     `From: ${from}`,
-    'To: Bob Sample <bob@example.com>',
+    'To: Bob Sample <bob@sample.test>',
     `Subject: Garden bench order ${n}`,
     `Date: ${day}`,
-    `Message-ID: <bench-order-${n}@example.com>`,
+    `Message-ID: <bench-order-${n}@example.test>`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8',
     '',

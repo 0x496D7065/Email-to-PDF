@@ -1,5 +1,6 @@
-// Pure checks behind synthetic-guard.test.ts: the privacy safety net that
-// keeps every test fixture obviously SYNTHETIC (README.md, rule R7).
+// Pure checks behind synthetic-guard.test.ts and test-code-guard.test.ts:
+// the privacy safety net that keeps every test fixture, and the test code
+// itself, obviously SYNTHETIC (README.md, rule R7).
 //
 // Hosts: only reserved test names may appear, i.e. names ending in ".test"
 // or ".invalid" (RFC 2606 / RFC 6761). They can never belong to a real
@@ -196,13 +197,40 @@ export function decodedViews(text: string, depth = 0): string[] {
  * name" rule would also flag file names like `manifest.ts`.
  */
 const REAL_TLDS =
-  /^(?:com|net|org|be|fr|nl|eu|de|uk|io|co|info|biz|lu|ch|at|es|it|ru|me|app|us|ca|au|pl|pt|se|dk|no|fi|ie|cz|jp|cn|in|br|xyz|online|site|dev|ai)$/i;
+  /^(?:com|net|org|edu|gov|ac|int|mil|be|fr|nl|eu|de|uk|io|co|info|biz|lu|ch|at|es|it|ru|me|app|us|ca|au|pl|pt|se|dk|no|fi|ie|cz|jp|cn|in|br|xyz|online|site|dev|ai|tv|ly|lt|lv|ro|gr|hu|sk|si|hr|is|nz|za|mx|ar|kr)$/i;
+
+/**
+ * How a text is read. 'fixture': a test email or its spec. 'code': test
+ * source code, where an identifier followed by `.at(-1)` (the array
+ * method) or `.info` (a property) is a member access, not a host. In
+ * 'code' mode the BARE-host rule skips a name ending in `.at` or `.info`
+ * only when it looks like a member access (isCodeMemberAccess); email
+ * addresses, URLs and `www.` names are still flagged, and every other rule
+ * is the same.
+ */
+export type ScanMode = 'fixture' | 'code';
+
+/** One JS identifier (no `-`, not starting with a digit), then `.at` or `.info`. A name with a `-` in it is a host. */
+const CODE_MEMBER_NAME = /^[A-Za-z_$][\w$]*\.(?:at|info)$/;
+/** A chain of JS identifiers ending in `.at` or `.info`, e.g. `run`, `glyphs`, `at` joined by dots. */
+const CODE_MEMBER_CHAIN = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\.(?:at|info)$/;
+
+/**
+ * True if the bare name `host`, followed in its text by `next`, reads as a
+ * TypeScript member access rather than a host: two labels whose first one is
+ * an identifier (a list, then `.at`), or a longer chain of identifiers that
+ * is called right away (two identifiers, then `.at(-1)`). Three labels that
+ * are not called, or a label with a `-`, are read as a host.
+ */
+function isCodeMemberAccess(host: string, next: string): boolean {
+  return CODE_MEMBER_NAME.test(host) || (next === '(' && CODE_MEMBER_CHAIN.test(host));
+}
 
 /** One label of a host name: anything but separators, so non-ASCII (IDN) labels match too (`example` or `bücher`). */
 const LABEL = `[^\\s.@<>"'\`,;:()\\[\\]{}/\\\\|=?!*&%$#+~^]+`;
 
 /** Problems found in one text: email, URL, bare host and IP literals that are not reserved test names / documentation IPs. */
-export function findForbiddenHosts(text: string): string[] {
+export function findForbiddenHosts(text: string, mode: ScanMode = 'fixture'): string[] {
   const problems = new Set<string>();
   for (const view of decodedViews(text)) {
     // Email addresses (also catches Message-IDs and cid: references, which use the same form).
@@ -228,7 +256,9 @@ export function findForbiddenHosts(text: string): string[] {
     for (const m of view.matchAll(/(?<![\w.-])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?![\w-]|\.[A-Za-z0-9])/g)) {
       const host = m[0];
       const tld = host.slice(host.lastIndexOf('.') + 1);
-      if ((/^www\./i.test(host) || REAL_TLDS.test(tld)) && !isReservedTestHost(host)) problems.add(`host name "${host}"`);
+      const next = view.charAt(m.index + host.length);
+      const realTld = REAL_TLDS.test(tld) && !(mode === 'code' && isCodeMemberAccess(host, next));
+      if ((/^www\./i.test(host) || realTld) && !isReservedTestHost(host)) problems.add(`host name "${host}"`);
     }
     // Bare IPv4 literals. Finds `192.0.2.10` (then checks the range), not `1.2.3` or `1.2.3.4.5`.
     for (const m of view.matchAll(/(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w]|\.\d)/g)) {
@@ -244,4 +274,129 @@ export function findForbiddenHosts(text: string): string[] {
     }
   }
   return [...problems];
+}
+
+/**
+ * Folder names allowed right after a home-folder root: generic placeholders
+ * that cannot name a real person. Anything else (a first name, a login, a
+ * nickname) is flagged. Template and environment placeholders such as
+ * `<name>`, `%USERNAME%` or `${user}` never match the path rule at all.
+ */
+const PLACEHOLDER_USER_NAMES: ReadonlySet<string> = new Set(['dev', 'user', 'username', 'example', 'test']);
+
+/**
+ * Home-folder paths: an optional drive (`C:`, or the mount-style `/c` of
+ * Git Bash and `/mnt/c` of WSL), then `Users` or `home` (any case) between
+ * separators, then the folder name. Separators may be `/`, `\`, an escaped
+ * `\\` or a JSON-escaped `\/`. The root must start the path (no letter,
+ * digit, dot, `~` or `-` just before), so `src/users/x`, `a/b/users/x` or
+ * the path of a URL like `https://example.test/users/x` is not a home folder.
+ * Flags a name after `/home/`, `C:\Users\` (also with `\\` or `/`),
+ * `/c/Users/` or `/mnt/c/Users/`; `/home/dev`, `C:\Users\<name>` and
+ * `%USERPROFILE%` pass.
+ */
+const HOME_PATH =
+  /(?<![\w.~-])(?:[A-Za-z]:|(?:[\\/]+mnt)?[\\/]+[A-Za-z])?[\\/]+(?:Users|home)[\\/]+([^\s\\/'"`<>:|?*%$&{}()[\],;=]+)/gi;
+
+/** Home-folder paths (Windows, macOS, Linux) whose folder name is not a generic placeholder: they could name a real person. */
+export function findPersonalPaths(text: string): string[] {
+  const problems = new Set<string>();
+  for (const view of decodedViews(text)) {
+    for (const m of view.matchAll(HOME_PATH)) {
+      const name = (m[1] ?? '').replace(/\.+$/, '');
+      if (!PLACEHOLDER_USER_NAMES.has(name.toLowerCase())) problems.add(`home-folder path "${m[0]}"`);
+    }
+  }
+  return [...problems];
+}
+
+/**
+ * The only time zones tests may name: a short list of neutral zones (and
+ * `UTC`, which has no area and is always fine). A zone name could hint at
+ * where the author lives, so any other zone is rejected. Add a zone here only
+ * if a test really needs its particular offset or rules.
+ *
+ * Known limit: only `Area/Location` names are checked. Single-word legacy
+ * names (abbreviations such as JST or EST) and legacy `US/...`-style areas
+ * are not, so keep to the neutral zones by hand there.
+ */
+export const ALLOWED_TIME_ZONES: readonly string[] = [
+  'Etc/UTC',
+  'Africa/Lagos',
+  'America/Los_Angeles',
+  'America/New_York',
+  'America/St_Johns',
+  'Asia/Kathmandu',
+  'Asia/Katmandu', // the old name of Asia/Kathmandu, to test that aliases are resolved
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Darwin',
+  'Australia/Sydney',
+  'Pacific/Kiritimati',
+  'Pacific/Pago_Pago',
+];
+
+/** The areas (first part) of IANA time-zone names. */
+const ZONE_AREA = 'Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc';
+/** Between area and location: `/`, `\`, `\/`, `\\`, `_` or `-` (percent and HTML encodings are decoded first). */
+const ZONE_SEP = '[\\\\/_-]+';
+/** Anything that starts like a zone name, any case: `Asia/Tokyo`, `asia\/tokyo`, `ASIA_TOKYO`; not `Asian` or `Indiana/x`. */
+const ZONE_START = new RegExp(`(?<![A-Za-z0-9])(?:${ZONE_AREA})${ZONE_SEP}[A-Za-z][A-Za-z0-9_+-]*`, 'gi');
+/**
+ * One allowed zone at a given position, in any case and with any separator.
+ * The `_` inside a location may also be a space, as in the label
+ * "America/New York". The name must end there: an allowed zone followed by
+ * more letters, digits or another `/Part` is a different (unlisted) name.
+ */
+const ALLOWED_ZONE_AT = new RegExp(
+  `(?:${ALLOWED_TIME_ZONES.map((zone) => {
+    const [area = '', ...location] = zone.split('/');
+    return `${area}${ZONE_SEP}${location.join('/').replace(/_/g, '[_ ]')}`;
+  }).join('|')})(?![A-Za-z0-9_+-]|/[A-Za-z])`,
+  'iy',
+);
+
+/** Time-zone names (`Area/Location`) not in ALLOWED_TIME_ZONES, in the text or any decoded view of it. */
+export function findUnlistedTimeZones(text: string): string[] {
+  const problems = new Set<string>();
+  for (const view of decodedViews(text)) {
+    for (const m of view.matchAll(ZONE_START)) {
+      ALLOWED_ZONE_AT.lastIndex = m.index;
+      if (!ALLOWED_ZONE_AT.test(view)) problems.add(`time zone "${m[0]}" (not in the allowed list)`);
+    }
+  }
+  return [...problems];
+}
+
+/**
+ * The text with every exempted string blanked out (longest first, so a
+ * shorter exempted string inside a longer one does not cut it in two).
+ * Exemptions are exact, case-sensitive strings: see guard-exemptions.ts.
+ * An exempted string that ends like a host name is only blanked where the
+ * host really ends there: exempting a URL `U` that ends in its host does
+ * not blank the start of `U` + `.more.labels` or `U` + `x`, which name a
+ * different host (`U` + a sentence-ending dot is still blanked), nor
+ * `U` + `@other.host` or `U` + `%2E...` (user info or an encoded dot).
+ * Likewise, one that starts with a host name `H` (`H` or `H/x`; not a URL
+ * with a scheme or a code snippet like `includes('x')`) is only blanked
+ * where nothing host-like (a letter, digit, `.`, `@`, `%`, `+` or `-`)
+ * comes just before, so exempting `H` does not blank it in `someone@H`
+ * or `www.` + `H`.
+ */
+export function withoutExemptions(text: string, exempt: readonly string[]): string {
+  return [...exempt]
+    .filter((s) => s !== '')
+    .sort((a, b) => b.length - a.length)
+    .reduce((out, s) => {
+      const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const hostStart = /^[\w-]+(?:\.[\w-]+)+(?![\w-])/.test(s) ? '(?<![\\w.@%+-])' : '';
+      const hostEnd = /[\w.-]$/.test(s) ? '(?![\\w@%-]|\\.[\\w-])' : '';
+      return out.replace(new RegExp(hostStart + escaped + hostEnd, 'g'), ' ');
+    }, text);
+}
+
+/** Every problem the guard finds in one text: hosts (in the given mode), home-folder paths and time zones outside the allowed list. */
+export function findPrivacyProblems(text: string, mode: ScanMode): string[] {
+  return [...findForbiddenHosts(text, mode), ...findPersonalPaths(text), ...findUnlistedTimeZones(text)];
 }

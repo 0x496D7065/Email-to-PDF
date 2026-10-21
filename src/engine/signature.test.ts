@@ -214,8 +214,8 @@ describe('detectSignatures: frequency rule', () => {
     const b = `Hello,\r\n\r\nSecond message.\r\n\r\n${tail2}`;
     const results = detect([a, b].map((t) => ({ bodyText: t, senderKey: BOB })));
     expect(foldedText(b, results[1] ?? [])).toEqual([tail2]);
-    const c = 'Hi\nDone.\nCordialement,\nB\u00E9atrice Exemple, Paris office\n';
-    const d = 'Hi\nAlso done.\nCordialement,\nBe\u0301atrice Exemple, Paris office\n';
+    const c = 'Hi\nDone.\nCordialement,\nB\u00E9atrice Exemple, Head office\n';
+    const d = 'Hi\nAlso done.\nCordialement,\nBe\u0301atrice Exemple, Head office\n';
     const r2 = detect([c, d].map((t) => ({ bodyText: t, senderKey: 'b@example.test' })));
     expect(r2[1]?.length).toBe(1);
   });

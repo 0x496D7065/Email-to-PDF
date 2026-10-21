@@ -340,7 +340,7 @@ describe('detectReplyHeaders: Outlook header blocks (replies fold to the end)', 
         lines('Voici le courrier :', 'De : la mairie', 'Date : lundi', 'Objet : permis', 'Ils demandent un papier. Tu peux m\u2019aider ?'),
       ],
       ['fr Envoye', lines('Le formulaire :', 'De : la mairie', 'Envoy\u00e9 : lundi 3 mars', '\u00c0 : la pr\u00e9fecture', 'Merci de r\u00e9pondre.')],
-      ['nl form', lines('Formulier:', 'Van: Amsterdam', 'Datum: maandag', 'Aan: Utrecht', 'Graag bevestigen. Groet, Alice')],
+      ['nl form', lines('Formulier:', 'Van: het archief', 'Datum: maandag', 'Aan: de balie', 'Graag bevestigen. Groet, Alice')],
       ['nl Verzonden', lines('Het briefje:', 'Van: de gemeente', 'Verzonden: dinsdag', 'Onderwerp: vergunning', 'Wat moet ik doen?')],
       ['inside a ">" quote', lines('Top.', '> From: the warehouse', '> Date: Monday', '> To: the office', '> Send it Friday.', 'Mine.')],
     ];

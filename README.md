@@ -39,7 +39,8 @@ R1 to R3 are enforced mechanically, by the build check, lint and browser
 tests. R4 and R5 are partly enforced the same way (HTML injection and
 browser storage APIs are banned by lint and the build check); the rest of them
 is followed by design. R6 and R7 are followed by design and checked by the
-unit tests of the detection code in `src/engine/`. All code must follow every
+unit tests of the detection code in `src/engine/`; the synthetic-data part of
+R7 is also checked by a guard test (see R7). All code must follow every
 rule.
 
 ### R1: No network requests after the page loads
@@ -208,6 +209,18 @@ puts every part in.
 Detection logic (quotes, signatures, duplicates, ordering) is written as pure
 functions with no page or DOM access, so each one can be unit tested in
 isolation with synthetic test emails. Real emails are never committed.
+
+A guard test checks this on every test run, for the test emails in
+`tests/fixtures/` and for the test code too (`src/**/*.test.ts`, `e2e/`,
+`tests/support/`, `scripts/**/*.test.*`). It fails on any email address,
+web address or host name that is not a reserved test name (`*.test`,
+`*.invalid`), any IP address outside the documentation and loopback
+ranges, any home-folder path that could name a person (only placeholders
+such as `dev` or `user` are allowed there), and any time-zone name outside
+a short list of neutral zones that the tests use. The few real web
+addresses the build-check tests need are listed, one by one with a reason,
+in `tests/fixtures/guard-exemptions.ts`.
+See `tests/fixtures/README.md`.
 
 ## Non-goals
 

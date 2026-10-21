@@ -8,11 +8,16 @@
 //      the file's bytes) or lacks the "X-Synthetic-Fixture: true" header,
 //   3. an email address, Message-ID, URL (also "//host"), www host or bare
 //      host with a common real TLD that is not a reserved test name (*.test,
-//      *.invalid), or an IP address outside the documentation ranges; also
+//      *.invalid), or an IP address outside the documentation and loopback
+//      ranges; also
 //      inside base64 (nested too), quoted-printable, RFC 2047, HTML
 //      character references and percent-encoded text,
 //   4. a .msg spec with such an address, or a built .msg without the marker,
-//   5. manifest.ts out of sync with the .eml files and the .msg specs.
+//   5. manifest.ts out of sync with the .eml files and the .msg specs,
+//   6. a home-folder path with a real-looking name, or a time zone outside
+//      the short allowed list (the same checks as for the test code, see
+//      test-code-guard.test.ts).
+// The only accepted exceptions are the exact strings in guard-exemptions.ts.
 //
 // Files are read with Vite's import.meta.glob + "?raw" (no Node types needed).
 // `exhaustive: true` makes the glob include dot-files and dot-folders, which it
@@ -20,13 +25,16 @@
 
 import MsgReader from '@kenjiuno/msgreader';
 import { describe, expect, it } from 'vitest';
+import { exemptionsFor } from './guard-exemptions';
 import {
   findForbiddenHosts,
+  findPrivacyProblems,
   hasHiddenSegment,
   hasSyntheticMarker,
   isAllowedHost,
   isReservedTestHost,
   isSevenBitAscii,
+  withoutExemptions,
 } from './guard-rules';
 import { FIXTURES } from './manifest';
 import { buildMsgView, SYNTHETIC_MARKER_PROP_ID, SYNTHETIC_MARKER_VALUE } from './msg/builder';
@@ -36,6 +44,11 @@ import { MSG_SPECS } from './msg/specs';
 const files = import.meta.glob<string>('./**/*', { query: '?raw', import: 'default', eager: true, exhaustive: true });
 const paths = Object.keys(files).sort();
 const emlPaths = paths.filter((p) => /\.eml$/i.test(p));
+
+/** Every privacy problem in one fixture file's text: hosts, home-folder paths and time zones. */
+function fixtureProblems(text: string): string[] {
+  return findPrivacyProblems(text, 'fixture');
+}
 
 describe('synthetic fixture guard', () => {
   it('finds the fixture files', () => {
@@ -57,8 +70,12 @@ describe('synthetic fixture guard', () => {
     expect(hasSyntheticMarker(text), `${path}: missing "X-Synthetic-Fixture: true" header`).toBe(true);
   });
 
-  it.each(paths)('%s uses only reserved test domains', (path) => {
-    expect(findForbiddenHosts(files[path] ?? ''), path).toEqual([]);
+  /** The file's text with its exempted strings (guard-exemptions.ts) blanked out. */
+  const scanned = (path: string): string => withoutExemptions(files[path] ?? '', exemptionsFor(`tests/fixtures/${path.slice(2)}`));
+
+  // fixtureProblems runs every rule (hosts, home-folder paths, time zones); its self-test below proves all three are on.
+  it.each(paths)('%s uses only reserved test domains, no personal home-folder path and only allowed time zones', (path) => {
+    expect(fixtureProblems(scanned(path)), path).toEqual([]);
   });
 
   it.each(MSG_SPECS.map((s) => [s.id, s] as const))('.msg spec %s uses only reserved test domains', (_, spec) => {
@@ -120,6 +137,9 @@ describe('synthetic fixture guard rules (self-test)', () => {
     expect(findForbiddenHosts(`shop.${'co'}.${'uk'}`)).not.toEqual([]);
     expect(findForbiddenHosts(`MAIL.${'EXAMPLE'}.${'DE'}`)).not.toEqual([]);
     expect(findForbiddenHosts(`write to ${'mail'}.${'ru'} today`)).not.toEqual([]);
+    // Education and government domains (a school is personal information too).
+    expect(findForbiddenHosts(`see school.${'edu'}, dept.${'ac'}.${'kr'} and city.${'gov'}`)).toHaveLength(3);
+    expect(findForbiddenHosts(`see ${'uni'}.${'ac'} today`)).not.toEqual([]);
     expect(findForbiddenHosts('Visit shop.example.test or x.com.invalid; version 1.2; e.g. this.')).toEqual([]);
   });
 
@@ -212,6 +232,16 @@ describe('synthetic fixture guard rules (self-test)', () => {
     const outer = `Content-Type: message/rfc822\nContent-Transfer-Encoding: base64\n\n${btoa(inner)}\n`;
     expect(findForbiddenHosts(outer)).not.toEqual([]);
     expect(findForbiddenHosts(`Content-Type: message/rfc822\n\n${inner}`)).not.toEqual([]);
+  });
+
+  it('checks each fixture for hosts, home-folder paths and time zones', () => {
+    const home = ['', 'home', 'planted', 'mail.eml'].join('/');
+    const zone = ['America', 'Chicago'].join('/');
+    const problems = fixtureProblems(`Path: ${home}\nZone: ${zone}\nVisit ${bad} today.\n`);
+    expect(problems.some((p) => p.startsWith('home-folder path')), 'home-folder path').toBe(true);
+    expect(problems.some((p) => p.startsWith('time zone')), 'time zone').toBe(true);
+    expect(problems.some((p) => p.startsWith('host name')), 'host name').toBe(true);
+    expect(fixtureProblems('Path: /home/dev/a.eml\nZone: Asia/Tokyo\nVisit shop.example.test today.\n')).toEqual([]);
   });
 
   it('rejects hidden (dot) files and folders', () => {

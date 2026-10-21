@@ -9,7 +9,7 @@
 //
 // Accepted shape (case-insensitive, extra spaces and (comments) allowed):
 //   [Weekday,] Day Month Year HH:MM[:SS] [Zone]
-//   e.g. "Tue, 3 Jun 2025 14:05:09 +0200 (CEST)"
+//   e.g. "Tue, 3 Jun 2025 14:05:09 +0900 (JST)"
 // The weekday may also be localized ("mer.,", "wo,") as long as a comma
 // follows it. Month names must stay English: a localized month ("okt")
 // is not RFC-valid, so such a header is reported as unparseable.
@@ -29,7 +29,7 @@ const NAMED_ZONES: Readonly<Record<string, number>> = {
   pdt: -7 * 60, pst: -8 * 60,
 };
 
-/** Removes (comments), which may be nested, e.g. "+0200 (CEST)" -> "+0200 ". */
+/** Removes (comments), which may be nested, e.g. "+0900 (JST)" -> "+0900 ". */
 function stripComments(text: string): string {
   let out = '';
   let depth = 0;
@@ -116,11 +116,11 @@ export function parseEmailDate(raw: string | null | undefined): EmailDate {
   let offset = zone.offset;
   let zoneKnown = offset !== null; // null offset = missing, "-0000" or unknown zone
   // Some clients write a zone NAME followed by a numeric offset, e.g.
-  // "12:00:00 CEST +0200" or "12:00:00 GMT +0200". When the next token is a
+  // "12:00:00 JST +0900" or "12:00:00 GMT +0200". When the next token is a
   // valid offset (in range, and not "-0000"):
   //   - GMT, UT, UTC or Z: "GMT +0200" means "GMT plus 2 hours", so the
   //     numeric offset is used and is trusted (zoneKnown true).
-  //   - unknown name (e.g. CEST): the numeric offset is used and trusted.
+  //   - unknown name (e.g. JST): the numeric offset is used and trusted.
   //   - US zone (EST, EDT, CST, CDT, MST, MDT, PST, PDT): if its value equals
   //     the offset, that offset is trusted. If they contradict each other, the
   //     numeric offset is still used for sorting, but zoneKnown is false so the
@@ -129,7 +129,7 @@ export function parseEmailDate(raw: string | null | undefined): EmailDate {
   // the header contradicts itself: the name's offset is kept, but zoneKnown
   // is set to false so the date gets flagged.
   // "-0000" after a name is ignored (the name is trusted).
-  // Otherwise the token after the zone (e.g. a bare "CEST") is ignored.
+  // Otherwise the token after the zone (e.g. a bare "JST") is ignored.
   if (/^[a-z]+$/i.test(zoneToken ?? '') && /^[+-]\d{4}$/.test(afterZoneToken ?? '')) {
     const next = readZone(afterZoneToken);
     if (next === null) {

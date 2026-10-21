@@ -14,7 +14,9 @@ bundled into the published site.
 | `manifest.ts`             | The expected parse result of every fixture (`.eml` and `.msg`).    |
 | `manifest.test.ts`        | Checks that `manifest.ts` matches the fixtures.                    |
 | `guard-rules.ts`          | The privacy checks (pure functions).                               |
+| `guard-exemptions.ts`     | The few exact strings the checks accept, each with its reason.     |
 | `synthetic-guard.test.ts` | Runs the privacy checks on every file here, plus their self-tests. |
+| `test-code-guard.test.ts` | Runs the privacy checks on the test code, plus their self-tests.   |
 
 There are **no `.msg` files on disk**, and there must never be: `.gitignore`
 ignores `.msg` everywhere, including here. Only `.eml` has an exception, and
@@ -60,4 +62,46 @@ only inside `tests/fixtures/`. Do not widen it.
   quoted-printable, RFC 2047, HTML character references (`&#64;`) and
   percent-encoding (`%40`),
 - a `.msg` spec that breaks these rules, or a built `.msg` without the marker,
-- a `manifest.ts` that does not list exactly the `.eml` files and `.msg` specs.
+- a `manifest.ts` that does not list exactly the `.eml` files and `.msg` specs,
+- a home-folder path or a time zone outside the allowed list (see below).
+
+## The test code is checked too
+
+`test-code-guard.test.ts` applies the same privacy checks to the code of
+every other test, so no real-looking data can hide in an inline test email
+either:
+
+- `src/**/*.test.ts`, everything in `e2e/` (specs and support files),
+  everything in `tests/` outside this folder (e.g. `tests/support/`), and
+  `scripts/**/*.test.*`. App code that is not a test is not scanned here (the
+  build check covers its web addresses).
+- Shared test data and helpers belong in `tests/support/`: helper modules
+  in `src/` that are not `*.test.ts` files are not scanned.
+- Hosts, email addresses, URLs and IP addresses: the same rules and
+  decoding as above. One difference: in code, an identifier followed by
+  `.at` or `.info` (the array method `at(-1)`, an `info` property) is read
+  as a member access, not a host. A longer dotted name ending that way is
+  read as code only if it is called right away (`(` just after) and has no
+  `-`. Email addresses and URLs with these endings are still rejected.
+- Home-folder paths (`C:\Users\`, `/Users/`, `/home/`, also Git Bash
+  `/c/Users/` and WSL `/mnt/c/Users/`, with `/`, `\` or `\\`) are
+  rejected unless the folder name is a generic placeholder:
+  `dev`, `user`, `username`, `example` or `test`. Placeholders such as
+  `<name>` or `%USERPROFILE%` are fine.
+- Time zones: tests use only `UTC` and a short list of neutral zones
+  (`ALLOWED_TIME_ZONES` in `guard-rules.ts`, e.g. `America/New_York`,
+  `Asia/Tokyo`). Any other zone name (`Area/Location`) in test code or
+  fixtures fails the check, in any case and with `/`, `\`, `_` or `-`
+  between its parts. Single-word names (abbreviations such as JST or EST)
+  and legacy `US/...`-style names are not checked: keep to neutral ones.
+
+These checks also run on every file in this folder.
+
+## Exemptions
+
+A test that must contain a real web address (today only the self-test of
+the no-network build check, which proves its allowlist accepts the approved
+license links and rejects everything else) lists each one in
+`guard-exemptions.ts`: one exact string, in one named file, with its reason.
+Never a pattern. The guard fails if an exemption is not needed or no longer
+found in its file.

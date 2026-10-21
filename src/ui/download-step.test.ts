@@ -19,8 +19,8 @@ import { mountPage, type Page } from './page';
 
 // ------------------------------------------------------------------ synthetic data
 
-const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.com' };
-const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@example.net' };
+const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
+const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@other.test' };
 const ORIGIN = 'http://127.0.0.1:4173';
 const NOW = Date.UTC(2025, 5, 1, 12, 0, 0);
 // The fonts' content does not matter to the page: it only passes them on.
@@ -30,7 +30,7 @@ let counter = 0;
 function make(): NormalizedMessage {
   counter++;
   return {
-    messageId: `d${String(counter)}@example.com`,
+    messageId: `d${String(counter)}@example.test`,
     inReplyTo: null,
     references: [],
     date: { utcMs: Date.UTC(2025, 2, 3, 8, 15) + counter * 60_000, original: 'synthetic', offsetMinutes: 0, zoneKnown: true },

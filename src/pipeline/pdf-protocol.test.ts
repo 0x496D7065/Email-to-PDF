@@ -1,7 +1,7 @@
 // Unit tests for the PDF worker's messages and its side of the conversation
 // (pdf-protocol.ts), in Node without a browser: the real makePdf (fonts
 // parsed from their bytes, as the worker does) and fakes. Synthetic emails
-// only (made-up names, example.com/.org addresses). The real worker is
+// only (made-up names, *.test addresses). The real worker is
 // checked in Chromium by e2e/download.spec.ts.
 
 import { describe, expect, it } from 'vitest';
@@ -16,12 +16,12 @@ import { createPdfWorkerSide, isFromPdfWorker, isToPdfWorker, makePdf, ownBuffer
 function make(k: number): NormalizedMessage {
   const n = String(k + 1);
   return {
-    messageId: `protocol-${n}@example.com`,
+    messageId: `protocol-${n}@example.test`,
     inReplyTo: null,
     references: [],
     date: { utcMs: Date.UTC(2025, 2, 4, 8) + k * 3_600_000, original: 'Tue, 4 Mar 2025 08:00:00 +0000', offsetMinutes: 0, zoneKnown: true },
-    from: [{ name: 'Alice Example', address: 'alice@example.com' }],
-    to: [{ name: 'Bob Sample', address: 'bob@example.org' }],
+    from: [{ name: 'Alice Example', address: 'alice@example.test' }],
+    to: [{ name: 'Bob Sample', address: 'bob@sample.test' }],
     cc: [],
     bcc: [],
     subject: `Garden bench, part ${n}`,

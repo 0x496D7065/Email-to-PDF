@@ -1,6 +1,6 @@
 // The whole PDF path (generatePdf): cover, index with real page numbers,
 // links, bookmarks, emails. Synthetic emails only (made-up names, reserved
-// example.com/.org/.net addresses). Every index page number is checked
+// *.test addresses). Every index page number is checked
 // twice: in the laid-out document (anchorPages, destinations, the drawn
 // number in each row's link area) and in the written file, read back with
 // the test reader (link annotations, named destinations, drawn text).
@@ -24,9 +24,9 @@ beforeAll(async () => {
 });
 
 const strings = createPdfStrings();
-const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.com' };
-const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.org' };
-const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@example.net' };
+const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
+const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@sample.test' };
+const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@other.test' };
 const PEOPLE = [ALICE, BOB, CAROL];
 const BASE_MS = Date.UTC(2025, 2, 4, 8, 0, 0);
 const GENERATED_AT = Date.UTC(2025, 5, 1, 12, 0, 0);
@@ -35,7 +35,7 @@ const GENERATED_AT = Date.UTC(2025, 5, 1, 12, 0, 0);
 function make(k: number, fields: Partial<NormalizedMessage> = {}): NormalizedMessage {
   const n = String(k + 1);
   return {
-    messageId: `generate-${n}@example.com`,
+    messageId: `generate-${n}@example.test`,
     inReplyTo: null,
     references: [],
     date: { utcMs: BASE_MS + k * 3_600_000, original: 'Tue, 4 Mar 2025 08:00:00 +0000', offsetMinutes: 0, zoneKnown: true },
