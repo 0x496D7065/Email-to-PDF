@@ -343,6 +343,117 @@ test('unticking an email in the middle never moves the emails below, nor does ti
   await expectNothingLeftThePage(page);
 });
 
+test('new labels that redraw a focused fold keep the keyboard focus on it (never lost to the top of the page)', async ({ page }) => {
+  test.setTimeout(60_000);
+  const items = await openWithEmails(page);
+  /** What has the focus: its tag, the email it is in (-1: none), and its index among that email's summaries (-1: not one). */
+  const focused = (): Promise<{ tag: string; position: number; summary: number }> =>
+    page.evaluate(() => {
+      const active = document.activeElement;
+      const item = active?.closest('#preview-list > li');
+      const position = Number(item?.getAttribute('data-position') ?? '-1');
+      const summaries = item === null || item === undefined ? [] : [...item.querySelectorAll('.message-body summary')];
+      return { tag: active?.tagName ?? '', position, summary: summaries.indexOf(active as Element) };
+    });
+
+  // 1. #3 (Alice's Gmail reply): one fold. Reached with the keyboard: Tab from its include checkbox.
+  const third = items.nth(2);
+  await expect(third.locator('details.fold')).toHaveCount(1);
+  await page.locator('#include-2').focus();
+  await page.keyboard.press('Tab');
+  expect(await focused()).toEqual({ tag: 'SUMMARY', position: 2, summary: 0 });
+  // Untick #1 inside the page (the focus stays on the summary): #3's fold now holds
+  // the first copy of Alice's signature, so the new labels cut it in two (a redraw).
+  const marked = await page.evaluate(() => {
+    document.activeElement?.setAttribute('data-test-old', '');
+    document.querySelector<HTMLInputElement>('#include-0')?.click();
+    return document.querySelector('#preview-list')?.getAttribute('data-pdf-labels');
+  });
+  expect(marked).toBe('updating');
+  await expectReady(page);
+  await expect(third.locator('details.fold')).toHaveCount(2);
+  await expect(page.locator('[data-test-old]')).toHaveCount(0); // the old summary is gone from the page
+  // The focus is on the new fold over the same text (the first piece), not on <body>.
+  expect(await focused()).toEqual({ tag: 'SUMMARY', position: 2, summary: 0 });
+  // So the next key works: Enter opens it, Enter closes it.
+  const firstFold = third.locator('details.fold').first();
+  await expect(firstFold).not.toHaveAttribute('open', /.*/);
+  await page.keyboard.press('Enter');
+  await expect(firstFold).toHaveAttribute('open', '');
+  expect(await focused()).toEqual({ tag: 'SUMMARY', position: 2, summary: 0 });
+  await page.keyboard.press('Enter');
+  await expect(firstFold).not.toHaveAttribute('open', /.*/);
+
+  // 2. #2 (Bob's Outlook reply): two folds; the focus on the second (the quote).
+  // "Put everything in the PDF", ticked inside the page: the two become one fold.
+  const second = items.nth(1);
+  await expect(second.locator('details.fold')).toHaveCount(2);
+  await second.locator('details.fold').nth(1).locator('summary').focus();
+  expect(await focused()).toEqual({ tag: 'SUMMARY', position: 1, summary: 1 });
+  const scrollBefore = await page.evaluate(() => {
+    document.querySelector<HTMLInputElement>('#pdf-everything')?.click();
+    return window.scrollY;
+  });
+  await expect(page.getByLabel(en.pdf.everything)).toBeChecked();
+  await expectReady(page);
+  await expect(second.locator('details.fold')).toHaveCount(1);
+  expect(await focused()).toEqual({ tag: 'SUMMARY', position: 1, summary: 0 });
+  // Not scrolled by the move (focus with preventScroll).
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  // Space toggles the new fold.
+  const merged = second.locator('details.fold').first();
+  await page.keyboard.press(' ');
+  await expect(merged).toHaveAttribute('open', '');
+  expect(await focused()).toEqual({ tag: 'SUMMARY', position: 1, summary: 0 });
+
+  await expectNothingLeftThePage(page);
+});
+
+test('a merge that moves the focused fold summary above the window scrolls it back into view', async ({ page }) => {
+  test.setTimeout(60_000);
+  const items = await openWithEmails(page);
+  // A short window, so the open first fold of #2 pushes its second summary far down.
+  await page.setViewportSize({ width: 800, height: 240 });
+  const second = items.nth(1);
+  const folds = second.locator('details.fold');
+  await expect(folds).toHaveCount(2);
+  await folds.first().locator('summary').click();
+  await expect(folds.first()).toHaveAttribute('open', '');
+  // The second summary near the top of the window, with the focus (as reached with the keyboard).
+  const old = await page.evaluate(() => {
+    const summary = document.querySelectorAll<HTMLElement>('#preview-list > li:nth-child(2) .message-body summary')[1]!;
+    summary.scrollIntoView({ block: 'start' });
+    window.scrollBy(0, -20);
+    summary.setAttribute('data-test-old', '');
+    summary.focus({ preventScroll: true });
+    const rect = summary.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom };
+  });
+  expect(old.top).toBeGreaterThan(0);
+  expect(old.bottom).toBeLessThan(240);
+  // "Put everything in the PDF", ticked inside the page: the two folds become one,
+  // whose summary is where the first fold starts (above the window).
+  await page.evaluate(() => document.querySelector<HTMLInputElement>('#pdf-everything')?.click());
+  await expect(page.getByLabel(en.pdf.everything)).toBeChecked();
+  await expectReady(page);
+  await expect(folds).toHaveCount(1);
+  await expect(page.locator('[data-test-old]')).toHaveCount(0);
+  await expect(folds.first()).toHaveAttribute('open', ''); // (kept open: it overlaps the open fold)
+  // The focus is on the new summary, and it can be seen in full (give or take
+  // a pixel fraction: the page scrolls by whole pixels).
+  const after = await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    const summary = document.querySelector('#preview-list > li:nth-child(2) .message-body summary');
+    const rect = active?.getBoundingClientRect();
+    return { same: active === summary, top: rect?.top ?? -1, bottom: rect?.bottom ?? -1, height: window.innerHeight };
+  });
+  expect(after.same).toBe(true);
+  expect(after.top).toBeGreaterThan(-1);
+  expect(after.bottom).toBeLessThan(after.height + 1);
+
+  await expectNothingLeftThePage(page);
+});
+
 test('"Put everything in the PDF" makes every label say so, and Clear everything unticks it', async ({ page }) => {
   test.setTimeout(60_000);
   const items = await openWithEmails(page);

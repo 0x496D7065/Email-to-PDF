@@ -21,6 +21,10 @@
 // the page forget the control the focus was on), so a mouse
 // user reading far down the list is not scrolled back up. The page keeps a
 // reference only to that one control, and forgets it on "Clear everything".
+// New PDF plans do not rebuild the list, only some emails' bodies: there the
+// preview itself puts the focus back on the redrawn fold (src/ui/preview.ts),
+// in the same task, so the focus never reaches <body> and this check, which
+// runs on new results only, has nothing to do.
 //
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what

@@ -109,6 +109,7 @@ function mount(options: PreviewOptions = {}): Preview {
 beforeEach(() => {
   doc = new FakeDocument();
   vi.stubGlobal('document', doc);
+  vi.stubGlobal('window', { innerHeight: 600 }); // (only the window's height is read)
   mount();
 });
 
@@ -1040,6 +1041,148 @@ describe('PDF labels', () => {
     expect(after[0]!.hasAttribute('open')).toBe(false);
     // "Put everything in": every label says "In the PDF".
     for (const item of items()) for (const text of labelsOf(item)) expect(text.startsWith('In the PDF: ')).toBe(true);
+  });
+
+  describe('keyboard focus through a redraw', () => {
+    /** Shows benchThread with its first plans; returns the result and Bob's reply (#2: two folds, signature in, quote out). */
+    function ready(): { result: EngineResult; reply: FakeElement } {
+      const result = engineOf(benchThread());
+      preview.show(result);
+      runAll();
+      preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+      runAll();
+      const reply = items()[1]!;
+      expect(withClass(reply, 'fold')).toHaveLength(2);
+      return { result, reply };
+    }
+    const allFocuses = (): number => area.descendants().reduce((n, e) => n + e.focuses, 0);
+
+    it('a focused fold summary that is redrawn: the focus goes to the new fold over the same text, without scrolling', () => {
+      const { result, reply } = ready();
+      // The keyboard focus is on the quote's summary (the second fold).
+      const oldSummary = withClass(reply, 'fold-label')[1]!;
+      doc.activeElement = oldSummary;
+      // "Put everything in": the two folds become one (a redraw).
+      preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
+      runAll();
+      const after = withClass(reply, 'fold-label');
+      expect(after).toHaveLength(1);
+      expect(after[0]).not.toBe(oldSummary);
+      expect(after[0]!.focuses).toBe(1);
+      expect(after[0]!.focusOptions).toEqual({ preventScroll: true });
+      expect(allFocuses()).toBe(1);
+      expect(renderedBody(reply)).toBe(result.messages[1]!.message.bodyText);
+
+      // Back to the default: one fold cut in two; the focus goes to the first piece (where the fold starts).
+      doc.activeElement = after[0]!;
+      preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+      runAll();
+      const cut = withClass(reply, 'fold-label');
+      expect(cut).toHaveLength(2);
+      expect(cut[0]!.focuses).toBe(1);
+      expect(cut[1]!.focuses).toBe(0);
+      expect(allFocuses()).toBe(1); // (the merged fold focused before is gone from the page)
+    });
+
+    it('focus elsewhere (or a body that is only relabelled) is never moved', () => {
+      const { result, reply } = ready();
+      // On a control outside the list (or nowhere): nothing is focused by the redraw.
+      for (const active of [byId('preview-zone'), doc.body, null]) {
+        doc.activeElement = active;
+        preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
+        runAll();
+        preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+        runAll();
+      }
+      expect(withClass(reply, 'fold')).toHaveLength(2); // redrawn each time
+      // On another email's fold, whose body is only relabelled (same blocks): left alone.
+      const third = items()[2]!;
+      doc.activeElement = one(third, 'fold-label');
+      preview.setPdfPlans(plansFor(result, [1, 2]));
+      runAll();
+      expect(allFocuses()).toBe(0);
+      expect(one(reply, 'message-body').hasAttribute('tabindex')).toBe(false);
+    });
+
+    it('focus on the email body itself (not redrawn) is left alone', () => {
+      const { result, reply } = ready();
+      const body = one(reply, 'message-body');
+      doc.activeElement = body;
+      preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
+      runAll();
+      expect(withClass(reply, 'fold')).toHaveLength(1); // redrawn
+      expect(allFocuses()).toBe(0);
+      expect(body.hasAttribute('tabindex')).toBe(false);
+    });
+
+    describe('scrolling the new summary into view', () => {
+      type Rect = { top: number; bottom: number };
+      /**
+       * Focuses Bob's quote summary placed at `oldRect` (window: 600 high),
+       * merges the two folds (a redraw), and returns how many scrollIntoView
+       * calls were made in the whole check area, and the new summary (placed
+       * at `newRect`: the fake has no layout, so every summary built by the
+       * redraw reports it).
+       */
+      function merge(oldRect: Rect, newRect: Rect): { scrolls: number; summary: FakeElement } {
+        const { result, reply } = ready();
+        const oldSummary = withClass(reply, 'fold-label')[1]!;
+        oldSummary.rect = oldRect;
+        doc.activeElement = oldSummary;
+        const create = doc.createElement.bind(doc);
+        const spy = vi.spyOn(doc, 'createElement').mockImplementation((tag: string) => {
+          const made = create(tag);
+          if (tag === 'summary') made.rect = newRect;
+          return made;
+        });
+        preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
+        runAll();
+        spy.mockRestore();
+        const after = withClass(reply, 'fold-label');
+        expect(after).toHaveLength(1);
+        expect(after[0]!.focuses).toBe(1);
+        expect(after[0]!.focusOptions).toEqual({ preventScroll: true });
+        return { scrolls: area.descendants().reduce((n, e) => n + e.scrollIntoViewCalls.length, 0), summary: after[0]! };
+      }
+
+      it('old summary in view, new one above the window (a merge with the first fold open): scrolled, only as far as needed', () => {
+        const { scrolls, summary } = merge({ top: 10, bottom: 30 }, { top: -304, bottom: -284 });
+        expect(summary.scrollIntoViewCalls).toEqual([{ block: 'nearest' }]);
+        expect(scrolls).toBe(1);
+      });
+
+      it('old summary partly in view, new one partly below the window: scrolled too', () => {
+        const { scrolls, summary } = merge({ top: -10, bottom: 10 }, { top: 590, bottom: 610 });
+        expect(summary.scrollIntoViewCalls).toEqual([{ block: 'nearest' }]);
+        expect(scrolls).toBe(1);
+      });
+
+      it('old summary out of view (the reader scrolled away): never scrolled back', () => {
+        expect(merge({ top: -500, bottom: -480 }, { top: -900, bottom: -880 }).scrolls).toBe(0);
+        expect(merge({ top: 700, bottom: 720 }, { top: 650, bottom: 670 }).scrolls).toBe(0);
+      });
+
+      it('new summary fully in view: not scrolled', () => {
+        expect(merge({ top: 300, bottom: 320 }, { top: 0, bottom: 20 }).scrolls).toBe(0);
+        expect(merge({ top: 300, bottom: 320 }, { top: 580, bottom: 600 }).scrolls).toBe(0);
+      });
+    });
+
+    it('no fold left over the focused block: the focus goes to the email body itself, never to the top of the page', () => {
+      const { result, reply } = ready();
+      // Focus in shown text (as with caret browsing): no fold covers that text after the redraw.
+      doc.activeElement = withClass(reply, 'body-text')[0]!;
+      const body = one(reply, 'message-body');
+      preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
+      runAll();
+      expect(body.focuses).toBe(1);
+      expect(body.focusOptions).toEqual({ preventScroll: true });
+      expect(body.getAttribute('tabindex')).toBe('-1');
+      expect(allFocuses()).toBe(1);
+      // Made focusable only for this: once the focus leaves it, it is not focusable any more.
+      body.fire('blur');
+      expect(body.hasAttribute('tabindex')).toBe(false);
+    });
   });
 
   it('applies new plans in chunks, and emails built later get their labels as they are built', () => {

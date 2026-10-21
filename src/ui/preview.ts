@@ -57,6 +57,13 @@
 //   text says so (pdf.messageFailed).
 // - The status line keeps its place while a list is shown, so ticking an
 //   email never moves the list under the reader's pointer.
+// - The keyboard focus is never lost to a redraw: when new plans redraw a
+//   body whose fold summary had the focus, the focus goes to the summary of
+//   the new fold over the same text (or to the body itself if no fold is
+//   left there), never back to the top of the page, and the new summary is
+//   scrolled into view if the old one could be seen. Focus anywhere else is
+//   not touched. (A new result is src/ui/page.ts's job: it rebuilds the
+//   whole list.)
 // The labels only add words: every character stays in the page.
 //
 // Not here: the counts, the include/exclude checkboxes and the notes
@@ -324,8 +331,22 @@ interface BuiltBlock {
   readonly start: number;
   readonly end: number;
   readonly details: HTMLDetailsElement | null;
+  /** A folded block's <summary> (where the focus goes after a redraw, see drawBlocks); null for shown text. */
+  readonly summary: HTMLElement | null;
+  /** The block's own elements in the body (to find the block the focus is in). */
+  readonly nodes: readonly HTMLElement[];
   /** The PDF label element (a folded block always has one, hidden when there is no label). */
   readonly label: HTMLElement | null;
+}
+
+/**
+ * Where the keyboard focus was before a redraw: the text range of its block
+ * (null: in the body, but in no known block), and whether the focused
+ * element could be seen in the window.
+ */
+interface FocusSpot {
+  readonly range: { readonly start: number; readonly end: number } | null;
+  readonly wasVisible: boolean;
 }
 
 /** One email's body in the page, redrawn when its PDF plan changes. */
@@ -461,12 +482,68 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   }
 
   /**
+   * Where the keyboard focus is in a body about to be redrawn: the range of
+   * the block it is in (null if it is in the body but in no known block),
+   * and whether the focused element could be seen (any part of it in the
+   * window); or null if the focus is not in this body's blocks at all (it is
+   * then never moved). The body element itself is not redrawn, so focus on
+   * it is null.
+   */
+  function focusSpotIn(slot: BodySlot): FocusSpot | null {
+    const active = document.activeElement;
+    if (active === null || active === slot.body || !slot.body.contains(active)) return null;
+    const block = slot.blocks.find((b) => b.nodes.some((n) => n.contains(active)));
+    const rect = active.getBoundingClientRect();
+    return {
+      range: block === undefined ? null : { start: block.start, end: block.end },
+      wasVisible: rect.bottom > 0 && rect.top < window.innerHeight,
+    };
+  }
+
+  /**
+   * Puts the focus back after a redraw took the focused element away (WCAG
+   * 2.4.3 focus order): on the summary of the first new folded block that
+   * overlaps the old block's text, else on the body itself (made focusable
+   * only for this, until the focus leaves it). Never on <body>, at the top of
+   * the page.
+   * Scrolling (WCAG 2.4.7 / 2.4.11, focus visible and not hidden): after a
+   * cut, the new summary starts where the old block started, but after a
+   * merge ([a,m] + [m,b] into [a,b]) it starts at `a`, which can be far above
+   * the window when the first fold was open. So the focus moves without
+   * scrolling (preventScroll), then the new summary is scrolled into view
+   * (only as far as needed) if the old focused element could be seen and the
+   * new summary cannot be seen in full. A reader who scrolled away while the
+   * focus stayed behind (a mouse click on a summary, then the wheel) is not
+   * pulled back.
+   */
+  function restoreFocus(slot: BodySlot, spot: FocusSpot): void {
+    const range = spot.range;
+    const target = range === null ? undefined : slot.blocks.find((b) => b.summary !== null && b.start < range.end && range.start < b.end);
+    if (target?.summary) {
+      target.summary.focus({ preventScroll: true });
+      if (spot.wasVisible) {
+        const rect = target.summary.getBoundingClientRect();
+        if (rect.top < 0 || rect.bottom > window.innerHeight) target.summary.scrollIntoView({ block: 'nearest' });
+      }
+      return;
+    }
+    // (If "Clear everything" removes this body before the focus leaves it,
+    // its tabindex="-1" stays on an element no longer in the page: harmless.)
+    setSafeAttribute(slot.body, 'tabindex', '-1');
+    slot.body.addEventListener('blur', () => setSafeAttribute(slot.body, 'tabindex', false), { once: true });
+    slot.body.focus({ preventScroll: true });
+  }
+
+  /**
    * Draws the blocks of a body (all of it). A new folded block is open when
    * "show quoted text" is ticked, or when a block it overlaps was open in
    * the body drawn before (`wasOpen`), so redrawing never closes what the
-   * reader opened.
+   * reader opened. If the keyboard focus was in one of the old blocks (a
+   * fold's summary), it is put back on the matching new one (restoreFocus);
+   * focus anywhere else is left alone.
    */
   function drawBlocks(slot: BodySlot, blocks: readonly PdfBlock[], wasOpen: readonly { start: number; end: number }[]): void {
+    const focusSpot = focusSpotIn(slot);
     const built: BuiltBlock[] = [];
     const children: Node[] = [];
     for (const { block, label } of blocks) {
@@ -474,31 +551,29 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         const text = el('div', { attrs: { class: 'body-text' }, text: block.text });
         if (label === null) {
           children.push(text);
-          built.push({ start: block.start, end: block.end, details: null, label: null });
+          built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [text], label: null });
           continue;
         }
         // Shown text the plan leaves out (a bug, never expected): said all the same.
         const mark = el('p', { attrs: { class: 'pdf-label pdf-label-shown' } });
         applyLabel(mark, label);
         children.push(mark, text);
-        built.push({ start: block.start, end: block.end, details: null, label: mark });
+        built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [mark, text], label: mark });
         continue;
       }
       const mark = el('span', { attrs: { class: 'pdf-label' } });
       applyLabel(mark, label);
       const open = showFolded || wasOpen.some((o) => o.start < block.end && block.start < o.end);
+      const summary = el('summary', {
+        attrs: { class: 'fold-label' },
+        children: [mark, el('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, slot.position, slot.positionByIndex) })],
+      });
       const details = el('details', {
         attrs: { class: 'fold', open },
-        children: [
-          el('summary', {
-            attrs: { class: 'fold-label' },
-            children: [mark, el('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, slot.position, slot.positionByIndex) })],
-          }),
-          el('div', { attrs: { class: 'body-text body-folded' }, text: block.text }),
-        ],
+        children: [summary, el('div', { attrs: { class: 'body-text body-folded' }, text: block.text })],
       });
       children.push(details);
-      built.push({ start: block.start, end: block.end, details, label: mark });
+      built.push({ start: block.start, end: block.end, details, summary, nodes: [details], label: mark });
     }
     if (blocks.length === 0) children.push(el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }));
     slot.body.replaceChildren(...children);
@@ -506,6 +581,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     for (const b of slot.blocks) if (b.details !== null) folds.delete(b.details);
     for (const b of built) if (b.details !== null) folds.add(b.details);
     slot.blocks = built;
+    if (focusSpot !== null) restoreFocus(slot, focusSpot);
   }
 
   /** Brings one body up to date with the plans in use: labels in place when the blocks stay the same, else redrawn. */

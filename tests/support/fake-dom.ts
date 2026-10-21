@@ -10,7 +10,8 @@
 // email's heading).
 // For the interactive parts (src/ui/add-files.ts, src/ui/preview.ts) it also
 // has event listeners (addEventListener + a test-side `fire`), click(),
-// focus() (counted), contains(), the `value` / `files` fields of a file input or select, and a
+// focus() (counted, its options kept), getBoundingClientRect() (from a
+// test-set `rect`), scrollIntoView() (recorded), contains(), the `value` / `files` fields of a file input or select, and a
 // checkbox's `checked`. FakeEventTarget stands in for `window` (page-wide
 // drag-and-drop listeners). FakeDocument has a `body`, an `activeElement`
 // and event listeners ('focusin', 'pointerdown'), and FakeElement an
@@ -181,9 +182,29 @@ export class FakeElement {
     this.listeners.fire('click', this, {});
   }
 
+  /** The options of the last focus() call (undefined: none given). */
+  focusOptions: unknown = undefined;
+
   /** Like the real focus(), recorded only (the fake has no active element). */
-  focus(): void {
+  focus(options?: unknown): void {
     this.focuses++;
+    this.focusOptions = options;
+  }
+
+  /** Where getBoundingClientRect() says this element is (set by a test; the fake has no layout). */
+  rect = { top: 0, bottom: 0 };
+
+  /** Like the real getBoundingClientRect(), from `rect` (top and bottom only). */
+  getBoundingClientRect(): { top: number; bottom: number } {
+    return { ...this.rect };
+  }
+
+  /** The options of each scrollIntoView() call, in order. */
+  readonly scrollIntoViewCalls: unknown[] = [];
+
+  /** Like the real scrollIntoView(), recorded only. */
+  scrollIntoView(options?: unknown): void {
+    this.scrollIntoViewCalls.push(options);
   }
 
   /** Test side: fires an event at this element's own listeners (target = this). */
