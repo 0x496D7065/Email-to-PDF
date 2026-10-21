@@ -44,7 +44,12 @@
 //   email built so far has its new labels. Emails built later get them as
 //   they are built.
 // - An email left out of the PDF (unticked) gets no PDF labels: the whole
-//   email is already marked "Not in the PDF" (src/ui/review.ts).
+//   email is already marked "Not in the PDF" (src/ui/review.ts). Its body
+//   is not redrawn: the labels and note it had stay in place but hidden,
+//   from screen readers too (`data-pdf-out` on its body and note, app.css),
+//   so unticking it does not move the emails below up, and ticking it back
+//   (same plan: nothing to redraw) does not move them down. An email built
+//   while left out simply has no labels.
 // - An email the plan keeps whole (rules 4 and 5 of output-plan.ts) gets a
 //   short note above its text (src/ui-model/message-notes.ts, pdfPlanNote).
 // - Never silent: when one email's labels cannot be shown (a failed update,
@@ -337,6 +342,9 @@ interface BodySlot {
   blocks: BuiltBlock[];
 }
 
+/** The shape of a body not drawn yet (never a real shape, so its first update draws). */
+const NOT_DRAWN = 'not drawn yet';
+
 /** Where the blocks are and which of them carry a label element: equal shapes can be updated in place. */
 function shapeOf(blocks: readonly PdfBlock[]): string {
   return blocks.map((b) => `${String(b.block.start)}:${String(b.block.end)}:${b.block.folded ? 'f' : b.label === null ? 's' : 'l'}`).join(',');
@@ -503,6 +511,12 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   /** Brings one body up to date with the plans in use: labels in place when the blocks stay the same, else redrawn. */
   function updateBody(slot: BodySlot): void {
     const view = viewFor(slot.position);
+    // Left out of the PDF (unticked): what was drawn stays, its labels and
+    // note hidden (see `data-pdf-out` at the top of this file).
+    const out = view === null && pdfPlans !== null && slot.shape !== NOT_DRAWN;
+    setSafeAttribute(slot.body, 'data-pdf-out', out);
+    setSafeAttribute(slot.note, 'data-pdf-out', out);
+    if (out) return;
     const key = viewKey(view);
     if (key === slot.key) return;
     const m = slot.m;
@@ -533,7 +547,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       body: el('div', { attrs: { class: 'message-body' } }),
       note: el('p', { attrs: { class: 'note pdf-note', hidden: true } }),
       key: '',
-      shape: 'not drawn yet', // never a real shape, so the first update draws
+      shape: NOT_DRAWN, // never a real shape, so the first update draws
       blocks: [],
     };
     updateBody(slot);

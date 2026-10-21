@@ -470,6 +470,100 @@ describe('step 3: a change of choice drops the PDF', () => {
     expect(status()).not.toBe(t('download.changed'));
   });
 
+  describe('one announcement per action (the status line is the page\'s one live region)', () => {
+    /** Every text the status line was given from here on, in order. */
+    function recordStatus(): string[] {
+      const said: string[] = [];
+      const setStatus = page.shell.setStatus.bind(page.shell);
+      vi.spyOn(page.shell, 'setStatus').mockImplementation((text) => {
+        said.push(text);
+        setStatus(text);
+      });
+      return said;
+    }
+    const untickFirst = changes[0]![1];
+    const combined = (count: string): string => `${count} ${t('download.changed')}`;
+
+    it('the combined text reads as two sentences', () => {
+      expect(combined('2 of 3 emails will be in the PDF.')).toBe(
+        '2 of 3 emails will be in the PDF. Your choices changed, so the previous PDF was removed. Make the PDF again to include them.',
+      );
+      expect(t('download.changedAfter', { news: 'A.', changed: 'B.' })).toBe('A. B.');
+    });
+
+    it('unticking an email when the PDF is ready: the count and the removal, once, together', async () => {
+      await addAndShow(3);
+      const url = await makeReady();
+      const said = recordStatus();
+      untickFirst();
+      expect(said).toEqual([combined('2 of 3 emails will be in the PDF.')]);
+      expect(status()).toBe(combined('2 of 3 emails will be in the PDF.'));
+      expect(revoked).toEqual([url]);
+      // The labels settling later announce nothing more.
+      runTasks();
+      expect(said).toHaveLength(1);
+      expect(status()).toBe(combined('2 of 3 emails will be in the PDF.'));
+      expect(note().textContent).toBe(t('download.changed'));
+    });
+
+    it('unticking an email while the PDF is being made: the count and the removal, once, together', async () => {
+      await addAndShow(3);
+      button().click();
+      const run = lastRun();
+      const said = recordStatus();
+      untickFirst();
+      expect(run.signal.aborted).toBe(true);
+      expect(said).toEqual([combined('2 of 3 emails will be in the PDF.')]);
+      expect(status()).toBe(combined('2 of 3 emails will be in the PDF.'));
+      runTasks();
+      run.resolve({ ok: true, bytes: new Uint8Array(5), fileName: 'correspondence-2025-06-01.pdf', pageCount: 3 });
+      await settle();
+      expect(said).toHaveLength(1);
+    });
+
+    it('unticking an email with no PDF: the count alone', async () => {
+      await addAndShow(3);
+      const said = recordStatus();
+      untickFirst();
+      expect(said).toEqual(['2 of 3 emails will be in the PDF.']);
+      runTasks();
+      expect(said).toHaveLength(1);
+      expect(status()).toBe('2 of 3 emails will be in the PDF.');
+    });
+
+    it('unticking an email after a failed PDF: the count alone (no PDF was removed)', async () => {
+      await addAndShow(3);
+      button().click();
+      lastRun().resolve({ ok: false, error: 'timeout' });
+      await settle();
+      const said = recordStatus();
+      untickFirst();
+      expect(said).toEqual(['2 of 3 emails will be in the PDF.']);
+    });
+
+    it('another time zone when the PDF is ready: the removal alone', async () => {
+      await addAndShow(3);
+      await makeReady();
+      const said = recordStatus();
+      changes[1]![1]();
+      expect(said).toEqual([t('download.changed')]);
+      expect(status()).toBe(t('download.changed'));
+    });
+
+    it('ticking an email back after the PDF was removed: the count alone', async () => {
+      await addAndShow(3);
+      await makeReady();
+      untickFirst();
+      runTasks();
+      const said = recordStatus();
+      const box = items()[0]!.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
+      box.checked = true;
+      box.fire('change');
+      runTasks();
+      expect(said).toEqual(['3 of 3 emails will be in the PDF.']);
+    });
+  });
+
   it('showing the folded text is not a change of the PDF', async () => {
     await addAndShow();
     const url = await makeReady();

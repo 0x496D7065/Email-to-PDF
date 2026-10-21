@@ -20,6 +20,11 @@
 //   running is stopped. A stale PDF is never offered. When a change of
 //   choice drops a PDF being made or ready, the status line says so
 //   (download.changed), so it never keeps announcing a PDF that is gone.
+//   A change that has news of its own (an email ticked or unticked: "2 of 3
+//   emails will be in the PDF.") passes it to inputsChanged, which makes ONE
+//   announcement of it: the news alone, or the news followed by
+//   download.changed when the PDF was dropped (download.changedAfter). Two
+//   announcements in a row would replace each other in the one live region.
 // - The link sits in a line that keeps its place when empty (see app.css),
 //   so the page below does not jump when it appears.
 // Only our own words are shown, with textContent (README.md, rule R4).
@@ -57,8 +62,12 @@ export interface DownloadStepOptions {
 export interface DownloadStep {
   /** Shows whether the button is available now (call after anything `unavailable` depends on changed). */
   refresh(): void;
-  /** A choice changed: stops a running PDF, drops a ready one. */
-  inputsChanged(): void;
+  /**
+   * A choice changed: stops a running PDF, drops a ready one. `news`: what
+   * the same action announces itself (see the top of this file); the status
+   * line then gets it, alone or with download.changed, in one announcement.
+   */
+  inputsChanged(news?: string): void;
   /** "Clear everything": stops and drops everything. */
   reset(): void;
   /** The current state (for tests). */
@@ -86,6 +95,10 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
   const link = el('a', { attrs: { id: 'download-link', class: 'download-link', hidden: true } });
   const linkLine = el('p', { attrs: { class: 'download-again' }, children: [link] });
   shell.downloadArea.replaceChildren(linkLine);
+  // The news of the change being handled by inputsChanged (null: none), and
+  // whether its drop of the PDF was announced (with that news).
+  let news: string | null = null;
+  let dropAnnounced = false;
 
   const job: PdfJob = createPdfJob({
     run: options.run,
@@ -102,7 +115,9 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
       } else if (state.changed) {
         // A choice dropped a PDF being made or ready: the status line must
         // not keep saying "Making your PDF..." or "Your PDF is ready".
-        shell.setStatus(t('download.changed'));
+        const changed = t('download.changed');
+        shell.setStatus(news === null ? changed : t('download.changedAfter', { news, changed }));
+        dropAnnounced = true;
       }
     },
   });
@@ -171,8 +186,16 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
 
   return {
     refresh: render,
-    inputsChanged() {
-      job.inputsChanged();
+    inputsChanged(text) {
+      news = text ?? null;
+      dropAnnounced = false;
+      try {
+        job.inputsChanged();
+      } finally {
+        news = null;
+      }
+      // No PDF was dropped: the news alone.
+      if (!dropAnnounced && text !== undefined) shell.setStatus(text);
       render();
     },
     reset: () => job.reset(),

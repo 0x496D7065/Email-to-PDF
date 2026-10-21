@@ -52,6 +52,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { build, type Rolldown } from 'vite';
 import { FIXTURES } from '../tests/fixtures/manifest.ts';
 import type * as Entry from './support/html-entry.ts';
+import { parseTimeReportFilter, type ExactParseTimeReport } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -66,9 +67,6 @@ declare global {
 const ROOT = decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 const BUNDLE_PATH = '/__e2e__/';
 
-/** Directives of the inline CSP reports Chromium makes while PARSING handlers and styles (see the header). */
-const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
-
 /**
  * Single parse-time reports tolerated as exact "directive URL parse" strings,
  * never as a whole directive. Chromium checks the `href` of a <base> element
@@ -77,11 +75,17 @@ const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'sty
  * track (the DOMParser document has no browsing context). The without-CSP
  * run proves no request for the track is ever made.
  */
-const PARSE_TIME_REPORTS = new Set(['base-uri https://base.invalid/ parse', 'media-src https://track.invalid/t.vtt parse']);
+const PARSE_TIME_REPORTS: ReadonlySet<ExactParseTimeReport> = new Set([
+  'base-uri https://base.invalid/ parse',
+  'media-src https://track.invalid/t.vtt parse',
+] as const);
 
-/** True for a recorded report ("directive blockedURI parse|live") that DOMParser makes while parsing (see the header). */
-const isParseTimeReport = (record: string): boolean =>
-  (PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse')) || PARSE_TIME_REPORTS.has(record);
+/**
+ * True for a recorded report ("directive blockedURI parse|live") that
+ * DOMParser makes while parsing (see the header): the shared inline
+ * parse-time reports (e2e/support/watch.ts), and the two above exactly.
+ */
+const isParseTimeReport = parseTimeReportFilter(PARSE_TIME_REPORTS);
 
 /** The in-memory test bundle: file name -> code. */
 const bundle = new Map<string, string>();

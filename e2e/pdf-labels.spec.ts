@@ -264,7 +264,8 @@ test('ticking an email never moves the list: the status line keeps its place', a
   // "ready" again (with #1 unticked): still the same place.
   await expectReady(page);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
-  // (Emails below #1 may move here: #1 itself lost its labels, being out of the PDF.)
+  // (Emails below #3 may move here: #3's labels changed, its fold now cut in
+  // two. #1's own hidden labels keep their place, see the next test.)
   expect(await top('#include-0')).toBe(ready.first);
 
   // And back (clicked in the page: Playwright's check() would scroll it into view first).
@@ -273,6 +274,69 @@ test('ticking an email never moves the list: the status line keeps its place', a
   await expectReady(page);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   expect(await top('#include-0')).toBe(ready.first);
+
+  await expectNothingLeftThePage(page);
+});
+
+test('unticking an email in the middle never moves the emails below, nor does ticking it back', async ({ page }) => {
+  test.setTimeout(60_000);
+  const items = await openWithEmails(page);
+  // #3 (Alice's Gmail reply): leaving it out changes no other email's labels
+  // (#4 names #2's signature), so only #3's own labels could move the list.
+  const third = items.nth(2);
+  const thirdLabels = await labelsOf(third);
+  expect(thirdLabels).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+  const labelCount = await third.locator('.pdf-label').count();
+
+  /**
+   * The top of #4, #5 and #6 in the document (not the viewport), and the
+   * labels state, read in one task. With `clickThird`, first clicks #3's
+   * checkbox in the page (Playwright's check() would scroll it into view),
+   * in that same task.
+   */
+  const readTops = (clickThird = false): Promise<{ state: string | null | undefined; tops: number[] }> =>
+    page.evaluate((click) => {
+      if (click) document.querySelector<HTMLInputElement>('#include-2')?.click();
+      return {
+        state: document.querySelector('#preview-list')?.getAttribute('data-pdf-labels'),
+        tops: [3, 4, 5].map((k) => (document.querySelector(`#preview-list > li[data-position="${String(k)}"]`)?.getBoundingClientRect().top ?? Number.NaN) + window.scrollY),
+      };
+    }, clickThird);
+  const below = (): ReturnType<typeof readTops> => readTops();
+  const clickThird = (): ReturnType<typeof readTops> => readTops(true);
+  const expectSameTops = (actual: readonly number[], expected: readonly number[]): void => {
+    expect(actual).toHaveLength(expected.length);
+    actual.forEach((top, k) => expect(Math.abs(top - (expected[k] ?? Number.NaN))).toBeLessThanOrEqual(1));
+  };
+
+  const ready = await below();
+  expect(ready.state).toBe('ready');
+  for (const top of ready.tops) expect(Number.isFinite(top)).toBe(true);
+
+  // Unticked: "updating" at once, nothing below moved.
+  const unticked = await clickThird();
+  expect(unticked.state).toBe('updating');
+  expectSameTops(unticked.tops, ready.tops);
+  // The labels settle (#3 out of the PDF): still nothing moved.
+  await expectReady(page);
+  await expect(third).toHaveAttribute('data-included', 'false');
+  expectSameTops((await below()).tops, ready.tops);
+  // #3 shows no label (none visible, none read out), but its label lines keep their place.
+  expect(await labelsOf(third)).toEqual([]);
+  await expect(third.locator('.pdf-label')).toHaveCount(labelCount);
+  for (const mark of await third.locator('.pdf-label').all()) await expect(mark).toHaveCSS('visibility', 'hidden');
+  await expect(third.locator('summary').first()).not.toHaveAccessibleName(new RegExp(en.pdf.label.out.replace('{reasons}', '').trim()));
+  // The other emails' labels did not change.
+  expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
+
+  // Ticked back: "updating", then the same labels; nothing below moved at any point.
+  const ticked = await clickThird();
+  expect(ticked.state).toBe('updating');
+  expectSameTops(ticked.tops, ready.tops);
+  await expectReady(page);
+  await expect(third).toHaveAttribute('data-included', 'true');
+  expectSameTops((await below()).tops, ready.tops);
+  expect(await labelsOf(third)).toEqual(thirdLabels);
 
   await expectNothingLeftThePage(page);
 });

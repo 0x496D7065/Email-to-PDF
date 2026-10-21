@@ -69,6 +69,9 @@ export const en = {
     // Shown (and announced in the status line) after a PDF being made or
     // ready was dropped because a choice changed (time zone, ticks, files...).
     changed: 'Your choices changed, so the previous PDF was removed. Make the PDF again to include them.',
+    // One announcement when the same action also has news of its own, e.g.
+    // "{2 of 3 emails will be in the PDF.} {Your choices changed, ...}".
+    changedAfter: '{news} {changed}',
     making: 'Making your PDF... This can take a little while for many emails. The page stays usable.',
     ready: {
       one: 'Your PDF is ready: {fileName}, {count} page. The download has started.',

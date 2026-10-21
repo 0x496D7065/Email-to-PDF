@@ -44,6 +44,12 @@ import { build, type Plugin, type Rolldown } from 'vite';
 import { decodeJsEscapes, findEmbeddedViolations, findViolations } from '../scripts/no-network-rules.mjs';
 import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
 import type * as Entry from './support/parse-entry.ts';
+// The page's CSP reports are filtered with isParseTimeReport: only the inline
+// reports DOMParser makes while it PARSES handlers and styles, fired at the
+// document. The HTML parsed here has no <base> element, so 'base-uri' is not
+// among them. (A blocked load is fired at the document wherever it happens:
+// never tolerated, see e2e/html-to-text.spec.ts.)
+import { isParseTimeReport } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -59,24 +65,6 @@ declare global {
 /** Project root as a file path ("file:///C:/x/" -> "C:/x/"), as in vite.config.ts. */
 const ROOT = decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 const BUNDLE_PATH = '/__e2e__/';
-
-/**
- * Directives of the CSP reports Chromium makes while DOMParser PARSES inline
- * handlers and styles (nothing runs). The HTML parsed here has no <base>
- * element, so 'base-uri' is not among them.
- */
-const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
-
-/**
- * True for a recorded report ("directive blockedURI parse|live") made while
- * DOMParser parses: blockedURI "inline", fired at the document itself (the
- * parsed element is in no live page). The same directive fired at an element
- * is an inline handler or style in the LIVE page. (A blocked load is fired at
- * the document wherever it happens: never tolerated, see
- * e2e/html-to-text.spec.ts.)
- */
-const isParseTimeReport = (record: string): boolean =>
-  PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
 
 /** The in-memory test bundle: path below BUNDLE_PATH -> file contents. */
 const bundle = new Map<string, string>();

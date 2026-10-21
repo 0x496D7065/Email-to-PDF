@@ -110,13 +110,16 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
   /** A choice that goes into the PDF changed: a PDF made or being made is dropped. */
   const choicesChanged = (): void => download.inputsChanged();
 
-  // The "N of M emails will be in the PDF" line is announced through the status line.
-  // Each tick or untick also works the PDF labels out again.
+  // Each tick or untick: step 3 drops a PDF made or being made and announces
+  // the "N of M emails will be in the PDF" line in the status line, in ONE
+  // announcement with "the previous PDF was removed" when it dropped one
+  // (src/ui/download-step.ts). Done first, so the drop happens here with the
+  // line and not inside the labels' refresh below (whose own call then has
+  // nothing left to drop). Then the PDF labels are worked out again.
   const review = createReview({
-    announce: (text) => shell.setStatus(text),
-    onChange: () => {
+    onChange: (announcement) => {
+      download.inputsChanged(announcement);
       pdfLabels.refresh();
-      choicesChanged();
     },
   });
   // The PDF labels of step 2 (src/ui/pdf-labels.ts): their checkbox sits in the preview's toolbar.

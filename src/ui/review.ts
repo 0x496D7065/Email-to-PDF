@@ -132,16 +132,15 @@ interface Entry {
 
 export interface ReviewOptions {
   /**
-   * Called with the "N of M emails will be in the PDF" line after each tick
-   * or untick, so screen readers hear it (src/ui/page.ts: the shell's status
-   * line, the page's one live region).
+   * Called after each tick or untick, once the choice is recorded, with the
+   * new "N of M emails will be in the PDF" line to announce, so screen
+   * readers hear it. src/ui/page.ts: the PDF labels are worked out again
+   * (src/ui/pdf-labels.ts), and step 3 announces the line in the shell's
+   * status line (the page's one live region), together with "the previous
+   * PDF was removed" when the change dropped one (src/ui/download-step.ts),
+   * so neither announcement replaces the other.
    */
-  readonly announce?: (text: string) => void;
-  /**
-   * Called after each tick or untick, once the choice is recorded
-   * (src/ui/page.ts: the PDF labels are worked out again, src/ui/pdf-labels.ts).
-   */
-  readonly onChange?: () => void;
+  readonly onChange?: (announcement: string) => void;
 }
 
 export function createReview(options: ReviewOptions = {}): Review {
@@ -160,7 +159,7 @@ export function createReview(options: ReviewOptions = {}): Review {
   // Plain text, not a link: the page has no links at all yet (see e2e/app-shell.spec.ts).
   const failedPointer = el('span', { attrs: { id: 'review-failed-pointer', hidden: true }, text: t('counts.seeFailed') });
   const messagesLine = el('p', { attrs: { id: 'review-messages', class: 'review-line' } });
-  // Not a live region itself: the page has one (the shell's status line); see `announce`.
+  // Not a live region itself: the page has one (the shell's status line); see `onChange`.
   const includedLine = el('p', { attrs: { id: 'review-included', class: 'review-line review-included' } });
   const notesLine = el('p', { attrs: { id: 'review-notes', class: 'review-line', hidden: true } });
   const element = el('div', {
@@ -262,8 +261,7 @@ export function createReview(options: ReviewOptions = {}): Review {
       // Every shown item: two items can share a file (see selection.ts).
       for (const entry of entries.values()) apply(entry);
       showIncludedLine();
-      options.announce?.(includedLine.textContent);
-      options.onChange?.();
+      options.onChange?.(includedLine.textContent);
     });
     // Right after the heading (the item's first child), before the details.
     item.insertBefore(el('div', { attrs: { class: 'message-review' }, children }), item.children[1] ?? null);

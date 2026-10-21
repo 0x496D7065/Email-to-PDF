@@ -968,6 +968,46 @@ describe('PDF labels', () => {
     expect(preview.pdfLabelState()).toBe('updating');
   });
 
+  it('an email unticked after its labels were shown keeps them in place but hidden, so the list below does not move', () => {
+    const result = engineOf(benchThread());
+    preview.show(result);
+    runAll();
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    const reply = items()[1]!;
+    const folds = withClass(reply, 'fold');
+    const marks = withClass(reply, 'pdf-label');
+    const body = one(reply, 'message-body');
+    const note = one(reply, 'pdf-note');
+    expect(labelsOf(reply)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
+    expect(body.hasAttribute('data-pdf-out')).toBe(false);
+
+    // #2 unticked: nothing redrawn (same blocks, same label elements, same
+    // texts), only marked so that app.css hides its labels and note.
+    preview.setPdfPlans(null);
+    preview.setPdfPlans(plansFor(result, [0, 2]));
+    runAll();
+    expect(state()).toBe('ready');
+    expect(withClass(reply, 'fold')).toEqual(folds);
+    expect(withClass(reply, 'pdf-label')).toEqual(marks);
+    expect(labelsOf(reply)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
+    expect(body.hasAttribute('data-pdf-out')).toBe(true);
+    expect(note.hasAttribute('data-pdf-out')).toBe(true);
+    // The others are not marked.
+    for (const k of [0, 2]) expect(one(items()[k]!, 'message-body').hasAttribute('data-pdf-out')).toBe(false);
+    expect(renderedBody(reply)).toBe(result.messages[1]!.message.bodyText);
+
+    // Ticked back: the same plan, so the same elements, shown again.
+    preview.setPdfPlans(null);
+    preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+    runAll();
+    expect(withClass(reply, 'fold')).toEqual(folds);
+    expect(withClass(reply, 'pdf-label')).toEqual(marks);
+    expect(body.hasAttribute('data-pdf-out')).toBe(false);
+    expect(note.hasAttribute('data-pdf-out')).toBe(false);
+    expect(labelsOf(reply)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
+  });
+
   it('updates labels in place when the blocks stay the same, and keeps what the reader opened when they change', () => {
     const result = engineOf(benchThread());
     preview.show(result);

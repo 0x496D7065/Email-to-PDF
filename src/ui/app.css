@@ -485,6 +485,16 @@ summary {
   visibility: hidden;
 }
 
+/* An email left out of the PDF (unticked) has no labels of its own: the
+   whole email is marked "Not in the PDF". Its last labels and note stay in
+   place, hidden the same way (from screen readers too), so the emails below
+   do not move up when it is unticked, nor down when it is ticked back
+   (src/ui/preview.ts, updateBody). */
+.message-body[data-pdf-out] .pdf-label,
+.pdf-note[data-pdf-out] {
+  visibility: hidden;
+}
+
 /* "Checking what goes in the PDF...": one line high even when empty, and
    shown (empty or not) whenever a list is (src/ui/preview.ts, setPdfState),
    so its text coming and going never moves the list below it. The failure

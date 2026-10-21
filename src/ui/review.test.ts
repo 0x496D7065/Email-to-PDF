@@ -256,9 +256,9 @@ describe('include checkboxes', () => {
     expect(mark.hasAttribute('hidden')).toBe(true);
   });
 
-  it('announces the new line after each tick or untick (the page has one live region, the status line)', () => {
+  it('gives onChange the new line to announce after each tick or untick (the page has one live region, the status line)', () => {
     const announced: string[] = [];
-    mount({}, { announce: (text) => announced.push(text) });
+    mount({}, { onChange: (text) => announced.push(text) });
     show(engineOf([make(), make()]));
     expect(announced).toEqual([]);
     expect(area.descendants().some((e) => e.hasAttribute('aria-live'))).toBe(false);
@@ -268,13 +268,17 @@ describe('include checkboxes', () => {
   });
 
   it('tells onChange after each tick or untick, once the choice is recorded (the PDF labels are worked out again)', () => {
-    const seen: (readonly number[])[] = [];
-    mount({}, { onChange: () => seen.push(review.includedPositions()) });
+    const seen: [readonly number[], boolean][] = [];
+    // The choice is recorded, and the line given is the one shown.
+    mount({}, { onChange: (text) => seen.push([review.includedPositions(), text === includedLine()]) });
     show(engineOf([make(), make()]));
     expect(seen).toEqual([]);
     toggle(items()[0]!, false);
     toggle(items()[0]!, true);
-    expect(seen).toEqual([[1], [0, 1]]);
+    expect(seen).toEqual([
+      [[1], true],
+      [[0, 1], true],
+    ]);
   });
 
   it('keeps the choices when more files are added (the whole set runs again)', () => {

@@ -96,13 +96,32 @@ export function workerCspReports(watch: Watch): string[] {
 /**
  * Directives of the CSP reports Chromium makes while DOMParser PARSES inline
  * handlers and styles (nothing runs). No fixture has a <base> element, so
- * 'base-uri' is not among them.
+ * 'base-uri' is not among them (see parseTimeReportFilter).
  */
 const PARSE_TIME_DIRECTIVES: ReadonlySet<string> = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
 
-/** True for a recorded report ("directive blockedURI parse|live") made while DOMParser parses: inline, fired at the document. */
+/**
+ * True for a recorded report ("directive blockedURI parse|live") made while
+ * DOMParser parses: blockedURI "inline", fired at the document itself (the
+ * parsed element is in no live page). The same directive fired at an element
+ * is an inline handler or style in the LIVE page, and is never tolerated.
+ */
 export const isParseTimeReport = (record: string): boolean =>
   PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
+
+/**
+ * One more parse-time report a spec tolerates, as an exact record, never as
+ * a whole directive: only base-uri or media-src, only for a URL of the
+ * reserved `.invalid` domain, only labelled "parse" (e2e/html-to-text.spec.ts:
+ * the <base> and <track> elements of its hostile HTML).
+ */
+export type ExactParseTimeReport = `${'base-uri' | 'media-src'} https://${string}.invalid/${string} parse`;
+
+/** isParseTimeReport, plus exactly the records in `exact` (compared whole). */
+export function parseTimeReportFilter(exact: ReadonlySet<ExactParseTimeReport>): (record: string) => boolean {
+  const records: ReadonlySet<string> = exact;
+  return (record) => isParseTimeReport(record) || records.has(record);
+}
 
 /**
  * The console lines Chromium writes for those same parse-time reports, with

@@ -33,7 +33,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { readOutline, readPdf } from '../tests/support/pdf-reader.ts';
-import { watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+// isParseTimeReport: only the CSP reports Chromium makes while DOMParser PARSES email HTML (see e2e/full-flow.spec.ts).
+import { isParseTimeReport, watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -92,10 +93,6 @@ function syntheticEmail(i: number): InputFile {
   ].join('\r\n');
   return textFile(`bench-order-${n}.eml`, text);
 }
-
-/** Directives of the CSP reports Chromium makes while DOMParser PARSES email HTML (see e2e/full-flow.spec.ts). */
-const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
-const isParseTimeReport = (record: string): boolean => PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
 
 // The browser's zone: Tokyo (UTC+9, no daylight saving time), so the day of
 // a PDF made at 20:00 UTC is already the next day there.
