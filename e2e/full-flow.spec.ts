@@ -46,7 +46,7 @@ import { en } from '../src/ui/i18n/en.ts';
 import { FIXTURES, type FixtureExpectation } from '../tests/fixtures/manifest.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
-import { watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+import { isParseTimeReport, PARSE_TIME_CONSOLE, watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -56,34 +56,6 @@ declare global {
 
 /** Project root as a file path ("file:///C:/x/" -> "C:/x/"), as in vite.config.ts. */
 const ROOT = decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
-
-/**
- * Directives of the CSP reports Chromium makes while DOMParser PARSES inline
- * handlers and styles (nothing runs). No fixture has a <base> element, so
- * 'base-uri' is not among them.
- */
-const PARSE_TIME_DIRECTIVES = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
-
-/** True for a recorded report ("directive blockedURI parse|live") made while DOMParser parses: inline, fired at the document. */
-const isParseTimeReport = (record: string): boolean =>
-  PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
-
-/**
- * The console lines Chromium writes for those same parse-time reports, with
- * the directives they go with. Each tolerated line needs a report of its
- * own: there may never be more such lines than matching reports. Any other
- * console error fails the test.
- */
-const PARSE_TIME_CONSOLE: readonly { readonly line: RegExp; readonly directives: readonly string[] }[] = [
-  {
-    line: /^console: Executing inline event handler violates the following Content Security Policy directive 'script-src 'self''\./,
-    directives: ['script-src-attr'],
-  },
-  {
-    line: /^console: Applying inline style violates the following Content Security Policy directive 'style-src 'self''\./,
-    directives: ['style-src-elem', 'style-src-attr'],
-  },
-];
 
 /**
  * The HTML-only .msg of the fixture set (no plain-text body): its text must

@@ -453,6 +453,8 @@ export function readContent(content: string): ContentSummary {
       font = (o[0] as PdfName).value;
       size = o[1] as number;
     } else if (op === 'Tm') {
+      // Positions only: a scaled, rotated or skewed matrix would make x, y and the run widths wrong.
+      if (o[0] !== 1 || o[1] !== 0 || o[2] !== 0 || o[3] !== 1) throw new Error('Tm must be 1 0 0 1 x y');
       x = o[4] as number;
       y = o[5] as number;
     } else if (op === 'g' || op === 'rg') {
@@ -532,4 +534,165 @@ export function readDests(pdf: ParsedPdf): Map<string, { page: number; top: numb
     result.set(key, { page, top: arr[3] as number });
   }
   return result;
+}
+
+/**
+ * One drawn text run with its text read back: `shown` is what the glyphs
+ * say through the font's ToUnicode map (what a reader SEES, e.g.
+ * "[U+1F600]" for a placeholder), `copied` is what a reader gets when
+ * copying or searching (the /ActualText of its span when there is one, else
+ * `shown`). Coordinates are PDF ones (y up).
+ */
+export interface PageRun {
+  readonly font: string;
+  readonly size: number;
+  readonly x: number;
+  readonly y: number;
+  /** Advance width in points, from the font's /DW and /W (so where the run ends: x + width). */
+  readonly width: number;
+  readonly shown: string;
+  readonly copied: string;
+  readonly actualText: string | undefined;
+}
+
+/** A CIDFont's widths (1000 units per em): /DW, and /W in both forms ("c [w1 w2 ...]" and "c1 c2 w"). */
+function cidWidths(pdf: ParsedPdf, type0: PdfDict): { dw: number; w: Map<number, number> } {
+  const descendants = pdf.resolve(type0.get('DescendantFonts'));
+  if (!Array.isArray(descendants) || descendants.length !== 1) throw new Error('a Type0 font needs one descendant font');
+  const cid = pdf.dict(descendants[0]);
+  const dw = pdf.resolve(cid.get('DW')) ?? 1000;
+  if (typeof dw !== 'number') throw new Error('bad /DW');
+  const w = new Map<number, number>();
+  const list = pdf.resolve(cid.get('W')) ?? [];
+  if (!Array.isArray(list)) throw new Error('bad /W');
+  for (let i = 0; i < list.length; ) {
+    const first = list[i];
+    const next = list[i + 1];
+    if (typeof first !== 'number') throw new Error('bad /W entry');
+    if (Array.isArray(next)) {
+      next.forEach((width, k) => {
+        if (typeof width !== 'number') throw new Error('bad /W width');
+        w.set(first + k, width);
+      });
+      i += 2;
+    } else {
+      const width = list[i + 2];
+      if (typeof next !== 'number' || typeof width !== 'number' || next < first) throw new Error('bad /W range');
+      for (let g = first; g <= next; g++) w.set(g, width);
+      i += 3;
+    }
+  }
+  return { dw, w };
+}
+
+/** The text runs of every page, in drawing order. A glyph missing from its font's ToUnicode map throws. */
+export async function readPageRuns(pdf: ParsedPdf): Promise<PageRun[][]> {
+  const cmaps = new Map<number, Map<number, string>>();
+  const out: PageRun[][] = [];
+  for (const pageDict of pdf.pages()) {
+    const fontDict = pdf.dict(pdf.dict(pageDict.get('Resources')).get('Font'));
+    const fonts = new Map<string, { map: Map<number, string>; widths: { dw: number; w: Map<number, number> } }>();
+    for (const key of fontDict.keys()) {
+      const type0 = pdf.dict(fontDict.get(key));
+      const ref = type0.get('ToUnicode');
+      if (!(ref instanceof PdfRef)) throw new Error(`font ${key} has no ToUnicode stream`);
+      let map = cmaps.get(ref.num);
+      if (map === undefined) {
+        map = parseToUnicode(await pdf.dataText(ref));
+        cmaps.set(ref.num, map);
+      }
+      fonts.set(key, { map, widths: cidWidths(pdf, type0) });
+    }
+    const { runs } = readContent(await pdf.dataText(pageDict.get('Contents')));
+    out.push(
+      runs.map((r) => {
+        const font = fonts.get(r.font);
+        if (font === undefined) throw new Error(`run in unknown font ${r.font}`);
+        const shown = r.glyphs
+          .map((g) => {
+            const text = font.map.get(g);
+            if (text === undefined) throw new Error(`glyph ${String(g)} of ${r.font} has no ToUnicode entry`);
+            return text;
+          })
+          .join('');
+        const units = r.glyphs.reduce((sum, g) => sum + (font.widths.w.get(g) ?? font.widths.dw), 0);
+        return { font: r.font, size: r.size, x: r.x, y: r.y, width: (units * r.size) / 1000, shown, copied: r.actualText ?? shown, actualText: r.actualText };
+      }),
+    );
+  }
+  return out;
+}
+
+/**
+ * Runs on one baseline, left to right, with their texts joined. Spaces are
+ * glyphs in our files, so runs that touch are joined as they are; where a
+ * visible gap separates two runs (two columns of a table, a label and its
+ * value), one space is put between them, as a text extractor does.
+ */
+export interface TextLine {
+  readonly y: number;
+  readonly runs: readonly PageRun[];
+  readonly shown: string;
+  readonly copied: string;
+  /**
+   * How many spaces were put between runs in `copied` (0 when the line is
+   * the runs' own text, joined as drawn). Only a table row or a label/value
+   * row should have any: inside a line of email text they would be spaces
+   * the email does not have.
+   */
+  readonly insertedSpaces: number;
+}
+
+/** Smallest gap between two runs, in points, that counts as a space between them. */
+const RUN_GAP = 1;
+
+/** Groups a page's runs into lines: same baseline (within `tolerance` points), top to bottom, each left to right. */
+export function textLines(runs: readonly PageRun[], tolerance = 0.01): TextLine[] {
+  const sorted = [...runs].sort((a, b) => b.y - a.y || a.x - b.x);
+  const lines: PageRun[][] = [];
+  for (const run of sorted) {
+    const last = lines.at(-1);
+    if (last !== undefined && Math.abs(last[0]!.y - run.y) <= tolerance) last.push(run);
+    else lines.push([run]);
+  }
+  return lines.map((line) => {
+    const inOrder = [...line].sort((a, b) => a.x - b.x);
+    const join = (pick: (r: PageRun) => string): { text: string; inserted: number } =>
+      inOrder.reduce(
+        ({ text, inserted }, r, k) => {
+          const before = inOrder[k - 1];
+          const gap = before !== undefined && r.x - (before.x + before.width) >= RUN_GAP && !/\s$/.test(text) && !/^\s/.test(pick(r));
+          return { text: text + (gap ? ' ' : '') + pick(r), inserted: inserted + (gap ? 1 : 0) };
+        },
+        { text: '', inserted: 0 },
+      );
+    const copied = join((r) => r.copied);
+    return { y: inOrder[0]!.y, runs: inOrder, shown: join((r) => r.shown).text, copied: copied.text, insertedSpaces: copied.inserted };
+  });
+}
+
+/** A link annotation: its page, its rectangle [x1, y1, x2, y2] (PDF coordinates) and its named destination. */
+export interface ReadLink {
+  readonly page: number;
+  readonly rect: readonly [number, number, number, number];
+  readonly dest: string;
+}
+
+/** Every link annotation of every page, in page order. Anything but a /Link with a /Rect and a named /Dest throws. */
+export function readLinks(pdf: ParsedPdf): ReadLink[] {
+  const out: ReadLink[] = [];
+  for (const [page, pageDict] of pdf.pages().entries()) {
+    const annots = pdf.resolve(pageDict.get('Annots'));
+    if (annots === undefined) continue;
+    if (!Array.isArray(annots)) throw new Error('/Annots is not an array');
+    for (const a of annots) {
+      const link = pdf.dict(a);
+      if (pdf.name(link.get('Subtype')) !== 'Link') throw new Error('an annotation that is not a link');
+      const rect = link.get('Rect');
+      if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((n): n is number => typeof n === 'number')) throw new Error('bad link /Rect');
+      const [x1, y1, x2, y2] = rect;
+      out.push({ page, rect: [x1!, y1!, x2!, y2!], dest: pdf.name(link.get('Dest')) });
+    }
+  }
+  return out;
 }

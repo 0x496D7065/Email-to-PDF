@@ -43,9 +43,9 @@ async function parseFixture(id: string): Promise<NormalizedMessage> {
 }
 
 describe('.eml adapter matches the manifest', () => {
-  it('covers all 33 .eml fixtures', () => {
-    expect(emlFixtures).toHaveLength(33);
-    expect(Object.keys(files)).toHaveLength(33);
+  it('covers all 34 .eml fixtures', () => {
+    expect(emlFixtures).toHaveLength(34);
+    expect(Object.keys(files)).toHaveLength(34);
   });
 
   it.each(emlFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) => {

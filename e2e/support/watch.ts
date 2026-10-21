@@ -88,3 +88,35 @@ export function workersNamed(watch: Watch, list: readonly Worker[], name: 'parse
 export function workerCspReports(watch: Watch): string[] {
   return watch.workerLog.filter((line) => /Content Security Policy|Refused to/i.test(line));
 }
+
+// DOMParser's parse-time CSP reports. A spec that shows email HTML records
+// each `securitypolicyviolation` event of the page as
+// "directive blockedURI parse|live" ("parse" when fired at the document).
+
+/**
+ * Directives of the CSP reports Chromium makes while DOMParser PARSES inline
+ * handlers and styles (nothing runs). No fixture has a <base> element, so
+ * 'base-uri' is not among them.
+ */
+const PARSE_TIME_DIRECTIVES: ReadonlySet<string> = new Set(['script-src-attr', 'style-src-elem', 'style-src-attr']);
+
+/** True for a recorded report ("directive blockedURI parse|live") made while DOMParser parses: inline, fired at the document. */
+export const isParseTimeReport = (record: string): boolean =>
+  PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
+
+/**
+ * The console lines Chromium writes for those same parse-time reports, with
+ * the directives they go with. Each tolerated line needs a report of its
+ * own: there may never be more such lines than matching reports. Any other
+ * console error fails the test.
+ */
+export const PARSE_TIME_CONSOLE: readonly { readonly line: RegExp; readonly directives: readonly string[] }[] = [
+  {
+    line: /^console: Executing inline event handler violates the following Content Security Policy directive 'script-src 'self''\./,
+    directives: ['script-src-attr'],
+  },
+  {
+    line: /^console: Applying inline style violates the following Content Security Policy directive 'style-src 'self''\./,
+    directives: ['style-src-elem', 'style-src-attr'],
+  },
+];

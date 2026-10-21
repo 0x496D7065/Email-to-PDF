@@ -518,6 +518,27 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     subject: 'Spare keys for the delivery team',
     bodyContains: ['The spare keys for the delivery team are at the front desk.'],
   }),
+  eml('93-answers-between-lines.eml', {
+    description:
+      'Answers written between the quoted lines (no quoted tail to fold); a Sender and a Cc mailbox found in no other fixture; ' +
+      'quoted-printable body with an emoji, a tab, a control character (BEL) and accents.',
+    messageId: 'answers-1.bob@furniture.example.test',
+    ...NO_THREAD_IDS,
+    date: at('2025-03-11T16:20:00Z', 0),
+    from: [BOB],
+    sender: { name: 'Erin Test', address: 'erin@furniture.example.test' },
+    to: [ALICE],
+    cc: [{ name: 'Dana Sample', address: 'dana.sample@example.test' }],
+    subject: 'Answers between the lines',
+    bodyContains: [
+      'My answers are between your lines.',
+      '> start whenever suits you.',
+      'Good, the van will take the old desks on Friday. \u{1F600}',
+      'Price list:\tdesk\u{7}chair',
+      'Caf\u{E9} cr\u{E8}me \u{E0} c\u{F4}t\u{E9}.',
+    ],
+    tags: ['quote:gmail-en'],
+  }),
 
   // ------------------------------------------------------------------ .msg (built from msg/specs.ts)
   msg('msg-01-plain-unicode', {
