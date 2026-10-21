@@ -18,10 +18,11 @@
 //
 // Seen in Chromium: the page's CSP is also checked while DOMParser parses.
 // An inline event handler, a <style> block or a <base> element in the email
-// is reported as a CSP violation (a "Refused to ..." line in the DevTools
-// console), although nothing runs and nothing is loaded. Those reports stay
-// in the browser: the CSP has no report-uri. e2e/html-to-text.spec.ts checks
-// all of this, with and without the CSP.
+// is reported as a CSP violation (an error line in the DevTools console
+// that names the Content Security Policy), although nothing runs and
+// nothing is loaded. Those reports stay in the browser: the CSP has no
+// report-uri. e2e/html-to-text.spec.ts checks all of this, with and without
+// the CSP.
 
 import { htmlTreeToText, type HtmlToTextLimits, type HtmlToTextResult } from './html-to-text';
 

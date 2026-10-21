@@ -475,7 +475,20 @@ test('keyboard only: every control is reached in order, shows its focus and work
   // the Enter below cannot open a real chooser first.
   await page.evaluate(() => 0);
 
-  // --- Step 1: the "choose" button is the first stop; Enter opens the chooser.
+  // --- The privacy panel's summary is the first stop: Enter opens it, Space closes it.
+  await page.keyboard.press('Tab');
+  const privacy = page.locator('#privacy-summary');
+  await expect(privacy).toBeFocused();
+  await expect(privacy).toHaveAccessibleName(en.privacy.summary);
+  const privacyFocus = await focused(page, 'privacy');
+  expect(privacyFocus.outlineStyle).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#privacy')).toHaveAttribute('open', '');
+  await expect(page.locator('#privacy .privacy-body')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#privacy')).not.toHaveAttribute('open', /.*/);
+
+  // --- Step 1: the "choose" button is the next stop; Enter opens the chooser.
   await page.keyboard.press('Tab');
   const choose = page.getByRole('button', { name: en.actions.chooseFiles });
   await expect(choose).toBeFocused();
@@ -509,8 +522,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     // Each include checkbox also says which email it is for.
     await expect(box).toHaveAccessibleDescription(/^#\d+ \S/);
   }
+  // checkVisibility(), not getClientRects(): the headings of the privacy
+  // panel, closed again above, keep their boxes inside the closed <details>.
   const headings = await page.locator('h1, h2, h3, h4, h5, h6').evaluateAll((list) =>
-    list.filter((h) => h.getClientRects().length > 0).map((h) => ({ level: Number(h.tagName.slice(1)), step: h.closest('section.step')?.id ?? '' })),
+    list.filter((h) => h.checkVisibility()).map((h) => ({ level: Number(h.tagName.slice(1)), step: h.closest('section.step')?.id ?? '' })),
   );
   expect(headings.filter((h) => h.level === 1)).toHaveLength(1);
   expect(headings[0]?.level).toBe(1);
@@ -521,7 +536,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(items.locator('h3')).toHaveCount(5);
 
   // --- Tab through the whole page, operating each control on the way. -----
-  const walk: Focus[] = [chooseFocus];
+  const walk: Focus[] = [privacyFocus, chooseFocus];
   const included = (n: number): string => `${String(n)} of 5 emails will be in the PDF.`;
   for (let i = 1; i < 200; i++) {
     await page.keyboard.press('Tab');
@@ -590,22 +605,22 @@ test('keyboard only: every control is reached in order, shows its focus and work
     }
   }
 
-  // The stops, in order: choose, clear, zone, folded-text toggle, "put
-  // everything in the PDF", then per email its checkbox and its folded
-  // blocks, and the download button last.
+  // The stops, in order: the privacy panel's summary, choose, clear, zone,
+  // folded-text toggle, "put everything in the PDF", then per email its
+  // checkbox and its folded blocks, and the download button last.
   const tags = walk.map((f) => f.tag);
-  expect(tags.slice(0, 5)).toEqual(['BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
-  expect(walk[4]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
+  expect(tags.slice(0, 6)).toEqual(['SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
+  expect(walk[5]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
   expect(tags.at(-1)).toBe('BUTTON');
   expect(walk.filter((f) => f.tag === 'INPUT' && f.position >= 0).map((f) => f.position)).toEqual([0, 1, 2, 3, 4]);
-  expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(await page.locator('#preview-list summary').count());
+  expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(1 + (await page.locator('#preview-list summary').count()));
   expect(walk.length).toBe(controlCount);
   // Every stop shows a clear outline.
   for (const f of walk) {
     expect(f.outlineStyle, f.key).not.toBe('none');
     expect(f.outlineWidth, f.key).toBeGreaterThanOrEqual(2);
   }
-  // The order follows the page: step by step, email by email, top to bottom
+  // The order follows the page: the header, then step by step, email by email, top to bottom
   // (a stop may share a line with the one before, never sit above it).
   const stepOrder = ['step-add', 'step-check', 'step-download'];
   for (let i = 1; i < walk.length; i++) {
@@ -622,9 +637,11 @@ test('keyboard only: every control is reached in order, shows its focus and work
     const key = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testFocus ?? '');
     expect(key).toBe(walk[i]?.key);
   }
-  await expect(choose).toBeFocused();
+  await expect(privacy).toBeFocused();
 
   // --- "Clear everything" with Enter: emptied, focus back on "choose". ----
+  await page.keyboard.press('Tab');
+  await expect(choose).toBeFocused();
   await page.keyboard.press('Tab');
   const clear = page.getByRole('button', { name: en.actions.clearEverything });
   await expect(clear).toBeFocused();

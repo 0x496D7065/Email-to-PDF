@@ -50,7 +50,8 @@ describe('mountApp', () => {
   it('has three step sections in order, each named by its heading', () => {
     const sections = all('section');
     expect(sections.map((s) => s.getAttribute('id'))).toEqual(['step-add', 'step-check', 'step-download']);
-    expect(all('h2').map((h) => h.textContent)).toEqual([
+    const main = all('main')[0];
+    expect(main?.descendants().filter((e) => e.tagName === 'h2').map((h) => h.textContent)).toEqual([
       `${t('steps.number', { number: 1 })} ${t('steps.add.title')}`,
       `${t('steps.number', { number: 2 })} ${t('steps.check.title')}`,
       `${t('steps.number', { number: 3 })} ${t('steps.download.title')}`,
@@ -139,6 +140,85 @@ describe('mountApp', () => {
     shell.setClearAvailable(false);
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.hasAttribute('disabled')).toBe(false);
+  });
+
+  describe('privacy panel', () => {
+    const topics = [
+      ['privacy.does.title', ['privacy.does.local', 'privacy.does.noUpload', 'privacy.does.noSaving', 'privacy.does.wiped', 'privacy.does.pdf']],
+      ['privacy.never.title', ['privacy.never.upload', 'privacy.never.tracking', 'privacy.never.remote', 'privacy.never.attachments']],
+      ['privacy.check.title', ['privacy.check.offline', 'privacy.check.network', 'privacy.check.source']],
+      ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
+    ] as const;
+
+    it('is a closed <details> in the header, after the promise, opened by its summary', () => {
+      const panel = byId('privacy');
+      expect(panel.tagName).toBe('details');
+      expect(panel.hasAttribute('open')).toBe(false);
+      const header = root.children[0] as FakeElement;
+      expect(header.children.map((c) => (c instanceof FakeElement ? c.getAttribute('class') : 'text'))).toEqual(['app-name', 'promise', 'privacy']);
+      // The summary comes first, so it is the line shown while closed (and the panel's name).
+      const summary = panel.children[0] as FakeElement;
+      expect(summary.tagName).toBe('summary');
+      expect(summary.textContent).toBe(t('privacy.summary'));
+      expect(all('summary')).toEqual([summary]);
+    });
+
+    it('has one h2 per topic, with its points in order, then the disclaimer', () => {
+      const panel = byId('privacy');
+      const headings = panel.descendants().filter((e) => /^h\d$/.test(e.tagName));
+      expect(headings.map((h) => h.tagName)).toEqual(['h2', 'h2', 'h2', 'h2']);
+      expect(headings.map((h) => h.textContent)).toEqual(topics.map(([title]) => t(title)));
+      for (const [title, points] of topics) {
+        const heading = headings.find((h) => h.textContent === t(title));
+        const topic = panel.descendants().find((e) => e.tagName === 'div' && e.children[0] === heading);
+        const texts = topic?.descendants().filter((e) => e.tagName === 'li' || e.tagName === 'p').map((e) => e.textContent);
+        expect(texts, title).toEqual(points.map((key) => t(key)));
+      }
+      // The first three topics are lists, the last one short paragraphs.
+      expect(panel.descendants().filter((e) => e.tagName === 'ul')).toHaveLength(3);
+    });
+
+    it('says what the page does, never does, how to check it, and its limits', () => {
+      const text = byId('privacy').textContent;
+      for (const phrase of [
+        'only inside this browser tab',
+        'Nothing leaves your computer',
+        'no cookies, no browser storage',
+        'Only the PDF you choose to download is saved',
+        '"Clear everything"',
+        'A PDF you already downloaded stays in your downloads',
+        'never opens attached files',
+        'turn off your internet',
+        'Network tab',
+        "The page's own files load once",
+        'open source',
+        'can see that the page was loaded, but never your emails',
+        'Content Security Policy',
+        '[U+05D0]',
+        'Latin, Greek and Cyrillic text shows normally',
+        'not legal advice',
+      ]) {
+        expect(text).toContain(phrase);
+      }
+    });
+
+    it('has no link and no heading level other than h2 (the steps are h2 too)', () => {
+      const panel = byId('privacy');
+      expect(panel.descendants().filter((e) => e.tagName === 'a')).toEqual([]);
+      expect(panel.descendants().some((e) => ['h1', 'h3', 'h4'].includes(e.tagName))).toBe(false);
+    });
+  });
+
+  it('ends step 3 with the disclaimer, after the download area', () => {
+    const step = byId('step-download');
+    const disclaimer = byId('download-disclaimer');
+    expect(disclaimer.tagName).toBe('p');
+    expect(disclaimer.textContent).toBe(t('disclaimer.text'));
+    expect(step.children.at(-1)).toBe(disclaimer);
+    const order = step.descendants();
+    expect(order.indexOf(disclaimer)).toBeGreaterThan(order.indexOf(byId('download-area')));
+    // Not the button's description: that one says what the button does now.
+    expect(byId('download-button').getAttribute('aria-describedby')).toBe('download-note');
   });
 
   it('has no external links and no inline styles or handlers', () => {

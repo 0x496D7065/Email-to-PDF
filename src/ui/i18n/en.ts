@@ -36,6 +36,52 @@ export const en = {
     promise: 'Everything stays on your computer.',
   },
 
+  // The privacy panel at the top of the page (src/ui/app.ts): closed by
+  // default, opened from its summary line. Each list item is its own key, so
+  // another language can word each point its own way. Plain words: the
+  // reader may not know what a "request" or a "server" is.
+  privacy: {
+    // The line that opens and closes the panel (also its accessible name).
+    summary: 'Your privacy: how this page works',
+    does: {
+      title: 'What this page does',
+      local: 'Your email files are read only inside this browser tab, on your computer.',
+      noUpload: 'Nothing leaves your computer.',
+      noSaving: 'This page saves nothing: no cookies, no browser storage. Only the PDF you choose to download is saved, in your downloads folder.',
+      wiped: 'Closing or reloading this tab, or pressing "Clear everything", removes everything from this page. A PDF you already downloaded stays in your downloads.',
+      pdf: 'The PDF is made here too. Once you download it, it exists only on your computer.',
+    },
+    never: {
+      title: 'What this page never does',
+      upload: 'It never uploads anything, and there are no accounts.',
+      tracking: 'It never tracks you: no analytics, nobody counts or follows what you do here.',
+      remote: 'It never loads pictures or anything else from the internet that an email links to.',
+      attachments: 'It never opens attached files (documents, pictures and so on): it only lists their name, size and type.',
+    },
+    check: {
+      title: 'How to check it yourself',
+      offline:
+        'After the page has loaded, turn off your internet (or use airplane mode), then use the tool: it still works. Do not reload the page while offline: reloading needs the internet.',
+      network:
+        "For technical people: open your browser's developer tools and go to the Network tab. The page's own files load once when it opens; after that, watch while you use the tool: nothing goes out to the internet. A few entries whose address starts with \"blob:\" are parts of this page running inside your browser.",
+      // The repository link is added next to this text later, in one place (src/ui/app.ts).
+      source: "This page's code is open source: anyone can read it and check what it does.",
+    },
+    notes: {
+      title: 'Good to know',
+      trust: 'Your trust depends on the code this site sends to your browser. That is why the code is open source and can be checked. Like any website, the site that hosts this page can see that the page was loaded, but never your emails.',
+      console:
+        'While emails are read, your browser\'s developer tools may show red error lines that mention a "Content Security Policy". That is the browser blocking styles, scripts or links found inside the emails: the protection working. Nothing from the emails was run or loaded.',
+      scripts:
+        'In the PDF, some writing systems (for example Hebrew, Arabic, Chinese, Japanese, Korean, Thai or Hindi) and emoji show as codes such as [U+05D0], because the font used in the PDF does not include them. Latin, Greek and Cyrillic text shows normally. The text in your original files is unchanged.',
+    },
+  },
+
+  // Shown under step 3 and repeated in the privacy panel. Draft wording.
+  disclaimer: {
+    text: 'This tool is provided as is, without any guarantee, and it is not legal advice. Check the PDF before you send it. Your original email files remain the reference.',
+  },
+
   steps: {
     // Small label above each step title, e.g. "Step 1".
     number: 'Step {number}',

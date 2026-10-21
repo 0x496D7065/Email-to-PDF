@@ -344,7 +344,7 @@ test('adding more files later re-reads the whole list; the same file added twice
   await expectNothingLeftThePage(page);
 });
 
-test('keyboard: Tab reaches the button first, and Enter or Space opens the file chooser', async ({ page }) => {
+test('keyboard: Tab reaches the button right after the privacy panel, and Enter or Space opens the file chooser', async ({ page }) => {
   test.setTimeout(60_000);
   await open(page);
 
@@ -355,6 +355,9 @@ test('keyboard: Tab reaches the button first, and Enter or Space opens the file 
   page.on('filechooser', (chooser) => choosers.push(chooser));
   await page.evaluate(() => 0);
 
+  // The privacy panel's summary in the header comes first (e2e/privacy.spec.ts).
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');
   const button = page.getByRole('button', { name: en.actions.chooseFiles });
   await expect(button).toBeFocused();

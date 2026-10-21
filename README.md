@@ -25,9 +25,10 @@ In development. Done so far:
   browser, in a worker, and saved as `correspondence-YYYY-MM-DD.pdf`. The
   PDF is kept in memory only, until you change a choice, clear everything or
   leave the page.
+- Privacy panel: at the top of the page, in plain words, what the tool does
+  and never does, how to check it yourself, and its known limits.
 
-Still to come: polish (more languages, a privacy panel, help for each mail
-program).
+Still to come: polish (more languages, help for each mail program).
 
 ## Privacy & security rules
 
@@ -230,7 +231,9 @@ could be served. You do not have to take our word for it; a technical person
 can check:
 
 1. **Watch the network:** open your browser's DevTools, go to the Network tab,
-   then use the tool. After the page has loaded, no new requests should appear.
+   then use the tool. The page's own files load once when it opens; after
+   that, nothing goes out to the internet. The only new entries are a few
+   `blob:` URLs: parts of the page running inside your browser.
 2. **Run it offline:** open the page, disconnect from the internet (or
    enable "Offline" in DevTools), then add your files: everything still
    works, because the tool never needs the network once the page has loaded.

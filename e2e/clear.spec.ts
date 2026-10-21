@@ -173,6 +173,9 @@ test('"Clear everything" is there from the start, unavailable but focusable and 
   await expect(clear).toBeDisabled(); // as assistive technology sees it...
   await expect(clear).toHaveAccessibleDescription(en.clear.note);
   // ...yet reachable with Tab, right after the "choose" button, and pressing it does nothing.
+  // The privacy panel's summary in the header is the first stop.
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: en.actions.chooseFiles })).toBeFocused();
   await page.keyboard.press('Tab');

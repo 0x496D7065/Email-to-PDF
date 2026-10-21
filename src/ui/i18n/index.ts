@@ -54,6 +54,8 @@ type ParamsFor<K extends string> = {
 };
 /** No second argument for a string without placeholders, a params object otherwise. */
 type Args<K extends string> = [PlaceholdersOf<At<typeof en, K>>] extends [never] ? [] : [params: ParamsFor<K>];
+/** The keys whose text has no placeholder, so t(key) needs no params (e.g. for a list of keys). */
+export type PlainMessageKey = { [K in MessageKey]: Args<K> extends [] ? K : never }[MessageKey];
 
 /** The page language (BCP 47 tag). Also used for <html lang>. */
 export const LOCALE = 'en';
