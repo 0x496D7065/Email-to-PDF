@@ -3,7 +3,7 @@
 A free, MIT-licensed web app that runs **100% in your browser**. You drop in
 exported email files (`.eml` and `.msg`), check a preview, and download one
 clean PDF: messages in chronological order, duplicates merged, repeated quoted
-text folded, and an index on the first page. **Nothing leaves your computer**:
+text folded, and an index after the cover page. **Nothing leaves your computer**:
 there is no server, no account, and no upload.
 
 ## Status

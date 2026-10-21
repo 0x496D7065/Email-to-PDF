@@ -259,6 +259,8 @@ export const en = {
       column: {
         number: 'No.',
         date: 'Date',
+        // The index's date column title: its dates are "YYYY-MM-DD HH:mm" in this zone, e.g. "Date (America/New York)".
+        dateInZone: 'Date ({zone})',
         from: 'From',
         subject: 'Subject',
         attachments: 'Attachments',
@@ -277,6 +279,10 @@ export const en = {
       fallback: 'The whole email is shown: the tool could not work out which parts to leave out.',
       // The footer of every page, e.g. "Page 3 of 12".
       pageFooter: 'Page {page} of {total}',
+      // Bookmarks (the side panel of a PDF reader): the cover page, then one per email,
+      // e.g. "3. 2025-03-04, Alice Example: Desks for the office".
+      coverBookmark: 'Cover',
+      emailBookmark: '{number}. {date}, {from}: {subject}',
     },
   },
 

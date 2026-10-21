@@ -7,9 +7,10 @@ import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { sizeText } from '../ui/preview';
-import { buildPdfDocument, emailAnchor, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput, type PdfDocument, type PdfEmail } from './model';
+import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput, type PdfDocument, type PdfEmail } from './model';
 import { createPdfStrings } from './strings';
 import { lineText, type PdfLine } from './text';
+import { copyLayerText } from './writer/copy-text';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
@@ -102,9 +103,20 @@ describe('numbering and the index', () => {
     const date = { utcMs: Date.UTC(2025, 2, 4, 9, 0, 0), original: 'x', offsetMinutes: 0, zoneKnown: true };
     const { doc } = build([make({ date, from: [ALICE, { name: '', address: 'dan@example.test' }] })].map(ok), { timeZone: 'Africa/Lagos' });
     const entry = doc.index.entries[0]!;
-    expect(text(entry.date)).toMatch(/^2025-03-04 10:00:00 UTC\+01:00$/);
+    // Short in the index (no seconds, no offset); the column title names the zone once.
+    expect(entry.date).toEqual([{ role: 'body', text: '2025-03-04 10:00' }]);
+    expect(doc.index.columns.date).toBe('Date (Africa/Lagos)');
+    expect(doc.index.columns.from).toBe('From');
+    // The email's own header keeps the full form.
+    expect(field(doc.emails[0]!, 'Date')!.map(text)[0]).toBe('2025-03-04 10:00:00 UTC+01:00');
     expect(text(entry.from)).toBe('Alice Example, dan@example.test');
     expect(entry.attachments).toBe(0);
+  });
+
+  it('names the zone in the index date column title as the cover does, UTC after a fallback', () => {
+    expect(build([ok(make())], { timeZone: 'America/New_York' }).doc.index.columns.date).toBe('Date (America/New York)');
+    expect(build([ok(make())], { timeZone: 'UTC' }).doc.index.columns.date).toBe('Date (UTC)');
+    expect(build([ok(make())], { timeZone: 'Not/A_Zone' }).doc.index.columns.date).toBe('Date (UTC)');
   });
 
   it('gives an empty document for no included email', () => {
@@ -508,6 +520,9 @@ describe('attachments', () => {
     expect(a.items.map(text)).toEqual(['quote.pdf (12 KB, application/pdf)', '(attachment without a name) (size unknown)', 'plan[U+0000].png (512 bytes, image/png)']);
     expect(a.items[0]![0]).toEqual({ role: 'field-value', text: 'quote.pdf' });
     expect(doc.index.entries[0]!.attachments).toBe(3);
+    // The index lists the same lines (not counted twice as control characters).
+    expect(doc.index.entries[0]!.attachmentLines).toBe(a.items);
+    expect(doc.index.entries[1]!.attachmentLines).toEqual([]);
     expect(doc.emails[1]!.attachments).toBeNull();
     expect(doc.emails[0]!.flags.controlChars).toBe(1);
   });
@@ -568,5 +583,85 @@ describe('purity', () => {
     expect(b).toEqual(a);
     // Plain data: survives a structured clone unchanged (no functions, no classes).
     expect(structuredClone(a)).toEqual(a);
+  });
+});
+
+describe('bookmarks', () => {
+  it('gives each email a one-line bookmark: number, day in the zone, sender, subject', () => {
+    const { doc } = build(
+      [
+        ok(make({ subject: 'Desks\r\nfor the\toffice \u0007' })),
+        ok(make({ subject: '', from: [], date: undatedDate })),
+        ok(make({ subject: 'y'.repeat(200), from: [CAROL] })),
+      ],
+      { timeZone: 'Asia/Tokyo' },
+    );
+    const [first, second, third] = doc.index.entries.map((e) => e.bookmark);
+    // The day as shown in the chosen zone (the first 10 characters of the email's date there).
+    expect(first).toBe(`1. ${lineText(doc.index.entries[0]!.date).slice(0, 10)}, Alice Example: Desks for the    office [U+0007]`);
+    expect(first).toMatch(/^1\. \d{4}-\d{2}-\d{2}, /);
+    expect(third).toBe('3. (no date), Unknown sender: (no subject)');
+    expect(Array.from(second!)).toHaveLength(MAX_BOOKMARK_LENGTH);
+    expect(second!.startsWith(`2. ${lineText(doc.index.entries[1]!.date).slice(0, 10)}, Carol Test: yyy`)).toBe(true);
+    expect(second!.endsWith('y\u{2026}')).toBe(true);
+  });
+
+  it('gives the day in the CHOSEN zone: 02:00 UTC is still the day before in New York', () => {
+    const date = { utcMs: Date.UTC(2025, 5, 2, 2, 0, 0), original: 'Mon, 2 Jun 2025 02:00:00 +0000', offsetMinutes: 0, zoneKnown: true };
+    const message = make({ date, subject: 'Chairs' });
+    expect(build([ok(message)], { timeZone: 'America/New_York' }).doc.index.entries[0]!.bookmark).toBe('1. 2025-06-01, Alice Example: Chairs');
+    expect(build([ok(message)], { timeZone: 'UTC' }).doc.index.entries[0]!.bookmark).toBe('1. 2025-06-02, Alice Example: Chairs');
+  });
+
+  // The text before the part that crosses the cut: `pad` characters, so that part sits on code point MAX_BOOKMARK_LENGTH - 1.
+  const across = (pad: number, part: string): string => 'a'.repeat(pad) + part + 'b'.repeat(20);
+  const keep = MAX_BOOKMARK_LENGTH - 1; // code points kept before the cut mark, at most
+
+  it('never cuts inside a kept flag: the whole flag goes (no tag characters left behind)', () => {
+    const england = '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'; // 7 code points
+    const title = bookmarkTitle(across(keep - 4, england));
+    expect(title).toBe('a'.repeat(keep - 4) + '\u{2026}');
+    expect(copyLayerText(title)).toBe(title); // nothing for the copy layer to replace
+    // A flag that ends exactly at the cut is kept whole.
+    expect(bookmarkTitle(across(keep - 7, england))).toBe('a'.repeat(keep - 7) + england + '\u{2026}');
+  });
+
+  it('never cuts inside a ZWJ emoji chain: the family goes whole, not as a smaller family', () => {
+    const family = '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}'; // 7 code points
+    // The cut falls before the last ZWJ: "man, woman, girl" would be another emoji.
+    expect(bookmarkTitle(across(keep - 5, family))).toBe('a'.repeat(keep - 5) + '\u{2026}');
+    expect(bookmarkTitle(across(keep - 7, family))).toBe('a'.repeat(keep - 7) + family + '\u{2026}');
+    // A skin tone stays with its hand.
+    expect(bookmarkTitle(across(keep - 1, '\u{1F44B}\u{1F3FD}'))).toBe('a'.repeat(keep - 1) + '\u{2026}');
+  });
+
+  it('never splits a regional-indicator pair (a country flag)', () => {
+    const japan = '\u{1F1EF}\u{1F1F5}';
+    expect(bookmarkTitle(across(keep - 1, japan))).toBe('a'.repeat(keep - 1) + '\u{2026}');
+    expect(bookmarkTitle(across(keep - 2, japan))).toBe('a'.repeat(keep - 2) + japan + '\u{2026}');
+    // Pairs count from the start of the run: the third indicator starts a new pair.
+    expect(bookmarkTitle(across(keep - 3, japan + japan))).toBe('a'.repeat(keep - 3) + japan + '\u{2026}');
+  });
+
+  it('never separates a letter from its combining accents', () => {
+    expect(bookmarkTitle(across(keep - 1, 'e\u{301}'))).toBe('a'.repeat(keep - 1) + '\u{2026}');
+    expect(bookmarkTitle(across(keep - 2, 'e\u{301}\u{323}'))).toBe('a'.repeat(keep - 2) + '\u{2026}');
+    expect(bookmarkTitle(across(keep - 2, 'e\u{301}'))).toBe('a'.repeat(keep - 2) + 'e\u{301}\u{2026}');
+    // A variation selector stays with its character too.
+    expect(bookmarkTitle(across(keep - 1, '\u{2764}\u{FE0F}'))).toBe('a'.repeat(keep - 1) + '\u{2026}');
+    // Spaces before what was dropped go as well.
+    expect(bookmarkTitle(across(keep - 2, ' e\u{301}'))).toBe('a'.repeat(keep - 2) + '\u{2026}');
+  });
+
+  it('cuts a title to MAX_BOOKMARK_LENGTH code points, never inside a surrogate pair', () => {
+    expect(bookmarkTitle('short')).toBe('short');
+    const exact = 'a'.repeat(MAX_BOOKMARK_LENGTH);
+    expect(bookmarkTitle(exact)).toBe(exact);
+    const emoji = '\u{1F600}'.repeat(MAX_BOOKMARK_LENGTH + 5);
+    const cut = bookmarkTitle(emoji);
+    expect(Array.from(cut)).toHaveLength(MAX_BOOKMARK_LENGTH);
+    expect(cut).toBe('\u{1F600}'.repeat(MAX_BOOKMARK_LENGTH - 1) + '\u{2026}');
+    // Spaces before the cut mark are dropped.
+    expect(bookmarkTitle('a'.repeat(MAX_BOOKMARK_LENGTH - 3) + '   tail')).toBe('a'.repeat(MAX_BOOKMARK_LENGTH - 3) + '\u{2026}');
   });
 });

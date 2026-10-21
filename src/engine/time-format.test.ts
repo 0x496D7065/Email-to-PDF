@@ -119,6 +119,20 @@ describe('formatInZone', () => {
     expect(summer).not.toBe(winter);
   });
 
+  it('gives a short form without seconds and offset, in the chosen zone, cut not rounded', () => {
+    const short = (utcMs: number, zone: string): string => {
+      const result = formatInZone(utcMs, zone);
+      if (result.kind !== 'date') throw new Error('expected a date');
+      return result.shortText;
+    };
+    expect(short(T('2025-04-02T09:00:59.999Z'), 'UTC')).toBe('2025-04-02 09:00');
+    expect(short(T('2025-06-02T02:00:00Z'), 'America/New_York')).toBe('2025-06-01 22:00');
+    expect(short(T('2024-12-31T15:00:00Z'), 'Asia/Tokyo')).toBe('2025-01-01 00:00');
+    expect(short(-1, 'UTC')).toBe('1969-12-31 23:59');
+    expect(short(MIN_DISPLAYABLE_MS, 'UTC')).toBe('0001-01-02 00:00');
+    expect(short(T('2025-04-02T09:00:00Z'), 'Not/A_Zone')).toBe('2025-04-02 09:00'); // UTC fallback
+  });
+
   it('shows a historical offset with seconds next to the wall-clock seconds', () => {
     // Before 18 November 1883 New York used local mean time, UTC-04:56:02 (-17,762 seconds).
     const result = formatInZone(T('1880-06-01T12:00:00Z'), 'America/New_York');
@@ -249,6 +263,8 @@ describe('formatInZone', () => {
         // Year, then the offset: hours and minutes, plus seconds for an old local mean time.
         expect(result.text).toMatch(/^(0001|9999)-\d\d-\d\d \d\d:\d\d:\d\d UTC[+-]\d\d:\d\d(:\d\d)?$/);
         expect(result.text).not.toContain('NaN');
+        expect(result.shortText).toBe(result.text.slice(0, 16));
+        expect(result.shortText).toMatch(/^(0001|9999)-\d\d-\d\d \d\d:\d\d$/);
       }
     },
   );

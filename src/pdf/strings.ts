@@ -21,6 +21,10 @@ export interface PdfStrings {
   readonly producer: string;
   /** The footer of every page: "Page 3 of 12" (both 1-based). */
   pageFooter(page: number, total: number): string;
+  /** The bookmark of the cover page. */
+  readonly coverBookmark: string;
+  /** The bookmark of one email: its number, its day (or the "no date" text), its sender and its subject. */
+  emailBookmark(number: number, date: string, from: string, subject: string): string;
 
   // Cover page.
   readonly datesLabel: string;
@@ -53,6 +57,8 @@ export interface PdfStrings {
     readonly attachments: string;
     readonly page: string;
   };
+  /** The index's date column title, naming the zone its short dates are in: "Date (America/New York)". */
+  indexDateColumn(zone: string): string;
 
   // One email.
   emailHeading(number: number): string;
@@ -117,6 +123,8 @@ export function createPdfStrings(): PdfStrings {
     producer: t('app.name'),
     // Strings, like the email numbers below.
     pageFooter: (page, total) => t('pdf.document.pageFooter', { page: String(page), total: String(total) }),
+    coverBookmark: t('pdf.document.coverBookmark'),
+    emailBookmark: (number, date, from, subject) => t('pdf.document.emailBookmark', { number: String(number), date, from, subject }),
     datesLabel: t('pdf.document.dates'),
     dateRange: (first, last) => t('pdf.document.dateRange', { first, last }),
     noDates: t('pdf.document.noDates'),
@@ -146,6 +154,7 @@ export function createPdfStrings(): PdfStrings {
       attachments: t('pdf.document.column.attachments'),
       page: t('pdf.document.column.page'),
     },
+    indexDateColumn: (zone) => t('pdf.document.column.dateInZone', { zone }),
     emailHeading: (number) => t('pdf.document.emailHeading', { number: String(number) }),
     fromLabel: t('preview.from'),
     senderLabel: t('preview.author.sender'),

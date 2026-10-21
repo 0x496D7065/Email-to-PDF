@@ -91,6 +91,8 @@ export type ZonedDateTime =
       readonly kind: 'date';
       /** Fixed, unambiguous form, e.g. "2025-04-02 11:00:42 UTC+02:00" (same in every browser). */
       readonly text: string;
+      /** Short form for tables, e.g. "2025-04-02 11:00": `text` without seconds and offset (always 16 characters). */
+      readonly shortText: string;
       /** The same moment in the reader's language, e.g. "Apr 2, 2025, 11:00:42 GMT+2". Wording varies by browser. */
       readonly localized: string;
       /**
@@ -186,10 +188,14 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/** "2025-04-02 11:00:42" from calendar fields. Years below 1000 get leading zeros (callers keep years in 1-9999). */
+/** "2025-04-02 11:00" from calendar fields. Years below 1000 get leading zeros (callers keep years in 1-9999). */
+function shortWallClockText(year: number, month: number, day: number, hour: number, minute: number): string {
+  return `${String(year).padStart(4, '0')}-${pad2(month)}-${pad2(day)} ${pad2(hour)}:${pad2(minute)}`;
+}
+
+/** "2025-04-02 11:00:42" from calendar fields (see shortWallClockText). */
 function wallClockText(year: number, month: number, day: number, hour: number, minute: number, second: number): string {
-  const date = `${String(year).padStart(4, '0')}-${pad2(month)}-${pad2(day)}`;
-  return `${date} ${pad2(hour)}:${pad2(minute)}:${pad2(second)}`;
+  return `${shortWallClockText(year, month, day, hour, minute)}:${pad2(second)}`;
 }
 
 /**
@@ -297,6 +303,7 @@ export function formatInZone(utcMs: number | null, zone: string, locale: string 
     kind: 'date',
     // Intl already cuts the moment to whole seconds (rounding down, also before 1970).
     text: `${wallClockText(year, month, day, hour, minute, second)} ${formatOffset(offsetMinutes)}`,
+    shortText: shortWallClockText(year, month, day, hour, minute),
     localized: localizedFormatter(usedZone, locale).format(utcMs),
     // The name as Intl spells it (e.g. "asia/tokyo" -> "Asia/Tokyo").
     zone: formatter.resolvedOptions().timeZone,

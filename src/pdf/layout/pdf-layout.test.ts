@@ -14,7 +14,7 @@ import { buildPdfDocument, emailAnchor, type PdfBlock, type PdfDocument, type Pd
 import { createPdfStrings } from '../strings';
 import { OwnPdfWriter } from '../writer';
 import type { LaidOutDocument, LaidOutTextRun } from '../writer/layout';
-import { DEFAULT_LAYOUT_CONFIG as CONFIG, type LayoutConfig, type TextStyle } from './config';
+import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, type LayoutConfig, MAX_DIGIT_EM, SHORT_DATE_EM, type TextStyle } from './config';
 import { layoutPdf, type PdfLayout } from './pdf-layout';
 import { Typesetter } from './typesetter';
 
@@ -70,10 +70,14 @@ const TOP = CONFIG.margin.top;
 const BOTTOM = CONFIG.page.height - CONFIG.margin.bottom;
 const isFooter = (run: LaidOutTextRun): boolean => run.y > BOTTOM;
 
-/** The page (0-based) of the first run whose copy text is `text`. */
-function pageOf(doc: LaidOutDocument, text: string): number {
-  return doc.pages.findIndex((p) => p.text.some((r) => r.copyText === text));
+/** The page (0-based) of the first run whose copy text is `text`, from page `from` on (e.g. the first email page). */
+function pageOf(doc: LaidOutDocument, text: string, from = 0): number {
+  const k = doc.pages.slice(from).findIndex((p) => p.text.some((r) => r.copyText === text));
+  return k < 0 ? -1 : from + k;
 }
+
+/** The destinations of the emails (not the cover's nor the index's). */
+const emailDestinations = (doc: LaidOutDocument) => doc.destinations.filter((d) => d.name.startsWith('email-'));
 
 function runWidth(run: LaidOutTextRun): number {
   const font = fonts[run.font];
@@ -97,23 +101,41 @@ function expectInsideTextArea(doc: LaidOutDocument): void {
 }
 
 describe('layoutPdf: document', () => {
-  it('lays out the cover, then the emails from a new page; info and no outline yet', () => {
+  it('lays out the cover, the index from a new page, then the emails from a new page; info and outline', () => {
     const doc = build([make(), make(), make()]);
-    const { document, anchorPages, placeholders } = lay(doc);
+    const { document, anchorPages, placeholders, frontPages, passes } = lay(doc);
     expect(document.pageSize).toEqual({ width: 595.28, height: 841.89 });
     expect(document.info).toEqual({ title: 'Email correspondence', producer: 'Email to PDF' });
-    expect(document.outline).toEqual([]);
+    expect(document.outline.map((o) => [o.title, o.destination])).toEqual([
+      ['Cover', 'cover'],
+      ['Index', 'index'],
+      ...doc.index.entries.map((e) => [e.bookmark, e.anchor]),
+    ]);
     expect(pageOf(document, 'Email correspondence')).toBe(0);
     expect(pageOf(document, 'Source files')).toBe(0);
+    expect(pageOf(document, 'Index')).toBe(1);
+    expect(frontPages).toBe(2);
+    expect(passes).toBe(2);
     expect([...anchorPages.entries()]).toEqual([
-      ['email-1', 1],
-      ['email-2', 1],
-      ['email-3', 1],
+      ['email-1', 2],
+      ['email-2', 2],
+      ['email-3', 2],
     ]);
     expect(placeholders).toBe(0);
     expectInsideTextArea(document);
     // Plain data: survives structured cloning unchanged.
     expect(structuredClone(document)).toEqual(document);
+  });
+
+  it('counts each placeholder once, though the cover is laid out on every pass', () => {
+    // A file name with a character the fonts lack: drawn as a code on the cover (source list) and in the email (File row).
+    const doc = build([make({ source: { fileName: '\u{4E00}.eml', sha256: 'a'.repeat(64), kind: 'eml' } })]);
+    const { document, placeholders, passes } = lay(doc);
+    expect(passes).toBe(2);
+    const drawn = document.pages.flatMap((p) => p.text).filter((r) => r.glyphText.join('').includes('[U+4E00]'));
+    expect(drawn.map((r) => r.copyText)).toEqual(['\u{4E00}', '\u{4E00}']);
+    expect(pageOf(document, '\u{4E00}')).toBe(0);
+    expect(placeholders).toBe(2);
   });
 
   it('writes "Page X of Y" in the footer of every page, centred', () => {
@@ -135,17 +157,17 @@ describe('layoutPdf: document', () => {
   it('puts one destination per email at its heading; anchorPages gives its 0-based page', () => {
     const doc = build(Array.from({ length: 25 }, (_, k) => make({ bodyText: lines(k + 1, 15) })));
     const { document, anchorPages } = lay(doc);
-    expect(document.destinations.map((d) => d.name)).toEqual(doc.emails.map((e) => e.anchor));
+    expect(document.destinations.map((d) => d.name)).toEqual(['cover', 'index', ...doc.emails.map((e) => e.anchor)]);
     // The heading's baseline is this far below the top of its line box.
     const above = new Typesetter(fonts, CONFIG).wrap([{ role: 'heading', text: 'Email 1' }], 1e6, 'heading')[0]!.above;
-    for (const d of document.destinations) {
+    for (const d of emailDestinations(document)) {
       expect(anchorPages.get(d.name)).toBe(d.page);
       const heading = document.pages[d.page]!.text.find((r) => r.copyText === `Email ${d.name.slice('email-'.length)}`);
       expect(heading).toBeDefined();
       expect(d.y).toBeCloseTo(heading!.y - above - CONFIG.spacing.destinationAbove, 6);
     }
     // The first email starts at the top of its page.
-    expect(document.destinations[0]!.y).toBeCloseTo(TOP - CONFIG.spacing.destinationAbove, 6);
+    expect(emailDestinations(document)[0]!.y).toBeCloseTo(TOP - CONFIG.spacing.destinationAbove, 6);
     expect(emailAnchor(25)).toMatch(/^[A-Za-z0-9._-]+$/);
   });
 });
@@ -169,29 +191,32 @@ describe('layoutPdf: pagination', () => {
   it('draws a rule between emails on one page; newPagePerEmail puts each on its own page', () => {
     const doc = build(Array.from({ length: 5 }, () => make()));
     const together = lay(doc);
-    // Four short emails start on the first page, the fifth on the next one, below the end of the fourth; a rule between each two.
-    expect([...together.anchorPages.values()]).toEqual([1, 1, 1, 1, 2]);
-    expect(together.document.pages.flatMap((p) => p.lines)).toHaveLength(4);
-    const rules = together.document.pages[1]!.lines;
+    // Four short emails start on the first email page (after the cover and the index), the fifth on the next one,
+    // below the end of the fourth; a rule between each two.
+    expect(together.frontPages).toBe(2);
+    expect([...together.anchorPages.values()]).toEqual([2, 2, 2, 2, 3]);
+    expect(together.document.pages.slice(2).flatMap((p) => p.lines)).toHaveLength(4);
+    const rules = together.document.pages[2]!.lines;
     for (const rule of rules) expect(rule).toMatchObject({ x1: CONFIG.margin.left, x2: CONFIG.page.width - CONFIG.margin.right, width: CONFIG.rule.width });
     const apart = lay(doc, true);
-    expect([...apart.anchorPages.values()]).toEqual([1, 2, 3, 4, 5]);
-    expect(apart.document.pages).toHaveLength(6);
-    for (const page of apart.document.pages) expect(page.lines).toHaveLength(0);
+    expect([...apart.anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
+    expect(apart.document.pages).toHaveLength(7);
+    for (const page of apart.document.pages.slice(2)) expect(page.lines).toHaveLength(0);
     // The option in the config does the same.
     const viaConfig = layoutPdf(doc, fonts, { strings, config: { ...CONFIG, newPagePerEmail: true } });
-    expect([...viaConfig.anchorPages.values()]).toEqual([1, 2, 3, 4, 5]);
+    expect([...viaConfig.anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
   });
 
   it('breaks a header row taller than a page between its lines, then goes on', () => {
     const many = Array.from({ length: 600 }, (_, k) => ({ name: `Person ${String(k)} Example`, address: `person${String(k)}@example.test` }));
     const doc = build([make({ to: many, bodyText: 'Short body.' })]);
-    const { document, anchorPages } = lay(doc);
+    const { document, anchorPages, frontPages } = lay(doc);
     // The cover lists all 601 people, over several pages.
     const first = anchorPages.get('email-1')!;
-    expect(first).toBeGreaterThan(1);
-    const toPage = pageOf(document, 'To');
-    const datePage = pageOf(document, 'Date');
+    expect(first).toBeGreaterThan(2);
+    expect(first).toBe(frontPages);
+    const toPage = pageOf(document, 'To', frontPages);
+    const datePage = pageOf(document, 'Date', frontPages);
     expect(toPage).toBe(first);
     expect(datePage).toBeGreaterThan(toPage + 1);
     expect(pageOf(document, 'Short body.')).toBe(datePage);
@@ -207,10 +232,11 @@ describe('layoutPdf: pagination', () => {
     // Twelve medium rows of 30 lines each: the table is taller than a page.
     const people = Array.from({ length: 140 }, (_, k) => ({ name: `Person ${String(k)} Example`, address: `p${String(k)}@example.test` }));
     const doc = build([make({ to: people, cc: people.slice(0, 120), bcc: people.slice(0, 100), bodyText: 'Body here.' })]);
-    const { document } = lay(doc);
+    const { document, frontPages } = lay(doc);
     const labels = ['From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'File'];
-    const pages = labels.map((label) => pageOf(document, label));
-    for (const p of pages) expect(p).toBeGreaterThanOrEqual(1);
+    // Searched from the first email page: the index has columns named like some of them.
+    const pages = labels.map((label) => pageOf(document, label, frontPages));
+    for (const p of pages) expect(p).toBeGreaterThanOrEqual(frontPages);
     // Each value line sits on the page of its label or later, and rows are in order.
     expect([...pages].sort((a, b) => a - b)).toEqual(pages);
     expect(new Set(pages).size).toBeGreaterThan(1);
@@ -228,10 +254,18 @@ describe('layoutPdf: pagination', () => {
       }),
     ]);
     const { document } = lay(doc);
+    // In the index (page 1) and in the email (page 2).
     expect(pageOf(document, 'Attachments')).toBe(1);
     expect(pageOf(document, 'plan.pdf')).toBe(1);
-    const empty: PdfDocument = { ...doc, cover: { ...doc.cover, blocks: [] }, emails: [] };
-    expect(lay(empty).document.pages).toHaveLength(1);
+    expect(pageOf(document, 'Attachments', 2)).toBe(2);
+    expect(pageOf(document, 'plan.pdf', 2)).toBe(2);
+    const empty: PdfDocument = { ...doc, cover: { ...doc.cover, blocks: [] }, index: { ...doc.index, entries: [] }, emails: [] };
+    const laidEmpty = lay(empty);
+    expect(laidEmpty.document.pages).toHaveLength(1);
+    // Only the cover bookmark (no index without entries).
+    expect(laidEmpty.document.outline.map((o) => o.destination)).toEqual(['cover']);
+    // An index entry whose email is not there is a clear Error (its link and page would be wrong).
+    expect(() => lay({ ...empty, index: doc.index })).toThrow(/^layout: the index entry email-1 has no email$/);
   });
 });
 
@@ -307,7 +341,7 @@ describe('layoutPdf: keeping things together', () => {
     for (let n = 1; n <= 60; n++) {
       const filler: PdfBlock = { kind: 'fields', rows: Array.from({ length: n }, (_, i) => ({ label: `K${String(i)}`, value: [[{ role: 'field-value', text: 'value' }]] })) };
       const blocks: PdfBlock[] = [filler, { kind: 'heading', level: 2, line: [{ role: 'heading', text: 'Section' }] }, paragraph('First of section.'), paragraph('Second of section.')];
-      const { document } = lay({ ...base, cover: { ...base.cover, blocks }, emails: [] });
+      const { document } = lay({ ...base, cover: { ...base.cover, blocks }, index: { ...base.index, entries: [] }, emails: [] });
       expect(pageOf(document, 'Section')).toBe(pageOf(document, 'First of section.'));
       expect(pageOf(document, 'Section')).toBe(pageOf(document, 'Second of section.'));
     }
@@ -337,7 +371,15 @@ describe('layoutPdf: config and footer checks', () => {
     ['list indent 0', { ...CONFIG, list: { ...CONFIG.list, indent: 0 } }, /list\.indent/],
     ['list indent wider than the text area', { ...CONFIG, list: { ...CONFIG.list, indent: 500 } }, /list\.indent must be less than the text area width/],
     ['negative spacing', { ...CONFIG, spacing: { ...CONFIG.spacing, betweenEmails: -2 } }, /spacing\.betweenEmails/],
+    ['index page column 0', { ...CONFIG, index: { ...CONFIG.index, pageWidth: 0 } }, /index\.pageWidth/],
+    ['index date column NaN', { ...CONFIG, index: { ...CONFIG.index, dateWidth: Number.NaN } }, /index\.dateWidth/],
+    ['negative index row gap', { ...CONFIG, index: { ...CONFIG.index, rowGap: -1 } }, /index\.rowGap/],
+    ['index columns leaving no subject column', { ...CONFIG, index: { ...CONFIG.index, fromWidth: 300 } }, /room for the subject column/],
+    ['list indent wider than the index attachment lines', { ...CONFIG, list: { ...CONFIG.list, indent: 420 } }, /index attachment lines/],
     ['keepBodyLines not whole', { ...CONFIG, keepBodyLines: 1.5 }, /keepBodyLines/],
+    ['index page column too narrow for 6 digits', { ...CONFIG, index: { ...CONFIG.index, pageWidth: 35 } }, /index\.pageWidth must hold a 6-digit page number/],
+    ['index page column too narrow for a bigger body size', role({ size: 11 }), /index\.pageWidth must hold/],
+    ['index date column too narrow for a short date', { ...CONFIG, index: { ...CONFIG.index, dateWidth: 60 } }, /index\.dateWidth must hold a date/],
   ])('rejects an invalid config with a clear Error (%s)', (_label, config, message) => {
     expect(withConfig(config)).toThrow(/^layout: invalid config: /);
     expect(withConfig(config)).toThrow(message);
@@ -357,8 +399,23 @@ describe('layoutPdf: config and footer checks', () => {
     const ts = new Typesetter(fonts, CONFIG);
     const width = CONFIG.page.width - CONFIG.margin.left - CONFIG.margin.right;
     expect(ts.wrap([{ role: 'muted', text: strings.pageFooter(99_999, 99_999) }], width, 'muted', ts.footerStyle)).toHaveLength(1);
-    const tooWide = { producer: strings.producer, pageFooter: () => 'Page '.repeat(200) };
+    const tooWide = { ...strings, pageFooter: () => 'Page '.repeat(200) };
     expect(() => layoutPdf(doc(), fonts, { strings: tooWide })).toThrow(/^layout: the page footer is wider than the text area$/);
+  });
+
+  it('measures what the index column checks assume: the widest digit, the widest short date', () => {
+    const ts = new Typesetter(fonts, CONFIG);
+    const size = CONFIG.roles.body.size;
+    const width = (text: string): number => ts.wrap([{ role: 'body', text }], 1e6, 'body')[0]!.width;
+    for (let d = 0; d <= 9; d++) {
+      const digit = String(d);
+      expect(width(digit)).toBeLessThanOrEqual(MAX_DIGIT_EM * size + 1e-9);
+      // Six of them on one line in the page column (the default config holds exactly that).
+      expect(width(digit.repeat(INDEX_PAGE_DIGITS))).toBeLessThanOrEqual(CONFIG.index.pageWidth + 1e-9);
+      const date = `${digit.repeat(4)}-${digit.repeat(2)}-${digit.repeat(2)} ${digit.repeat(2)}:${digit.repeat(2)}`;
+      expect(width(date)).toBeLessThanOrEqual(SHORT_DATE_EM * size + 1e-9);
+      expect(ts.wrap([{ role: 'body', text: date }], CONFIG.index.dateWidth, 'body')).toHaveLength(1);
+    }
   });
 });
 
@@ -408,7 +465,7 @@ describe('layoutPdf + OwnPdfWriter', () => {
     expect(all).toContain(`Page 1 of ${String(document.pages.length)}`);
     // The destinations, as the reader sees them.
     const dests = readDests(pdf);
-    expect([...dests.keys()].sort()).toEqual(doc.emails.map((e) => e.anchor).sort());
+    expect([...dests.keys()].sort()).toEqual(['cover', 'index', ...doc.emails.map((e) => e.anchor)].sort());
     for (const d of document.destinations) expect(dests.get(d.name)!.page).toBe(d.page);
     // Info: title and producer only.
     expect(pdf.info.keys().sort()).toEqual(['Producer', 'Title']);

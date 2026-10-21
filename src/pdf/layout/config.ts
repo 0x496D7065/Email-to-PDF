@@ -34,6 +34,22 @@ export interface LayoutConfig {
   readonly fields: { readonly labelWidth: number; readonly gap: number; readonly rowGap: number };
   /** Lists (cover): the bullet and the indent of the item text. */
   readonly list: { readonly bullet: string; readonly indent: number; readonly itemGap: number };
+  /**
+   * The index table: the widths of its fixed columns (the subject column
+   * takes the rest of the text area), the gap between two columns, the space
+   * below each row and below the column titles. The date column holds the
+   * short date "YYYY-MM-DD HH:mm" (body style) on one line; the page column
+   * holds a page number of up to INDEX_PAGE_DIGITS digits (body style).
+   */
+  readonly index: {
+    readonly numberWidth: number;
+    readonly dateWidth: number;
+    readonly fromWidth: number;
+    readonly pageWidth: number;
+    readonly gap: number;
+    readonly rowGap: number;
+    readonly headerGap: number;
+  };
   readonly spacing: {
     /** After the document title. */
     readonly afterTitle: number;
@@ -82,6 +98,7 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   footer: { style: { font: 'sans-regular', size: 8.5, color: GREY, lineHeight: 1.3 }, baselineFromBottom: 30, align: 'center' },
   fields: { labelWidth: 78, gap: 10, rowGap: 1.5 },
   list: { bullet: '\u{2022}', indent: 12, itemGap: 3 },
+  index: { numberWidth: 30, dateWidth: 88, fromWidth: 104, pageWidth: 36, gap: 8, rowGap: 5, headerGap: 4 },
   spacing: {
     afterTitle: 14,
     beforeSection: 16,
@@ -97,6 +114,13 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   newPagePerEmail: false,
   keepBodyLines: 2,
 };
+
+/** The longest index page number the page column is sized for (999,999 pages). */
+export const INDEX_PAGE_DIGITS = 6;
+/** The widest digit of the bundled sans fonts, in em (IBM Plex Sans figures are 600/1000 em; a layout test measures it). */
+export const MAX_DIGIT_EM = 0.6;
+/** The longest short date of the index ("YYYY-MM-DD HH:mm"), in em, measured from the same fonts (a layout test checks it). */
+export const SHORT_DATE_EM = 8.6;
 
 /** One check of validateLayoutConfig. */
 function check(ok: boolean, what: string): void {
@@ -141,6 +165,19 @@ export function validateLayoutConfig(config: LayoutConfig): void {
   positive(config.list.indent, 'list.indent');
   check(config.list.indent < contentWidth, 'list.indent must be less than the text area width');
   nonNegative(config.list.itemGap, 'list.itemGap');
+  const ix = config.index;
+  for (const name of ['numberWidth', 'dateWidth', 'fromWidth', 'pageWidth'] as const) positive(ix[name], `index.${name}`);
+  for (const name of ['gap', 'rowGap', 'headerGap'] as const) nonNegative(ix[name], `index.${name}`);
+  check(
+    ix.numberWidth + ix.dateWidth + ix.fromWidth + ix.pageWidth + 4 * ix.gap < contentWidth,
+    'the index columns and gaps must leave room for the subject column',
+  );
+  // A page number and a short date each stay on one line (see INDEX_PAGE_DIGITS, SHORT_DATE_EM).
+  const bodySize = config.roles.body.size;
+  check(ix.pageWidth >= INDEX_PAGE_DIGITS * MAX_DIGIT_EM * bodySize - 1e-9, `index.pageWidth must hold a ${String(INDEX_PAGE_DIGITS)}-digit page number`);
+  check(ix.dateWidth >= SHORT_DATE_EM * bodySize - 1e-9, 'index.dateWidth must hold a date as "YYYY-MM-DD HH:mm" on one line');
+  // The attachment lines of an index row run from the date column to the end of the subject column.
+  check(config.list.indent < contentWidth - ix.numberWidth - ix.pageWidth - 2 * ix.gap, 'list.indent must be less than the width of the index attachment lines');
   for (const [name, value] of Object.entries(config.spacing)) nonNegative(value, `spacing.${name}`);
   nonNegative(config.rule.width, 'rule.width');
   check(typeof config.newPagePerEmail === 'boolean', 'newPagePerEmail must be true or false');

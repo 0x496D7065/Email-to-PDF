@@ -12,7 +12,8 @@
 //   zone, the source files with their SHA-256, and the files that could not
 //   be read (as `blocks` for the renderer, and as data);
 // - index: one entry per email (number, date, author, subject, attachment
-//   count, anchor); the renderer resolves each anchor to a page number;
+//   count and lines, anchor, bookmark title); the renderer resolves each
+//   anchor to a page number;
 // - emails: per email its header rows, notes, body lines and attachments.
 //
 // Numbering: emails are numbered 1..k over the INCLUDED emails, in list
@@ -58,7 +59,9 @@ import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time
 import type { EmailAddress, NormalizedMessage, ParseErrorCode } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
 import type { PdfStrings } from './strings';
-import { bodyLines, inlineRuns, joinKept, type PdfLine, type PdfRole } from './text';
+import { bodyLines, inlineRuns, joinKept, lineText, type PdfLine, type PdfRole } from './text';
+// Pure and backend-neutral (it only reads src/pdf/text.ts): the bookmark cut follows the same rule as the copy layer.
+import { copyLayerCutIndex } from './writer/copy-text';
 
 export type { PdfLine, PdfRole, PdfRun } from './text';
 
@@ -132,6 +135,10 @@ export interface PdfIndexEntry {
   readonly from: PdfLine;
   readonly subject: PdfLine;
   readonly attachments: number;
+  /** One line per attachment, the same lines as the email's own list (PdfEmail.attachments.items). */
+  readonly attachmentLines: readonly PdfLine[];
+  /** The email's bookmark title: one line, at most MAX_BOOKMARK_LENGTH characters (bookmarkTitle). */
+  readonly bookmark: string;
 }
 
 export interface PdfIndex {
@@ -215,6 +222,58 @@ export interface BuildPdfInput {
 export function pdfFileName(generatedAt: number, timeZone: string): string {
   const shown = formatInZone(generatedAt, timeZone);
   return shown.kind === 'date' ? `correspondence-${shown.text.slice(0, 10)}.pdf` : 'correspondence.pdf';
+}
+
+/** Longest bookmark title, in code points (the "..." included). */
+export const MAX_BOOKMARK_LENGTH = 120;
+
+/** Characters that belong to the one before them: combining marks (variation selectors included) and skin tone modifiers. */
+const ATTACHED = /^[\p{M}\p{Emoji_Modifier}]$/u;
+function isRegionalIndicator(point: string | undefined): boolean {
+  const cp = point?.codePointAt(0);
+  return cp !== undefined && cp >= 0x1f1e6 && cp <= 0x1f1ff;
+}
+
+/**
+ * How many of `points` a bookmark keeps, at most `limit`: the cut moves back
+ * until it splits nothing a reader sees as one character. The copy layer's
+ * own rule (copyLayerCutIndex: never inside a surrogate pair, a kept flag or
+ * a ZWJ emoji chain), plus: never between a character and the marks or skin
+ * tone after it, never inside a regional-indicator pair (a flag). Not full
+ * Unicode grapheme segmentation (Intl.Segmenter is not used, as its data
+ * differs between engines and versions); these are the cases whose split
+ * would change or break what is drawn.
+ * A subject made only of combining marks / skin tones, or of one huge ZWJ
+ * chain, can be cut to nothing: that email's bookmark then shows only
+ * "N. date, From: ..." (acceptable; the text itself is untouched on the pages).
+ */
+function bookmarkCut(points: readonly string[], limit: number): number {
+  const text = points.join('');
+  let cut = limit;
+  for (;;) {
+    let next = Array.from(text.slice(0, copyLayerCutIndex(text, points.slice(0, cut).join('').length))).length;
+    // A dropped mark takes the character it belongs to along (and the marks before it).
+    while (next > 0 && ATTACHED.test(points[next] ?? '')) next--;
+    // Regional indicators pair from the start of their run: an odd count before the cut splits a pair.
+    let run = 0;
+    while (run < next && isRegionalIndicator(points[next - 1 - run])) run++;
+    if (run % 2 === 1 && isRegionalIndicator(points[next])) next--;
+    if (next === cut) return cut;
+    cut = next;
+  }
+}
+
+/**
+ * A bookmark title from texts already made one-line by inlineRuns (no line
+ * breaks, no tabs, control characters as codes, src/pdf/text.ts): cut to
+ * MAX_BOOKMARK_LENGTH code points, ending with U+2026 when cut. The cut
+ * never splits an emoji, a flag or a letter from its accents (bookmarkCut);
+ * trailing spaces before the cut mark are dropped.
+ */
+export function bookmarkTitle(text: string): string {
+  const points = Array.from(text);
+  if (points.length <= MAX_BOOKMARK_LENGTH) return text;
+  return `${points.slice(0, bookmarkCut(points, MAX_BOOKMARK_LENGTH - 1)).join('').trimEnd()}\u{2026}`;
 }
 
 /** The anchor of email `number` (for the index links). */
@@ -407,13 +466,18 @@ function buildEmail(
   const anchor = emailAnchor(number);
   const fromIndex: PdfLine =
     author.source === 'none' ? own(strings.unknownSender, 'muted') : index.line(strings.joinList(author.mailboxes.map(shortMailbox)), 'body');
+  const subjectIndex = hasSubject ? index.line(message.subject, 'body') : own(strings.noSubject, 'muted');
+  const day = shown.kind === 'date' && dated ? shown.text.slice(0, 10) : strings.noDate;
   const entry: PdfIndexEntry = {
     number,
     anchor,
-    date: shown.kind === 'date' && dated ? own(shown.text, 'body') : own(strings.noDate, 'muted'),
+    // Short ("2025-03-04 08:00", one line); the column title names the zone once.
+    date: shown.kind === 'date' && dated ? own(shown.shortText, 'body') : own(strings.noDate, 'muted'),
     from: fromIndex,
-    subject: hasSubject ? index.line(message.subject, 'body') : own(strings.noSubject, 'muted'),
+    subject: subjectIndex,
     attachments: message.attachments.length,
+    attachmentLines: items,
+    bookmark: bookmarkTitle(strings.emailBookmark(number, day, lineText(fromIndex), lineText(subjectIndex))),
   };
 
   const email: PdfEmail = {
@@ -479,6 +543,8 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     return f.kind === 'date' ? f.text : strings.noDate;
   };
   const dateRange = first === null || last === null ? null : { first: textAt(first), last: textAt(last) };
+  // The zone as the cover's "Time zone" row writes it (underscores as spaces).
+  const zoneShown = usedZone.replaceAll('_', ' ');
 
   const dateLines: PdfLine[] = [];
   if (dateRange === null) dateLines.push(own(strings.noDates, 'muted'));
@@ -509,7 +575,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
       rows: [
         { label: strings.datesLabel, value: dateLines },
         { label: strings.emailsLabel, value: [own(strings.emailCount(emails.length), 'field-value')] },
-        { label: strings.timeZoneLabel, value: [c.line(zoneFallback ? strings.zoneFallback(usedZone) : usedZone.replaceAll('_', ' '), 'field-value')] },
+        { label: strings.timeZoneLabel, value: [c.line(zoneFallback ? strings.zoneFallback(usedZone) : zoneShown, 'field-value')] },
         { label: strings.generatedLabel, value: [own(generated, 'field-value')] },
       ],
     },
@@ -545,7 +611,12 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     timeZone: usedZone,
     zoneFallback,
     cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants, sources, unreadable },
-    index: { heading: strings.indexHeading, columns: strings.columns, entries },
+    index: {
+      heading: strings.indexHeading,
+      // The zone name passes the same sanitizer as on the cover (a title is plain text, so codes stay as their text).
+      columns: { ...strings.columns, date: strings.indexDateColumn(lineText(c.line(zoneShown, 'field-label'))) },
+      entries,
+    },
     emails,
     pdfNumberByPosition,
     controlChars,
