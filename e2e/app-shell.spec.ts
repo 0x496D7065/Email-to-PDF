@@ -1,6 +1,6 @@
 // Browser test of the page shell: one screen, three steps (add, check,
 // download), accessible and working under the strict CSP (README.md, rules
-// R1, R2 and R4). Runs in Chromium against the built site served by
+// R1, R2 and R4). Runs in each test browser against the built site served by
 // `vite preview` (see playwright.config.ts).
 //
 // No accessibility library (such as axe-core) is used, to avoid a new
@@ -9,6 +9,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
+import { withoutSelectConsole, withoutSelectReports } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -30,7 +31,8 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.__shellViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__shellViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__shellViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
   });
 });
@@ -63,7 +65,7 @@ test('shows the three steps in order, with landmarks, language and title', async
   }
 });
 
-test('starts with step 2 waiting and the download unavailable but explained', async ({ page }) => {
+test('starts with step 2 waiting and the download unavailable but explained', async ({ page, browserName }) => {
   await open(page);
 
   await expect(page.locator('#check-waiting')).toHaveText(en.steps.check.waiting);
@@ -85,7 +87,7 @@ test('starts with step 2 waiting and the download unavailable but explained', as
   expect(page.url()).toBe(url);
   await expect(page.locator('#download-area')).toHaveAttribute('data-state', 'idle');
   await expect(page.locator('#download-link')).toBeHidden();
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
 });
 
 test('has one polite live region for status messages', async ({ page }) => {
@@ -169,11 +171,11 @@ test('has no inline styles, no inline handlers and no links to other sites', asy
   expect(found).toEqual([]);
 });
 
-test('loads without console errors, page errors or CSP violations', async ({ page }) => {
+test('loads without console errors, page errors or CSP violations', async ({ page, browserName }) => {
   await open(page);
   await page.keyboard.press('Tab');
-  expect(await page.evaluate(() => window.__shellViolations)).toEqual([]);
-  expect(problems).toEqual([]);
+  expect(withoutSelectReports(browserName, await page.evaluate(() => window.__shellViolations))).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
 });
 
 test.describe('without JavaScript', () => {

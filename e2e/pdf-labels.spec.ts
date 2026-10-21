@@ -2,8 +2,8 @@
 // src/ui/pdf-labels.ts): each folded part says, in words, whether it will be
 // in the PDF, exactly as the PDF's own plan (src/engine/output-plan.ts)
 // decides; unticking an email or ticking "Put everything in the PDF" changes
-// the labels, and a label that may be stale is never shown. In Chromium,
-// against the BUILT site, with the real pipeline.
+// the labels, and a label that may be stale is never shown. In each test
+// browser, against the BUILT site, with the real pipeline.
 //
 // Emails: four fixtures of tests/fixtures/eml (a thread with an
 // Outlook-style and a Gmail-style reply, and repeated signatures), plus two
@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { watchPage, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -124,7 +124,8 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__labelViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__labelViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__labelViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
   });
 });
@@ -163,9 +164,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void> {
   expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  expect(await page.evaluate(() => window.__labelViolations)).toEqual([]);
+  const browserName = engineOf(page.context());
+  expect(withoutSelectReports(browserName, await page.evaluate(() => window.__labelViolations))).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
 }
 
 test('each folded part says whether it will be in the PDF', async ({ page }) => {

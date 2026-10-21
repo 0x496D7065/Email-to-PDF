@@ -16,8 +16,13 @@ export default defineConfig({
   reporter: 'list',
   retries: 0,
   use: { baseURL: BASE_URL },
-  // Chromium only for now; Firefox and WebKit can be added later.
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // The three browser engines. WebKit is Safari's engine, not Safari itself.
+  // Install them with: npm run test:e2e:install
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
   // Playwright starts this server before the tests and stops it afterwards.
   // It always rebuilds first, so the tests never run against a stale dist/.
   // `vite preview` serves dist/ with the same security headers as Cloudflare

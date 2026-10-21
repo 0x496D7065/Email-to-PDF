@@ -15,11 +15,15 @@ interface Violation {
   blockedURI: string;
   /** The policy that was violated: tells the header CSP and the meta CSP apart. */
   policy: string;
+  /** Fired at a <select>: WebKit's report about its own <select> parts (see withoutSelectReports in e2e/support/watch.ts). */
+  select: boolean;
 }
 
 declare global {
   interface Window {
     __cspViolations: Violation[];
+    /** Set by the inline script of tryForbiddenThings if it ever ran: must stay unset. */
+    __cspInlineRan?: boolean;
   }
 }
 
@@ -82,10 +86,22 @@ test.beforeEach(async ({ context, page, baseURL }) => {
         directive: event.effectiveDirective,
         blockedURI: event.blockedURI,
         policy: event.originalPolicy,
+        select: event.target instanceof HTMLSelectElement,
       });
     });
   });
 });
+
+/**
+ * The violations without WebKit's <select> reports, after checking there is
+ * exactly one per policy in force (`policies`) in WebKit and none elsewhere
+ * (see withoutSelectReports in e2e/support/watch.ts).
+ */
+function withoutSelect(browserName: string, list: readonly Violation[], policies: string[]): Omit<Violation, 'select'>[] {
+  const quirk = list.filter((v) => v.select).map((v) => `${v.directive} ${v.blockedURI} | ${v.policy}`);
+  expect(quirk.sort()).toEqual(browserName === 'webkit' ? policies.map((policy) => `style-src-attr inline | ${policy}`).sort() : []);
+  return list.filter((v) => !v.select).map(({ directive, blockedURI, policy }) => ({ directive, blockedURI, policy }));
+}
 
 test('loads with zero requests outside its own origin', async ({ page }) => {
   // "networkidle" = no request for 500 ms, i.e. the app has settled.
@@ -100,9 +116,9 @@ test('loads with zero requests outside its own origin', async ({ page }) => {
   expect(websockets).toEqual([]);
 });
 
-test('loads with zero CSP violations', async ({ page }) => {
+test('loads with zero CSP violations', async ({ page, browserName }) => {
   await page.goto('/', { waitUntil: 'networkidle' });
-  expect(await violations(page)).toEqual([]);
+  expect(withoutSelect(browserName, await violations(page), [cspForHeader(), cspForMeta()])).toEqual([]);
 });
 
 test('sends the security headers and the meta CSP', async ({ page }) => {
@@ -122,8 +138,17 @@ test('shows the app shell with its privacy promise', async ({ page }) => {
   await expect(page.getByRole('banner')).toContainText(en.app.promise);
 });
 
-/** Does forbidden things inside the page: a fetch() and a remote image. */
+/** Does forbidden things inside the page: an inline script, a fetch() and a remote image. */
 async function tryForbiddenThings(page: Page): Promise<void> {
+  // An inline <script> put into the page must not run.
+  const ran = await page.evaluate(() => {
+    const script = document.createElement('script');
+    script.textContent = 'window.__cspInlineRan = true;';
+    document.body.append(script);
+    return window.__cspInlineRan === true;
+  });
+  expect(ran).toBe(false);
+
   const fetchResult = await page.evaluate(async () => {
     try {
       await fetch('https://example.invalid/x');
@@ -141,50 +166,58 @@ async function tryForbiddenThings(page: Page): Promise<void> {
   });
 }
 
-/** Violations as sorted "directive blockedURI | policy" strings. */
-async function violationKeys(page: Page): Promise<string[]> {
-  return (await violations(page)).map((v) => `${v.directive} ${v.blockedURI} | ${v.policy}`).sort();
+/** Violations as sorted "directive blockedURI | policy" strings (`policies`: those in force, see withoutSelect). */
+async function violationKeys(page: Page, browserName: string, policies: string[]): Promise<string[]> {
+  return withoutSelect(browserName, await violations(page), policies)
+    .map((v) => `${v.directive} ${v.blockedURI} | ${v.policy}`)
+    .sort();
 }
 
 /**
  * Checks that it was the CSP that stopped the image, not the safety net:
  * Chromium reports the blocked image as a request that failed with reason
  * "csp" (a request aborted by the safety net would show a different reason).
- * The blocked fetch never even becomes a request.
+ * Firefox and WebKit stop it before it becomes a request at all, so the
+ * safety net never saw it (the violation reports, checked before, show the
+ * CSP did). The blocked fetch never even becomes a request.
  */
-async function expectImageBlockedByCsp(): Promise<void> {
-  await expect
-    .poll(() =>
-      requests
-        .filter((request) => new URL(request.url()).origin !== origin)
-        .map((request) => `${request.url()} ${request.failure()?.errorText ?? 'not failed'}`),
-    )
-    .toEqual(['https://example.invalid/p.png csp']);
+async function expectImageBlockedByCsp(browserName: string): Promise<void> {
+  // Polled in Chromium, where the failed request shows up; elsewhere the list
+  // must stay empty, checked once the reports above have arrived.
+  const outside = (): string[] =>
+    requests
+      .filter((request) => new URL(request.url()).origin !== origin)
+      .map((request) => `${request.url()} ${request.failure()?.errorText ?? 'not failed'}`);
+  if (browserName === 'chromium') await expect.poll(outside).toEqual(['https://example.invalid/p.png csp']);
+  else expect(outside()).toEqual([]);
 }
 
 // Positive control: proves the CSP is really enforced, by deliberately doing
-// forbidden things inside the page and checking the browser blocks them.
+// forbidden things inside the page and checking the browser blocks them
+// (in each of the three browsers the suite runs in).
 // Both policies (header and meta) must report each violation on their own,
 // so a silently ignored copy would make this test fail.
-test('the CSP blocks fetch() and remote images (header and meta)', async ({ page }) => {
+test('the CSP blocks fetch() and remote images (header and meta)', async ({ page, browserName }) => {
   await page.goto('/', { waitUntil: 'networkidle' });
   await tryForbiddenThings(page);
 
   // Violation events arrive asynchronously, so poll until all are recorded.
+  const policies = [cspForHeader(), cspForMeta()];
   const expected = [];
-  for (const policy of [cspForHeader(), cspForMeta()]) {
+  for (const policy of policies) {
+    expected.push(`script-src-elem inline | ${policy}`);
     expected.push(`connect-src https://example.invalid/x | ${policy}`);
     expected.push(`img-src https://example.invalid/p.png | ${policy}`);
   }
-  await expect.poll(() => violationKeys(page)).toEqual(expected.sort());
+  await expect.poll(() => violationKeys(page, browserName, policies)).toEqual(expected.sort());
 
-  await expectImageBlockedByCsp();
+  await expectImageBlockedByCsp(browserName);
 });
 
 // Hosts that cannot send headers (e.g. GitHub Pages) rely on the meta tag
 // alone. Serve the same page WITHOUT the CSP header and check the meta tag
 // still blocks everything on its own. The safety net stays active.
-test('the meta CSP alone blocks fetch() and remote images', async ({ page }) => {
+test('the meta CSP alone blocks fetch() and remote images', async ({ page, browserName }) => {
   await page.route(
     (url) => url.origin === origin && url.pathname === '/',
     async (route) => {
@@ -197,16 +230,20 @@ test('the meta CSP alone blocks fetch() and remote images', async ({ page }) => 
 
   const response = await page.goto('/', { waitUntil: 'networkidle' });
   expect(response?.headers()['content-security-policy']).toBeUndefined();
-  expect(await violations(page)).toEqual([]);
+  const policy = cspForMeta();
+  expect(withoutSelect(browserName, await violations(page), [policy])).toEqual([]);
 
   await tryForbiddenThings(page);
 
-  const policy = cspForMeta();
   await expect
-    .poll(() => violationKeys(page))
+    .poll(() => violationKeys(page, browserName, [policy]))
     .toEqual(
-      [`connect-src https://example.invalid/x | ${policy}`, `img-src https://example.invalid/p.png | ${policy}`].sort(),
+      [
+        `script-src-elem inline | ${policy}`,
+        `connect-src https://example.invalid/x | ${policy}`,
+        `img-src https://example.invalid/p.png | ${policy}`,
+      ].sort(),
     );
 
-  await expectImageBlockedByCsp();
+  await expectImageBlockedByCsp(browserName);
 });

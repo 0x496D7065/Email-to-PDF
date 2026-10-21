@@ -1,5 +1,5 @@
 // Browser test of WHAT the PDF says (README.md, rules R1, R2, R4, R5 and R6),
-// in Chromium against the BUILT site served by `vite preview` (see
+// in each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts), with the real pipeline and the real workers. The
 // other specs check that a PDF is made and downloaded (e2e/download.spec.ts:
 // the download itself, offline, "Clear everything", stale links, a big
@@ -68,7 +68,18 @@ import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
 import { readDests, readLinks, readOutline, readPageRuns, readPdf, textLines, type PageRun, type TextLine } from '../tests/support/pdf-reader.ts';
 import { referenceDisplayText } from '../tests/support/pdf-reference.ts';
-import { isParseTimeReport, PARSE_TIME_CONSOLE, watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+import {
+  engineOf,
+  isParseTimeReport,
+  PARSE_TIME_CONSOLE,
+  untoleratedReports,
+  watchPage,
+  withoutSelectConsole,
+  withoutSelectReports,
+  workerCspReports,
+  workersNamed,
+  type Watch,
+} from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -552,7 +563,9 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__contentViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__contentViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${event.target === document ? 'parse' : 'live'}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+      window.__contentViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
     });
   });
 });
@@ -630,17 +643,19 @@ async function expectNothingLeftThePage(page: Page): Promise<void> {
   expect(others.filter((url) => url !== pdfUrl)).toEqual([]);
   expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  const violations = await page.evaluate(() => window.__contentViolations);
-  expect(violations.filter((v) => !isParseTimeReport(v))).toEqual([]);
+  const browserName = engineOf(page.context());
+  const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__contentViolations));
+  expect(untoleratedReports(browserName, violations)).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
   const named = (['parse-worker', 'engine-worker', 'pdf-worker'] as const).reduce((sum, name) => sum + workersNamed(watch, watch.workers, name).length, 0);
   expect(named).toBe(watch.workers.length);
   await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
   const directives = violations.filter(isParseTimeReport).map((v) => v.split(' ')[0] ?? '');
+  const consoleProblems = withoutSelectConsole(browserName, problems);
   for (const known of PARSE_TIME_CONSOLE) {
-    expect(problems.filter((p) => known.line.test(p)).length).toBeLessThanOrEqual(directives.filter((x) => known.directives.includes(x)).length);
+    expect(consoleProblems.filter((p) => known.line.test(p)).length).toBeLessThanOrEqual(directives.filter((x) => known.directives.includes(x)).length);
   }
-  expect(problems.filter((p) => !PARSE_TIME_CONSOLE.some((known) => known.line.test(p)))).toEqual([]);
+  expect(consoleProblems.filter((p) => !PARSE_TIME_CONSOLE.some((known) => known.line.test(p)))).toEqual([]);
   const stored = await page.evaluate(async () => ({
     localStorage: localStorage.length,
     sessionStorage: sessionStorage.length,

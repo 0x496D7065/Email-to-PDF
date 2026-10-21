@@ -3,7 +3,7 @@
 // contains it. The spec bundles it in memory with the project's own Vite
 // config and serves it to the page through a Playwright route, so the real
 // production code (browser-parsers.ts, html-dom.ts, html-to-text.ts,
-// postal-mime) runs in Chromium under the site's real CSP.
+// postal-mime) runs in each test browser under the site's real CSP.
 
 export { createBrowserParsers } from '../../src/parsing/browser-parsers';
 export { htmlToTextWithDomParser } from '../../src/parsing/html-dom';

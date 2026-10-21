@@ -1,5 +1,5 @@
 // Browser test of the whole journey, end to end (README.md, rules R1, R2,
-// R4, R5 and R6), in Chromium against the BUILT site served by
+// R4, R5 and R6), in each test browser against the BUILT site served by
 // `vite preview` (see playwright.config.ts). The other specs check each part
 // on its own; this one runs them one after the other, the way a user does:
 //
@@ -46,7 +46,18 @@ import { en } from '../src/ui/i18n/en.ts';
 import { FIXTURES, type FixtureExpectation } from '../tests/fixtures/manifest.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
-import { isParseTimeReport, PARSE_TIME_CONSOLE, watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+import {
+  engineOf,
+  isParseTimeReport,
+  PARSE_TIME_CONSOLE,
+  untoleratedReports,
+  watchPage,
+  withoutSelectConsole,
+  withoutSelectReports,
+  workerCspReports,
+  workersNamed,
+  type Watch,
+} from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -190,7 +201,9 @@ test.beforeEach(async ({ context, page, baseURL }) => {
     // An inline report made while DOMParser parses is fired at the document;
     // an inline one about the live page at the element concerned (see the top).
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__flowViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${event.target === document ? 'parse' : 'live'}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+      window.__flowViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
     });
   });
 });
@@ -247,18 +260,20 @@ async function expectNothingLeftThePage(page: Page): Promise<void> {
   expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  const violations = await page.evaluate(() => window.__flowViolations);
-  expect(violations.filter((v) => !isParseTimeReport(v))).toEqual([]);
+  const browserName = engineOf(page.context());
+  const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__flowViolations));
+  expect(untoleratedReports(browserName, violations)).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
   const named = workersNamed(watch, watch.workers, 'parse-worker').length + workersNamed(watch, watch.workers, 'engine-worker').length;
   expect(named).toBe(watch.workers.length);
   await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
   const directives = violations.filter(isParseTimeReport).map((v) => v.split(' ')[0] ?? '');
+  const consoleProblems = withoutSelectConsole(browserName, problems);
   for (const known of PARSE_TIME_CONSOLE) {
-    const lines = problems.filter((p) => known.line.test(p)).length;
+    const lines = consoleProblems.filter((p) => known.line.test(p)).length;
     expect(lines).toBeLessThanOrEqual(directives.filter((d) => known.directives.includes(d)).length);
   }
-  expect(problems.filter((p) => !PARSE_TIME_CONSOLE.some((known) => known.line.test(p)))).toEqual([]);
+  expect(consoleProblems.filter((p) => !PARSE_TIME_CONSOLE.some((known) => known.line.test(p)))).toEqual([]);
   expect(await page.title()).toBe(en.app.name);
 }
 

@@ -1,6 +1,6 @@
 // Browser test of the inert HTML-to-text path (README.md, rules R1, R2, R4):
-// the real DOMParser-based converter runs in Chromium, inside the built site
-// served by `vite preview` (see playwright.config.ts).
+// the real DOMParser-based converter runs in Chromium, Firefox and WebKit,
+// inside the built site served by `vite preview` (see playwright.config.ts).
 //
 // How the code gets into the page without shipping a test hook:
 // the converter is not wired into the page yet, so the built site does not
@@ -39,7 +39,9 @@
 // above, and the <base> and <track> reports for their one URL each.
 // Anything else (any "live" report, img-src, connect-src, script-src-elem,
 // frame-src, ...) would mean a load or an execution was attempted, and fails
-// the test.
+// the test. Firefox and WebKit make none of these parse-time reports, so
+// there nothing at all is tolerated (untoleratedReports in
+// e2e/support/watch.ts).
 //
 // Why BOTH runs must stay: the with-CSP run tells a parse-time check apart
 // from a blocked attempt in the live page only by where the report is fired
@@ -52,7 +54,14 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { build, type Rolldown } from 'vite';
 import { FIXTURES } from '../tests/fixtures/manifest.ts';
 import type * as Entry from './support/html-entry.ts';
-import { parseTimeReportFilter, type ExactParseTimeReport } from './support/watch.ts';
+import {
+  engineOf,
+  isWebKitBlobRead,
+  parseTimeReportFilter,
+  untoleratedReports,
+  withoutSelectReports,
+  type ExactParseTimeReport,
+} from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -121,9 +130,12 @@ let loadedAt = 0;
 let websockets: string[] = [];
 let dialogs: string[] = [];
 
-/** Records every request; aborts anything that leaves the preview server (safety net). */
+/** Records every request (WebKit's in-memory blob reads aside, see isWebKitBlobRead); aborts anything that leaves the preview server (safety net). */
 async function watchNetwork(context: BrowserContext): Promise<void> {
-  context.on('request', (request) => requestUrls.push(request.url()));
+  const webkit = engineOf(context) === 'webkit';
+  context.on('request', (request) => {
+    if (!(webkit && isWebKitBlobRead(request, origin))) requestUrls.push(request.url());
+  });
   await context.route('**/*', (route) =>
     new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
   );
@@ -175,14 +187,20 @@ test.beforeEach(async ({ context, page, baseURL }) => {
     // An inline report made while DOMParser parses is fired at the document;
     // an inline one about the live page at the element concerned (see the header).
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${event.target === document ? 'parse' : 'live'}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
     });
   });
 });
 
+/** How many CSPs the page was opened with (header and <meta>: 2; none: 0). */
+let cspPolicies = 2;
+
 /** Opens the site, with or without its CSP, and notes where its own requests end. */
 async function open(page: Page, csp: 'with-csp' | 'without-csp'): Promise<void> {
   if (csp === 'without-csp') await removeCsp(page);
+  cspPolicies = csp === 'with-csp' ? 2 : 0;
   await page.goto('/', { waitUntil: 'networkidle' });
   loadedAt = requestUrls.length;
   if (csp === 'without-csp') {
@@ -207,8 +225,9 @@ async function expectNothingHappened(page: Page): Promise<void> {
   expect(page.url()).toBe(`${origin}/`);
   expect(requestsAfterLoad()).toEqual([]);
   expect(websockets).toEqual([]);
-  const violations = await page.evaluate(() => window.__e2eViolations);
-  expect(violations.filter((v) => !isParseTimeReport(v))).toEqual([]);
+  const browserName = engineOf(page.context());
+  const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), cspPolicies);
+  expect(untoleratedReports(browserName, violations, isParseTimeReport)).toEqual([]);
 }
 
 /** Converts `html` in the page with the production DOMParser converter (default limits unless given). */
@@ -354,7 +373,7 @@ test('deeply nested HTML converts without a crash and keeps its text', async ({ 
 // Positive controls: prove the checks above would notice a leak. Moving
 // parsed email nodes INTO the live page is exactly what the converter must
 // never do.
-test('control, with CSP: email images moved into the live page are blocked AND reported', async ({ page }) => {
+test('control, with CSP: email images moved into the live page are blocked AND reported', async ({ page, browserName }) => {
   await open(page, 'with-csp');
   await page.evaluate((html) => {
     const parsed = new DOMParser().parseFromString(html, 'text/html');
@@ -368,8 +387,11 @@ test('control, with CSP: email images moved into the live page are blocked AND r
   const live = ['img-src https://tracker.invalid/p.png parse', 'script-src-attr inline live'];
   await expect.poll(() => page.evaluate(() => window.__e2eViolations)).toEqual(expect.arrayContaining(live));
   // The filter of expectNothingHappened rejects both.
-  expect((await page.evaluate(() => window.__e2eViolations)).filter((v) => !isParseTimeReport(v))).toEqual(expect.arrayContaining(live));
-  expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
+  expect(untoleratedReports(browserName, await page.evaluate(() => window.__e2eViolations), isParseTimeReport)).toEqual(expect.arrayContaining(live));
+  // Chromium lists the blocked image as a (failed) request; Firefox and
+  // WebKit stop it before it becomes a request at all.
+  if (browserName === 'chromium') expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
+  else expect(requestsAfterLoad()).not.toContain('https://tracker.invalid/p.png');
 });
 
 test('control, without CSP: email images moved into the live page load and run their handlers', async ({ page }) => {
@@ -384,7 +406,8 @@ test('control, without CSP: email images moved into the live page load and run t
   await expect.poll(() => page.evaluate(() => window.__e2eFlags.sort())).toEqual(['img-onerror', 'img-onload']);
 });
 
-test('control, without CSP: an email <track> moved into the live page requests its URL', async ({ page }) => {
+test('control, without CSP: an email <track> moved into the live page requests its URL', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'backs the Chromium-only media-src tolerance; Firefox and WebKit tolerate no parse-time report');
   await open(page, 'without-csp');
   await page.evaluate(() => {
     const parsed = new DOMParser().parseFromString(

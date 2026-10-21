@@ -55,9 +55,37 @@ jobs:
       - name: Build and no-network check
         run: npm run build
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+  # End-to-end tests, one job per browser engine, run in parallel once the
+  # checks above have passed. No network requests and no CSP violations.
+  e2e:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      # One browser failing must not hide the results of the others.
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    name: e2e (${{ matrix.browser }})
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      # End-to-end: no network requests and no CSP violations.
-      - name: End-to-end tests
-        run: npm run test:e2e
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Only this job's browser, with the system packages it needs.
+      - name: Install Playwright ${{ matrix.browser }}
+        run: npm run test:e2e:install:${{ matrix.browser }} -- --with-deps
+
+      # Playwright rebuilds the site itself before testing (playwright.config.ts).
+      - name: End-to-end tests (${{ matrix.browser }})
+        run: npm run test:e2e:${{ matrix.browser }}

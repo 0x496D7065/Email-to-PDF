@@ -1,6 +1,6 @@
 // Browser test of step 2's counts, include checkboxes and notes
-// (src/ui/review.ts; README.md, rules R1, R2, R4, R5 and R6), in Chromium
-// against the BUILT site served by `vite preview` (see playwright.config.ts).
+// (src/ui/review.ts; README.md, rules R1, R2, R4, R5 and R6), in each test
+// browser against the BUILT site served by `vite preview` (see playwright.config.ts).
 // The real pipeline runs on synthetic fixtures from tests/fixtures/eml plus
 // one made-up file that is not an email, added through the file input.
 //
@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { watchPage, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -62,7 +62,8 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__reviewViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__reviewViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__reviewViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
   });
 });
@@ -90,9 +91,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void> {
   expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  expect(await page.evaluate(() => window.__reviewViolations)).toEqual([]);
+  const browserName = engineOf(page.context());
+  expect(withoutSelectReports(browserName, await page.evaluate(() => window.__reviewViolations))).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
 }
 
 test('shows the counts, and points to step 1 for the file that could not be read', async ({ page }) => {

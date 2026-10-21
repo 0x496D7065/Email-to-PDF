@@ -1,5 +1,5 @@
 // Browser test of step 1, adding email files (README.md, rules R1, R2, R4
-// and R5), in Chromium against the BUILT site served by `vite preview` (see
+// and R5), in each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts). The real pipeline runs: the parse and engine
 // workers are inlined in the page's script and started from blob: URLs, under
 // the page's own CSP.
@@ -24,7 +24,7 @@ import { createServer } from 'vite';
 import { en } from '../src/ui/i18n/en.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
-import { watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -98,7 +98,8 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__addViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__addViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__addViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
   });
 });
@@ -206,10 +207,11 @@ async function expectNothingLeftThePage(page: Page): Promise<void> {
   expect(parseWorkers() + engineWorkers()).toBe(watch.workers.length);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  expect(await page.evaluate(() => window.__addViolations)).toEqual([]);
+  const browserName = engineOf(page.context());
+  expect(withoutSelectReports(browserName, await page.evaluate(() => window.__addViolations))).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
   await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
   expect(await page.title()).toBe(en.app.name);
 }
 

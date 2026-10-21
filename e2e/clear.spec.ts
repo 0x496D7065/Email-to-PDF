@@ -1,5 +1,5 @@
 // Browser test of "Clear everything" and of "nothing is kept"
-// (src/ui/page.ts; README.md, rules R1, R2, R5 and R6), in Chromium against
+// (src/ui/page.ts; README.md, rules R1, R2, R5 and R6), in each test browser against
 // the BUILT site served by `vite preview` (see playwright.config.ts). The
 // real pipeline runs on synthetic fixtures from tests/fixtures/eml, plus a
 // large batch of made-up emails built in this file (invented names,
@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { watchPage, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -94,7 +94,8 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__clearViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__clearViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__clearViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
   });
 });
@@ -154,17 +155,19 @@ async function expectEmptyApp(page: Page): Promise<void> {
   await expect(page.locator('#clear-everything')).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
 }
 
-/** Nothing left the page, no CSP violation, no console error (see e2e/review.spec.ts). */
-async function expectNothingLeftThePage(page: Page): Promise<void> {
+/** Nothing left the page, no CSP violation, no console error (see e2e/review.spec.ts). `loads`: page loads since the test began. */
+async function expectNothingLeftThePage(page: Page, loads = 1): Promise<void> {
   await page.waitForTimeout(500);
   const workerUrls = new Set(watch.workers.map((w) => w.url()));
   for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
   expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  expect(await page.evaluate(() => window.__clearViolations)).toEqual([]);
+  const browserName = engineOf(page.context());
+  // The recorder starts again with each load; the console lines add up.
+  expect(withoutSelectReports(browserName, await page.evaluate(() => window.__clearViolations))).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems, 2, loads)).toEqual([]);
 }
 
 test('"Clear everything" is there from the start, unavailable but focusable and explained', async ({ page }) => {
@@ -310,5 +313,5 @@ test('reloading after adding files shows an empty app: nothing was kept', async 
   expect(after.text).not.toContain('Office desks');
   expect(after.chosenFiles).toBe(0);
   expect(await storedState(page)).toEqual(NOTHING_STORED);
-  await expectNothingLeftThePage(page);
+  await expectNothingLeftThePage(page, 2);
 });

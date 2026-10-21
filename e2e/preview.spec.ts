@@ -1,5 +1,5 @@
 // Browser test of step 2, the preview (README.md, rules R1, R2, R4, R5 and
-// R6), in Chromium against the BUILT site served by `vite preview` (see
+// R6), in each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts). The real pipeline runs on synthetic fixtures from
 // tests/fixtures/eml, added through the file input.
 //
@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { watchPage, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -73,7 +73,8 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await page.addInitScript(() => {
     window.__previewViolations = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__previewViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__previewViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
   });
 });
@@ -88,6 +89,9 @@ async function openWithFixtures(page: Page): Promise<Locator> {
   const items = page.locator('#preview-list > li');
   await expect(items).toHaveCount(6);
   await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
+  // The PDF plans arrive a moment later and redraw the fold blocks (see
+  // src/ui/pdf-labels.ts): wait for them, so no later click or focus is lost.
+  await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready', { timeout: 15_000 });
   return items;
 }
 
@@ -99,9 +103,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void> {
   expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
   expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  expect(await page.evaluate(() => window.__previewViolations)).toEqual([]);
+  const browserName = engineOf(page.context());
+  expect(withoutSelectReports(browserName, await page.evaluate(() => window.__previewViolations))).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
 }
 
 test('lists the emails by date, with their details, in the browser zone', async ({ page }) => {

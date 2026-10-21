@@ -4,8 +4,8 @@
 // the batch or the page. The engine then organizes the results in its own
 // worker (src/pipeline/engine-worker.ts), also with a time limit; processFiles
 // (src/pipeline/process-files.ts) chains it all from browser File objects.
-// Runs in Chromium against the site served by `vite preview` (see
-// playwright.config.ts).
+// Runs in Chromium, Firefox and WebKit against the site served by
+// `vite preview` (see playwright.config.ts).
 //
 // How the code gets into the page without shipping a test hook:
 // beforeAll bundles e2e/support/parse-entry.ts IN MEMORY (`write: false`)
@@ -29,12 +29,16 @@
 //   (proved by a positive control below);
 // - page.on('worker') to follow every worker and its 'close' event
 //   (terminated);
-// - a CDP session that attaches to every worker of the page before its script
-//   runs and enables the `Log` domain, where Chromium reports each CSP
-//   violation of that worker ("Refused to connect ..."). Playwright's worker
-//   'console' event does not carry these reports (seen in Chromium). The
-//   same session gives each worker's name (its target title), which tells
-//   the parse and engine workers apart: their blob: URLs all look alike;
+// - watchWorkers (e2e/support/watch.ts), in every browser: each blob: worker
+//   starts with a `securitypolicyviolation` listener put in front of its
+//   code, which passes every CSP report of that worker to the test; the name
+//   each worker is started with tells the parse, engine and PDF workers
+//   apart (their blob: URLs all look alike);
+// - in Chromium also, a CDP session that attaches to every worker of the
+//   page before its script runs and enables the `Log` domain, where Chromium
+//   reports each CSP violation of that worker ("Refused to connect ...").
+//   Playwright's worker 'console' event does not carry these reports (seen
+//   in Chromium);
 // - a `securitypolicyviolation` listener installed INSIDE a worker with
 //   worker.evaluate, for the positive control.
 // Requests are re-checked after processing has finished and a quiet period,
@@ -44,12 +48,20 @@ import { build, type Plugin, type Rolldown } from 'vite';
 import { decodeJsEscapes, findEmbeddedViolations, findViolations } from '../scripts/no-network-rules.mjs';
 import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
 import type * as Entry from './support/parse-entry.ts';
-// The page's CSP reports are filtered with isParseTimeReport: only the inline
-// reports DOMParser makes while it PARSES handlers and styles, fired at the
-// document. The HTML parsed here has no <base> element, so 'base-uri' is not
-// among them. (A blocked load is fired at the document wherever it happens:
-// never tolerated, see e2e/html-to-text.spec.ts.)
-import { isParseTimeReport } from './support/watch.ts';
+// The page's CSP reports are filtered with untoleratedReports: in Chromium
+// only, the inline reports DOMParser makes while it PARSES handlers and
+// styles, fired at the document, are tolerated. The HTML parsed here has no
+// <base> element, so 'base-uri' is not among them. (A blocked load is fired
+// at the document wherever it happens: never tolerated, see
+// e2e/html-to-text.spec.ts.)
+import {
+  engineOf,
+  isWebKitBlobRead,
+  untoleratedReports,
+  watchWorkers,
+  withoutSelectReports,
+  workerCspReports as sharedWorkerCspReports,
+} from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -125,14 +137,23 @@ let loadedAt = 0;
 let websockets: string[] = [];
 let workers: Worker[] = [];
 let closedWorkers: Worker[] = [];
-/** Log entries (CSP reports, ...) of every worker, as "source level | text". */
+/** CSP reports of every worker (see WorkerWatch in e2e/support/watch.ts). */
 let workerLog: string[] = [];
-/** Worker URL -> the name it was started with (CDP target title); blob: URLs all look alike. */
+/** Worker URL -> the name it was started with; blob: URLs all look alike. */
 let workerNames = new Map<string, string>();
+/** URL of each worker started without the CSP report prelude (see WorkerWatch). */
+let unwrappedWorkers: string[] = [];
 
-/** Records every request of the context (pages and their workers); aborts anything that leaves the preview server. */
+/**
+ * Records every request of the context (pages and their workers), except
+ * WebKit's in-memory blob reads (isWebKitBlobRead); aborts anything that
+ * leaves the preview server.
+ */
 async function watchNetwork(context: BrowserContext): Promise<void> {
-  context.on('request', (request) => requestUrls.push(request.url()));
+  const webkit = engineOf(context) === 'webkit';
+  context.on('request', (request) => {
+    if (!(webkit && isWebKitBlobRead(request, origin))) requestUrls.push(request.url());
+  });
   await context.route('**/*', (route) =>
     new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
   );
@@ -190,43 +211,18 @@ async function servePageWith(page: Page, csp: PageCsp): Promise<void> {
 }
 
 /**
- * Follows every worker the page starts: its end (page.on('worker')), and its
- * log entries through CDP. The CDP session auto-attaches to each new worker
- * paused before its script runs (waitForDebuggerOnStart), enables the Log
- * domain, then lets it run, so no entry can be missed. `flatten: false`
- * routes the worker's messages through this one session
- * (Target.sendMessageToTarget), which Playwright's CDPSession supports.
+ * Worker log entries that report a CSP violation (see e2e/support/watch.ts).
+ * Every worker must run with the report prelude, except the test's own
+ * misbehaving worker (exact URL of that file in the test bundle): it is
+ * started from its script file, served with the site's headers, and only
+ * hangs or crashes.
  */
-async function watchWorkers(context: BrowserContext, page: Page): Promise<void> {
-  page.on('worker', (worker) => {
-    workers.push(worker);
-    worker.on('close', () => closedWorkers.push(worker));
-  });
-  const cdp = await context.newCDPSession(page);
-  let nextId = 0;
-  cdp.on('Target.attachedToTarget', ({ sessionId, targetInfo }) => {
-    const send = (method: string): void => {
-      void cdp
-        .send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: ++nextId, method, params: {} }) })
-        .catch(() => undefined); // the worker may already be gone
-    };
-    if (targetInfo.type === 'worker') {
-      // Recorded before the worker is let run, so before it can do anything.
-      workerNames.set(targetInfo.url, targetInfo.title);
-      send('Log.enable');
-    }
-    send('Runtime.runIfWaitingForDebugger');
-  });
-  cdp.on('Target.receivedMessageFromTarget', ({ message }) => {
-    const parsed = JSON.parse(message) as { method?: string; params?: { entry?: { source: string; level: string; text: string } } };
-    const entry = parsed.params?.entry;
-    if (parsed.method === 'Log.entryAdded' && entry !== undefined) workerLog.push(`${entry.source} ${entry.level} | ${entry.text}`);
-  });
-  await cdp.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: false });
-}
-
-/** Worker log entries that report a CSP violation. */
-const workerCspReports = (): string[] => workerLog.filter((line) => /Content Security Policy|Refused to/i.test(line));
+const workerCspReports = (): string[] => {
+  const misbehaving = [...bundle.keys()].filter((name) => /misbehaving-worker/.test(name));
+  expect(misbehaving).toHaveLength(1);
+  const exempt = new Set(misbehaving.map((name) => `${origin}${BUNDLE_PATH}${name}`));
+  return sharedWorkerCspReports({ workers, closedWorkers, workerLog, workerNames, unwrappedWorkers }, exempt);
+};
 
 test.beforeEach(async ({ context, page, baseURL }) => {
   origin = new URL(baseURL ?? '').origin;
@@ -237,14 +233,19 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   closedWorkers = [];
   workerLog = [];
   workerNames = new Map();
+  unwrappedWorkers = [];
   await watchNetwork(context);
-  await watchWorkers(context, page);
+  // Follows every worker the page starts: its end (page.on('worker')), its
+  // name and its CSP reports (see e2e/support/watch.ts).
+  await watchWorkers(context, page, { workers, closedWorkers, workerLog, workerNames, unwrappedWorkers });
   await page.addInitScript(() => {
     window.__e2eViolations = [];
     // An inline report made while DOMParser parses is fired at the document;
     // an inline one about the live page at the element concerned.
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${event.target === document ? 'parse' : 'live'}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
     });
   });
 });
@@ -287,7 +288,7 @@ async function expectNoNetworkAndPageAlive(page: Page): Promise<void> {
   // CSP). Anything else, including the same directive fired at a live
   // element, would be an attempted load or execution.
   const pageViolations = await page.evaluate(() => window.__e2eViolations);
-  expect(pageViolations.filter((v) => !isParseTimeReport(v))).toEqual([]);
+  expect(untoleratedReports(engineOf(page.context()), withoutSelectReports(engineOf(page.context()), pageViolations))).toEqual([]);
   expect(workerCspReports()).toEqual([]);
   expect(await page.title()).toBe('Email to PDF');
   expect(await page.evaluate(() => 6 * 7)).toBe(42);
@@ -676,7 +677,7 @@ for (const which of ['parse', 'engine', 'pdf'] as const) {
     // The worker really runs under the site's strict CSP, and its violations
     // really reach the detector used after each batch (worker log entries
     // over CDP), so "no violation" above means something.
-    test(`the ${which} worker runs under the page's strict CSP (${csp}), and the detectors see its violations`, async ({ page }) => {
+    test(`the ${which} worker runs under the page's strict CSP (${csp}), and the detectors see its violations`, async ({ page, browserName }) => {
       await serveBundle(page);
       await servePageWith(page, csp);
       await open(page);
@@ -690,13 +691,29 @@ for (const which of ['parse', 'engine', 'pdf'] as const) {
         `connect-src ${origin}/same-origin-from-worker | ${policy}`,
       ]);
       expect(violations.sort()).toEqual(expected.sort());
-      // The detector used after each batch (worker log entries over CDP) sees them.
-      await expect.poll(() => workerCspReports().filter((line) => line.includes('example.invalid/from-worker')).length).toBeGreaterThan(0);
-      await expect.poll(() => workerCspReports().filter((line) => line.includes('/same-origin-from-worker')).length).toBeGreaterThan(0);
+      // The detectors used after each batch see them: the worker prelude in
+      // every browser (exactly one line per report), and in Chromium also the
+      // worker log entries over CDP.
+      const name = `${which}-worker`;
+      await expect
+        .poll(() => workerCspReports().filter((line) => line.startsWith('securitypolicyviolation ')).sort())
+        .toEqual(
+          policies
+            .flatMap(() => [
+              `securitypolicyviolation connect-src https://example.invalid/from-worker | ${name}`,
+              `securitypolicyviolation connect-src ${origin}/same-origin-from-worker | ${name}`,
+            ])
+            .sort(),
+        );
+      if (browserName === 'chromium') {
+        const cdpLines = (): string[] => workerCspReports().filter((line) => !line.startsWith('securitypolicyviolation '));
+        await expect.poll(() => cdpLines().filter((line) => line.includes('example.invalid/from-worker')).length).toBeGreaterThan(0);
+        await expect.poll(() => cdpLines().filter((line) => line.includes('/same-origin-from-worker')).length).toBeGreaterThan(0);
+      }
       // Blocked by the CSP before any request was made.
       expect(requestsAfterLoad()).toEqual([]);
       // The page itself saw nothing: its listener does not see worker violations.
-      expect(await page.evaluate(() => window.__e2eViolations)).toEqual([]);
+      expect(withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), policies.length)).toEqual([]);
     });
   }
 

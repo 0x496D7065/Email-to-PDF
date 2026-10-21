@@ -1,5 +1,5 @@
 // Browser test of the accessibility basics (WCAG 2.2 AA) in every state of
-// the page, in Chromium against the BUILT site served by `vite preview` (see
+// the page, in each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts). No accessibility library (such as axe-core) is
 // used, to avoid a new dependency: each check is written out here.
 //
@@ -34,7 +34,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { watchPage, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
 declare global {
   interface Window {
@@ -148,7 +148,8 @@ test.beforeEach(async ({ context, page, baseURL }) => {
     window.__a11yStatuses = [];
     window.__a11yProgress = [];
     document.addEventListener('securitypolicyviolation', (event) => {
-      window.__a11yViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      // "select": WebKit's report about a <select> (see withoutSelectReports).
+      window.__a11yViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
     });
     // Records each text the status line and the progress line show (each
     // change, also the same text set again), from before the app starts.
@@ -185,19 +186,19 @@ async function addFiles(page: Page): Promise<void> {
  * Nothing left the page: after loading, only the inlined workers' own blob:
  * URLs; before, only the page's own files. No WebSocket, no console error.
  */
-async function expectNoRequestLeftThePage(page: Page): Promise<void> {
+async function expectNoRequestLeftThePage(page: Page, cspPolicies = 2): Promise<void> {
   await page.waitForTimeout(500);
   const ownBlob = new RegExp(`^blob:${origin}/[0-9a-f-]+$`);
   for (const url of watch.requests.slice(loadedAt)) expect(url).toMatch(ownBlob);
   expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
   expect(watch.websockets).toEqual([]);
-  expect(problems).toEqual([]);
+  expect(withoutSelectConsole(engineOf(page.context()), problems, cspPolicies)).toEqual([]);
 }
 
 /** Nothing left the page, no CSP violation, no console error (see e2e/preview.spec.ts). */
 async function expectNothingLeftThePage(page: Page): Promise<void> {
   await expectNoRequestLeftThePage(page);
-  expect(await page.evaluate(() => window.__a11yViolations)).toEqual([]);
+  expect(withoutSelectReports(engineOf(page.context()), await page.evaluate(() => window.__a11yViolations))).toEqual([]);
   expect(workerCspReports(watch)).toEqual([]);
 }
 
@@ -221,8 +222,13 @@ interface Control {
  * where it was afterwards.
  */
 async function measureControls(page: Page): Promise<Control[]> {
-  await page.keyboard.press('Shift');
-  return page.evaluate((selector) => {
+  // The key press must MOVE the focus (Tab): Chromium shows the keyboard
+  // focus style after any key, even Shift, but Firefox only once the focus
+  // was moved with the keyboard (WebKit: after a key that is not a modifier).
+  // Where the focus was is noted first, so it is put back there.
+  const before = await page.evaluateHandle(() => document.activeElement);
+  await page.keyboard.press('Tab');
+  return page.evaluate(([selector, before]) => {
     const parse = (color: string): number[] => color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
     const luminance = (rgb: number[]): number => {
       const channel = (v: number): number => {
@@ -239,7 +245,6 @@ async function measureControls(page: Page): Promise<Control[]> {
       }
       return [255, 255, 255, 1];
     };
-    const before = document.activeElement;
     const found = [...document.querySelectorAll<HTMLElement>(selector)]
       .filter((e) => e.checkVisibility())
       .map((e) => {
@@ -260,7 +265,7 @@ async function measureControls(page: Page): Promise<Control[]> {
     if (before instanceof HTMLElement) before.focus();
     else (document.activeElement as HTMLElement | null)?.blur();
     return found;
-  }, CONTROLS);
+  }, [CONTROLS, before] as const);
 }
 
 /** Pixels the page scrolls sideways (0: none). */
@@ -576,7 +581,7 @@ test.describe('with larger text spacing (WCAG 1.4.12)', () => {
       expect(await sidewaysScroll(page), String(width)).toBeLessThanOrEqual(0);
     }
     // The CSP is off here, so only the requests can be checked: still none leave the page.
-    await expectNoRequestLeftThePage(page);
+    await expectNoRequestLeftThePage(page, 0);
   });
 });
 

@@ -119,12 +119,16 @@ fallback because browsers ignore it there.
 - The Web Worker code is built into the page's script as text (see the CSP
   note), so the check scans each built file twice: as it is, and with its
   text escapes (such as `\n`) undone, so the worker code is checked too.
-- A browser test (Playwright, Chromium) loads the built site and fails if it
-  makes any request outside its own site or triggers any CSP violation. It
-  also switches the network off right after loading and checks that adding
-  files still gives the full result.
+- A browser test (Playwright) loads the built site and fails if it makes any
+  request outside its own site or triggers any CSP violation. It also
+  switches the network off right after loading and checks that adding files
+  still gives the full result. It runs in three browser engines: Chromium
+  (Chrome, Edge), Firefox and WebKit. WebKit is the engine behind Safari, but
+  it is not Safari itself, so the tool is still checked by hand in real
+  Safari before a release.
 - CI runs `npm audit`, type checking, lint, unit tests, the build check and
-  the browser test on every push.
+  the browser test on every push (the browser test as one job per browser
+  engine).
 - Dependencies are kept minimal, pinned to exact versions, with a committed
   lockfile.
 
@@ -309,7 +313,9 @@ Tested with Node.js 22 (the version CI uses).
 | `npm run preview` | Serve the built site from `dist/` locally, with the same security headers as production. Run `npm run build` first. |
 | `npm run check:network` | Run the no-network check on the source and an existing `dist/`, without rebuilding. |
 | `npm test` | Run the unit tests (Vitest). |
-| `npm run test:e2e` | Build the site, then run the browser test against it (Playwright). Run `npx playwright install chromium` once first. |
+| `npm run test:e2e:install` | Download the three test browsers (Chromium, Firefox, WebKit) into Playwright's own browser folder, outside the project. Needed once before the browser test (and again after a Playwright update). On Linux, `npm run test:e2e:install -- --with-deps` also installs the system packages they need. To download one browser only: `test:e2e:install:chromium`, `test:e2e:install:firefox` or `test:e2e:install:webkit`. |
+| `npm run test:e2e` | Build the site, then run the browser test against it (Playwright) in Chromium, Firefox and WebKit. |
+| `npm run test:e2e:chromium` | The same in one browser only (also `test:e2e:firefox`, `test:e2e:webkit`). |
 | `npm run lint` | Run ESLint, including the privacy early-warning rules. |
 | `npm run typecheck` | Check the TypeScript types. |
 
