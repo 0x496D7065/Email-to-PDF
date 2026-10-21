@@ -69,9 +69,9 @@ test('starts with step 2 waiting and the download unavailable but explained', as
   await expect(page.locator('#check-waiting')).toHaveText(en.steps.check.waiting);
   await expect(page.locator('#check-area')).toBeHidden();
 
-  const download = page.getByRole('button', { name: en.actions.downloadPdf });
+  const download = page.getByRole('button', { name: en.actions.makePdf });
   await expect(download).toHaveAttribute('aria-disabled', 'true');
-  await expect(download).toHaveAccessibleDescription(en.steps.download.comingSoon);
+  await expect(download).toHaveAccessibleDescription(en.download.unavailable['no-emails']);
   // Assistive technology (and Playwright) see it as disabled...
   await expect(download).toBeDisabled();
   // ...yet it can still be focused, and pressing it does nothing (no
@@ -83,6 +83,8 @@ test('starts with step 2 waiting and the download unavailable but explained', as
   await page.keyboard.press('Enter');
   await page.keyboard.press('Space');
   expect(page.url()).toBe(url);
+  await expect(page.locator('#download-area')).toHaveAttribute('data-state', 'idle');
+  await expect(page.locator('#download-link')).toBeHidden();
   expect(problems).toEqual([]);
 });
 

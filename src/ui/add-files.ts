@@ -70,6 +70,8 @@ export interface AddFiles {
   reset(): void;
   /** True once files were added (being read, waiting, or read), until reset(). */
   hasFiles(): boolean;
+  /** True while files are being read and organized (step 3 waits for the result). */
+  isBusy(): boolean;
   /** Moves the keyboard focus to the "choose files" button. */
   focus(): void;
   /** Removes the page-wide listeners (tests; the page keeps them for its whole life). */
@@ -364,8 +366,8 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   function add(newFiles: readonly FileLike[]): void {
     if (newFiles.length === 0) return;
     pending = [...pending, ...newFiles];
-    filesChanged();
     if (busy) {
+      filesChanged();
       queuedNotice = true;
       showNotice();
       // Announced once too; the next progress update replaces it.
@@ -373,6 +375,9 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       return;
     }
     void run();
+    // After run() started: it marks step 1 busy at once (before its first
+    // wait), so a listener already sees the files as being read (step 3).
+    filesChanged();
   }
 
   // --- Choose button ------------------------------------------------------
@@ -455,6 +460,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       filesChanged();
     },
     hasFiles: () => files.length > 0 || pending.length > 0,
+    isBusy: () => busy,
     focus() {
       button.focus();
     },

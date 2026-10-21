@@ -83,6 +83,14 @@ const iconvLiteShim = decodeURIComponent(shimUrl.pathname).replace(/^\/([A-Za-z]
 
 export default defineConfig({
   plugins: [bytesImport(), securityHeaders()],
+  // The inlined workers are bundled separately and do NOT get the plugins
+  // above. Without bytesImport() there, a worker importing a font by
+  // mistake would get the font's asset URL as a string (and a .woff file
+  // in dist/), which no build check sees. With it, the bytes would be a
+  // long number array inside the page's script, outside the font chunk,
+  // and the build check fails (scripts/font-rules.mjs). The PDF worker
+  // gets the font bytes from the page instead (src/pipeline/pdf-protocol.ts).
+  worker: { plugins: () => [bytesImport()] },
   resolve: {
     // @kenjiuno/msgreader (the .msg parser) requires 'iconv-lite', which needs
     // Node's Buffer and crashes in the browser. Every import of exactly

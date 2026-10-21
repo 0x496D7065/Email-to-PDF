@@ -44,6 +44,8 @@ export interface GeneratedPdf {
   readonly bytes: Uint8Array;
   /** "correspondence-YYYY-MM-DD.pdf", the generation date in the chosen zone. */
   readonly fileName: string;
+  /** How many pages the PDF has (for the page's "ready" message). */
+  readonly pageCount: number;
 }
 
 /**
@@ -64,5 +66,5 @@ export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf
   });
   const { document } = layoutPdf(doc, input.fonts, { strings, ...(input.config === undefined ? {} : { config: input.config }) });
   const bytes = await (input.backend ?? new OwnPdfWriter()).render(document, input.fonts);
-  return { bytes, fileName: doc.fileName };
+  return { bytes, fileName: doc.fileName, pageCount: document.pages.length };
 }

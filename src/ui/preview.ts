@@ -268,6 +268,8 @@ export interface PreviewOptions {
   readonly onRendered?: (result: EngineResult) => void;
   /** Controls added at the end of the toolbar (src/ui/pdf-labels.ts). Default: none. */
   readonly toolbarItems?: readonly Node[];
+  /** Called after the user picked another time zone (src/ui/page.ts: a PDF made before is dropped). */
+  readonly onZoneChange?: () => void;
 }
 
 /** The PDF plans of a result, for the labels (see the top of this file). */
@@ -785,6 +787,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   zoneSelect.addEventListener('change', () => {
     zone = zoneSelect.value;
     for (const slot of slots) applyDate(slot);
+    try {
+      options.onZoneChange?.();
+    } catch {
+      // The dates are shown in the new zone either way.
+    }
   });
   foldToggle.addEventListener('change', () => {
     showFolded = foldToggle.checked;

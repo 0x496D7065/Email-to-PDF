@@ -499,6 +499,24 @@ summary {
   margin: 0;
 }
 
+/* Step 3 (src/ui/download-step.ts): the note under "Make the PDF" keeps
+   three lines' height (its longest texts wrap to three lines) and the
+   "Download again" line one, even when empty, so the page does not jump as
+   the PDF is made and offered. */
+.download-note {
+  min-height: 4.5em;
+}
+
+.download-again {
+  margin: 0.75rem 0 0;
+  min-height: 1.5em;
+}
+
+.download-link {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* A clear outline for keyboard users on everything focusable. */
 :focus-visible {
   outline: 3px solid var(--focus);

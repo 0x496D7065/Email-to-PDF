@@ -609,14 +609,11 @@ test('keyboard only: every control is reached in order, shows its focus and work
       await page.keyboard.press('Space');
       await expect(details).not.toHaveAttribute('open', /.*/);
     } else if (focus.tag === 'BUTTON' && (await here.getAttribute('id')) === 'download-button') {
-      // Unavailable, explained, and pressing it does nothing.
-      await expect(here).toHaveAccessibleName(en.actions.downloadPdf);
-      await expect(here).toHaveAttribute('aria-disabled', 'true');
-      const status = await page.getByRole('status').textContent();
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('Space');
-      await expect(page.getByRole('status')).toHaveText(status ?? '');
-      await expect(here).toBeFocused();
+      // Available and explained. It is not pressed here: making and
+      // downloading the PDF with the keyboard is checked in e2e/download.spec.ts.
+      await expect(here).toHaveAccessibleName(en.actions.makePdf);
+      await expect(here).not.toHaveAttribute('aria-disabled', /.*/);
+      await expect(here).toHaveAccessibleDescription(en.download.available);
       break;
     }
   }

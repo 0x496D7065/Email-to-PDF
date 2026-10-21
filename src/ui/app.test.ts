@@ -98,16 +98,21 @@ describe('mountApp', () => {
     expect(byId('add-area').children).toEqual([]);
   });
 
-  it('has a download button that is unavailable but focusable, described by its note', () => {
+  it('has a "Make the PDF" button that is unavailable but focusable, described by its note (why)', () => {
     const button = byId('download-button');
     expect(shell.downloadButton).toBe(button);
     expect(button.tagName).toBe('button');
     expect(button.getAttribute('type')).toBe('button');
-    expect(button.textContent).toBe(t('actions.downloadPdf'));
+    expect(button.textContent).toBe(t('actions.makePdf'));
     expect(button.getAttribute('aria-disabled')).toBe('true');
     // Not `disabled`: a disabled button cannot be reached with Tab.
     expect(button.hasAttribute('disabled')).toBe(false);
-    expect(byId(button.getAttribute('aria-describedby') ?? '').textContent).toBe(t('steps.download.comingSoon'));
+    const note = byId(button.getAttribute('aria-describedby') ?? '');
+    expect(shell.downloadNote).toBe(note);
+    expect(note.textContent).toBe(t('download.unavailable.no-emails'));
+    // The download link's container comes after the note, empty for now.
+    expect(shell.downloadArea).toBe(byId('download-area'));
+    expect(byId('download-area').children).toEqual([]);
   });
 
   it('has a "Clear everything" button at the end of step 1, unavailable but focusable, described by its note', () => {

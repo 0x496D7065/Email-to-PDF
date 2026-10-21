@@ -65,6 +65,8 @@ export interface PdfLabelsOptions {
   readonly cancel?: (handle: unknown) => void;
   /** A clock in ms (default: performance.now). */
   readonly now?: () => number;
+  /** Called after the user ticked or unticked the checkbox (src/ui/page.ts: a PDF made before is dropped). */
+  readonly onPolicyChange?: () => void;
 }
 
 export interface PdfLabels {
@@ -221,7 +223,14 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
     start(inputs);
   }
 
-  checkbox.addEventListener('change', refresh);
+  checkbox.addEventListener('change', () => {
+    refresh();
+    try {
+      options.onPolicyChange?.();
+    } catch {
+      // The labels follow the checkbox either way.
+    }
+  });
 
   return {
     element,

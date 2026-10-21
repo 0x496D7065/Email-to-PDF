@@ -2,8 +2,9 @@
 //
 // This builds the empty, accessible shell; the steps are filled in later:
 // step 1 gets the file picker, step 2 the preview, step 3 the PDF button's
-// real action. Every visible word comes from the strings module (i18n/) and
-// is set with textContent through el() (README.md, rule R4).
+// action (src/ui/download-step.ts). Every visible word comes from the
+// strings module (i18n/) and is set with textContent through el()
+// (README.md, rule R4).
 //
 // Accessibility choices:
 // - Landmarks: <header> (banner), <main>, <footer> (contentinfo). Each step
@@ -12,8 +13,9 @@
 // - One live region (role="status", aria-live="polite") for progress and
 //   results. It exists from the start: screen readers only announce changes
 //   to a live region that was already on the page.
-// - The download button is NOT `disabled` but aria-disabled="true", linked to
-//   its "coming soon" note with aria-describedby. A disabled button cannot be
+// - The "Make the PDF" button is NOT `disabled` but aria-disabled="true"
+//   while it is unavailable, linked with aria-describedby to its note, which
+//   says why (at first: add your emails). A disabled button cannot be
 //   reached with the Tab key, so a keyboard or screen reader user would never
 //   learn why it is unavailable. "Clear everything" uses the same pattern
 //   while there is nothing to clear.
@@ -34,8 +36,12 @@ export interface AppShell {
   readonly addArea: HTMLDivElement;
   /** Step 2 container: the preview goes here. Hidden until setCheckReady(true). */
   readonly checkArea: HTMLDivElement;
-  /** Step 3 button. aria-disabled="true" until the PDF export exists. */
+  /** Step 3 button, "Make the PDF". aria-disabled="true" until src/ui/download-step.ts makes it available. */
   readonly downloadButton: HTMLButtonElement;
+  /** Step 3 note under the button, its accessible description: what it does now, or why it is unavailable. */
+  readonly downloadNote: HTMLParagraphElement;
+  /** Step 3 container under the note: the "Download again" link goes here. */
+  readonly downloadArea: HTMLDivElement;
   /** "Clear everything", at the end of step 1. aria-disabled="true" until setClearAvailable(true). */
   readonly clearButton: HTMLButtonElement;
   /** Makes "Clear everything" available (there is something to clear) or not. */
@@ -123,12 +129,15 @@ export function mountApp(root: HTMLElement): AppShell {
       'aria-disabled': 'true',
       'aria-describedby': 'download-note',
     },
-    text: t('actions.downloadPdf'),
+    text: t('actions.makePdf'),
   });
+  const downloadNote = el('p', { attrs: { id: 'download-note', class: 'note download-note' }, text: t('download.unavailable.no-emails') });
+  const downloadArea = el('div', { attrs: { id: 'download-area', class: 'download-area' } });
   const downloadStep = stepSection('step-download', 3, t('steps.download.title'), [
     el('p', { attrs: { class: 'step-intro' }, text: t('steps.download.intro') }),
     downloadButton,
-    el('p', { attrs: { id: 'download-note', class: 'note' }, text: t('steps.download.comingSoon') }),
+    downloadNote,
+    downloadArea,
   ]);
 
   const main = el('main', { attrs: { id: 'main', class: 'steps' }, children: [status, addStep, checkStep, downloadStep] });
@@ -145,6 +154,8 @@ export function mountApp(root: HTMLElement): AppShell {
     addArea,
     checkArea,
     downloadButton,
+    downloadNote,
+    downloadArea,
     clearButton,
     setClearAvailable(available) {
       setSafeAttribute(clearButton, 'aria-disabled', available ? false : 'true');

@@ -6,8 +6,8 @@
 // from `blob:` URLs (see src/parsing/worker-runner.ts). Chromium lists the
 // loading of a blob: worker script as a request to that blob: URL; it never
 // goes to the network. Every blob: URL looks alike, so workers are told
-// apart by the name they are started with ('parse-worker', 'engine-worker'),
-// which CDP reports as the worker target's title.
+// apart by the name they are started with ('parse-worker', 'engine-worker',
+// 'pdf-worker'), which CDP reports as the worker target's title.
 //
 // These are the same detectors as in e2e/parse-files.spec.ts, which also
 // holds their positive controls (proof that they really see a request or a
@@ -80,7 +80,7 @@ export async function watchPage(context: BrowserContext, page: Page, origin: str
 }
 
 /** The workers in `list` that were started with this name. */
-export function workersNamed(watch: Watch, list: readonly Worker[], name: 'parse-worker' | 'engine-worker'): Worker[] {
+export function workersNamed(watch: Watch, list: readonly Worker[], name: 'parse-worker' | 'engine-worker' | 'pdf-worker'): Worker[] {
   return list.filter((worker) => watch.workerNames.get(worker.url()) === name);
 }
 

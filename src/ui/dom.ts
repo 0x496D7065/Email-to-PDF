@@ -11,6 +11,8 @@
 // - URL attributes, except href/src holding a '#fragment' or a plain
 //   relative path on the same site. Anything with a scheme (javascript:,
 //   data:, https:, ...) or starting with // is refused (README.md, rule R1).
+//   Only setBlobHref (below) may set a blob: URL, and only one this page
+//   made itself (the finished PDF, already in memory).
 // - tags that can run code, load things or hold raw markup (script, iframe,
 //   style, template, ...): only the tags in SAFE_TAGS can be created.
 
@@ -101,6 +103,30 @@ export function isSafeUrl(value: string): boolean {
   if (hasControlCharacter(value)) return false;
   if (value.startsWith('#')) return FRAGMENT.test(value);
   return !value.startsWith('//') && RELATIVE_URL.test(value);
+}
+
+/**
+ * Is `value` a blob: URL made by this page with URL.createObjectURL, i.e.
+ * exactly "blob:" + the page's origin + "/" + an id of hex digits and
+ * dashes? Such a URL points at data already in this tab's memory (the
+ * finished PDF), never at the network. `origin` is the page's own
+ * (location.origin); an opaque origin ("null") is refused.
+ */
+export function isOwnBlobUrl(value: string, origin: string): boolean {
+  if (hasControlCharacter(value) || origin === '' || origin === 'null') return false;
+  const prefix = `blob:${origin}/`;
+  return value.startsWith(prefix) && /^[0-9A-Fa-f-]+$/.test(value.slice(prefix.length));
+}
+
+/**
+ * The one exception to the href rule above, for step 3's download link
+ * (src/ui/download-step.ts): sets `href` to a blob: URL made by this page
+ * (see isOwnBlobUrl). Throws for anything else. el() and setSafeAttribute
+ * keep refusing every blob: URL.
+ */
+export function setBlobHref(link: HTMLAnchorElement, url: string, origin: string): void {
+  if (!isOwnBlobUrl(url, origin)) throw new Error('setBlobHref(): href may only hold a blob: URL made by this page');
+  link.setAttribute('href', url);
 }
 
 /**

@@ -28,6 +28,7 @@ import type { ProcessErrorCode } from '../../pipeline/process-files';
 import type { AuthorSource } from '../../ui-model/display-author';
 import type { PdfNoteCode } from '../../ui-model/message-notes';
 import type { PdfStatus } from '../../ui-model/pdf-plan';
+import type { PdfError, PdfUnavailable } from '../pdf-job';
 
 export const en = {
   app: {
@@ -50,8 +51,37 @@ export const en = {
     download: {
       title: 'Download PDF',
       intro: 'Save one PDF with all your emails, oldest first.',
-      comingSoon: 'Coming soon: making the PDF is not available yet.',
     },
+  },
+
+  // Step 3 (src/ui/download-step.ts). The note under the button is also its
+  // accessible description: it always says what the button does now, or why
+  // it is unavailable.
+  download: {
+    // Why the button is unavailable.
+    unavailable: {
+      'no-emails': 'Add your emails in step 1 first.',
+      busy: 'Please wait: your emails are still being read and checked.',
+      'none-included': 'Tick at least one email in step 2 to make a PDF.',
+      'labels-failed': 'The PDF cannot be made: the tool could not work out what goes in it. To try again, reconnect to the internet, reload the page and add your files again.',
+    } satisfies Record<PdfUnavailable, string>,
+    available: 'Makes one PDF of the emails ticked in step 2, here on this computer.',
+    // Shown (and announced in the status line) after a PDF being made or
+    // ready was dropped because a choice changed (time zone, ticks, files...).
+    changed: 'Your choices changed, so the previous PDF was removed. Make the PDF again to include them.',
+    making: 'Making your PDF... This can take a little while for many emails. The page stays usable.',
+    ready: {
+      one: 'Your PDF is ready: {fileName}, {count} page. The download has started.',
+      other: 'Your PDF is ready: {fileName}, {count} pages. The download has started.',
+    },
+    // The link kept after the download started.
+    again: 'Download again: {fileName}',
+    // Why no PDF was made. Never says the emails are damaged.
+    error: {
+      timeout: 'Making the PDF took too long, so it was stopped. You can try again, or untick some emails in step 2 to make a smaller PDF.',
+      'tool-error': 'The tool could not make the PDF. Your emails are still here: you can try again.',
+      'not-started': 'The tool could not start making the PDF in this browser. To try again, reconnect to the internet, reload the page and add your files again.',
+    } satisfies Record<PdfError, string>,
   },
 
   drop: {
@@ -356,7 +386,7 @@ export const en = {
 
   actions: {
     chooseFiles: 'Choose email files',
-    downloadPdf: 'Download PDF',
+    makePdf: 'Make the PDF',
     clearEverything: 'Clear everything',
     include: 'Include in the PDF',
   },

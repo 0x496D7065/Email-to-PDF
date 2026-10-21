@@ -11,8 +11,8 @@ if (root) mountPage(root);
 
 // The PDF fonts are imported here, by the page entry, so their chunk
 // (assets/pdf-fonts-[hash].js) is loaded together with the page and the
-// tool keeps working offline afterwards (README.md, rule R1). Using them
-// (a quick check of their WOFF headers) keeps the bundler from dropping the
-// import while nothing else uses the fonts yet. The flag says only whether
-// the app's own fonts are there; it holds no user data.
+// tool keeps working offline afterwards (README.md, rule R1). Step 3 hands
+// their bytes to the PDF worker (src/ui/page.ts), which never imports them
+// itself. The flag says only whether the app's own fonts are there; it
+// holds no user data.
 document.documentElement.dataset.pdfFonts = pdfFontsReady() ? 'ready' : 'missing';

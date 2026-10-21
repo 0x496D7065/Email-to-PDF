@@ -2,7 +2,7 @@
 // Node with a recording fake DOM (tests/support/fake-dom.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeText } from '../../tests/support/fake-dom';
-import { attributeProblem, el, isSafeUrl, SAFE_TAGS, setSafeAttribute, type SafeTag } from './dom';
+import { attributeProblem, el, isOwnBlobUrl, isSafeUrl, SAFE_TAGS, setBlobHref, setSafeAttribute, type SafeTag } from './dom';
 
 let doc: FakeDocument;
 
@@ -158,5 +158,51 @@ describe('setSafeAttribute', () => {
     expect(() => setSafeAttribute(target, 'Hidden', false)).toThrow(/not allowed/);
     // A URL attribute can still be removed (no value to check).
     expect(() => setSafeAttribute(target, 'href', false)).not.toThrow();
+  });
+});
+
+describe('isOwnBlobUrl / setBlobHref (step 3 download link only)', () => {
+  const ORIGIN = 'http://127.0.0.1:4173';
+  const OWN = `blob:${ORIGIN}/0f8c2b6e-1a2b-4c3d-9e8f-0123456789ab`;
+
+  it('accepts exactly a blob: URL of this page', () => {
+    expect(isOwnBlobUrl(OWN, ORIGIN)).toBe(true);
+    expect(isOwnBlobUrl(`blob:${ORIGIN}/ABCDEF-12`, ORIGIN)).toBe(true);
+  });
+
+  it('refuses anything else', () => {
+    for (const url of [
+      'blob:x',
+      `blob:${ORIGIN}/`,
+      `blob:${ORIGIN}/0f8c?x=1`,
+      `blob:${ORIGIN}/../x`,
+      `blob:${ORIGIN}/0f8c#a`,
+      `blob:${ORIGIN}/0f8c\n`,
+      `blob:${ORIGIN}/0f8c\u{0}`,
+      `blob:${ORIGIN}.example.invalid/0f8c`,
+      'blob:http://example.invalid/0f8c',
+      `${ORIGIN}/0f8c`,
+      `BLOB:${ORIGIN}/0f8c`,
+      'javascript:alert(1)',
+      'data:application/pdf,x',
+      '',
+    ]) {
+      expect(isOwnBlobUrl(url, ORIGIN), JSON.stringify(url)).toBe(false);
+    }
+    // No usable origin (not a browser page, or an opaque one): nothing is accepted.
+    expect(isOwnBlobUrl('blob:null/0f8c', 'null')).toBe(false);
+    expect(isOwnBlobUrl('blob:/0f8c', '')).toBe(false);
+  });
+
+  it('sets href only to such a URL; el() and setSafeAttribute still refuse every blob: URL', () => {
+    const a = new FakeElement('a');
+    const link = a as unknown as HTMLAnchorElement;
+    setBlobHref(link, OWN, ORIGIN);
+    expect(a.getAttribute('href')).toBe(OWN);
+    expect(() => setBlobHref(link, 'blob:http://example.invalid/0f8c', ORIGIN)).toThrow(/blob: URL made by this page/);
+    expect(() => setBlobHref(link, 'javascript:alert(1)', ORIGIN)).toThrow(/blob: URL made by this page/);
+    expect(a.getAttribute('href')).toBe(OWN);
+    expect(() => setSafeAttribute(link, 'href', OWN)).toThrow(/fragment or a relative/);
+    expect(() => el('a', { attrs: { href: OWN } })).toThrow(/fragment or a relative/);
   });
 });

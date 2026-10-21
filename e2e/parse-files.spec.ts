@@ -10,7 +10,7 @@
 // How the code gets into the page without shipping a test hook:
 // beforeAll bundles e2e/support/parse-entry.ts IN MEMORY (`write: false`)
 // with the project's own vite.config.ts, the same configuration as the
-// production build. As in dist/, the parse worker and the engine worker are
+// production build. As in dist/, the parse, engine and PDF workers are
 // inlined into that bundle (`?worker&inline`) and start from blob: URLs. A
 // small capture plugin also keeps each worker's own code, so the first test
 // can prove that the build check really sees that code inside the bundle.
@@ -127,6 +127,7 @@ test.beforeAll(async () => {
   expect(entryUrl).not.toBe('');
   expect(workerSources.get('parse-worker')?.length ?? 0).toBeGreaterThan(1000);
   expect(workerSources.get('engine-worker')?.length ?? 0).toBeGreaterThan(1000);
+  expect(workerSources.get('pdf-worker')?.length ?? 0).toBeGreaterThan(1000);
 });
 
 let origin = '';
@@ -317,16 +318,16 @@ interface Summary {
   readonly hashed: boolean;
 }
 
-test('the parse and engine workers are inlined in the page script, and the build check sees their code', () => {
-  // As in dist/: no separate parse or engine worker file. A worker file is
+test('the parse, engine and PDF workers are inlined in the page script, and the build check sees their code', () => {
+  // As in dist/: no separate parse, engine or PDF worker file. A worker file is
   // fetched each time a worker starts, which fails once the network is off.
-  expect([...bundle.keys()].filter((file) => /(parse|engine)-worker/.test(file))).toEqual([]);
+  expect([...bundle.keys()].filter((file) => /(parse|engine|pdf)-worker/.test(file))).toEqual([]);
   const allCode = [...bundle.entries()]
     .filter(([file]) => file.endsWith('.js'))
     .map(([, code]) => code)
     .join('BUNDLE-FILE-SEPARATOR');
   const decoded = decodeJsEscapes(allCode);
-  for (const name of ['parse-worker', 'engine-worker']) {
+  for (const name of ['parse-worker', 'engine-worker', 'pdf-worker']) {
     const workerCode = workerSources.get(name) ?? '';
     // The worker's own code passes the same scan as every dist/ file.
     expect(findViolations(workerCode, { isDist: true, distFile: `${name}.js` }), name).toEqual([]);
@@ -626,8 +627,8 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
   await expectNoNetworkAndPageAlive(page);
 });
 
-/** Starts an idle parse or engine worker in the page (kept alive on window) and returns its Playwright handle. */
-async function startIdleWorker(page: Page, which: 'parse' | 'engine'): Promise<Worker> {
+/** Starts an idle parse, engine or PDF worker in the page (kept alive on window) and returns its Playwright handle. */
+async function startIdleWorker(page: Page, which: 'parse' | 'engine' | 'pdf'): Promise<Worker> {
   // Only one worker is started here, so the next one seen is it (its blob:
   // URL is not known in advance); its name is checked once it is known.
   const started = page.waitForEvent('worker');
@@ -635,7 +636,12 @@ async function startIdleWorker(page: Page, which: 'parse' | 'engine'): Promise<W
     async ({ url, kind }) => {
       const entry = (await import(url)) as typeof Entry;
       const events = { message: () => undefined, failure: () => undefined };
-      window.__e2eKeep = kind === 'parse' ? entry.createBrowserWorker(events) : entry.createBrowserEngineWorker(events);
+      window.__e2eKeep =
+        kind === 'parse'
+          ? entry.createBrowserWorker(events)
+          : kind === 'engine'
+            ? entry.createBrowserEngineWorker(events)
+            : entry.createBrowserPdfWorker(events);
     },
     { url: entryUrl, kind: which },
   );
@@ -671,13 +677,13 @@ function tryFetchesInWorker(worker: Worker, siteOrigin: string): Promise<{ outco
 }
 
 // Positive controls for the checks above, for each kind of worker the
-// pipeline starts (parse and engine). A blob: worker takes the CSP of the page
+// page starts (parse, engine and PDF). A blob: worker takes the CSP of the page
 // that starts it, so these change the PAGE's CSP. Seen in Chromium: with the
 // header and the <meta> tag, the worker is bound by BOTH policies (each
 // reports the violation); with the <meta> tag alone, by that one. So unlike a
 // worker loaded from its own file, a blob: worker stays covered on a host
 // that can only use the <meta> fallback.
-for (const which of ['parse', 'engine'] as const) {
+for (const which of ['parse', 'engine', 'pdf'] as const) {
   for (const csp of ['header and meta', 'meta'] as const) {
     // The worker really runs under the site's strict CSP, and its violations
     // really reach the detector used after each batch (worker log entries

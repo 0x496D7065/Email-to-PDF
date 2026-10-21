@@ -20,9 +20,14 @@ In development. Done so far:
   text. Quoted text and signatures are folded, never deleted. Each folded part
   says whether it will be in the PDF or not, and why, and a checkbox puts
   everything in the PDF. Each email can be left out of the PDF.
+- PDF download: one PDF with a cover page (source files and their SHA-256
+  fingerprints), an index with page numbers and bookmarks, made in the
+  browser, in a worker, and saved as `correspondence-YYYY-MM-DD.pdf`. The
+  PDF is kept in memory only, until you change a choice, clear everything or
+  leave the page.
 
-In progress: the PDF download. Until it is done, the tool shows the preview
-but **cannot make a PDF yet**.
+Still to come: polish (more languages, a privacy panel, help for each mail
+program).
 
 ## Privacy & security rules
 
