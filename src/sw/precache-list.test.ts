@@ -94,6 +94,19 @@ describe('manifestVersion', () => {
       manifestVersion(files, `var c=a("${MANIFEST_PLACEHOLDER}");`, headers),
     );
   });
+
+  it('changes when only a string in the service worker code changes (only the list itself is left out)', () => {
+    for (const quote of ['"', "'", '`']) {
+      expect(manifestVersion(files, `a(${quote}x${quote})`, headers), quote).not.toBe(manifestVersion(files, `a(${quote}y${quote})`, headers));
+    }
+    // Strings that look like JSON but are not the written list still count:
+    // the list is only a double-quoted {"version":...} string.
+    const decoys = ['a("{}")', 'a("{\\"paths\\":[]}")', `a('{"version":1}')`, 'a(`{"version":1}`)'];
+    for (const decoy of decoys) {
+      expect(manifestVersion(files, decoy, headers), decoy).not.toBe(manifestVersion(files, 'a("")', headers));
+    }
+    expect(new Set(decoys.map((decoy) => manifestVersion(files, decoy, headers))).size).toBe(decoys.length);
+  });
 });
 
 describe('readBuiltManifest', () => {
