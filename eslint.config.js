@@ -145,6 +145,23 @@ export default defineConfig(
       'no-restricted-syntax': ['error', ...restrictedSyntax, ...dynamicNodeImports],
     },
   },
+  // The service worker (src/sw/service-worker.ts) is the one shipped file
+  // allowed to call fetch(): a listed file of this site missing from its
+  // copy is fetched from this site again, and nothing is stored (README.md,
+  // "How the privacy model works"; the build check has the same single
+  // exception, RULE_EXEMPTIONS in scripts/no-network-rules.mjs). Only bare
+  // `fetch` is allowed there; every other entry of the list still applies.
+  {
+    files: ['src/sw/service-worker.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...Object.entries(forbiddenGlobals)
+          .filter(([name]) => name !== 'fetch')
+          .map(([name, message]) => ({ name, message })),
+      ],
+    },
+  },
   // e2e/ browser tests deliberately try forbidden things (fetch, remote
   // images) inside the page to PROVE the CSP blocks them. That code runs
   // only in the test browser and is never shipped, so the early-warning

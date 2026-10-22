@@ -15,7 +15,15 @@ export default defineConfig({
   // Plain console output; no HTML report folder is generated.
   reporter: 'list',
   retries: 0,
-  use: { baseURL: BASE_URL },
+  // serviceWorkers 'block': the built site registers a service worker (the
+  // offline copy of its own files, src/sw/), which stores those files in
+  // the background right after the page loads. Every spec checks that
+  // nothing at all is requested after the page's own files, so the service
+  // worker is kept out of them (Playwright's block makes register() do
+  // nothing, which also shows the app works without it). The one spec about
+  // the service worker turns it back on and checks its requests exactly
+  // (e2e/offline-reload.spec.ts).
+  use: { baseURL: BASE_URL, serviceWorkers: 'block' },
   // The three browser engines. WebKit is Safari's engine, not Safari itself.
   // Install them with: npm run test:e2e:install
   projects: [
@@ -26,7 +34,7 @@ export default defineConfig({
   // Playwright starts this server before the tests and stops it afterwards.
   // It always rebuilds first, so the tests never run against a stale dist/.
   // `vite preview` serves dist/ with the same security headers as Cloudflare
-  // (see `preview.headers` in vite.config.ts). --strictPort makes it fail
+  // (see previewHeaders() in vite.config.ts). --strictPort makes it fail
   // instead of silently picking another port.
   webServer: {
     command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${String(PORT)} --strictPort`,

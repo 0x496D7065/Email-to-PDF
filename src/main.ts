@@ -4,6 +4,7 @@
 // Nothing is logged and nothing is stored (README.md, rule R5).
 import './ui/app.css';
 import { pdfFontsReady } from './pdf/fonts';
+import { registerWhenLoaded } from './sw/register';
 import { mountPage } from './ui/page';
 
 const root = document.getElementById('app');
@@ -16,3 +17,9 @@ if (root) mountPage(root);
 // itself. The flag says only whether the app's own fonts are there; it
 // holds no user data.
 document.documentElement.dataset.pdfFonts = pdfFontsReady() ? 'ready' : 'missing';
+
+// The offline copy of the site's own files (src/sw/), so the page can also
+// be reopened while offline after one visit online. Built site only:
+// `npm run dev` has no service worker (import.meta.env.PROD is false there,
+// and this line is left out of the dev code). It never touches your emails.
+if (import.meta.env.PROD) registerWhenLoaded(window, navigator);

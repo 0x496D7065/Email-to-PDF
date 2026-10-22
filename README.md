@@ -27,6 +27,9 @@ In development. Done so far:
   leave the page.
 - Privacy panel: at the top of the page, in plain words, what the tool does
   and never does, how to check it yourself, and its known limits.
+- Offline reload: after one visit with the internet on, the page can be
+  reloaded or opened again without internet. The browser keeps a copy of
+  the site's own files only, never your emails (see "Offline copy" below).
 
 Still to come: polish (more languages, help for each mail program).
 
@@ -52,7 +55,10 @@ at all. No `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`,
 emails (tracking pixels, remote images) is never loaded. The only outbound
 thing ever allowed is a plain link (the donation or project repository link,
 with `rel="noopener noreferrer"`) that you click yourself, never a script,
-widget or frame.
+widget or frame. One approved exception: the service worker fetches the
+site's own listed files (when it installs, and again if a stored copy is
+missing), and the browser asks for `/sw.js` to check for a new version;
+this site only, never another one. See "Offline copy" below.
 
 ### R2: Strict Content Security Policy
 
@@ -85,6 +91,12 @@ frame-ancestors 'none'
 `frame-ancestors 'none'` is header-only: it is left out of the `<meta>`
 fallback because browsers ignore it there.
 
+One file has a different policy: the service worker script `/sw.js` (see
+"Offline copy" below) is sent with the same policy except
+`connect-src 'self'`, so that it can store and serve the site's own files.
+That exception was approved by the user and applies to `/sw.js` only; the
+page keeps `connect-src 'none'`.
+
 ### R3: Automated checks in the build and CI
 
 - `npm run build` fails if the source or the built site contains a network
@@ -113,6 +125,15 @@ fallback because browsers ignore it there.
   network APIs above. This check does not catch every possible way of
   writing data down, for example many short lists joined together, or
   numbers written as text.
+- One exception to the network and storage scans, for one file only: the
+  service worker (`src/sw/service-worker.ts`, built as `dist/sw.js`) may call
+  `fetch(` and use Cache Storage (`caches.`), to keep and serve a copy of the
+  site's own files (see "Offline copy" below). Every other rule still
+  applies to it, and both calls still fail the build in any other file,
+  including the page's scripts and the inlined workers
+  (`RULE_EXEMPTIONS` in `scripts/no-network-rules.mjs`). The check also
+  fails if `dist/sw.js` is missing, or if `dist/_headers` does not give
+  `/sw.js` exactly the page's policy with `connect-src 'self'`.
 - The same build check also fails if the built site contains an HTML
   injection API (such as `innerHTML`, `outerHTML`, `insertAdjacentHTML` or
   `document.write`), as a backstop for rule R4.
@@ -122,7 +143,13 @@ fallback because browsers ignore it there.
 - A browser test (Playwright) loads the built site and fails if it makes any
   request outside its own site or triggers any CSP violation. It also
   switches the network off right after loading and checks that adding files
-  still gives the full result. It runs in three browser engines: Chromium
+  still gives the full result. Another browser test opens the page once,
+  switches the network off, reloads it, and uses the whole tool from the
+  service worker's copy: nothing reaches the network, there is no CSP
+  violation, and the copy holds exactly the site's own files before and
+  after the emails. (The other browser tests block the service worker, so
+  that they can check that nothing at all is requested after the page's
+  own files.) The browser tests run in three browser engines: Chromium
   (Chrome, Edge), Firefox and WebKit. WebKit is the engine behind Safari, but
   it is not Safari itself, so the tool is still checked by hand in real
   Safari before a release.
@@ -154,8 +181,9 @@ refuses event handler attributes and unsafe URLs.
 Message data, and anything derived from it, stays in memory only: no
 `localStorage`, `sessionStorage`, `IndexedDB`, cookies or cache storage.
 Closing or reloading the tab wipes everything, and the visible "Clear
-everything" button does the same at any time. If an offline (service worker)
-version is added, it caches only the app's own files, never your data.
+everything" button does the same at any time. The offline copy (a service
+worker, see "Offline copy" below) keeps only the app's own static files in
+Cache Storage, never your data.
 
 ### R6: Collapse, never delete
 
@@ -248,19 +276,73 @@ could be served. You do not have to take our word for it; a technical person
 can check:
 
 1. **Watch the network:** open your browser's DevTools, go to the Network tab,
-   then use the tool. The page's own files load once when it opens; after
-   that, nothing goes out to the internet. The only new entries are a few
-   `blob:` URLs: parts of the page running inside your browser.
+   then use the tool. The page's own files load when it opens; the service
+   worker (below) may fetch the same files again from the site, in the
+   background, to keep its copy, and the browser asks the site for `/sw.js`
+   to see whether a new version is out. After that, nothing goes out to the
+   internet. The only new entries are a few `blob:` URLs: parts of the page
+   running inside your browser.
 2. **Run it offline:** open the page, disconnect from the internet (or
    enable "Offline" in DevTools), then add your files: everything still
    works, because the tool never needs the network once the page has loaded.
-   Do not reload the page while offline: reloading has to download the page
-   again, which needs the network (a version that can also start offline may
-   come later).
+   After one visit with the internet on, you can also reload the page, or
+   open it again, while offline: it then comes from the browser's copy of
+   the site's own files (see "Offline copy" below).
 3. **Read the source:** the code is MIT-licensed; once the repository is
    public you can read it. The security headers live in
    `src/security/headers.ts`, the build check in `scripts/`, and the browser
    test in `e2e/`.
+
+## Offline copy (service worker)
+
+So that the page can be reloaded or opened again without internet, the
+built site registers a service worker, `/sw.js` (source in `src/sw/`). It
+is registered from the app's own script (no inline script), in the built
+site only (`npm run dev` has none). If the browser refuses it, nothing
+changes: the page works as before, it just cannot be reopened offline.
+
+- **What it keeps:** only the site's own static files, in Cache Storage:
+  the page (`/`), its scripts and styles (`assets/`), the PDF fonts script
+  and `THIRD_PARTY_NOTICES.txt`. The list is made by the build from the
+  files it writes (every file of `dist/` except `_headers`, `_redirects`,
+  `_routes.json`, source maps (`*.map`) and `sw.js`; no library is used
+  for this) and written into `sw.js`, with a version that is a content hash
+  of those files, of the service worker's code and of `_headers` (the copy
+  of the page keeps the headers it was served with, so a header change
+  alone also gives a new version). The same build always gives the same
+  `sw.js`.
+- **What it never keeps:** your emails, the PDF, anything you add or
+  anything made from it. Those stay in the page's memory (rule R5) and
+  never reach the service worker. It never stores anything at run time:
+  the only time it writes to its cache is when it installs, with exactly
+  the listed files.
+- **What it answers:** only `GET` requests of this site for a listed file,
+  without a query string (`?...`), from its copy. Every other request is
+  left to the browser as if there were no service worker, and the page's
+  CSP still applies to it. When a new version of the site is published, it
+  stores the new files under a new name, then deletes the older copies of
+  its own (never another cache). After an update, the first visit still
+  shows the previous version; the new one is used from the next time you
+  open or reload the page. Addresses with a query (`?...`), or with a `?`
+  in the part after `#`, are not served from the copy offline (on
+  purpose: only the plain addresses of the listed files are).
+- **Its own CSP:** a service worker does not use the page's CSP. Its
+  requests follow the CSP sent with `/sw.js` itself, and the page's
+  `connect-src 'none'` would stop it from storing the files. So `/sw.js`,
+  and only `/sw.js`, is sent with the page's policy changed in one place:
+  `connect-src 'self'` (this site only, never another one). The page keeps
+  `connect-src 'none'`. In `_headers`, the `/sw.js` rule first removes the
+  policy of `/*` (`! Content-Security-Policy`) and then sets its own:
+  Cloudflare Pages would otherwise send both, joined by a comma, and the
+  browser would apply both.
+- **"Clear everything"** does not touch this copy: it holds only the
+  site's own files, nothing of yours.
+- **How to remove it:** delete this site's data in your browser (for
+  example, in Chrome: Settings, Privacy and security, Site settings, the
+  site, "Delete data"; in Firefox: the padlock in the address bar, "Clear
+  cookies and site data"). In DevTools, the Application tab (Chrome) or
+  Storage tab (Firefox) shows the service worker and its cache, and can
+  remove them too.
 
 ## CSP note
 

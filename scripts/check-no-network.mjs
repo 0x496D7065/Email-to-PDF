@@ -4,7 +4,8 @@
 // Fails (exit code 1) if the source or the built site contains a network API,
 // a browser storage API, an http(s) URL that is not allowlisted, or test code,
 // if the built site contains an HTML injection API such as innerHTML
-// (README.md, rule R4), or if the built security headers are missing. The
+// (README.md, rule R4), if the built security headers are missing, or if
+// the version in dist/sw.js is not the one computed from dist/. The
 // matching rules live in no-network-rules.mjs.
 //
 // Plain JavaScript using only Node built-ins: no extra dependency or
@@ -30,6 +31,11 @@
 //     committed font; anywhere else (src/ included) a long number array
 //     fails, like a long base64 literal. The page's entry script must
 //     import the font chunk statically, so it loads with the page.
+//   - One exception, for one file: the service worker (src/sw/service-worker.ts,
+//     built as dist/sw.js) may use the network call and Cache Storage, to keep
+//     and serve a copy of the site's own files (RULE_EXEMPTIONS in
+//     no-network-rules.mjs). Every other rule still applies to it, and both
+//     rules still apply to every other file.
 // What is NOT scanned:
 //   - scripts/: these check files must contain the banned words to look for them.
 //   - src/**/*.test.ts: tests legitimately mention banned words as strings
@@ -43,6 +49,7 @@ import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
 import { checkFontChunkLoadedAtStartup, checkNumberArrays, checkSourceFonts, findNumberArrays, isFontFile } from './font-rules.mjs';
 import { checkBuiltHtml, checkHeadersFile, findEmbeddedViolations, findOpaquePayloads, findViolations } from './no-network-rules.mjs';
+import { manifestVersion, readBuiltManifest } from './sw-version.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = join(root, 'dist');
@@ -132,6 +139,26 @@ for (const [path, check] of [
   }
   for (const problem of check(readFileSync(path, 'utf8'))) {
     errors.push(`${display(path)}: ${problem}`);
+  }
+}
+
+// The service worker script must be there: dist/_headers has a rule for it
+// (checked above), and its two rule exceptions (RULE_EXEMPTIONS) are for it.
+if (!existsSync(join(dist, 'sw.js'))) errors.push('dist/sw.js: file is missing (README.md, "How the privacy model works")');
+// Its version must be the one computed from what dist/ really holds: the
+// listed files, the service worker's code and dist/_headers (the same
+// manifestVersion the build uses, scripts/sw-version.mjs). A build that
+// left a file or the real headers out of the version fails here, because
+// returning visitors would then keep an old copy.
+else {
+  try {
+    const swJs = readFileSync(join(dist, 'sw.js'), 'utf8');
+    const { version, paths } = readBuiltManifest(swJs);
+    const files = paths.map((path) => ({ path, bytes: readFileSync(join(dist, path === '/' ? 'index.html' : path.slice(1))) }));
+    const expected = manifestVersion(files, swJs, readFileSync(headersFile));
+    if (version !== expected) errors.push(`dist/sw.js: version ${version} is not the one computed from dist/ (${expected}): the build left something out of it`);
+  } catch (error) {
+    errors.push(`dist/sw.js: its version cannot be checked: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

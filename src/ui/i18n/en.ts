@@ -47,7 +47,9 @@ export const en = {
       title: 'What this page does',
       local: 'Your email files are read only inside this browser tab, on your computer.',
       noUpload: 'Nothing leaves your computer.',
-      noSaving: 'This page saves nothing: no cookies, no browser storage. Only the PDF you choose to download is saved, in your downloads folder.',
+      // The service worker (src/sw/) keeps the page's own files, never user data.
+      noSaving:
+        "This page saves nothing of yours: no cookies, and nothing from your emails in the browser. Your browser only keeps a copy of this page's own files, so the page can open without internet. Only the PDF you choose to download is saved, in your downloads folder.",
       wiped: 'Closing or reloading this tab, or pressing "Clear everything", removes everything from this page. A PDF you already downloaded stays in your downloads.',
       pdf: 'The PDF is made here too. Once you download it, it exists only on your computer.',
     },
@@ -61,9 +63,9 @@ export const en = {
     check: {
       title: 'How to check it yourself',
       offline:
-        'After the page has loaded, turn off your internet (or use airplane mode), then use the tool: it still works. Do not reload the page while offline: reloading needs the internet.',
+        "After the page has loaded, turn off your internet (or use airplane mode), then use the tool: it still works. In most browsers, once you have opened the page with the internet on, you can also reload it or open it again without internet: your browser keeps a copy of this page's own files (never your emails).",
       network:
-        "For technical people: open your browser's developer tools and go to the Network tab. The page's own files load once when it opens; after that, watch while you use the tool: nothing goes out to the internet. A few entries whose address starts with \"blob:\" are parts of this page running inside your browser.",
+        "For technical people: open your browser's developer tools and go to the Network tab. The page's own files load when it opens. Your browser may also fetch them again from this site in the background, to keep its copy for use without internet up to date, and it asks this site for the file \"/sw.js\" to see whether a new version is out. After that, watch while you use the tool: nothing goes out to the internet. A few entries whose address starts with \"blob:\" are parts of this page running inside your browser.",
       // The repository link is added next to this text later, in one place (src/ui/app.ts).
       source: "This page's code is open source: anyone can read it and check what it does.",
     },
@@ -419,7 +421,11 @@ export const en = {
     } satisfies Record<ParseErrorCode, string>,
     // Why a whole batch has no result. Only actions that exist on the page
     // today are suggested (there is no "try again" button yet). Reload
-    // advice always mentions the internet: an offline page cannot reload.
+    // advice always mentions the internet: an offline page can reload only
+    // when the browser kept its offline copy (src/sw/), and that copy may be
+    // missing (private browsing, service worker refused or not yet
+    // installed, site data cleared), so reconnecting first stays the safe
+    // advice.
     batch: {
       'engine-timeout': 'Putting your emails in order took too long. To try again, reconnect to the internet, reload the page and add fewer files.',
       'engine-failed': 'Your emails could not be put in order. To try again, reconnect to the internet, reload the page and add your files again.',

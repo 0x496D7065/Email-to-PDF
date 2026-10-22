@@ -9,8 +9,11 @@ import {
   findEmbeddedViolations,
   findOpaquePayloads,
   findViolations,
+  isRuleExempt,
   normalizeUrl,
   OPAQUE_PAYLOAD_MIN_LENGTH,
+  RULE_EXEMPTIONS,
+  RULES,
   SOURCE_FILE_URL_ALLOWLIST,
   URL_ALLOWLIST,
 } from './no-network-rules.mjs';
@@ -270,18 +273,120 @@ describe('checkBuiltHtml', () => {
 });
 
 describe('checkHeadersFile', () => {
+  const PAGE = "  Content-Security-Policy: default-src 'none'; connect-src 'none'; frame-ancestors 'none'";
+  const SW = "  Content-Security-Policy: default-src 'none'; connect-src 'self'; frame-ancestors 'none'";
+  const complete = (swRule: string[] = ['/sw.js', '  ! Content-Security-Policy', SW]): string =>
+    ['# comment', '/*', PAGE, '  Referrer-Policy: no-referrer', '  Permissions-Policy: camera=()', ...swRule].join('\n');
+
   it('accepts complete headers', () => {
-    const text = [
-      '/*',
-      "  Content-Security-Policy: default-src 'none'; connect-src 'none'; frame-ancestors 'none'",
-      '  Referrer-Policy: no-referrer',
-      '  Permissions-Policy: camera=()',
-    ].join('\n');
-    expect(checkHeadersFile(text)).toEqual([]);
+    expect(checkHeadersFile(complete())).toEqual([]);
   });
 
   it('reports every missing header', () => {
-    expect(checkHeadersFile('/*\n')).toHaveLength(3);
+    // The three page headers, and the /sw.js rule.
+    expect(checkHeadersFile('/*\n')).toHaveLength(4);
+  });
+
+  it('needs the /sw.js rule', () => {
+    expect(checkHeadersFile(complete([]))).toEqual([expect.stringMatching(/exactly one rule for \/sw\.js/)]);
+  });
+
+  it('the /sw.js rule must detach the page CSP before setting its own', () => {
+    for (const rule of [
+      ['/sw.js', SW],
+      ['/sw.js', SW, '  ! Content-Security-Policy'],
+      ['/sw.js', '  ! Content-Security-Policy'],
+      ['/sw.js', '  ! Content-Security-Policy', SW, SW],
+    ]) {
+      expect(checkHeadersFile(complete(rule)), rule.join('|')).toEqual([expect.stringMatching(/must remove the page CSP/)]);
+    }
+  });
+
+  it("the /sw.js CSP must be the page's with only connect-src 'self'", () => {
+    for (const csp of [
+      PAGE, // unchanged: the worker could not store the files
+      "  Content-Security-Policy: default-src 'none'; connect-src *; frame-ancestors 'none'",
+      "  Content-Security-Policy: default-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+      "  Content-Security-Policy: default-src 'none'; connect-src 'self' https://cdn.invalid/ ; frame-ancestors 'none'",
+      "  Content-Security-Policy: default-src 'none'; connect-src 'self'",
+    ]) {
+      expect(checkHeadersFile(complete(['/sw.js', '  ! Content-Security-Policy', csp])), csp).toEqual([expect.stringMatching(/only connect-src 'self'/)]);
+    }
+  });
+
+  it('the /sw.js rule changes nothing but the CSP', () => {
+    expect(checkHeadersFile(complete(['/sw.js', '  ! Content-Security-Policy', SW, '  ! Referrer-Policy']))).toEqual([
+      expect.stringMatching(/may only replace the Content-Security-Policy/),
+    ]);
+  });
+
+  it('no other rule may set or remove a CSP', () => {
+    for (const lines of [['/assets/*', '  ! Content-Security-Policy'], ['/x.js', SW]]) {
+      expect(checkHeadersFile(`${complete()}\n${lines.join('\n')}`)).toEqual([expect.stringMatching(/only \/sw\.js may/)]);
+    }
+  });
+
+  it('a second CSP in the /* rule counts as missing (two policies, comma-joined)', () => {
+    const text = complete().replace(PAGE, `${PAGE}\n${PAGE}`);
+    expect(checkHeadersFile(text)).toContain('missing Content-Security-Policy: header (README.md, rule R2)');
+  });
+});
+
+describe('rule exceptions (the service worker only)', () => {
+  const swCode = 'caches.open(c).then((x) => x.match(p) ?? fetch(r));';
+
+  it('are exactly fetch( and caches. in sw.js and its source', () => {
+    expect(RULE_EXEMPTIONS).toEqual([
+      { rule: 'fetch', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
+      { rule: 'caches', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
+    ]);
+    expect(RULES.filter((rule) => rule.id !== undefined).map((rule) => rule.id)).toEqual(['fetch', 'caches']);
+  });
+
+  it('allow those two calls in dist/sw.js and src/sw/service-worker.ts', () => {
+    expect(findViolations(swCode, { isDist: true, distFile: 'sw.js' })).toEqual([]);
+    expect(findViolations(swCode, { isDist: false, sourceFile: 'src/sw/service-worker.ts' })).toEqual([]);
+    expect(findEmbeddedViolations(JSON.stringify(swCode), { isDist: true, distFile: 'sw.js' })).toEqual([]);
+  });
+
+  it('still report them in every other file, src/ and dist/ alike', () => {
+    for (const options of [
+      { isDist: true, distFile: 'assets/index-abc.js' },
+      { isDist: true, distFile: 'assets/sw.js' },
+      { isDist: true, distFile: 'index.html' },
+      { isDist: true },
+      { isDist: false, sourceFile: 'src/sw/sw-logic.ts' },
+      { isDist: false, sourceFile: 'src/main.ts' },
+      { isDist: false },
+      // The two scopes never mix: the dist name for a source file, and the reverse.
+      { isDist: false, sourceFile: 'sw.js' },
+      { isDist: true, distFile: 'src/sw/service-worker.ts' },
+    ]) {
+      expect(findViolations(swCode, options).map((f) => f.match), JSON.stringify(options)).toEqual(['fetch(', 'caches.']);
+    }
+  });
+
+  it('do not switch off any other rule in sw.js', () => {
+    const code = 'new XMLHttpRequest(); new WebSocket(u); importScripts(u); localStorage.x; indexedDB.open(n); navigator.sendBeacon(u); x.innerHTML = y; fetch("https://cdn.invalid/x");';
+    expect(findViolations(code, { isDist: true, distFile: 'sw.js' }).map((f) => f.match)).toEqual([
+      'XMLHttpRequest',
+      'WebSocket',
+      'sendBeacon',
+      'importScripts',
+      'localStorage',
+      'indexedDB',
+      'innerHTML',
+      'https://cdn.invalid/x',
+    ]);
+  });
+
+  it('isRuleExempt needs a rule id and the matching file', () => {
+    expect(isRuleExempt({}, true, 'sw.js', undefined)).toBe(false);
+    expect(isRuleExempt({ id: 'fetch' }, true, 'sw.js', undefined)).toBe(true);
+    expect(isRuleExempt({ id: 'fetch' }, true, undefined, 'src/sw/service-worker.ts')).toBe(false);
+    expect(isRuleExempt({ id: 'fetch' }, false, 'sw.js', undefined)).toBe(false);
+    expect(isRuleExempt({ id: 'caches' }, false, undefined, 'src/sw/service-worker.ts')).toBe(true);
+    expect(isRuleExempt({ id: 'other' }, true, 'sw.js', undefined)).toBe(false);
   });
 });
 

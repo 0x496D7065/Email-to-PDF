@@ -77,7 +77,7 @@ const htmlInjection = 'HTML injection API in the build output: use textContent (
  * `fetch (` and `window.fetch(` all match but `prefetch(` does not.
  */
 export const RULES = [
-  { pattern: /(?<![\w$])fetch\s*\(/g, reason: network },
+  { id: 'fetch', pattern: /(?<![\w$])fetch\s*\(/g, reason: network },
   { pattern: /\bXMLHttpRequest\b/g, reason: network },
   { pattern: /\bWebSocket\b/g, reason: network },
   { pattern: /\bEventSource\b/g, reason: network },
@@ -87,7 +87,7 @@ export const RULES = [
   { pattern: /\bsessionStorage\b/g, reason: storage },
   { pattern: /\bindexedDB\b/g, reason: storage },
   { pattern: /\bdocument\s*\.\s*cookie\b/g, reason: storage },
-  { pattern: /(?<![\w$])caches\s*\./g, reason: storage },
+  { id: 'caches', pattern: /(?<![\w$])caches\s*\./g, reason: storage },
   { pattern: /\bvitest\b/g, reason: testCode, distOnly: true },
   { pattern: /(?<![\w$])describe\s*\(/g, reason: testCode, distOnly: true },
   // HTML injection (README.md, rule R4). dist/ only, because comments in src/
@@ -104,6 +104,46 @@ export const RULES = [
   { pattern: /\b(?:setHTMLUnsafe|parseHTMLUnsafe)\b/g, reason: htmlInjection, distOnly: true },
   { pattern: /\bdocument\s*\.\s*write(?:ln)?\s*\(/g, reason: htmlInjection, distOnly: true },
 ];
+
+/**
+ * The ONLY exceptions to RULES, each for one rule in exactly one file:
+ * the service worker (README.md, "How the privacy model works"). It is the
+ * one piece of shipped code that may use the network and Cache Storage, and
+ * only to keep and serve a copy of the site's OWN static files, so the page
+ * can be reopened offline:
+ *   - 'fetch': when a listed file is missing from its copy, the request
+ *     goes on to this site (the answer is not stored). Its CSP
+ *     (`connect-src 'self'`, sent with /sw.js only) stops any other site.
+ *   - 'caches': the copy itself (precache list made at build time; nothing
+ *     is ever stored at run time).
+ * `distFile` is the built file (path relative to dist/), `sourceFile` its
+ * source (path relative to the project root). Anywhere else, including
+ * every other file of src/ and dist/ (the page's scripts, the inlined
+ * workers), both rules still fail the build. Every other rule (XHR,
+ * WebSocket, script loading, the other storage APIs, URLs, ...) still
+ * applies to these two files too. Never add an entry without the user's
+ * approval.
+ */
+export const RULE_EXEMPTIONS = [
+  { rule: 'fetch', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
+  { rule: 'caches', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
+];
+
+/**
+ * Is `rule` switched off for this file (RULE_EXEMPTIONS)? A dist/ entry
+ * only counts for dist/ files, a source entry only for source files.
+ * @param {{ id?: string }} rule
+ * @param {boolean} isDist
+ * @param {string | undefined} distFile
+ * @param {string | undefined} sourceFile
+ * @returns {boolean}
+ */
+export function isRuleExempt(rule, isDist, distFile, sourceFile) {
+  if (rule.id === undefined) return false;
+  return RULE_EXEMPTIONS.some((entry) =>
+    entry.rule === rule.id && (isDist ? distFile !== undefined && entry.distFile === distFile : sourceFile !== undefined && entry.sourceFile === sourceFile),
+  );
+}
 
 // A URL runs until whitespace, a quote, a backtick, <, > or a closing bracket.
 // Schemes: http(s) and ws(s) (WebSocket, README.md rule R1). Each slash may be
@@ -139,6 +179,7 @@ export function findViolations(text, { isDist, distFile, sourceFile }) {
   lines.forEach((lineText, index) => {
     for (const rule of RULES) {
       if (rule.distOnly && !isDist) continue;
+      if (isRuleExempt(rule, isDist, distFile, sourceFile)) continue;
       for (const m of lineText.matchAll(rule.pattern)) {
         findings.push({ line: index + 1, match: m[0], reason: rule.reason });
       }
@@ -298,18 +339,31 @@ export function checkBuiltHtml(html) {
 
 /**
  * Structural checks on dist/_headers (Cloudflare Pages). Returns problems.
+ * The `/*` rule must send the strict CSP, the referrer and permissions
+ * policies; the `/sw.js` rule must replace the CSP with the service
+ * worker's (the same with connect-src 'self') and change nothing else.
  * @param {string} text
  * @returns {string[]}
  */
 export function checkHeadersFile(text) {
   const problems = [];
-  const lines = text.split(/\r?\n/).map((line) => line.trim());
-  const csp = lines.find((line) => line.startsWith('Content-Security-Policy:'));
-  if (csp === undefined) {
+  // Rules: a path line (not indented), then its indented header lines.
+  /** @type {{ path: string, lines: string[] }[]} */
+  const rules = [];
+  for (const raw of text.split(/\r?\n/)) {
+    if (raw.trim() === '' || raw.trim().startsWith('#')) continue;
+    if (/^\s/.test(raw)) rules.at(-1)?.lines.push(raw.trim());
+    else rules.push({ path: raw.trim(), lines: [] });
+  }
+  const cspOf = (rule) => rule.lines.filter((line) => line.startsWith('Content-Security-Policy:'));
+  const all = rules.find((rule) => rule.path === '/*');
+  const lines = all?.lines ?? [];
+  const csp = all === undefined ? [] : cspOf(all);
+  if (csp.length !== 1) {
     problems.push('missing Content-Security-Policy: header (README.md, rule R2)');
   } else {
     for (const directive of ["default-src 'none'", "connect-src 'none'", "frame-ancestors 'none'"]) {
-      if (!csp.includes(directive)) {
+      if (!csp[0].includes(directive)) {
         problems.push(`Content-Security-Policy header is missing "${directive}" (README.md, rule R2)`);
       }
     }
@@ -319,6 +373,33 @@ export function checkHeadersFile(text) {
   }
   if (!lines.some((line) => line.startsWith('Permissions-Policy:'))) {
     problems.push('missing Permissions-Policy: header (README.md, rule R2)');
+  }
+  // The service worker script's own CSP (README.md, "How the privacy model
+  // works"): exactly the page's policy with connect-src 'self' instead of
+  // 'none', after detaching the page's (Cloudflare would otherwise send
+  // both, comma-joined). No other rule may set or remove a CSP.
+  const sw = rules.filter((rule) => rule.path === '/sw.js');
+  for (const rule of rules) {
+    if (rule.path === '/*' || rule.path === '/sw.js') continue;
+    if (rule.lines.some((line) => /^!?\s*Content-Security-Policy\b/.test(line))) {
+      problems.push(`the rule for ${rule.path} changes the Content-Security-Policy: only /sw.js may (README.md, rule R2)`);
+    }
+  }
+  if (sw.length !== 1) {
+    problems.push('needs exactly one rule for /sw.js, with its own Content-Security-Policy (README.md, rule R2)');
+  } else {
+    const swLines = sw[0].lines;
+    const detach = swLines.indexOf('! Content-Security-Policy');
+    const swCsp = cspOf(sw[0]);
+    const expected = csp.length === 1 ? csp[0].replace("connect-src 'none'", "connect-src 'self'") : undefined;
+    if (detach === -1 || swCsp.length !== 1 || swLines.indexOf(swCsp[0]) < detach) {
+      problems.push('the /sw.js rule must remove the page CSP ("! Content-Security-Policy") and then set exactly one of its own (README.md, rule R2)');
+    } else if (expected === undefined || swCsp[0] !== expected || expected === csp[0]) {
+      problems.push("the /sw.js Content-Security-Policy must be the page's with only connect-src 'self' instead of 'none' (README.md, rule R2)");
+    }
+    if (swLines.some((line) => !line.startsWith('Content-Security-Policy:') && line !== '! Content-Security-Policy')) {
+      problems.push('the /sw.js rule may only replace the Content-Security-Policy (README.md, rule R2)');
+    }
   }
   return problems;
 }

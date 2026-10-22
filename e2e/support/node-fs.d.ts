@@ -7,7 +7,10 @@
 // import of node:fs; the no-restricted-imports and no-restricted-syntax
 // rules for src/ in eslint.config.js refuse any node: import there, static
 // or import().
+// readdirSync lists the built files of dist/ (e2e/offline-reload.spec.ts:
+// the service worker's precache list must be exactly those).
 declare module 'node:fs' {
   export function readFileSync(path: string, encoding: 'utf8'): string;
   export function readFileSync(path: string): Uint8Array;
+  export function readdirSync(path: string, options: { recursive: true; withFileTypes: true }): { name: string; parentPath: string; isFile(): boolean }[];
 }

@@ -43,6 +43,45 @@ export function cspForMeta(): string {
 }
 
 /**
+ * Path of the service worker script (the offline copy of the site's own
+ * files, src/sw/). It is written into dist/ by the build (vite.config.ts).
+ */
+export const SERVICE_WORKER_PATH = '/sw.js';
+
+/**
+ * The CSP of the service worker script's OWN response (/sw.js only).
+ *
+ * A service worker does not take the page's CSP: its own fetches (storing
+ * the site's files, and answering the page from that copy) follow the CSP
+ * sent with sw.js itself. With the page's `connect-src 'none'` it could not
+ * store anything. User-approved exception, exactly this one: the page
+ * policy with ONLY connect-src set to 'self' (the site's own address, never
+ * another one). Everything else stays as strict as the page's:
+ * `script-src 'self'` (the worker's own script is not checked against it,
+ * and it loads no other script: the build check bans the call that would),
+ * `worker-src 'self' blob:` (a service worker cannot start workers,
+ * so this changes nothing), and `default-src 'none'` for the rest. The page
+ * itself (header and <meta>) keeps `connect-src 'none'`.
+ */
+export function cspForServiceWorker(): string {
+  return CSP_DIRECTIVES.map(([name, sources]) => `${name} ${name === 'connect-src' ? "'self'" : sources}`).join('; ');
+}
+
+/**
+ * The security headers sent with the file at `pathname` (the same for every
+ * file except the service worker script, which gets its own CSP). Used by
+ * `npm run preview` (vite.config.ts); dist/_headers says the same for
+ * Cloudflare Pages (cloudflareHeadersFile).
+ */
+export function securityHeadersFor(pathname: string): Record<string, string> {
+  return {
+    'Content-Security-Policy': pathname === SERVICE_WORKER_PATH ? cspForServiceWorker() : cspForHeader(),
+    'Referrer-Policy': REFERRER_POLICY,
+    'Permissions-Policy': PERMISSIONS_POLICY,
+  };
+}
+
+/**
  * Powerful browser features the app never uses, all switched off.
  * `()` means "allowed for nobody". Reading dropped files / the file picker is
  * not a Permissions-Policy feature, so it is unaffected.
@@ -77,6 +116,13 @@ export const REFERRER_POLICY = 'no-referrer';
 /**
  * Contents of dist/_headers in Cloudflare Pages format: a URL pattern line,
  * then indented "Name: value" lines. `/*` = every file on the site.
+ *
+ * The service worker script matches `/*` too. Cloudflare joins two values
+ * of the same header with a comma, and a browser treats a comma-joined CSP
+ * as two policies that must BOTH allow a request, so the page's
+ * `connect-src 'none'` would still apply to it. Its rule therefore first
+ * removes the CSP of `/*` (`! Content-Security-Policy`), then sets its own
+ * (cspForServiceWorker). Its other headers are those of `/*`.
  */
 export function cloudflareHeadersFile(): string {
   return [
@@ -85,6 +131,9 @@ export function cloudflareHeadersFile(): string {
     `  Content-Security-Policy: ${cspForHeader()}`,
     `  Referrer-Policy: ${REFERRER_POLICY}`,
     `  Permissions-Policy: ${PERMISSIONS_POLICY}`,
+    SERVICE_WORKER_PATH,
+    '  ! Content-Security-Policy',
+    `  Content-Security-Policy: ${cspForServiceWorker()}`,
     '',
   ].join('\n');
 }

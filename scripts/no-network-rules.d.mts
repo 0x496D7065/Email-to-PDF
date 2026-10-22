@@ -20,7 +20,12 @@ export const SOURCE_FILE_URL_ALLOWLIST: readonly { url: string; onlyIn: string }
 
 export function isUrlAllowed(url: string, distFile: string | undefined, sourceFile?: string): boolean;
 
-export const RULES: readonly { pattern: RegExp; reason: string; distOnly?: boolean }[];
+export const RULES: readonly { id?: string; pattern: RegExp; reason: string; distOnly?: boolean }[];
+
+/** The only rule exceptions: one rule, one built file and its source (the service worker). */
+export const RULE_EXEMPTIONS: readonly { rule: string; distFile: string; sourceFile: string }[];
+
+export function isRuleExempt(rule: { id?: string }, isDist: boolean, distFile: string | undefined, sourceFile: string | undefined): boolean;
 
 /** Unescapes \/ and trims trailing punctuation, before the allowlist comparison. */
 export function normalizeUrl(raw: string): string;
