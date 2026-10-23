@@ -32,6 +32,15 @@
 //   Its topics are h2 headings, right under the page's h1 and before the
 //   steps' h2 headings, so the heading levels never skip. It only shows text
 //   (README.md, rules R1 and R5): no link yet.
+// - The step 1 help ("How do I get my email files?") is the same kind of
+//   native <details>, closed by default, between step 1's intro and the drop
+//   zone: it is the Tab stop right before the "choose" button, and holds no
+//   control. Its mail programs are a list (so a screen reader says how many
+//   there are), each with its name as an h3 heading: the help sits inside
+//   step 1, whose title is an h2, so the levels never skip (the failed-files
+//   title further down step 1 is an h3 too). Every line is hedged: nothing
+//   has been checked against the real mail programs yet. No links, no URLs.
+//   Whether it is open is never stored (README.md, rule R5).
 // - A short disclaimer closes step 3 (repeated in the panel). It is on the
 //   page from the start, under the download line that keeps its height, so
 //   nothing moves when the PDF is made.
@@ -148,6 +157,41 @@ function privacyPanel(): HTMLDetailsElement {
   });
 }
 
+/** The mail programs of the step 1 help, in the order shown (keys under help.clients in en.ts). */
+export const HELP_CLIENTS = ['outlookClassic', 'outlookNew', 'thunderbird', 'appleMail', 'gmail'] as const;
+
+/**
+ * The step 1 help, "How do I get my email files?": a closed <details> right
+ * above the drop zone (see the top of this file). A short intro, one list
+ * item per mail program (its name as an h3, then one or two sentences), and
+ * a closing note.
+ */
+function helpPanel(): HTMLDetailsElement {
+  const items = HELP_CLIENTS.map((client) =>
+    el('li', {
+      attrs: { class: 'help-client' },
+      children: [
+        el('h3', { attrs: { class: 'help-heading' }, text: t(`help.clients.${client}.name`) }),
+        el('p', { attrs: { class: 'help-text' }, text: t(`help.clients.${client}.how`) }),
+      ],
+    }),
+  );
+  return el('details', {
+    attrs: { id: 'help', class: 'help' },
+    children: [
+      el('summary', { attrs: { id: 'help-summary', class: 'help-summary' }, text: t('help.summary') }),
+      el('div', {
+        attrs: { class: 'help-body' },
+        children: [
+          el('p', { attrs: { class: 'help-text' }, text: t('help.intro') }),
+          el('ul', { attrs: { id: 'help-list', class: 'help-list' }, children: items }),
+          el('p', { attrs: { class: 'help-text' }, text: t('help.note') }),
+        ],
+      }),
+    ],
+  });
+}
+
 /** Builds the shell inside `root` (replacing anything in it) and returns its handles. */
 export function mountApp(root: HTMLElement): AppShell {
   setSafeAttribute(document.documentElement, 'lang', LOCALE);
@@ -182,6 +226,7 @@ export function mountApp(root: HTMLElement): AppShell {
   const clearUnavailable = el('p', { attrs: { id: 'clear-unavailable', class: 'note clear-unavailable' }, text: t('clear.unavailable') });
   const addStep = stepSection('step-add', 1, t('steps.add.title'), [
     el('p', { attrs: { class: 'step-intro' }, text: t('steps.add.intro') }),
+    helpPanel(),
     addArea,
     el('div', {
       attrs: { id: 'clear-area', class: 'clear-area' },

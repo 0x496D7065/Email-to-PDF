@@ -3,7 +3,7 @@
 // e2e/app-shell.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeText } from '../../tests/support/fake-dom';
-import { mountApp, type AppShell } from './app';
+import { HELP_CLIENTS, mountApp, type AppShell } from './app';
 import { t } from './i18n';
 
 let doc: FakeDocument;
@@ -171,7 +171,8 @@ describe('mountApp', () => {
       const summary = panel.children[0] as FakeElement;
       expect(summary.tagName).toBe('summary');
       expect(summary.textContent).toBe(t('privacy.summary'));
-      expect(all('summary')).toEqual([summary]);
+      // The header's only summary (step 1's help has its own, see below).
+      expect(header.descendants().filter((e) => e.tagName === 'summary')).toEqual([summary]);
     });
 
     it('has one h2 per topic, with its points in order, then the disclaimer', () => {
@@ -220,6 +221,87 @@ describe('mountApp', () => {
       const panel = byId('privacy');
       expect(panel.descendants().filter((e) => e.tagName === 'a')).toEqual([]);
       expect(panel.descendants().some((e) => ['h1', 'h3', 'h4'].includes(e.tagName))).toBe(false);
+    });
+  });
+
+  describe('step 1 help (how to get your email files)', () => {
+    const clientKeys = HELP_CLIENTS.map((client) => [`help.clients.${client}.name`, `help.clients.${client}.how`] as const);
+
+    it('is a closed <details> in step 1, between the intro and the drop zone area, opened by its summary', () => {
+      const help = byId('help');
+      expect(help.tagName).toBe('details');
+      expect(help.hasAttribute('open')).toBe(false);
+      const step = byId('step-add');
+      const classes = step.children.map((c) => (c instanceof FakeElement ? (c.getAttribute('id') ?? c.getAttribute('class')) : 'text'));
+      expect(classes).toEqual(['step-add-title', 'step-intro', 'help', 'add-area', 'clear-area']);
+      // The summary comes first: the line shown while closed, and the help's accessible name.
+      const summary = help.children[0] as FakeElement;
+      expect(summary.tagName).toBe('summary');
+      expect(summary.getAttribute('id')).toBe('help-summary');
+      expect(summary.textContent).toBe(t('help.summary'));
+      expect(help.descendants().filter((e) => e.tagName === 'summary')).toEqual([summary]);
+      // Two disclosures on the empty page: the privacy panel, then this help.
+      expect(all('summary').map((e) => e.getAttribute('id'))).toEqual(['privacy-summary', 'help-summary']);
+    });
+
+    it('lists the five mail programs in order, each an h3 name and its text, between the intro and the note', () => {
+      const help = byId('help');
+      const body = help.children[1] as FakeElement;
+      expect(body.children.map((c) => (c as FakeElement).tagName)).toEqual(['p', 'ul', 'p']);
+      expect((body.children[0] as FakeElement).textContent).toBe(t('help.intro'));
+      expect((body.children[2] as FakeElement).textContent).toBe(t('help.note'));
+      const list = byId('help-list');
+      expect(list.tagName).toBe('ul');
+      expect(list.children).toHaveLength(5);
+      for (const [index, [name, how]] of clientKeys.entries()) {
+        const item = list.children[index] as FakeElement;
+        expect(item.tagName).toBe('li');
+        expect(item.children.map((c) => (c as FakeElement).tagName)).toEqual(['h3', 'p']);
+        expect((item.children[0] as FakeElement).textContent).toBe(t(name));
+        expect((item.children[1] as FakeElement).textContent).toBe(t(how));
+      }
+      expect(list.descendants().filter((e) => e.tagName === 'h3').map((h) => h.textContent)).toEqual([
+        'Outlook (classic, on Windows)',
+        'New Outlook and Outlook on the web',
+        'Thunderbird',
+        'Apple Mail',
+        'Gmail (in a web browser)',
+      ]);
+    });
+
+    it('uses only h3 headings (step 1 is an h2), and holds no link and no control', () => {
+      const help = byId('help');
+      const headings = help.descendants().filter((e) => /^h\d$/.test(e.tagName));
+      expect(headings.map((h) => h.tagName)).toEqual(['h3', 'h3', 'h3', 'h3', 'h3']);
+      expect(byId('step-add-title').tagName).toBe('h2');
+      const controls = help.descendants().filter((e) => ['a', 'button', 'input', 'select', 'textarea'].includes(e.tagName));
+      expect(controls).toEqual([]);
+      expect(help.descendants().some((e) => e.hasAttribute('tabindex') || e.hasAttribute('href'))).toBe(false);
+    });
+
+    it('says what the tool reads, that several files can be added, and that menus can differ', () => {
+      const text = byId('help').textContent;
+      for (const phrase of ['.eml and .msg files', 'several files at once', 'Menu names can differ', 'versions and languages', 'Save As in the File menu', 'Download message', 'Finder']) {
+        expect(text).toContain(phrase);
+      }
+    });
+
+    it('hedges every mail program: each says "usually", "may" or "varies", and none promises it works', () => {
+      for (const [, how] of clientKeys) {
+        expect(t(how), how).toMatch(/\b(usually|may|varies)\b/);
+        expect(t(how), how).not.toMatch(/\b(always|guaranteed|will work|works)\b/i);
+      }
+    });
+
+    it('has no URL, web address or jargon in any help string', () => {
+      const texts = [t('help.summary'), t('help.intro'), t('help.note'), ...clientKeys.flatMap(([name, how]) => [t(name), t(how)])];
+      for (const text of texts) {
+        expect(text).not.toMatch(/[a-z][a-z0-9+.-]*:\/\//i);
+        expect(text).not.toMatch(/\/\/|www\./i);
+        // A bare host name with a common ending (the ".eml" and ".msg" file types are not hosts: they start a word).
+        expect(text).not.toMatch(/\w\.(com|net|org|fr|nl|be|io)\b/i);
+        expect(text).not.toMatch(/\bRFC\b|MIME/);
+      }
     });
   });
 

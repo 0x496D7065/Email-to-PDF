@@ -3,10 +3,11 @@
 // playwright.config.ts). No accessibility library (such as axe-core) is
 // used, to avoid a new dependency: each check is written out here.
 //
-// States: the empty page, the privacy panel open, files being read, the
-// list ready (with a file that failed, notes, a very long email, folded text
-// shown, an email left out), "Put everything in the PDF", a PDF made, a PDF
-// that could not be made, and after "Clear everything". In each:
+// States: the empty page, the privacy panel open, step 1's help open, files
+// being read, the list ready (with a file that failed, notes, a very long
+// email, folded text shown, an email left out), "Put everything in the PDF",
+// a PDF made, a PDF that could not be made, and after "Clear everything". In
+// each:
 // - every control is at least 24 x 24 CSS pixels (2.5.8), has a name, and
 //   shows a focus outline of at least 2 px with 3:1 contrast against what
 //   is around it (2.4.7, 2.4.11, 1.4.11);
@@ -305,7 +306,7 @@ for (const width of [1280, 320]) {
     await open(page);
 
     // --- Empty page. The drop zone has a keyboard way in: the "choose" button.
-    await expectAccessibleState(page, 'empty', 4);
+    await expectAccessibleState(page, 'empty', 5);
     await expect(page.locator('#drop-zone').getByRole('button', { name: en.actions.chooseFiles })).toBeVisible();
 
     // --- Privacy panel open.
@@ -315,6 +316,15 @@ for (const width of [1280, 320]) {
     await expectAccessibleState(page, 'privacy open', 4);
     await page.keyboard.press('Enter');
     await expect(page.locator('#privacy .privacy-body')).toBeHidden();
+
+    // --- Step 1's help open: its h3 names sit under step 1's h2.
+    await page.locator('#help-summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#help .help-body')).toBeVisible();
+    await expectAccessibleState(page, 'help open', 5);
+    expect(await focusedId(page)).toBe('help-summary');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#help .help-body')).toBeHidden();
 
     // --- The list ready: a failed file, notes, long words. ------------------
     await page.locator('#choose-files').focus();
@@ -373,7 +383,7 @@ for (const width of [1280, 320]) {
     await page.keyboard.press('Enter');
     await expect(page.getByRole('status')).toHaveText(en.clear.done);
     expect(await focusedId(page)).toBe('choose-files');
-    await expectAccessibleState(page, 'cleared', 4);
+    await expectAccessibleState(page, 'cleared', 5);
 
     await expectNothingLeftThePage(page);
   });
@@ -468,10 +478,12 @@ test('a new result that removes the focused control puts the focus on "choose"; 
   });
   await expect.poll(() => focusedId(page)).toBe('choose-files');
 
-  // Focus outside the rebuilt parts (the time-zone select, the privacy panel's summary): left where it is.
+  // Focus outside the rebuilt parts (the time-zone select, the privacy panel's
+  // and step 1's help summaries): left where it is.
   for (const [id, added] of [
     ['preview-zone', 2],
     ['privacy-summary', 3],
+    ['help-summary', 4],
   ] as const) {
     await page.locator(`#${id}`).focus();
     await page.locator('#file-input').setInputFiles([batchEmail(added)]);
@@ -561,6 +573,8 @@ test.describe('with larger text spacing (WCAG 1.4.12)', () => {
     await open(page);
     await addFiles(page);
     await page.locator('#add-failed-list summary').click();
+    await page.locator('#help-summary').click();
+    await expect(page.locator('#help .help-body')).toBeVisible();
     await page.locator('#preview-show-folded').check();
     await page.addStyleTag({
       content: '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }',

@@ -503,6 +503,19 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await page.keyboard.press('Space');
   await expect(page.locator('#privacy')).not.toHaveAttribute('open', /.*/);
 
+  // --- Step 1's help ("How do I get my email files?") is next: Enter opens it, Space closes it.
+  await page.keyboard.press('Tab');
+  const help = page.locator('#help-summary');
+  await expect(help).toBeFocused();
+  await expect(help).toHaveAccessibleName(en.help.summary);
+  const helpFocus = await focused(page, 'help');
+  expect(helpFocus.outlineStyle).not.toBe('none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#help')).toHaveAttribute('open', '');
+  await expect(page.locator('#help .help-body')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#help')).not.toHaveAttribute('open', /.*/);
+
   // --- Step 1: the "choose" button is the next stop; Enter opens the chooser.
   await page.keyboard.press('Tab');
   const choose = page.getByRole('button', { name: en.actions.chooseFiles });
@@ -538,7 +551,8 @@ test('keyboard only: every control is reached in order, shows its focus and work
     await expect(box).toHaveAccessibleName(new RegExp(`^${en.actions.include} #\\d+ \\S`));
   }
   // checkVisibility(), not getClientRects(): the headings of the privacy
-  // panel, closed again above, keep their boxes inside the closed <details>.
+  // panel and of step 1's help, closed again above, keep their boxes inside
+  // the closed <details>.
   const headings = await page.locator('h1, h2, h3, h4, h5, h6').evaluateAll((list) =>
     list.filter((h) => h.checkVisibility()).map((h) => ({ level: Number(h.tagName.slice(1)), step: h.closest('section.step')?.id ?? '' })),
   );
@@ -551,7 +565,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(items.locator('h3')).toHaveCount(5);
 
   // --- Tab through the whole page, operating each control on the way. -----
-  const walk: Focus[] = [privacyFocus, chooseFocus];
+  const walk: Focus[] = [privacyFocus, helpFocus, chooseFocus];
   const included = (n: number): string => `${String(n)} of 5 emails will be in the PDF.`;
   for (let i = 1; i < 200; i++) {
     await page.keyboard.press('Tab');
@@ -620,15 +634,16 @@ test('keyboard only: every control is reached in order, shows its focus and work
     }
   }
 
-  // The stops, in order: the privacy panel's summary, choose, clear, zone,
-  // folded-text toggle, "put everything in the PDF", then per email its
-  // checkbox and its folded blocks, and the download button last.
+  // The stops, in order: the privacy panel's summary, step 1's help, choose,
+  // clear, zone, folded-text toggle, "put everything in the PDF", then per
+  // email its checkbox and its folded blocks, and the download button last.
   const tags = walk.map((f) => f.tag);
-  expect(tags.slice(0, 6)).toEqual(['SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
-  expect(walk[5]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
+  expect(tags.slice(0, 7)).toEqual(['SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
+  expect(walk[1]?.key).toBe('help');
+  expect(walk[6]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
   expect(tags.at(-1)).toBe('BUTTON');
   expect(walk.filter((f) => f.tag === 'INPUT' && f.position >= 0).map((f) => f.position)).toEqual([0, 1, 2, 3, 4]);
-  expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(1 + (await page.locator('#preview-list summary').count()));
+  expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(2 + (await page.locator('#preview-list summary').count()));
   expect(walk.length).toBe(controlCount);
   // Every stop shows a clear outline.
   for (const f of walk) {
@@ -655,6 +670,8 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(privacy).toBeFocused();
 
   // --- "Clear everything" with Enter: emptied, focus back on "choose". ----
+  await page.keyboard.press('Tab');
+  await expect(help).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(choose).toBeFocused();
   await page.keyboard.press('Tab');

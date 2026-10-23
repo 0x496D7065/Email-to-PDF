@@ -102,6 +102,40 @@ export const en = {
     },
   },
 
+  // The "how to get your email files" help in step 1 (src/ui/app.ts): closed
+  // by default, opened from its summary line. Nothing here has been checked
+  // against the real mail programs yet, so every line is hedged ("usually",
+  // "may"): never promise that a menu or a drag works. No links, no URLs.
+  help: {
+    // The line that opens and closes the help (also its accessible name).
+    summary: 'How do I get my email files?',
+    intro: 'This tool reads .eml and .msg files. You can add several files at once.',
+    // One entry per mail program, in the order shown: its name (a heading) and one or two short sentences.
+    clients: {
+      outlookClassic: {
+        name: 'Outlook (classic, on Windows)',
+        how: 'Dragging an email from the list to a folder or to the desktop usually makes a .msg file. Save As in the File menu may also save one.',
+      },
+      outlookNew: {
+        name: 'New Outlook and Outlook on the web',
+        how: 'This varies. There may be a Download or Save option in the email\'s "..." menu that gives an .eml file; dragging an email may not make a file.',
+      },
+      thunderbird: {
+        name: 'Thunderbird',
+        how: 'Dragging an email to a folder, or using Save As in the File menu, usually gives an .eml file.',
+      },
+      appleMail: {
+        name: 'Apple Mail',
+        how: 'Dragging an email to a folder in Finder usually gives an .eml file.',
+      },
+      gmail: {
+        name: 'Gmail (in a web browser)',
+        how: 'Open the email, then look for "Download message" in its three-dot menu. This usually gives an .eml file.',
+      },
+    },
+    note: 'Menu names can differ between versions and languages, so yours may not match exactly.',
+  },
+
   // Step 3 (src/ui/download-step.ts). The note under the button is also its
   // accessible description: it always says what the button does now, or why
   // it is unavailable.

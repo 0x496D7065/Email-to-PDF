@@ -110,9 +110,14 @@ test('the panel is the first Tab stop, opens and closes with Enter and Space, an
   expect(await contrastFailures(page, '#privacy', 15)).toEqual([]);
   await expect(panel.locator('a')).toHaveCount(0);
 
-  // The next Tab stop is still step 1's "choose" button: the panel holds no control.
+  // The next Tab stop is step 1's help (e2e/help.spec.ts), then its "choose"
+  // button: the panel holds no control.
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#help-summary')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: en.actions.chooseFiles })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('#help-summary')).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(summary).toBeFocused();
 
