@@ -3,13 +3,13 @@
 // (tests/support/fake-dom.ts), the real steps and engine, a controllable
 // fake processFiles and a fake PDF maker. Synthetic messages only.
 //
-// The shipped page has English and French. Here a synthetic test language,
-// 'xx' (every English string with accented look-alike letters, in brackets;
-// see tests/support/test-locale.ts), is also added to the catalog for this
-// file only: since every one of its strings differs from English, it shows
-// any word of ours that a switch did not rewrite. What changes
-// (every word of ours, <html lang>, the title, one announcement, the PDF
-// dropped) and what must not (ticks, time zone, open folds, focus, the
+// The shipped page has English, French and Dutch. Here a synthetic test
+// language, 'xx' (every English string with accented look-alike letters,
+// in brackets; see tests/support/test-locale.ts), is also added to the
+// catalog for this file only: since every one of its strings differs from
+// English, it shows any word of ours that a switch did not rewrite. What
+// changes (every word of ours, <html lang>, the title, one announcement,
+// the PDF dropped) and what must not (ticks, time zone, open folds, focus, the
 // elements themselves, stand-ins, the plans).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../tests/support/fake-dom';
@@ -288,9 +288,9 @@ function englishLeft(data: ReturnType<typeof emails>, sameInBoth: readonly strin
 
 // ------------------------------------------------------------------ tests
 
-describe('the language picker (English, French, and the test-only language added to the catalog)', () => {
+describe('the language picker (English, French, Dutch, and the test-only language added to the catalog)', () => {
   it('is a fieldset first in the header, with a legend and one radio per language', () => {
-    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr', TEST_LOCALE]);
+    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr', 'nl', TEST_LOCALE]);
     const header = root.children[0] as FakeElement;
     expect(header.tagName).toBe('header');
     const fieldset = header.children[0] as FakeElement;
@@ -306,13 +306,15 @@ describe('the language picker (English, French, and the test-only language added
     expect(radios.map((r) => [r.getAttribute('type'), r.getAttribute('name'), r.getAttribute('id'), r.getAttribute('lang'), r.getAttribute('value')])).toEqual([
       ['radio', 'language', 'lang-en', 'en', 'en'],
       ['radio', 'language', 'lang-fr', 'fr', 'fr'],
+      ['radio', 'language', 'lang-nl', 'nl', 'nl'],
       ['radio', 'language', `lang-${TEST_LOCALE}`, TEST_LOCALE, TEST_LOCALE],
     ]);
-    expect(radios.map((r) => r.checked)).toEqual([true, false, false]);
+    expect(radios.map((r) => r.checked)).toEqual([true, false, false, false]);
     const labels = fieldset.descendants().filter((e) => e.tagName === 'label');
     expect(labels.map((l) => [l.getAttribute('for'), l.getAttribute('lang'), l.textContent])).toEqual([
       ['lang-en', 'en', 'English'],
       ['lang-fr', 'fr', 'Français'],
+      ['lang-nl', 'nl', 'Nederlands'],
       [`lang-${TEST_LOCALE}`, TEST_LOCALE, testLanguageName(TEST_LOCALE)],
     ]);
     // Radios, never a <select> (WebKit reports each <select> as a CSP style violation).
@@ -326,17 +328,18 @@ describe('the language picker (English, French, and the test-only language added
     expect(getLocale()).toBe(TEST_LOCALE);
     expect(byId('language')).toBe(fieldset);
     expect(fieldset.descendants().filter((e) => e.tagName === 'input')).toEqual(radios);
-    expect(radios.map((r) => r.checked)).toEqual([false, false, true]);
+    expect(radios.map((r) => r.checked)).toEqual([false, false, false, true]);
     expect((fieldset.children[0] as FakeElement).textContent).toBe(t('language.label'));
     expect((fieldset.children[0] as FakeElement).textContent).not.toBe('Language');
     expect(fieldset.descendants().filter((e) => e.tagName === 'label').map((l) => l.textContent)).toEqual([
       'English',
       'Français',
+      'Nederlands',
       testLanguageName(TEST_LOCALE),
     ]);
     pick('en');
     expect(getLocale()).toBe('en');
-    expect(radios.map((r) => r.checked)).toEqual([true, false, false]);
+    expect(radios.map((r) => r.checked)).toEqual([true, false, false, false]);
     expect((fieldset.children[0] as FakeElement).textContent).toBe('Language');
   });
 });
@@ -478,7 +481,8 @@ describe('setLanguage with files loaded', () => {
     await addAndShow();
     const setStatus = vi.spyOn(page.shell, 'setStatus');
     page.setLanguage('en');
-    page.setLanguage('nl');
+    page.setLanguage('de');
+    page.setLanguage('nl-BE');
     page.setLanguage('fr-BE');
     page.setLanguage('EN');
     expect(setStatus).not.toHaveBeenCalled();
@@ -564,6 +568,79 @@ describe('French (shipped)', () => {
     expect(getLocale()).toBe('fr');
     expect(status()).toBe('Tout a été effacé.');
     expect(byId('lang-fr').checked).toBe(true);
+  });
+});
+
+/**
+ * Words written the same in English and Dutch (see SAME_AS_ENGLISH in
+ * src/ui/i18n/nl.test.ts): two mail program names, words and units that
+ * are Dutch too, and "of" (the Dutch "or", an English word as well).
+ */
+const SAME_IN_DUTCH = ['Thunderbird', 'Apple Mail', 'Cc', 'Bcc', 'KB', 'of'];
+
+describe('Dutch (shipped)', () => {
+  it('rewrites the page in Dutch with files loaded, keeping every choice, then back to English', async () => {
+    const data = await addAndShow();
+    const list = items();
+    const boxes = byClass('include-checkbox');
+    boxes[1]!.checked = false;
+    boxes[1]!.fire('change');
+    runAll();
+    const radio = byId('lang-nl');
+    doc.activeElement = radio;
+    const setStatus = vi.spyOn(page.shell, 'setStatus');
+
+    pick('nl');
+
+    expect(getLocale()).toBe('nl');
+    expect(byId('lang-nl').checked).toBe(true);
+    expect(byId('lang-en').checked).toBe(false);
+    expect(byId('lang-fr').checked).toBe(false);
+    // Only the words that are the same in both languages are left.
+    expect(englishLeft(data, SAME_IN_DUTCH)).toEqual([]);
+    expect(englishLeft(data)).not.toEqual([]); // ...and the check does see them
+    expect(doc.documentElement.getAttribute('lang')).toBe('nl');
+    expect(doc.title).toBe('Email to PDF');
+    // One announcement, in Dutch.
+    expect(setStatus).toHaveBeenCalledTimes(1);
+    expect(status()).toBe('De pagina is nu in het Nederlands.');
+    // A few exact Dutch texts.
+    expect(byId('step-add-title').textContent).toBe('Stap 1 Voeg uw e-mails toe');
+    expect(byId('review-included').textContent).toBe('In de PDF: 3 van 4 e-mails.');
+    expect(byId('add-summary-text').textContent).toContain('7 bestanden toegevoegd.');
+    expect(byId('download-note').textContent).toBe(t('download.available'));
+    expect((byId('language').children[0] as FakeElement).textContent).toBe('Taal');
+    // Nothing rebuilt, the tick kept, the focus left on the radio.
+    expect(items()).toEqual(list);
+    expect(boxes.map((b) => b.checked)).toEqual([true, false, true, true]);
+    expect(doc.activeElement).toBe(radio);
+
+    // Straight to French, then back to English: each switch rewrites everything.
+    pick('fr');
+    expect(byId('step-add-title').textContent).toBe('Étape 1 Ajoutez vos e-mails');
+    pick('en');
+    expect(getLocale()).toBe('en');
+    expect(byId('step-add-title').textContent).toBe('Step 1 Add your emails');
+    expect(byId('review-included').textContent).toBe('3 of 4 emails will be in the PDF.');
+    expect(doc.documentElement.getAttribute('lang')).toBe('en');
+    expect(items()).toEqual(list);
+  });
+
+  it('the next PDF is asked for in Dutch', async () => {
+    await addAndShow();
+    pick('nl');
+    byId('download-button').click();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.request.input.locale).toBe('nl');
+  });
+
+  it('"Clear everything" keeps Dutch', async () => {
+    await addAndShow();
+    pick('nl');
+    byId('clear-everything').click();
+    expect(getLocale()).toBe('nl');
+    expect(status()).toBe('Alles is gewist.');
+    expect(byId('lang-nl').checked).toBe(true);
   });
 });
 

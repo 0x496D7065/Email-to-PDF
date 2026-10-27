@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe('with more than one language', () => {
   it('lists every language of the catalog: the shipped ones first, then the test ones', () => {
-    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr', 'xx', 'de']);
+    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr', 'nl', 'xx', 'de']);
     expect(languageName('xx')).toBe('[Pseudo xx]');
     expect(languageName('en')).toBe('English');
     expect(languageName('zz')).toBe('zz');
@@ -28,7 +28,8 @@ describe('with more than one language', () => {
     expect(pickLocale(['de-AT'])).toBe('de');
     expect(pickLocale(['DE'])).toBe('de');
     expect(pickLocale(['fr-BE', 'de'])).toBe('fr');
-    expect(pickLocale(['nl', 'de'])).toBe('en');
+    expect(pickLocale(['nl', 'de'])).toBe('nl');
+    expect(pickLocale(['it', 'de'])).toBe('en');
     expect(pickLocale([])).toBe('en');
   });
 

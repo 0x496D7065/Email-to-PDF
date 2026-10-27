@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { FOLD_REASONS } from '../../engine/segments';
 import { en } from './en';
 import { fr } from './fr';
+import { nl } from './nl';
 import {
   DEFAULT_LOCALE,
   getLocale,
@@ -23,8 +24,8 @@ import {
   type MessageKey,
 } from './index';
 
-/** Every language file. Dutch is added here when it exists. */
-const LOCALES: Readonly<Record<string, Messages>> = { en, fr };
+/** Every language file. */
+const LOCALES: Readonly<Record<string, Messages>> = { en, fr, nl };
 
 /** Every [dotted key, value] of a language file. */
 function entries(table: unknown, prefix = ''): [string, unknown][] {
@@ -95,6 +96,16 @@ describe('language files', () => {
   it('is plain ASCII in English (non-ASCII characters must be \\u escapes in the source)', () => {
     for (const [key, value] of enEntries) {
       for (const text of textsOf(value)) expect(text, key).toMatch(/^[\x20-\x7e]*$/);
+    }
+  });
+
+  it('has no comma in any PDF reason, in every language (reasons are joined with ", ", so a comma would read as two reasons)', () => {
+    for (const [name, table] of Object.entries(LOCALES)) {
+      const reasons = entries(table).filter(([key]) => key.startsWith('pdf.reason.'));
+      expect(reasons.length, name).toBeGreaterThan(0);
+      for (const [key, value] of reasons) {
+        for (const text of textsOf(value)) expect(text, `${name} ${key}`).not.toContain(',');
+      }
     }
   });
 
@@ -198,26 +209,29 @@ describe('helpers', () => {
   });
 });
 
-describe('languages (the shipped catalog: English and French)', () => {
-  it('ships English then French; the page starts in English until it picks one', () => {
-    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr']);
+describe('languages (the shipped catalog: English, French and Dutch)', () => {
+  it('ships English, French, then Dutch; the page starts in English until it picks one', () => {
+    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr', 'nl']);
     expect(DEFAULT_LOCALE).toBe('en');
     expect(getLocale()).toBe('en');
     // Each name in its own language, never translated.
     expect(languageName('en')).toBe('English');
     expect(languageName('fr')).toBe('Français');
+    expect(languageName('nl')).toBe('Nederlands');
   });
 
   it('isSupportedLocale: exact shipped codes only', () => {
     expect(isSupportedLocale('en')).toBe(true);
     expect(isSupportedLocale('fr')).toBe(true);
-    for (const value of ['EN', 'en-US', 'FR', 'fr-BE', 'nl', 'xx', '', ' en', 'toString', '__proto__', null, undefined, 1, ['en']]) {
+    expect(isSupportedLocale('nl')).toBe(true);
+    for (const value of ['EN', 'en-US', 'FR', 'fr-BE', 'NL', 'nl-BE', 'de', 'xx', '', ' en', 'toString', '__proto__', null, undefined, 1, ['en']]) {
       expect(isSupportedLocale(value), String(value)).toBe(false);
     }
   });
 
   it('setLocale refuses a language the page does not ship (the page language stays)', () => {
-    expect(() => setLocale('nl')).toThrow(/unsupported/);
+    expect(() => setLocale('de')).toThrow(/unsupported/);
+    expect(() => setLocale('nl-BE')).toThrow(/unsupported/);
     expect(() => setLocale('fr-BE')).toThrow(/unsupported/);
     expect(() => setLocale('EN')).toThrow(/unsupported/);
     expect(getLocale()).toBe('en');
@@ -272,12 +286,16 @@ describe('pickLocale', () => {
     expect(pickLocale([])).toBe('en');
   });
 
-  it('uses the shipped languages by default (English and French)', () => {
+  it('uses the shipped languages by default (English, French and Dutch)', () => {
     expect(pickLocale(['fr-BE'])).toBe('fr');
     expect(pickLocale(['fr-FR', 'en'])).toBe('fr');
     expect(pickLocale(['fr-CA'])).toBe('fr');
+    expect(pickLocale(['nl-BE'])).toBe('nl');
+    expect(pickLocale(['nl-NL', 'en'])).toBe('nl');
     expect(pickLocale(['en-US'])).toBe('en');
     // Only the first language counts.
-    expect(pickLocale(['nl-BE', 'fr-BE'])).toBe('en');
+    expect(pickLocale(['nl-BE', 'fr-BE'])).toBe('nl');
+    expect(pickLocale(['de', 'nl'])).toBe('en');
+    expect(pickLocale(['en-GB', 'nl-BE'])).toBe('en');
   });
 });

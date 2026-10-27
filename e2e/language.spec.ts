@@ -1,13 +1,18 @@
-// Browser test of the language picker and the French page (src/ui/app.ts,
-// src/ui/page.ts, src/ui/i18n/fr.ts), in each test browser against the
-// BUILT site served by `vite preview` (see playwright.config.ts):
+// Browser test of the language picker and the French and Dutch pages
+// (src/ui/app.ts, src/ui/page.ts, src/ui/i18n/fr.ts, src/ui/i18n/nl.ts), in
+// each test browser against the BUILT site served by `vite preview` (see
+// playwright.config.ts):
 //
 // - in an English browser (the pinned en-US of playwright.config.ts): the
 //   picker is the first Tab stop; with emails loaded, the arrow key switches
 //   the page to French in place (words, <html lang>, the announcement), and
 //   back to English;
 // - in a French browser (a fr-FR context): the page starts in French, and
-//   the PDF is made in French, with its French file name.
+//   the PDF is made in French, with its French file name;
+// - in a Dutch browser (an nl-BE context): the page starts in Dutch, the
+//   header with three languages fits 320 px and 200% zoom, the picker
+//   switches to French and back, and the PDF is made in Dutch, with its
+//   Dutch file name.
 //
 // Throughout (see e2e/support/watch.ts): after the page's own files, the
 // only requests are the blob: URLs of the inlined workers and of the PDF (in
@@ -19,6 +24,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { fr } from '../src/ui/i18n/fr.ts';
+import { nl } from '../src/ui/i18n/nl.ts';
 import { readOutline, readPdf } from '../tests/support/pdf-reader.ts';
 import { contrastFailures } from './support/contrast.ts';
 import {
@@ -153,7 +159,11 @@ test('English browser: the picker is the first Tab stop; the arrow keys switch t
   await expect(english).toBeChecked();
   await expect(french).not.toBeChecked();
   // The shipped languages only: the test-only one (tests/support/test-locale.ts) is never bundled.
-  await expect(picker.getByRole('radio')).toHaveCount(2);
+  await expect(picker.getByRole('radio')).toHaveCount(3);
+  await expect(page.locator('#lang-nl')).toHaveAccessibleName('Nederlands');
+  await expect(page.locator('#lang-nl')).toHaveAttribute('lang', 'nl');
+  await expect(page.locator('label[for="lang-nl"]')).toHaveAttribute('lang', 'nl');
+  await expect(page.locator('#lang-nl')).not.toBeChecked();
   await expect(page.locator('#lang-xx')).toHaveCount(0);
   await expect(page.locator('label[for="lang-fr"]')).toHaveAttribute('lang', 'fr');
   await expect(french).toHaveAttribute('lang', 'fr');
@@ -232,6 +242,92 @@ test.describe('French browser', () => {
     // One bookmark per email ("3. 2025-03-04, Alice Example : ..."), the undated one with the French "no date" text.
     expect(titles.filter((title) => /^\d+\. /.test(title))).toHaveLength(FILES.length);
     expect(titles.some((title) => title.includes(fr.preview.noDate))).toBe(true);
+    expect(downloads).toHaveLength(1);
+    expect(workersNamed(watch, watch.workers, 'pdf-worker')).toHaveLength(1);
+
+    await expectNothingLeftThePage(page);
+  });
+});
+
+test.describe('Dutch browser', () => {
+  test.use({ locale: 'nl-BE' });
+
+  test('starts in Dutch, fits a narrow and a zoomed screen, switches with the picker, and makes the PDF in Dutch, named correspondentie-YYYY-MM-DD.pdf', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.clock.setFixedTime(FIXED_NOW);
+    await open(page);
+
+    await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
+    await expect(page).toHaveTitle(en.app.name);
+    const dutch = page.locator('#lang-nl');
+    const french = page.locator('#lang-fr');
+    await expect(dutch).toHaveAccessibleName('Nederlands');
+    await expect(dutch).toBeChecked();
+    await expect(page.locator('#lang-en')).not.toBeChecked();
+    await expect(french).not.toBeChecked();
+    await expect(page.getByRole('group', { name: nl.language.label })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(en.app.name);
+    await expect(page.getByRole('banner')).toContainText(nl.app.promise);
+    await expect(page.locator('#download-note')).toHaveText(nl.download.unavailable['no-emails']);
+    // The first Tab stop is the ticked radio: Dutch here.
+    await page.keyboard.press('Tab');
+    await expect(dutch).toBeFocused();
+
+    // The header (picker with three languages, privacy summary) fits a
+    // narrow phone screen and 200% zoom (640 CSS px wide) without sideways scrolling.
+    for (const size of [
+      { width: 320, height: 640 },
+      { width: 640, height: 400 },
+    ]) {
+      await page.setViewportSize(size);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, `${String(size.width)} px`).toBeLessThanOrEqual(0);
+      for (const id of ['#lang-en', '#lang-fr', '#lang-nl', '#privacy-summary']) {
+        const box = await page.locator(id).boundingBox();
+        expect(box, id).not.toBeNull();
+        expect((box?.x ?? -1) >= 0 && (box?.x ?? 0) + (box?.width ?? 0) <= size.width, `${id} at ${String(size.width)} px`).toBe(true);
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    await addFiles(page);
+    await expect(page.locator('#add-summary-text')).toHaveText(`${many(nl.added.files.other, 4)} ${many(nl.added.messages.other, 4)}`);
+    await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveText(
+      [nl.steps.add.title, nl.steps.check.title, nl.steps.download.title].map((title, i) => `Stap ${String(i + 1)} ${title}`),
+    );
+    await expect(page.locator('#preview-list .pdf-label:visible').filter({ hasText: /^Niet in de PDF: / }).first()).toBeVisible();
+
+    // The picker: the arrow key goes to French, a click on "Nederlands" comes back.
+    await dutch.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(french).toBeChecked();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page.getByRole('status')).toHaveText(fr.language.changed);
+    await page.locator('label[for="lang-nl"]').click();
+    await expect(dutch).toBeChecked();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
+    await expect(page.getByRole('status')).toHaveText(nl.language.changed);
+    await expect(page.locator('#add-summary-text')).toHaveText(`${many(nl.added.files.other, 4)} ${many(nl.added.messages.other, 4)}`);
+    await expect(page.getByRole('main')).not.toContainText(en.steps.add.title);
+    await expect(page.getByRole('main')).not.toContainText(fr.steps.add.title);
+
+    const fileName = 'correspondentie-2025-06-02.pdf';
+    const first = page.waitForEvent('download');
+    await page.getByRole('button', { name: nl.actions.makePdf }).focus();
+    await page.keyboard.press('Enter');
+    const download = await first;
+    expect(download.suggestedFilename()).toBe(fileName);
+    const status = (await page.getByRole('status').textContent()) ?? '';
+    expect(status).toMatch(new RegExp(`^Uw PDF is klaar: ${fileName.replaceAll('.', '[.]')}, [0-9]+ pagina’s[.] Het downloaden is begonnen[.]$`));
+    await expect(page.locator('#download-link')).toHaveText(`Opnieuw downloaden: ${fileName}`);
+
+    // The PDF's own words are Dutch too.
+    const pdf = readPdf(new Uint8Array(readFileSync(await download.path())));
+    const titles = (readOutline(pdf)?.items ?? []).map((item) => item.title);
+    expect(titles[0]).toBe(nl.pdf.document.coverBookmark);
+    // One bookmark per email, the undated one with the Dutch "no date" text.
+    expect(titles.filter((title) => /^\d+\. /.test(title))).toHaveLength(FILES.length);
+    expect(titles.some((title) => title.includes(nl.preview.noDate))).toBe(true);
     expect(downloads).toHaveLength(1);
     expect(workersNamed(watch, watch.workers, 'pdf-worker')).toHaveLength(1);
 

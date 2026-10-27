@@ -15,7 +15,7 @@
 //   stops compiling until a label is written (or removed).
 // - ASCII only: a non-ASCII character would be written as a \u escape.
 //
-// Other languages (French: fr.ts; Dutch later) get a sibling file with the
+// Other languages (French: fr.ts; Dutch: nl.ts) get a sibling file with the
 // same shape, typed as `Messages` (see index.ts), listed in catalog.ts.
 
 import type { DedupeWarningCode } from '../../engine/dedupe';

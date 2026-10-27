@@ -491,7 +491,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await page.evaluate(() => 0);
 
   // --- The language picker is the first stop: the ticked radio (English).
-  // The other language's radio is reached with the arrow keys, not Tab.
+  // The other languages' radios are reached with the arrow keys, not Tab.
   await page.keyboard.press('Tab');
   const english = page.locator('#lang-en');
   await expect(english).toBeFocused();
@@ -656,8 +656,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
   expect(tags.at(-1)).toBe('BUTTON');
   expect(walk.filter((f) => f.tag === 'INPUT' && f.position >= 0).map((f) => f.position)).toEqual([0, 1, 2, 3, 4]);
   expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(2 + (await page.locator('#preview-list summary').count()));
-  // Every control is a stop, except the unticked language radio (one Tab stop per radio group).
-  expect(walk.length).toBe(controlCount - 1);
+  // Every control is a stop, except the unticked language radios (one Tab stop per radio group).
+  const languageRadios = await page.locator('#language input[type="radio"]').count();
+  expect(languageRadios).toBe(3);
+  expect(walk.length).toBe(controlCount - (languageRadios - 1));
   // Every stop shows a clear outline.
   for (const f of walk) {
     expect(f.outlineStyle, f.key).not.toBe('none');
