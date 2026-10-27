@@ -20,6 +20,7 @@ import type { MessagePlan, OutputPolicy } from '../engine/output-plan';
 import type { PdfFontName } from '../pdf/fonts';
 import { generatePdf, type GeneratedPdf } from '../pdf/generate';
 import { PDF_FONT_NAMES, parsePdfFonts } from '../pdf/parse-fonts';
+import { isSupportedLocale } from '../ui/i18n';
 
 /** What one PDF is made of: the input of generatePdf without the fonts. */
 export interface PdfJobInput {
@@ -32,6 +33,12 @@ export interface PdfJobInput {
   readonly timeZone: string;
   /** When the PDF is made (ms since 1970 UTC), taken on the page. */
   readonly generatedAt: number;
+  /**
+   * The PDF's language: the page language when the button was pressed (a
+   * language the page ships, e.g. 'en'). The worker uses this, never a
+   * default of its own.
+   */
+  readonly locale: string;
 }
 
 /** The WOFF bytes of the four PDF fonts. */
@@ -77,6 +84,7 @@ export function isToPdfWorker(data: unknown): data is ToPdfWorker {
     isRecord(input.policy) &&
     typeof input.timeZone === 'string' &&
     typeof input.generatedAt === 'number' &&
+    isSupportedLocale(input.locale) &&
     PDF_FONT_NAMES.every((name) => fonts[name] instanceof Uint8Array)
   );
 }

@@ -35,7 +35,7 @@ import type { EngineMessage, EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutputSteps, type MessagePlan, type OutputPolicy } from '../engine/output-plan';
 import { signatureSources, type PdfView, type PlannedEmail } from '../ui-model/pdf-plan';
 import { el } from './dom';
-import { t } from './i18n';
+import { createStaticLabels } from './labels';
 import type { PreviewPdfPlans } from './preview';
 
 /** Pause after a change before the plans are worked out (ms). */
@@ -82,6 +82,8 @@ export interface PdfLabels {
   getPdfPolicy(): OutputPolicy;
   /** The plans of the current inputs, or null while they are being worked out (or there are none). */
   currentPlans(): PdfPlans | null;
+  /** Writes the checkbox's label again in the page language (the plans do not depend on it). */
+  relabel(): void;
 }
 
 /** The input of one planning: everything the plans depend on. */
@@ -105,10 +107,11 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
   // The planning waiting or in progress.
   let job: { readonly inputs: Inputs; handle: unknown } | null = null;
 
+  const labels = createStaticLabels();
   const checkbox = el('input', { attrs: { type: 'checkbox', id: 'pdf-everything' } });
   const element = el('div', {
     attrs: { class: 'field field-checkbox' },
-    children: [checkbox, el('label', { attrs: { for: 'pdf-everything' }, text: t('pdf.everything') })],
+    children: [checkbox, labels.text(el('label', { attrs: { for: 'pdf-everything' } }), 'pdf.everything')],
   });
 
   function policy(): OutputPolicy {
@@ -252,5 +255,6 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
     },
     getPdfPolicy: policy,
     currentPlans: () => (upToDate && made !== null && made.inputs.result === result ? made.plans : null),
+    relabel: () => labels.relabel(),
   };
 }

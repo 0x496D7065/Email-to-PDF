@@ -58,6 +58,17 @@
 // the same, since nothing is ever stored (no storage, cookies or caches).
 // This is the user's own, explicit action: nothing else ever drops text
 // (README.md, rule R6).
+//
+// Language (setLanguage, called by the picker in the header, src/ui/app.ts):
+// makes the new language the page language, then each part writes its own
+// words again from its own state (relabel: nothing is rebuilt, so ticks,
+// the time zone, open folds, "show quoted text", "Put everything in the
+// PDF", the plans, the focus and the scroll position all stay), sets
+// <html lang> and the title, and makes ONE announcement through step 3
+// (inputsChanged): the PDF's words and file name follow the language, so a
+// PDF made or being made is dropped like after any other change, and never
+// made again by itself. Nothing about the language is stored, and "Clear
+// everything" keeps it.
 
 import type { EngineResult } from '../engine/engine';
 import { PDF_FONTS } from '../pdf/fonts';
@@ -65,9 +76,9 @@ import type { ProcessResult } from '../pipeline/process-files';
 import type { PdfJobInput } from '../pipeline/pdf-protocol';
 import { createBrowserPdfWorker, pdfTimeoutMs, runPdfInWorker } from '../pipeline/pdf-runner';
 import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files';
-import { mountApp, type AppShell } from './app';
+import { applyDocumentLanguage, mountApp, type AppShell } from './app';
 import { mountDownloadStep, type DownloadStep, type DownloadStepOptions } from './download-step';
-import { t } from './i18n';
+import { getLocale, isSupportedLocale, setLocale, t } from './i18n';
 import { createPdfLabels, type PdfLabels, type PdfLabelsOptions } from './pdf-labels';
 import type { PdfUnavailable } from './pdf-job';
 import { mountPreview, type Preview, type PreviewOptions } from './preview';
@@ -99,6 +110,11 @@ export interface Page {
   readonly download: DownloadStep;
   /** What "Clear everything" does (see the top of this file). */
   clearEverything(): void;
+  /**
+   * Shows the page in another shipped language (see the top of this file).
+   * Does nothing for the language already shown or one the page does not ship.
+   */
+  setLanguage(locale: string): void;
 }
 
 /** The browser's way to offer the PDF: a Blob in memory and its blob: URL. */
@@ -132,7 +148,8 @@ export function focusedControlWasRemoved(
 
 /** Builds the page inside `root` and wires its parts together. */
 export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
-  const shell = mountApp(root);
+  // The picker only calls back on the reader's action, once everything below exists.
+  const shell = mountApp(root, { onLanguageChange: (locale) => setLanguage(locale) });
   // The result shown in step 2 (null: none), and whether its PDF plans failed.
   let shown: EngineResult | null = null;
   let plansFailed = false;
@@ -235,7 +252,16 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
   function pdfInput(generatedAt: number): PdfJobInput | null {
     const plans = pdfLabels.currentPlans();
     if (plans === null || plans.result !== shown) return null;
-    return { result: plans.result, positions: plans.positions, plans: plans.plans, policy: plans.policy, timeZone: preview.zone(), generatedAt };
+    return {
+      result: plans.result,
+      positions: plans.positions,
+      plans: plans.plans,
+      policy: plans.policy,
+      timeZone: preview.zone(),
+      generatedAt,
+      // The PDF's words and file name are in the page language.
+      locale: getLocale(),
+    };
   }
 
   const settings = options.download ?? {};
@@ -273,11 +299,27 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     addFiles.focus();
   }
 
+  function setLanguage(locale: string): void {
+    if (!isSupportedLocale(locale) || locale === getLocale()) return;
+    setLocale(locale);
+    shell.relabel();
+    addFiles.relabel();
+    review.relabel();
+    pdfLabels.relabel();
+    preview.relabel();
+    // Deliberate: relabel first, then inputsChanged below drops the PDF.
+    download.relabel();
+    applyDocumentLanguage();
+    // One announcement, in the new language; a PDF made or being made is
+    // dropped (and said so in the same announcement), never made again here.
+    download.inputsChanged(t('language.changed'));
+  }
+
   shell.clearButton.addEventListener('click', () => {
     // aria-disabled: still focusable, but does nothing while there is nothing to clear.
     if (!addFiles.hasFiles()) return;
     clearEverything();
   });
 
-  return { shell, addFiles, preview, review, pdfLabels, download, clearEverything };
+  return { shell, addFiles, preview, review, pdfLabels, download, clearEverything, setLanguage };
 }

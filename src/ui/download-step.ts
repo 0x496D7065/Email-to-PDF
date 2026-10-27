@@ -13,7 +13,8 @@
 // - When the PDF is ready, its download starts once by itself (a click on
 //   the link, made by the page), and the link stays as "Download again".
 //   The link's href is the PDF's blob: URL (setBlobHref, src/ui/dom.ts);
-//   its `download` attribute gives the file name, correspondence-YYYY-MM-DD.pdf.
+//   its `download` attribute gives the file name, in the page language
+//   (correspondence-YYYY-MM-DD.pdf in English).
 // - Every change of choice (src/ui/page.ts calls inputsChanged), "Clear
 //   everything" (reset) and leaving the page (pagehide) drop the PDF: the
 //   link is hidden and loses its href, the URL is revoked, a job still
@@ -70,6 +71,8 @@ export interface DownloadStep {
   inputsChanged(news?: string): void;
   /** "Clear everything": stops and drops everything. */
   reset(): void;
+  /** Writes the note (and the link, if any) again in the page language, from the state. */
+  relabel(): void;
   /** The current state (for tests). */
   state(): PdfJobState;
 }
@@ -199,6 +202,7 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
       render();
     },
     reset: () => job.reset(),
+    relabel: render,
     state: () => job.state(),
   };
 }

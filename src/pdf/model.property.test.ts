@@ -144,7 +144,7 @@ function randomMessage(random: () => number, k: number): NormalizedMessage {
   };
 }
 
-const strings = createPdfStrings();
+const strings = createPdfStrings('en');
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 
 describe('PDF document model properties', () => {

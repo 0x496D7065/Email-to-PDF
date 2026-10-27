@@ -66,6 +66,16 @@
 //   whole list.)
 // The labels only add words: every character stays in the page.
 //
+// Language change (relabel): nothing is rebuilt, and no body is redrawn, so
+// open folds, the focus and the scroll position stay. Written again in
+// place, from what the preview keeps anyway: the toolbar's words (and the
+// "this computer" zone's name), the status line, each email's number, its
+// "(no subject)" placeholder, its details list (<dl>: labels and mailbox,
+// attachment and "also in" lines, the date and sender-time elements kept),
+// each fold's "what" line and PDF label, the PDF and "no text" notes, and
+// the stand-ins' notes. The time zones' own names and the dates' numbers
+// are the same in every language.
+//
 // Not here: the counts, the include/exclude checkboxes and the notes
 // (src/ui/review.ts). They reach the page through three options: `header`
 // (nodes above the toolbar), `decorate` (adds to each email's item) and
@@ -80,11 +90,12 @@ import type { AttachmentInfo, EmailAddress, EmailDate } from '../parsing/types';
 import type { ProcessResult } from '../pipeline/process-files';
 import { displayAuthor } from '../ui-model/display-author';
 import type { DisplayBlock } from '../ui-model/display-blocks';
-import { pdfPlanNote } from '../ui-model/message-notes';
+import { pdfPlanNote, type PdfNoteCode } from '../ui-model/message-notes';
 import { pdfBlocks, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
-import { LOCALE, t } from './i18n';
+import { getLocale, t, translator } from './i18n';
+import { createStaticLabels } from './labels';
 
 /** Emails built per chunk (at least one per chunk, see MAX_CHUNK_CHARS). */
 export const DEFAULT_CHUNK_SIZE = 40;
@@ -100,12 +111,9 @@ export const PDF_CHUNK_FACTOR = 4;
 // ---------------------------------------------------------------------------
 // Pure helpers (no DOM; unit tested directly).
 
-// "a, b, c" in the page language, from the browser's own list rules.
-const listFormat = new Intl.ListFormat(LOCALE, { style: 'short', type: 'unit' });
-
-/** Joins texts the local way ("a, b, c"). */
+/** Joins texts the local way ("a, b, c"), with the page language's own list rules. */
 export function joinList(items: readonly string[]): string {
-  return listFormat.format(items);
+  return translator(getLocale()).list(items);
 }
 
 /** True if a mailbox has neither a name nor an address. */
@@ -159,7 +167,7 @@ export interface DateTexts {
 }
 
 export function dateTexts(date: EmailDate, zone: string): DateTexts {
-  const shown = formatInZone(date.utcMs, zone, LOCALE);
+  const shown = formatInZone(date.utcMs, zone, getLocale());
   if (shown.kind === 'no-date' || !isDisplayableMs(date.utcMs)) return { main: t('preview.noDate'), iso: null, senderLocal: null };
   const sender = formatSenderLocal(date);
   const senderLocal = sender.kind === 'local' && sender.text !== shown.text ? t('preview.senderTime', { time: sender.text }) : null;
@@ -324,6 +332,8 @@ export interface Preview {
   pdfPlansFailed(): void;
   /** See PdfLabelState. */
   pdfLabelState(): PdfLabelState;
+  /** Writes step 2's words again in the page language now (see the top of this file: nothing is rebuilt). */
+  relabel(): void;
 }
 
 /** One block of a shown body, as built (to update its label in place). */
@@ -337,6 +347,10 @@ interface BuiltBlock {
   readonly nodes: readonly HTMLElement[];
   /** The PDF label element (a folded block always has one, hidden when there is no label). */
   readonly label: HTMLElement | null;
+  /** The PDF label shown in `label` (to write it again in another language). */
+  pdf: PdfLabel | null;
+  /** A folded block's "what" line ("Quoted text, 12 lines, ...") and the block it describes; null for shown text. */
+  readonly what: { readonly element: HTMLSpanElement; readonly block: DisplayBlock } | null;
 }
 
 /**
@@ -361,6 +375,27 @@ interface BodySlot {
   /** The blocks' places and kinds (see shapeOf). */
   shape: string;
   blocks: BuiltBlock[];
+  /** What `note` says: a PDF note's code, 'failed' (pdf.messageFailed) or null (empty). */
+  noteCode: PdfNoteCode | 'failed' | null;
+  /** The "(no text)" note of a body without blocks, else null. */
+  empty: HTMLParagraphElement | null;
+}
+
+/** One email's item in the page (not a stand-in): what relabel() writes again. */
+interface ItemSlot {
+  readonly m: EngineMessage;
+  readonly number: HTMLSpanElement;
+  /** The "(no subject)" placeholder, or null when the email has a subject (shown as it is). */
+  readonly noSubject: HTMLSpanElement | null;
+  readonly meta: HTMLDListElement;
+  readonly date: DateSlot;
+}
+
+/** A stand-in's own notes (see fallbackItemOf). */
+interface StandIn {
+  readonly number: HTMLSpanElement;
+  readonly failedNote: HTMLParagraphElement;
+  readonly pdfNote: HTMLParagraphElement;
 }
 
 /** The shape of a body not drawn yet (never a real shape, so its first update draws). */
@@ -369,6 +404,12 @@ const NOT_DRAWN = 'not drawn yet';
 /** Where the blocks are and which of them carry a label element: equal shapes can be updated in place. */
 function shapeOf(blocks: readonly PdfBlock[]): string {
   return blocks.map((b) => `${String(b.block.start)}:${String(b.block.end)}:${b.block.folded ? 'f' : b.label === null ? 's' : 'l'}`).join(',');
+}
+
+/** Sets a block's PDF label: its element's text and state (hidden without a label). */
+function setBlockLabel(block: BuiltBlock, label: PdfLabel | null): void {
+  block.pdf = label;
+  if (block.label !== null) applyLabel(block.label, label);
 }
 
 /** Sets a PDF label element's text and state (hidden without a label). */
@@ -389,6 +430,39 @@ interface DateSlot {
 /** One "label: value" row of an email's details. */
 function row(name: string, label: string, value: readonly (Node | string)[]): Node[] {
   return [el('dt', { attrs: { class: `meta-${name}` }, text: label }), el('dd', { attrs: { class: `meta-${name}` }, children: value })];
+}
+
+/**
+ * The rows of an email's details list, in the page language: date (with
+ * the given date elements, which are kept across a language change), shown
+ * author, recipients, attachments and the files it was also found in.
+ */
+function metaRows(m: EngineMessage, date: DateSlot): Node[] {
+  const message = m.message;
+  const author = displayAuthor(message);
+  const meta: Node[] = [
+    ...row('date', t('preview.date'), [date.time, ' ', date.senderNote]),
+    ...(author.source === 'none'
+      ? row('author', t('preview.from'), [el('span', { attrs: { class: 'placeholder' }, text: t('preview.author.none') })])
+      : row('author', t(`preview.author.${author.source}`), [mailboxListText(author.mailboxes)])),
+  ];
+  for (const [name, label, mailboxes] of [
+    ['to', t('preview.to'), message.to],
+    ['cc', t('preview.cc'), message.cc],
+    ['bcc', t('preview.bcc'), message.bcc],
+  ] as const) {
+    const text = mailboxListText(mailboxes);
+    if (text !== '') meta.push(...row(name, label, [text]));
+  }
+  if (message.attachments.length > 0) {
+    const items = message.attachments.map((a) => el('li', { attrs: { class: 'attachment' }, text: attachmentText(a) }));
+    meta.push(...row('attachments', t('preview.attachments'), [el('ul', { attrs: { class: 'attachment-list' }, children: items })]));
+  }
+  if (m.duplicates.length > 0) {
+    const names = m.duplicates.map((d) => (d.source.fileName === '' ? t('added.noName') : d.source.fileName));
+    meta.push(...row('also-in', t('preview.alsoIn'), [joinList(names)]));
+  }
+  return meta;
 }
 
 /** Builds step 2 inside shell.checkArea. */
@@ -412,8 +486,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   let currentResult: EngineResult | null = null;
   // The bodies built so far, by list position.
   let bodies = new Map<number, BodySlot>();
-  // The PDF notes of the stand-ins in the page, by list position.
-  let standIns = new Map<number, HTMLParagraphElement>();
+  // The items built so far (not stand-ins), by list position.
+  let itemSlots = new Map<number, ItemSlot>();
+  // The notes of the stand-ins in the page, by list position.
+  let standIns = new Map<number, StandIn>();
   // The PDF plans in use (null: none, or being worked out again), and their state.
   let pdfPlans: PreviewPdfPlans | null = null;
   let pdfState: PdfLabelState = 'off';
@@ -422,10 +498,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   let pdfGeneration = 0;
 
   // --- Toolbar --------------------------------------------------------------
-  const zoneSelect = el('select', {
-    attrs: { id: 'preview-zone', class: 'zone-select' },
-    children: zones.map((z) => el('option', { attrs: { value: z, selected: z === zone }, text: zoneLabel(z, homeZone) })),
-  });
+  const labels = createStaticLabels();
+  const zoneOptions = zones.map((z) => el('option', { attrs: { value: z, selected: z === zone }, text: zoneLabel(z, homeZone) }));
+  // Only the browser's own zone has words of ours ("(this computer)").
+  const homeOption = zoneOptions[zones.indexOf(homeZone)] ?? null;
+  const zoneSelect = el('select', { attrs: { id: 'preview-zone', class: 'zone-select' }, children: zoneOptions });
   zoneSelect.value = zone;
   const foldToggle = el('input', { attrs: { type: 'checkbox', id: 'preview-show-folded' } });
   const toolbar = el('div', {
@@ -433,11 +510,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     children: [
       el('div', {
         attrs: { class: 'field' },
-        children: [el('label', { attrs: { for: 'preview-zone' }, text: t('preview.zone') }), zoneSelect],
+        children: [labels.text(el('label', { attrs: { for: 'preview-zone' } }), 'preview.zone'), zoneSelect],
       }),
       el('div', {
         attrs: { class: 'field field-checkbox' },
-        children: [foldToggle, el('label', { attrs: { for: 'preview-show-folded' }, text: t('preview.showFolded') })],
+        children: [foldToggle, labels.text(el('label', { attrs: { for: 'preview-show-folded' } }), 'preview.showFolded')],
       }),
       ...(options.toolbarItems ?? []),
     ],
@@ -449,7 +526,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   toolbar.append(pdfStatus);
 
   // role="list": some screen readers drop the list role when the numbers are hidden by CSS.
-  const list = el('ol', { attrs: { id: 'preview-list', class: 'message-list', role: 'list', 'aria-label': t('preview.listLabel') } });
+  const list = labels.attr(el('ol', { attrs: { id: 'preview-list', class: 'message-list', role: 'list' } }), 'aria-label', 'preview.listLabel');
   shell.checkArea.replaceChildren(...(options.header ?? []), toolbar, list);
 
   /**
@@ -551,32 +628,32 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         const text = el('div', { attrs: { class: 'body-text' }, text: block.text });
         if (label === null) {
           children.push(text);
-          built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [text], label: null });
+          built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [text], label: null, pdf: null, what: null });
           continue;
         }
         // Shown text the plan leaves out (a bug, never expected): said all the same.
         const mark = el('p', { attrs: { class: 'pdf-label pdf-label-shown' } });
         applyLabel(mark, label);
         children.push(mark, text);
-        built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [mark, text], label: mark });
+        built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [mark, text], label: mark, pdf: label, what: null });
         continue;
       }
       const mark = el('span', { attrs: { class: 'pdf-label' } });
       applyLabel(mark, label);
       const open = showFolded || wasOpen.some((o) => o.start < block.end && block.start < o.end);
-      const summary = el('summary', {
-        attrs: { class: 'fold-label' },
-        children: [mark, el('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, slot.position, slot.positionByIndex) })],
-      });
+      const what = el('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, slot.position, slot.positionByIndex) });
+      const summary = el('summary', { attrs: { class: 'fold-label' }, children: [mark, what] });
       const details = el('details', {
         attrs: { class: 'fold', open },
         children: [summary, el('div', { attrs: { class: 'body-text body-folded' }, text: block.text })],
       });
       children.push(details);
-      built.push({ start: block.start, end: block.end, details, summary, nodes: [details], label: mark });
+      built.push({ start: block.start, end: block.end, details, summary, nodes: [details], label: mark, pdf: label, what: { element: what, block } });
     }
-    if (blocks.length === 0) children.push(el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }));
+    const empty = blocks.length === 0 ? el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }) : null;
+    if (empty !== null) children.push(empty);
     slot.body.replaceChildren(...children);
+    slot.empty = empty;
     // Recorded only once in the page: a build that threw above leaves nothing behind.
     for (const b of slot.blocks) if (b.details !== null) folds.delete(b.details);
     for (const b of built) if (b.details !== null) folds.add(b.details);
@@ -600,8 +677,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     const shape = shapeOf(blocks);
     if (shape === slot.shape) {
       blocks.forEach((b, i) => {
-        const element = slot.blocks[i]?.label ?? null;
-        if (element !== null) applyLabel(element, b.label);
+        const built = slot.blocks[i];
+        if (built !== undefined) setBlockLabel(built, b.label);
       });
     } else {
       const wasOpen = slot.blocks.filter((b) => b.details?.hasAttribute('open') === true);
@@ -609,9 +686,16 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       slot.shape = shape;
     }
     const note = view === null ? null : pdfPlanNote(view.plan);
-    slot.note.textContent = note === null ? '' : t(`review.pdfNote.${note}`);
+    slot.noteCode = note;
+    writeNote(slot);
     setSafeAttribute(slot.note, 'hidden', note === null);
     slot.key = key;
+  }
+
+  /** A body's PDF note, in the page language (see BodySlot.noteCode). */
+  function writeNote(slot: BodySlot): void {
+    const code = slot.noteCode;
+    slot.note.textContent = code === null ? '' : code === 'failed' ? t('pdf.messageFailed') : t(`review.pdfNote.${code}`);
   }
 
   /** An email's body, with its PDF note (placed just above the body, outside the email's text). */
@@ -625,6 +709,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       key: '',
       shape: NOT_DRAWN, // never a real shape, so the first update draws
       blocks: [],
+      noteCode: null,
+      empty: null,
     };
     updateBody(slot);
     bodies.set(position, slot);
@@ -634,16 +720,14 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   function itemOf(m: EngineMessage, position: number, result: EngineResult): HTMLLIElement {
     const message = m.message;
     const hasSubject = message.subject.trim() !== '';
+    const number = el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) });
+    const subject = el('span', {
+      attrs: { class: hasSubject ? 'message-subject' : 'message-subject placeholder' },
+      text: hasSubject ? message.subject : t('preview.noSubject'),
+    });
     const heading = el('h3', {
       attrs: { id: headingId(position), class: 'message-heading' },
-      children: [
-        el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) }),
-        ' ',
-        el('span', {
-          attrs: { class: hasSubject ? 'message-subject' : 'message-subject placeholder' },
-          text: hasSubject ? message.subject : t('preview.noSubject'),
-        }),
-      ],
+      children: [number, ' ', subject],
     });
 
     const time = el('time', { attrs: { class: 'message-date' } });
@@ -652,36 +736,15 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     applyDate(slot);
     slots.push(slot);
 
-    const author = displayAuthor(message);
-    const meta: Node[] = [
-      ...row('date', t('preview.date'), [time, ' ', senderNote]),
-      ...(author.source === 'none'
-        ? row('author', t('preview.from'), [el('span', { attrs: { class: 'placeholder' }, text: t('preview.author.none') })])
-        : row('author', t(`preview.author.${author.source}`), [mailboxListText(author.mailboxes)])),
-    ];
-    for (const [name, label, mailboxes] of [
-      ['to', t('preview.to'), message.to],
-      ['cc', t('preview.cc'), message.cc],
-      ['bcc', t('preview.bcc'), message.bcc],
-    ] as const) {
-      const text = mailboxListText(mailboxes);
-      if (text !== '') meta.push(...row(name, label, [text]));
-    }
-    if (message.attachments.length > 0) {
-      const items = message.attachments.map((a) => el('li', { attrs: { class: 'attachment' }, text: attachmentText(a) }));
-      meta.push(...row('attachments', t('preview.attachments'), [el('ul', { attrs: { class: 'attachment-list' }, children: items })]));
-    }
-    if (m.duplicates.length > 0) {
-      const names = m.duplicates.map((d) => (d.source.fileName === '' ? t('added.noName') : d.source.fileName));
-      meta.push(...row('also-in', t('preview.alsoIn'), [joinList(names)]));
-    }
-
+    const meta = el('dl', { attrs: { class: 'message-meta' }, children: metaRows(m, slot) });
     const body = bodyOf(m, position, result.positionByIndex);
     const item = el('li', {
       attrs: { class: 'message', 'data-position': String(position) },
-      children: [heading, el('dl', { attrs: { class: 'message-meta' }, children: meta }), body.note, body.body],
+      children: [heading, meta, body.note, body.body],
     });
     options.decorate?.(item, m, position, result);
+    // Recorded last: an item whose decoration threw is not in the page (safeItemOf).
+    itemSlots.set(position, { m, number, noSubject: hasSubject ? null : subject, meta, date: slot });
     return item;
   }
 
@@ -698,16 +761,18 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     // PDF, a note says so (hidden while the labels are, see app.css).
     const pdfNote = el('p', { attrs: { class: 'note pdf-note', hidden: true }, text: t('pdf.messageFailed') });
     updateStandIn(position, pdfNote);
+    const number = el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) });
+    const failedNote = el('p', { attrs: { class: 'note message-failed-note' }, text: t('preview.itemFailed') });
     // The last stand-in built for a position is the one in the page (see decoratedFallbackOf).
-    standIns.set(position, pdfNote);
+    standIns.set(position, { number, failedNote, pdfNote });
     return el('li', {
       attrs: { class: 'message message-failed', 'data-position': String(position) },
       children: [
         el('h3', {
           attrs: { id: headingId(position), class: 'message-heading' },
-          children: [el('span', { attrs: { class: 'message-number' }, text: messageNumberText(position + 1) })],
+          children: [number],
         }),
-        el('p', { attrs: { class: 'note message-failed-note' }, text: t('preview.itemFailed') }),
+        failedNote,
         pdfNote,
         el('div', { attrs: { class: 'message-body' }, children: text === '' ? [] : [el('div', { attrs: { class: 'body-text' }, text })] }),
       ],
@@ -744,6 +809,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       const body = bodies.get(position);
       if (body !== undefined) for (const b of body.blocks) if (b.details !== null) folds.delete(b.details);
       bodies.delete(position);
+      itemSlots.delete(position);
       return decoratedFallbackOf(m, position, result);
     }
   }
@@ -768,6 +834,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     slots = [];
     folds = new Set();
     bodies = new Map();
+    itemSlots = new Map();
     standIns = new Map();
     currentResult = null;
     pdfPlans = null;
@@ -784,8 +851,9 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     try {
       updateBody(slot);
     } catch {
-      for (const b of slot.blocks) if (b.label !== null) applyLabel(b.label, null);
-      slot.note.textContent = t('pdf.messageFailed');
+      for (const b of slot.blocks) setBlockLabel(b, null);
+      slot.noteCode = 'failed';
+      writeNote(slot);
       setSafeAttribute(slot.note, 'hidden', false);
       slot.key = 'failed';
     }
@@ -808,7 +876,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     pdfPlans = plans;
     setPdfState('updating');
     // Stand-ins are few (only a bug makes one) and cheap: updated at once.
-    for (const [position, note] of standIns) updateStandIn(position, note);
+    for (const [position, standIn] of standIns) updateStandIn(position, standIn.pdfNote);
     const myGeneration = pdfGeneration;
     // The bodies built so far; those built later get the new labels as they are built.
     const todo = [...bodies.values()];
@@ -873,6 +941,48 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     buildChunk();
   }
 
+  // --- Language change ------------------------------------------------------
+  /**
+   * Writes every word of ours again in the page language, in place (see the
+   * top of this file). The <dl> of each email is refilled (it holds nothing
+   * focusable); its date elements are kept and rewritten. Bodies are never
+   * redrawn: only their fold "what" lines, PDF labels and notes change.
+   */
+  function relabel(): void {
+    labels.relabel();
+    if (homeOption !== null) homeOption.textContent = zoneLabel(homeZone, homeZone);
+    setPdfState(pdfState);
+    for (const [position, item] of itemSlots) {
+      item.number.textContent = messageNumberText(position + 1);
+      if (item.noSubject !== null) item.noSubject.textContent = t('preview.noSubject');
+      try {
+        item.meta.replaceChildren(...metaRows(item.m, item.date));
+      } catch {
+        // Not expected (the same rows were built once): this email keeps its details as they were;
+        // swallowed so one bad email never stops the rest of the page from being relabelled.
+      }
+    }
+    for (const slot of slots) applyDate(slot);
+    for (const slot of bodies.values()) {
+      for (const b of slot.blocks) {
+        try {
+          if (b.what !== null) b.what.element.textContent = foldSummaryText(b.what.block, slot.position, slot.positionByIndex);
+          if (b.label !== null) applyLabel(b.label, b.pdf);
+        } catch {
+          // Not expected (the same texts were made once): this block keeps its words as they were;
+          // swallowed so one bad block never stops the rest of the page from being relabelled.
+        }
+      }
+      if (slot.empty !== null) slot.empty.textContent = t('preview.noText');
+      writeNote(slot);
+    }
+    for (const [position, standIn] of standIns) {
+      standIn.number.textContent = messageNumberText(position + 1);
+      standIn.failedNote.textContent = t('preview.itemFailed');
+      standIn.pdfNote.textContent = t('pdf.messageFailed');
+    }
+  }
+
   // --- Controls -------------------------------------------------------------
   zoneSelect.addEventListener('change', () => {
     zone = zoneSelect.value;
@@ -912,5 +1022,6 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       setPdfState(currentResult === null ? 'off' : 'failed');
     },
     pdfLabelState: () => pdfState,
+    relabel,
   };
 }

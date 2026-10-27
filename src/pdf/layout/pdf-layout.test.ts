@@ -23,7 +23,7 @@ beforeAll(async () => {
   for (const name of Object.keys(PDF_FONTS) as PdfFontName[]) fonts[name] = await readWoffFont(PDF_FONTS[name]);
 });
 
-const strings = createPdfStrings();
+const strings = createPdfStrings('en');
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
 const BASE_MS = Date.UTC(2025, 2, 4, 8, 0, 0);

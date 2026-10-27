@@ -218,10 +218,13 @@ export interface BuildPdfInput {
 
 // ---------------------------------------------------------------- helpers
 
-/** The PDF file name: "correspondence-YYYY-MM-DD.pdf", the date of `generatedAt` in `timeZone`. */
-export function pdfFileName(generatedAt: number, timeZone: string): string {
+/**
+ * The PDF file name in the PDF's language, from the date of `generatedAt`
+ * in `timeZone`: "correspondence-YYYY-MM-DD.pdf" in English.
+ */
+export function pdfFileName(generatedAt: number, timeZone: string, strings: Pick<PdfStrings, 'fileName'>): string {
   const shown = formatInZone(generatedAt, timeZone);
-  return shown.kind === 'date' ? `correspondence-${shown.text.slice(0, 10)}.pdf` : 'correspondence.pdf';
+  return strings.fileName(shown.kind === 'date' ? shown.text.slice(0, 10) : null);
 }
 
 /** Longest bookmark title, in code points (the "..." included). */
@@ -607,7 +610,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
 
   return {
     title: strings.title,
-    fileName: pdfFileName(generatedAt, timeZone),
+    fileName: pdfFileName(generatedAt, timeZone, strings),
     timeZone: usedZone,
     zoneFallback,
     cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants, sources, unreadable },

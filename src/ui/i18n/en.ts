@@ -16,7 +16,7 @@
 // - ASCII only: a non-ASCII character would be written as a \u escape.
 //
 // Other languages (French next, then Dutch) get a sibling file with the same
-// shape, typed as `Messages` (see index.ts).
+// shape, typed as `Messages` (see index.ts), listed in catalog.ts.
 
 import type { DedupeWarningCode } from '../../engine/dedupe';
 import type { EngineWarningCode } from '../../engine/engine';
@@ -34,6 +34,18 @@ export const en = {
   app: {
     name: 'Email to PDF',
     promise: 'Everything stays on your computer.',
+  },
+
+  // The language picker at the top of the page (src/ui/app.ts), shown only
+  // when the page has two or more languages. Each language's own name
+  // ("English", ...) is never translated: see src/ui/i18n/catalog.ts.
+  language: {
+    // The picker's group name (its <legend>).
+    label: 'Language',
+    // Announced (status line) after the reader picked this language, in
+    // this language. A PDF made before is removed then (another sentence
+    // is added to say so, see download.changedAfter).
+    changed: 'The page is now in English.',
   },
 
   // The privacy panel at the top of the page (src/ui/app.ts): closed by
@@ -403,6 +415,12 @@ export const en = {
       // e.g. "3. 2025-03-04, Alice Example: Desks for the office".
       coverBookmark: 'Cover',
       emailBookmark: '{number}. {date}, {from}: {subject}',
+      // The PDF's file name, from the day it is made in the chosen zone
+      // (YYYY-MM-DD). ASCII letters, digits and dashes only: some systems
+      // mangle other characters in a file name.
+      fileName: 'correspondence-{date}.pdf',
+      // The same when that day cannot be worked out (not expected).
+      fileNameNoDate: 'correspondence.pdf',
     },
   },
 

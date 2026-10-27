@@ -36,6 +36,11 @@
 // up a new result by itself, and showing the same result twice changes
 // nothing. rendered only completes the result already shown (by decorate or
 // showResult): it ignores any other. reset() is for "Clear everything".
+//
+// Language change (relabel): the counts are written again from the result
+// shown and the number of emails with notes; each decorated item's label,
+// "Not in the PDF" mark and notes are rewritten in place from the codes
+// kept with them, so no checkbox is rebuilt (ticks and focus stay).
 
 import type { EngineCounts, EngineMessage, EngineResult } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
@@ -43,6 +48,7 @@ import { messageNotes, type MessageNote } from '../ui-model/message-notes';
 import { createSelection } from '../ui-model/selection';
 import { el, setSafeAttribute } from './dom';
 import { t } from './i18n';
+import { createStaticLabels } from './labels';
 import { headingId, joinList, messageNumberText } from './preview';
 
 // ---------------------------------------------------------------------------
@@ -120,14 +126,25 @@ export interface Review {
   includedPositions(): readonly number[];
   /** The emails to put in the PDF, in list (date) order. */
   includedMessages(): readonly EngineMessage[];
+  /** Writes the counts and every item's words again in the page language now (nothing is rebuilt). */
+  relabel(): void;
+}
+
+/** What build() added to an item (see Entry). */
+interface Parts {
+  readonly checkbox: HTMLInputElement;
+  readonly excludedNote: HTMLSpanElement;
+  /** The checkbox's visible label. */
+  readonly label: HTMLLabelElement;
+  /** The list of notes (null: the email has none), and each note's item with the note it shows. */
+  readonly notesList: HTMLUListElement | null;
+  readonly notes: readonly { readonly element: HTMLLIElement; readonly note: MessageNote }[];
 }
 
 /** One decorated item. */
-interface Entry {
+interface Entry extends Parts {
   readonly item: HTMLLIElement;
   readonly message: EngineMessage;
-  readonly checkbox: HTMLInputElement;
-  readonly excludedNote: HTMLSpanElement;
 }
 
 export interface ReviewOptions {
@@ -152,12 +169,15 @@ export function createReview(options: ReviewOptions = {}): Review {
   // The result whose list the preview finished building (see `rendered`).
   let renderedResult: EngineResult | null = null;
   // The parts added to each item, so a second call on the same item adds nothing.
-  const added = new WeakMap<HTMLLIElement, Pick<Entry, 'checkbox' | 'excludedNote'>>();
+  const added = new WeakMap<HTMLLIElement, Parts>();
+  // How many emails of the result shown have notes (for the counts line).
+  let withNotes = 0;
+  const labels = createStaticLabels();
 
   // --- Counts box -----------------------------------------------------------
   const filesLine = el('span', { attrs: { id: 'review-files-text' } });
   // Plain text, not a link: the page has no links at all yet (see e2e/app-shell.spec.ts).
-  const failedPointer = el('span', { attrs: { id: 'review-failed-pointer', hidden: true }, text: t('counts.seeFailed') });
+  const failedPointer = labels.text(el('span', { attrs: { id: 'review-failed-pointer', hidden: true } }), 'counts.seeFailed');
   const messagesLine = el('p', { attrs: { id: 'review-messages', class: 'review-line' } });
   // Not a live region itself: the page has one (the shell's status line); see `onChange`.
   const includedLine = el('p', { attrs: { id: 'review-included', class: 'review-line review-included' } });
@@ -205,8 +225,25 @@ export function createReview(options: ReviewOptions = {}): Review {
     setSafeAttribute(entry.excludedNote, 'hidden', included);
   }
 
+  /** The counts lines of the result shown, in the page language. */
+  function writeCounts(result: EngineResult): void {
+    filesLine.textContent = filesText(result.counts);
+    messagesLine.textContent = messagesText(result.counts);
+    notesLine.textContent = withNotes > 0 ? t('counts.withNotes', { count: withNotes }) : '';
+    showIncludedLine();
+  }
+
+  /** An item's own words (label, "Not in the PDF", notes), in the page language. */
+  function writeParts(parts: Parts): void {
+    parts.label.textContent = t('actions.include');
+    parts.excludedNote.textContent = t('review.excluded');
+    if (parts.notesList !== null) setSafeAttribute(parts.notesList, 'aria-label', t('review.notesLabel'));
+    for (const { element, note } of parts.notes) element.textContent = noteText(note);
+  }
+
   function emptyCounts(): void {
     current = null;
+    withNotes = 0;
     // Defensive only: each run gives a new result object, so an old
     // renderedResult could never match a later `current` anyway.
     renderedResult = null;
@@ -224,20 +261,17 @@ export function createReview(options: ReviewOptions = {}): Review {
     if (result === current) return;
     current = result;
     entries = new Map();
-    filesLine.textContent = filesText(result.counts);
     setSafeAttribute(failedPointer, 'hidden', result.counts.filesFailed === 0);
-    messagesLine.textContent = messagesText(result.counts);
-    let withNotes = 0;
+    withNotes = 0;
     result.messages.forEach((m, position) => {
       if (safeNotes(m, position, result.positionByIndex).length > 0) withNotes++;
     });
-    notesLine.textContent = withNotes > 0 ? t('counts.withNotes', { count: withNotes }) : '';
     setSafeAttribute(notesLine, 'hidden', withNotes === 0);
-    showIncludedLine();
+    writeCounts(result);
   }
 
   /** Builds the checkbox and notes of one item (only once per item). */
-  function build(item: HTMLLIElement, m: EngineMessage, position: number, result: EngineResult): Pick<Entry, 'checkbox' | 'excludedNote'> {
+  function build(item: HTMLLIElement, m: EngineMessage, position: number, result: EngineResult): Parts {
     const id = `include-${String(position)}`;
     const labelId = `${id}-label`;
     // Named by its visible label AND the email's heading: "Include in the PDF
@@ -247,22 +281,22 @@ export function createReview(options: ReviewOptions = {}): Review {
     const checkbox = el('input', {
       attrs: { type: 'checkbox', id, class: 'include-checkbox', 'aria-labelledby': `${labelId} ${headingId(position)}` },
     });
-    const excludedNote = el('span', { attrs: { class: 'excluded-note', hidden: true }, text: t('review.excluded') });
+    const excludedNote = el('span', { attrs: { class: 'excluded-note', hidden: true } });
+    const label = el('label', { attrs: { id: labelId, for: id } });
     const children: Node[] = [
       el('div', {
         attrs: { class: 'field field-checkbox message-include' },
-        children: [checkbox, el('label', { attrs: { id: labelId, for: id }, text: t('actions.include') }), excludedNote],
+        children: [checkbox, label, excludedNote],
       }),
     ];
-    const notes = safeNotes(m, position, result.positionByIndex);
-    if (notes.length > 0) {
-      children.push(
-        el('ul', {
-          attrs: { class: 'message-notes', 'aria-label': t('review.notesLabel') },
-          children: notes.map((note) => el('li', { attrs: { class: 'message-note', 'data-code': note.code }, text: noteText(note) })),
-        }),
-      );
-    }
+    const notes = safeNotes(m, position, result.positionByIndex).map((note) => ({
+      element: el('li', { attrs: { class: 'message-note', 'data-code': note.code } }),
+      note,
+    }));
+    const notesList = notes.length === 0 ? null : el('ul', { attrs: { class: 'message-notes' }, children: notes.map((n) => n.element) });
+    if (notesList !== null) children.push(notesList);
+    const parts: Parts = { checkbox, excludedNote, label, notesList, notes };
+    writeParts(parts);
     checkbox.addEventListener('change', () => {
       selection.setIncluded(m, checkbox.checked);
       // Every shown item: two items can share a file (see selection.ts).
@@ -272,7 +306,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     });
     // Right after the heading (the item's first child), before the details.
     item.insertBefore(el('div', { attrs: { class: 'message-review' }, children }), item.children[1] ?? null);
-    return { checkbox, excludedNote };
+    return parts;
   }
 
   const decorate: Review['decorate'] = (item, m, position, result) => {
@@ -310,6 +344,11 @@ export function createReview(options: ReviewOptions = {}): Review {
       if (result !== current) return;
       renderedResult = result;
       showIncludedLine();
+    },
+    relabel() {
+      labels.relabel();
+      if (current !== null) writeCounts(current);
+      for (const entry of entries.values()) writeParts(entry);
     },
     includedPositions: positions,
     includedMessages() {

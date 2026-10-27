@@ -42,6 +42,25 @@ describe('mountApp', () => {
     expect(doc.title).toBe(t('app.name'));
   });
 
+  it('has no language picker while the page ships one language (English only today)', () => {
+    expect(all('fieldset')).toEqual([]);
+    expect(all('legend')).toEqual([]);
+    expect(root.descendants().filter((e) => e.getAttribute('type') === 'radio' || e.getAttribute('name') === 'language')).toEqual([]);
+    expect(root.descendants().filter((e) => e.getAttribute('id') === 'language')).toEqual([]);
+    // Not even with an explicit one-language list.
+    const other = new FakeElement('div');
+    mountApp(other as unknown as HTMLElement, { locales: ['en'] });
+    expect(other.descendants().filter((e) => e.tagName === 'fieldset')).toEqual([]);
+  });
+
+  it('relabel writes the same words again in the same language (nothing rebuilt)', () => {
+    const before = root.textContent;
+    const heading = byId('step-add-title');
+    shell.relabel();
+    expect(root.textContent).toBe(before);
+    expect(byId('step-add-title')).toBe(heading);
+  });
+
   it('shows the app name as the only h1, with the promise', () => {
     expect(all('h1').map((h) => h.textContent)).toEqual([t('app.name')]);
     expect(root.textContent).toContain(t('app.promise'));

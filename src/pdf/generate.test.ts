@@ -23,7 +23,7 @@ beforeAll(async () => {
   fonts = await loadPdfFonts();
 });
 
-const strings = createPdfStrings();
+const strings = createPdfStrings('en');
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@sample.test' };
 const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@other.test' };
@@ -64,7 +64,7 @@ function inputFor(messages: readonly NormalizedMessage[], extra: Partial<Generat
     positions.map((p) => result.messages[p]!),
     DEFAULT_OUTPUT_POLICY,
   );
-  return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: GENERATED_AT, fonts, strings, ...extra };
+  return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: GENERATED_AT, fonts, locale: 'en', strings, ...extra };
 }
 
 /** The same steps as generatePdf, keeping the document and the layout to check them. */

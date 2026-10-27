@@ -39,7 +39,7 @@ function inputFor(count: number): PdfJobInput {
     positions.map((p) => result.messages[p]!),
     DEFAULT_OUTPUT_POLICY,
   );
-  return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: Date.UTC(2025, 5, 1, 20, 0, 0) };
+  return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: Date.UTC(2025, 5, 1, 20, 0, 0), locale: 'en' };
 }
 
 const REQUEST: MakePdfRequest = { type: 'make', input: inputFor(3), fonts: PDF_FONTS };
@@ -63,6 +63,12 @@ describe('message checks', () => {
     ['no generation time', { ...REQUEST, input: { ...REQUEST.input, generatedAt: '2025-06-01' } }],
     ['no result', { ...REQUEST, input: { ...REQUEST.input, result: null } }],
     ['no policy', { ...REQUEST, input: { ...REQUEST.input, policy: null } }],
+    // The worker never falls back to a language of its own.
+    ['no language', { ...REQUEST, input: { ...REQUEST.input, locale: undefined } }],
+    ['a language the page does not ship', { ...REQUEST, input: { ...REQUEST.input, locale: 'xx' } }],
+    ['a language tag that is not exactly a shipped code', { ...REQUEST, input: { ...REQUEST.input, locale: 'en-US' } }],
+    ['a language code in capitals', { ...REQUEST, input: { ...REQUEST.input, locale: 'EN' } }],
+    ['a language that is not a string', { ...REQUEST, input: { ...REQUEST.input, locale: ['en'] } }],
   ])('rejects %s as a request', (_label, data) => {
     expect(isToPdfWorker(data)).toBe(false);
   });

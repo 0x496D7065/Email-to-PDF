@@ -15,7 +15,7 @@ import { copyLayerText } from './writer/copy-text';
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
 const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@sample.test' };
-const strings = createPdfStrings();
+const strings = createPdfStrings('en');
 
 /** 2025-03-04 08:00:00 UTC. */
 const BASE_MS = Date.UTC(2025, 2, 4, 8, 0, 0);
@@ -537,20 +537,20 @@ describe('attachments', () => {
 describe('pdfFileName', () => {
   it('uses the generation date in the chosen zone', () => {
     const lateUtc = Date.UTC(2025, 2, 1, 23, 30, 0); // 2025-03-01 23:30 UTC
-    expect(pdfFileName(lateUtc, 'UTC')).toBe('correspondence-2025-03-01.pdf');
-    expect(pdfFileName(lateUtc, 'Africa/Lagos')).toBe('correspondence-2025-03-02.pdf'); // 00:30 the next day at +01:00
-    expect(pdfFileName(lateUtc - 3_600_000, 'Africa/Lagos')).toBe('correspondence-2025-03-01.pdf'); // 23:30 at +01:00
-    expect(pdfFileName(lateUtc, 'America/New_York')).toBe('correspondence-2025-03-01.pdf');
+    expect(pdfFileName(lateUtc, 'UTC', strings)).toBe('correspondence-2025-03-01.pdf');
+    expect(pdfFileName(lateUtc, 'Africa/Lagos', strings)).toBe('correspondence-2025-03-02.pdf'); // 00:30 the next day at +01:00
+    expect(pdfFileName(lateUtc - 3_600_000, 'Africa/Lagos', strings)).toBe('correspondence-2025-03-01.pdf'); // 23:30 at +01:00
+    expect(pdfFileName(lateUtc, 'America/New_York', strings)).toBe('correspondence-2025-03-01.pdf');
     const earlyUtc = Date.UTC(2025, 2, 2, 0, 30, 0); // 2025-03-02 00:30 UTC
-    expect(pdfFileName(earlyUtc, 'UTC')).toBe('correspondence-2025-03-02.pdf');
-    expect(pdfFileName(earlyUtc, 'America/Los_Angeles')).toBe('correspondence-2025-03-01.pdf');
-    expect(pdfFileName(earlyUtc, 'Pacific/Kiritimati')).toBe('correspondence-2025-03-02.pdf');
-    expect(pdfFileName(Date.UTC(2024, 11, 31, 11, 0, 0), 'Pacific/Kiritimati')).toBe('correspondence-2025-01-01.pdf');
+    expect(pdfFileName(earlyUtc, 'UTC', strings)).toBe('correspondence-2025-03-02.pdf');
+    expect(pdfFileName(earlyUtc, 'America/Los_Angeles', strings)).toBe('correspondence-2025-03-01.pdf');
+    expect(pdfFileName(earlyUtc, 'Pacific/Kiritimati', strings)).toBe('correspondence-2025-03-02.pdf');
+    expect(pdfFileName(Date.UTC(2024, 11, 31, 11, 0, 0), 'Pacific/Kiritimati', strings)).toBe('correspondence-2025-01-01.pdf');
   });
 
   it('falls back to UTC for an unknown zone and to a plain name without a usable moment', () => {
-    expect(pdfFileName(Date.UTC(2025, 2, 1, 23, 30, 0), 'Not/AZone')).toBe('correspondence-2025-03-01.pdf');
-    expect(pdfFileName(Number.NaN, 'UTC')).toBe('correspondence.pdf');
+    expect(pdfFileName(Date.UTC(2025, 2, 1, 23, 30, 0), 'Not/AZone', strings)).toBe('correspondence-2025-03-01.pdf');
+    expect(pdfFileName(Number.NaN, 'UTC', strings)).toBe('correspondence.pdf');
   });
 
   it('is the document file name', () => {

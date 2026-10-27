@@ -23,7 +23,11 @@ export default defineConfig({
   // nothing, which also shows the app works without it). The one spec about
   // the service worker turns it back on and checks its requests exactly
   // (e2e/offline-reload.spec.ts).
-  use: { baseURL: BASE_URL, serviceWorkers: 'block' },
+  //
+  // locale 'en-US': the browser's preferred language is pinned, so the page
+  // (which starts in the browser's language when it ships it, src/main.ts)
+  // never follows the language of the machine running the tests.
+  use: { baseURL: BASE_URL, serviceWorkers: 'block', locale: 'en-US' },
   // The three browser engines. WebKit is Safari's engine, not Safari itself.
   // Install them with: npm run test:e2e:install
   projects: [

@@ -3,7 +3,24 @@
 import { describe, expect, it } from 'vitest';
 import { FOLD_REASONS } from '../../engine/segments';
 import { en } from './en';
-import { interpolate, isPluralForms, lookup, placeholdersIn, pluralForm, t, type Messages, type MessageKey } from './index';
+import {
+  DEFAULT_LOCALE,
+  getLocale,
+  interpolate,
+  isPluralForms,
+  isSupportedLocale,
+  languageName,
+  lookup,
+  pickLocale,
+  placeholdersIn,
+  pluralForm,
+  setLocale,
+  SUPPORTED_LOCALES,
+  t,
+  translator,
+  type Messages,
+  type MessageKey,
+} from './index';
 
 /** Every language file. French and Dutch are added here when they exist. */
 const LOCALES: Readonly<Record<string, Messages>> = { en };
@@ -173,5 +190,81 @@ describe('helpers', () => {
   it('placeholdersIn lists placeholders in order', () => {
     expect(placeholdersIn('Reading file {done} of {total}...')).toEqual(['done', 'total']);
     expect(placeholdersIn('none')).toEqual([]);
+  });
+});
+
+describe('languages (the shipped catalog: English only)', () => {
+  it('ships English only, so the page starts and stays in English', () => {
+    expect(SUPPORTED_LOCALES).toEqual(['en']);
+    expect(DEFAULT_LOCALE).toBe('en');
+    expect(getLocale()).toBe('en');
+    expect(languageName('en')).toBe('English');
+  });
+
+  it('isSupportedLocale: exact shipped codes only', () => {
+    expect(isSupportedLocale('en')).toBe(true);
+    for (const value of ['EN', 'en-US', 'fr', 'xx', '', ' en', 'toString', '__proto__', null, undefined, 1, ['en']]) {
+      expect(isSupportedLocale(value), String(value)).toBe(false);
+    }
+  });
+
+  it('setLocale refuses a language the page does not ship (the page language stays)', () => {
+    expect(() => setLocale('fr')).toThrow(/unsupported/);
+    expect(() => setLocale('EN')).toThrow(/unsupported/);
+    expect(getLocale()).toBe('en');
+  });
+
+  it('translator: one per language, made once and kept; refuses an unknown language', () => {
+    const en1 = translator('en');
+    expect(translator('en')).toBe(en1);
+    expect(en1.locale).toBe('en');
+    expect(() => translator('xx')).toThrow(/unsupported/);
+    expect(() => translator('toString')).toThrow(/unsupported/);
+  });
+
+  it('translator: English text, numbers, lists and plurals', () => {
+    const tr = translator('en');
+    expect(tr.t('steps.add.title')).toBe('Add your emails');
+    expect(tr.t('drop.reading', { done: 1, total: 1234 })).toBe('Reading file 1 of 1,234...');
+    expect(tr.number(1234.5)).toBe('1,234.5');
+    expect(tr.list(['a', 'b', 'c'])).toBe('a, b, c');
+    expect(tr.plural({ one: 'one', other: 'other' }, 1)).toBe('one');
+    expect(tr.plural({ one: 'one', other: 'other' }, 2)).toBe('other');
+    expect(tr.t('pdf.document.fileName', { date: '2025-06-02' })).toBe('correspondence-2025-06-02.pdf');
+    expect(tr.t('pdf.document.fileNameNoDate')).toBe('correspondence.pdf');
+  });
+});
+
+describe('pickLocale', () => {
+  const withFrench = ['en', 'fr'];
+
+  it('takes the primary subtag of the FIRST language when the page ships it', () => {
+    expect(pickLocale(['fr-BE'], withFrench)).toBe('fr');
+    expect(pickLocale(['fr'], withFrench)).toBe('fr');
+    expect(pickLocale(['en-GB', 'fr'], withFrench)).toBe('en');
+    expect(pickLocale(['fr_CA'], withFrench)).toBe('fr');
+  });
+
+  it('is case-insensitive and ignores spaces around the tag', () => {
+    expect(pickLocale(['FR-be'], withFrench)).toBe('fr');
+    expect(pickLocale(['Fr'], withFrench)).toBe('fr');
+    expect(pickLocale([' fr-BE '], withFrench)).toBe('fr');
+  });
+
+  it('never looks past the first language: anything else gives English', () => {
+    expect(pickLocale(['de', 'fr'], withFrench)).toBe('en');
+    expect(pickLocale(['de-AT', 'fr-BE', 'en'], withFrench)).toBe('en');
+    expect(pickLocale(['', 'fr'], withFrench)).toBe('en');
+    expect(pickLocale(['frr'], withFrench)).toBe('en');
+  });
+
+  it('gives English for an empty list', () => {
+    expect(pickLocale([], withFrench)).toBe('en');
+    expect(pickLocale([])).toBe('en');
+  });
+
+  it('uses the shipped languages by default (English only today)', () => {
+    expect(pickLocale(['fr-BE'])).toBe('en');
+    expect(pickLocale(['en-US'])).toBe('en');
   });
 });

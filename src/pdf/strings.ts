@@ -2,16 +2,18 @@
 // (src/pdf/model.ts) as one object, so the model stays a pure function of
 // its inputs and a test (or another language) can pass its own.
 //
-// createPdfStrings() builds them from the page's strings (src/ui/i18n):
-// the PDF's own texts live under `pdf.document`, and the labels it shares
-// with the preview (From, To, "(no subject)", file sizes...) are the
-// preview's, so the two always use the same words.
+// createPdfStrings(locale) builds them from the page's strings (src/ui/i18n)
+// in the language asked for: the PDF's own texts live under `pdf.document`,
+// and the labels it shares with the preview (From, To, "(no subject)", file
+// sizes...) are the preview's, so the two always use the same words. The
+// language is always given (the PDF worker gets it in its request): this
+// never reads the page's active language.
 //
 // Every text here is OUR text. Values put into it (a name, a file name) come
 // from the caller already sanitized by the model; the result is plain text
 // the renderer writes as text, never markup (README.md, rule R4).
 
-import { LOCALE, t } from '../ui/i18n';
+import { translator } from '../ui/i18n';
 
 export interface PdfStrings {
   /** BCP 47 tag of the language, for sorting names and joining lists. */
@@ -100,6 +102,8 @@ export interface PdfStrings {
   joinList(items: readonly string[]): string;
   /** The separator between a source file's name and its email. */
   readonly separator: string;
+  /** The PDF's file name for the day it is made ("YYYY-MM-DD"), or without a day (null). ASCII only. */
+  fileName(day: string | null): string;
 }
 
 /** One decimal under 10 (1.4 KB), whole numbers above (12 KB): the same rule as the preview (src/ui/preview.ts, sizeText). */
@@ -107,9 +111,9 @@ function roundSize(n: number): number {
   return n < 10 ? Math.round(n * 10) / 10 : Math.round(n);
 }
 
-/** The PDF texts in the page language. */
-export function createPdfStrings(): PdfStrings {
-  const listFormat = new Intl.ListFormat(LOCALE, { style: 'short', type: 'unit' });
+/** The PDF texts in `locale` (a language the page ships; throws for any other, see translator()). */
+export function createPdfStrings(locale: string): PdfStrings {
+  const { t, list } = translator(locale);
   const size = (bytes: number | null): string => {
     if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return t('preview.size.unknown');
     if (bytes < 1024) return t('preview.size.bytes', { count: bytes });
@@ -118,7 +122,7 @@ export function createPdfStrings(): PdfStrings {
     return t('preview.size.mb', { size: roundSize(kb / 1024) });
   };
   return {
-    locale: LOCALE,
+    locale,
     title: t('pdf.document.title'),
     producer: t('app.name'),
     // Strings, like the email numbers below.
@@ -185,7 +189,8 @@ export function createPdfStrings(): PdfStrings {
     size,
     attachmentDetails: (sizeText, type) =>
       type.trim() === '' ? t('pdf.document.attachmentNoType', { size: sizeText }) : t('pdf.document.attachment', { size: sizeText, type }),
-    joinList: (items) => listFormat.format(items),
+    joinList: (items) => list(items),
     separator: ' - ',
+    fileName: (day) => (day === null ? t('pdf.document.fileNameNoDate') : t('pdf.document.fileName', { date: day })),
   };
 }

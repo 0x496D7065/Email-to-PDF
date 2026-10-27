@@ -26,7 +26,7 @@ describe('PDF document model over the parsed fixtures', () => {
     const plans = planOutput(r.messages, policy);
     return {
       result: r,
-      doc: buildPdfDocument({ result: r, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: createPdfStrings() }),
+      doc: buildPdfDocument({ result: r, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: createPdfStrings('en') }),
     };
   }
   const emailOf = (d: PdfDocument, r: EngineResult, file: string): PdfEmail => {

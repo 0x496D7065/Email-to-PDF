@@ -40,6 +40,14 @@
 //
 // Every word comes from i18n/ and goes into the page with textContent
 // through el() (README.md, rule R4). File names are untrusted: text only.
+// The technical details of a failed file are the parser's own English
+// words (never translated), marked lang="en" for screen readers.
+//
+// Language change (relabel): the fixed words are recorded (src/ui/labels.ts);
+// the notice, progress line and summary are written again from what this
+// step keeps anyway (numbers and codes, never a translated sentence); each
+// failed file's reason is rewritten in place, so its "Technical details"
+// stays open or closed and keeps the focus.
 
 import type { FailedFile } from '../engine/engine';
 import { processFiles, UNEXPECTED_BATCH_DETAIL, type ProcessOptions, type ProcessProgress, type ProcessResult } from '../pipeline/process-files';
@@ -47,6 +55,7 @@ import type { FileLike } from '../pipeline/read-files';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
 import { t } from './i18n';
+import { createStaticLabels } from './labels';
 
 /** The file types the chooser offers (drops are checked by the parsers anyway). */
 export const ACCEPTED_TYPES = '.eml,.msg';
@@ -81,6 +90,8 @@ export interface AddFiles {
   isBusy(): boolean;
   /** Moves the keyboard focus to the "choose files" button. */
   focus(): void;
+  /** Writes step 1's words again in the page language now (nothing is rebuilt). */
+  relabel(): void;
   /** Removes the page-wide listeners (tests; the page keeps them for its whole life). */
   destroy(): void;
 }
@@ -145,6 +156,17 @@ export interface FailedEntry {
   readonly fileName: string;
   readonly error: FailedFile['error'];
   readonly detail: string;
+}
+
+/** A failed file's item in the page: what its reason line is rewritten from (see relabel). */
+interface FailedItem {
+  readonly reason: HTMLParagraphElement;
+  /** The <strong> with the file name, or with the "no name" text when `unnamed`. */
+  readonly name: HTMLElement;
+  readonly unnamed: boolean;
+  readonly error: FailedFile['error'];
+  /** Its "Technical details" line. */
+  readonly summary: HTMLElement;
 }
 
 /** What step 1 shows after a batch. */
@@ -226,21 +248,24 @@ function isNode(value: unknown): value is Node {
 export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFiles {
   const processBatch = options.process ?? processFiles;
   const target: ListenerTarget = options.listenerTarget ?? window;
+  const labels = createStaticLabels();
 
   // --- Elements -----------------------------------------------------------
-  const input = el('input', {
-    attrs: { type: 'file', id: 'file-input', multiple: true, accept: ACCEPTED_TYPES, hidden: true, 'aria-label': t('actions.chooseFiles') },
-  });
-  const button = el('button', {
-    attrs: { type: 'button', id: 'choose-files', class: 'button button-primary', 'aria-describedby': 'drop-accepted' },
-    text: t('actions.chooseFiles'),
-  });
+  const input = labels.attr(
+    el('input', { attrs: { type: 'file', id: 'file-input', multiple: true, accept: ACCEPTED_TYPES, hidden: true } }),
+    'aria-label',
+    'actions.chooseFiles',
+  );
+  const button = labels.text(
+    el('button', { attrs: { type: 'button', id: 'choose-files', class: 'button button-primary', 'aria-describedby': 'drop-accepted' } }),
+    'actions.chooseFiles',
+  );
   const zone = el('div', {
     attrs: { id: 'drop-zone', class: 'drop-zone', 'data-state': 'idle' },
     children: [
-      el('p', { attrs: { class: 'drop-zone-text' }, text: t('drop.zone') }),
+      labels.text(el('p', { attrs: { class: 'drop-zone-text' } }), 'drop.zone'),
       button,
-      el('p', { attrs: { id: 'drop-accepted', class: 'note' }, text: t('drop.accepted') }),
+      labels.text(el('p', { attrs: { id: 'drop-accepted', class: 'note' } }), 'drop.accepted'),
       input,
     ],
   });
@@ -257,7 +282,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   const failedList = el('ul', { attrs: { id: 'add-failed-list', class: 'failed-list' } });
   const failedBox = el('div', {
     attrs: { id: 'add-failed', hidden: true },
-    children: [el('h3', { attrs: { class: 'failed-title' }, text: t('added.failedTitle') }), failedList],
+    children: [labels.text(el('h3', { attrs: { class: 'failed-title' } }), 'added.failedTitle'), failedList],
   });
   const summaryBox = el('div', { attrs: { id: 'add-summary', class: 'summary', hidden: true }, children: [summaryLine, batchError, failedBox] });
 
@@ -267,9 +292,16 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   let files: FileLike[] = [];
   let pending: FileLike[] = [];
   let busy = false;
-  // The two parts of the notice (see showNotice).
-  let folderNotice = '';
+  // The two parts of the notice (see showNotice): how many folders the last
+  // drop left out, and whether files wait for the current round.
+  let foldersLeftOut = 0;
   let queuedNotice = false;
+  // What the progress line and the summary show (numbers and codes only), to
+  // write them again in another language; null: nothing shown.
+  let lastProgress: ProcessProgress | null = null;
+  let lastSummary: Omit<BatchSummary, 'failed'> | null = null;
+  // The failed files' items in the page, to rewrite their reasons in place.
+  let failedItems: FailedItem[] = [];
   // Increased by reset(): a run that started before it throws its result away.
   let generation = 0;
   // Cancels the current run's workers (reset()); one per run.
@@ -303,13 +335,15 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
   // order" or the next round may replace the status line soon after, so it
   // could vanish unread.
   function showNotice(): void {
-    const text = [folderNotice, queuedNotice ? t('drop.queued') : ''].filter((part) => part !== '').join(' ');
+    const folderText = foldersLeftOut > 0 ? t('drop.folders', { count: foldersLeftOut }) : '';
+    const text = [folderText, queuedNotice ? t('drop.queued') : ''].filter((part) => part !== '').join(' ');
     notice.textContent = text;
     setSafeAttribute(notice, 'hidden', text === '');
   }
 
   function showProgress(progress: ProcessProgress): void {
     const text = progressText(progress);
+    lastProgress = progress;
     progressLabel.textContent = text;
     if (progress.stage === 'reading') {
       setSafeAttribute(progressBar, 'max', String(progress.filesTotal));
@@ -327,34 +361,60 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     }
   }
 
+  /** The reason line of a failed file: its name (or the "no name" text) and why it failed. */
+  function writeReason(item: FailedItem): void {
+    if (item.unnamed) item.name.textContent = t('added.noName');
+    // The <strong> is kept (it holds the file name); only the words change.
+    item.reason.replaceChildren(item.name, ' ', t(`errors.file.${item.error}`));
+    item.summary.textContent = t('added.details');
+  }
+
   function failedItem(entry: FailedEntry, index: number): HTMLLIElement {
     const reasonId = `add-failed-${String(index)}-reason`;
+    const name = el('strong', entry.fileName === '' ? {} : { text: entry.fileName });
+    const reason = el('p', { attrs: { id: reasonId, class: 'failed-reason' } });
+    // Every file has its own "Technical details": described by its
+    // file name and reason, so each one says which file it is about.
+    const summary = el('summary', { attrs: { 'aria-describedby': reasonId } });
+    const item: FailedItem = { reason, name, unnamed: entry.fileName === '', error: entry.error, summary };
+    writeReason(item);
+    failedItems.push(item);
     return el('li', {
       attrs: { class: 'failed-file' },
       children: [
-        el('p', {
-          attrs: { id: reasonId, class: 'failed-reason' },
-          children: [el('strong', { text: entry.fileName === '' ? t('added.noName') : entry.fileName }), ' ', t(`errors.file.${entry.error}`)],
-        }),
+        reason,
         el('details', {
           children: [
-            // Every file has its own "Technical details": described by its
-            // file name and reason, so each one says which file it is about.
-            el('summary', { attrs: { 'aria-describedby': reasonId }, text: t('added.details') }),
-            el('p', { attrs: { class: 'failed-detail' }, text: entry.detail }),
+            summary,
+            // The parser's own technical words, in English in every language.
+            el('p', { attrs: { class: 'failed-detail', lang: 'en' }, text: entry.detail }),
           ],
         }),
       ],
     });
   }
 
-  function showResult(result: ProcessResult): void {
-    const summary = summarize(result);
-    const line = summaryText(summary);
+  /** The summary line and the batch error, in the page language. */
+  function writeSummary(summary: Omit<BatchSummary, 'failed'>): { line: string; errorText: string } {
+    const line = summaryText({ ...summary, failed: [] });
     summaryLine.textContent = line;
     const errorText = summary.batchError === null ? '' : t(`errors.batch.${summary.batchError}`);
     batchError.textContent = errorText;
+    return { line, errorText };
+  }
+
+  function showResult(result: ProcessResult): void {
+    const summary = summarize(result);
+    lastSummary = {
+      filesAdded: summary.filesAdded,
+      filesFailed: summary.filesFailed,
+      messagesFound: summary.messagesFound,
+      duplicatesMerged: summary.duplicatesMerged,
+      batchError: summary.batchError,
+    };
+    const { line, errorText } = writeSummary(lastSummary);
     setSafeAttribute(batchError, 'hidden', errorText === '');
+    failedItems = [];
     failedList.replaceChildren(...summary.failed.map((entry, index) => failedItem(entry, index)));
     setSafeAttribute(failedBox, 'hidden', summary.failed.length === 0);
     setSafeAttribute(summaryBox, 'hidden', false);
@@ -428,7 +488,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     const chosen = input.files === null ? [] : Array.from(input.files);
     // Cleared so that choosing the same file again still counts as a change.
     input.value = '';
-    folderNotice = '';
+    foldersLeftOut = 0;
     showNotice();
     add(chosen);
   });
@@ -458,7 +518,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     }
     const { files: dropped, folders } = filesFromDrop(drag.dataTransfer);
     const folderText = folders > 0 ? t('drop.folders', { count: folders }) : '';
-    folderNotice = folderText;
+    foldersLeftOut = folders;
     showNotice();
     if (dropped.length > 0) add(dropped);
     else shell.setStatus(folderText === '' ? t('drop.nothing') : folderText);
@@ -484,9 +544,12 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       input.value = '';
       setBusy(false);
       setDragOver(false);
-      folderNotice = '';
+      foldersLeftOut = 0;
       queuedNotice = false;
       showNotice();
+      lastProgress = null;
+      lastSummary = null;
+      failedItems = [];
       progressLabel.textContent = '';
       summaryLine.textContent = '';
       batchError.textContent = '';
@@ -502,6 +565,13 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     isBusy: () => busy,
     focus() {
       button.focus();
+    },
+    relabel() {
+      labels.relabel();
+      showNotice();
+      if (lastProgress !== null) progressLabel.textContent = progressText(lastProgress);
+      if (lastSummary !== null) writeSummary(lastSummary);
+      for (const item of failedItems) writeReason(item);
     },
     destroy() {
       for (const [type, listener] of listeners) target.removeEventListener(type, listener);

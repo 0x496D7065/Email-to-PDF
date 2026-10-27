@@ -45,10 +45,26 @@
 //   page from the start, under the download line that keeps its height, so
 //   nothing moves when the PDF is made.
 //
+// - The language picker (src/ui/page.ts switches the language): a
+//   <fieldset> with a <legend> and one native radio per language, first in
+//   the header, so its place in the page, on screen and in the Tab order
+//   agree. Radios, not a <select>: WebKit reports every <select> as a CSP
+//   style violation (see e2e/support/watch.ts), and the arrow keys move
+//   between radios with no script of ours. Each radio and its label carry
+//   their language's lang attribute, and the label shows the language's own
+//   name (never translated). The radios are never rebuilt, so the focus
+//   stays on the one just picked. With a single language the picker is not
+//   built at all: the page and its Tab order are as before.
+//
+// Switching language: relabel() writes every fixed word of the shell again
+// in the new language (src/ui/labels.ts). The steps' own texts belong to
+// their modules (each has a relabel()).
+//
 // Nothing here is stored anywhere (README.md, rule R5).
 
 import { el, setSafeAttribute } from './dom';
-import { LOCALE, t, type PlainMessageKey } from './i18n';
+import { getLocale, languageName, SUPPORTED_LOCALES, t, type PlainMessageKey } from './i18n';
+import { createStaticLabels, type StaticLabels } from './labels';
 
 /** What later tasks use to fill the page. */
 export interface AppShell {
@@ -70,28 +86,43 @@ export interface AppShell {
   setStatus(message: string): void;
   /** Switches step 2 between "waiting for emails" and showing its container. */
   setCheckReady(ready: boolean): void;
+  /** Writes the shell's own words again in the page language now (and ticks its radio in the picker). */
+  relabel(): void;
+}
+
+export interface AppOptions {
+  /** The reader picked another language in the picker (src/ui/page.ts). */
+  readonly onLanguageChange?: (locale: string) => void;
+  /** The languages offered (default: SUPPORTED_LOCALES). The picker is built only for two or more. */
+  readonly locales?: readonly string[];
+}
+
+/** Sets <html lang> and the tab's title for the page language. The app's name is the same in every language. */
+export function applyDocumentLanguage(): void {
+  setSafeAttribute(document.documentElement, 'lang', getLocale());
+  document.title = t('app.name');
 }
 
 /** A step heading: a small "Step N" label above the title, both in the accessible name. */
-function stepHeading(id: string, number: number, title: string): HTMLHeadingElement {
+function stepHeading(labels: StaticLabels, id: string, number: number, title: PlainMessageKey): HTMLHeadingElement {
   return el('h2', {
     attrs: { id, class: 'step-title' },
     children: [
-      el('span', { attrs: { class: 'step-number' }, text: t('steps.number', { number }) }),
+      labels.text(el('span', { attrs: { class: 'step-number' } }), 'steps.number', { number }),
       // A real space, so the accessible name reads "Step 1 Add your emails"
       // and not "Step 1Add your emails" (the label is shown on its own line).
       ' ',
-      el('span', { attrs: { class: 'step-name' }, text: title }),
+      labels.text(el('span', { attrs: { class: 'step-name' } }), title),
     ],
   });
 }
 
 /** One step section, named by its heading (so it is a navigable region). */
-function stepSection(id: string, number: number, title: string, body: readonly Node[]): HTMLElement {
+function stepSection(labels: StaticLabels, id: string, number: number, title: PlainMessageKey, body: readonly Node[]): HTMLElement {
   const headingId = `${id}-title`;
   return el('section', {
     attrs: { id, class: 'step', 'aria-labelledby': headingId },
-    children: [stepHeading(headingId, number, title), ...body],
+    children: [stepHeading(labels, headingId, number, title), ...body],
   });
 }
 
@@ -134,24 +165,24 @@ const PRIVACY_TOPICS: readonly PrivacyTopic[] = [
 ];
 
 /** The privacy panel: a closed <details> whose summary opens it (see the top of this file). */
-function privacyPanel(): HTMLDetailsElement {
+function privacyPanel(labels: StaticLabels): HTMLDetailsElement {
   const topics = PRIVACY_TOPICS.map((topic) => {
     const headingId = `${topic.id}-title`;
     const points =
       topic.as === 'list'
-        ? [el('ul', { attrs: { class: 'privacy-list' }, children: topic.points.map((key) => el('li', { text: t(key) })) })]
-        : topic.points.map((key) => el('p', { attrs: { class: 'privacy-text' }, text: t(key) }));
+        ? [el('ul', { attrs: { class: 'privacy-list' }, children: topic.points.map((key) => labels.text(el('li'), key)) })]
+        : topic.points.map((key) => labels.text(el('p', { attrs: { class: 'privacy-text' } }), key));
     // A plain div, not a named section: four more landmarks would only
     // clutter the page's landmark list; the headings are enough to navigate.
     return el('div', {
       attrs: { id: topic.id, class: 'privacy-topic' },
-      children: [el('h2', { attrs: { id: headingId, class: 'privacy-heading' }, text: t(topic.title) }), ...points],
+      children: [labels.text(el('h2', { attrs: { id: headingId, class: 'privacy-heading' } }), topic.title), ...points],
     });
   });
   return el('details', {
     attrs: { id: 'privacy', class: 'privacy' },
     children: [
-      el('summary', { attrs: { id: 'privacy-summary', class: 'privacy-summary' }, text: t('privacy.summary') }),
+      labels.text(el('summary', { attrs: { id: 'privacy-summary', class: 'privacy-summary' } }), 'privacy.summary'),
       el('div', { attrs: { class: 'privacy-body' }, children: topics }),
     ],
   });
@@ -166,43 +197,85 @@ export const HELP_CLIENTS = ['outlookClassic', 'outlookNew', 'thunderbird', 'app
  * item per mail program (its name as an h3, then one or two sentences), and
  * a closing note.
  */
-function helpPanel(): HTMLDetailsElement {
+function helpPanel(labels: StaticLabels): HTMLDetailsElement {
   const items = HELP_CLIENTS.map((client) =>
     el('li', {
       attrs: { class: 'help-client' },
       children: [
-        el('h3', { attrs: { class: 'help-heading' }, text: t(`help.clients.${client}.name`) }),
-        el('p', { attrs: { class: 'help-text' }, text: t(`help.clients.${client}.how`) }),
+        labels.text(el('h3', { attrs: { class: 'help-heading' } }), `help.clients.${client}.name`),
+        labels.text(el('p', { attrs: { class: 'help-text' } }), `help.clients.${client}.how`),
       ],
     }),
   );
   return el('details', {
     attrs: { id: 'help', class: 'help' },
     children: [
-      el('summary', { attrs: { id: 'help-summary', class: 'help-summary' }, text: t('help.summary') }),
+      labels.text(el('summary', { attrs: { id: 'help-summary', class: 'help-summary' } }), 'help.summary'),
       el('div', {
         attrs: { class: 'help-body' },
         children: [
-          el('p', { attrs: { class: 'help-text' }, text: t('help.intro') }),
+          labels.text(el('p', { attrs: { class: 'help-text' } }), 'help.intro'),
           el('ul', { attrs: { id: 'help-list', class: 'help-list' }, children: items }),
-          el('p', { attrs: { class: 'help-text' }, text: t('help.note') }),
+          labels.text(el('p', { attrs: { class: 'help-text' } }), 'help.note'),
         ],
       }),
     ],
   });
 }
 
+/** The id of one language's radio in the picker (also what its label points at). */
+export function languageRadioId(locale: string): string {
+  return `lang-${locale}`;
+}
+
+/**
+ * The language picker (see the top of this file): one radio per language,
+ * the page language ticked. Picking one calls `onChange` with its code.
+ */
+function languagePicker(
+  labels: StaticLabels,
+  locales: readonly string[],
+  onChange: (locale: string) => void,
+): { readonly fieldset: HTMLFieldSetElement; readonly radios: ReadonlyMap<string, HTMLInputElement> } {
+  const radios = new Map<string, HTMLInputElement>();
+  const options = locales.map((locale) => {
+    const id = languageRadioId(locale);
+    const ticked = locale === getLocale();
+    const radio = el('input', { attrs: { type: 'radio', id, name: 'language', value: locale, lang: locale, checked: ticked } });
+    radio.checked = ticked;
+    radio.addEventListener('change', () => {
+      if (radio.checked) onChange(locale);
+    });
+    radios.set(locale, radio);
+    // The language's own name, in its own language (never translated).
+    return el('div', {
+      attrs: { class: 'language-option' },
+      children: [radio, el('label', { attrs: { for: id, lang: locale }, text: languageName(locale) })],
+    });
+  });
+  const fieldset = el('fieldset', {
+    attrs: { id: 'language', class: 'language' },
+    children: [labels.text(el('legend', { attrs: { class: 'language-legend' } }), 'language.label'), ...options],
+  });
+  return { fieldset, radios };
+}
+
 /** Builds the shell inside `root` (replacing anything in it) and returns its handles. */
-export function mountApp(root: HTMLElement): AppShell {
-  setSafeAttribute(document.documentElement, 'lang', LOCALE);
-  document.title = t('app.name');
+export function mountApp(root: HTMLElement, options: AppOptions = {}): AppShell {
+  applyDocumentLanguage();
+  const labels = createStaticLabels();
+
+  // Built only when there is a choice to make (see the top of this file).
+  const locales = options.locales ?? SUPPORTED_LOCALES;
+  const picker = locales.length >= 2 ? languagePicker(labels, locales, (locale) => options.onLanguageChange?.(locale)) : null;
 
   const header = el('header', {
     attrs: { class: 'site-header' },
     children: [
-      el('h1', { attrs: { class: 'app-name' }, text: t('app.name') }),
-      el('p', { attrs: { class: 'promise' }, text: t('app.promise') }),
-      privacyPanel(),
+      ...(picker === null ? [] : [picker.fieldset]),
+      labels.text(el('h1', { attrs: { class: 'app-name' } }), 'app.name'),
+      labels.text(el('p', { attrs: { class: 'promise' } }), 'app.promise'),
+      privacyPanel(labels),
     ],
   });
 
@@ -221,23 +294,23 @@ export function mountApp(root: HTMLElement): AppShell {
       'aria-disabled': 'true',
       'aria-describedby': CLEAR_DESCRIBED_UNAVAILABLE,
     },
-    text: t('actions.clearEverything'),
   });
-  const clearUnavailable = el('p', { attrs: { id: 'clear-unavailable', class: 'note clear-unavailable' }, text: t('clear.unavailable') });
-  const addStep = stepSection('step-add', 1, t('steps.add.title'), [
-    el('p', { attrs: { class: 'step-intro' }, text: t('steps.add.intro') }),
-    helpPanel(),
+  labels.text(clearButton, 'actions.clearEverything');
+  const clearUnavailable = labels.text(el('p', { attrs: { id: 'clear-unavailable', class: 'note clear-unavailable' } }), 'clear.unavailable');
+  const addStep = stepSection(labels, 'step-add', 1, 'steps.add.title', [
+    labels.text(el('p', { attrs: { class: 'step-intro' } }), 'steps.add.intro'),
+    helpPanel(labels),
     addArea,
     el('div', {
       attrs: { id: 'clear-area', class: 'clear-area' },
-      children: [clearButton, clearUnavailable, el('p', { attrs: { id: 'clear-note', class: 'note' }, text: t('clear.note') })],
+      children: [clearButton, clearUnavailable, labels.text(el('p', { attrs: { id: 'clear-note', class: 'note' } }), 'clear.note')],
     }),
   ]);
 
-  const checkWaiting = el('p', { attrs: { id: 'check-waiting', class: 'note' }, text: t('steps.check.waiting') });
+  const checkWaiting = labels.text(el('p', { attrs: { id: 'check-waiting', class: 'note' } }), 'steps.check.waiting');
   const checkArea = el('div', { attrs: { id: 'check-area', class: 'step-body', hidden: true } });
-  const checkStep = stepSection('step-check', 2, t('steps.check.title'), [
-    el('p', { attrs: { class: 'step-intro' }, text: t('steps.check.intro') }),
+  const checkStep = stepSection(labels, 'step-check', 2, 'steps.check.title', [
+    labels.text(el('p', { attrs: { class: 'step-intro' } }), 'steps.check.intro'),
     checkWaiting,
     checkArea,
   ]);
@@ -251,23 +324,24 @@ export function mountApp(root: HTMLElement): AppShell {
       'aria-disabled': 'true',
       'aria-describedby': 'download-note',
     },
-    text: t('actions.makePdf'),
   });
+  labels.text(downloadButton, 'actions.makePdf');
+  // Its text follows step 3's state: src/ui/download-step.ts writes it (again on a language change too).
   const downloadNote = el('p', { attrs: { id: 'download-note', class: 'note download-note' }, text: t('download.unavailable.no-emails') });
   const downloadArea = el('div', { attrs: { id: 'download-area', class: 'download-area' } });
-  const downloadStep = stepSection('step-download', 3, t('steps.download.title'), [
-    el('p', { attrs: { class: 'step-intro' }, text: t('steps.download.intro') }),
+  const downloadStep = stepSection(labels, 'step-download', 3, 'steps.download.title', [
+    labels.text(el('p', { attrs: { class: 'step-intro' } }), 'steps.download.intro'),
     downloadButton,
     downloadNote,
     downloadArea,
-    el('p', { attrs: { id: 'download-disclaimer', class: 'note disclaimer' }, text: t('disclaimer.text') }),
+    labels.text(el('p', { attrs: { id: 'download-disclaimer', class: 'note disclaimer' } }), 'disclaimer.text'),
   ]);
 
   const main = el('main', { attrs: { id: 'main', class: 'steps' }, children: [status, addStep, checkStep, downloadStep] });
 
   const footer = el('footer', {
     attrs: { class: 'site-footer' },
-    children: [el('p', { text: t('footer.note') })],
+    children: [labels.text(el('p'), 'footer.note')],
   });
 
   root.replaceChildren(header, main, footer);
@@ -291,6 +365,12 @@ export function mountApp(root: HTMLElement): AppShell {
       setSafeAttribute(checkStep, 'data-state', ready ? 'ready' : 'waiting');
       setSafeAttribute(checkWaiting, 'hidden', ready);
       setSafeAttribute(checkArea, 'hidden', !ready);
+    },
+    relabel() {
+      labels.relabel();
+      // Defensive: the page language's radio is the ticked one (it already
+      // is when the reader picked it: the radios are never rebuilt).
+      if (picker !== null) for (const [locale, radio] of picker.radios) radio.checked = locale === getLocale();
     },
   };
 }

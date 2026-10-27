@@ -1,11 +1,20 @@
-// Entry point of the page: loads the styles and builds the page (the shell,
-// step 1's file picker, step 2's preview with its counts, include
-// checkboxes and notes, and "Clear everything"; see src/ui/page.ts).
+// Entry point of the page: loads the styles, picks the page language and
+// builds the page (the shell, step 1's file picker, step 2's preview with
+// its counts, include checkboxes and notes, and "Clear everything"; see
+// src/ui/page.ts).
 // Nothing is logged and nothing is stored (README.md, rule R5).
 import './ui/app.css';
 import { pdfFontsReady } from './pdf/fonts';
 import { registerWhenLoaded } from './sw/register';
+import { pickLocale, setLocale } from './ui/i18n';
 import { mountPage } from './ui/page';
+
+// The page language: the browser's most preferred language if the page
+// ships it ('fr' for fr-BE), else English (src/ui/i18n, pickLocale). Done
+// here only, once, never when a module loads, so unit tests never follow
+// the machine's language. Nothing is stored: the reader can switch in the
+// page (the picker shows once there are two languages).
+setLocale(pickLocale(navigator.languages.length > 0 ? navigator.languages : [navigator.language]));
 
 const root = document.getElementById('app');
 if (root) mountPage(root);

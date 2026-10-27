@@ -32,7 +32,9 @@ export interface GeneratePdfInput {
   /** When the PDF is made, in ms since 1970 UTC. */
   readonly generatedAt: number;
   readonly fonts: PdfFonts;
-  /** The fixed texts (default: createPdfStrings(), the page language). */
+  /** The PDF's language (a language the page ships, e.g. 'en'): its words and its file name. */
+  readonly locale: string;
+  /** The fixed texts (default: createPdfStrings(locale)). Tests may pass their own. */
   readonly strings?: PdfStrings;
   /** The look (default: the layout's DEFAULT_LAYOUT_CONFIG). */
   readonly config?: LayoutConfig;
@@ -42,7 +44,7 @@ export interface GeneratePdfInput {
 
 export interface GeneratedPdf {
   readonly bytes: Uint8Array;
-  /** "correspondence-YYYY-MM-DD.pdf", the generation date in the chosen zone. */
+  /** "correspondence-YYYY-MM-DD.pdf" in English: the generation date in the chosen zone, the name in the PDF's language. */
   readonly fileName: string;
   /** How many pages the PDF has (for the page's "ready" message). */
   readonly pageCount: number;
@@ -54,7 +56,7 @@ export interface GeneratedPdf {
  * e.g. a size limit reached).
  */
 export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf> {
-  const strings = input.strings ?? createPdfStrings();
+  const strings = input.strings ?? createPdfStrings(input.locale);
   const doc = buildPdfDocument({
     result: input.result,
     positions: input.positions,
