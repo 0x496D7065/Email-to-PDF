@@ -21,6 +21,8 @@ playwright/.cache/
 # No .msg exception: .msg fixtures are built in memory, never stored.
 # Real emails stay ignored everywhere else. Must come after the rules above.
 !tests/fixtures/**/*.[eE][mM][lL]
+# User's local test mail: never commit
+/Dummy mail/
 # Local junk
 .DS_Store
 Thumbs.db
