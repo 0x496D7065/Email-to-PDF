@@ -68,7 +68,7 @@ export const nl: Messages = {
       trust:
         'Uw vertrouwen hangt af van de code die deze site naar uw browser stuurt. Daarom is de code open source en kan iedereen hem controleren. Zoals bij elke website kan de site waarop deze pagina staat zien dat de pagina is geladen, maar nooit uw e-mails.',
       console:
-        'Terwijl de e-mails worden gelezen, kunnen de ontwikkelaarstools van uw browser rode foutregels tonen waarin “Content Security Policy” staat. Dat is de browser die stijlen, scripts of links uit de e-mails tegenhoudt: de beveiliging werkt. Niets uit de e-mails is uitgevoerd of geladen.',
+        'De ontwikkelaarstools van uw browser kunnen rode foutregels tonen waarin “Content Security Policy” staat. Dat is de browser die stijlen, scripts of links weigert, bijvoorbeeld die uit uw e-mails: de beveiliging werkt. Niets uit uw e-mails is uitgevoerd of geladen.',
       scripts:
         'In de PDF worden sommige schriften (bijvoorbeeld Hebreeuws, Arabisch, Chinees, Japans, Koreaans, Thais of Hindi) en emoji getoond als codes zoals [U+05D0], omdat het lettertype van de PDF ze niet bevat. Tekst in het Latijnse, Griekse en Cyrillische schrift wordt gewoon getoond. De tekst in uw originele bestanden blijft ongewijzigd.',
     },

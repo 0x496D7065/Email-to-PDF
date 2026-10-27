@@ -85,7 +85,7 @@ export const en = {
       title: 'Good to know',
       trust: 'Your trust depends on the code this site sends to your browser. That is why the code is open source and can be checked. Like any website, the site that hosts this page can see that the page was loaded, but never your emails.',
       console:
-        'While emails are read, your browser\'s developer tools may show red error lines that mention a "Content Security Policy". That is the browser blocking styles, scripts or links found inside the emails: the protection working. Nothing from the emails was run or loaded.',
+        'Your browser\'s developer tools may show red error lines that mention a "Content Security Policy". That is the browser refusing styles, scripts or links, for example ones found inside your emails: the protection working. Nothing from your emails was run or loaded.',
       scripts:
         'In the PDF, some writing systems (for example Hebrew, Arabic, Chinese, Japanese, Korean, Thai or Hindi) and emoji show as codes such as [U+05D0], because the font used in the PDF does not include them. Latin, Greek and Cyrillic text shows normally. The text in your original files is unchanged.',
     },

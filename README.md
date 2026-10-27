@@ -128,11 +128,11 @@ by anyone, as described next.
    [R2](#r2-strict-content-security-policy); the served page repeats it in
    a `<meta>` tag.
 
-**Red "Content Security Policy" lines in the console.** While emails are
-read, DevTools may show red error lines that mention a Content Security
-Policy. That is the browser blocking styles, scripts or links found inside
-the emails: the protection working. Nothing from the emails was run or
-loaded. In WebKit (the engine behind Safari) the browser tests also see
+**Red "Content Security Policy" lines in the console.** DevTools may show
+red error lines that mention a Content Security Policy. That is the browser
+refusing styles, scripts or links, for example ones found inside your
+emails: the protection working. Nothing from your emails was run or loaded.
+In WebKit (the engine behind Safari) the browser tests also see
 one such line per policy when the page opens, caused by the page's own
 time-zone drop-down list; it blocks nothing the page needs.
 

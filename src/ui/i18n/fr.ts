@@ -68,7 +68,7 @@ export const fr: Messages = {
       trust:
         'Votre confiance dépend du code que ce site envoie à votre navigateur. C’est pourquoi ce code est open source et peut être vérifié. Comme tout site web, le site qui héberge cette page peut voir que la page a été chargée, mais jamais vos e-mails.',
       console:
-        'Pendant la lecture des e-mails, les outils de développement de votre navigateur peuvent afficher des lignes d’erreur rouges qui mentionnent une «\u00A0Content Security Policy\u00A0». C’est le navigateur qui bloque des styles, des scripts ou des liens trouvés dans les e-mails\u00A0: la protection fonctionne. Rien de ce que contiennent les e-mails n’a été exécuté ni chargé.',
+        'Les outils de développement de votre navigateur peuvent afficher des lignes d’erreur rouges qui mentionnent une «\u00A0Content Security Policy\u00A0». C’est le navigateur qui refuse des styles, des scripts ou des liens, par exemple ceux trouvés dans vos e-mails\u00A0: la protection fonctionne. Rien de ce que contiennent vos e-mails n’a été exécuté ni chargé.',
       scripts:
         'Dans le PDF, certaines écritures (par exemple l’hébreu, l’arabe, le chinois, le japonais, le coréen, le thaï ou l’hindi) et les emoji apparaissent sous forme de codes comme [U+05D0], car la police utilisée dans le PDF ne les contient pas. Le texte en alphabet latin, grec ou cyrillique s’affiche normalement. Le texte de vos fichiers d’origine n’est pas modifié.',
     },
