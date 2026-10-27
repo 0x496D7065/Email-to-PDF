@@ -9,7 +9,7 @@ import { runEngine, type EngineMessage, type EngineResult } from '../engine/engi
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS, type MessageNote } from '../ui-model/message-notes';
 import { SAFE_TAGS } from './dom';
-import { t } from './i18n';
+import { setLocale, t } from './i18n';
 import { headingId, mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, filesText, messagesText, noteText, relatedText, type Review, type ReviewOptions } from './review';
 
@@ -125,6 +125,19 @@ describe('texts', () => {
     expect(filesText({ ...counts, filesGiven: 1, filesFailed: 0 })).toBe('1 file.');
     expect(messagesText(counts)).toBe('11 emails found, 2 identical copies merged.');
     expect(messagesText({ ...counts, messagesFound: 1, duplicatesMerged: 0 })).toBe('1 email found.');
+    expect(filesText({ ...counts, filesGiven: 12, filesFailed: 3 })).toBe('12 files, 3 could not be read.');
+  });
+
+  it('writes the files line in French with "dont": the failed files are among the given ones', () => {
+    const counts = { filesGiven: 12, filesFailed: 1, messagesFound: 11, duplicatesMerged: 2, undated: 0, withFolds: 0 };
+    setLocale('fr');
+    try {
+      expect(filesText(counts)).toBe('12 fichiers, dont 1 n’a pas pu être lu.');
+      expect(filesText({ ...counts, filesFailed: 3 })).toBe('12 fichiers, dont 3 n’ont pas pu être lus.');
+      expect(filesText({ ...counts, filesGiven: 1, filesFailed: 0 })).toBe('1 fichier.');
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('gives every note code a readable, non-empty label', () => {

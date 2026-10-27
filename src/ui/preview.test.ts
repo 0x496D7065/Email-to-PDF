@@ -10,7 +10,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import type { DisplayBlock } from '../ui-model/display-blocks';
 import { signatureSources } from '../ui-model/pdf-plan';
-import { t } from './i18n';
+import { setLocale, t } from './i18n';
 import {
   attachmentText,
   dateTexts,
@@ -176,6 +176,18 @@ describe('helpers', () => {
     expect(mailboxListText([{ name: ' ', address: '' }])).toBe('');
   });
 
+  it('joins three recipients with a plain ", " in English (unchanged) and in French (no "et")', () => {
+    const carol: EmailAddress = { name: 'Carol Test', address: 'carol@example.test' };
+    const expected = 'Alice Example <alice@example.test>, Bob Sample <bob@furniture.example.test>, Carol Test <carol@example.test>';
+    expect(mailboxListText([ALICE, BOB, carol])).toBe(expected);
+    setLocale('fr');
+    try {
+      expect(mailboxListText([ALICE, BOB, carol])).toBe(expected);
+    } finally {
+      setLocale('en');
+    }
+  });
+
   it('writes sizes for people', () => {
     expect(sizeText(null)).toBe('size unknown');
     expect(sizeText(Number.NaN)).toBe('size unknown');
@@ -212,6 +224,20 @@ describe('helpers', () => {
     expect(foldSummaryText({ ...block, related: [0, 1] }, 5, [0, 2])).toBe(`${t('preview.fold.quoted-overlap')}, 2 lines, from emails #1, #3`);
     expect(foldSummaryText({ ...block, related: [], label: 'signature', text: 'x' }, 0, [])).toBe(`${t('preview.fold.signature')}, 1 line`);
     expect(foldSummaryText({ ...block, related: [], label: null }, 0, [])).toBe(`${t('preview.foldOther')}, 2 lines`);
+  });
+
+  it('writes a fold label in French as parts, not as a list joined with "et"; only the email numbers are a list', () => {
+    const block: DisplayBlock = { start: 0, end: 4, text: 'a\nb\n', folded: true, reasons: ['quote-marker'], related: [0], label: 'quote-marker', collapsed: true };
+    const list = (items: string[]): string => new Intl.ListFormat('fr', { style: 'short', type: 'unit' }).format(items);
+    setLocale('fr');
+    try {
+      const quoted = t('preview.fold.quote-marker');
+      expect(foldSummaryText({ ...block, related: [] }, 0, [])).toBe(`${quoted}, 2 lignes`);
+      expect(foldSummaryText(block, 5, [1])).toBe(`${quoted}, 2 lignes, de l’e-mail #2`);
+      expect(foldSummaryText({ ...block, related: [0, 1] }, 5, [0, 2])).toBe(`${quoted}, 2 lignes, des e-mails ${list(['#1', '#3'])}`);
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('names zones readably and marks this computer', () => {
@@ -290,6 +316,20 @@ describe('mountPreview', () => {
     expect(one(item, 'sender-time').hasAttribute('hidden')).toBe(true);
   });
 
+  it('shows a three-recipient To row with a plain ", " in English and in French', () => {
+    const carol: EmailAddress = { name: 'Carol Test', address: 'carol@example.test' };
+    const expected = 'Alice Example <alice@example.test>, Bob Sample <bob@furniture.example.test>, Carol Test <carol@example.test>';
+    preview.show(engineOf([make({ to: [ALICE, BOB, carol] })]));
+    expect(meta(items()[0]!, 'to')).toBe(expected);
+    setLocale('fr');
+    try {
+      preview.show(engineOf([make({ to: [ALICE, BOB, carol] })]));
+      expect(meta(items()[0]!, 'to')).toBe(expected);
+    } finally {
+      setLocale('en');
+    }
+  });
+
   it('leaves out empty To, Cc and Bcc rows', () => {
     preview.show(engineOf([make({ to: [], cc: [{ name: ' ', address: '' }] })]));
     const item = items()[0]!;
@@ -346,6 +386,22 @@ describe('mountPreview', () => {
     expect(items()).toHaveLength(1);
     expect(label(items()[0]!, 'also-in')).toBe(t('preview.alsoIn'));
     expect(meta(items()[0]!, 'also-in')).toBe('copy-from-sent.eml');
+  });
+
+  it('names the files of three merged copies with a plain ", " in English and in French', () => {
+    const original = make({ messageId: 'same@example.test' });
+    const copyOf = (fileName: string, hash: string): NormalizedMessage => ({ ...original, source: { ...original.source, fileName, sha256: hash.repeat(64) } });
+    const emails = [original, copyOf('copy-a.eml', 'a'), copyOf('copy-b.eml', 'b'), copyOf('copy-c.eml', 'c')];
+    const expected = 'copy-a.eml, copy-b.eml, copy-c.eml';
+    preview.show(engineOf(emails));
+    expect(meta(items()[0]!, 'also-in')).toBe(expected);
+    setLocale('fr');
+    try {
+      preview.show(engineOf(emails));
+      expect(meta(items()[0]!, 'also-in')).toBe(expected);
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('folds quoted text in a labelled <details>, with the email it repeats', () => {
@@ -819,6 +875,22 @@ describe('PDF labels', () => {
     expect(pdfLabelText({ status: 'partly', reasons: [], signaturesFrom: [] })).toBe('Partly in the PDF: text written in this email');
     expect(pdfReasonText('writer-quote', [])).toBe("quote that is part of the writer's text");
     expect(pdfReasonText('signature', [2])).toBe('signature');
+  });
+
+  it('helpers: in French the reasons are joined with ", " (only the email numbers are a list)', () => {
+    const list = (items: string[]): string => new Intl.ListFormat('fr', { style: 'short', type: 'unit' }).format(items);
+    setLocale('fr');
+    try {
+      const signature = t('pdf.reason.signature');
+      const same = t('pdf.repeatedFromMany', { list: list(['#1', '#3']) });
+      expect(pdfLabelText({ status: 'out', reasons: ['signature', 'repeated-signature'], signaturesFrom: [1, 3] })).toBe(
+        t('pdf.label.out', { reasons: `${signature}, ${same}` }),
+      );
+      // One "et" at most: the one inside the email numbers.
+      expect(pdfLabelText({ status: 'out', reasons: ['signature', 'repeated-signature'], signaturesFrom: [1, 3] }).split(' et ')).toHaveLength(2);
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('starts "off": no labels, no status text; the fold texts are unchanged', () => {

@@ -117,9 +117,14 @@ test('reaches every interactive element with Tab, in page order, with a visible 
 
   const count = await page.evaluate(() => {
     const selector = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]';
+    // A radio group is one Tab stop: its ticked radio (the language picker;
+    // the arrow keys move to the others).
     window.__focusables = [...document.querySelectorAll(selector)].filter(
       (e) =>
-        !(e as HTMLButtonElement).disabled && e.getAttribute('tabindex') !== '-1' && e.getClientRects().length > 0,
+        !(e as HTMLButtonElement).disabled &&
+        e.getAttribute('tabindex') !== '-1' &&
+        e.getClientRects().length > 0 &&
+        !(e instanceof HTMLInputElement && e.type === 'radio' && !e.checked),
     );
     // A positive tabindex would break the natural order: there must be none.
     return document.querySelectorAll('[tabindex]:not([tabindex="0"]):not([tabindex="-1"])').length === 0

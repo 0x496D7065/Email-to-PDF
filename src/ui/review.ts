@@ -85,9 +85,12 @@ export function noteText(note: MessageNote): string {
 
 /** "12 files, 1 could not be read." */
 export function filesText(counts: EngineCounts): string {
-  const parts = [t('counts.files', { count: counts.filesGiven })];
-  if (counts.filesFailed > 0) parts.push(t('counts.filesFailed', { count: counts.filesFailed }));
-  return t('counts.sentence', { text: joinList(parts) });
+  const files = t('counts.files', { count: counts.filesGiven });
+  if (counts.filesFailed === 0) return t('counts.sentence', { text: files });
+  // A template, not a list: the failed files are among the given ones
+  // ("12 fichiers, dont 1", not "12 fichiers et 1").
+  const failed = t('counts.filesFailed', { count: counts.filesFailed });
+  return t('counts.sentence', { text: t('counts.filesWithFailed', { files, failed }) });
 }
 
 /** "9 emails found, 2 identical copies merged." */

@@ -58,6 +58,7 @@ import type { MessagePlan, OutputPolicy } from '../engine/output-plan';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
 import type { EmailAddress, NormalizedMessage, ParseErrorCode } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
+import { joinMailboxes } from '../ui-model/mailbox-list';
 import type { PdfStrings } from './strings';
 import { bodyLines, inlineRuns, joinKept, lineText, type PdfLine, type PdfRole } from './text';
 // Pure and backend-neutral (it only reads src/pdf/text.ts): the bookmark cut follows the same rule as the copy layer.
@@ -410,7 +411,7 @@ function buildEmail(
   const fields: PdfFieldRow[] = [];
   const list = (label: string, mailboxes: readonly EmailAddress[]): void => {
     const shown = mailboxes.filter((x) => !isBlank(x));
-    if (shown.length > 0) fields.push({ label, value: [s.line(strings.joinList(shown.map((x) => mailboxText(x, strings))), 'field-value')] });
+    if (shown.length > 0) fields.push({ label, value: [s.line(joinMailboxes(shown.map((x) => mailboxText(x, strings))), 'field-value')] });
   };
   const author = displayAuthor(message);
   const fromShown = message.from.filter((x) => !isBlank(x));
@@ -468,7 +469,7 @@ function buildEmail(
   // Index entry (texts without codes counted again).
   const anchor = emailAnchor(number);
   const fromIndex: PdfLine =
-    author.source === 'none' ? own(strings.unknownSender, 'muted') : index.line(strings.joinList(author.mailboxes.map(shortMailbox)), 'body');
+    author.source === 'none' ? own(strings.unknownSender, 'muted') : index.line(joinMailboxes(author.mailboxes.map(shortMailbox)), 'body');
   const subjectIndex = hasSubject ? index.line(message.subject, 'body') : own(strings.noSubject, 'muted');
   const day = shown.kind === 'date' && dated ? shown.text.slice(0, 10) : strings.noDate;
   const entry: PdfIndexEntry = {

@@ -90,6 +90,7 @@ import type { AttachmentInfo, EmailAddress, EmailDate } from '../parsing/types';
 import type { ProcessResult } from '../pipeline/process-files';
 import { displayAuthor } from '../ui-model/display-author';
 import type { DisplayBlock } from '../ui-model/display-blocks';
+import { joinMailboxes, joinPlain } from '../ui-model/mailbox-list';
 import { pdfPlanNote, type PdfNoteCode } from '../ui-model/message-notes';
 import { pdfBlocks, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
 import type { AppShell } from './app';
@@ -129,9 +130,13 @@ export function mailboxText(m: EmailAddress): string {
   return hasName ? m.name : m.address;
 }
 
-/** The mailboxes of a list as one line; blank entries left out. '' if none. */
+/**
+ * The mailboxes of a list as one line; blank entries left out. '' if none.
+ * Joined with a plain ", " in every language: an address field is not a
+ * sentence (src/ui-model/mailbox-list.ts).
+ */
 export function mailboxListText(list: readonly EmailAddress[]): string {
-  return joinList(list.filter((m) => !isBlankMailbox(m)).map(mailboxText));
+  return joinMailboxes(list.filter((m) => !isBlankMailbox(m)).map(mailboxText));
 }
 
 /** One decimal under 10 (1.4 KB), whole numbers above (12 KB). */
@@ -208,13 +213,14 @@ export function messageNumberText(number: number): string {
 
 /** The label of a folded block: "Quoted text, 12 lines, from email #3". */
 export function foldSummaryText(block: DisplayBlock, ownPosition: number, positionByIndex: readonly (number | null)[]): string {
-  const parts = [block.label === null ? t('preview.foldOther') : t(`preview.fold.${block.label}`), t('preview.foldLines', { count: lineCount(block.text) })];
+  const kind = block.label === null ? t('preview.foldOther') : t(`preview.fold.${block.label}`);
+  const lines = t('preview.foldLines', { count: lineCount(block.text) });
   const numbers = relatedNumbers(block, ownPosition, positionByIndex);
-  if (numbers.length > 0) {
-    const list = joinList(numbers.map(messageNumberText));
-    parts.push(numbers.length === 1 ? t('preview.foldFromOne', { list }) : t('preview.foldFromMany', { list }));
-  }
-  return joinList(parts);
+  if (numbers.length === 0) return t('preview.foldLabel', { kind, lines });
+  // The email numbers ARE a list: "from emails #1, #3" ("#1 et #3" in French).
+  const list = joinList(numbers.map(messageNumberText));
+  const from = numbers.length === 1 ? t('preview.foldFromOne', { list }) : t('preview.foldFromMany', { list });
+  return t('preview.foldLabelFrom', { kind, lines, from });
 }
 
 /**
@@ -232,7 +238,9 @@ export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly numbe
 /** A block's PDF label: "Not in the PDF: earlier email quoted by the mail app". */
 export function pdfLabelText(label: PdfLabel): string {
   const list = label.reasons.length === 0 ? ['text' as const] : label.reasons;
-  const reasons = joinList(list.map((r) => pdfReasonText(r, label.signaturesFrom)));
+  // The reasons are parts, not a list: a plain ", " (no "et" in French; a
+  // reason may itself hold a list of email numbers, "#1 et #3").
+  const reasons = joinPlain(list.map((r) => pdfReasonText(r, label.signaturesFrom)));
   switch (label.status) {
     case 'in':
       return t('pdf.label.in', { reasons });
@@ -460,7 +468,7 @@ function metaRows(m: EngineMessage, date: DateSlot): Node[] {
   }
   if (m.duplicates.length > 0) {
     const names = m.duplicates.map((d) => (d.source.fileName === '' ? t('added.noName') : d.source.fileName));
-    meta.push(...row('also-in', t('preview.alsoIn'), [joinList(names)]));
+    meta.push(...row('also-in', t('preview.alsoIn'), [joinPlain(names)]));
   }
   return meta;
 }

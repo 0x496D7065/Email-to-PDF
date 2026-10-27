@@ -42,15 +42,51 @@ describe('mountApp', () => {
     expect(doc.title).toBe(t('app.name'));
   });
 
-  it('has no language picker while the page ships one language (English only today)', () => {
-    expect(all('fieldset')).toEqual([]);
-    expect(all('legend')).toEqual([]);
-    expect(root.descendants().filter((e) => e.getAttribute('type') === 'radio' || e.getAttribute('name') === 'language')).toEqual([]);
-    expect(root.descendants().filter((e) => e.getAttribute('id') === 'language')).toEqual([]);
-    // Not even with an explicit one-language list.
+  it('shows the language picker first in the header: English and French, each named in its own language', () => {
+    const header = root.children[0] as FakeElement;
+    const fieldset = header.children[0] as FakeElement;
+    expect(fieldset.tagName).toBe('fieldset');
+    expect(fieldset.getAttribute('id')).toBe('language');
+    expect(all('fieldset')).toEqual([fieldset]);
+    const legend = fieldset.children[0] as FakeElement;
+    expect(legend.tagName).toBe('legend');
+    expect(legend.textContent).toBe('Language');
+    const radios = fieldset.descendants().filter((e) => e.tagName === 'input');
+    expect(radios.map((r) => [r.getAttribute('type'), r.getAttribute('name'), r.getAttribute('id'), r.getAttribute('value'), r.getAttribute('lang')])).toEqual([
+      ['radio', 'language', 'lang-en', 'en', 'en'],
+      ['radio', 'language', 'lang-fr', 'fr', 'fr'],
+    ]);
+    // The page language is the ticked one.
+    expect(radios.map((r) => r.checked)).toEqual([true, false]);
+    // Each radio has its own label, in its own language (lang on the label too).
+    const labels = fieldset.descendants().filter((e) => e.tagName === 'label');
+    expect(labels.map((l) => [l.getAttribute('for'), l.getAttribute('lang'), l.textContent])).toEqual([
+      ['lang-en', 'en', 'English'],
+      ['lang-fr', 'fr', 'Français'],
+    ]);
+    // Radios, never a <select> (WebKit reports each <select> as a CSP style violation).
+    expect(all('select')).toEqual([]);
+  });
+
+  it('picking French calls onLanguageChange("fr"), and back to English calls it with "en"', () => {
+    const picked: string[] = [];
+    const other = new FakeElement('div');
+    mountApp(other as unknown as HTMLElement, { onLanguageChange: (locale) => picked.push(locale) });
+    const radio = (id: string): FakeElement => other.descendants().find((e) => e.getAttribute('id') === id)!;
+    radio('lang-fr').checked = true;
+    radio('lang-fr').fire('change');
+    radio('lang-en').checked = true;
+    radio('lang-en').fire('change');
+    // A change event on a radio that is not ticked (it was just unticked) picks nothing.
+    radio('lang-fr').checked = false;
+    radio('lang-fr').fire('change');
+    expect(picked).toEqual(['fr', 'en']);
+  });
+
+  it('has no language picker for a one-language list', () => {
     const other = new FakeElement('div');
     mountApp(other as unknown as HTMLElement, { locales: ['en'] });
-    expect(other.descendants().filter((e) => e.tagName === 'fieldset')).toEqual([]);
+    expect(other.descendants().filter((e) => e.tagName === 'fieldset' || e.getAttribute('type') === 'radio')).toEqual([]);
   });
 
   it('relabel writes the same words again in the same language (nothing rebuilt)', () => {
@@ -185,7 +221,8 @@ describe('mountApp', () => {
       expect(panel.tagName).toBe('details');
       expect(panel.hasAttribute('open')).toBe(false);
       const header = root.children[0] as FakeElement;
-      expect(header.children.map((c) => (c instanceof FakeElement ? c.getAttribute('class') : 'text'))).toEqual(['app-name', 'promise', 'privacy']);
+      // After the language picker (first in the header).
+      expect(header.children.map((c) => (c instanceof FakeElement ? c.getAttribute('class') : 'text'))).toEqual(['language', 'app-name', 'promise', 'privacy']);
       // The summary comes first, so it is the line shown while closed (and the panel's name).
       const summary = panel.children[0] as FakeElement;
       expect(summary.tagName).toBe('summary');

@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { FOLD_REASONS } from '../../engine/segments';
 import { en } from './en';
+import { fr } from './fr';
 import {
   DEFAULT_LOCALE,
   getLocale,
@@ -22,8 +23,8 @@ import {
   type MessageKey,
 } from './index';
 
-/** Every language file. French and Dutch are added here when they exist. */
-const LOCALES: Readonly<Record<string, Messages>> = { en };
+/** Every language file. Dutch is added here when it exists. */
+const LOCALES: Readonly<Record<string, Messages>> = { en, fr };
 
 /** Every [dotted key, value] of a language file. */
 function entries(table: unknown, prefix = ''): [string, unknown][] {
@@ -70,20 +71,24 @@ describe('language files', () => {
     }
   });
 
-  it('uses only well-formed {name} placeholders (no stray braces)', () => {
-    for (const [key, value] of enEntries) {
-      for (const text of textsOf(value)) {
-        const withoutPlaceholders = text.replace(/\{\w+\}/g, '');
-        expect(withoutPlaceholders, key).not.toMatch(/[{}]/);
+  it('uses only well-formed {name} placeholders (no stray braces), in every language', () => {
+    for (const [name, table] of Object.entries(LOCALES)) {
+      for (const [key, value] of entries(table)) {
+        for (const text of textsOf(value)) {
+          const withoutPlaceholders = text.replace(/\{\w+\}/g, '');
+          expect(withoutPlaceholders, `${name} ${key}`).not.toMatch(/[{}]/);
+        }
       }
     }
   });
 
-  it('gives both plural forms the same placeholders, always including {count}', () => {
-    for (const [key, value] of enEntries) {
-      if (!isPluralForms(value)) continue;
-      expect(placeholderSet(value.one), key).toEqual(placeholderSet(value.other));
-      expect(placeholderSet(value.one), key).toContain('count');
+  it('gives both plural forms the same placeholders, always including {count}, in every language', () => {
+    for (const [name, table] of Object.entries(LOCALES)) {
+      for (const [key, value] of entries(table)) {
+        if (!isPluralForms(value)) continue;
+        expect(placeholderSet(value.one), `${name} ${key}`).toEqual(placeholderSet(value.other));
+        expect(placeholderSet(value.one), `${name} ${key}`).toContain('count');
+      }
     }
   });
 
@@ -193,23 +198,27 @@ describe('helpers', () => {
   });
 });
 
-describe('languages (the shipped catalog: English only)', () => {
-  it('ships English only, so the page starts and stays in English', () => {
-    expect(SUPPORTED_LOCALES).toEqual(['en']);
+describe('languages (the shipped catalog: English and French)', () => {
+  it('ships English then French; the page starts in English until it picks one', () => {
+    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr']);
     expect(DEFAULT_LOCALE).toBe('en');
     expect(getLocale()).toBe('en');
+    // Each name in its own language, never translated.
     expect(languageName('en')).toBe('English');
+    expect(languageName('fr')).toBe('Français');
   });
 
   it('isSupportedLocale: exact shipped codes only', () => {
     expect(isSupportedLocale('en')).toBe(true);
-    for (const value of ['EN', 'en-US', 'fr', 'xx', '', ' en', 'toString', '__proto__', null, undefined, 1, ['en']]) {
+    expect(isSupportedLocale('fr')).toBe(true);
+    for (const value of ['EN', 'en-US', 'FR', 'fr-BE', 'nl', 'xx', '', ' en', 'toString', '__proto__', null, undefined, 1, ['en']]) {
       expect(isSupportedLocale(value), String(value)).toBe(false);
     }
   });
 
   it('setLocale refuses a language the page does not ship (the page language stays)', () => {
-    expect(() => setLocale('fr')).toThrow(/unsupported/);
+    expect(() => setLocale('nl')).toThrow(/unsupported/);
+    expect(() => setLocale('fr-BE')).toThrow(/unsupported/);
     expect(() => setLocale('EN')).toThrow(/unsupported/);
     expect(getLocale()).toBe('en');
   });
@@ -263,8 +272,12 @@ describe('pickLocale', () => {
     expect(pickLocale([])).toBe('en');
   });
 
-  it('uses the shipped languages by default (English only today)', () => {
-    expect(pickLocale(['fr-BE'])).toBe('en');
+  it('uses the shipped languages by default (English and French)', () => {
+    expect(pickLocale(['fr-BE'])).toBe('fr');
+    expect(pickLocale(['fr-FR', 'en'])).toBe('fr');
+    expect(pickLocale(['fr-CA'])).toBe('fr');
     expect(pickLocale(['en-US'])).toBe('en');
+    // Only the first language counts.
+    expect(pickLocale(['nl-BE', 'fr-BE'])).toBe('en');
   });
 });

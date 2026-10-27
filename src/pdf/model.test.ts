@@ -148,6 +148,24 @@ describe('header fields', () => {
     expect(field(e, 'From')![0]![0]!.role).toBe('field-value');
   });
 
+  it('joins several mailboxes with a plain ", " in English (unchanged) and in French (no "et"), header and index alike', () => {
+    const three = make({ from: [ALICE, BOB, CAROL], to: [ALICE, BOB, CAROL] });
+    const fullLine = 'Alice Example <alice@example.test>, Bob Sample <bob@furniture.example.test>, Carol Test <carol@sample.test>';
+    const indexLine = 'Alice Example, Bob Sample, Carol Test';
+    const { doc, input } = build([ok(three)]);
+    const e = doc.emails[0]!;
+    expect(text(field(e, 'From')![0]!)).toBe(fullLine);
+    expect(text(field(e, 'To')![0]!)).toBe(fullLine);
+    expect(text(doc.index.entries[0]!.from)).toBe(indexLine);
+
+    const fr = createPdfStrings('fr');
+    const frDoc = buildPdfDocument({ ...input, strings: fr });
+    const f = frDoc.emails[0]!;
+    expect(text(field(f, fr.fromLabel)![0]!)).toBe(fullLine);
+    expect(text(field(f, fr.toLabel)![0]!)).toBe(fullLine);
+    expect(text(frDoc.index.entries[0]!.from)).toBe(indexLine);
+  });
+
   it('leaves Cc and Bcc out when empty, and says "Unknown sender" without a From', () => {
     const { doc } = build([ok(make({ from: [], to: [] }))]);
     const e = doc.emails[0]!;

@@ -419,3 +419,28 @@ describe('generatePdf: time bound', () => {
     expect(readOutline(readPdf(bytes))!.items).toHaveLength(2002);
   }, 180_000);
 });
+
+describe('generatePdf in French (locale "fr", its own texts)', () => {
+  it('writes the French texts with no code for a missing character, the French file name, and the same structure', async () => {
+    const messages = many(3, (k) => ({
+      attachments: k === 0 ? [{ fileName: 'plan.pdf', size: 1.4 * 1024 * 1024, mimeType: 'application/pdf' }] : [],
+    }));
+    // No `strings`: generatePdf makes them from the locale, as the PDF worker does.
+    const { strings: englishStrings, ...input } = inputFor(messages);
+    const french = await generatePdf({ ...input, locale: 'fr' });
+    const english = await generatePdf({ ...input, strings: englishStrings });
+    expect(french.fileName).toBe('correspondance-2025-06-01.pdf');
+    expect(french.pageCount).toBe(english.pageCount);
+
+    const pdf = readPdf(french.bytes);
+    const text = (await pageRuns(pdf)).flat().map((r) => r.text).join('\n');
+    for (const part of ['Correspondance par e-mail', 'Sommaire', 'Pi\u00e8ces jointes', 'E-mail 1', `Page 1 sur ${String(french.pageCount)}`, '1,4 Mo']) {
+      expect(text).toContain(part);
+    }
+    // Every French character is in the fonts: none was written as a code such as [U+00E9].
+    expect(text).not.toMatch(/\[U\+[0-9A-F]{4,6}\]/);
+    expect(text).not.toContain('Email correspondence');
+    const outline = readOutline(pdf)!;
+    expect(outline.items[0]?.title).toBe('Page de garde');
+  });
+});

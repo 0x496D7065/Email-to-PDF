@@ -76,7 +76,9 @@ test('the panel is the first Tab stop, opens and closes with Enter and Space, an
   await expect(body).toBeHidden();
   await expect(summary).toHaveAccessibleName(en.privacy.summary);
 
-  // First Tab stop, with a visible outline.
+  // The Tab stop right after the language picker, with a visible outline.
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#lang-en')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(summary).toBeFocused();
   const outline = await summary.evaluate((e) => {

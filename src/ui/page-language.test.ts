@@ -3,11 +3,11 @@
 // (tests/support/fake-dom.ts), the real steps and engine, a controllable
 // fake processFiles and a fake PDF maker. Synthetic messages only.
 //
-// The shipped page has one language, so its picker is never shown and the
-// browser tests (e2e/) cannot switch. Here a synthetic test language, 'xx'
-// (every English string with accented look-alike letters, in brackets; see
-// tests/support/test-locale.ts), is added to the catalog for this file
-// only, so the picker appears and the switch can be checked: what changes
+// The shipped page has English and French. Here a synthetic test language,
+// 'xx' (every English string with accented look-alike letters, in brackets;
+// see tests/support/test-locale.ts), is also added to the catalog for this
+// file only: since every one of its strings differs from English, it shows
+// any word of ours that a switch did not rewrite. What changes
 // (every word of ours, <html lang>, the title, one announcement, the PDF
 // dropped) and what must not (ticks, time zone, open folds, focus, the
 // elements themselves, stand-ins, the plans).
@@ -233,8 +233,9 @@ const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\
  * time zone names, dates and MIME types, the app's name, the languages' own
  * names). Empty when every word of ours was rewritten.
  */
-function englishLeft(data: ReturnType<typeof emails>): string[] {
+function englishLeft(data: ReturnType<typeof emails>, sameInBoth: readonly string[] = []): string[] {
   const allowed = [
+    ...sameInBoth,
     t('app.name'),
     'English',
     testLanguageName(TEST_LOCALE),
@@ -287,9 +288,9 @@ function englishLeft(data: ReturnType<typeof emails>): string[] {
 
 // ------------------------------------------------------------------ tests
 
-describe('the language picker (shown because a second, test-only language is in the catalog)', () => {
+describe('the language picker (English, French, and the test-only language added to the catalog)', () => {
   it('is a fieldset first in the header, with a legend and one radio per language', () => {
-    expect(SUPPORTED_LOCALES).toEqual(['en', TEST_LOCALE]);
+    expect(SUPPORTED_LOCALES).toEqual(['en', 'fr', TEST_LOCALE]);
     const header = root.children[0] as FakeElement;
     expect(header.tagName).toBe('header');
     const fieldset = header.children[0] as FakeElement;
@@ -304,12 +305,14 @@ describe('the language picker (shown because a second, test-only language is in 
     const radios = fieldset.descendants().filter((e) => e.tagName === 'input');
     expect(radios.map((r) => [r.getAttribute('type'), r.getAttribute('name'), r.getAttribute('id'), r.getAttribute('lang'), r.getAttribute('value')])).toEqual([
       ['radio', 'language', 'lang-en', 'en', 'en'],
+      ['radio', 'language', 'lang-fr', 'fr', 'fr'],
       ['radio', 'language', `lang-${TEST_LOCALE}`, TEST_LOCALE, TEST_LOCALE],
     ]);
-    expect(radios.map((r) => r.checked)).toEqual([true, false]);
+    expect(radios.map((r) => r.checked)).toEqual([true, false, false]);
     const labels = fieldset.descendants().filter((e) => e.tagName === 'label');
     expect(labels.map((l) => [l.getAttribute('for'), l.getAttribute('lang'), l.textContent])).toEqual([
       ['lang-en', 'en', 'English'],
+      ['lang-fr', 'fr', 'Français'],
       [`lang-${TEST_LOCALE}`, TEST_LOCALE, testLanguageName(TEST_LOCALE)],
     ]);
     // Radios, never a <select> (WebKit reports each <select> as a CSP style violation).
@@ -323,13 +326,17 @@ describe('the language picker (shown because a second, test-only language is in 
     expect(getLocale()).toBe(TEST_LOCALE);
     expect(byId('language')).toBe(fieldset);
     expect(fieldset.descendants().filter((e) => e.tagName === 'input')).toEqual(radios);
-    expect(radios.map((r) => r.checked)).toEqual([false, true]);
+    expect(radios.map((r) => r.checked)).toEqual([false, false, true]);
     expect((fieldset.children[0] as FakeElement).textContent).toBe(t('language.label'));
     expect((fieldset.children[0] as FakeElement).textContent).not.toBe('Language');
-    expect(fieldset.descendants().filter((e) => e.tagName === 'label').map((l) => l.textContent)).toEqual(['English', testLanguageName(TEST_LOCALE)]);
+    expect(fieldset.descendants().filter((e) => e.tagName === 'label').map((l) => l.textContent)).toEqual([
+      'English',
+      'Français',
+      testLanguageName(TEST_LOCALE),
+    ]);
     pick('en');
     expect(getLocale()).toBe('en');
-    expect(radios.map((r) => r.checked)).toEqual([true, false]);
+    expect(radios.map((r) => r.checked)).toEqual([true, false, false]);
     expect((fieldset.children[0] as FakeElement).textContent).toBe('Language');
   });
 });
@@ -471,7 +478,8 @@ describe('setLanguage with files loaded', () => {
     await addAndShow();
     const setStatus = vi.spyOn(page.shell, 'setStatus');
     page.setLanguage('en');
-    page.setLanguage('fr');
+    page.setLanguage('nl');
+    page.setLanguage('fr-BE');
     page.setLanguage('EN');
     expect(setStatus).not.toHaveBeenCalled();
     expect(getLocale()).toBe('en');
@@ -486,6 +494,76 @@ describe('setLanguage with files loaded', () => {
     expect(status()).not.toBe('Everything was cleared.');
     expect(byId(`lang-${TEST_LOCALE}`).checked).toBe(true);
     expect(byId('download-note').textContent).toBe(t('download.unavailable.no-emails'));
+  });
+});
+
+/**
+ * Words written the same in English and French (see SAME_AS_ENGLISH in
+ * src/ui/i18n/fr.test.ts): two mail program names, and three words that
+ * are French too.
+ */
+const SAME_IN_FRENCH = ['Thunderbird', 'Apple Mail', 'Cc', 'Date', 'signature'];
+
+describe('French (shipped)', () => {
+  it('rewrites the page in French with files loaded, keeping every choice, then back to English', async () => {
+    const data = await addAndShow();
+    const list = items();
+    const boxes = byClass('include-checkbox');
+    boxes[1]!.checked = false;
+    boxes[1]!.fire('change');
+    runAll();
+    const radio = byId('lang-fr');
+    doc.activeElement = radio;
+    const setStatus = vi.spyOn(page.shell, 'setStatus');
+
+    pick('fr');
+
+    expect(getLocale()).toBe('fr');
+    expect(byId('lang-fr').checked).toBe(true);
+    expect(byId('lang-en').checked).toBe(false);
+    // Only the words that are the same in both languages are left.
+    expect(englishLeft(data, SAME_IN_FRENCH)).toEqual([]);
+    expect(englishLeft(data)).not.toEqual([]); // ...and the check does see them
+    expect(doc.documentElement.getAttribute('lang')).toBe('fr');
+    expect(doc.title).toBe('Email to PDF');
+    // One announcement, in French.
+    expect(setStatus).toHaveBeenCalledTimes(1);
+    expect(status()).toBe('La page est maintenant en français.');
+    // A few exact French texts, numbers written the French way by t().
+    expect(byId('step-add-title').textContent).toBe('Étape 1 Ajoutez vos e-mails');
+    expect(byId('review-included').textContent).toBe('E-mails dans le PDF\u00A0: 3 sur 4.');
+    expect(byId('add-summary-text').textContent).toContain('7 fichiers ajoutés.');
+    expect(byId('download-note').textContent).toBe(t('download.available'));
+    expect((byId('language').children[0] as FakeElement).textContent).toBe('Langue');
+    // Nothing rebuilt, the tick kept, the focus left on the radio.
+    expect(items()).toEqual(list);
+    expect(boxes.map((b) => b.checked)).toEqual([true, false, true, true]);
+    expect(doc.activeElement).toBe(radio);
+
+    pick('en');
+    expect(getLocale()).toBe('en');
+    expect(byId('step-add-title').textContent).toBe('Step 1 Add your emails');
+    expect(byId('review-included').textContent).toBe('3 of 4 emails will be in the PDF.');
+    expect(doc.documentElement.getAttribute('lang')).toBe('en');
+    expect(status()).toBe('The page is now in English.');
+    expect(items()).toEqual(list);
+  });
+
+  it('the next PDF is asked for in French', async () => {
+    await addAndShow();
+    pick('fr');
+    byId('download-button').click();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.request.input.locale).toBe('fr');
+  });
+
+  it('"Clear everything" keeps French', async () => {
+    await addAndShow();
+    pick('fr');
+    byId('clear-everything').click();
+    expect(getLocale()).toBe('fr');
+    expect(status()).toBe('Tout a été effacé.');
+    expect(byId('lang-fr').checked).toBe(true);
   });
 });
 

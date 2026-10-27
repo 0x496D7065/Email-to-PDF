@@ -24,7 +24,6 @@ describe('createPdfStrings', () => {
     expect(strings.pageFooter(3, 12)).toBe('Page 3 of 12');
     expect(strings.fileName('2025-06-02')).toBe('correspondence-2025-06-02.pdf');
     expect(strings.fileName(null)).toBe('correspondence.pdf');
-    expect(strings.joinList(['a', 'b'])).toBe('a, b');
     expect(strings.size(2048)).toBe('2 KB');
   });
 

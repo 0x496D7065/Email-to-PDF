@@ -30,6 +30,8 @@ In development. Done so far:
 - Offline reload: after one visit with the internet on, the page can be
   reloaded or opened again without internet. The browser keeps a copy of
   the site's own files only, never your emails (see "Offline copy" below).
+- Languages: English and French, the PDF too (French if it is your browser's
+  first language; a switch at the top changes it, and nothing is saved).
 
 Still to come: polish (more languages, help for each mail program).
 

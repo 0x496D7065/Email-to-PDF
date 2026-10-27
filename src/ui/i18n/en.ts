@@ -15,8 +15,8 @@
 //   stops compiling until a label is written (or removed).
 // - ASCII only: a non-ASCII character would be written as a \u escape.
 //
-// Other languages (French next, then Dutch) get a sibling file with the same
-// shape, typed as `Messages` (see index.ts), listed in catalog.ts.
+// Other languages (French: fr.ts; Dutch later) get a sibling file with the
+// same shape, typed as `Messages` (see index.ts), listed in catalog.ts.
 
 import type { DedupeWarningCode } from '../../engine/dedupe';
 import type { EngineWarningCode } from '../../engine/engine';
@@ -251,7 +251,13 @@ export const en = {
       mb: '{size} MB',
       unknown: 'size unknown',
     },
-    // Parts of a folded block's label, e.g. "Quoted text, 12 lines, from email #3".
+    // A folded block's label, e.g. "Quoted text, 12 lines, from email #3":
+    // its kind (fold below), its number of lines (foldLines) and, when known,
+    // where the text comes from (foldFromOne / foldFromMany). Templates, not
+    // a list: the language's list rule would join the parts with "and" in
+    // some languages ("Quoted text and 12 lines").
+    foldLabel: '{kind}, {lines}',
+    foldLabelFrom: '{kind}, {lines}, {from}',
     foldLines: { one: '{count} line', other: '{count} lines' },
     foldFromOne: 'from email {list}',
     foldFromMany: 'from emails {list}',
@@ -284,6 +290,8 @@ export const en = {
     sentence: '{text}.',
     files: { one: '{count} file', other: '{count} files' },
     filesFailed: { one: '{count} could not be read', other: '{count} could not be read' },
+    // The two parts above when some files failed: the failed ones are among the {files}.
+    filesWithFailed: '{files}, {failed}',
     // Points to the list of failed files (with the reasons) in step 1.
     seeFailed: 'See why in step 1.',
     messagesFound: { one: '{count} email found', other: '{count} emails found' },

@@ -490,7 +490,17 @@ test('keyboard only: every control is reached in order, shows its focus and work
   // the Enter below cannot open a real chooser first.
   await page.evaluate(() => 0);
 
-  // --- The privacy panel's summary is the first stop: Enter opens it, Space closes it.
+  // --- The language picker is the first stop: the ticked radio (English).
+  // The other language's radio is reached with the arrow keys, not Tab.
+  await page.keyboard.press('Tab');
+  const english = page.locator('#lang-en');
+  await expect(english).toBeFocused();
+  await expect(english).toBeChecked();
+  await expect(english).toHaveAccessibleName('English');
+  const languageFocus = await focused(page, 'language');
+  expect(languageFocus.outlineStyle).not.toBe('none');
+
+  // --- The privacy panel's summary is next: Enter opens it, Space closes it.
   await page.keyboard.press('Tab');
   const privacy = page.locator('#privacy-summary');
   await expect(privacy).toBeFocused();
@@ -565,7 +575,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(items.locator('h3')).toHaveCount(5);
 
   // --- Tab through the whole page, operating each control on the way. -----
-  const walk: Focus[] = [privacyFocus, helpFocus, chooseFocus];
+  const walk: Focus[] = [languageFocus, privacyFocus, helpFocus, chooseFocus];
   const included = (n: number): string => `${String(n)} of 5 emails will be in the PDF.`;
   for (let i = 1; i < 200; i++) {
     await page.keyboard.press('Tab');
@@ -634,17 +644,20 @@ test('keyboard only: every control is reached in order, shows its focus and work
     }
   }
 
-  // The stops, in order: the privacy panel's summary, step 1's help, choose,
-  // clear, zone, folded-text toggle, "put everything in the PDF", then per
-  // email its checkbox and its folded blocks, and the download button last.
+  // The stops, in order: the language picker (its ticked radio), the privacy
+  // panel's summary, step 1's help, choose, clear, zone, folded-text toggle,
+  // "put everything in the PDF", then per email its checkbox and its folded
+  // blocks, and the download button last.
   const tags = walk.map((f) => f.tag);
-  expect(tags.slice(0, 7)).toEqual(['SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
-  expect(walk[1]?.key).toBe('help');
-  expect(walk[6]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
+  expect(tags.slice(0, 8)).toEqual(['INPUT', 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
+  expect(walk[0]?.key).toBe('language');
+  expect(walk[2]?.key).toBe('help');
+  expect(walk[7]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
   expect(tags.at(-1)).toBe('BUTTON');
   expect(walk.filter((f) => f.tag === 'INPUT' && f.position >= 0).map((f) => f.position)).toEqual([0, 1, 2, 3, 4]);
   expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(2 + (await page.locator('#preview-list summary').count()));
-  expect(walk.length).toBe(controlCount);
+  // Every control is a stop, except the unticked language radio (one Tab stop per radio group).
+  expect(walk.length).toBe(controlCount - 1);
   // Every stop shows a clear outline.
   for (const f of walk) {
     expect(f.outlineStyle, f.key).not.toBe('none');
@@ -667,6 +680,8 @@ test('keyboard only: every control is reached in order, shows its focus and work
     const key = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testFocus ?? '');
     expect(key).toBe(walk[i]?.key);
   }
+  await expect(english).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(privacy).toBeFocused();
 
   // --- "Clear everything" with Enter: emptied, focus back on "choose". ----

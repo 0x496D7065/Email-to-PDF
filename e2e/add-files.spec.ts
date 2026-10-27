@@ -359,8 +359,11 @@ test('keyboard: Tab reaches the button right after the privacy panel and the ste
   page.on('filechooser', (chooser) => choosers.push(chooser));
   await page.evaluate(() => 0);
 
-  // The privacy panel's summary in the header comes first (e2e/privacy.spec.ts),
-  // then step 1's help (e2e/help.spec.ts).
+  // The language picker comes first (its ticked radio), then the privacy
+  // panel's summary in the header (e2e/privacy.spec.ts), then step 1's help
+  // (e2e/help.spec.ts).
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#lang-en')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');

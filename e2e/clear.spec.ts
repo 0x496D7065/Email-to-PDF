@@ -181,7 +181,10 @@ test('"Clear everything" is there from the start, unavailable but focusable and 
   await expect(page.locator('#clear-unavailable')).toHaveText(en.clear.unavailable);
   await expect(clear).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
   // ...yet reachable with Tab, right after the "choose" button, and pressing it does nothing.
-  // The privacy panel's summary in the header is the first stop, step 1's help the second.
+  // The language picker is the first stop, the privacy panel's summary the
+  // second, step 1's help the third.
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#lang-en')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');

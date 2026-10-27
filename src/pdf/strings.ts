@@ -16,7 +16,7 @@
 import { translator } from '../ui/i18n';
 
 export interface PdfStrings {
-  /** BCP 47 tag of the language, for sorting names and joining lists. */
+  /** BCP 47 tag of the language, for sorting names. */
   readonly locale: string;
   readonly title: string;
   /** The tool's name, written as the PDF's producer. */
@@ -98,8 +98,6 @@ export interface PdfStrings {
   size(bytes: number | null): string;
   /** "(12 KB, application/pdf)" after an attachment name; type may be ''. */
   attachmentDetails(size: string, type: string): string;
-  /** Joins texts the local way ("a, b, c"). */
-  joinList(items: readonly string[]): string;
   /** The separator between a source file's name and its email. */
   readonly separator: string;
   /** The PDF's file name for the day it is made ("YYYY-MM-DD"), or without a day (null). ASCII only. */
@@ -113,7 +111,7 @@ function roundSize(n: number): number {
 
 /** The PDF texts in `locale` (a language the page ships; throws for any other, see translator()). */
 export function createPdfStrings(locale: string): PdfStrings {
-  const { t, list } = translator(locale);
+  const { t } = translator(locale);
   const size = (bytes: number | null): string => {
     if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return t('preview.size.unknown');
     if (bytes < 1024) return t('preview.size.bytes', { count: bytes });
@@ -189,7 +187,6 @@ export function createPdfStrings(locale: string): PdfStrings {
     size,
     attachmentDetails: (sizeText, type) =>
       type.trim() === '' ? t('pdf.document.attachmentNoType', { size: sizeText }) : t('pdf.document.attachment', { size: sizeText, type }),
-    joinList: (items) => list(items),
     separator: ' - ',
     fileName: (day) => (day === null ? t('pdf.document.fileNameNoDate') : t('pdf.document.fileName', { date: day })),
   };

@@ -77,7 +77,9 @@ test('the help sits by step 1, opens and closes with Enter and Space, and reads 
   });
   expect(above).toBe(true);
 
-  // The Tab stop after the privacy panel's summary, with a visible outline.
+  // The Tab stop after the language picker and the privacy panel's summary, with a visible outline.
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#lang-en')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');
