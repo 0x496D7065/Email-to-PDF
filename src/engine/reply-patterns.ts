@@ -30,8 +30,13 @@ export interface HeaderLabels {
   /** The date line ("Sent" in Outlook, "Date" in Apple Mail and Gmail forwards). */
   readonly sent: readonly string[];
   readonly to: readonly string[];
-  /** Copy lines (Cc and Bcc). */
+  /** Copy lines. */
   readonly cc: readonly string[];
+  /**
+   * Blind-copy lines. For detection they count exactly like Cc lines; the
+   * field reader (quoted-header.ts) reads past them and never reports them.
+   */
+  readonly bcc: readonly string[];
   readonly subject: readonly string[];
 }
 
@@ -48,6 +53,18 @@ export interface ReplyLanguage {
   readonly attribution: {
     readonly opener: RegExp;
     readonly endings: readonly RegExp[];
+    /**
+     * How quoted-header.ts reads the date and the sender out of an
+     * attribution (detection does not use this). `tail` matches what follows
+     * the sender at the end of the line (" wrote:"). `verbs`: the words
+     * written between the date and the sender when the language puts the
+     * verb first (Dutch "Op <date> schreef <name>:"); without them, the last
+     * comma separates the date from the sender.
+     */
+    readonly parts: {
+      readonly tail: RegExp;
+      readonly verbs?: readonly string[];
+    };
   };
   /** Outlook-style "original message" separator lines (whole line). */
   readonly separators: readonly RegExp[];
@@ -66,6 +83,7 @@ export const REPLY_LANGUAGES: readonly ReplyLanguage[] = [
       // Apple: "On 4 Mar 2025, at 11:20, Carol <carol@x.test> wrote:"
       opener: /^on /,
       endings: [/\bwrote ?:$/],
+      parts: { tail: / ?\bwrote ?:$/ },
     },
     separators: [/^-{2,} ?original message ?-{2,}$/],
     forwardMarkers: [
@@ -77,7 +95,8 @@ export const REPLY_LANGUAGES: readonly ReplyLanguage[] = [
       from: ['From'],
       sent: ['Sent', 'Date'],
       to: ['To'],
-      cc: ['Cc', 'Bcc'],
+      cc: ['Cc'],
+      bcc: ['Bcc'],
       subject: ['Subject'],
     },
   },
@@ -89,6 +108,7 @@ export const REPLY_LANGUAGES: readonly ReplyLanguage[] = [
       // (with the accents). "[e\u00e9]" also accepts a lost accent.
       opener: /^le /,
       endings: [/\ba [e\u00e9]crit ?:$/],
+      parts: { tail: / ?\ba [e\u00e9]crit ?:$/ },
     },
     separators: [/^-{2,} ?message d['\u2019]origine ?-{2,}$/],
     forwardMarkers: [
@@ -102,7 +122,8 @@ export const REPLY_LANGUAGES: readonly ReplyLanguage[] = [
       sent: ['Envoy\u00e9', 'Envoye', 'Date'],
       // "A" without its accent is common in plain-text copies.
       to: ['\u00c0', 'A'],
-      cc: ['Cc', 'Cci'],
+      cc: ['Cc'],
+      bcc: ['Cci'],
       subject: ['Objet'],
     },
   },
@@ -115,6 +136,9 @@ export const REPLY_LANGUAGES: readonly ReplyLanguage[] = [
       // for "schreef" somewhere before the final colon.
       opener: /^op /,
       endings: [/\bschreef\b.*:$/, /\bhet volgende geschreven ?:$/],
+      // "... schreef Bob <bob@x.test>:", "... schreef Bob <bob@x.test> het volgende:",
+      // "... heeft Carol <carol@x.test> het volgende geschreven:"
+      parts: { tail: /(?: het volgende(?: geschreven)?)? ?:$/, verbs: ['schreef', 'heeft'] },
     },
     separators: [/^-{2,} ?oorspronkelijk bericht ?-{2,}$/],
     forwardMarkers: [
@@ -126,7 +150,8 @@ export const REPLY_LANGUAGES: readonly ReplyLanguage[] = [
       from: ['Van'],
       sent: ['Verzonden', 'Datum'],
       to: ['Aan'],
-      cc: ['CC', 'BCC'],
+      cc: ['CC'],
+      bcc: ['BCC'],
       subject: ['Onderwerp'],
     },
   },

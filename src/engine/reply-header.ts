@@ -41,9 +41,10 @@
 //    intro is folded with the block.
 //    - WITHOUT an intro, the label lines must also look like a real header,
 //      not a letter or a label quoted in the sender's own text ("From: the
-//      warehouse / Date: Monday / To: the office"): a From, To or Cc value
-//      holds an address ("@", which covers "<addr>" and "[mailto:...]"), or
-//      the Sent/Date value holds a 4-digit year or an hh:mm time. This
+//      warehouse / Date: Monday / To: the office"): a From, To or Cc (or
+//      Bcc) value holds an address ("@", which covers "<addr>" and
+//      "[mailto:...]"), or the Sent/Date value holds a 4-digit year or an
+//      hh:mm time. This
 //      applies to a block inside a ">" quote too. With an intro, the shape
 //      above is enough.
 //    - REPLY: the fold runs from the intro (or the block) to the end of the
@@ -116,11 +117,12 @@ export const MAX_GAP_LINES = 2;
 const MAX_INTRO_LENGTH = 120;
 
 /** Characters read at the start of a line to find a label ("Onderwerp :" with stars and spaces fits). */
-const LABEL_HEAD_LENGTH = 40;
+export const LABEL_HEAD_LENGTH = 40;
 
-type Role = keyof HeaderLabels;
+/** The role of a header label line (from, sent, to, cc, bcc, subject). */
+export type Role = keyof HeaderLabels;
 
-const ROLES: readonly Role[] = ['from', 'sent', 'to', 'cc', 'subject'];
+const ROLES: readonly Role[] = ['from', 'sent', 'to', 'cc', 'bcc', 'subject'];
 
 /** Escapes a plain word for use inside a regular expression. */
 function escapeRegExp(word: string): string {
@@ -128,7 +130,7 @@ function escapeRegExp(word: string): string {
 }
 
 /** Lower case + NFC: the key used to compare labels. */
-function labelKey(word: string): string {
+export function labelKey(word: string): string {
   return word.normalize('NFC').toLowerCase();
 }
 
@@ -136,16 +138,20 @@ function labelKey(word: string): string {
 // with Unicode semantics ("i" + "u").
 const ci = (re: RegExp): RegExp => new RegExp(re.source, 'iu');
 
-const LANGUAGES = REPLY_LANGUAGES.map((lang) => ({
+/** Attribution patterns per language, compiled (same order as REPLY_LANGUAGES). Also read by quoted-header.ts. */
+export const LANGUAGES: readonly { readonly code: string; readonly opener: RegExp; readonly endings: readonly RegExp[] }[] = REPLY_LANGUAGES.map((lang) => ({
+  code: lang.code,
   opener: ci(lang.attribution.opener),
   endings: lang.attribution.endings.map(ci),
 }));
 
-const SEPARATORS: readonly RegExp[] = REPLY_LANGUAGES.flatMap((lang) => lang.separators.map(ci));
-const FORWARD_MARKERS: readonly RegExp[] = REPLY_LANGUAGES.flatMap((lang) => lang.forwardMarkers.map(ci));
+export const SEPARATORS: readonly RegExp[] = REPLY_LANGUAGES.flatMap((lang) => lang.separators.map(ci));
+export const FORWARD_MARKERS: readonly RegExp[] = REPLY_LANGUAGES.flatMap((lang) => lang.forwardMarkers.map(ci));
 
 /** Label word (labelKey) -> role. The first language listing a word wins. */
 const LABEL_ROLES = new Map<string, Role>();
+/** Read-only view of LABEL_ROLES, for quoted-header.ts. */
+export const LABEL_ROLE_OF: ReadonlyMap<string, Role> = LABEL_ROLES;
 for (const lang of REPLY_LANGUAGES) {
   for (const role of ROLES) {
     for (const word of lang.labels[role]) {
@@ -157,7 +163,7 @@ for (const lang of REPLY_LANGUAGES) {
 // "Label:" at the start of a cleaned line, with optional stars around the
 // label and one optional space before the colon ("De :", "*From:*").
 // Longest words first, so "Aan" is tried before "A".
-const LABEL_PATTERN = new RegExp(
+export const LABEL_PATTERN = new RegExp(
   `^\\*?(${[...LABEL_ROLES.keys()]
     .sort((a, b) => b.length - a.length)
     .map(escapeRegExp)
@@ -206,7 +212,7 @@ function readLine(text: string, range: LineRange): LineInfo {
 }
 
 /** The cleaned copy of text[from, to) (see the header comment, rule 1). */
-function clean(text: string, from: number, to: number): string {
+export function clean(text: string, from: number, to: number): string {
   return text.slice(from, to).replace(/\s+/g, ' ').trim().normalize('NFC');
 }
 
@@ -315,7 +321,8 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
     // Only this line is read (never text.indexOf over the rest of the body).
     const value = text.slice(at(i).textStart, at(i).range.contentEnd);
     if (role === 'sent') return DATE_EVIDENCE.test(value);
-    if (role === 'from' || role === 'to' || role === 'cc') return value.includes('@');
+    // Bcc counts exactly like Cc (it was one role with it before the field reader needed them apart).
+    if (role === 'from' || role === 'to' || role === 'cc' || role === 'bcc') return value.includes('@');
     return false;
   };
 

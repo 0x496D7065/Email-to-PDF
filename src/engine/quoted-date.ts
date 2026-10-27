@@ -511,8 +511,9 @@ export function parseQuotedDate(text: string, sourceOffsetMinutes: number | null
   // Step 1: an RFC 5322 date (forward blocks), only when parseEmailDate used
   // every word (wholeRfcDate). Not when an AM/PM word is present:
   // parseEmailDate would take "PM" for an unknown zone and read 2:02 PM as
-  // 02:02. Read with a real zone (exact), or with "-0000" or a military
-  // zone (UTC, local zone unknown: approximate, file comment).
+  // 02:02. Read with a real zone (exact), or with "-0000" (UTC, local zone
+  // unknown: approximate, file comment). A one-letter military zone other
+  // than "Z" is refused (unreadable, below).
   const rfc = parseEmailDate(text);
   const whole = wholeRfcDate(stripped.text);
   if (rfc.utcMs !== null && whole !== undefined && !tokens.some((t) => MERIDIEM[t] !== undefined)) {

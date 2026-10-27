@@ -354,6 +354,10 @@ describe('detectReplyHeaders: Outlook header blocks (replies fold to the end)', 
       ['address in From', ['From: Alice Example <alice@example.test>', 'Date: Monday', 'To: the office']],
       ['mailto in To', ['From: Alice Example', 'Sent: Monday', 'To: Bob Sample [mailto:bob@example.test]', 'Subject: x']],
       ['address in Cc', ['Van: Alice', 'Verzonden: maandag', 'Cc: bob@example.test', 'Aan: Bob']],
+      // Blind-copy labels (their own `bcc` list in reply-patterns.ts) count exactly like Cc.
+      ['address in Bcc', ['From: Alice', 'Sent: Monday', 'Bcc: bob@example.test', 'To: Bob']],
+      ['address in Cci', ['De : Alice', 'Envoy\u00e9 : lundi', 'Cci : bob@example.test', 'Objet : x']],
+      ['address in BCC', ['Van: Alice', 'Verzonden: maandag', 'BCC: bob@example.test', 'Aan: Bob']],
       ['year in Date', ['De : la mairie', 'Date : lundi 3 mars 2025', 'Objet : permis']],
       ['time in Sent', ['From: the warehouse', 'Sent: Monday 9:15 AM', 'To: the office']],
     ];

@@ -6,6 +6,10 @@
 // - precision: found headers that start at a true header,
 // - kind / headEnd: of the found true headers, how many have the right kind
 //   (reply or forward) and the right end of the header lines,
+// - fields / hdrEnd*: of the found true headers, how many have every field
+//   read right by readQuotedHeader (quoted-header.ts: from, to, cc, subject,
+//   date text, header end, compared with the builder's ground truth), and how
+//   many have the right header end once read (it fixes wrapped To/Cc),
 // - extra: found boundaries that start at no true header (precision's
 //   complement, as a count),
 // - false splits: boundaries found in the negative bodies that hold no
@@ -21,6 +25,8 @@
 import { describe, expect, it } from 'vitest';
 import { NEGATIVE_CASES, THREAD_CASES } from '../../tests/support/thread-cases';
 import type { QuoteStyle } from '../../tests/support/thread-builder';
+import { fieldDiffs } from '../../tests/support/quoted-header-truth';
+import { readQuotedHeader } from './quoted-header';
 import { findReplyHeaders } from './reply-header';
 
 /** What a boundary detector reports for one header. */
@@ -37,17 +43,23 @@ interface Tally {
   matched: number;
   kindOk: number;
   headEndOk: number;
+  /** All fields read right (readQuotedHeader). */
+  fieldsOk: number;
+  /** Header end right once read (readQuotedHeader). */
+  headerEndOk: number;
   /** Found boundaries at no true header. */
   extra: number;
 }
 
-const empty = (): Tally => ({ truths: 0, found: 0, matched: 0, kindOk: 0, headEndOk: 0, extra: 0 });
+const empty = (): Tally => ({ truths: 0, found: 0, matched: 0, kindOk: 0, headEndOk: 0, fieldsOk: 0, headerEndOk: 0, extra: 0 });
 
 interface Measurement {
   readonly byGroup: ReadonlyMap<string, Tally>;
   readonly byStyle: ReadonlyMap<QuoteStyle, Tally>;
   /** Missed true headers, "case id: generation style". */
   readonly misses: readonly string[];
+  /** Found true headers with a field read wrong, "case id: generation style: differences". */
+  readonly fieldMisses: readonly string[];
   /** Boundaries found in 'no-header' negatives, per case. */
   readonly falseSplits: ReadonlyMap<string, number>;
   /** Real headers found in 'refuse' negatives, per case (folding them is fine). */
@@ -60,6 +72,7 @@ function measure(detect: Detect): Measurement {
   const byGroup = new Map<string, Tally>();
   const byStyle = new Map<QuoteStyle, Tally>();
   const misses: string[] = [];
+  const fieldMisses: string[] = [];
   const tally = <K>(map: Map<K, Tally>, key: K): Tally => {
     let t = map.get(key);
     if (t === undefined) map.set(key, (t = empty()));
@@ -74,14 +87,19 @@ function measure(detect: Detect): Measurement {
     for (const h of c.thread.headers) {
       const s = tally(byStyle, h.style);
       const hit = found.find((f) => f.start === h.start);
+      const read = hit === undefined ? undefined : readQuotedHeader(c.thread.body, hit);
+      const diffs = read === undefined ? [] : fieldDiffs(h, read);
       for (const t of [g, s]) {
         t.truths++;
         if (hit === undefined) continue;
         t.matched++;
         if (hit.kind === h.kind) t.kindOk++;
         if (hit.headEnd === h.headEnd) t.headEndOk++;
+        if (diffs.length === 0) t.fieldsOk++;
+        if (read?.headerEnd === h.headEnd) t.headerEndOk++;
       }
       if (hit === undefined) misses.push(`${c.id}: generation ${h.generation} (${h.style})`);
+      else if (diffs.length > 0) fieldMisses.push(`${c.id}: generation ${h.generation} (${h.style}): ${diffs.join('; ')}`);
     }
   }
   const falseSplits = new Map<string, number>();
@@ -97,28 +115,29 @@ function measure(detect: Detect): Measurement {
     refuseFound.set(n.id, real);
     refuseExtra.set(n.id, found.length - real);
   }
-  return { byGroup, byStyle, misses, falseSplits, refuseFound, refuseExtra };
+  return { byGroup, byStyle, misses, fieldMisses, falseSplits, refuseFound, refuseExtra };
 }
 
 const pct = (part: number, whole: number): string => (whole === 0 ? '-' : `${Math.round((100 * part) / whole)}%`);
 
 function table(m: Measurement): string {
   const row = (name: string, t: Tally): string =>
-    `${name.padEnd(20)} ${String(t.truths).padStart(3)} ${pct(t.matched, t.truths).padStart(6)} ${pct(t.matched, t.found).padStart(6)} ${String(t.extra).padStart(5)} ${pct(t.kindOk, t.matched).padStart(6)} ${pct(t.headEndOk, t.matched).padStart(7)}`;
-  const head = `${'group'.padEnd(20)} hdr recall  prec. extra   kind headEnd`;
-  const byStyle = [...m.byStyle].map(([s, t]) => `${s.padEnd(20)} ${String(t.truths).padStart(3)} ${pct(t.matched, t.truths).padStart(6)}`);
+    `${name.padEnd(20)} ${String(t.truths).padStart(3)} ${pct(t.matched, t.truths).padStart(6)} ${pct(t.matched, t.found).padStart(6)} ${String(t.extra).padStart(5)} ${pct(t.kindOk, t.matched).padStart(6)} ${pct(t.headEndOk, t.matched).padStart(7)} ${pct(t.fieldsOk, t.matched).padStart(6)} ${pct(t.headerEndOk, t.matched).padStart(7)}`;
+  const head = `${'group'.padEnd(20)} hdr recall  prec. extra   kind headEnd fields hdrEnd*`;
+  const byStyle = [...m.byStyle].map(([s, t]) => `${s.padEnd(20)} ${String(t.truths).padStart(3)} ${pct(t.matched, t.truths).padStart(6)} ${pct(t.fieldsOk, t.matched).padStart(6)}`);
   const negatives = [...m.falseSplits].map(([id, n]) => `  ${id}: ${n}`);
   const refuse = [...m.refuseFound].map(([id, n]) => `  ${id}: ${n} at the real header, ${m.refuseExtra.get(id) ?? 0} elsewhere`);
   return [
     head,
     ...[...m.byGroup].map(([g, t]) => row(g, t)),
-    `${'style'.padEnd(20)} hdr recall`,
+    `${'style'.padEnd(20)} hdr recall fields`,
     ...byStyle,
     'false splits on no-header negatives:',
     ...negatives,
     'real headers found on refuse negatives (fold only; 7.4 must not split):',
     ...refuse,
     ...(m.misses.length === 0 ? [] : ['missed:', ...m.misses.map((s) => `  ${s}`)]),
+    ...(m.fieldMisses.length === 0 ? [] : ['fields read wrong:', ...m.fieldMisses.map((s) => `  ${s}`)]),
   ].join('\n');
 }
 
@@ -137,6 +156,21 @@ const BASELINE = {
   kind: { forward: 17 / 18 } as Readonly<Record<string, number>>,
   /** Right header end, of the found true headers: a wrapped To/Cc line ends the label run early. */
   headEnd: { 'outlook-wrapped': 0 } as Readonly<Record<string, number>>,
+  /**
+   * Every field read right by readQuotedHeader (task 7.3), of the found true
+   * headers, per group. Safety over coverage (quoted-header.ts, rule 1): a
+   * names-only To list wrapped over several lines is never continued, since
+   * a body line cannot be told apart from a name. In 'outlook-wrapped' the
+   * two headers of the "outlook-nl wrapped names only" case are read short
+   * (the names of the label line only, flagged incomplete; the Subject after
+   * the wrapped lines is not read): 5 of 7. Nothing is lost, the lines stay
+   * in the original text.
+   */
+  fields: { 'outlook-wrapped': 5 / 7 } as Readonly<Record<string, number>>,
+  /** The same per quote style: the two refused headers are outlook-nl (7 of 9). */
+  fieldsByStyle: { 'outlook-nl': 7 / 9 } as Readonly<Record<string, number>>,
+  /** Right header end once read by readQuotedHeader, per group: the wrapped To/Cc gap of headEnd is closed, except for the refused names-only lists above (5 of 7). */
+  headerEnd: { 'outlook-wrapped': 5 / 7 } as Readonly<Record<string, number>>,
   /** Found boundaries at no true header, per group (target: 0 each). Groups not listed must stay at 0. */
   extra: {} as Readonly<Record<string, number>>,
   /** Boundaries found per 'no-header' negative (target: 0 each). */
@@ -161,6 +195,14 @@ describe('thread reconstruction: measurement of the current boundary detector', 
       expect(t.kindOk / t.matched, `${group} kind`).toBeGreaterThanOrEqual(BASELINE.kind[group] ?? 1);
       expect(t.headEndOk / t.matched, `${group} headEnd`).toBeGreaterThanOrEqual(BASELINE.headEnd[group] ?? 1);
     }
+  });
+
+  it('keeps the baseline field accuracy of readQuotedHeader per group and per style (task 7.3)', () => {
+    for (const [group, t] of m.byGroup) {
+      expect(t.fieldsOk / t.matched, `${group} fields`).toBeGreaterThanOrEqual(BASELINE.fields[group] ?? 1);
+      expect(t.headerEndOk / t.matched, `${group} header end once read`).toBeGreaterThanOrEqual(BASELINE.headerEnd[group] ?? 1);
+    }
+    for (const [style, t] of m.byStyle) expect(t.fieldsOk / t.matched, `${style} fields`).toBeGreaterThanOrEqual(BASELINE.fieldsByStyle[style] ?? 1);
   });
 
   it('keeps the baseline extra boundaries per group (boundaries at no true header)', () => {
@@ -211,5 +253,4 @@ describe.skip('thread reconstruction: milestone 7 targets (task 7.4)', () => {
 describe('thread reconstruction: targets for later tasks', () => {
   it.todo('7.4: the splitter refuses the "refuse" negatives (interleaved answers, bottom-posting): no reconstructed message');
   it.todo('7.4/7.5: 0 wrong suppressions (no reconstructed message hidden as a duplicate when it is not one)');
-  it.todo('7.3: header fields (from, date, to, cc, subject) equal ExpectedHeader.fields, wrapped To/Cc included');
 });
