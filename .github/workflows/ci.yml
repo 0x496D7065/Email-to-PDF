@@ -60,7 +60,9 @@ jobs:
   e2e:
     needs: checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Higher than the checks job: installing a browser's system packages
+    # (--with-deps) can take over 15 minutes on a slow Ubuntu mirror.
+    timeout-minutes: 30
     strategy:
       # One browser failing must not hide the results of the others.
       fail-fast: false
@@ -88,4 +90,6 @@ jobs:
 
       # Playwright rebuilds the site itself before testing (playwright.config.ts).
       - name: End-to-end tests (${{ matrix.browser }})
+        # Own limit, so a hung test run fails well before the 30-minute job limit.
+        timeout-minutes: 15
         run: npm run test:e2e:${{ matrix.browser }}
