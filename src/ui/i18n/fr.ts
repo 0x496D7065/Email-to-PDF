@@ -101,7 +101,7 @@ export const fr: Messages = {
     clients: {
       outlookClassic: {
         name: 'Outlook (classique, sous Windows)',
-        how: 'Faire glisser un e-mail de la liste vers un dossier ou vers le bureau crée généralement un fichier .msg. «\u00A0Enregistrer sous\u00A0» dans le menu Fichier peut aussi en enregistrer un.',
+        how: 'Faire glisser un e-mail de la liste vers un dossier ou vers le bureau crée généralement un fichier\u00A0: un fichier .eml ou .msg, selon votre version d’Outlook. Les deux fonctionnent ici. «\u00A0Enregistrer sous\u00A0» dans le menu Fichier peut aussi en enregistrer un.',
       },
       outlookNew: {
         name: 'Nouvel Outlook et Outlook sur le web',

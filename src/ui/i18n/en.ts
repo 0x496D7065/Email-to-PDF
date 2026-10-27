@@ -115,9 +115,11 @@ export const en = {
   },
 
   // The "how to get your email files" help in step 1 (src/ui/app.ts): closed
-  // by default, opened from its summary line. Nothing here has been checked
-  // against the real mail programs yet, so every line is hedged ("usually",
-  // "may"): never promise that a menu or a drag works. No links, no URLs.
+  // by default, opened from its summary line. Classic Outlook for Windows:
+  // dragging an email to the desktop or a folder was checked to give .eml
+  // (2026-10); older versions reportedly give .msg. Everything else is
+  // unverified, so every line stays hedged ("usually", "may"): never promise
+  // that a menu or a drag works. No links, no URLs.
   help: {
     // The line that opens and closes the help (also its accessible name).
     summary: 'How do I get my email files?',
@@ -126,7 +128,7 @@ export const en = {
     clients: {
       outlookClassic: {
         name: 'Outlook (classic, on Windows)',
-        how: 'Dragging an email from the list to a folder or to the desktop usually makes a .msg file. Save As in the File menu may also save one.',
+        how: 'Dragging an email from the list to a folder or to the desktop usually makes a file: an .eml or a .msg file, depending on your Outlook version. Both work here. Save As in the File menu may also save one.',
       },
       outlookNew: {
         name: 'New Outlook and Outlook on the web',
