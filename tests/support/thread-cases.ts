@@ -4,7 +4,7 @@
 // measurement test (src/engine/reconstruct-measure.test.ts) and the builder's
 // own test. Synthetic data only (README.md, rule R7).
 
-import { buildThread, isForwardStyle, wallTimeOf, type BuiltThread, type Person, type QuoteOptions, type QuoteStyle, type ThreadMessage, type Zone } from './thread-builder';
+import { buildThread, isForwardStyle, wallTimeOf, type BuiltThread, type ExpectedHeader, type Person, type QuoteOptions, type QuoteStyle, type ThreadMessage, type Zone } from './thread-builder';
 
 export const ALICE: Person = { name: 'Alice Example', address: 'alice@example.test' };
 export const BOB: Person = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
@@ -191,6 +191,64 @@ function makeCases(): ThreadCase[] {
 
 export const THREAD_CASES: readonly ThreadCase[] = makeCases();
 
+/** Shifts every offset of a header at or after `at` by `delta` (the text before `at` is unchanged). */
+function shiftHeader(h: ExpectedHeader, at: number, delta: number): ExpectedHeader {
+  const s = (n: number): number => (n >= at ? n + delta : n);
+  return { ...h, start: s(h.start), headEnd: s(h.headEnd), ownStart: s(h.ownStart), ownEnd: s(h.ownEnd) };
+}
+
+/**
+ * Real threads in shapes the splitter (task 7.4) refuses on purpose, so the
+ * recall cost of "drop the holder on refusal" stays visible. Measured apart
+ * (src/engine/reconstruct-measure.test.ts), NOT in the per-style recall
+ * targets of THREAD_CASES. The builder forbids own text with ">" lines or
+ * no own text, so both bodies are built, then edited; the ground truth is
+ * edited with them.
+ * - a quoted message that quotes a list itself ("> Here is what the agent
+ *   wrote:" then "> > ..."): the list's bare "wrote:" line is a weak header
+ *   (no sender, no date), so its holder and every older message are dropped;
+ * - a Gmail attribution followed directly by a quoted "-----Original
+ *   Message-----" block (passed on without a comment): the attribution has no
+ *   text of its own, so its body depth cannot be read and it is refused.
+ */
+function makeRefusalCostCases(): ThreadCase[] {
+  const group = 'refusal-cost';
+  // (a) Message 1 holds a ">" list. "@ " stands for "> " while building (same length: no offset moves).
+  const listed = chain(repeat('gmail-en', 2)).map((m, i) =>
+    i === 1 ? { ...m, text: 'Hello Alice,\n\nHere is what the agent wrote:\n@ keys for the side door\n@ parking card\n\nBest regards,\nBob' } : m,
+  );
+  const a = buildThread(listed);
+  const listBody = a.body.replace(/^> @ /gmu, '> > ');
+  const listThread: BuiltThread = {
+    ...a,
+    body: listBody,
+    headers: a.headers.map((h) => ({ ...h, ownText: h.ownText.replace(/^@ /gmu, '> ') })),
+  };
+
+  // (b) Message 1 forwards message 0 with no comment: its own text (a placeholder line and the gap after it) is cut out.
+  const placeholder = 'PLACEHOLDER-NO-COMMENT';
+  const passed = chain(['outlook-original-en', 'gmail-en']).map((m, i) => (i === 1 ? { ...m, text: placeholder } : m));
+  const b = buildThread(passed);
+  const cut = `> ${placeholder}\n>\n`;
+  const at = b.body.indexOf(cut);
+  if (at < 0 || b.body.indexOf(cut, at + 1) >= 0) throw new Error('refusal-cost: placeholder not found once');
+  const passedThread: BuiltThread = {
+    ...b,
+    body: b.body.slice(0, at) + b.body.slice(at + cut.length),
+    headers: b.headers.map((h) => {
+      const moved = shiftHeader(h, at + cut.length, -cut.length);
+      return h.ownText === placeholder ? { ...moved, ownStart: at, ownEnd: at, ownText: '' } : moved;
+    }),
+  };
+
+  return [
+    { id: 'quoted message quoting a ">" list after "wrote:"', group, thread: listThread },
+    { id: 'gmail reply over "-----Original Message-----" with no comment', group, thread: passedThread },
+  ];
+}
+
+export const REFUSAL_COST_CASES: readonly ThreadCase[] = makeRefusalCostCases();
+
 /**
  * A body where splitting must NOT happen.
  * - 'no-header': nothing in it is a quote header; any boundary found is a false split.
@@ -241,6 +299,18 @@ export const NEGATIVE_CASES: readonly NegativeCase[] = [
     'Could you send yours?',
     '',
     'Alice',
+  ]),
+  negative('header-like prose under an underscore row', 'no-header', [
+    'Hello Bob,',
+    '',
+    'See you.',
+    '',
+    '________________________________',
+    'From: the accounting team',
+    'Sent: in March 2025',
+    'Subject: missing receipts',
+    '',
+    'Could you send yours?',
   ]),
   negative('">" list that is not a quote', 'no-header', ['Hello Bob,', '', 'The checklist for Thursday:', '> keys for the side door', '> parking card', '> signed delivery note', '', 'Alice']),
   negative('">" list after a "wrote:" sentence', 'no-header', [

@@ -76,11 +76,17 @@
 //    language, a clause can sit where the name is ("Bob forwarded what
 //    Carol wrote:", "schreef Bob dat hij later komt:"), so the name is kept
 //    only with at most MAX_NAME_WORDS words, every lowercase word a name
-//    particle ("Jan van der Berg", "Jean de La Fontaine", "d'Arc"). So
-//    "my colleague Bob wrote:" gives no sender (accepted cost).
+//    particle ("Jan van der Berg", "Jean de La Fontaine", "d'Arc"), not the
+//    pronoun "I" / "Je" / "Ik" alone, and no "&" or "/" (two people). So
+//    "my colleague Bob wrote:" gives no sender (accepted cost). WITH an
+//    address the same name test applies (except the word count: the
+//    address bounds the name), but only the name is dropped: "On
+//    3 March 2025, my colleague Bob <bob@x> wrote:" gives the address with
+//    an empty name (the address is unambiguous, the name is not).
 //    Without an opener ("Bob <bob@x>
 //    wrote:"), there is no date; the name is kept only without a comma or a
-//    digit. Without an address and without a clear split: nothing.
+//    digit, and only when it passes the same name test (else the address
+//    alone). Without an address and without a clear split: nothing.
 // 3. MAILBOX LISTS are split at ";" and "," outside quotes, "<>", "[]" and
 //    "()". A "," splits only after a mailbox WITH an address, so a name
 //    written "Sample, Bob" (Outlook, names only) stays one name. A mailbox
@@ -204,6 +210,8 @@ const NAME_PARTICLES: ReadonlySet<string> = new Set([
   'van', 'de', 'der', 'den', 'het', 'ten', 'ter', 'te', "'t",
   'du', 'des', 'la', 'le', "d'", 'd\u2019',
 ]);
+/** First-person pronouns (EN/FR/NL, lowercase): never a sender's name on their own. */
+const PRONOUNS: ReadonlySet<string> = new Set(['i', 'je', 'ik']);
 /** A French elided particle written onto the name: "d'Arc", "d\u2019Estaing". */
 const ELIDED_PARTICLE = /^d['\u2019]\p{Lu}/u;
 /** Splits an attribution into words to find every address written in it. */
@@ -524,13 +532,19 @@ function attributionName(raw: string): string {
 }
 
 /**
- * Whether a name read without an address looks like one (rule 2): at most
- * MAX_NAME_WORDS words, every word starting with a lowercase letter a name
- * particle (NAME_PARTICLES; "in" only before "'t"; "d'Arc").
+ * Whether an attribution name looks like one (rule 2): at most
+ * MAX_NAME_WORDS words when no address bounds it (`addressed` false; with
+ * an address a longer name such as "Carol Test - Equipe Livraisons" is
+ * kept), every word starting with a lowercase letter a name particle (NAME_PARTICLES; "in" only before "'t"; "d'Arc"), not a
+ * pronoun alone (PRONOUNS) and without "&" or "/". Exported for
+ * reconstruct.ts (rule R1: a sender without an address counts as evidence
+ * only when its name is name-shaped).
  */
-function isPlainName(name: string): boolean {
+export function isPlainName(name: string, addressed: boolean): boolean {
   const words = name.split(' ');
-  if (words.length > MAX_NAME_WORDS) return false;
+  if (!addressed && words.length > MAX_NAME_WORDS) return false;
+  // "I wrote:", "Je ... a ecrit :", "Ik ...": the writer, not a name; "&" or "/": two people.
+  if (PRONOUNS.has(name.toLowerCase()) || /[&/]/u.test(name)) return false;
   return words.every(
     (w, i) =>
       !LOWERCASE_START.test(w) ||
@@ -589,14 +603,16 @@ function readAttribution(text: string): { from: EmailAddress[]; dateText: string
     if (opener === null) {
       // "Bob Sample <bob@x.test> wrote:": no date. The name only when nothing else can be in it.
       if (address === null) return none;
-      const name = /[\d,]/u.test(before) ? '' : attributionName(before);
+      const plain = /[\d,]/u.test(before) ? '' : attributionName(before);
+      const name = isPlainName(plain, true) ? plain : '';
       return { from: [{ name, address: address.address }], dateText: null };
     }
     const split = splitDateName(before, lang.verbs);
     if (split === null) return address === null ? none : { from: [{ name: '', address: address.address }], dateText: null };
-    // No address: a clause can sit where the name is ("Bob forwarded what
-    // Carol wrote:", "schreef Bob dat hij later komt:"). Only a name-shaped name is kept.
-    const name = address === null && !isPlainName(split.name) ? '' : split.name;
+    // A clause can sit where the name is ("Bob forwarded what Carol wrote:",
+    // "schreef Bob dat hij later komt:", "my colleague Bob <bob@x> wrote:").
+    // Only a name-shaped name is kept; an address is kept either way.
+    const name = isPlainName(split.name, address !== null) ? split.name : '';
     const from = name === '' && address === null ? [] : [{ name, address: address?.address ?? '' }];
     return { from, dateText: split.date };
   }

@@ -340,6 +340,38 @@ describe('readQuotedHeader: attributions', () => {
     expect(attribution('Le 3 mars 2025, Marie du Bois a \u00e9crit :').from).toEqual([box('Marie du Bois')]);
   });
 
+  it('with an address, a name that is not name-shaped is dropped and the address kept (7.3 review)', () => {
+    const cases: readonly [string, string | null][] = [
+      ['On 3 March 2025, my colleague Bob <bob@x.example.test> wrote:', '3 March 2025'],
+      ['On 3 March 2025, I <bob@x.example.test> wrote:', '3 March 2025'],
+      ['Le 3 mars 2025, Je <bob@x.example.test> a \u00e9crit :', '3 mars 2025'],
+      ['Op 3 maart 2025 schreef Ik <bob@x.example.test>:', '3 maart 2025'],
+      ['On 3 March 2025, Bob & Carol <bob@x.example.test> wrote:', '3 March 2025'],
+      ['On 3 March 2025, Bob/Carol <bob@x.example.test> wrote:', '3 March 2025'],
+      // No opener: no date, the same name test.
+      ['my colleague Bob <bob@x.example.test> wrote:', null],
+      ['Bob & Carol <bob@x.example.test> wrote:', null],
+    ];
+    for (const [text, date] of cases) {
+      const got = attribution(text);
+      expect(got.from, text).toEqual([box('', 'bob@x.example.test')]);
+      expect(got.dateText, text).toBe(date);
+    }
+    // A name-shaped name with an address is still read.
+    expect(attribution('On 3 March 2025, Bob Sample <bob@x.example.test> wrote:').from).toEqual([box('Bob Sample', 'bob@x.example.test')]);
+    expect(attribution('Bob Sample <bob@x.example.test> wrote:').from).toEqual([box('Bob Sample', 'bob@x.example.test')]);
+    // With an address the word count is not limited: the address bounds the name (fixture 22 has such a name).
+    expect(attribution('On 3 March 2025, Carol Test - Delivery Team Ghent <carol@sample.invalid> wrote:').from).toEqual([box('Carol Test - Delivery Team Ghent', 'carol@sample.invalid')]);
+  });
+
+  it('without an address, a pronoun alone or a name with "&" or "/" gives no sender (the date is kept)', () => {
+    for (const text of ['On 3 March 2025, I wrote:', 'Le 3 mars 2025, Je a \u00e9crit :', 'Op 3 maart 2025 schreef Ik:', 'On 3 March 2025, Bob & Carol wrote:', 'On 3 March 2025, Bob / Carol wrote:']) {
+      const got = attribution(text);
+      expect(got.from, text).toEqual([]);
+      expect(got.dateText, text).not.toBeNull();
+    }
+  });
+
   it('reads a bare attribution (no opener): address and plain name only, no date', () => {
     const got = readOne('New.\n\nBob Sample <bob@x.example.test> wrote:\n> Old text.\n');
     expect(got.from).toEqual([box('Bob Sample', 'bob@x.example.test')]);
