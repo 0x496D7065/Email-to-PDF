@@ -18,6 +18,13 @@
 //       messages), so its first fold can start AT the signature and would
 //       hide the signature from the signature detector.
 // 5. Per message, turn all folds into segments (segments.ts).
+// 6. Rebuild earlier messages from the quoted text of every kept message
+//    (reconstruct.ts), link them to the real messages and to each other, and
+//    build the timeline (rebuild-links.ts). Always on, but it only ADDS
+//    `reconstructed`, `timeline` and `reconstructionWarnings` to the
+//    result: messages, segments, counts and positionByIndex are exactly
+//    what they would be without it. A rebuilt message is a view of a slice
+//    of its source body; the source body stays whole in `messages`.
 //
 // Indices: every `index` and `related` number in the result (EngineMessage.index,
 // MergedCopy.index, DedupeWarning.related, Segment.related) is a position in
@@ -37,7 +44,14 @@
 // 'folding-disabled' warning. If de-duplication throws or returns an
 // inconsistent result, no message is merged and every message gets a
 // 'dedupe-failed' warning. Text is never lost, at worst it is not folded or
-// not merged. Long lists are appended with loops, never spread into a call
+// not merged. Rebuilding (step 6) has its own net: if it throws or returns
+// anything invalid for a message (see validRebuilt), nothing is rebuilt
+// from that message and it gets a 'reconstruct-failed'
+// ReconstructionWarning; a limit reached gives 'reconstruct-limit' (with
+// what was rebuilt up to the limit). If linking throws or gives an invalid
+// timeline, nothing is rebuilt at all and every kept message gets
+// 'reconstruct-failed'. The real messages are never affected.
+// Long lists are appended with loops, never spread into a call
 // (`push(...list)` overflows the stack for a few hundred thousand items).
 //
 // Not solved here (notes for the preview milestone):
@@ -60,6 +74,29 @@ import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
 import { buildSegments, checkSegments, reconstruct, type FoldRange, type FoldReason, type Segment } from './segments';
 import { detectSignatures, senderKeyOf } from './signature';
+import { linkRebuilt, type EngineRebuilt, type LinkSource, type TimelineEntry } from './rebuild-links';
+import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks, type ReconstructedMessage } from './reconstruct';
+
+export type { EngineRebuilt, RealMatch, RebuiltLink, RebuiltPlacement, TimelineEntry } from './rebuild-links';
+
+/**
+ * Something that went wrong while rebuilding messages from the quoted text
+ * of one kept message (step 6). Kept apart from EngineWarningCode: the real
+ * message itself is not affected (its segments are the same), and the
+ * preview does not show these yet (task 7.6).
+ * - 'reconstruct-failed': rebuilding threw or returned something invalid,
+ *   so nothing was rebuilt from this message (or, if linking failed, from
+ *   any message).
+ * - 'reconstruct-limit': the body is longer than MAX_SOURCE_LENGTH (nothing
+ *   rebuilt) or MAX_RECONSTRUCTED messages were rebuilt (there may be more).
+ */
+export type ReconstructionWarningCode = 'reconstruct-failed' | 'reconstruct-limit';
+
+export interface ReconstructionWarning {
+  /** Input position of the kept message (EngineMessage.index). */
+  readonly index: number;
+  readonly code: ReconstructionWarningCode;
+}
 
 /** Something the engine itself had to work around for one message. */
 export type EngineWarningCode =
@@ -133,6 +170,17 @@ export interface EngineResult {
    * for a failed file. Use it to resolve `index` and `related` numbers.
    */
   readonly positionByIndex: readonly (number | null)[];
+  /**
+   * Messages rebuilt from quoted text (step 6), by source (in `messages`
+   * order), newest first; each says whether it is linked to a real message,
+   * the same as another rebuilt one, or its own timeline entry. Not shown
+   * by the UI or the PDF yet (tasks 7.6, 7.7).
+   */
+  readonly reconstructed: readonly EngineRebuilt[];
+  /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (rebuild-links.ts). */
+  readonly timeline: readonly TimelineEntry[];
+  /** Problems while rebuilding, in `messages` order. Usually empty. */
+  readonly reconstructionWarnings: readonly ReconstructionWarning[];
 }
 
 /**
@@ -148,11 +196,25 @@ export interface EngineParts {
   readonly buildSegments: typeof buildSegments;
   /** Optional, default: dedupe.ts. */
   readonly dedupe?: typeof dedupe;
+  /** Optional, default: reconstruct.ts. */
+  readonly reconstructQuotedMessages?: typeof reconstructQuotedMessages;
+  /** Optional, default: rebuild-links.ts. */
+  readonly linkRebuilt?: typeof linkRebuilt;
   /** Called when a stage starts ('dedupe', 'order', ...) and with 'done' at the end. */
   readonly onStage?: (stage: EngineStage) => void;
 }
 
-export type EngineStage = 'dedupe' | 'order' | 'overlap' | 'quote-markers' | 'reply-headers' | 'signatures' | 'segments' | 'done';
+export type EngineStage =
+  | 'dedupe'
+  | 'order'
+  | 'overlap'
+  | 'quote-markers'
+  | 'reply-headers'
+  | 'signatures'
+  | 'segments'
+  | 'reconstruct'
+  | 'link-rebuilt'
+  | 'done';
 
 export const DEFAULT_PARTS: EngineParts = Object.freeze({
   detectQuotedOverlap,
@@ -307,6 +369,121 @@ function wholeBody(body: string): Segment[] {
   return body.length === 0 ? [] : [{ start: 0, end: body.length, folded: false, reasons: [], related: [] }];
 }
 
+const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
+const isNumOrNull = (v: unknown): v is number | null => v === null || (typeof v === 'number' && Number.isFinite(v));
+const isStrOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
+
+/** A plain copy of a mailbox list, or null if it is not one. */
+function mailboxes(v: unknown): ReconstructedMessage['from'] | null {
+  if (!Array.isArray(v)) return null;
+  const out: { name: string; address: string }[] = [];
+  for (const m of v as readonly unknown[]) {
+    if (typeof m !== 'object' || m === null) return null;
+    const { name, address } = m as Record<string, unknown>;
+    if (typeof name !== 'string' || typeof address !== 'string') return null;
+    out.push({ name, address });
+  }
+  return out;
+}
+
+/**
+ * A plain copy of one rebuilt message, or null if it breaks the contract of
+ * reconstruct.ts: offsets inside the body, in order, after `minStart`;
+ * `generation` = its rank; and its text exactly the body slice
+ * [headerEnd, end) with `depth` quote marks removed (checked by recomputing
+ * it). The engine never trusts the part blindly (README.md, rule R6).
+ */
+function validRebuilt(body: string, v: unknown, minStart: number, generation: number): ReconstructedMessage | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const r = v as Record<string, unknown>;
+  const { start, headerEnd, end, depth, kind, subject, dateText, date, dateApproximate, reconstructedText, quoteMarksRemoved } = r;
+  if (!isInt(start) || !isInt(headerEnd) || !isInt(end) || !isInt(depth)) return null;
+  if (start < minStart || headerEnd <= start || end < headerEnd || end > body.length) return null;
+  if (r.generation !== generation || depth < 0 || depth > MAX_QUOTE_DEPTH) return null;
+  if ((kind !== 'reply' && kind !== 'forward') || !isStrOrNull(subject) || !isStrOrNull(dateText)) return null;
+  if (typeof dateApproximate !== 'boolean' || quoteMarksRemoved !== depth > 0 || typeof reconstructedText !== 'string') return null;
+  const from = mailboxes(r.from);
+  const to = mailboxes(r.to);
+  const cc = mailboxes(r.cc);
+  if (from === null || to === null || cc === null || !Array.isArray(r.incomplete)) return null;
+  const incomplete = (r.incomplete as readonly unknown[]).filter((x): x is 'to' | 'cc' => x === 'to' || x === 'cc');
+  if (incomplete.length !== r.incomplete.length) return null;
+  let quotedDate: ReconstructedMessage['date'] = null;
+  if (date !== null) {
+    if (typeof date !== 'object') return null;
+    const d = date as Record<string, unknown>;
+    const basis = d.basis;
+    if (typeof d.text !== 'string' || !isNumOrNull(d.wallMs) || !isNumOrNull(d.estimatedUtcMs)) return null;
+    if (d.precision !== 'minute' && d.precision !== 'day' && d.precision !== null) return null;
+    if (basis !== 'rfc-zone' && basis !== 'written-zone' && basis !== 'source-offset' && basis !== 'none') return null;
+    quotedDate = { text: d.text, wallMs: d.wallMs, precision: d.precision, estimatedUtcMs: d.estimatedUtcMs, basis };
+  }
+  if (reconstructedText !== removeQuoteMarks(body, headerEnd, end, depth)) return null;
+  return {
+    start,
+    headerEnd,
+    end,
+    depth,
+    generation,
+    kind,
+    from,
+    to,
+    cc,
+    subject,
+    dateText,
+    incomplete,
+    date: quotedDate,
+    dateApproximate,
+    reconstructedText,
+    quoteMarksRemoved,
+  };
+}
+
+/** Rebuilds from one message (step 6), with the safety net; adds its warnings to `warnings`. */
+function rebuildFrom(
+  w: { readonly message: NormalizedMessage; readonly index: number },
+  rebuild: typeof reconstructQuotedMessages,
+  warnings: ReconstructionWarning[],
+): ReconstructedMessage[] {
+  const body = w.message.bodyText;
+  if (body.length > MAX_SOURCE_LENGTH) {
+    warnings.push({ index: w.index, code: 'reconstruct-limit' });
+    return [];
+  }
+  let raw: unknown;
+  try {
+    raw = rebuild(body, { subject: w.message.subject, sourceOffsetMinutes: w.message.date.offsetMinutes });
+  } catch {
+    warnings.push({ index: w.index, code: 'reconstruct-failed' });
+    return [];
+  }
+  const out: ReconstructedMessage[] = [];
+  let ok = Array.isArray(raw) && raw.length <= MAX_RECONSTRUCTED;
+  if (ok) {
+    try {
+      let minStart = 0;
+      for (const v of raw as readonly unknown[]) {
+        const r = validRebuilt(body, v, minStart, out.length + 1);
+        if (r === null) {
+          ok = false;
+          break;
+        }
+        out.push(r);
+        minStart = r.end;
+      }
+    } catch {
+      ok = false; // a getter that throws
+    }
+  }
+  if (!ok) {
+    // Keep nothing: a later entry being wrong casts doubt on the chain.
+    warnings.push({ index: w.index, code: 'reconstruct-failed' });
+    return [];
+  }
+  if (out.length >= MAX_RECONSTRUCTED) warnings.push({ index: w.index, code: 'reconstruct-limit' });
+  return out;
+}
+
 /**
  * Runs the whole engine (see the steps at the top of this file).
  * `results`: one parse result per dropped file, in drop order.
@@ -428,6 +605,29 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
     for (const d of m.duplicates) positionByIndex[d.index] = position;
   });
 
+  // 6. Rebuild, link, timeline (the real messages above are final already).
+  parts.onStage?.('reconstruct');
+  const reconstructionWarnings: ReconstructionWarning[] = [];
+  const rebuild = parts.reconstructQuotedMessages ?? reconstructQuotedMessages;
+  const sources: LinkSource[] = work.map((w, k) => {
+    const rebuilt = rebuildFrom(w, rebuild, reconstructionWarnings);
+    // Its own text ends at its first quoted part: the first rebuilt message, or the first quote fold.
+    const ownEnd = Math.min(rebuilt[0]?.start ?? w.message.bodyText.length, ownTextEnd[k] ?? w.message.bodyText.length);
+    return { index: w.index, message: w.message, utcMs: w.order === 'by-date' ? w.message.date.utcMs : null, ownEnd, rebuilt };
+  });
+  parts.onStage?.('link-rebuilt');
+  let reconstructed: readonly EngineRebuilt[];
+  let timeline: readonly TimelineEntry[];
+  try {
+    ({ reconstructed, timeline } = (parts.linkRebuilt ?? linkRebuilt)(sources));
+    if (!isValidTimeline(timeline, reconstructed, messages.length)) throw new Error('invalid timeline');
+  } catch {
+    reconstructed = [];
+    timeline = messages.map((_, position) => ({ kind: 'message', position }));
+    reconstructionWarnings.length = 0;
+    for (const w of work) reconstructionWarnings.push({ index: w.index, code: 'reconstruct-failed' });
+  }
+
   parts.onStage?.('done');
   return {
     messages,
@@ -441,5 +641,34 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
       withFolds: messages.filter((m) => m.segments.some((s) => s.folded)).length,
     },
     positionByIndex,
+    reconstructed,
+    timeline,
+    reconstructionWarnings,
   };
+}
+
+/**
+ * True if the timeline holds every message position 0..count-1 exactly once,
+ * in order, and exactly the rebuilt entries with link 'entry', once each,
+ * and the reconstructed list is numbered by position. Guards the rule that
+ * linking never removes or reorders a real message. Called inside a try: an
+ * entry that is not an object throws, which counts as invalid.
+ */
+function isValidTimeline(timeline: readonly TimelineEntry[], reconstructed: readonly EngineRebuilt[], count: number): boolean {
+  // A plain boolean check: Array.isArray as a type guard would turn the lists into any[].
+  const isList = (v: unknown): boolean => Array.isArray(v);
+  if (!isList(timeline) || !isList(reconstructed)) return false;
+  if (!reconstructed.every((r, id) => r.id === id)) return false;
+  let next = 0;
+  const seen = new Set<number>();
+  for (const e of timeline) {
+    if (e.kind === 'message') {
+      if (e.position !== next) return false;
+      next++;
+    } else {
+      if (e.kind !== 'rebuilt' || seen.has(e.id) || reconstructed[e.id]?.link !== 'entry') return false;
+      seen.add(e.id);
+    }
+  }
+  return next === count && seen.size === reconstructed.filter((r) => r.link === 'entry').length;
 }

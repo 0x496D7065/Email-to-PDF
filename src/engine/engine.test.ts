@@ -91,6 +91,9 @@ describe('runEngine: files, indices and counts', () => {
       failed: [],
       counts: { filesGiven: 0, messagesFound: 0, duplicatesMerged: 0, filesFailed: 0, undated: 0, withFolds: 0 },
       positionByIndex: [],
+      reconstructed: [],
+      timeline: [],
+      reconstructionWarnings: [],
     });
   });
 

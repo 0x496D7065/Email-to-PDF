@@ -8,7 +8,9 @@
 // side and engine-worker.ts for why the engine runs in a worker.
 //
 // Messages are copied by the browser (structured clone): plain data only.
-// The engine's result is plain data on purpose (see src/engine/engine.ts).
+// The engine's result is plain data on purpose (see src/engine/engine.ts),
+// including the messages rebuilt from quoted text and the timeline (task
+// 7.5: `reconstructed`, `timeline`, `reconstructionWarnings`).
 // Nothing is stored anywhere (README.md, rule R5).
 
 import { runEngine, type EngineResult } from '../engine/engine';
@@ -52,15 +54,24 @@ export function isToEngineWorker(data: unknown): data is ToEngineWorker {
 /**
  * True if `data` is a well-formed engine worker -> page message. The result
  * is checked for its overall shape (the lists and counts the preview reads
- * first); the worker runs our own code, so this guards against bugs and
- * stray messages, not against a hostile worker.
+ * first, and the lists of rebuilt messages, timeline and rebuild warnings);
+ * the worker runs our own code, so this guards against bugs and stray
+ * messages, not against a hostile worker.
  */
 export function isFromEngineWorker(data: unknown): data is FromEngineWorker {
   if (!isRecord(data)) return false;
   if (data.type === 'failed') return true;
   if (data.type !== 'result' || !isRecord(data.result)) return false;
-  const { messages, failed, counts, positionByIndex } = data.result;
-  return Array.isArray(messages) && Array.isArray(failed) && isRecord(counts) && Array.isArray(positionByIndex);
+  const { messages, failed, counts, positionByIndex, reconstructed, timeline, reconstructionWarnings } = data.result;
+  return (
+    Array.isArray(messages) &&
+    Array.isArray(failed) &&
+    isRecord(counts) &&
+    Array.isArray(positionByIndex) &&
+    Array.isArray(reconstructed) &&
+    Array.isArray(timeline) &&
+    Array.isArray(reconstructionWarnings)
+  );
 }
 
 /**

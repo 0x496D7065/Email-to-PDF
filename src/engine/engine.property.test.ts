@@ -10,7 +10,12 @@
 //   Message-ID, or by author + date + body when neither copy has an id), and
 //   copies sharing a Message-ID but with a different body are NOT merged;
 // - the output order respects the dates; failed files are all listed;
-// - nothing throws and the input is not modified.
+// - nothing throws and the input is not modified;
+// - rebuilding (task 7.5) only adds data: messages, segments, counts and
+//   positions are the same as with rebuilding off; every rebuilt message is
+//   its source body slice with only quote marks and indentation removed;
+//   the timeline holds every kept message once, in order, and exactly the
+//   rebuilt entries; every link points to a kept message or an entry.
 // The same generator builds the large batch for the speed test.
 //
 // The random generator is a few lines (mulberry32), so no dependency is needed.
@@ -19,7 +24,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { normalizeBody, type DuplicateRule } from './dedupe';
-import { DEFAULT_PARTS, runEngine, type EngineResult, type EngineStage } from './engine';
+import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult, type EngineStage } from './engine';
 import { checkSegments, FOLD_REASONS, reconstruct, visibleView, type FoldReason } from './segments';
 
 // ------------------------------------------------------------- generator
@@ -339,6 +344,102 @@ function checkInvariants(
   });
 }
 
+/**
+ * True if `text` is `slice` with only quote marks (">") and spacing
+ * (whitespace other than line breaks) removed: an independent check of
+ * reconstruct.ts step 4, letter by letter.
+ */
+function onlyMarksRemoved(slice: string, text: string): boolean {
+  const removable = (ch: string): boolean => ch === '>' || (ch !== '\n' && /\s/u.test(ch));
+  let j = 0;
+  for (let i = 0; i < text.length; i++) {
+    while (j < slice.length && slice[j] !== text[i]) {
+      if (!removable(slice[j]!)) return false;
+      j++;
+    }
+    if (j >= slice.length) return false;
+    j++;
+  }
+  for (; j < slice.length; j++) if (!removable(slice[j]!)) return false;
+  return true;
+}
+
+const NO_REBUILD: EngineParts = { ...DEFAULT_PARTS, reconstructQuotedMessages: () => [] };
+
+/** The rebuild invariants of one engine run (see the file comment); `baseline` = the same run with rebuilding off. */
+function checkRebuilt(out: EngineResult, baseline?: EngineResult): void {
+  if (baseline !== undefined) {
+    expect(out.messages).toEqual(baseline.messages);
+    expect(out.failed).toEqual(baseline.failed);
+    expect(out.counts).toEqual(baseline.counts);
+    expect(out.positionByIndex).toEqual(baseline.positionByIndex);
+  }
+  const keptAt = (index: number | null): boolean => index !== null && out.messages[out.positionByIndex[index] ?? -1]?.index === index;
+  const bySource = new Map<number, number[]>();
+  out.reconstructed.forEach((r, id) => {
+    expect(r.id).toBe(id);
+    expect(keptAt(r.sourceIndex), `rebuilt ${id}: source`).toBe(true);
+    const body = out.messages[out.positionByIndex[r.sourceIndex]!]!.message.bodyText;
+    const { start, headerEnd, end, depth } = r.rebuilt;
+    expect(0 <= start && start < headerEnd && headerEnd <= end && end <= body.length, `rebuilt ${id}: offsets`).toBe(true);
+    const slice = body.slice(headerEnd, end);
+    expect(onlyMarksRemoved(slice, r.rebuilt.reconstructedText), `rebuilt ${id}: text`).toBe(true);
+    if (depth === 0) expect(r.rebuilt.reconstructedText).toBe(slice);
+    expect(r.rebuilt.quoteMarksRemoved).toBe(depth > 0);
+    const list = bySource.get(r.sourceIndex) ?? [];
+    list.push(id);
+    bySource.set(r.sourceIndex, list);
+    if (r.link === 'real') {
+      expect(keptAt(r.realIndex), `rebuilt ${id}: real link`).toBe(true);
+      expect(r.realIndex).not.toBe(r.sourceIndex);
+      expect(r.match).not.toBeNull();
+    } else if (r.link === 'same-as') {
+      const entry = out.reconstructed[r.sameAs ?? -1];
+      expect(entry?.link, `rebuilt ${id}: same-as`).toBe('entry');
+      expect(entry?.copies).toContain(id);
+      expect(entry?.sourceIndex).not.toBe(r.sourceIndex);
+    } else {
+      for (const c of r.copies) expect(out.reconstructed[c]?.sameAs).toBe(id);
+      expect(r.alsoQuotedIn).toEqual([...new Set(r.copies.map((c) => out.reconstructed[c]!.sourceIndex))].sort((a, b) => a - b));
+    }
+  });
+  // Per source: generations 1, 2, ... in body order, never overlapping.
+  for (const ids of bySource.values()) {
+    let end = 0;
+    ids.forEach((id, k) => {
+      const r = out.reconstructed[id]!.rebuilt;
+      expect(r.generation).toBe(k + 1);
+      expect(r.start).toBeGreaterThanOrEqual(end);
+      end = r.end;
+    });
+  }
+  // Timeline: every kept message once, in order; exactly the entries, once each.
+  expect(out.timeline.flatMap((e) => (e.kind === 'message' ? [e.position] : []))).toEqual(out.messages.map((_, p) => p));
+  const entries = out.timeline.flatMap((e) => (e.kind === 'rebuilt' ? [e.id] : []));
+  expect([...entries].sort((a, b) => a - b)).toEqual(out.reconstructed.filter((r) => r.link === 'entry').map((r) => r.id));
+  expect(out.reconstructionWarnings).toEqual([]);
+}
+
+/**
+ * Heuristic for this generator: every fresh text opens with a unique
+ * "Note N:", so a rebuilt message and the real message (or the copy) it is
+ * linked to must open with the same N. Returns the links that do not.
+ */
+function wrongLinks(out: EngineResult): string[] {
+  const serial = (text: string): string | null => /Note (\d+):/u.exec(text)?.[1] ?? null;
+  const wrong: string[] = [];
+  for (const r of out.reconstructed) {
+    const mine = serial(r.rebuilt.reconstructedText);
+    if (mine === null || r.link === 'entry') continue;
+    const other =
+      r.link === 'real'
+        ? serial(out.messages[out.positionByIndex[r.realIndex!]!]!.message.bodyText)
+        : serial(out.reconstructed[r.sameAs!]!.rebuilt.reconstructedText);
+    if (other !== mine) wrong.push(`rebuilt ${r.id} (Note ${mine}) linked to Note ${other ?? '?'}`);
+  }
+  return wrong;
+}
+
 /** First non-blank line of a body, with its offset. */
 function firstLine(body: string): { at: number; text: string } | null {
   const match = /[^\r\n]*\S[^\r\n]*/.exec(body);
@@ -357,6 +458,8 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
     const reasonsSeen = new Map<FoldReason, number>();
     const rulesSeen = new Map<DuplicateRule, number>();
     let conflictCount = 0;
+    let rebuilt = 0;
+    const links = new Map<string, number>();
     for (let seed = 1; seed <= 300; seed++) {
       const { results, copies, conflicts } = makeBatch(seed, SMALL);
       const snapshot = JSON.stringify(results);
@@ -365,6 +468,10 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
       if (out === undefined) throw new Error('no result');
       expect(JSON.stringify(results), `seed ${seed}: input modified`).toBe(snapshot);
       checkInvariants(results, out, copies, conflicts);
+      checkRebuilt(out, seed % 5 === 0 ? runEngine(results, NO_REBUILD) : undefined);
+      rebuilt += out.reconstructed.length;
+      expect(wrongLinks(out), `seed ${seed}`).toEqual([]);
+      for (const r of out.reconstructed) links.set(r.link, (links.get(r.link) ?? 0) + 1);
       conflictCount += conflicts.length;
       for (const m of out.messages) {
         for (const s of m.segments) for (const r of s.reasons) reasonsSeen.set(r, (reasonsSeen.get(r) ?? 0) + 1);
@@ -390,7 +497,8 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
       `engine property test: 300 batches, ${messages} messages, ${duplicates} duplicates merged, ` +
         `${undated} undated, ${failed} failed files, ${folded} kept messages with folds, ` +
         `${conflictCount} same-id conflicts; fold reasons ${JSON.stringify(Object.fromEntries(reasonsSeen))}, ` +
-        `dedupe rules ${JSON.stringify(Object.fromEntries(rulesSeen))}`,
+        `dedupe rules ${JSON.stringify(Object.fromEntries(rulesSeen))}, ` +
+        `${rebuilt} rebuilt messages, links ${JSON.stringify(Object.fromEntries(links))}`,
     );
     // Not vacuous: the generator really produced each case.
     expect(folded).toBeGreaterThan(300);
@@ -398,9 +506,12 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
     expect(undated).toBeGreaterThan(50);
     expect(failed).toBeGreaterThan(20);
     expect(conflictCount).toBeGreaterThan(10);
+    expect(rebuilt).toBeGreaterThan(300);
+    expect(links.get('entry') ?? 0).toBeGreaterThan(50);
     for (const reason of FOLD_REASONS) expect(reasonsSeen.get(reason) ?? 0, `fold reason ${reason}`).toBeGreaterThan(0);
     for (const rule of ['message-id', 'author-date-body'] as const) expect(rulesSeen.get(rule) ?? 0, `dedupe rule ${rule}`).toBeGreaterThan(0);
-  });
+    // About 1.5 s alone; far slower when every test file runs at once. No speed claim here (see the speed test below).
+  }, 60_000);
 
   it('keeps every invariant with no files, only failed files or only empty bodies', () => {
     const fail = (n: number): ParseResult => ({ ok: false, fileName: `bad-${n}.msg`, sha256: null, error: 'too-large', detail: 'over the size limit' });
@@ -411,6 +522,7 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
     const empty = makeBatch(7, { ...SMALL, emptyBody: 1, duplicate: 0, failed: 0 });
     const out = runEngine(empty.results);
     checkInvariants(empty.results, out, empty.copies, empty.conflicts);
+    checkRebuilt(out, runEngine(empty.results, NO_REBUILD));
     for (const m of out.messages) expect(m.segments).toEqual([]);
   });
 });
@@ -454,6 +566,7 @@ describe('runEngine: speed on a large batch', () => {
     expect(batch.results.length).toBeGreaterThanOrEqual(2000);
     expect(chars).toBeGreaterThan(4_000_000);
     checkInvariants(batch.results, out, batch.copies, batch.conflicts);
+    checkRebuilt(out);
     expect(total).toBeLessThan(30_000);
-  });
+  }, 60_000);
 });

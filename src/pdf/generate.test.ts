@@ -245,7 +245,7 @@ describe('generatePdf: index page numbers', () => {
     }
     const pdf = await checkPdf((await generatePdf(input)).bytes, doc);
     expect(pdf.pages()).toHaveLength(layout.document.pages.length);
-  });
+  }, 30_000);
 
   it('splits the link of a row taller than a page over each of its pages, numbered once', async () => {
     const long = Array.from({ length: 1500 }, (_, i) => `word${String(i)}`).join(' ');

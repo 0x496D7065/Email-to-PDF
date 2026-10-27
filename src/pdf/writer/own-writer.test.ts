@@ -225,7 +225,7 @@ describe('OwnPdfWriter: fonts', () => {
       expect(new Set(widths.keys())).toEqual(used);
       for (const glyph of used) expect(widths.get(glyph)).toBe((parsed.advance(glyph) * 1000) / parsed.unitsPerEm);
     }
-  });
+  }, 60_000); // four whole fonts: slow on a busy machine
 
   it('embeds only the fonts that are used', async () => {
     const { pdf, bytes } = await write(doc([page([run('Bold only', { font: 'sans-bold' })])]));

@@ -4,10 +4,29 @@
 
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../engine/engine';
-import type { ParseResult } from '../parsing/types';
+import type { NormalizedMessage, ParseResult } from '../parsing/types';
 import { createEngineWorkerSide, isFromEngineWorker, isToEngineWorker, type FromEngineWorker } from './engine-protocol';
 
 const FAILED_FILE: ParseResult = { ok: false, fileName: 'notes.txt', sha256: null, error: 'unsupported-type', detail: 'not an email file' };
+
+/** An email quoting an earlier one, so the result holds a rebuilt message and a timeline. */
+const QUOTING: NormalizedMessage = {
+  messageId: 'protocol-1@example.test',
+  inReplyTo: null,
+  references: [],
+  date: { utcMs: Date.parse('2025-03-04T10:00:00Z'), original: '', offsetMinutes: 60, zoneKnown: true },
+  from: [{ name: 'Bob Sample', address: 'bob@furniture.example.test' }],
+  to: [],
+  cc: [],
+  bcc: [],
+  subject: 'Re: Desks',
+  bodyText: 'Fine for me.\n\nOn Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n> Could you send a quote?\n',
+  attachments: [],
+  source: { fileName: 'reply.eml', sha256: '0'.repeat(64), kind: 'eml' },
+  warnings: [],
+};
+const WITH_REBUILT: readonly ParseResult[] = [{ ok: true, message: QUOTING }, FAILED_FILE];
+const RESULT = runEngine(WITH_REBUILT);
 
 describe('message checks', () => {
   it('accepts a run request with parse results', () => {
@@ -28,6 +47,9 @@ describe('message checks', () => {
 
   it('accepts a real engine result and a failure', () => {
     expect(isFromEngineWorker({ type: 'result', result: runEngine([FAILED_FILE]) })).toBe(true);
+    expect(RESULT.reconstructed.length).toBe(1);
+    expect(RESULT.timeline.length).toBe(2);
+    expect(isFromEngineWorker({ type: 'result', result: RESULT })).toBe(true);
     expect(isFromEngineWorker({ type: 'failed' })).toBe(true);
   });
 
@@ -38,6 +60,9 @@ describe('message checks', () => {
     ['messages not a list', { type: 'result', result: { messages: {}, failed: [], counts: {}, positionByIndex: [] } }],
     ['no counts', { type: 'result', result: { messages: [], failed: [], positionByIndex: [] } }],
     ['no positionByIndex', { type: 'result', result: { messages: [], failed: [], counts: {} } }],
+    ['no reconstructed list', { type: 'result', result: { ...RESULT, reconstructed: undefined } }],
+    ['timeline not a list', { type: 'result', result: { ...RESULT, timeline: {} } }],
+    ['no reconstruction warnings', { type: 'result', result: { ...RESULT, reconstructionWarnings: null } }],
   ])('rejects %s as a reply', (_label, data) => {
     expect(isFromEngineWorker(data)).toBe(false);
   });
@@ -51,9 +76,10 @@ describe('createEngineWorkerSide', () => {
     expect(posted).toEqual([{ type: 'result', result: runEngine([FAILED_FILE]) }]);
   });
 
-  it('the result survives a structured clone unchanged (plain data only)', () => {
+  it('the result survives a structured clone unchanged (plain data only), rebuilt messages included', () => {
     let result: unknown;
-    createEngineWorkerSide((m) => (result = m.type === 'result' ? m.result : undefined))({ type: 'run', results: [FAILED_FILE] });
+    createEngineWorkerSide((m) => (result = m.type === 'result' ? m.result : undefined))({ type: 'run', results: WITH_REBUILT });
+    expect(result).toEqual(RESULT);
     expect(structuredClone(result)).toEqual(result);
   });
 

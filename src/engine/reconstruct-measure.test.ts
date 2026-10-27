@@ -347,6 +347,6 @@ describe('thread reconstruction: recall cost of refusing (task 7.4, measured apa
   });
 });
 
-describe('thread reconstruction: targets for later tasks', () => {
-  it.todo('7.4/7.5: 0 wrong suppressions (no reconstructed message hidden as a duplicate when it is not one)');
-});
+// "0 wrong suppressions" (no rebuilt message linked to a real file or merged
+// with a copy of another message) is measured in the engine, with the other
+// task 7.5 targets: src/engine/rebuild-links.measure.test.ts.

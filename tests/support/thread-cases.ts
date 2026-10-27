@@ -123,6 +123,12 @@ export interface ThreadCase {
   /** Measurement group (one row of the table). */
   readonly group: string;
   readonly thread: BuiltThread;
+  /**
+   * The conversation, oldest first (thread = buildThread(messages)). Lets a
+   * test drop earlier messages as real files (buildThread of a prefix).
+   * Absent where the built body was edited afterwards (REFUSAL_COST_CASES).
+   */
+  readonly messages?: readonly ThreadMessage[];
 }
 
 const repeat = (style: QuoteStyle, n: number): QuoteStyle[] => Array.from({ length: n }, () => style);
@@ -130,7 +136,7 @@ const repeat = (style: QuoteStyle, n: number): QuoteStyle[] => Array.from({ leng
 const REPLY_STYLES: readonly QuoteStyle[] = ['outlook-en', 'gmail-fr', 'apple-en', 'outlook-nl', 'thunderbird-en', 'gmail-nl', 'outlook-fr', 'apple-nl', 'gmail-en', 'apple-fr'];
 
 function makeCases(): ThreadCase[] {
-  const c = (group: string, id: string, messages: readonly ThreadMessage[]): ThreadCase => ({ id, group, thread: buildThread(messages) });
+  const c = (group: string, id: string, messages: readonly ThreadMessage[]): ThreadCase => ({ id, group, thread: buildThread(messages), messages });
   return [
     // Outlook classic, one language per chain, no ">".
     c('outlook-en', 'outlook-en x3', chain(repeat('outlook-en', 3))),
