@@ -51,6 +51,11 @@ describe('message checks', () => {
     expect(isToPdfWorker(structuredClone(REQUEST))).toBe(true);
   });
 
+  it('accepts a request with or without the rebuilt emails chosen', () => {
+    expect(isToPdfWorker({ ...REQUEST, input: { ...REQUEST.input, rebuilt: [] } })).toBe(true);
+    expect(isToPdfWorker(structuredClone({ ...REQUEST, input: { ...REQUEST.input, rebuilt: [2, 0] } }))).toBe(true);
+  });
+
   it.each([
     ['null', null],
     ['another type', { ...REQUEST, type: 'run' }],
@@ -69,6 +74,10 @@ describe('message checks', () => {
     ['a language tag that is not exactly a shipped code', { ...REQUEST, input: { ...REQUEST.input, locale: 'en-US' } }],
     ['a language code in capitals', { ...REQUEST, input: { ...REQUEST.input, locale: 'EN' } }],
     ['a language that is not a string', { ...REQUEST, input: { ...REQUEST.input, locale: ['en'] } }],
+    // The rebuilt emails chosen (task 7.7): absent, or a list of ids.
+    ['rebuilt ids that are not a list', { ...REQUEST, input: { ...REQUEST.input, rebuilt: 3 } }],
+    ['a rebuilt id that is not a whole number', { ...REQUEST, input: { ...REQUEST.input, rebuilt: [0, '1'] } }],
+    ['a rebuilt id that is a fraction', { ...REQUEST, input: { ...REQUEST.input, rebuilt: [0.5] } }],
   ])('rejects %s as a request', (_label, data) => {
     expect(isToPdfWorker(data)).toBe(false);
   });

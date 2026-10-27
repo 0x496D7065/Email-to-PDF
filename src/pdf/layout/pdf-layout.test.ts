@@ -483,6 +483,7 @@ function syntheticEmail(n: number, body: readonly string[]): PdfEmail {
     anchor: emailAnchor(n),
     position: n - 1,
     heading: `Email ${String(n)}`,
+    rebuilt: null,
     fields: [
       { label: 'From', value: value('Alice Example <alice@example.test>') },
       { label: 'To', value: value('Bob Sample <bob@furniture.example.test>') },

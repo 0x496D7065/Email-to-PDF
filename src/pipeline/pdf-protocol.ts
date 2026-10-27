@@ -29,6 +29,12 @@ export interface PdfJobInput {
   readonly positions: readonly number[];
   /** One plan per position, same order (src/ui/pdf-labels.ts: the preview's own plans). */
   readonly plans: readonly MessagePlan[];
+  /**
+   * Ids of the rebuilt emails the reader wants in the PDF (src/ui/review.ts,
+   * includedRebuilt; [] when the switch is off). Absent: none. The PDF still
+   * applies the follow-source rule (src/pdf/model.ts, planPdfOrder).
+   */
+  readonly rebuilt?: readonly number[];
   readonly policy: OutputPolicy;
   readonly timeZone: string;
   /** When the PDF is made (ms since 1970 UTC), taken on the page. */
@@ -81,6 +87,7 @@ export function isToPdfWorker(data: unknown): data is ToPdfWorker {
     Array.isArray(input.positions) &&
     Array.isArray(input.plans) &&
     input.positions.length === input.plans.length &&
+    (input.rebuilt === undefined || (Array.isArray(input.rebuilt) && input.rebuilt.every((id) => Number.isInteger(id)))) &&
     isRecord(input.policy) &&
     typeof input.timeZone === 'string' &&
     typeof input.generatedAt === 'number' &&

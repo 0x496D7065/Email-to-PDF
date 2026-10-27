@@ -13,6 +13,9 @@ import { createPdfStrings } from './strings';
 import { lineText } from './text';
 
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
+/** The real emails of a document with their list position (rebuilt emails have none: left out first). */
+const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
+  d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
 
 describe('PDF document model over the parsed fixtures', () => {
   let result: EngineResult | undefined;
@@ -74,8 +77,8 @@ describe('PDF document model over the parsed fixtures', () => {
   it('with "include everything", every body is the full text after the display transforms only', async () => {
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
     const { doc: d, result: r } = await doc(policy);
-    for (const e of d.emails) {
-      const m = r.messages[e.position]!;
+    for (const { e, position } of realEmails(d)) {
+      const m = r.messages[position]!;
       expect(bodyOf(e), m.message.source.fileName).toBe(referenceDisplayText(m.message.bodyText));
       expect(e.flags.planFallback).toBe(false);
     }

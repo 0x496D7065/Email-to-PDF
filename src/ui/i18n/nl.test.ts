@@ -46,6 +46,7 @@ const SAME_AS_ENGLISH: ReadonlySet<string> = new Set([
   'preview.size.mb',
   // Only placeholders and punctuation: nothing to translate.
   'download.changedAfter',
+  'pdf.document.rebuiltBookmark',
   'preview.messageNumber',
   'preview.mailbox',
   'preview.attachment',

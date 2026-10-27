@@ -89,8 +89,9 @@
 //   were), plus "same quoted text also in email #K" for copies;
 // - shows the sender, recipients ("list may be incomplete" when the quoted
 //   list may go on), subject and date read from the quoted header. A quoted
-//   date without its own zone is shown in the chosen zone with "about", and
-//   always as written too; a date that could not be read only as written;
+//   time without its own zone is shown in the chosen zone with "about"; a
+//   day alone as written, never "about" (user decision Q2); both always as
+//   written too; a date that could not be read only as written;
 // - shows the rebuilt text as text (quote marks removed, the one form change
 //   the user allowed), never folded.
 // Nothing of the source email changes: its card is built exactly as before,
@@ -308,9 +309,8 @@ export function rebuiltDateTexts(date: RebuiltDate, zone: string): RebuiltDateTe
   const asWritten = t('rebuilt.dateAsWritten', { text: date.text });
   const unreadable = { main: t('rebuilt.dateUnreadable'), iso: null, asWritten };
   if (date.kind === 'unreadable') return unreadable;
-  if (date.kind === 'day') {
-    return { main: date.approximate ? t('rebuilt.dateAbout', { date: date.day }) : date.day, iso: date.day, asWritten };
-  }
+  // A day alone is shown as written, never "about" (user decision Q2, task 7.7): only a time can be off.
+  if (date.kind === 'day') return { main: date.day, iso: date.day, asWritten };
   const shown = formatInZone(date.utcMs, zone, getLocale());
   if (shown.kind === 'no-date') return unreadable;
   const text = `${shown.shortText} ${formatOffset(shown.offsetMinutes)}`;

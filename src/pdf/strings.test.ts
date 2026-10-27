@@ -49,3 +49,29 @@ describe('createPdfStrings', () => {
     expect(() => createPdfStrings('')).toThrow(/unsupported/);
   });
 });
+
+describe('the texts of rebuilt emails (task 7.7)', () => {
+  it('mark them, name the email they were taken from by its PDF number, and reuse the preview words', () => {
+    const s = createPdfStrings('en');
+    expect(s.rebuiltHeading(3)).toBe('Earlier email (rebuilt from quoted text in email 3)');
+    expect(s.rebuiltMarker).toBe('[Rebuilt]');
+    expect(s.rebuiltBookmark('2025-03-03', 'Alice Example', 'Desks')).toBe('[Rebuilt] 2025-03-03, Alice Example: Desks');
+    expect(s.rebuiltNote(3, true)).toBe('Rebuilt from the quoted text in email 3. Quote marks removed; may be incomplete or inexact.');
+    expect(s.rebuiltNote(3, false)).toBe('Rebuilt from the quoted text in email 3. May be incomplete or inexact.');
+    expect(s.rebuiltAlso([])).toBe('');
+    expect(s.rebuiltAlso([4])).toBe('Same quoted text also in email 4.');
+    expect(s.rebuiltAlso([4, 1006])).toBe('Same quoted text also in emails 4, 1006.');
+    expect(s.takenFromLabel).toBe('Taken from');
+    expect(s.takenFrom(1234)).toBe('email 1234');
+    expect(s.dateAbout('2025-03-03 09:15')).toBe('about 2025-03-03 09:15');
+    expect(s.quoteDateAsWritten('maandag')).toBe('As written in the quote: maandag');
+    expect(s.rebuiltCount(1)).toBe('1 earlier email rebuilt from quoted text');
+    expect(s.rebuiltCount(2)).toBe('2 earlier emails rebuilt from quoted text');
+    // The paragraph names the marker the index uses, in every language.
+    for (const locale of ['en', 'fr', 'nl']) {
+      const x = createPdfStrings(locale);
+      expect(x.rebuiltIntro).toContain(x.rebuiltMarker);
+      expect(x.rebuiltBookmark('d', 'f', 's').startsWith(`${x.rebuiltMarker} `)).toBe(true);
+    }
+  });
+});

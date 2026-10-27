@@ -9,6 +9,7 @@ import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
 import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { runEngine, type EngineRebuilt, type EngineResult } from '../engine/engine';
 import type { NormalizedMessage } from '../parsing/types';
+import { planPdfOrder } from '../pdf/model';
 import { rebuiltEntries } from '../ui-model/rebuilt';
 import { setLocale, t } from './i18n';
 import { mountPreview, rebuiltAlsoText, rebuiltDateTexts, rebuiltNoteText, type Preview, type PreviewOptions } from './preview';
@@ -227,14 +228,20 @@ describe('rebuilt cards in the list', () => {
     expect(time.getAttribute('datetime')).toMatch(/^2025-03-03T\d\d:40:00\.000Z$/);
   });
 
-  it('write the dates as the quote allows: "about" when guessed, a day as written, an unreadable one only as written', () => {
+  it('write the dates as the quote allows: "about" for a guessed time only, a day as written (never "about", user decision Q2), an unreadable one only as written', () => {
     const ms = Date.parse('2025-03-03T14:40:00Z');
     expect(rebuiltDateTexts({ kind: 'moment', utcMs: ms, approximate: false, text: 'x' }, 'UTC')).toEqual({
       main: '2025-03-03 14:40 UTC+00:00',
       iso: '2025-03-03T14:40:00.000Z',
       asWritten: 'As written in the quote: x',
     });
-    expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', approximate: true, text: '3 maart 2025' }, 'UTC').main).toBe('about 2025-03-03');
+    expect(rebuiltDateTexts({ kind: 'moment', utcMs: ms, approximate: true, text: 'x' }, 'UTC').main).toBe('about 2025-03-03 14:40 UTC+00:00');
+    expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', approximate: true, text: '3 maart 2025' }, 'UTC')).toEqual({
+      main: '2025-03-03',
+      iso: '2025-03-03',
+      asWritten: 'As written in the quote: 3 maart 2025',
+    });
+    expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', approximate: false, text: '3 March 2025' }, 'UTC').main).toBe('2025-03-03');
     expect(rebuiltDateTexts({ kind: 'unreadable', text: 'gisteren' }, 'UTC')).toEqual({
       main: '(date could not be read)',
       iso: null,
@@ -325,6 +332,112 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(byId('review-included').textContent).toBe('1 of 1 email will be in the PDF.');
     // Its checkbox is named by its label and its heading.
     expect(one(card, 'include-checkbox').getAttribute('aria-labelledby')).toBe('include-rebuilt-2-label rebuilt-2-title');
+  });
+
+  it('follow the email they were taken from: unticking it marks them "Not in the PDF" and counts them out (user decision Q1 (a))', () => {
+    const changes: string[] = [];
+    mount({}, { onChange: (line) => changes.push(line) });
+    show(engineOf(LAST));
+    const own = one(rebuiltItems()[0] as FakeElement, 'include-checkbox');
+    tick(own, false);
+    const source = one(realItems()[0] as FakeElement, 'include-checkbox');
+    tick(source, false);
+    expect(byId('review-included').textContent).toBe('0 of 1 email will be in the PDF.');
+    expect(byId('review-rebuilt').textContent).toBe('0 of 3 rebuilt emails will be in the PDF.');
+    // One announcement with both lines (the rebuilt line changed too).
+    expect(changes).toEqual(['0 of 1 email will be in the PDF. 0 of 3 rebuilt emails will be in the PDF.']);
+    expect(review.includedRebuilt()).toEqual([]);
+    for (const card of rebuiltItems()) {
+      expect(isHidden(card)).toBe(false);
+      expect(card.getAttribute('data-included')).toBe('false');
+      expect(isHidden(one(card, 'excluded-note'))).toBe(false);
+    }
+    // Each card keeps its own tick; the mark says why it is out.
+    expect(rebuiltItems().map((c) => one(c, 'include-checkbox').checked)).toEqual([false, true, true]);
+    expect(rebuiltItems().map((c) => one(c, 'excluded-note').textContent)).toEqual([
+      'Not in the PDF',
+      'Not in the PDF: the email it comes from is left out',
+      'Not in the PDF: the email it comes from is left out',
+    ]);
+    // The words follow the page language.
+    setLocale('fr');
+    review.relabel();
+    expect(one(rebuiltItems()[1] as FakeElement, 'excluded-note').textContent).toBe(t('rebuilt.sourceExcluded'));
+    expect(t('rebuilt.sourceExcluded')).toMatch(/^Pas dans le PDF/);
+    setLocale('en');
+    review.relabel();
+    // Ticked again: back in, except the one unticked by itself.
+    tick(source, true);
+    expect(review.includedRebuilt().map((r) => r.id)).toEqual([1, 0]);
+    expect(rebuiltItems().map((c) => c.getAttribute('data-included'))).toEqual(['false', 'true', 'true']);
+    expect(isHidden(one(rebuiltItems()[1] as FakeElement, 'excluded-note'))).toBe(true);
+    expect(changes.at(-1)).toBe('1 of 1 email will be in the PDF. 2 of 3 rebuilt emails will be in the PDF.');
+  });
+
+  it('a text quoted in two emails stays in while one of them is ticked (follow-source rule)', () => {
+    const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+    show(result);
+    const shared = rebuiltEntries(result).filter((e) => e.copies.length > 0);
+    expect(shared.length).toBeGreaterThan(0);
+    const boxOf = (position: number): FakeElement =>
+      one(realItems().find((i) => i.getAttribute('data-position') === String(position)) as FakeElement, 'include-checkbox');
+    const cardOf = (id: number): FakeElement => rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === String(id)) as FakeElement;
+    const e = shared[0]!;
+    const own = result.positionByIndex[e.sourceIndex]!;
+    const other = result.positionByIndex[result.reconstructed[e.copies[0]!]!.sourceIndex]!;
+    tick(boxOf(own), false);
+    expect(cardOf(e.id).getAttribute('data-included')).toBe('true');
+    expect(review.includedRebuilt().map((r) => r.id)).toContain(e.id);
+    tick(boxOf(other), false);
+    expect(cardOf(e.id).getAttribute('data-included')).toBe('false');
+    expect(review.includedRebuilt()).toEqual([]);
+  });
+
+  it('say "In the PDF: taken from #K" only when the PDF takes the card from a copy in another email (task 7.7 review)', () => {
+    const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+    show(result);
+    const e = rebuiltEntries(result).find((x) => x.copies.length > 0)!;
+    const own = result.positionByIndex[e.sourceIndex]!;
+    const other = result.positionByIndex[result.reconstructed[e.copies[0]!]!.sourceIndex]!;
+    expect(other).not.toBe(own);
+    const boxOf = (position: number): FakeElement =>
+      one(realItems().find((i) => i.getAttribute('data-position') === String(position)) as FakeElement, 'include-checkbox');
+    const card = rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === String(e.id)) as FakeElement;
+    const line = one(card, 'rebuilt-pdf-source');
+    // Both emails ticked: the PDF takes it from its own email, the one its card names; no line.
+    expect(isHidden(line)).toBe(true);
+    for (const c of rebuiltItems()) expect(isHidden(one(c, 'rebuilt-pdf-source'))).toBe(true);
+    // Its own email unticked: still in the PDF, taken from the other email; the card says which.
+    tick(boxOf(own), false);
+    expect(card.getAttribute('data-included')).toBe('true');
+    expect(metaRows(card)).toContain(`Taken from: email #${String(own + 1)}`);
+    expect(isHidden(line)).toBe(false);
+    expect(line.textContent).toBe(`In the PDF: taken from #${String(other + 1)}`);
+    // The same email as the PDF itself picks (planPdfOrder, from the same choices).
+    const slot = planPdfOrder(result, review.includedPositions(), review.includedRebuilt().map((r) => r.id)).slots.find(
+      (s) => s.kind === 'rebuilt' && s.entry.id === e.id,
+    );
+    expect(slot?.kind === 'rebuilt' ? slot.source.shown.position : null).toBe(other);
+    // Written again in the page language.
+    setLocale('fr');
+    review.relabel();
+    expect(line.textContent).toBe(t('rebuilt.pdfSource', { number: `#${String(other + 1)}` }));
+    expect(line.textContent).toMatch(/^Dans le PDF/);
+    setLocale('en');
+    review.relabel();
+    // Out of the PDF (the card unticked, or every source unticked): no line.
+    tick(one(card, 'include-checkbox'), false);
+    expect(isHidden(line)).toBe(true);
+    tick(one(card, 'include-checkbox'), true);
+    expect(isHidden(line)).toBe(false);
+    tick(boxOf(other), false);
+    expect(card.getAttribute('data-included')).toBe('false');
+    expect(isHidden(line)).toBe(true);
+    // Its own email ticked again: taken from it again; no line.
+    tick(boxOf(own), true);
+    expect(card.getAttribute('data-included')).toBe('true');
+    expect(isHidden(line)).toBe(true);
+    expect(line.textContent).toBe('');
   });
 
   it('keep the choices when files are added, and forget them on "Clear everything"', () => {

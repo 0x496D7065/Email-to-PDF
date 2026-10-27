@@ -126,7 +126,8 @@ export function layIndex(ts: Typesetter, config: LayoutConfig, left: number, wid
 
   const rows = index.entries.map((entry): LaidIndexRow => {
     const cells = [
-      cell(cols.number, [{ role: 'body', text: String(entry.number) }], true),
+      // A rebuilt email has no number: its cell stays empty (its subject starts with the rebuilt marker).
+      cell(cols.number, entry.number === null ? [] : [{ role: 'body', text: String(entry.number) }], true),
       cell(cols.date, entry.date),
       cell(cols.from, entry.from),
       cell(cols.subject, entry.subject),

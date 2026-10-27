@@ -5,8 +5,9 @@
 // uses it to spot a forward) and the UTC offset of its own Date header (used
 // to estimate the time of a quoted date written without a zone: user
 // decision, see quoted-date.ts). Output: one ReconstructedMessage per earlier
-// message, newest first (= in body order). Not wired into the engine, the UI
-// or the PDF yet (tasks 7.5 to 7.7).
+// message, newest first (= in body order). The engine links them
+// (rebuild-links.ts); the preview (src/ui/preview.ts) and the PDF
+// (src/pdf/model.ts) show them, marked as rebuilt.
 //
 // How it works:
 // 1. findReplyHeaders (reply-header.ts) finds the quote headers, with its own

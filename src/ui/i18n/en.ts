@@ -368,6 +368,12 @@ export const en = {
     includeAll: 'Include earlier emails rebuilt from quoted text',
     // A rebuilt card that could not be built (not expected).
     itemFailed: 'Something went wrong while showing this rebuilt email. Its text is still in the email it was taken from.',
+    // On a rebuilt card that is ticked, while every email it was taken from is unticked (task 7.7: it follows them).
+    sourceExcluded: 'Not in the PDF: the email it comes from is left out',
+    // On a rebuilt card in the PDF whose own email (named in "Taken from") is
+    // unticked while another email quoting the same text is ticked: the PDF
+    // takes it from that email, e.g. "In the PDF: taken from #5" (task 7.7).
+    pdfSource: 'In the PDF: taken from {number}',
   },
 
   // What the PDF will leave out, shown on each folded part in step 2
@@ -472,6 +478,25 @@ export const en = {
       fileName: 'correspondence-{date}.pdf',
       // The same when that day cannot be worked out (not expected).
       fileNameNoDate: 'correspondence.pdf',
+      // Earlier emails rebuilt from quoted text (task 7.7). They have no
+      // number, no file and no fingerprint of their own. Their other texts
+      // (note, "Taken from", "about", "As written in the quote", "list may
+      // be incomplete") are the preview's (the rebuilt group above).
+      // The heading of one, e.g. "Earlier email (rebuilt from quoted text in email 3)".
+      rebuiltHeading: 'Earlier email (rebuilt from quoted text in email {number})',
+      // In front of a rebuilt email's subject in the index, and of its bookmark.
+      rebuiltMarker: '[Rebuilt]',
+      // A rebuilt email's bookmark, e.g. "[Rebuilt] 2025-03-03, Alice Example: Desks".
+      rebuiltBookmark: '{marker} {date}, {from}: {subject}',
+      // Cover page: the row with their count, and a section that says what they are.
+      rebuilt: 'Rebuilt emails',
+      rebuiltCount: {
+        one: '{count} earlier email rebuilt from quoted text',
+        other: '{count} earlier emails rebuilt from quoted text',
+      },
+      rebuiltSection: 'Earlier emails rebuilt from quoted text',
+      rebuiltIntro:
+        'Rebuilt emails are earlier emails that were not among the files added: the tool rebuilt them from the text quoted in a later email. Each one says which email it was taken from and has no number, no file and no SHA-256 fingerprint of its own; in the index they are marked "[Rebuilt]". Any quote marks (>) were removed from their text, and they may be incomplete or inexact. They are not original files.',
     },
   },
 

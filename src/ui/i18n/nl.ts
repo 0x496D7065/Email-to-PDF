@@ -284,6 +284,10 @@ export const nl: Messages = {
     dateUnreadable: '(datum kon niet worden gelezen)',
     includeAll: 'Eerdere e-mails opnemen die uit geciteerde tekst zijn gereconstrueerd',
     itemFailed: 'Er ging iets mis bij het tonen van deze gereconstrueerde e-mail. De tekst staat nog in de e-mail waaruit hij is overgenomen.',
+    // NEEDS USER PROOFREADING (task 7.7 draft, see the top of this file).
+    sourceExcluded: 'Niet in de PDF: de e-mail waaruit hij is overgenomen, wordt weggelaten',
+    // NEEDS USER PROOFREADING (task 7.7).
+    pdfSource: 'In de PDF: overgenomen uit {number}',
   },
 
   pdf: {
@@ -356,6 +360,18 @@ export const nl: Messages = {
       // ASCII only, like the English one.
       fileName: 'correspondentie-{date}.pdf',
       fileNameNoDate: 'correspondentie.pdf',
+      // NEEDS USER PROOFREADING (task 7.7 drafts, see the top of this file).
+      rebuiltHeading: 'Eerdere e-mail (gereconstrueerd uit de geciteerde tekst in e-mail {number})',
+      rebuiltMarker: '[Gereconstrueerd]',
+      rebuiltBookmark: '{marker} {date}, {from}: {subject}',
+      rebuilt: 'Gereconstrueerde e-mails',
+      rebuiltCount: {
+        one: '{count} eerdere e-mail gereconstrueerd uit geciteerde tekst',
+        other: '{count} eerdere e-mails gereconstrueerd uit geciteerde tekst',
+      },
+      rebuiltSection: 'Eerdere e-mails gereconstrueerd uit geciteerde tekst',
+      rebuiltIntro:
+        'Gereconstrueerde e-mails zijn eerdere e-mails die niet bij de toegevoegde bestanden zaten: de tool heeft ze gereconstrueerd uit de tekst die in een latere e-mail wordt geciteerd. Elk ervan vermeldt uit welke e-mail hij is overgenomen en heeft geen eigen nummer, bestand of SHA-256-vingerafdruk; in de inhoudsopgave zijn ze gemarkeerd met “[Gereconstrueerd]”. Eventuele citaattekens (>) zijn uit hun tekst verwijderd, en ze kunnen onvolledig of onnauwkeurig zijn. Het zijn geen originele bestanden.',
     },
   },
 

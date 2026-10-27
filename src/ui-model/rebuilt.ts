@@ -26,8 +26,12 @@
 // worked out again and ids change): the SHA-256 of the source file plus the
 // offset where the quoted header starts in its body, for the entry and for
 // every copy of it (and for every file merged into a source). A rebuilt
-// message is left out if ANY of its keys was left out. The PDF step (task
-// 7.7) reads includedRebuilt(). Memory only (README.md, rule R5).
+// message is left out if ANY of its keys was left out. Memory only
+// (README.md, rule R5). On top of that, a rebuilt message FOLLOWS the
+// emails it was read from (user decision Q1 (a), task 7.7; rebuiltInPdf):
+// it is in the PDF only while one of them is. The review applies both
+// (src/ui/review.ts, includedRebuilt) and the PDF applies the follow-source
+// rule again with its own list of emails (src/pdf/model.ts, planPdfOrder).
 //
 // Pure functions, no DOM (README.md, rule R7).
 
@@ -159,10 +163,78 @@ export function createRebuiltSelection(): RebuiltSelection {
   };
 }
 
-/** The rebuilt entries going into the PDF, in preview (timeline) order. */
+/** The rebuilt entries the reader wants in the PDF (switch on, card ticked), in preview (timeline) order. Not yet the follow-source rule (rebuiltInPdf). */
 export function includedRebuilt(result: EngineResult, selection: RebuiltSelection): EngineRebuilt[] {
   if (!selection.includeAll()) return [];
   return rebuiltEntries(result).filter((r) => selection.isIncluded(r, result));
+}
+
+/** One place the text of a rebuilt entry was read: the entry itself or one of its copies, and the list position of the email quoting it. */
+export interface RebuiltSource {
+  readonly rebuilt: EngineRebuilt;
+  readonly position: number;
+}
+
+/**
+ * Every place the quoted text of entry `r` was read: the entry first, then
+ * its copies (link 'same-as', ascending id). A copy that does not point back
+ * to the entry, or whose email is unknown, is left out (not expected).
+ */
+export function rebuiltSources(r: EngineRebuilt, result: Pick<EngineResult, 'positionByIndex' | 'reconstructed'>): RebuiltSource[] {
+  const out: RebuiltSource[] = [];
+  const add = (x: EngineRebuilt | undefined): void => {
+    if (x === undefined) return;
+    const position = result.positionByIndex[x.sourceIndex];
+    if (typeof position === 'number') out.push({ rebuilt: x, position });
+  };
+  add(r);
+  for (const id of r.copies) {
+    const copy = result.reconstructed[id];
+    if (copy !== undefined && copy.link === 'same-as' && copy.sameAs === r.id) add(copy);
+  }
+  return out;
+}
+
+/** Where a rebuilt entry in the PDF was taken from (rebuiltInPdf). */
+export interface RebuiltInPdf {
+  /** The copy shown: the entry's own when its email is in the PDF, else the copy from the first such email. */
+  readonly shown: RebuiltSource;
+  /** The PDF number of the email `shown` was taken from ("Taken from: email N"). */
+  readonly number: number;
+  /** The PDF numbers of the OTHER emails in the PDF quoting the same text, ascending, unique. */
+  readonly also: readonly number[];
+}
+
+/**
+ * THE FOLLOW-SOURCE RULE (user decision Q1 (a), task 7.7): a rebuilt entry
+ * goes into the PDF only while at least one email it was read from (the
+ * entry's own source, or the source of one of its copies) is in the PDF.
+ * `numberOf` gives the PDF number of a list position, or null when that
+ * email is not in the PDF. Returns null when no source is in the PDF.
+ *
+ * The copy shown is the entry's own when its source is in the PDF, else the
+ * copy whose source has the smallest PDF number: so "Taken from: email N"
+ * always names an email in the PDF, and the text and header shown are
+ * exactly the ones read from that email. Every other source in the PDF is
+ * listed in `also` ("Same quoted text also in email ...").
+ */
+export function rebuiltInPdf(
+  r: EngineRebuilt,
+  result: Pick<EngineResult, 'positionByIndex' | 'reconstructed'>,
+  numberOf: (position: number) => number | null,
+): RebuiltInPdf | null {
+  let best: { source: RebuiltSource; number: number } | null = null;
+  const numbers = new Set<number>();
+  for (const source of rebuiltSources(r, result)) {
+    const number = numberOf(source.position);
+    if (number === null) continue;
+    numbers.add(number);
+    // The entry's own source wins when it is in the PDF (it comes first); else the smallest number.
+    if (best === null || (best.source.rebuilt !== r && number < best.number)) best = { source, number };
+  }
+  if (best === null) return null;
+  const chosen = best;
+  return { shown: chosen.source, number: chosen.number, also: [...numbers].filter((n) => n !== chosen.number).sort((a, b) => a - b) };
 }
 
 /** A rebuilt message's date, as the card shows it. */
@@ -173,7 +245,7 @@ export type RebuiltDate =
   | { readonly kind: 'unreadable'; readonly text: string }
   /** A date with a time: shown in the chosen zone, "about" when approximate. */
   | { readonly kind: 'moment'; readonly utcMs: number; readonly approximate: boolean; readonly text: string }
-  /** A day without a time: shown as written (YYYY-MM-DD), "about" when approximate. */
+  /** A day without a time: shown as written (YYYY-MM-DD), never "about" (user decision Q2, task 7.7). */
   | { readonly kind: 'day'; readonly day: string; readonly approximate: boolean; readonly text: string };
 
 /** The date of a rebuilt message (see RebuiltDate). */

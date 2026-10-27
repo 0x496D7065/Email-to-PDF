@@ -11,6 +11,8 @@
 // - with the default policy, every shown line is a piece of that full text
 //   (nothing is invented, only parts are left out), and the numbering maps
 //   back to the included emails;
+// - with the rebuilt emails ON (task 7.7), every real email's body is still
+//   its full text (collapse, never delete);
 // - 2000 emails build in well under a second.
 // Synthetic data only: made-up names, *.test addresses. Every invisible or
 // special character is written as a \u escape.
@@ -20,7 +22,8 @@ import { referenceDisplayText } from '../../tests/support/pdf-reference';
 import { runEngine } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
-import { buildPdfDocument, type PdfEmail } from './model';
+import { rebuiltEntries } from '../ui-model/rebuilt';
+import { buildPdfDocument, type PdfDocument, type PdfEmail } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
 
@@ -146,6 +149,9 @@ function randomMessage(random: () => number, k: number): NormalizedMessage {
 
 const strings = createPdfStrings('en');
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
+/** The real emails of a document with their list position (rebuilt emails have none: left out first). */
+const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
+  d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
 
 describe('PDF document model properties', () => {
   it('with "include everything", every body is the full text after the display transforms only', () => {
@@ -163,8 +169,8 @@ describe('PDF document model properties', () => {
       const doc = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings });
       expect(doc.emails).toHaveLength(positions.length);
       let codes = 0;
-      for (const e of doc.emails) {
-        const m = result.messages[e.position]!;
+      for (const { e, position } of realEmails(doc)) {
+        const m = result.messages[position]!;
         expect(bodyOf(e), `seed ${String(seed)} position ${String(e.position)}`).toBe(referenceDisplayText(m.message.bodyText));
         for (const line of e.body) for (const run of line) expect(run.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
         codes += e.flags.controlChars;
@@ -185,8 +191,8 @@ describe('PDF document model properties', () => {
       const doc = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: 0, strings });
       positions.forEach((p, k) => expect(doc.pdfNumberByPosition[p]).toBe(k + 1));
       expect(doc.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
-      for (const e of doc.emails) {
-        const full = referenceDisplayText(result.messages[e.position]!.message.bodyText);
+      for (const { e, position } of realEmails(doc)) {
+        const full = referenceDisplayText(result.messages[position]!.message.bodyText);
         for (const line of e.body) {
           const shown = lineText(line);
           if (shown.trim() !== '') expect(full, `seed ${String(seed)}`).toContain(shown);
@@ -195,6 +201,39 @@ describe('PDF document model properties', () => {
     }
     // The random emails must really exercise left-out parts.
     expect(withOmissions).toBeGreaterThan(20);
+  });
+
+  it('with rebuilt emails ON, every real email still shows its full text (collapse, never delete; task 7.7)', () => {
+    let rebuiltShown = 0;
+    for (let seed = 201; seed <= 240; seed++) {
+      const random = makeRandom(seed);
+      const messages = Array.from({ length: 12 }, (_, k) => {
+        const m = randomMessage(random, seed * 100 + k);
+        // A quoted history after the new text, so the engine has earlier emails to rebuild.
+        const quoted = Array.from({ length: 1 + Math.floor(random() * 4) }, () => `> ${pick(random, PIECES)}`).join('\n');
+        const history = `\n\nOn Tue, 4 Mar 2025 at 09:${String(10 + (k % 50))}, ${pick(random, ['Bob Sample <bob@furniture.example.test>', 'Carol Test <carol@sample.test>'])} wrote:\n> The desks arrive on Monday morning.\n${quoted}\n`;
+        return random() < 0.7 ? { ...m, bodyText: m.bodyText + history } : m;
+      });
+      const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
+      const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
+      const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
+      const plans = planOutput(
+        positions.map((p) => result.messages[p]!),
+        DEFAULT_OUTPUT_POLICY,
+      );
+      const rebuilt = rebuiltEntries(result).map((r) => r.id);
+      const doc = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
+      const real = realEmails(doc);
+      rebuiltShown += doc.emails.length - real.length;
+      // Every included real email is there once, numbered 1..k in list order, with its full text.
+      expect(real.map((x) => x.position)).toEqual(positions);
+      expect(real.map((x) => x.e.number)).toEqual(positions.map((_, k) => k + 1));
+      for (const { e, position } of real) {
+        expect(bodyOf(e), `seed ${String(seed)} position ${String(position)}`).toBe(referenceDisplayText(result.messages[position]!.message.bodyText));
+      }
+    }
+    // The random emails must really give rebuilt emails in the PDF.
+    expect(rebuiltShown).toBeGreaterThan(20);
   });
 
   it('builds 2000 emails in well under a second', () => {

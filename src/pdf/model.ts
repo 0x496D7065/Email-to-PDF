@@ -22,6 +22,39 @@
 // maps a list position to its PDF number (null when not in the PDF), for a
 // preview that wants to show it later.
 //
+// Rebuilt emails (milestone 7, task 7.7; brief section 8.6): earlier emails
+// rebuilt from the quoted text of an email (src/engine/rebuild-links.ts),
+// the ones the reader chose (`rebuilt`, src/ui/review.ts includedRebuilt),
+// at their place in the timeline (planPdfOrder). Never presented as files:
+// - NO number of their own (PdfEmail.number and PdfIndexEntry.number are
+//   null; the real emails keep 1..k, so a rebuilt email never shifts them);
+// - heading "Earlier email (rebuilt from quoted text in email N)", a "Taken
+//   from: email N" row instead of a File row, the preview's fixed note
+//   ("Rebuilt from the quoted text in email N. ... may be incomplete or
+//   inexact"), "Same quoted text also in email ..." for copies, "(list may
+//   be incomplete)" where flagged, "Unknown sender" when the quote names
+//   none; the date as the preview shows it ("about" only for a time read
+//   without a zone of its own; a day alone as written, user decision Q2)
+//   plus "As written in the quote: ...";
+// - in the index: no number, the subject starts with the marker
+//   "[Rebuilt]"; their bookmark starts with it too;
+// - on the cover: a "Rebuilt emails" count row and a section saying what
+//   they are; NOT in the source files and their SHA-256 (they have no file),
+//   NOT in "Emails", the date range or the people (those are the real
+//   emails' own facts; a quoted header is read, not proven).
+// NUMBERING RULE: every "email N" a rebuilt email names is the number the
+// real email carries IN THIS PDF (pdfNumberByPosition), never the preview's
+// list number "#N" (they differ once a real email is left out). The
+// preview keeps its own list numbers, which name every email it shows.
+// FOLLOW-SOURCE RULE (user decision Q1 (a)): a rebuilt email is in the PDF
+// only while at least one email it was read from is (rebuiltInPdf in
+// src/ui-model/rebuilt.ts); for a text quoted in several emails, "Taken
+// from" names its own source when that one is in the PDF, else the source
+// in the PDF with the smallest number (and the text and header shown are
+// the ones read from that email); the other sources in the PDF are listed
+// as "also in". The source email itself is unchanged: its quoted history is
+// folded or kept by its plan exactly as before (collapse, never delete).
+//
 // Body: the plan's KEPT ranges joined in order (src/pdf/text.ts, joinKept):
 // nothing is written where a part is left out (README.md, rule R6, the
 // exception for the PDF), except a line break when two kept parts would
@@ -53,14 +86,15 @@
 // transform makes new strings. Pure function, no DOM, no clock (the caller
 // passes `generatedAt`), README.md, rule R7.
 
-import type { EngineMessage, EngineResult } from '../engine/engine';
+import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
 import type { MessagePlan, OutputPolicy } from '../engine/output-plan';
-import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
+import { formatInZone, formatOffset, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
 import type { EmailAddress, NormalizedMessage, ParseErrorCode } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
 import { joinMailboxes } from '../ui-model/mailbox-list';
+import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../ui-model/rebuilt';
 import type { PdfStrings } from './strings';
-import { bodyLines, inlineRuns, joinKept, lineText, type PdfLine, type PdfRole } from './text';
+import { bodyLines, inlineRuns, joinKept, lineText, type PdfLine, type PdfRole, type PdfRun } from './text';
 // Pure and backend-neutral (it only reads src/pdf/text.ts): the bookmark cut follows the same rule as the copy layer.
 import { copyLayerCutIndex } from './writer/copy-text';
 
@@ -122,6 +156,8 @@ export interface PdfCover {
   readonly dateRange: { readonly first: string; readonly last: string } | null;
   readonly undated: number;
   readonly emailCount: number;
+  /** How many emails rebuilt from quoted text are in the PDF (not counted in emailCount). */
+  readonly rebuiltCount: number;
   readonly generated: string;
   readonly participants: readonly PdfParticipant[];
   readonly sources: readonly PdfSourceFile[];
@@ -130,7 +166,10 @@ export interface PdfCover {
 
 /** One line of the index. The renderer adds the page of `anchor`. */
 export interface PdfIndexEntry {
-  readonly number: number;
+  /** The email's PDF number; null for a rebuilt email (it has none: its subject starts with the rebuilt marker). */
+  readonly number: number | null;
+  /** True for an email rebuilt from quoted text. */
+  readonly rebuilt: boolean;
   readonly anchor: string;
   readonly date: PdfLine;
   readonly from: PdfLine;
@@ -164,16 +203,36 @@ export interface PdfEmailFlags {
   readonly controlChars: number;
 }
 
+/** What makes a rebuilt email in the PDF (task 7.7; see the top of this file). */
+export interface PdfRebuiltInfo {
+  /** The entry's id in `result.reconstructed` (link 'entry'). */
+  readonly id: number;
+  /** The id of the copy shown: the entry, or a copy read from an email in the PDF (rebuiltInPdf). */
+  readonly shownId: number;
+  /** The list position of the email it was taken from (in the PDF). */
+  readonly sourcePosition: number;
+  /** That email's PDF number ("Taken from: email N"). */
+  readonly takenFrom: number;
+  /** The PDF numbers of the other emails in the PDF quoting the same text, ascending. */
+  readonly also: readonly number[];
+}
+
 export interface PdfEmail {
-  /** 1..k over the included emails. */
-  readonly number: number;
+  /** 1..k over the included real emails; null for a rebuilt email (it never has a number). */
+  readonly number: number | null;
   /** For links from the index (resolved by the renderer). */
   readonly anchor: string;
-  /** Its position in the engine's list (`result.messages`). */
-  readonly position: number;
-  /** "Email 3". */
+  /** Its position in the engine's list (`result.messages`); null for a rebuilt email (see `rebuilt`). */
+  readonly position: number | null;
+  /** "Email 3", or "Earlier email (rebuilt from quoted text in email 3)". */
   readonly heading: string;
-  /** From, Sent by, To, Cc, Bcc (each when present), Date, Subject, File. */
+  /** null for a real email. */
+  readonly rebuilt: PdfRebuiltInfo | null;
+  /**
+   * From, Sent by, To, Cc, Bcc (each when present), Date, Subject, File. A
+   * rebuilt email: From, To, Cc (each with "(list may be incomplete)" when
+   * flagged), Date, Subject, Taken from (never a File row).
+   */
   readonly fields: readonly PdfFieldRow[];
   /** Short notes above the text (role 'muted'), e.g. "The whole email is shown: ...". */
   readonly notes: readonly PdfLine[];
@@ -194,6 +253,7 @@ export interface PdfDocument {
   readonly zoneFallback: boolean;
   readonly cover: PdfCover;
   readonly index: PdfIndex;
+  /** The real and the rebuilt emails, in PDF order (see planPdfOrder). */
   readonly emails: readonly PdfEmail[];
   /** For each list position of `result.messages`: its PDF number, or null when it is not in the PDF. */
   readonly pdfNumberByPosition: readonly (number | null)[];
@@ -215,6 +275,12 @@ export interface BuildPdfInput {
   readonly strings: PdfStrings;
   /** List the files that could not be read on the cover (default true). */
   readonly listUnreadable?: boolean;
+  /**
+   * Ids (in `result.reconstructed`) of the rebuilt emails the reader wants in
+   * the PDF (src/ui/review.ts, includedRebuilt; [] or absent when the switch
+   * is off). Each still follows the emails it was read from (planPdfOrder).
+   */
+  readonly rebuilt?: readonly number[];
 }
 
 // ---------------------------------------------------------------- helpers
@@ -283,6 +349,71 @@ export function bookmarkTitle(text: string): string {
 /** The anchor of email `number` (for the index links). */
 export function emailAnchor(number: number): string {
   return `email-${String(number)}`;
+}
+
+/** The anchor of rebuilt entry `id` (for the index links). Never an "email-N" anchor. */
+export function rebuiltAnchor(id: number): string {
+  return `rebuilt-${String(id)}`;
+}
+
+/** One place in the PDF: a real email (its list position, PDF number and plan) or a rebuilt one. */
+export type PdfSlot =
+  | { readonly kind: 'email'; readonly position: number; readonly number: number; /** Index into `plans`. */ readonly plan: number }
+  | { readonly kind: 'rebuilt'; readonly entry: EngineRebuilt; readonly source: RebuiltInPdf };
+
+export interface PdfOrder {
+  readonly slots: readonly PdfSlot[];
+  /** For each list position: its PDF number, or null when it is not in the PDF. */
+  readonly pdfNumberByPosition: readonly (number | null)[];
+}
+
+/**
+ * What goes in the PDF, in which order (see the top of this file):
+ * - the real emails: `positions` in the given order, each existing one
+ *   once, numbered 1..k (rebuilt emails take no number);
+ * - the rebuilt entries of `rebuiltIds` that exist, have their own
+ *   timeline entry (link 'entry') and pass the follow-source rule
+ *   (rebuiltInPdf: at least one email they were read from is in the PDF),
+ *   each once, at their place in the timeline: just before the first real
+ *   email in the PDF that comes after them, else at the end. A timeline
+ *   that is not valid (previewOrder falls back) gives no rebuilt email at
+ *   all: their text is in their source emails anyway.
+ * Pure: `result` is never changed.
+ */
+export function planPdfOrder(result: EngineResult, positions: readonly number[], rebuiltIds: readonly number[] = []): PdfOrder {
+  const pdfNumberByPosition: (number | null)[] = result.messages.map(() => null);
+  const real: { readonly kind: 'email'; readonly position: number; readonly number: number; readonly plan: number }[] = [];
+  positions.forEach((position, k) => {
+    if (result.messages[position] === undefined || pdfNumberByPosition[position] !== null) return;
+    const number = real.length + 1;
+    pdfNumberByPosition[position] = number;
+    real.push({ kind: 'email', position, number, plan: k });
+  });
+  if (rebuiltIds.length === 0) return { slots: real, pdfNumberByPosition };
+
+  const wanted = new Set(rebuiltIds);
+  const rankOfPosition = new Map<number, number>();
+  const rebuilt: { readonly slot: PdfSlot; readonly rank: number }[] = [];
+  previewOrder(result).forEach((slot, rank) => {
+    if (slot.kind === 'message') {
+      rankOfPosition.set(slot.position, rank);
+      return;
+    }
+    const entry = result.reconstructed[slot.id];
+    if (entry === undefined || !wanted.has(slot.id)) return;
+    const source = rebuiltInPdf(entry, result, (p) => pdfNumberByPosition[p] ?? null);
+    if (source !== null) rebuilt.push({ slot: { kind: 'rebuilt', entry, source }, rank });
+  });
+
+  const slots: PdfSlot[] = [];
+  let next = 0;
+  for (const email of real) {
+    const rank = rankOfPosition.get(email.position) ?? Number.POSITIVE_INFINITY;
+    while (next < rebuilt.length && rebuilt[next]!.rank < rank) slots.push(rebuilt[next++]!.slot);
+    slots.push(email);
+  }
+  while (next < rebuilt.length) slots.push(rebuilt[next++]!.slot);
+  return { slots, pdfNumberByPosition };
 }
 
 function isBlank(m: EmailAddress): boolean {
@@ -474,6 +605,7 @@ function buildEmail(
   const day = shown.kind === 'date' && dated ? shown.text.slice(0, 10) : strings.noDate;
   const entry: PdfIndexEntry = {
     number,
+    rebuilt: false,
     anchor,
     // Short ("2025-03-04 08:00", one line); the column title names the zone once.
     date: shown.kind === 'date' && dated ? own(shown.shortText, 'body') : own(strings.noDate, 'muted'),
@@ -489,6 +621,7 @@ function buildEmail(
     anchor,
     position,
     heading: strings.emailHeading(number),
+    rebuilt: null,
     fields,
     notes,
     body: lines.lines,
@@ -505,35 +638,154 @@ function buildEmail(
   return { email, entry, utcMs: dated ? message.date.utcMs : null };
 }
 
+// ---------------------------------------------------------------- one rebuilt email
+
+/** A rebuilt email's date: the header's value lines, the index's short form and the bookmark's day. */
+interface RebuiltDateParts {
+  readonly lines: readonly PdfLine[];
+  readonly index: PdfLine;
+  readonly day: string;
+  readonly undated: boolean;
+}
+
+/**
+ * The date of a rebuilt email, as the preview shows it (src/ui/preview.ts,
+ * rebuiltDateTexts; user decision Q2): a time in the chosen zone without
+ * seconds, "about" when it was read without a zone of its own; a day alone
+ * as written, never "about"; else "no date" or "could not be read". The
+ * date as written in the quote follows on its own line whenever there is one.
+ */
+function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer): RebuiltDateParts {
+  const { strings, timeZone } = input;
+  const date = rebuiltDate(r);
+  if (date.kind === 'none') return { lines: [own(strings.noDate, 'muted')], index: own(strings.noDate, 'muted'), day: strings.noDate, undated: true };
+  const asWritten = s.line(strings.quoteDateAsWritten(date.text), 'muted');
+  const unreadable: RebuiltDateParts = {
+    lines: [own(strings.quoteDateUnreadable, 'muted'), asWritten],
+    index: own(strings.quoteDateUnreadable, 'muted'),
+    day: strings.noDate,
+    undated: true,
+  };
+  if (date.kind === 'unreadable') return unreadable;
+  if (date.kind === 'day') return { lines: [own(date.day, 'field-value'), asWritten], index: own(date.day, 'body'), day: date.day, undated: false };
+  const shown = formatInZone(date.utcMs, timeZone);
+  if (shown.kind !== 'date') return unreadable;
+  const full = `${shown.shortText} ${formatOffset(shown.offsetMinutes)}`;
+  return {
+    lines: [own(date.approximate ? strings.dateAbout(full) : full, 'field-value'), asWritten],
+    index: own(date.approximate ? strings.dateAbout(shown.shortText) : shown.shortText, 'body'),
+    day: shown.text.slice(0, 10),
+    undated: false,
+  };
+}
+
+/**
+ * One rebuilt email (see the top of this file): marked in its heading, its
+ * notes and the index, with the copy chosen by rebuiltInPdf. Its text is
+ * the rebuilt text (quote marks removed), whole: no plan applies to it.
+ */
+function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, input: BuildPdfInput): EmailParts {
+  const { strings } = input;
+  const r = source.shown.rebuilt;
+  const m = r.rebuilt;
+  const s = sanitizer();
+  const index = sanitizer(); // the index repeats the header texts: not counted again
+
+  const fields: PdfFieldRow[] = [];
+  const shownOf = (list: readonly EmailAddress[]): EmailAddress[] => list.filter((x) => !isBlank(x));
+  const from = shownOf(m.from);
+  fields.push({
+    label: strings.fromLabel,
+    value: [from.length > 0 ? s.line(joinMailboxes(from.map((x) => mailboxText(x, strings))), 'field-value') : own(strings.unknownSender, 'muted')],
+  });
+  const list = (label: string, mailboxes: readonly EmailAddress[], incomplete: boolean): void => {
+    const shown = shownOf(mailboxes);
+    if (shown.length === 0 && !incomplete) return;
+    const line: PdfRun[] = shown.length > 0 ? [...s.line(joinMailboxes(shown.map((x) => mailboxText(x, strings))), 'field-value')] : [];
+    if (incomplete) line.push(...own(`${line.length > 0 ? ' ' : ''}${strings.listIncomplete}`, 'muted'));
+    fields.push({ label, value: [line] });
+  };
+  list(strings.toLabel, m.to, m.incomplete.includes('to'));
+  list(strings.ccLabel, m.cc, m.incomplete.includes('cc'));
+  const date = rebuiltDateParts(r, input, s);
+  fields.push({ label: strings.dateLabel, value: date.lines });
+  const subject = m.subject !== null && m.subject.trim() !== '' ? m.subject : null;
+  fields.push({ label: strings.subjectLabel, value: [subject !== null ? s.line(subject, 'field-value') : own(strings.rebuiltNoSubject, 'muted')] });
+  fields.push({ label: strings.takenFromLabel, value: [own(strings.takenFrom(source.number), 'field-value')] });
+
+  const lines = bodyLines(m.reconstructedText);
+  s.count += lines.replaced;
+  const notes: PdfLine[] = [own(strings.rebuiltNote(source.number, m.quoteMarksRemoved), 'muted')];
+  const also = strings.rebuiltAlso(source.also);
+  if (also !== '') notes.push(own(also, 'muted'));
+  if (lines.lines.length === 0) notes.push(own(strings.noText, 'muted'));
+
+  const anchor = rebuiltAnchor(entry.id);
+  const fromIndex: PdfLine = from.length > 0 ? index.line(joinMailboxes(from.map(shortMailbox)), 'body') : own(strings.unknownSender, 'muted');
+  const subjectLine: PdfLine = subject !== null ? index.line(subject, 'body') : own(strings.rebuiltNoSubject, 'muted');
+  const entryOut: PdfIndexEntry = {
+    number: null,
+    rebuilt: true,
+    anchor,
+    date: date.index,
+    from: fromIndex,
+    // The marker first, so the row can never be taken for a real email's.
+    subject: [...own(strings.rebuiltMarker, 'field-label'), ...own(' ', 'body'), ...subjectLine],
+    attachments: 0,
+    attachmentLines: [],
+    bookmark: bookmarkTitle(strings.rebuiltBookmark(date.day, lineText(fromIndex), lineText(subjectLine))),
+  };
+  const email: PdfEmail = {
+    number: null,
+    anchor,
+    position: null,
+    heading: strings.rebuiltHeading(source.number),
+    rebuilt: { id: entry.id, shownId: r.id, sourcePosition: source.shown.position, takenFrom: source.number, also: source.also },
+    fields,
+    notes,
+    body: lines.lines,
+    attachments: null,
+    flags: { undated: date.undated, zoneUnknown: false, keptAllBecauseEmpty: false, planFallback: false, htmlConverted: false, controlChars: s.count },
+  };
+  return { email, entry: entryOut, utcMs: null };
+}
+
 // ---------------------------------------------------------------- the document
 
 /** Builds the whole PDF document model (see the top of this file). */
 export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   const { result, positions, plans, strings, timeZone, generatedAt } = input;
 
-  // The included emails: positions that exist, each once, in the given order.
-  const pdfNumberByPosition: (number | null)[] = result.messages.map(() => null);
+  // The included emails: positions that exist, each once, in the given
+  // order; the rebuilt ones chosen, at their place (planPdfOrder).
+  const { slots, pdfNumberByPosition } = planPdfOrder(result, positions, input.rebuilt ?? []);
   const emails: PdfEmail[] = [];
   const entries: PdfIndexEntry[] = [];
   const included: EngineMessage[] = [];
+  let rebuiltCount = 0;
+  let undated = 0;
   let first: number | null = null;
   let last: number | null = null;
-  positions.forEach((position, k) => {
-    const m = result.messages[position];
-    if (m === undefined || pdfNumberByPosition[position] !== null) return;
-    const number = emails.length + 1;
-    pdfNumberByPosition[position] = number;
-    const parts = buildEmail(m, position, number, plans[k], input);
+  for (const slot of slots) {
+    if (slot.kind === 'rebuilt') {
+      const parts = buildRebuiltEmail(slot.entry, slot.source, input);
+      emails.push(parts.email);
+      entries.push(parts.entry);
+      rebuiltCount++;
+      continue;
+    }
+    const m = result.messages[slot.position]!;
+    const parts = buildEmail(m, slot.position, slot.number, plans[slot.plan], input);
     emails.push(parts.email);
     entries.push(parts.entry);
     included.push(m);
+    if (parts.email.flags.undated) undated++;
     if (parts.utcMs !== null) {
       if (first === null || parts.utcMs < first) first = parts.utcMs;
       if (last === null || parts.utcMs > last) last = parts.utcMs;
     }
-  });
+  }
   const controlChars = emails.reduce((n, e) => n + e.flags.controlChars, 0);
-  const undated = emails.filter((e) => e.flags.undated).length;
 
   // Cover.
   const c = sanitizer(); // the cover repeats names from the emails: not counted
@@ -578,13 +830,18 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
       kind: 'fields',
       rows: [
         { label: strings.datesLabel, value: dateLines },
-        { label: strings.emailsLabel, value: [own(strings.emailCount(emails.length), 'field-value')] },
+        { label: strings.emailsLabel, value: [own(strings.emailCount(included.length), 'field-value')] },
+        ...(rebuiltCount > 0 ? [{ label: strings.rebuiltLabel, value: [own(strings.rebuiltCount(rebuiltCount), 'field-value')] }] : []),
         { label: strings.timeZoneLabel, value: [c.line(zoneFallback ? strings.zoneFallback(usedZone) : zoneShown, 'field-value')] },
         { label: strings.generatedLabel, value: [own(generated, 'field-value')] },
       ],
     },
   ];
   if (controlChars > 0) blocks.push({ kind: 'paragraph', line: own(strings.controlChars(controlChars), 'muted') });
+  if (rebuiltCount > 0) {
+    blocks.push({ kind: 'heading', level: 2, line: own(strings.rebuiltSection, 'heading') });
+    blocks.push({ kind: 'paragraph', line: own(strings.rebuiltIntro, 'body') });
+  }
   if (participants.length > 0) {
     blocks.push({ kind: 'heading', level: 2, line: own(strings.peopleHeading, 'heading') });
     blocks.push({ kind: 'list', items: participants.map((p) => [c.line(mailboxText(p, strings), 'body')]) });
@@ -614,7 +871,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     fileName: pdfFileName(generatedAt, timeZone, strings),
     timeZone: usedZone,
     zoneFallback,
-    cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants, sources, unreadable },
+    cover: { blocks, dateRange, undated, emailCount: included.length, rebuiltCount, generated, participants, sources, unreadable },
     index: {
       heading: strings.indexHeading,
       // The zone name passes the same sanitizer as on the cover (a title is plain text, so codes stay as their text).

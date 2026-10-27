@@ -563,6 +563,14 @@ summary {
   overflow-wrap: anywhere;
 }
 
+/* "In the PDF: taken from #K" (src/ui/review.ts): only when the PDF takes
+   the card from another email than the one its details name. */
+.rebuilt-pdf-source {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
 /* "(no subject)", "Unknown sender": our own words, not the email's. */
 .placeholder {
   font-style: italic;

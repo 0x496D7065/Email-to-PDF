@@ -15,7 +15,9 @@ import {
   rebuiltCard,
   rebuiltDate,
   rebuiltEntries,
+  rebuiltInPdf,
   rebuiltSelectionKeys,
+  rebuiltSources,
   sourceNumber,
 } from './rebuilt';
 
@@ -208,5 +210,52 @@ describe('rebuiltCard', () => {
     expect(card.ccIncomplete).toBe(true);
     expect(card.toIncomplete).toBe(false);
     expect(card.subject).toBeNull();
+  });
+});
+
+describe('the follow-source rule (rebuiltSources, rebuiltInPdf; task 7.7, user decision Q1 (a))', () => {
+  /** Entries quoted in both emails, with their copy. */
+  const shared = (result: EngineResult) => rebuiltEntries(result).filter((e) => e.copies.length > 0);
+
+  it('lists the entry first, then its copies, each with the list position of the email it was read from', () => {
+    const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+    const entries = shared(result);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const e of entries) {
+      const sources = rebuiltSources(e, result);
+      expect(sources[0]).toEqual({ rebuilt: e, position: result.positionByIndex[e.sourceIndex] });
+      expect(sources.slice(1).map((s) => s.rebuilt.id)).toEqual(e.copies);
+    }
+    // A copy that does not point back to the entry is not one of its sources (not expected).
+    const e = entries[0]!;
+    const broken = { ...result, reconstructed: result.reconstructed.map((r) => (r.id === e.copies[0] ? { ...r, sameAs: 999 } : r)) };
+    expect(rebuiltSources(e, broken).map((s) => s.rebuilt.id)).toEqual([e.id, ...e.copies.slice(1)]);
+  });
+
+  it('keeps an entry while one of its emails is in the PDF, names that one, and lists the others as "also in"', () => {
+    const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+    for (const e of shared(result)) {
+      const own = result.positionByIndex[e.sourceIndex]!;
+      const copy = result.reconstructed[e.copies[0]!]!;
+      const other = result.positionByIndex[copy.sourceIndex]!;
+      // PDF numbers: own = 7, other = 3 (any numbers: the rule uses what it is given).
+      const numbers = new Map([
+        [own, 7],
+        [other, 3],
+      ]);
+      const both = rebuiltInPdf(e, result, (p) => numbers.get(p) ?? null);
+      expect(both).toEqual({ shown: { rebuilt: e, position: own }, number: 7, also: [3] });
+      const otherOnly = rebuiltInPdf(e, result, (p) => (p === other ? 3 : null));
+      expect(otherOnly).toEqual({ shown: { rebuilt: copy, position: other }, number: 3, also: [] });
+      expect(rebuiltInPdf(e, result, () => null)).toBeNull();
+    }
+  });
+
+  it('a rebuilt email quoted in one email only: in the PDF exactly while that email is', () => {
+    const result = engineOf('13-order-4-bob-outlook-nl.eml');
+    for (const e of rebuiltEntries(result)) {
+      expect(rebuiltInPdf(e, result, () => 1)).toEqual({ shown: { rebuilt: e, position: 0 }, number: 1, also: [] });
+      expect(rebuiltInPdf(e, result, () => null)).toBeNull();
+    }
   });
 });

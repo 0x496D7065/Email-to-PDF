@@ -173,8 +173,9 @@ export interface EngineResult {
   /**
    * Messages rebuilt from quoted text (step 6), by source (in `messages`
    * order), newest first; each says whether it is linked to a real message,
-   * the same as another rebuilt one, or its own timeline entry. Not shown
-   * by the UI or the PDF yet (tasks 7.6, 7.7).
+   * the same as another rebuilt one, or its own timeline entry. The preview
+   * shows the entries (src/ui-model/rebuilt.ts), and so does the PDF
+   * (src/pdf/model.ts, the ones the reader chose).
    */
   readonly reconstructed: readonly EngineRebuilt[];
   /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (rebuild-links.ts). */

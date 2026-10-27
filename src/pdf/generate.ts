@@ -26,6 +26,8 @@ export interface GeneratePdfInput {
   readonly positions: readonly number[];
   /** One plan per position, same order. */
   readonly plans: readonly MessagePlan[];
+  /** Ids of the rebuilt emails chosen (src/ui/review.ts, includedRebuilt); absent or [] for none. See BuildPdfInput.rebuilt. */
+  readonly rebuilt?: readonly number[];
   readonly policy: OutputPolicy;
   /** IANA zone the dates are shown in (an invalid one falls back to UTC, and the cover says so). */
   readonly timeZone: string;
@@ -61,6 +63,7 @@ export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf
     result: input.result,
     positions: input.positions,
     plans: input.plans,
+    ...(input.rebuilt === undefined ? {} : { rebuilt: input.rebuilt }),
     policy: input.policy,
     timeZone: input.timeZone,
     generatedAt: input.generatedAt,

@@ -29,8 +29,9 @@
 // Rebuilt emails (task 7.6): the review's switch sits in the preview's
 // toolbar and the review decorates their cards (decorateRebuilt); a change
 // of the switch or of a rebuilt card's checkbox drops a PDF made before and
-// is announced (onRebuiltChange). The PDF does not show them yet (task 7.7
-// reads review.includedRebuilt()).
+// is announced (onRebuiltChange). The PDF shows the ones the review gives
+// (review.includedRebuilt(), task 7.7: ticked, switch on, and an email they
+// were read from in the PDF), at their place in time (src/pdf/model.ts).
 //
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what
@@ -272,6 +273,8 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       result: plans.result,
       positions: plans.positions,
       plans: plans.plans,
+      // The rebuilt emails ticked whose source email is in the PDF ([] when the switch is off).
+      rebuilt: review.includedRebuilt().map((r) => r.id),
       policy: plans.policy,
       timeZone: preview.zone(),
       generatedAt,
@@ -288,7 +291,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     run:
       settings.run ??
       ((request, signal) =>
-        runPdfInWorker(request, { createWorker: createBrowserPdfWorker, timeoutMs: pdfTimeoutMs(request.input.positions.length), signal })),
+        runPdfInWorker(request, { createWorker: createBrowserPdfWorker, timeoutMs: pdfTimeoutMs(request.input.positions.length + (request.input.rebuilt?.length ?? 0)), signal })),
     createUrl: settings.createUrl ?? blobUrl,
     revokeUrl: settings.revokeUrl ?? ((url) => URL.revokeObjectURL(url)),
     // No `location` outside a browser (unit tests that pass no origin): no link can be shown then.

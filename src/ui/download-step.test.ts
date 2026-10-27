@@ -320,6 +320,44 @@ describe('step 3: making the PDF', () => {
     expect(request.input.generatedAt).toBe(NOW);
   });
 
+  it('sends the rebuilt emails chosen (task 7.7): all by default, none with the switch off or with their source email unticked', async () => {
+    // A reply quoting an earlier email ("On ... wrote:" and ">" lines): one rebuilt email.
+    const quoting: NormalizedMessage = {
+      ...make(),
+      subject: 'Re: Garden bench',
+      bodyText: 'Fine for me.\n\nOn Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n> Could you paint the bench?\n',
+    };
+    const result = engineOf([quoting]);
+    expect(result.reconstructed.filter((r) => r.link === 'entry')).toHaveLength(1);
+    choose(quoting.source.fileName);
+    calls.at(-1)?.resolve({ ok: true, engine: result });
+    await settle();
+    runTasks();
+    button().click();
+    expect(lastRun().request.input.rebuilt).toEqual([0]);
+    // The switch off: none (and the PDF made before is dropped).
+    const all = byId('rebuilt-include-all');
+    all.checked = false;
+    all.fire('change');
+    runTasks();
+    button().click();
+    expect(lastRun().request.input.rebuilt).toEqual([]);
+    all.checked = true;
+    all.fire('change');
+    runTasks();
+    // The source email unticked: no email at all, so no PDF; the rebuilt one is out too.
+    const source = byId('include-0');
+    source.checked = false;
+    source.fire('change');
+    runTasks();
+    expect(page.review.includedRebuilt()).toEqual([]);
+    source.checked = true;
+    source.fire('change');
+    runTasks();
+    button().click();
+    expect(lastRun().request.input.rebuilt).toEqual([0]);
+  });
+
   it('shows and announces progress; pressing again meanwhile starts nothing', async () => {
     await addAndShow();
     button().click();

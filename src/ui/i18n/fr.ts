@@ -283,6 +283,10 @@ export const fr: Messages = {
     dateUnreadable: '(date illisible)',
     includeAll: 'Inclure les e-mails antérieurs reconstitués à partir du texte cité',
     itemFailed: 'Un problème est survenu à l’affichage de cet e-mail reconstitué. Son texte se trouve toujours dans l’e-mail d’où il est tiré.',
+    // NEEDS USER PROOFREADING (task 7.7 draft, see the top of this file).
+    sourceExcluded: 'Pas dans le PDF\u00A0: l’e-mail d’où il est tiré est laissé de côté',
+    // NEEDS USER PROOFREADING (task 7.7).
+    pdfSource: 'Dans le PDF\u00A0: tiré de {number}',
   },
 
   pdf: {
@@ -355,6 +359,18 @@ export const fr: Messages = {
       // ASCII only, like the English one.
       fileName: 'correspondance-{date}.pdf',
       fileNameNoDate: 'correspondance.pdf',
+      // NEEDS USER PROOFREADING (task 7.7 drafts, see the top of this file).
+      rebuiltHeading: 'E-mail antérieur (reconstitué à partir du texte cité dans l’e-mail {number})',
+      rebuiltMarker: '[Reconstitué]',
+      rebuiltBookmark: '{marker} {date}, {from}\u00A0: {subject}',
+      rebuilt: 'E-mails reconstitués',
+      rebuiltCount: {
+        one: '{count} e-mail antérieur reconstitué à partir du texte cité',
+        other: '{count} e-mails antérieurs reconstitués à partir du texte cité',
+      },
+      rebuiltSection: 'E-mails antérieurs reconstitués à partir du texte cité',
+      rebuiltIntro:
+        'Les e-mails reconstitués sont des e-mails antérieurs qui ne figuraient pas parmi les fichiers ajoutés\u00A0: l’outil les a reconstitués à partir du texte cité dans un e-mail ultérieur. Chacun indique l’e-mail d’où il est tiré et n’a ni numéro, ni fichier, ni empreinte SHA-256 propre\u202F; dans le sommaire, ils sont marqués «\u00A0[Reconstitué]\u00A0». Les éventuels signes de citation (>) ont été retirés de leur texte, et ils peuvent être incomplets ou inexacts. Ce ne sont pas des fichiers d’origine.',
     },
   },
 
