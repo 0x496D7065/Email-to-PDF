@@ -538,6 +538,31 @@ summary {
   color: var(--text-muted);
 }
 
+/* An earlier email rebuilt from quoted text (src/ui/preview.ts): a dashed
+   frame, and the word "Rebuilt" at the start of its heading says it in
+   words too (never the border or colour alone). It has no number. */
+.message-rebuilt {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 2px dashed var(--text-muted);
+  border-radius: 0.25rem;
+}
+
+.rebuilt-label {
+  padding: 0 0.375rem;
+  border: 1px solid var(--text-muted);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.rebuilt-note,
+.rebuilt-also {
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
 /* "(no subject)", "Unknown sender": our own words, not the email's. */
 .placeholder {
   font-style: italic;

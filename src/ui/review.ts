@@ -41,15 +41,29 @@
 // shown and the number of emails with notes; each decorated item's label,
 // "Not in the PDF" mark and notes are rewritten in place from the codes
 // kept with them, so no checkbox is rebuilt (ticks and focus stay).
+//
+// Rebuilt emails (milestone 7, task 7.6; src/ui-model/rebuilt.ts): earlier
+// emails rebuilt from quoted text get cards of their own in the preview
+// (decorateRebuilt adds their checkbox, like a real email's). All are in
+// the PDF by default. One switch, `rebuiltSwitch` (for the preview's
+// toolbar, shown only when the result has rebuilt emails), leaves ALL of
+// them out: their cards are then hidden (each is only a second view of a
+// part of an email still in the list, whose card keeps all its text). An
+// unticked card stays, dimmed and marked "Not in the PDF", like a real
+// email. The counts say how many were found and how many will be in the
+// PDF. includedRebuilt() gives the PDF step (task 7.7) the ones to put in.
+// A change is told through `onRebuiltChange` (not `onChange`: the PDF
+// labels of the real emails do not depend on it).
 
-import type { EngineCounts, EngineMessage, EngineResult } from '../engine/engine';
+import type { EngineCounts, EngineMessage, EngineRebuilt, EngineResult, ReconstructionWarning } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
 import { messageNotes, type MessageNote } from '../ui-model/message-notes';
+import { createRebuiltSelection, rebuiltEntries } from '../ui-model/rebuilt';
 import { createSelection } from '../ui-model/selection';
 import { el, setSafeAttribute } from './dom';
 import { t } from './i18n';
 import { createStaticLabels } from './labels';
-import { headingId, joinList, messageNumberText } from './preview';
+import { headingId, joinList, messageNumberText, rebuiltHeadingId } from './preview';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (no DOM; unit tested directly).
@@ -75,6 +89,8 @@ export function noteText(note: MessageNote): string {
       return t(`preview.order.${note.code}`);
     case 'engine':
       return t(`warnings.engine.${note.code}`);
+    case 'rebuild':
+      return t(`warnings.rebuild.${note.code}`);
     case 'dedupe': {
       const label = t(`warnings.dedupe.${note.code}`);
       const related = relatedText(note.related, note.more);
@@ -93,17 +109,23 @@ export function filesText(counts: EngineCounts): string {
   return t('counts.sentence', { text: t('counts.filesWithFailed', { files, failed }) });
 }
 
-/** "9 emails found, 2 identical copies merged." */
-export function messagesText(counts: EngineCounts): string {
+/** "9 emails found, 2 identical copies merged, 3 earlier emails rebuilt from quoted text." `rebuilt`: rebuilt cards. */
+export function messagesText(counts: EngineCounts, rebuilt = 0): string {
   const parts = [t('counts.messagesFound', { count: counts.messagesFound })];
   if (counts.duplicatesMerged > 0) parts.push(t('counts.duplicatesMerged', { count: counts.duplicatesMerged }));
+  if (rebuilt > 0) parts.push(t('counts.rebuiltFound', { count: rebuilt }));
   return t('counts.sentence', { text: joinList(parts) });
 }
 
 /** The notes of one email, or none if they cannot be worked out (a broken entry: never stops the page). */
-export function safeNotes(m: EngineMessage, position: number, positionByIndex: readonly (number | null)[]): MessageNote[] {
+export function safeNotes(
+  m: EngineMessage,
+  position: number,
+  positionByIndex: readonly (number | null)[],
+  rebuildWarnings: readonly ReconstructionWarning[] = [],
+): MessageNote[] {
   try {
-    return messageNotes(m, position, positionByIndex);
+    return messageNotes(m, position, positionByIndex, rebuildWarnings);
   } catch {
     return [];
   }
@@ -131,6 +153,14 @@ export interface Review {
   includedMessages(): readonly EngineMessage[];
   /** Writes the counts and every item's words again in the page language now (nothing is rebuilt). */
   relabel(): void;
+  /** The "include rebuilt emails" switch field, for the preview's toolbar (hidden when there is no rebuilt email). */
+  readonly rebuiltSwitch: HTMLDivElement;
+  /** The preview's `decorateRebuilt` hook: adds the include checkbox to a rebuilt email's card. */
+  readonly decorateRebuilt: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
+  /** The switch: false when the reader left every rebuilt email out. */
+  rebuiltIncludeAll(): boolean;
+  /** The rebuilt emails to put in the PDF, in list (timeline) order; [] when the switch is off. For task 7.7. */
+  includedRebuilt(): readonly EngineRebuilt[];
 }
 
 /** What build() added to an item (see Entry). */
@@ -150,6 +180,19 @@ interface Entry extends Parts {
   readonly message: EngineMessage;
 }
 
+/** What buildRebuilt() added to a rebuilt card. */
+interface RebuiltParts {
+  readonly checkbox: HTMLInputElement;
+  readonly excludedNote: HTMLSpanElement;
+  readonly label: HTMLLabelElement;
+}
+
+/** One decorated rebuilt card. */
+interface RebuiltEntry extends RebuiltParts {
+  readonly item: HTMLLIElement;
+  readonly rebuilt: EngineRebuilt;
+}
+
 export interface ReviewOptions {
   /**
    * Called after each tick or untick, once the choice is recorded, with the
@@ -161,6 +204,12 @@ export interface ReviewOptions {
    * so neither announcement replaces the other.
    */
   readonly onChange?: (announcement: string) => void;
+  /**
+   * Called after the switch or a rebuilt card's checkbox changed, with the
+   * new "N of M rebuilt emails will be in the PDF" line to announce.
+   * src/ui/page.ts: step 3 drops a PDF made before and announces the line.
+   */
+  readonly onRebuiltChange?: (announcement: string) => void;
 }
 
 export function createReview(options: ReviewOptions = {}): Review {
@@ -176,6 +225,11 @@ export function createReview(options: ReviewOptions = {}): Review {
   // How many emails of the result shown have notes (for the counts line).
   let withNotes = 0;
   const labels = createStaticLabels();
+  // Rebuilt emails: the choices, the cards decorated (by id) and the cards of the result shown.
+  const rebuiltSelection = createRebuiltSelection();
+  let rebuiltItems = new Map<number, RebuiltEntry>();
+  const addedRebuilt = new WeakMap<HTMLLIElement, RebuiltParts>();
+  let rebuiltList: readonly EngineRebuilt[] = [];
 
   // --- Counts box -----------------------------------------------------------
   const filesLine = el('span', { attrs: { id: 'review-files-text' } });
@@ -185,14 +239,25 @@ export function createReview(options: ReviewOptions = {}): Review {
   // Not a live region itself: the page has one (the shell's status line); see `onChange`.
   const includedLine = el('p', { attrs: { id: 'review-included', class: 'review-line review-included' } });
   const notesLine = el('p', { attrs: { id: 'review-notes', class: 'review-line', hidden: true } });
+  const rebuiltLine = el('p', { attrs: { id: 'review-rebuilt', class: 'review-line review-included', hidden: true } });
   const element = el('div', {
     attrs: { id: 'review-summary', class: 'review-summary' },
     children: [
       el('p', { attrs: { id: 'review-files', class: 'review-line' }, children: [filesLine, ' ', failedPointer] }),
       messagesLine,
       includedLine,
+      rebuiltLine,
       notesLine,
     ],
+  });
+
+  // The switch (ticked: every rebuilt email that is ticked goes in the PDF).
+  // Hidden with its field while there is no rebuilt email (both: a hidden input is never taken for a control).
+  const rebuiltCheckbox = el('input', { attrs: { type: 'checkbox', id: 'rebuilt-include-all', checked: true, hidden: true } });
+  rebuiltCheckbox.checked = true;
+  const rebuiltSwitch = el('div', {
+    attrs: { id: 'rebuilt-switch', class: 'field field-checkbox', hidden: true },
+    children: [rebuiltCheckbox, labels.text(el('label', { attrs: { for: 'rebuilt-include-all' } }), 'rebuilt.includeAll')],
   });
 
   /** True if the email goes into the PDF. A broken entry counts as included: never silently left out. */
@@ -221,6 +286,47 @@ export function createReview(options: ReviewOptions = {}): Review {
     includedLine.textContent = current === null ? '' : t('counts.included', { included: positions().length, count: current.messages.length });
   }
 
+  /** Shows or hides the switch (only shown when the result shown has rebuilt emails). */
+  function showSwitch(shown: boolean): void {
+    setSafeAttribute(rebuiltSwitch, 'hidden', !shown);
+    setSafeAttribute(rebuiltCheckbox, 'hidden', !shown);
+  }
+
+  /** True if this rebuilt card is ticked (a broken entry counts as ticked, as for real emails). */
+  function isRebuiltTicked(r: EngineRebuilt): boolean {
+    try {
+      return current === null || rebuiltSelection.isTicked(r, current);
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * The rebuilt emails that go in the PDF, in list order: none when the
+   * switch is off; else the ticked ones, and (once the list is complete) any
+   * card the page could not decorate, as for real emails (see `positions`).
+   */
+  function rebuiltIncluded(): EngineRebuilt[] {
+    if (current === null || !rebuiltSelection.includeAll()) return [];
+    const complete = renderedResult === current;
+    return rebuiltList.filter((r) => (complete && !rebuiltItems.has(r.id)) || isRebuiltTicked(r));
+  }
+
+  function showRebuiltLine(): void {
+    const count = rebuiltList.length;
+    rebuiltLine.textContent = current === null || count === 0 ? '' : t('counts.rebuiltIncluded', { included: rebuiltIncluded().length, count });
+  }
+
+  function applyRebuilt(entry: RebuiltEntry): void {
+    const ticked = isRebuiltTicked(entry.rebuilt);
+    const all = rebuiltSelection.includeAll();
+    entry.checkbox.checked = ticked;
+    setSafeAttribute(entry.item, 'data-included', ticked && all ? 'true' : 'false');
+    setSafeAttribute(entry.excludedNote, 'hidden', ticked);
+    // Switch off: the card leaves the list (its text stays in its source email's card).
+    setSafeAttribute(entry.item, 'hidden', !all);
+  }
+
   function apply(entry: Entry): void {
     const included = isIncluded(entry.message);
     entry.checkbox.checked = included;
@@ -231,9 +337,10 @@ export function createReview(options: ReviewOptions = {}): Review {
   /** The counts lines of the result shown, in the page language. */
   function writeCounts(result: EngineResult): void {
     filesLine.textContent = filesText(result.counts);
-    messagesLine.textContent = messagesText(result.counts);
+    messagesLine.textContent = messagesText(result.counts, rebuiltList.length);
     notesLine.textContent = withNotes > 0 ? t('counts.withNotes', { count: withNotes }) : '';
     showIncludedLine();
+    showRebuiltLine();
   }
 
   /** An item's own words (label, "Not in the PDF", notes), in the page language. */
@@ -257,6 +364,11 @@ export function createReview(options: ReviewOptions = {}): Review {
     includedLine.textContent = '';
     notesLine.textContent = '';
     setSafeAttribute(notesLine, 'hidden', true);
+    rebuiltList = [];
+    rebuiltItems = new Map();
+    rebuiltLine.textContent = '';
+    setSafeAttribute(rebuiltLine, 'hidden', true);
+    showSwitch(false);
   }
 
   /** Shows a result's counts; does nothing for the result already shown (its items stay registered). */
@@ -267,9 +379,17 @@ export function createReview(options: ReviewOptions = {}): Review {
     setSafeAttribute(failedPointer, 'hidden', result.counts.filesFailed === 0);
     withNotes = 0;
     result.messages.forEach((m, position) => {
-      if (safeNotes(m, position, result.positionByIndex).length > 0) withNotes++;
+      if (safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings).length > 0) withNotes++;
     });
     setSafeAttribute(notesLine, 'hidden', withNotes === 0);
+    rebuiltItems = new Map();
+    try {
+      rebuiltList = rebuiltEntries(result);
+    } catch {
+      rebuiltList = []; // not expected; the real emails are shown either way
+    }
+    setSafeAttribute(rebuiltLine, 'hidden', rebuiltList.length === 0);
+    showSwitch(rebuiltList.length > 0);
     writeCounts(result);
   }
 
@@ -292,7 +412,7 @@ export function createReview(options: ReviewOptions = {}): Review {
         children: [checkbox, label, excludedNote],
       }),
     ];
-    const notes = safeNotes(m, position, result.positionByIndex).map((note) => ({
+    const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings).map((note) => ({
       element: el('li', { attrs: { class: 'message-note', 'data-code': note.code } }),
       note,
     }));
@@ -311,6 +431,56 @@ export function createReview(options: ReviewOptions = {}): Review {
     item.insertBefore(el('div', { attrs: { class: 'message-review' }, children }), item.children[1] ?? null);
     return parts;
   }
+
+  /** Builds a rebuilt card's checkbox (only once per card), right after its heading. */
+  function buildRebuilt(item: HTMLLIElement, r: EngineRebuilt): RebuiltParts {
+    const id = `include-rebuilt-${String(r.id)}`;
+    const labelId = `${id}-label`;
+    // Named by its label and the card's heading ("Include in the PDF Rebuilt Desks"), as for real emails.
+    const checkbox = el('input', {
+      attrs: { type: 'checkbox', id, class: 'include-checkbox', 'aria-labelledby': `${labelId} ${rebuiltHeadingId(r.id)}` },
+    });
+    const excludedNote = el('span', { attrs: { class: 'excluded-note', hidden: true } });
+    const label = el('label', { attrs: { id: labelId, for: id } });
+    const parts: RebuiltParts = { checkbox, excludedNote, label };
+    writeRebuiltParts(parts);
+    checkbox.addEventListener('change', () => {
+      if (current !== null) rebuiltSelection.setTicked(r, current, checkbox.checked);
+      // Every shown card: two cards could share a key (see src/ui-model/rebuilt.ts).
+      for (const entry of rebuiltItems.values()) applyRebuilt(entry);
+      showRebuiltLine();
+      options.onRebuiltChange?.(rebuiltLine.textContent);
+    });
+    const field = el('div', { attrs: { class: 'field field-checkbox message-include' }, children: [checkbox, label, excludedNote] });
+    item.insertBefore(el('div', { attrs: { class: 'message-review' }, children: [field] }), item.children[1] ?? null);
+    return parts;
+  }
+
+  /** A rebuilt card's own words (label, "Not in the PDF"), in the page language. */
+  function writeRebuiltParts(parts: RebuiltParts): void {
+    parts.label.textContent = t('actions.include');
+    parts.excludedNote.textContent = t('review.excluded');
+  }
+
+  const decorateRebuilt: Review['decorateRebuilt'] = (item, r, result) => {
+    if (result !== current) show(result);
+    let parts = addedRebuilt.get(item);
+    if (parts === undefined) {
+      parts = buildRebuilt(item, r);
+      addedRebuilt.set(item, parts);
+    }
+    // Recorded last: a call that threw above leaves no reference behind.
+    const entry: RebuiltEntry = { item, rebuilt: r, ...parts };
+    applyRebuilt(entry);
+    rebuiltItems.set(r.id, entry);
+  };
+
+  rebuiltCheckbox.addEventListener('change', () => {
+    rebuiltSelection.setIncludeAll(rebuiltCheckbox.checked);
+    for (const entry of rebuiltItems.values()) applyRebuilt(entry);
+    showRebuiltLine();
+    options.onRebuiltChange?.(rebuiltLine.textContent);
+  });
 
   const decorate: Review['decorate'] = (item, m, position, result) => {
     if (result !== current) show(result);
@@ -335,6 +505,8 @@ export function createReview(options: ReviewOptions = {}): Review {
     },
     reset() {
       selection.clear();
+      rebuiltSelection.clear();
+      rebuiltCheckbox.checked = true;
       emptyCounts();
     },
     rendered: (result) => {
@@ -347,12 +519,18 @@ export function createReview(options: ReviewOptions = {}): Review {
       if (result !== current) return;
       renderedResult = result;
       showIncludedLine();
+      showRebuiltLine();
     },
     relabel() {
       labels.relabel();
       if (current !== null) writeCounts(current);
       for (const entry of entries.values()) writeParts(entry);
+      for (const entry of rebuiltItems.values()) writeRebuiltParts(entry);
     },
+    rebuiltSwitch,
+    decorateRebuilt,
+    rebuiltIncludeAll: () => rebuiltSelection.includeAll(),
+    includedRebuilt: rebuiltIncluded,
     includedPositions: positions,
     includedMessages() {
       const messages = current?.messages ?? [];

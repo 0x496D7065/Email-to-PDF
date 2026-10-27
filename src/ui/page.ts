@@ -26,6 +26,12 @@
 // in the same task, so the focus never reaches <body> and this check, which
 // runs on new results only, has nothing to do.
 //
+// Rebuilt emails (task 7.6): the review's switch sits in the preview's
+// toolbar and the review decorates their cards (decorateRebuilt); a change
+// of the switch or of a rebuilt card's checkbox drops a PDF made before and
+// is announced (onRebuiltChange). The PDF does not show them yet (task 7.7
+// reads review.includedRebuilt()).
+//
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what
 // goes into the PDF drops a PDF made or being made (choicesChanged): files
@@ -180,6 +186,14 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       download.inputsChanged(announcement);
       pdfLabels.refresh();
     },
+    // The rebuilt emails' switch or a rebuilt card's checkbox: a PDF made
+    // before is dropped (and said so with the new line). The PDF labels of
+    // the real emails do not depend on it. Every rebuilt card (a stand-in
+    // the review could not decorate too) is shown or hidden with the switch.
+    onRebuiltChange: (announcement) => {
+      preview.refreshRebuilt();
+      download.inputsChanged(announcement);
+    },
   });
   // The PDF labels of step 2 (src/ui/pdf-labels.ts): their checkbox sits in the preview's toolbar.
   // New plans (or none) also mean a PDF made from the old ones is stale.
@@ -205,8 +219,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
   const preview = mountPreview(shell, {
     ...options.preview,
     header: [review.element],
-    toolbarItems: [pdfLabels.element],
+    toolbarItems: [pdfLabels.element, review.rebuiltSwitch],
     decorate: review.decorate,
+    decorateRebuilt: review.decorateRebuilt,
+    rebuiltShown: () => review.rebuiltIncludeAll(),
     onRendered: (result) => {
       review.rendered(result);
       // Once the list is complete, an email without a decorated item counts as included (src/ui/review.ts).

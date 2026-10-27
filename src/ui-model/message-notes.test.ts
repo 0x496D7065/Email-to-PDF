@@ -4,7 +4,7 @@ import type { DedupeWarning } from '../engine/dedupe';
 import { runEngine, type EngineMessage } from '../engine/engine';
 import type { NormalizedMessage, ParseResult } from '../parsing/types';
 import { t } from '../ui/i18n';
-import { DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, relatedListNumbers } from './message-notes';
+import { DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
 
 let counter = 0;
 function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage {
@@ -45,7 +45,7 @@ function engineMessage(fields: Partial<EngineMessage> = {}): EngineMessage {
 
 describe('code lists', () => {
   it('name each code once', () => {
-    for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, ENGINE_WARNINGS]) expect(new Set(list).size).toBe(list.length);
+    for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, ENGINE_WARNINGS, REBUILD_WARNINGS]) expect(new Set(list).size).toBe(list.length);
   });
 });
 
@@ -88,6 +88,23 @@ describe('messageNotes', () => {
       { kind: 'engine', code: 'detector-failed' },
       { kind: 'engine', code: 'folding-disabled' },
     ]);
+  });
+
+  it('adds the problems while rebuilding earlier emails from the quote of THIS email, last, each once', () => {
+    const m = engineMessage({ index: 3, engineWarnings: ['detector-failed'] });
+    const warnings = [
+      { index: 2, code: 'reconstruct-failed' as const },
+      { index: 3, code: 'reconstruct-limit' as const },
+      { index: 3, code: 'reconstruct-failed' as const },
+      { index: 3, code: 'reconstruct-limit' as const },
+    ];
+    expect(messageNotes(m, 0, [null, null, null, 0], warnings)).toEqual([
+      { kind: 'engine', code: 'detector-failed' },
+      { kind: 'rebuild', code: 'reconstruct-failed' },
+      { kind: 'rebuild', code: 'reconstruct-limit' },
+    ]);
+    expect(messageNotes(m, 0, [null, null, null, 0])).toEqual([{ kind: 'engine', code: 'detector-failed' }]);
+    for (const code of REBUILD_WARNINGS) expect(t(`warnings.rebuild.${code}`)).toMatch(/still in this email[.]$/);
   });
 
   it('shows each code once even if it is repeated', () => {

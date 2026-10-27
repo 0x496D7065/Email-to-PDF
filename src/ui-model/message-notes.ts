@@ -1,7 +1,8 @@
 // The notes of one email in the preview: everything the tool was unsure
 // about or had to work around for it (a missing date, an unknown time zone,
 // text converted from HTML, a look-alike email that was not merged, a fold
-// detector that failed, ...). The words come from the strings module
+// detector that failed, earlier emails in its quote that could not be
+// rebuilt, ...). The words come from the strings module
 // (src/ui/i18n/en.ts); this file only decides WHICH notes an email gets, in
 // which order, and which other emails they point to.
 //
@@ -12,7 +13,7 @@
 // Pure functions, no DOM (README.md, rule R7).
 
 import type { DedupeWarningCode } from '../engine/dedupe';
-import type { EngineMessage, EngineWarningCode } from '../engine/engine';
+import type { EngineMessage, EngineWarningCode, ReconstructionWarning, ReconstructionWarningCode } from '../engine/engine';
 import type { MessagePlan } from '../engine/output-plan';
 import type { ParseWarning } from '../parsing/types';
 
@@ -53,8 +54,12 @@ const dedupeWarningsComplete: Complete<DedupeWarningCode, typeof DEDUPE_WARNINGS
 export const ENGINE_WARNINGS = ['detector-failed', 'folding-disabled', 'dedupe-failed'] as const satisfies readonly EngineWarningCode[];
 const engineWarningsComplete: Complete<EngineWarningCode, typeof ENGINE_WARNINGS> = true;
 
+/** Every warning about rebuilding earlier emails from this email's quote (task 7.6), in the order shown. */
+export const REBUILD_WARNINGS = ['reconstruct-failed', 'reconstruct-limit'] as const satisfies readonly ReconstructionWarningCode[];
+const rebuildWarningsComplete: Complete<ReconstructionWarningCode, typeof REBUILD_WARNINGS> = true;
+
 // Read once so the checks above are not "unused" (they matter at compile time only).
-void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete];
+void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete, rebuildWarningsComplete];
 
 /**
  * Notes about the PDF plan of one email (src/engine/output-plan.ts, rules 4
@@ -90,7 +95,9 @@ export type MessageNote =
        */
       readonly more: number;
     }
-  | { readonly kind: 'engine'; readonly code: EngineWarningCode };
+  | { readonly kind: 'engine'; readonly code: EngineWarningCode }
+  // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
+  | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode };
 
 /**
  * The list numbers (1-based) of the emails a warning points to: input
@@ -106,8 +113,17 @@ export function relatedListNumbers(related: readonly number[], ownPosition: numb
   return [...numbers].sort((a, b) => a - b);
 }
 
-/** The notes of the email at `position` (0-based) in the list, in the order shown. [] if none. */
-export function messageNotes(m: EngineMessage, position: number, positionByIndex: readonly (number | null)[]): MessageNote[] {
+/**
+ * The notes of the email at `position` (0-based) in the list, in the order
+ * shown. [] if none. `rebuildWarnings`: the result's reconstructionWarnings
+ * (only those of this email, by its input position, are used).
+ */
+export function messageNotes(
+  m: EngineMessage,
+  position: number,
+  positionByIndex: readonly (number | null)[],
+  rebuildWarnings: readonly ReconstructionWarning[] = [],
+): MessageNote[] {
   const notes: MessageNote[] = [];
   const parse = new Set<ParseWarning>(m.parserWarnings);
   for (const code of PARSE_WARNINGS) {
@@ -130,5 +146,7 @@ export function messageNotes(m: EngineMessage, position: number, positionByIndex
   }
   const engine = new Set<EngineWarningCode>(m.engineWarnings);
   for (const code of ENGINE_WARNINGS) if (engine.has(code)) notes.push({ kind: 'engine', code });
+  const rebuild = new Set<ReconstructionWarningCode>(rebuildWarnings.filter((w) => w.index === m.index).map((w) => w.code));
+  for (const code of REBUILD_WARNINGS) if (rebuild.has(code)) notes.push({ kind: 'rebuild', code });
   return notes;
 }

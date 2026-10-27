@@ -236,11 +236,18 @@ export const nl: Messages = {
     seeFailed: 'Zie stap 1 voor de reden.',
     messagesFound: { one: '{count} e-mail gevonden', other: '{count} e-mails gevonden' },
     duplicatesMerged: { one: '{count} identieke kopie samengevoegd', other: '{count} identieke kopieën samengevoegd' },
+    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
+    rebuiltFound: { one: '{count} eerdere e-mail gereconstrueerd uit geciteerde tekst', other: '{count} eerdere e-mails gereconstrueerd uit geciteerde tekst' },
     // The form follows {count} (the total), as in English, so no verb that
     // would have to agree with {included}: hence "In de PDF: 1 van 5 e-mails".
     included: {
       one: 'In de PDF: {included} van {count} e-mail.',
       other: 'In de PDF: {included} van {count} e-mails.',
+    },
+    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
+    rebuiltIncluded: {
+      one: 'In de PDF: {included} van {count} gereconstrueerde e-mail.',
+      other: 'In de PDF: {included} van {count} gereconstrueerde e-mails.',
     },
     withNotes: {
       one: '{count} e-mail heeft opmerkingen, die hieronder bij de e-mail staan.',
@@ -259,6 +266,24 @@ export const nl: Messages = {
       'pdf-kept-all-empty': 'De hele e-mail komt in de PDF: de tool kon de eigen tekst niet van het citaat onderscheiden.',
       'pdf-fallback': 'De hele e-mail komt in de PDF: de tool kon niet bepalen welke delen moeten worden weggelaten.',
     },
+  },
+
+  // NEEDS USER PROOFREADING (task 7.6 drafts; user decision Q4, proofread in task 7.8).
+  rebuilt: {
+    label: 'Gereconstrueerd',
+    noSubject: '(onderwerp staat niet in het citaat)',
+    noteMarks: 'Gereconstrueerd uit de geciteerde tekst in e-mail {number}. Citaattekens verwijderd; mogelijk onvolledig of onnauwkeurig.',
+    noteNoMarks: 'Gereconstrueerd uit de geciteerde tekst in e-mail {number}. Mogelijk onvolledig of onnauwkeurig.',
+    alsoOne: 'Dezelfde geciteerde tekst staat ook in e-mail {list}.',
+    alsoMany: 'Dezelfde geciteerde tekst staat ook in e-mails {list}.',
+    takenFrom: 'Overgenomen uit',
+    takenFromValue: 'e-mail {number}',
+    listIncomplete: '(lijst mogelijk onvolledig)',
+    dateAbout: 'omstreeks {date}',
+    dateAsWritten: 'Zoals geschreven in het citaat: {text}',
+    dateUnreadable: '(datum kon niet worden gelezen)',
+    includeAll: 'Eerdere e-mails opnemen die uit geciteerde tekst zijn gereconstrueerd',
+    itemFailed: 'Er ging iets mis bij het tonen van deze gereconstrueerde e-mail. De tekst staat nog in de e-mail waaruit hij is overgenomen.',
   },
 
   pdf: {
@@ -359,6 +384,11 @@ export const nl: Messages = {
       'detector-failed': 'Een deel van de geciteerde of herhaalde tekst in deze e-mail kon niet worden gecontroleerd, dus de e-mail wordt volledig getoond.',
       'folding-disabled': 'Deze e-mail wordt volledig getoond; geciteerde tekst kon niet worden ingeklapt.',
       'dedupe-failed': 'Identieke kopieën konden niet worden gecontroleerd, dus elke e-mail wordt bewaard.',
+    },
+    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
+    rebuild: {
+      'reconstruct-failed': 'De eerdere e-mails die in deze e-mail worden geciteerd, konden niet als afzonderlijke e-mails worden gereconstrueerd. De geciteerde tekst staat nog volledig in deze e-mail.',
+      'reconstruct-limit': 'Niet alle eerdere e-mails die in deze e-mail worden geciteerd, konden worden gereconstrueerd (te veel, of de e-mail is te lang). De geciteerde tekst staat nog volledig in deze e-mail.',
     },
   },
 

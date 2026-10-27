@@ -76,6 +76,31 @@
 // the stand-ins' notes. The time zones' own names and the dates' numbers
 // are the same in every language.
 //
+// Rebuilt emails (milestone 7, task 7.6; src/ui-model/rebuilt.ts): the
+// list follows the engine's timeline, so an earlier email rebuilt from the
+// quoted text of an email added gets its own card at its place in time.
+// Only rebuilt emails with their own timeline entry get one (one that is
+// the same as a real email added gets none: the real file wins). A rebuilt
+// card:
+// - has NO number of its own (numbers belong to the real emails), a dashed
+//   border AND the word "Rebuilt" in its heading (never colour alone);
+// - says, in a fixed note, which email it was taken from and that it may be
+//   incomplete or inexact (and that quote marks were removed, when they
+//   were), plus "same quoted text also in email #K" for copies;
+// - shows the sender, recipients ("list may be incomplete" when the quoted
+//   list may go on), subject and date read from the quoted header. A quoted
+//   date without its own zone is shown in the chosen zone with "about", and
+//   always as written too; a date that could not be read only as written;
+// - shows the rebuilt text as text (quote marks removed, the one form change
+//   the user allowed), never folded.
+// Nothing of the source email changes: its card is built exactly as before,
+// with all its text (README.md, rule R6). The rebuilt cards' checkboxes and
+// the switch that leaves them all out are src/ui/review.ts's
+// (`decorateRebuilt`). A rebuilt card that cannot be built is replaced by
+// a stand-in with its label, a note and its text. While the switch is off
+// (`rebuiltShown`), EVERY rebuilt card in the list is hidden, a stand-in the
+// review could not decorate too (`refreshRebuilt` after each change).
+//
 // Not here: the counts, the include/exclude checkboxes and the notes
 // (src/ui/review.ts). They reach the page through three options: `header`
 // (nodes above the toolbar), `decorate` (adds to each email's item) and
@@ -83,9 +108,9 @@
 // to the toolbar (the "Put everything in the PDF" checkbox of
 // src/ui/pdf-labels.ts).
 
-import type { EngineMessage, EngineResult } from '../engine/engine';
+import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
 import type { PlanReason } from '../engine/output-plan';
-import { browserTimeZone, formatInZone, formatSenderLocal, isDisplayableMs, listTimeZones } from '../engine/time-format';
+import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, listTimeZones } from '../engine/time-format';
 import type { AttachmentInfo, EmailAddress, EmailDate } from '../parsing/types';
 import type { ProcessResult } from '../pipeline/process-files';
 import { displayAuthor } from '../ui-model/display-author';
@@ -93,6 +118,7 @@ import type { DisplayBlock } from '../ui-model/display-blocks';
 import { joinMailboxes, joinPlain } from '../ui-model/mailbox-list';
 import { pdfPlanNote, type PdfNoteCode } from '../ui-model/message-notes';
 import { pdfBlocks, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
+import { previewOrder, rebuiltCard, type PreviewSlot, type RebuiltCard, type RebuiltDate } from '../ui-model/rebuilt';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
 import { getLocale, t, translator } from './i18n';
@@ -256,6 +282,59 @@ export function headingId(position: number): string {
   return `message-${String(position)}-title`;
 }
 
+/** The id of a rebuilt card's heading (unique: one card per rebuilt id). */
+export function rebuiltHeadingId(id: number): string {
+  return `rebuilt-${String(id)}-title`;
+}
+
+/** The date texts of a rebuilt email in `zone`. */
+export interface RebuiltDateTexts {
+  /** "about 2025-03-03 09:15 UTC+01:00", "2025-03-03", or a "no date" / "could not be read" text. */
+  readonly main: string;
+  /** For <time datetime>: the moment, or the day; null without a readable date. */
+  readonly iso: string | null;
+  /** "As written in the quote: ..." when the quote has a date text; else null. */
+  readonly asWritten: string | null;
+}
+
+/**
+ * A rebuilt email's date in `zone`. A quoted time has no seconds, so none
+ * are shown; "about" marks a time read without a zone of its own (its
+ * zone was assumed to be the source email's). A day alone is shown as
+ * written. The date text as written is always given too.
+ */
+export function rebuiltDateTexts(date: RebuiltDate, zone: string): RebuiltDateTexts {
+  if (date.kind === 'none') return { main: t('preview.noDate'), iso: null, asWritten: null };
+  const asWritten = t('rebuilt.dateAsWritten', { text: date.text });
+  const unreadable = { main: t('rebuilt.dateUnreadable'), iso: null, asWritten };
+  if (date.kind === 'unreadable') return unreadable;
+  if (date.kind === 'day') {
+    return { main: date.approximate ? t('rebuilt.dateAbout', { date: date.day }) : date.day, iso: date.day, asWritten };
+  }
+  const shown = formatInZone(date.utcMs, zone, getLocale());
+  if (shown.kind === 'no-date') return unreadable;
+  const text = `${shown.shortText} ${formatOffset(shown.offsetMinutes)}`;
+  return {
+    main: date.approximate ? t('rebuilt.dateAbout', { date: text }) : text,
+    iso: new Date(Math.floor(date.utcMs)).toISOString(),
+    asWritten,
+  };
+}
+
+/** The fixed note of a rebuilt card: where it was taken from, may be incomplete or inexact (quote marks removed, if so). */
+export function rebuiltNoteText(card: Pick<RebuiltCard, 'sourceNumber' | 'quoteMarksRemoved'>): string {
+  if (card.sourceNumber === null) throw new Error('rebuilt email without a source'); // a stand-in is shown instead
+  const number = messageNumberText(card.sourceNumber);
+  return card.quoteMarksRemoved ? t('rebuilt.noteMarks', { number }) : t('rebuilt.noteNoMarks', { number });
+}
+
+/** "Same quoted text also in emails #4, #6."; '' if none. */
+export function rebuiltAlsoText(numbers: readonly number[]): string {
+  if (numbers.length === 0) return '';
+  const list = joinList(numbers.map(messageNumberText));
+  return numbers.length === 1 ? t('rebuilt.alsoOne', { list }) : t('rebuilt.alsoMany', { list });
+}
+
 /** The shown time-zone name: underscores as spaces, and the browser's own zone marked. */
 export function zoneLabel(zone: string, browserZone: string): string {
   const name = zone.replaceAll('_', ' ');
@@ -287,6 +366,21 @@ export interface PreviewOptions {
    * Each item's heading has the id `message-<position>-title`.
    */
   readonly decorate?: (item: HTMLLIElement, message: EngineMessage, position: number, result: EngineResult) => void;
+  /**
+   * The same for a rebuilt email's card (src/ui/review.ts: its include
+   * checkbox). Called after the card is built; if building or decorating
+   * fails, called again with the card's stand-in. Each card's heading has
+   * the id `rebuilt-<id>-title`.
+   */
+  readonly decorateRebuilt?: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
+  /**
+   * False while the reader left every rebuilt email out (src/ui/review.ts:
+   * its switch). Then EVERY rebuilt card is hidden, decorated or not (a
+   * stand-in the hook could not decorate too). Read when a card is put in
+   * the list and by refreshRebuilt(). Default: always shown. If it throws,
+   * the cards are shown.
+   */
+  readonly rebuiltShown?: () => boolean;
   /**
    * Called once the last item of a result is in the page (src/ui/review.ts:
    * an email with no decorated item then counts as included). Not called
@@ -342,6 +436,8 @@ export interface Preview {
   pdfLabelState(): PdfLabelState;
   /** Writes step 2's words again in the page language now (see the top of this file: nothing is rebuilt). */
   relabel(): void;
+  /** Shows or hides every rebuilt card in the list now, as `rebuiltShown` says (after the switch changed). */
+  refreshRebuilt(): void;
 }
 
 /** One block of a shown body, as built (to update its label in place). */
@@ -397,6 +493,34 @@ interface ItemSlot {
   readonly noSubject: HTMLSpanElement | null;
   readonly meta: HTMLDListElement;
   readonly date: DateSlot;
+}
+
+/** A rebuilt card's date element, rewritten when the zone changes. */
+interface RebuiltDateSlot {
+  readonly time: HTMLTimeElement;
+  readonly asWritten: HTMLSpanElement;
+  readonly date: RebuiltDate;
+}
+
+/** One rebuilt card in the page (not a stand-in): what relabel() and a zone change write again. */
+interface RebuiltSlot {
+  readonly card: RebuiltCard;
+  readonly label: HTMLSpanElement;
+  /** The "(subject not in the quote)" placeholder, or null when the quote has a subject. */
+  readonly noSubject: HTMLSpanElement | null;
+  readonly note: HTMLParagraphElement;
+  /** "Same quoted text also in ...", or null when no other email quotes it. */
+  readonly also: HTMLParagraphElement | null;
+  readonly meta: HTMLDListElement;
+  readonly date: RebuiltDateSlot;
+  /** The "(no text)" note of an empty text, else null. */
+  readonly empty: HTMLParagraphElement | null;
+}
+
+/** A rebuilt card's stand-in: its own words. */
+interface RebuiltStandIn {
+  readonly label: HTMLSpanElement;
+  readonly failedNote: HTMLParagraphElement;
 }
 
 /** A stand-in's own notes (see fallbackItemOf). */
@@ -473,6 +597,45 @@ function metaRows(m: EngineMessage, date: DateSlot): Node[] {
   return meta;
 }
 
+/** One rebuilt card's date element texts in `zone`. */
+function applyRebuiltDate(slot: RebuiltDateSlot, zone: string): void {
+  const texts = rebuiltDateTexts(slot.date, zone);
+  slot.time.textContent = texts.main;
+  setSafeAttribute(slot.time, 'datetime', texts.iso ?? false);
+  slot.asWritten.textContent = texts.asWritten ?? '';
+  setSafeAttribute(slot.asWritten, 'hidden', texts.asWritten === null);
+}
+
+/** A To / Cc row of a rebuilt card: the list, and "(list may be incomplete)" when it may go on; none when empty and complete. */
+function rebuiltListRow(name: 'to' | 'cc', label: string, list: readonly EmailAddress[], incomplete: boolean): Node[] {
+  const text = mailboxListText(list);
+  if (text === '' && !incomplete) return [];
+  const value: (Node | string)[] = text === '' ? [] : [text];
+  if (incomplete) {
+    if (text !== '') value.push(' ');
+    value.push(el('span', { attrs: { class: 'placeholder list-incomplete' }, text: t('rebuilt.listIncomplete') }));
+  }
+  return row(name, label, value);
+}
+
+/**
+ * The rows of a rebuilt card's details list, in the page language: date
+ * (with the given date elements), sender (or "Unknown sender"), To, Cc, and
+ * the email it was taken from.
+ */
+function rebuiltMetaRows(card: RebuiltCard, date: RebuiltDateSlot): Node[] {
+  if (card.sourceNumber === null) throw new Error('rebuilt email without a source'); // a stand-in is shown instead
+  return [
+    ...row('date', t('preview.date'), [date.time, ' ', date.asWritten]),
+    ...(card.from.length === 0
+      ? row('author', t('preview.from'), [el('span', { attrs: { class: 'placeholder' }, text: t('preview.author.none') })])
+      : row('author', t('preview.author.from'), [mailboxListText(card.from)])),
+    ...rebuiltListRow('to', t('preview.to'), card.to, card.toIncomplete),
+    ...rebuiltListRow('cc', t('preview.cc'), card.cc, card.ccIncomplete),
+    ...row('source', t('rebuilt.takenFrom'), [t('rebuilt.takenFromValue', { number: messageNumberText(card.sourceNumber) })]),
+  ];
+}
+
 /** Builds step 2 inside shell.checkArea. */
 export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: PreviewOptions = {}): Preview {
   const chunkSize = Math.max(1, options.chunkSize ?? DEFAULT_CHUNK_SIZE);
@@ -498,6 +661,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   let itemSlots = new Map<number, ItemSlot>();
   // The notes of the stand-ins in the page, by list position.
   let standIns = new Map<number, StandIn>();
+  // The rebuilt cards built so far (not stand-ins), and the rebuilt stand-ins, by rebuilt id.
+  let rebuiltSlots = new Map<number, RebuiltSlot>();
+  let rebuiltStandIns = new Map<number, RebuiltStandIn>();
+  // Every rebuilt card in the list, decorated or a stand-in (shown or hidden together, see refreshRebuilt).
+  let rebuiltCards: HTMLLIElement[] = [];
   // The PDF plans in use (null: none, or being worked out again), and their state.
   let pdfPlans: PreviewPdfPlans | null = null;
   let pdfState: PdfLabelState = 'off';
@@ -822,6 +990,95 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     }
   }
 
+  // --- Building one rebuilt email (see the top of this file) ---------------
+  function rebuiltLabel(): HTMLSpanElement {
+    return el('span', { attrs: { class: 'rebuilt-label' }, text: t('rebuilt.label') });
+  }
+
+  function rebuiltItemOf(r: EngineRebuilt, result: EngineResult): HTMLLIElement {
+    const card = rebuiltCard(r, result);
+    const label = rebuiltLabel();
+    const hasSubject = card.subject !== null;
+    const subject = el('span', {
+      attrs: { class: hasSubject ? 'message-subject' : 'message-subject placeholder' },
+      text: card.subject ?? t('rebuilt.noSubject'),
+    });
+    const heading = el('h3', { attrs: { id: rebuiltHeadingId(r.id), class: 'message-heading' }, children: [label, ' ', subject] });
+    const note = el('p', { attrs: { class: 'note rebuilt-note' }, text: rebuiltNoteText(card) });
+    const alsoText = rebuiltAlsoText(card.alsoNumbers);
+    const also = alsoText === '' ? null : el('p', { attrs: { class: 'note rebuilt-also' }, text: alsoText });
+    const date: RebuiltDateSlot = {
+      time: el('time', { attrs: { class: 'message-date' } }),
+      asWritten: el('span', { attrs: { class: 'sender-time' } }),
+      date: card.date,
+    };
+    applyRebuiltDate(date, zone);
+    const meta = el('dl', { attrs: { class: 'message-meta' }, children: rebuiltMetaRows(card, date) });
+    // The rebuilt text, as text, never folded; "(no text)" if there is none.
+    const empty = card.text === '' ? el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }) : null;
+    const body = el('div', {
+      attrs: { class: 'message-body' },
+      children: [empty ?? el('div', { attrs: { class: 'body-text' }, text: card.text })],
+    });
+    const item = el('li', {
+      attrs: { class: 'message message-rebuilt', 'data-rebuilt-id': String(r.id) },
+      children: [heading, note, ...(also === null ? [] : [also]), meta, body],
+    });
+    options.decorateRebuilt?.(item, r, result);
+    // Recorded last: a card whose decoration threw is not in the page (safeRebuiltItemOf).
+    rebuiltSlots.set(r.id, { card, label, noSubject: hasSubject ? null : subject, note, also, meta, date, empty });
+    return item;
+  }
+
+  /** A rebuilt card's stand-in: its label, a calm note and its text (the text is in its source email's card anyway). */
+  function rebuiltFallbackOf(r: EngineRebuilt | undefined, id: number): HTMLLIElement {
+    const text = typeof r?.rebuilt?.reconstructedText === 'string' ? r.rebuilt.reconstructedText : '';
+    const label = rebuiltLabel();
+    const failedNote = el('p', { attrs: { class: 'note message-failed-note' }, text: t('rebuilt.itemFailed') });
+    rebuiltStandIns.set(id, { label, failedNote });
+    return el('li', {
+      attrs: { class: 'message message-rebuilt message-failed', 'data-rebuilt-id': String(id) },
+      children: [
+        el('h3', { attrs: { id: rebuiltHeadingId(id), class: 'message-heading' }, children: [label] }),
+        failedNote,
+        el('div', { attrs: { class: 'message-body' }, children: text === '' ? [] : [el('div', { attrs: { class: 'body-text' }, text })] }),
+      ],
+    });
+  }
+
+  /** A rebuilt card, or its stand-in (decorated if possible, as for real emails). Never throws for one bad card. */
+  function safeRebuiltItemOf(r: EngineRebuilt | undefined, id: number, result: EngineResult): HTMLLIElement {
+    try {
+      if (r === undefined) throw new Error('missing rebuilt email');
+      return rebuiltItemOf(r, result);
+    } catch {
+      rebuiltSlots.delete(id);
+      const item = rebuiltFallbackOf(r, id);
+      if (r === undefined || options.decorateRebuilt === undefined) return item;
+      try {
+        options.decorateRebuilt(item, r, result);
+        return item;
+      } catch {
+        return rebuiltFallbackOf(r, id);
+      }
+    }
+  }
+
+  /** The `rebuiltShown` option now (shown by default, and if it throws: never hidden by mistake). */
+  function rebuiltShownNow(): boolean {
+    try {
+      return options.rebuiltShown?.() ?? true;
+    } catch {
+      return true;
+    }
+  }
+
+  /** Shows or hides every rebuilt card in the list (decorated or stand-in), as `rebuiltShown` says. */
+  function refreshRebuilt(): void {
+    const shown = rebuiltShownNow();
+    for (const card of rebuiltCards) setSafeAttribute(card, 'hidden', !shown);
+  }
+
   // --- Chunked building -----------------------------------------------------
   function stopPending(): void {
     if (pending !== null) cancel(pending.handle);
@@ -844,6 +1101,9 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     bodies = new Map();
     itemSlots = new Map();
     standIns = new Map();
+    rebuiltSlots = new Map();
+    rebuiltStandIns = new Map();
+    rebuiltCards = [];
     currentResult = null;
     pdfPlans = null;
     setPdfState('off');
@@ -914,6 +1174,13 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     setPdfState(pdfState); // the status line takes its place now, before any tick
     const myGeneration = generation;
     const messages = result.messages;
+    // The timeline: the real emails in list order, rebuilt ones in between (src/ui-model/rebuilt.ts).
+    let order: PreviewSlot[];
+    try {
+      order = previewOrder(result);
+    } catch {
+      order = messages.map((_, position) => ({ kind: 'message', position })); // not expected
+    }
     let next = 0;
     const buildChunk = (): void => {
       if (myGeneration !== generation) return; // a newer list or reset() came meanwhile
@@ -921,11 +1188,22 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       const items: HTMLLIElement[] = [];
       let chars = 0;
       try {
-        while (next < messages.length && items.length < chunkSize && (items.length === 0 || chars < MAX_CHUNK_CHARS)) {
-          const m = messages[next];
-          const position = next;
+        while (next < order.length && items.length < chunkSize && (items.length === 0 || chars < MAX_CHUNK_CHARS)) {
+          const slot = order[next] as PreviewSlot;
           next++; // moved on first: an email is never tried twice
-          items.push(safeItemOf(m, position, result));
+          if (slot.kind === 'rebuilt') {
+            const r = result.reconstructed[slot.id];
+            const card = safeRebuiltItemOf(r, slot.id, result);
+            rebuiltCards.push(card);
+            // Switch off: hidden too, even a stand-in the review never saw.
+            if (!rebuiltShownNow()) setSafeAttribute(card, 'hidden', true);
+            items.push(card);
+            const text = r?.rebuilt?.reconstructedText;
+            chars += typeof text === 'string' ? text.length : 0;
+            continue;
+          }
+          const m = messages[slot.position];
+          items.push(safeItemOf(m, slot.position, result));
           const body = m?.message?.bodyText;
           chars += typeof body === 'string' ? body.length : 0;
         }
@@ -933,7 +1211,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         // Whatever happened above, what was built is shown and the rest of
         // the list is still scheduled: no email is silently left out.
         list.append(...items);
-        if (next < messages.length) {
+        if (next < order.length) {
           setSafeAttribute(list, 'aria-busy', 'true');
           pending = { handle: schedule(buildChunk) };
         } else {
@@ -989,12 +1267,31 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       standIn.failedNote.textContent = t('preview.itemFailed');
       standIn.pdfNote.textContent = t('pdf.messageFailed');
     }
+    for (const slot of rebuiltSlots.values()) {
+      try {
+        slot.label.textContent = t('rebuilt.label');
+        if (slot.noSubject !== null) slot.noSubject.textContent = t('rebuilt.noSubject');
+        slot.note.textContent = rebuiltNoteText(slot.card);
+        if (slot.also !== null) slot.also.textContent = rebuiltAlsoText(slot.card.alsoNumbers);
+        slot.meta.replaceChildren(...rebuiltMetaRows(slot.card, slot.date));
+        applyRebuiltDate(slot.date, zone);
+        if (slot.empty !== null) slot.empty.textContent = t('preview.noText');
+      } catch {
+        // Not expected (the same texts were made once): this card keeps its words as they were;
+        // swallowed so one bad card never stops the rest of the page from being relabelled.
+      }
+    }
+    for (const standIn of rebuiltStandIns.values()) {
+      standIn.label.textContent = t('rebuilt.label');
+      standIn.failedNote.textContent = t('rebuilt.itemFailed');
+    }
   }
 
   // --- Controls -------------------------------------------------------------
   zoneSelect.addEventListener('change', () => {
     zone = zoneSelect.value;
     for (const slot of slots) applyDate(slot);
+    for (const slot of rebuiltSlots.values()) applyRebuiltDate(slot.date, zone);
     try {
       options.onZoneChange?.();
     } catch {
@@ -1031,5 +1328,6 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     },
     pdfLabelState: () => pdfState,
     relabel,
+    refreshRebuilt,
   };
 }

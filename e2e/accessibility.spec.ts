@@ -6,8 +6,9 @@
 // States: the empty page, the privacy panel open, step 1's help open, files
 // being read, the list ready (with a file that failed, notes, a very long
 // email, folded text shown, an email left out), "Put everything in the PDF",
-// a PDF made, a PDF that could not be made, and after "Clear everything". In
-// each:
+// a PDF made, a PDF that could not be made, and after "Clear everything";
+// also earlier emails rebuilt from quoted text (one left out, then all of
+// them with the switch). In each:
 // - every control is at least 24 x 24 CSS pixels (2.5.8), has a name, and
 //   shows a focus outline of at least 2 px with 3:1 contrast against what
 //   is around it (2.4.7, 2.4.11, 1.4.11);
@@ -649,3 +650,32 @@ test('reduced motion: nothing on the page moves by itself', async ({ page }) => 
   expect(moving).toEqual([]);
   await expectNothingLeftThePage(page);
 });
+
+// Earlier emails rebuilt from quoted text (task 7.6): the last email of a
+// thread alone gives three rebuilt cards before its own.
+for (const width of [1280, 320]) {
+  test(`rebuilt cards at ${String(width)} px: target size, names, focus outline, contrast, reflow, headings`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 800 });
+    await open(page);
+    await page.locator('#file-input').setInputFiles([fixture('13-order-4-bob-outlook-nl.eml')]);
+    await expect(items(page)).toHaveCount(4, { timeout: 60_000 });
+    await expect(page.locator('#preview-list > li.message-rebuilt')).toHaveCount(3);
+    await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.locator('#download-button')).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 30_000 });
+    await expectAccessibleState(page, 'rebuilt cards', 10);
+    // One card left out: dimmed, marked in words.
+    await page.locator('#include-rebuilt-1').focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator('#preview-list > li.message-rebuilt').nth(1)).toHaveAttribute('data-included', 'false');
+    await expectAccessibleState(page, 'a rebuilt card left out', 10);
+    expect(await focusedId(page)).toBe('include-rebuilt-1');
+    // Every rebuilt email left out with the switch: the focus stays on it.
+    await page.locator('#rebuilt-include-all').focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator('#preview-list > li.message-rebuilt').first()).toBeHidden();
+    await expectAccessibleState(page, 'rebuilt emails left out', 8);
+    expect(await focusedId(page)).toBe('rebuilt-include-all');
+    await expectNothingLeftThePage(page);
+  });
+}

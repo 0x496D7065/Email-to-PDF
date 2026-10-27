@@ -137,8 +137,12 @@ async function openWithEmails(page: Page): Promise<Locator> {
   loadedAt = watch.requests.length;
   await page.locator('#file-input').setInputFiles(FILES);
   await expect(page.locator('#add-summary-text')).toHaveText('6 files added. 6 emails found.', { timeout: 30_000 });
-  const items = page.locator('#preview-list > li');
+  // The real emails' items. The forwarded email's quote also gives one earlier
+  // email rebuilt from quoted text (task 7.6), with a card of its own: not
+  // what this file checks (see e2e/rebuilt.spec.ts).
+  const items = page.locator('#preview-list > li:not(.message-rebuilt)');
   await expect(items).toHaveCount(6);
+  await expect(page.locator('#preview-list > li.message-rebuilt')).toHaveCount(1);
   await expect(items.locator('.message-subject')).toHaveText(SUBJECTS_IN_ORDER);
   await expectReady(page);
   return items;

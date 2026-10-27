@@ -235,11 +235,18 @@ export const fr: Messages = {
     seeFailed: 'Voir pourquoi à l’étape 1.',
     messagesFound: { one: '{count} e-mail trouvé', other: '{count} e-mails trouvés' },
     duplicatesMerged: { one: '{count} copie identique fusionnée', other: '{count} copies identiques fusionnées' },
+    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
+    rebuiltFound: { one: '{count} e-mail antérieur reconstitué à partir du texte cité', other: '{count} e-mails antérieurs reconstitués à partir du texte cité' },
     // The form follows {count} (the total), as in English, so the verb must
     // not agree with {included}: hence "E-mails dans le PDF : 1 sur 5".
     included: {
       one: 'E-mail dans le PDF\u00A0: {included} sur {count}.',
       other: 'E-mails dans le PDF\u00A0: {included} sur {count}.',
+    },
+    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
+    rebuiltIncluded: {
+      one: 'E-mail reconstitué dans le PDF\u00A0: {included} sur {count}.',
+      other: 'E-mails reconstitués dans le PDF\u00A0: {included} sur {count}.',
     },
     withNotes: {
       one: '{count} e-mail a des remarques, affichées avec lui ci-dessous.',
@@ -258,6 +265,24 @@ export const fr: Messages = {
       'pdf-kept-all-empty': 'L’e-mail entier sera dans le PDF\u00A0: l’outil n’a pas pu distinguer son propre texte de la citation.',
       'pdf-fallback': 'L’e-mail entier sera dans le PDF\u00A0: l’outil n’a pas pu déterminer quelles parties laisser de côté.',
     },
+  },
+
+  // NEEDS USER PROOFREADING (task 7.6 drafts; user decision Q4, proofread in task 7.8).
+  rebuilt: {
+    label: 'Reconstitué',
+    noSubject: '(objet absent de la citation)',
+    noteMarks: 'Reconstitué à partir du texte cité dans l’e-mail {number}. Signes de citation retirés\u202F; peut être incomplet ou inexact.',
+    noteNoMarks: 'Reconstitué à partir du texte cité dans l’e-mail {number}. Peut être incomplet ou inexact.',
+    alsoOne: 'Même texte cité aussi dans l’e-mail {list}.',
+    alsoMany: 'Même texte cité aussi dans les e-mails {list}.',
+    takenFrom: 'Tiré de',
+    takenFromValue: 'l’e-mail {number}',
+    listIncomplete: '(liste peut-être incomplète)',
+    dateAbout: 'vers {date}',
+    dateAsWritten: 'Telle qu’écrite dans la citation\u00A0: {text}',
+    dateUnreadable: '(date illisible)',
+    includeAll: 'Inclure les e-mails antérieurs reconstitués à partir du texte cité',
+    itemFailed: 'Un problème est survenu à l’affichage de cet e-mail reconstitué. Son texte se trouve toujours dans l’e-mail d’où il est tiré.',
   },
 
   pdf: {
@@ -358,6 +383,11 @@ export const fr: Messages = {
       'detector-failed': 'Une partie du texte cité ou répété de cet e-mail n’a pas pu être vérifiée, il est donc affiché en entier.',
       'folding-disabled': 'Cet e-mail est affiché en entier\u202F; le texte cité n’a pas pu être replié.',
       'dedupe-failed': 'Les copies identiques n’ont pas pu être vérifiées, tous les e-mails sont donc conservés.',
+    },
+    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
+    rebuild: {
+      'reconstruct-failed': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas pu être reconstitués séparément. Tout le texte cité reste dans cet e-mail.',
+      'reconstruct-limit': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas tous pu être reconstitués (trop nombreux, ou e-mail trop long). Tout le texte cité reste dans cet e-mail.',
     },
   },
 

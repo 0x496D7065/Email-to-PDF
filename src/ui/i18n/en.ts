@@ -19,7 +19,7 @@
 // same shape, typed as `Messages` (see index.ts), listed in catalog.ts.
 
 import type { DedupeWarningCode } from '../../engine/dedupe';
-import type { EngineWarningCode } from '../../engine/engine';
+import type { EngineWarningCode, ReconstructionWarningCode } from '../../engine/engine';
 import type { OrderReason } from '../../engine/order';
 import type { PlanReason } from '../../engine/output-plan';
 import type { FoldReason } from '../../engine/segments';
@@ -298,10 +298,17 @@ export const en = {
     seeFailed: 'See why in step 1.',
     messagesFound: { one: '{count} email found', other: '{count} emails found' },
     duplicatesMerged: { one: '{count} identical copy merged', other: '{count} identical copies merged' },
+    // Earlier emails rebuilt from the quoted text of the emails added (task 7.6), a part of the line above.
+    rebuiltFound: { one: '{count} earlier email rebuilt from quoted text', other: '{count} earlier emails rebuilt from quoted text' },
     // Updated (and announced) each time an email is ticked or unticked. {count} is the total.
     included: {
       one: '{included} of {count} email will be in the PDF.',
       other: '{included} of {count} emails will be in the PDF.',
+    },
+    // Shown (and announced on each change) only when emails were rebuilt from quoted text. {count} is the total.
+    rebuiltIncluded: {
+      one: '{included} of {count} rebuilt email will be in the PDF.',
+      other: '{included} of {count} rebuilt emails will be in the PDF.',
     },
     withNotes: {
       one: '{count} email has notes, shown with it below.',
@@ -327,6 +334,40 @@ export const en = {
       'pdf-kept-all-empty': 'The whole email will be in the PDF: the tool could not tell its own text from the quote.',
       'pdf-fallback': 'The whole email will be in the PDF: the tool could not work out which parts to leave out.',
     } satisfies Record<PdfNoteCode, string>,
+  },
+
+  // Step 2: earlier emails rebuilt from the quoted text of an email added
+  // (src/ui/preview.ts, src/ui-model/rebuilt.ts). Drafts (user decision Q4,
+  // 2026-10-27): the user proofreads them in task 7.8. A rebuilt card never
+  // has a number of its own; its words always say it was rebuilt, never
+  // only its dashed border.
+  rebuilt: {
+    // The text label at the start of every rebuilt card's heading.
+    label: 'Rebuilt',
+    // The quoted header has no subject (an "On ... wrote:" line never has one).
+    noSubject: '(subject not in the quote)',
+    // The fixed note on every rebuilt card. {number} is the source email's number, e.g. "#3".
+    // noteMarks when quote marks (">") were removed from the text, noteNoMarks otherwise.
+    noteMarks: 'Rebuilt from the quoted text in email {number}. Quote marks removed; may be incomplete or inexact.',
+    noteNoMarks: 'Rebuilt from the quoted text in email {number}. May be incomplete or inexact.',
+    // Other emails that quote the same earlier email, e.g. "Same quoted text also in emails #4, #6."
+    alsoOne: 'Same quoted text also in email {list}.',
+    alsoMany: 'Same quoted text also in emails {list}.',
+    // A details row: the email the card was taken from, e.g. "Taken from: email #3".
+    takenFrom: 'Taken from',
+    takenFromValue: 'email {number}',
+    // After a To or Cc list that may go on past what could be read.
+    listIncomplete: '(list may be incomplete)',
+    // A quoted date read without a time zone of its own: the time is a best guess.
+    dateAbout: 'about {date}',
+    // The date exactly as the quote wrote it, under the date shown.
+    dateAsWritten: 'As written in the quote: {text}',
+    // A quoted date the tool could not read (it is shown as written below).
+    dateUnreadable: '(date could not be read)',
+    // The checkbox in the step 2 toolbar, ticked by default. Unticking it leaves every rebuilt email out.
+    includeAll: 'Include earlier emails rebuilt from quoted text',
+    // A rebuilt card that could not be built (not expected).
+    itemFailed: 'Something went wrong while showing this rebuilt email. Its text is still in the email it was taken from.',
   },
 
   // What the PDF will leave out, shown on each folded part in step 2
@@ -463,6 +504,11 @@ export const en = {
       'folding-disabled': 'This email is shown in full; quoted text could not be tucked away.',
       'dedupe-failed': 'Identical copies could not be checked, so every email is kept.',
     } satisfies Record<EngineWarningCode, string>,
+    // Earlier emails quoted in this email could not (all) be rebuilt. Nothing is lost: the quote stays here.
+    rebuild: {
+      'reconstruct-failed': 'The earlier emails quoted in this email could not be rebuilt as separate emails. The quoted text is all still in this email.',
+      'reconstruct-limit': 'Not every earlier email quoted in this email could be rebuilt (too many, or the email is too long). The quoted text is all still in this email.',
+    } satisfies Record<ReconstructionWarningCode, string>,
   },
 
   errors: {
