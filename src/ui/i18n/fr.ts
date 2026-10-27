@@ -104,7 +104,7 @@ export const fr: Messages = {
         how: 'Faire glisser un e-mail de la liste vers un dossier ou vers le bureau crée généralement un fichier\u00A0: un fichier .eml ou .msg, selon votre version d’Outlook. Les deux fonctionnent ici. «\u00A0Enregistrer sous\u00A0» dans le menu Fichier peut aussi en enregistrer un.',
       },
       outlookNew: {
-        name: 'Nouvel Outlook et Outlook sur le web',
+        name: 'Application Outlook et Outlook sur navigateur',
         how: 'Cela varie. Le menu «\u00A0...\u00A0» de l’e-mail peut proposer une option Télécharger ou Enregistrer qui donne un fichier .eml\u202F; faire glisser un e-mail peut ne pas créer de fichier.',
       },
       thunderbird: {
@@ -292,9 +292,9 @@ export const fr: Messages = {
       emails: 'E-mails',
       emailCount: { one: '{count} e-mail', other: '{count} e-mails' },
       generated: 'Créé le',
-      timeZone: 'Fuseau horaire des dates',
+      timeZone: 'Fuseau horaire',
       zoneFallback: '{zone} (le fuseau horaire choisi n’a pas été reconnu)',
-      people: 'Personnes',
+      people: 'Participants',
       sources: 'Fichiers sources',
       sourcesIntro:
         'Chaque fichier dont provient un e-mail de ce PDF, avec son empreinte SHA-256. Un fichier qui a la même empreinte est exactement le même fichier.',

@@ -75,7 +75,7 @@ export const nl: Messages = {
   },
 
   disclaimer: {
-    text: 'Deze tool wordt aangeboden zoals hij is, zonder enige garantie, en is geen juridisch advies. Controleer de PDF voordat u hem verstuurt. Uw originele e-mailbestanden blijven de referentie.',
+    text: 'Deze tool wordt aangeboden in de huidige staat, zonder enige garantie, en is geen juridisch advies. Controleer de PDF voordat u hem verstuurt. Uw originele e-mailbestanden blijven leidend.',
   },
 
   steps: {
@@ -157,7 +157,7 @@ export const nl: Messages = {
     readingMany: '{total} bestanden worden gelezen. Dit kan even duren; de voortgangsbalk hieronder toont hoe ver het is.',
     organizing: 'Uw e-mails worden op volgorde gezet…',
     queued: 'Er zijn meer bestanden toegevoegd. Ze worden gelezen zodra de huidige klaar zijn.',
-    outside: 'Er is niets toegevoegd. Laat bestanden los op het vak met de stippellijn in stap 1 om ze toe te voegen.',
+    outside: 'Er is niets toegevoegd. Laat bestanden los op het vak met de gestreepte rand in stap 1 om ze toe te voegen.',
     nothing: 'Er is niets toegevoegd: hier kunnen alleen bestanden worden neergezet.',
     folders: {
       one: '{count} map kon niet worden toegevoegd. Open de map en voeg in plaats daarvan de e-mailbestanden toe die erin staan.',
@@ -284,7 +284,7 @@ export const nl: Messages = {
     document: {
       title: 'E-mailcorrespondentie',
       dates: 'Datums',
-      dateRange: 'van {first} tot {last}',
+      dateRange: 'Van {first} tot {last}',
       noDates: 'Geen enkele e-mail in deze PDF heeft een bruikbare datum.',
       undated: {
         one: '{count} e-mail heeft geen bruikbare datum. Die staat na de e-mails met een datum, in de volgorde waarin de bestanden zijn toegevoegd.',
@@ -293,7 +293,7 @@ export const nl: Messages = {
       emails: 'E-mails',
       emailCount: { one: '{count} e-mail', other: '{count} e-mails' },
       generated: 'Gemaakt op',
-      timeZone: 'Tijdzone van de datums',
+      timeZone: 'Tijdzone',
       zoneFallback: '{zone} (de gekozen tijdzone werd niet herkend)',
       people: 'Personen',
       sources: 'Bronbestanden',

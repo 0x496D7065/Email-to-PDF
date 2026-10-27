@@ -140,7 +140,7 @@ describe('Dutch strings', () => {
   describe('meaning kept where it matters', () => {
     it('the disclaimer: as is, no guarantee, not legal advice, check the PDF, the original files remain the reference', () => {
       const text = nl.disclaimer.text;
-      for (const part of ['zoals hij is', 'zonder enige garantie', 'geen juridisch advies', 'Controleer de PDF', 'blijven de referentie']) {
+      for (const part of ['in de huidige staat', 'zonder enige garantie', 'geen juridisch advies', 'Controleer de PDF', 'blijven leidend']) {
         expect(text).toContain(part);
       }
     });
