@@ -374,6 +374,11 @@ export const en = {
     // unticked while another email quoting the same text is ticked: the PDF
     // takes it from that email, e.g. "In the PDF: taken from #5" (task 7.7).
     pdfSource: 'In the PDF: taken from {number}',
+    // On a ticked rebuilt card while "Put everything in the PDF" is ticked
+    // (user decision 2026-10-28, task 7.8b): no rebuilt email is in the PDF
+    // then, as its source email is printed whole. Names the checkbox as
+    // pdf.everything says it, without the part in brackets.
+    everythingExcluded: 'Not in the PDF while "Put everything in the PDF" is ticked: its text is already in the email it comes from',
   },
 
   // What the PDF will leave out, shown on each folded part in step 2
@@ -381,6 +386,9 @@ export const en = {
   pdf: {
     // The checkbox in the step 2 toolbar (the "include everything" option).
     everything: 'Put everything in the PDF (leave nothing out)',
+    // The note under that checkbox, read with it (aria-describedby; user decision 2026-10-28, task 7.8b).
+    everythingNote:
+      'Ticking this puts every ticked email in the PDF in full, quoted earlier emails included, so the same text may appear more than once. Leave it unticked for a cleaner PDF. While it is ticked, rebuilt emails are left out of the PDF: they would only repeat the quoted text.',
     // Shown while the labels are being worked out again (they are hidden meanwhile).
     // The line keeps its place when empty, so the list below never moves.
     updating: 'Checking what goes in the PDF...',

@@ -440,6 +440,95 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(line.textContent).toBe('');
   });
 
+  it('"Put everything in the PDF" ticked: every card stays, marked out of the PDF, counted out; unticked: exactly as before (user decision 2026-10-28, task 7.8b)', () => {
+    let everything = false;
+    mount({}, { unfoldEverything: () => everything });
+    const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+    show(result);
+    // A state worth restoring: one card unticked, and one card taken from a copy (its own email unticked).
+    const e = rebuiltEntries(result).find((x) => x.copies.length > 0)!;
+    const own = result.positionByIndex[e.sourceIndex]!;
+    const boxOf = (position: number): FakeElement =>
+      one(realItems().find((i) => i.getAttribute('data-position') === String(position)) as FakeElement, 'include-checkbox');
+    tick(boxOf(own), false);
+    const other = rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') !== String(e.id))!;
+    tick(one(other, 'include-checkbox'), false);
+    const snapshot = (): string[] =>
+      rebuiltItems().map(
+        (c) =>
+          `${String(one(c, 'include-checkbox').checked)}|${c.getAttribute('data-included') ?? ''}|${String(isHidden(c))}|${String(isHidden(one(c, 'excluded-note')))}|${one(c, 'excluded-note').textContent}|${String(isHidden(one(c, 'rebuilt-pdf-source')))}|${one(c, 'rebuilt-pdf-source').textContent}`,
+      );
+    const before = snapshot();
+    const beforeIds = review.includedRebuilt().map((r) => r.id);
+    const beforeLine = byId('review-rebuilt').textContent;
+    const count = rebuiltItems().length;
+    expect(beforeIds.length).toBeGreaterThan(0);
+    expect(before.some((s) => s.endsWith('|false|In the PDF: taken from #' + String(result.positionByIndex[result.reconstructed[e.copies[0]!]!.sourceIndex]! + 1)))).toBe(true);
+
+    everything = true;
+    const line = review.everythingChanged();
+    expect(line).toBe(`0 of ${String(count)} rebuilt emails will be in the PDF.`);
+    expect(byId('review-rebuilt').textContent).toBe(line);
+    expect(review.includedRebuilt()).toEqual([]);
+    expect(byId('rebuilt-include-all').checked).toBe(true);
+    for (const card of rebuiltItems()) {
+      // Still in the list (collapse, never delete), dimmed, with its own tick kept.
+      expect(isHidden(card)).toBe(false);
+      expect(card.getAttribute('data-included')).toBe('false');
+      expect(isHidden(one(card, 'excluded-note'))).toBe(false);
+      expect(isHidden(one(card, 'rebuilt-pdf-source'))).toBe(true);
+    }
+    expect(rebuiltItems().map((c) => one(c, 'include-checkbox').checked)).toEqual(before.map((s) => s.startsWith('true')));
+    // Unticked: "Not in the PDF"; ticked with an email it was read from in
+    // the PDF (its note was hidden before): the "Put everything" note;
+    // ticked with every such email left out: still "the email it comes from
+    // is left out" (its text is not in the PDF either way).
+    rebuiltItems().forEach((card, k) => {
+      const [wasTicked, , , noteWasHidden] = before[k]!.split('|');
+      const expected = wasTicked !== 'true' ? t('review.excluded') : noteWasHidden === 'true' ? t('rebuilt.everythingExcluded') : t('rebuilt.sourceExcluded');
+      expect(one(card, 'excluded-note').textContent).toBe(expected);
+    });
+    expect(rebuiltItems().some((c) => one(c, 'excluded-note').textContent === t('rebuilt.everythingExcluded'))).toBe(true);
+    // The real emails are not touched.
+    expect(review.includedPositions()).not.toContain(own);
+    // A tick changed meanwhile still counts nothing in, and is kept.
+    tick(one(other, 'include-checkbox'), true);
+    expect(review.includedRebuilt()).toEqual([]);
+    expect(one(other, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
+    tick(one(other, 'include-checkbox'), false);
+    // Review round 2: a ticked card whose source emails are ALL unticked says
+    // so, not "its text is already in the email it comes from" (false then).
+    const cardE = rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === String(e.id))!;
+    expect(one(cardE, 'include-checkbox').checked).toBe(true);
+    expect(one(cardE, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
+    const copySources = [...new Set(e.copies.map((c) => result.positionByIndex[result.reconstructed[c]!.sourceIndex]!))];
+    for (const p of copySources) tick(boxOf(p), false);
+    expect(isHidden(one(cardE, 'excluded-note'))).toBe(false);
+    expect(one(cardE, 'excluded-note').textContent).toBe(t('rebuilt.sourceExcluded'));
+    expect(review.includedRebuilt()).toEqual([]);
+    for (const p of copySources) tick(boxOf(p), true);
+    expect(one(cardE, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
+    // Written again in the page language.
+    setLocale('nl');
+    review.relabel();
+    const ticked = rebuiltItems().find((c) => one(c, 'include-checkbox').checked)!;
+    expect(one(ticked, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
+    expect(one(ticked, 'excluded-note').textContent).toMatch(/^Niet in de PDF/);
+    setLocale('en');
+    review.relabel();
+
+    everything = false;
+    expect(review.everythingChanged()).toBe(beforeLine);
+    expect(snapshot()).toEqual(before);
+    expect(review.includedRebuilt().map((r) => r.id)).toEqual(beforeIds);
+  });
+
+  it('everythingChanged gives no line when nothing was rebuilt', () => {
+    mount({}, { unfoldEverything: () => true });
+    show(engineOf('10-order-1-alice.eml'));
+    expect(review.everythingChanged()).toBe('');
+  });
+
   it('keep the choices when files are added, and forget them on "Clear everything"', () => {
     show(engineOf(LAST));
     tick(one(rebuiltItems()[0] as FakeElement, 'include-checkbox'), false);

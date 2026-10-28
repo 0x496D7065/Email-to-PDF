@@ -287,10 +287,15 @@ export const fr: Messages = {
     sourceExcluded: 'Pas dans le PDF\u00A0: l’e-mail d’où il est tiré est laissé de côté',
     // NEEDS USER PROOFREADING (task 7.7).
     pdfSource: 'Dans le PDF\u00A0: tiré de {number}',
+    // NEEDS USER PROOFREADING (task 7.8b).
+    everythingExcluded: 'Pas dans le PDF tant que «\u00A0Tout mettre dans le PDF\u00A0» est coché\u00A0: son texte est déjà dans l’e-mail d’où il est tiré',
   },
 
   pdf: {
     everything: 'Tout mettre dans le PDF (ne rien laisser de côté)',
+    // NEEDS USER PROOFREADING (task 7.8b).
+    everythingNote:
+      'Si cette case est cochée, chaque e-mail coché figure en entier dans le PDF, e-mails antérieurs cités compris\u00A0: le même texte peut donc apparaître plusieurs fois. Laissez-la décochée pour un PDF plus clair. Tant qu’elle est cochée, les e-mails reconstitués ne sont pas mis dans le PDF\u00A0: ils ne feraient que répéter le texte cité.',
     updating: 'Vérification de ce qui va dans le PDF…',
     failed: 'L’outil n’a pas pu déterminer quelles parties le PDF laisse de côté, les parties repliées ne sont donc pas signalées.',
     label: {

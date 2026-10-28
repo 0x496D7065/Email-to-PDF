@@ -1,6 +1,13 @@
 // Step 2: works out what the PDF will leave out, for the preview's labels
 // (src/ui/preview.ts), and holds the "Put everything in the PDF (leave
 // nothing out)" checkbox (OutputPolicy.unfoldEverything, off by default).
+// Under the checkbox, a short visible note (user decision 2026-10-28, task
+// 7.8b) says what ticking it means: every email in full, quoted earlier
+// emails included, so the same text may appear more than once; unticked
+// gives a cleaner PDF; rebuilt emails are left out while it is ticked (they
+// would only repeat the quoted text; src/ui/review.ts, src/pdf/model.ts).
+// The note is the checkbox's description (aria-describedby), so a screen
+// reader reads it with the checkbox.
 //
 // The plans are the PDF's own: planOutput's rules (planOutputSteps,
 // src/engine/output-plan.ts) on the INCLUDED emails, in list order, with the
@@ -70,7 +77,7 @@ export interface PdfLabelsOptions {
 }
 
 export interface PdfLabels {
-  /** The checkbox field, for the preview's toolbar. */
+  /** The checkbox field and its note, for the preview's toolbar. */
   readonly element: HTMLDivElement;
   /** A new result is shown (null: none). */
   show(result: EngineResult | null): void;
@@ -82,7 +89,7 @@ export interface PdfLabels {
   getPdfPolicy(): OutputPolicy;
   /** The plans of the current inputs, or null while they are being worked out (or there are none). */
   currentPlans(): PdfPlans | null;
-  /** Writes the checkbox's label again in the page language (the plans do not depend on it). */
+  /** Writes the checkbox's label and note again in the page language (the plans do not depend on it). */
   relabel(): void;
 }
 
@@ -108,10 +115,16 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
   let job: { readonly inputs: Inputs; handle: unknown } | null = null;
 
   const labels = createStaticLabels();
-  const checkbox = el('input', { attrs: { type: 'checkbox', id: 'pdf-everything' } });
+  const checkbox = el('input', { attrs: { type: 'checkbox', id: 'pdf-everything', 'aria-describedby': 'pdf-everything-note' } });
   const element = el('div', {
-    attrs: { class: 'field field-checkbox' },
-    children: [checkbox, labels.text(el('label', { attrs: { for: 'pdf-everything' } }), 'pdf.everything')],
+    attrs: { class: 'field field-everything' },
+    children: [
+      el('div', {
+        attrs: { class: 'field-checkbox' },
+        children: [checkbox, labels.text(el('label', { attrs: { for: 'pdf-everything' } }), 'pdf.everything')],
+      }),
+      labels.text(el('p', { attrs: { id: 'pdf-everything-note', class: 'field-note' } }), 'pdf.everythingNote'),
+    ],
   });
 
   function policy(): OutputPolicy {

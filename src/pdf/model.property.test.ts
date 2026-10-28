@@ -203,7 +203,7 @@ describe('PDF document model properties', () => {
     expect(withOmissions).toBeGreaterThan(20);
   });
 
-  it('with rebuilt emails ON, every real email still shows its full text (collapse, never delete; task 7.7)', () => {
+  it('with rebuilt emails chosen, every real email stays; under "Put everything" each shows its full text and no rebuilt email is in (tasks 7.7, 7.8b)', () => {
     let rebuiltShown = 0;
     for (let seed = 201; seed <= 240; seed++) {
       const random = makeRandom(seed);
@@ -217,14 +217,27 @@ describe('PDF document model properties', () => {
       const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
       const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
       const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
-      const plans = planOutput(
-        positions.map((p) => result.messages[p]!),
-        DEFAULT_OUTPUT_POLICY,
-      );
+      const included = positions.map((p) => result.messages[p]!);
+      // Each document is built with plans of its own policy, as the app does (src/ui/pdf-labels.ts).
+      const defaultPlans = planOutput(included, DEFAULT_OUTPUT_POLICY);
+      const everythingPlans = planOutput(included, policy);
       const rebuilt = rebuiltEntries(result).map((r) => r.id);
-      const doc = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
+      // The default policy: the rebuilt emails chosen are in, between the real ones (which all stay, numbered alike).
+      const defaultInput = { result, positions, plans: defaultPlans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'America/New_York', generatedAt: 0, strings };
+      const folded = buildPdfDocument({ ...defaultInput, rebuilt });
+      const foldedReal = realEmails(folded);
+      rebuiltShown += folded.emails.length - foldedReal.length;
+      expect(foldedReal.map((x) => x.position)).toEqual(positions);
+      expect(foldedReal.map((x) => x.e.number)).toEqual(positions.map((_, k) => k + 1));
+      // Task 7.7: the real emails' text is the same with and without rebuilt emails.
+      const plain = realEmails(buildPdfDocument({ ...defaultInput, rebuilt: [] }));
+      expect(foldedReal.map((x) => bodyOf(x.e)), `seed ${String(seed)}`).toEqual(plain.map((x) => bodyOf(x.e)));
+      // "Put everything in the PDF" (user decision 2026-10-28): the same choice gives NO rebuilt email.
+      const doc = buildPdfDocument({ result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
       const real = realEmails(doc);
-      rebuiltShown += doc.emails.length - real.length;
+      expect(doc.emails).toHaveLength(real.length);
+      expect(doc.cover.rebuiltCount).toBe(0);
+      expect(doc.index.entries.every((x) => !x.rebuilt)).toBe(true);
       // Every included real email is there once, numbered 1..k in list order, with its full text.
       expect(real.map((x) => x.position)).toEqual(positions);
       expect(real.map((x) => x.e.number)).toEqual(positions.map((_, k) => k + 1));

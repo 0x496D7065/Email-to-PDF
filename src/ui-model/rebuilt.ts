@@ -32,6 +32,14 @@
 // it is in the PDF only while one of them is. The review applies both
 // (src/ui/review.ts, includedRebuilt) and the PDF applies the follow-source
 // rule again with its own list of emails (src/pdf/model.ts, planPdfOrder).
+// And while "Put everything in the PDF" is ticked (OutputPolicy
+// .unfoldEverything; user decision 2026-10-28, task 7.8b), NO rebuilt
+// message goes into the PDF: the source emails are then printed whole, quoted
+// history included, so a rebuilt message would only print the same text a
+// second time (rebuiltInPdf's `unfoldEverything` option, the review and the
+// PDF model). The choices above are not touched by it: unticking "Put
+// everything" brings back exactly the previous state. The cards stay in the
+// preview (collapse, never delete).
 //
 // Pure functions, no DOM (README.md, rule R7).
 
@@ -205,6 +213,12 @@ export interface RebuiltInPdf {
   readonly also: readonly number[];
 }
 
+/** Options of rebuiltInPdf. */
+export interface RebuiltInPdfOptions {
+  /** "Put everything in the PDF" is ticked (OutputPolicy.unfoldEverything): no rebuilt entry is in the PDF (see the top). */
+  readonly unfoldEverything?: boolean;
+}
+
 /**
  * THE FOLLOW-SOURCE RULE (user decision Q1 (a), task 7.7): a rebuilt entry
  * goes into the PDF only while at least one email it was read from (the
@@ -217,12 +231,18 @@ export interface RebuiltInPdf {
  * always names an email in the PDF, and the text and header shown are
  * exactly the ones read from that email. Every other source in the PDF is
  * listed in `also` ("Same quoted text also in email ...").
+ *
+ * With `options.unfoldEverything` ("Put everything in the PDF" ticked, user
+ * decision 2026-10-28) the answer is always null: the source emails are
+ * printed whole, so the rebuilt entry would only repeat their quoted text.
  */
 export function rebuiltInPdf(
   r: EngineRebuilt,
   result: Pick<EngineResult, 'positionByIndex' | 'reconstructed'>,
   numberOf: (position: number) => number | null,
+  options: RebuiltInPdfOptions = {},
 ): RebuiltInPdf | null {
+  if (options.unfoldEverything === true) return null;
   let best: { source: RebuiltSource; number: number } | null = null;
   const numbers = new Set<number>();
   for (const source of rebuiltSources(r, result)) {

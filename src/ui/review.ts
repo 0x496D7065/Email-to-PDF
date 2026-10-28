@@ -62,6 +62,17 @@
 // (not `onChange`: the PDF labels of the real emails do not depend on it);
 // a real email's tick is told through `onChange`, with the rebuilt line
 // added when it changed.
+//
+// "Put everything in the PDF" (user decision 2026-10-28, task 7.8b): while
+// it is ticked (`unfoldEverything`, read from src/ui/pdf-labels.ts), NO
+// rebuilt email goes in the PDF: includedRebuilt() is empty, the counts say
+// "0 of N rebuilt emails will be in the PDF", and every card stays in the
+// list (collapse, never delete), dimmed and marked "Not in the PDF while
+// "Put everything in the PDF" is ticked" (or plain "Not in the PDF" when
+// unticked itself), with no "In the PDF: taken from #K" line. Neither the
+// switch nor any card's tick is changed by it: unticking "Put everything"
+// brings back exactly the previous state. The page calls
+// everythingChanged() after the checkbox changed.
 
 import type { EngineCounts, EngineMessage, EngineRebuilt, EngineResult, ReconstructionWarning } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
@@ -167,8 +178,15 @@ export interface Review {
   readonly decorateRebuilt: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
   /** The switch: false when the reader left every rebuilt email out. */
   rebuiltIncludeAll(): boolean;
-  /** The rebuilt emails to put in the PDF, in list (timeline) order: ticked, and an email they were read from included; [] when the switch is off. */
+  /** The rebuilt emails to put in the PDF, in list (timeline) order: ticked, and an email they were read from included; [] when the switch is off or "Put everything in the PDF" is ticked. */
   includedRebuilt(): readonly EngineRebuilt[];
+  /**
+   * "Put everything in the PDF" was ticked or unticked: every rebuilt card
+   * and the rebuilt counts line are written again. Returns the new "N of M
+   * rebuilt emails will be in the PDF" line to announce ('' when there is
+   * no rebuilt email).
+   */
+  everythingChanged(): string;
 }
 
 /** What build() added to an item (see Entry). */
@@ -220,6 +238,12 @@ export interface ReviewOptions {
    * src/ui/page.ts: step 3 drops a PDF made before and announces the line.
    */
   readonly onRebuiltChange?: (announcement: string) => void;
+  /**
+   * True while "Put everything in the PDF" is ticked (src/ui/page.ts: the
+   * PDF labels' policy): no rebuilt email is in the PDF then (see the top).
+   * Default: never ticked. If it throws, it counts as unticked.
+   */
+  readonly unfoldEverything?: () => boolean;
 }
 
 export function createReview(options: ReviewOptions = {}): Review {
@@ -302,6 +326,15 @@ export function createReview(options: ReviewOptions = {}): Review {
     setSafeAttribute(rebuiltCheckbox, 'hidden', !shown);
   }
 
+  /** True while "Put everything in the PDF" is ticked (see the top of this file). */
+  function everythingOn(): boolean {
+    try {
+      return options.unfoldEverything?.() === true;
+    } catch {
+      return false;
+    }
+  }
+
   /** True if this rebuilt card is ticked (a broken entry counts as ticked, as for real emails). */
   function isRebuiltTicked(r: EngineRebuilt): boolean {
     try {
@@ -333,6 +366,7 @@ export function createReview(options: ReviewOptions = {}): Review {
    * (rebuiltInPdf; the PDF numbers follow the list order, so the smallest
    * list position is the smallest PDF number). Null otherwise, or when it
    * cannot be worked out (then the card simply shows no extra line).
+   * Only asked while the card is in the PDF ("Put everything" unticked).
    */
   function pdfSourceNumber(r: EngineRebuilt, included: ReadonlySet<number>): number | null {
     if (current === null) return null;
@@ -350,9 +384,10 @@ export function createReview(options: ReviewOptions = {}): Review {
    * card the page could not decorate, as for real emails (see `positions`);
    * in both cases only while an email they were read from is in the PDF
    * (user decision Q1 (a): a rebuilt email follows its source email).
+   * None while "Put everything in the PDF" is ticked (user decision 2026-10-28).
    */
   function rebuiltIncluded(): EngineRebuilt[] {
-    if (current === null || !rebuiltSelection.includeAll()) return [];
+    if (current === null || !rebuiltSelection.includeAll() || everythingOn()) return [];
     const complete = renderedResult === current;
     const included = new Set(positions());
     return rebuiltList.filter((r) => ((complete && !rebuiltItems.has(r.id)) || isRebuiltTicked(r)) && sourceInPdf(r, included));
@@ -368,19 +403,33 @@ export function createReview(options: ReviewOptions = {}): Review {
    * is unticked, or when every email it was read from is unticked (then the
    * mark says so; the card's own tick is kept, and counts again once one of
    * those emails is ticked back). `included`: positions() (see sourceInPdf).
+   * While "Put everything in the PDF" is ticked, a ticked card is marked
+   * "Not in the PDF while ... is ticked" (its own tick is kept).
    */
   function applyRebuilt(entry: RebuiltEntry, included: ReadonlySet<number> = new Set(positions())): void {
     const ticked = isRebuiltTicked(entry.rebuilt);
     const all = rebuiltSelection.includeAll();
+    const everything = everythingOn();
     const sourceIn = sourceInPdf(entry.rebuilt, included);
+    const inPdf = ticked && all && sourceIn && !everything;
     entry.checkbox.checked = ticked;
-    setSafeAttribute(entry.item, 'data-included', ticked && all && sourceIn ? 'true' : 'false');
-    setSafeAttribute(entry.excludedNote, 'hidden', ticked && sourceIn);
-    entry.excludedNote.textContent = ticked ? t('rebuilt.sourceExcluded') : t('review.excluded');
+    setSafeAttribute(entry.item, 'data-included', inPdf ? 'true' : 'false');
+    setSafeAttribute(entry.excludedNote, 'hidden', ticked && sourceIn && !everything);
+    // Order matters: a ticked card whose source emails are all unticked says
+    // so even under "Put everything" (its text is NOT in the PDF then).
+    entry.excludedNote.textContent = !ticked
+      ? t('review.excluded')
+      : !sourceIn
+        ? t('rebuilt.sourceExcluded')
+        : everything
+          ? t('rebuilt.everythingExcluded')
+          : // Ticked, source in, "Put everything" off: the note is hidden
+            // (see the 'hidden' line above), so this text is never shown.
+            t('rebuilt.sourceExcluded');
     // In the PDF, but taken from a copy in another email (its own is left
     // out): the card's "Taken from #N" names the left-out email, so say which
     // email the PDF uses (task 7.7 review).
-    const pdfSource = ticked && all && sourceIn ? pdfSourceNumber(entry.rebuilt, included) : null;
+    const pdfSource = inPdf ? pdfSourceNumber(entry.rebuilt, included) : null;
     setSafeAttribute(entry.pdfSourceNote, 'hidden', pdfSource === null);
     entry.pdfSourceNote.textContent = pdfSource === null ? '' : t('rebuilt.pdfSource', { number: messageNumberText(pdfSource) });
     // Switch off: the card leaves the list (its text stays in its source email's card).
@@ -607,6 +656,11 @@ export function createReview(options: ReviewOptions = {}): Review {
     decorateRebuilt,
     rebuiltIncludeAll: () => rebuiltSelection.includeAll(),
     includedRebuilt: rebuiltIncluded,
+    everythingChanged() {
+      applyAllRebuilt();
+      showRebuiltLine();
+      return rebuiltLine.textContent;
+    },
     includedPositions: positions,
     includedMessages() {
       const messages = current?.messages ?? [];

@@ -5,6 +5,9 @@ import { FOLD_REASONS } from '../../engine/segments';
 import { en } from './en';
 import { fr } from './fr';
 import { nl } from './nl';
+import enSource from './en.ts?raw';
+import frSource from './fr.ts?raw';
+import nlSource from './nl.ts?raw';
 import {
   DEFAULT_LOCALE,
   getLocale,
@@ -111,6 +114,57 @@ describe('language files', () => {
 
   it('has a fold label for every fold reason', () => {
     for (const reason of FOLD_REASONS) expect(lookup(en, `preview.fold.${reason}`), reason).toEqual(expect.any(String));
+  });
+});
+
+describe('"Put everything in the PDF": its note and the rebuilt card mark (user decision 2026-10-28, task 7.8b)', () => {
+  /** The checkbox's name without the part in brackets ("Put everything in the PDF"). */
+  const shortName = (m: Messages): string => m.pdf.everything.replace(/\s*\(.*\)$/, '');
+  /** How each language quotes a control's name (as the "Clear everything" mentions do). */
+  const QUOTED: Readonly<Record<string, (name: string) => string>> = {
+    en: (name) => `"${name}"`,
+    fr: (name) => `«\u00A0${name}\u00A0»`,
+    nl: (name) => `“${name}”`,
+  };
+
+  it('every language has a note and a card mark, different from the checkbox label and from each other', () => {
+    for (const [name, m] of Object.entries(LOCALES)) {
+      expect(m.pdf.everythingNote.length, name).toBeGreaterThan(60);
+      expect(m.pdf.everythingNote, name).not.toBe(m.pdf.everything);
+      expect(m.rebuilt.everythingExcluded, name).not.toBe(m.rebuilt.sourceExcluded);
+      expect(placeholdersIn(m.pdf.everythingNote), name).toEqual([]);
+      expect(placeholdersIn(m.rebuilt.everythingExcluded), name).toEqual([]);
+    }
+  });
+
+  it('the card mark names the checkbox as it reads, quoted as each language does, and starts like the other "Not in the PDF" marks', () => {
+    for (const [name, m] of Object.entries(LOCALES)) {
+      expect(m.rebuilt.everythingExcluded, name).toContain(QUOTED[name]!(shortName(m)));
+      expect(m.rebuilt.everythingExcluded.startsWith(m.review.excluded), name).toBe(true);
+    }
+  });
+
+  it('the note says: every email in full with the quoted earlier emails, may repeat, cleaner unticked, rebuilt emails left out', () => {
+    const parts: Readonly<Record<string, readonly RegExp[]>> = {
+      en: [/^Ticking this puts every ticked email in the PDF in full/, /quoted earlier emails/, /more than once/, /unticked for a cleaner PDF/, /rebuilt emails are left out of the PDF/, /repeat the quoted text/],
+      fr: [/^Si cette case est cochée, chaque e-mail coché figure en entier dans le PDF/, /e-mails antérieurs cités/, /plusieurs fois/, /décochée pour un PDF plus clair/, /e-mails reconstitués ne sont pas mis dans le PDF/, /répéter le texte cité/],
+      nl: [/^Als dit is aangevinkt, komt elke aangevinkte e-mail volledig in de PDF/, /geciteerde eerdere e-mails/, /meer dan eens/, /uitgevinkt voor een overzichtelijkere PDF/, /gereconstrueerde e-mails buiten de PDF/, /geciteerde tekst herhalen/],
+    };
+    for (const [name, m] of Object.entries(LOCALES)) {
+      for (const part of parts[name]!) expect(m.pdf.everythingNote, `${name} ${String(part)}`).toMatch(part);
+    }
+  });
+
+  it('the rebuilt label word of each language is the one the note uses', () => {
+    expect(en.pdf.everythingNote).toContain(en.rebuilt.label.toLowerCase());
+    expect(fr.pdf.everythingNote.toLowerCase()).toContain(fr.rebuilt.label.toLowerCase().slice(0, 10));
+    expect(nl.pdf.everythingNote.toLowerCase()).toContain(nl.rebuilt.label.toLowerCase());
+  });
+
+  it('no language file holds a raw invisible character: only \\u escapes (no-break spaces, thin spaces, zero widths)', () => {
+    for (const [name, source] of Object.entries({ en: enSource, fr: frSource, nl: nlSource })) {
+      expect(source, name).not.toMatch(/[\u00A0\u00AD\u2000-\u200F\u2028\u2029\u202F\u2060\uFEFF]/);
+    }
   });
 });
 

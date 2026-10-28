@@ -288,10 +288,15 @@ export const nl: Messages = {
     sourceExcluded: 'Niet in de PDF: de e-mail waaruit hij is overgenomen, wordt weggelaten',
     // NEEDS USER PROOFREADING (task 7.7).
     pdfSource: 'In de PDF: overgenomen uit {number}',
+    // NEEDS USER PROOFREADING (task 7.8b).
+    everythingExcluded: 'Niet in de PDF zolang “Alles in de PDF zetten” is aangevinkt: de tekst staat al in de e-mail waaruit hij is overgenomen',
   },
 
   pdf: {
     everything: 'Alles in de PDF zetten (niets weglaten)',
+    // NEEDS USER PROOFREADING (task 7.8b).
+    everythingNote:
+      'Als dit is aangevinkt, komt elke aangevinkte e-mail volledig in de PDF, met de geciteerde eerdere e-mails erbij, dus dezelfde tekst kan meer dan eens voorkomen. Laat dit uitgevinkt voor een overzichtelijkere PDF. Zolang het is aangevinkt, blijven gereconstrueerde e-mails buiten de PDF: ze zouden alleen de geciteerde tekst herhalen.',
     updating: 'Controleren wat er in de PDF komt…',
     failed: 'De tool kon niet bepalen welke delen de PDF weglaat, dus de ingeklapte delen zijn niet gemarkeerd.',
     label: {

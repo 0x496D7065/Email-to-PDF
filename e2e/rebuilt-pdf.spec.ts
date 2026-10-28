@@ -15,6 +15,11 @@
 // 3. The email they were taken from unticked (another email added, so a
 //    PDF can still be made): the cards are marked "Not in the PDF", and
 //    nothing rebuilt is in the PDF (user decision Q1 (a)).
+// 4. "Put everything in the PDF" ticked (user decision 2026-10-28, task
+//    7.8b): its note is shown and read with it, the cards stay but are
+//    marked out, the PDF holds the email whole (each quoted text once) and
+//    nothing rebuilt; unticked, the earlier choices come back exactly.
+// 5. That note at 320 px wide: it wraps, no sideways scrolling.
 //
 // Throughout (see e2e/support/watch.ts): after the page's own files, only
 // the own-origin blob: URLs of the inlined workers and, at most once, the
@@ -189,4 +194,74 @@ test('the email they were taken from unticked: the cards say so, and nothing reb
   const again = (await makePdfText(page)).join(' ');
   expect(again.split(HEADING)).toHaveLength(4);
   await expectNothingLeftThePage(page, 2);
+});
+
+test('"Put everything in the PDF" ticked: a note says why, the cards stay but are out, and the PDF holds the email whole with nothing rebuilt; unticked: back (task 7.8b)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, [LAST], 4);
+  const everything = page.getByRole('checkbox', { name: en.pdf.everything });
+  const note = page.locator('#pdf-everything-note');
+  // The note is always there, read with the checkbox.
+  await expect(note).toBeVisible();
+  await expect(note).toHaveText(en.pdf.everythingNote);
+  await expect(everything).toHaveAttribute('aria-describedby', 'pdf-everything-note');
+  await expect(everything).toHaveAccessibleDescription(en.pdf.everythingNote);
+  const cards = page.locator('#preview-list > li.message-rebuilt');
+  // One card unticked first: the state to come back to.
+  await cards.first().getByRole('checkbox').uncheck();
+  await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+
+  await everything.check();
+  await expect(page.locator('#review-rebuilt')).toHaveText('0 of 3 rebuilt emails will be in the PDF.');
+  await expect(page.locator('#status')).toContainText('0 of 3 rebuilt emails will be in the PDF.');
+  await expect(cards).toHaveCount(3);
+  const ticks: boolean[] = [];
+  for (const card of await cards.all()) {
+    await expect(card).toBeVisible();
+    await expect(card).toHaveAttribute('data-included', 'false');
+    const ticked = await card.getByRole('checkbox').isChecked();
+    ticks.push(ticked);
+    await expect(card.locator('.excluded-note')).toHaveText(ticked ? en.rebuilt.everythingExcluded : en.review.excluded);
+    await expect(card.locator('.rebuilt-pdf-source')).toBeHidden();
+  }
+  expect(ticks).toEqual([false, true, true]);
+  await expect(page.getByRole('checkbox', { name: en.rebuilt.includeAll })).toBeChecked();
+  const all = (await makePdfText(page)).join(' ');
+  expect(all).toContain('Email 1');
+  expect(all).not.toContain(HEADING);
+  expect(all).not.toContain(MARKER);
+  expect(all).not.toMatch(/rebuilt/i);
+  // The source email is printed whole: its quoted history (the earlier emails' text) is in, once each.
+  for (const quoted of ['Wednesday at 10:00 works for me.', 'I can come by on Wednesday 5 March', 'We are furnishing a small office']) {
+    expect(all.split(quoted), quoted).toHaveLength(2);
+  }
+  expect(all.match(/\b[0-9a-f]{64}\b/g)).toHaveLength(1);
+
+  await everything.uncheck();
+  await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+  for (const [k, card] of (await cards.all()).entries()) {
+    await expect(card.getByRole('checkbox')).toBeChecked({ checked: ticks[k]! });
+    await expect(card).toHaveAttribute('data-included', ticks[k]! ? 'true' : 'false');
+  }
+  const again = (await makePdfText(page)).join(' ');
+  expect(again.split(HEADING)).toHaveLength(3);
+  expect(again).toContain('Rebuilt emails 2 earlier emails rebuilt from quoted text');
+  await expectNothingLeftThePage(page, 2);
+});
+
+test('the "Put everything" note fits a 320 px wide screen and wraps, with no sideways scrolling', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await open(page, [LAST], 4);
+  const note = page.locator('#pdf-everything-note');
+  await expect(note).toBeVisible();
+  const box = await note.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+  // It wraps over several lines rather than running off the page.
+  expect(box!.height).toBeGreaterThan(40);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await expectNothingLeftThePage(page, 0);
 });

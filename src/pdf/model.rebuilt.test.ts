@@ -8,7 +8,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { runEngine, type EngineRebuilt, type EngineResult } from '../engine/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
+import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../engine/output-plan';
 import type { QuotedDate } from '../engine/quoted-date';
 import type { NormalizedMessage } from '../parsing/types';
 import { rebuiltEntries } from '../ui-model/rebuilt';
@@ -41,19 +41,20 @@ function withRebuilt(result: EngineResult, id: number, edit: (r: EngineRebuilt) 
 /** Builds the document of `result` with the given real positions (default all) and rebuilt ids (default every entry). */
 function build(
   result: EngineResult,
-  options: { positions?: readonly number[]; rebuilt?: readonly number[] | null; timeZone?: string; strings?: PdfStrings } = {},
+  options: { positions?: readonly number[]; rebuilt?: readonly number[] | null; timeZone?: string; strings?: PdfStrings; policy?: OutputPolicy } = {},
 ): PdfDocument {
   const positions = options.positions ?? result.messages.map((_, k) => k);
+  const policy = options.policy ?? DEFAULT_OUTPUT_POLICY;
   const plans = planOutput(
     positions.map((p) => result.messages[p]!),
-    DEFAULT_OUTPUT_POLICY,
+    policy,
   );
   const rebuilt = options.rebuilt === undefined ? rebuiltEntries(result).map((r) => r.id) : options.rebuilt;
   return buildPdfDocument({
     result,
     positions,
     plans,
-    policy: DEFAULT_OUTPUT_POLICY,
+    policy,
     timeZone: options.timeZone ?? 'Africa/Lagos',
     generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
     strings: options.strings ?? EN,
@@ -374,5 +375,58 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
     const doc = build(result, { positions: [] });
     expect(doc.emails).toEqual([]);
     expect(doc.cover.rebuiltCount).toBe(0);
+  });
+});
+
+describe('"Put everything in the PDF" (policy.unfoldEverything; user decision 2026-10-28, task 7.8b)', () => {
+  const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
+
+  it('leaves every rebuilt email out, whatever was chosen: no heading, no index marker, no bookmark, nothing on the cover', () => {
+    const result = engineOf(LAST);
+    const ids = rebuiltEntries(result).map((r) => r.id);
+    expect(ids).toHaveLength(3);
+    const doc = build(result, { rebuilt: ids, policy: EVERYTHING });
+    expect(rebuiltOf(doc)).toEqual([]);
+    expect(doc.emails.map((e) => e.number)).toEqual([1]);
+    expect(doc.emails.some((e) => e.heading.startsWith('Earlier email'))).toBe(false);
+    expect(doc.index.entries.map((e) => e.rebuilt)).toEqual([false]);
+    expect(doc.index.entries.some((e) => e.bookmark.includes(EN.rebuiltMarker) || text(e.subject).includes(EN.rebuiltMarker))).toBe(false);
+    expect(doc.cover.rebuiltCount).toBe(0);
+    expect(doc.cover.emailCount).toBe(1);
+    const cover = blockTexts(doc.cover.blocks);
+    expect(cover.some((t) => /rebuilt/i.test(t))).toBe(false);
+    expect(cover).not.toContain(EN.rebuiltSection);
+    expect(cover).not.toContain(EN.rebuiltIntro);
+  });
+
+  it('prints the source email whole, quoted history included (collapse, never delete), the same as with no rebuilt email chosen', () => {
+    const result = engineOf(LAST);
+    const ids = rebuiltEntries(result).map((r) => r.id);
+    const doc = build(result, { rebuilt: ids, policy: EVERYTHING });
+    const body = doc.emails[0]!.body.map(text);
+    expect(body).toEqual(bodyLines(result.messages[0]!.message.bodyText).lines.map(text));
+    // Every rebuilt text is inside it, so nothing of them is lost.
+    for (const r of rebuiltEntries(result)) {
+      const lines = r.rebuilt.reconstructedText.split('\n').filter((l) => l.trim() !== '');
+      for (const line of lines) expect(body.join('\n')).toContain(line.trim());
+    }
+    expect(doc).toEqual(build(result, { rebuilt: [], policy: EVERYTHING }));
+  });
+
+  it('back to the default policy, the same choice gives the rebuilt emails again (nothing forgotten)', () => {
+    const result = engineOf(LAST);
+    const ids = rebuiltEntries(result).map((r) => r.id);
+    build(result, { rebuilt: ids, policy: EVERYTHING });
+    const doc = build(result, { rebuilt: ids });
+    expect(rebuiltOf(doc)).toHaveLength(3);
+    expect(doc.cover.rebuiltCount).toBe(3);
+  });
+
+  it('also when the text is quoted in several emails', () => {
+    const result = engineOf(THIRD, LAST);
+    const doc = build(result, { policy: EVERYTHING });
+    expect(rebuiltOf(doc)).toEqual([]);
+    expect(doc.emails.map((e) => e.number)).toEqual([1, 2]);
+    expect(rebuiltOf(build(result))).not.toEqual([]);
   });
 });

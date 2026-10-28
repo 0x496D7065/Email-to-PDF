@@ -8,6 +8,9 @@ import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
 import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
+import { setLocale } from './i18n';
+import { en } from './i18n/en';
+import { fr } from './i18n/fr';
 import { DEBOUNCE_MS, SLICE_MS, createPdfLabels, type PdfLabels } from './pdf-labels';
 import type { PreviewPdfPlans } from './preview';
 
@@ -83,9 +86,8 @@ function runAll(): number {
 }
 
 const last = (): PreviewPdfPlans | null | undefined => applied.at(-1);
-/** A child element of the checkbox field (the fake DOM's children are a plain array). */
-const part = (tag: string): FakeElement | undefined =>
-  (labels.element as unknown as FakeElement).children.find((c): c is FakeElement => c instanceof FakeElement && c.tagName === tag);
+/** The first element of the checkbox field (checkbox, label, note) with this tag. */
+const part = (tag: string): FakeElement | undefined => (labels.element as unknown as FakeElement).descendants().find((c) => c.tagName === tag);
 const checkbox = (): FakeElement => part('input')!;
 
 beforeEach(() => {
@@ -112,6 +114,26 @@ describe('createPdfLabels', () => {
     expect(box.checked).toBe(false);
     expect(labels.getPdfPolicy()).toEqual(DEFAULT_OUTPUT_POLICY);
     expect(labels.currentPlans()).toBeNull();
+  });
+
+  it('has a visible note under the checkbox, read with it, and relabelled with the page (task 7.8b)', () => {
+    const note = part('p');
+    expect(note?.getAttribute('id')).toBe('pdf-everything-note');
+    expect(note?.getAttribute('hidden')).toBeNull();
+    expect(checkbox().getAttribute('aria-describedby')).toBe('pdf-everything-note');
+    expect(note?.textContent).toBe(en.pdf.everythingNote);
+    // What it must say (user decision 2026-10-28).
+    expect(note?.textContent).toContain('more than once');
+    expect(note?.textContent).toContain('cleaner PDF');
+    expect(note?.textContent).toContain('rebuilt emails are left out of the PDF');
+    setLocale('fr');
+    try {
+      labels.relabel();
+      expect(note?.textContent).toBe(fr.pdf.everythingNote);
+      expect(part('label')?.textContent).toBe(fr.pdf.everything);
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('hides the labels at once, then gives the plans of the included emails, after a pause', () => {

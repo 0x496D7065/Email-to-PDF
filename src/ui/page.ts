@@ -32,6 +32,11 @@
 // is announced (onRebuiltChange). The PDF shows the ones the review gives
 // (review.includedRebuilt(), task 7.7: ticked, switch on, and an email they
 // were read from in the PDF), at their place in time (src/pdf/model.ts).
+// While "Put everything in the PDF" is ticked, none of them is (user
+// decision 2026-10-28, task 7.8b): the review reads the PDF labels' policy
+// (unfoldEverything), and a change of that checkbox marks the cards again
+// and announces the new rebuilt line (everythingChanged). The PDF model
+// leaves them out under that policy too (src/pdf/model.ts).
 //
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what
@@ -195,6 +200,8 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       preview.refreshRebuilt();
       download.inputsChanged(announcement);
     },
+    // "Put everything in the PDF" ticked: no rebuilt email in the PDF (src/ui/review.ts).
+    unfoldEverything: () => pdfLabels.getPdfPolicy().unfoldEverything,
   });
   // The PDF labels of step 2 (src/ui/pdf-labels.ts): their checkbox sits in the preview's toolbar.
   // New plans (or none) also mean a PDF made from the old ones is stale.
@@ -214,8 +221,18 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     // Deliberately a second path besides setPdfPlans and failed: the PDF is
     // dropped on the user's change itself, whatever the labels then do with
     // their plans (they call neither when plans for those inputs are already
-    // on their way). Dropping twice is harmless.
-    onPolicyChange: choicesChanged,
+    // on their way). Dropping twice is harmless. The rebuilt cards follow
+    // the checkbox (none in the PDF while it is ticked): their new line is
+    // announced with the drop, when there are rebuilt emails.
+    // The PDF is dropped even if writing the cards again throws.
+    onPolicyChange: () => {
+      let line = '';
+      try {
+        line = review.everythingChanged();
+      } finally {
+        download.inputsChanged(line === '' ? undefined : line);
+      }
+    },
   });
   const preview = mountPreview(shell, {
     ...options.preview,
@@ -273,8 +290,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       result: plans.result,
       positions: plans.positions,
       plans: plans.plans,
-      // The rebuilt emails ticked whose source email is in the PDF ([] when the switch is off).
-      rebuilt: review.includedRebuilt().map((r) => r.id),
+      // The rebuilt emails ticked whose source email is in the PDF ([] when
+      // the switch is off, and under "Put everything in the PDF", whose plans
+      // these are: the PDF model leaves them out then anyway).
+      rebuilt: plans.policy.unfoldEverything ? [] : review.includedRebuilt().map((r) => r.id),
       policy: plans.policy,
       timeZone: preview.zone(),
       generatedAt,

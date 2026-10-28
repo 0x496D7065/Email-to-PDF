@@ -358,6 +358,40 @@ describe('step 3: making the PDF', () => {
     expect(lastRun().request.input.rebuilt).toEqual([0]);
   });
 
+  it('sends no rebuilt email while "Put everything in the PDF" is ticked, says so, and sends them again once unticked (task 7.8b)', async () => {
+    const quoting: NormalizedMessage = {
+      ...make(),
+      subject: 'Re: Garden bench',
+      bodyText: 'Fine for me.\n\nOn Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n> Could you paint the bench?\n',
+    };
+    const result = engineOf([quoting]);
+    choose(quoting.source.fileName);
+    calls.at(-1)?.resolve({ ok: true, engine: result });
+    await settle();
+    runTasks();
+    expect(byId('review-rebuilt').textContent).toBe('1 of 1 rebuilt email will be in the PDF.');
+    const everything = byId('pdf-everything');
+    everything.checked = true;
+    everything.fire('change');
+    // Announced at once, with the rebuilt line (no PDF was made yet: the line alone).
+    expect(status()).toBe('0 of 1 rebuilt email will be in the PDF.');
+    expect(byId('review-rebuilt').textContent).toBe('0 of 1 rebuilt email will be in the PDF.');
+    const card = byId('include-rebuilt-0');
+    expect(card.checked).toBe(true); // its own tick is kept
+    expect(byId('rebuilt-include-all').checked).toBe(true); // and so is the switch
+    runTasks();
+    button().click();
+    expect(lastRun().request.input.rebuilt).toEqual([]);
+    expect(lastRun().request.input.policy.unfoldEverything).toBe(true);
+    everything.checked = false;
+    everything.fire('change');
+    expect(byId('review-rebuilt').textContent).toBe('1 of 1 rebuilt email will be in the PDF.');
+    runTasks();
+    button().click();
+    expect(lastRun().request.input.rebuilt).toEqual([0]);
+    expect(lastRun().request.input.policy.unfoldEverything).toBe(false);
+  });
+
   it('shows and announces progress; pressing again meanwhile starts nothing', async () => {
     await addAndShow();
     button().click();

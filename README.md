@@ -13,6 +13,7 @@ leave your computer.
 - [How the privacy model works](#how-the-privacy-model-works)
 - [How to verify it](#how-to-verify-it)
 - [Collapse, never delete](#collapse-never-delete)
+- [Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text)
 - [Known limits](#known-limits)
 - [Disclaimer](#disclaimer)
 - [Privacy and security rules (R1 to R7)](#privacy-and-security-rules-r1-to-r7)
@@ -41,9 +42,11 @@ page starts in your browser's first (preferred) language if it is one of
 these, otherwise in English. A switch at the top changes it. The choice is
 not saved.
 
-**Status:** working and tested, not yet released. Rebuilding a whole
-conversation from a single email (from the quotes inside it) is planned for
-later.
+If you add only the last email of a conversation, the earlier emails quoted
+inside it are also shown as separate emails, clearly marked "Rebuilt" (see
+[Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text)).
+
+**Status:** working and tested, not yet released.
 
 ## Getting your email files
 
@@ -152,7 +155,13 @@ The tool never throws message text away on its own:
   "In the PDF" or "Not in the PDF" and why. The details, including the
   known edge cases, are under [R6](#r6-collapse-never-delete).
 - **"Put everything in the PDF (leave nothing out)"**: this checkbox in
-  step 2 puts every part of every ticked email in the PDF.
+  step 2 puts every part of every ticked email in the PDF, quoted earlier
+  emails included, so the same text may appear more than once. A short
+  note under the checkbox says so, and that leaving it unticked gives a
+  cleaner PDF. While it is ticked, the
+  [rebuilt emails](#earlier-emails-rebuilt-from-quoted-text) are left out
+  of the PDF, since their text is already in full in the email they come
+  from.
 - **Duplicates are merged only when provably identical:** same text,
   subject, attachment names and sender, plus the same Message-ID (with
   close dates) or the same date, and one copy's recipients and other
@@ -166,7 +175,120 @@ The tool never throws message text away on its own:
   is exactly the one used. Files that could not be read are listed too.
   Then come the index (number, date, sender, subject, attachments, page)
   and the emails, with page numbers and PDF bookmarks.
-- Message text is never rewritten or summarised.
+- Message text is never rewritten or summarised. (Rebuilt emails, below,
+  lose only their "> " quote marks.)
+
+## Earlier emails rebuilt from quoted text
+
+People often have only the last email of a conversation, with the earlier
+ones quoted inside it. The tool then reads those quotes and shows each
+earlier email it can find as a separate email, in date order, in the
+preview and in the PDF. The email you added is not changed: its quoted
+history stays in it, folded as usual.
+
+**How they are marked.** A rebuilt email is never presented as an original
+file:
+
+- **Preview:** a dashed card whose heading starts with "Rebuilt", with no
+  number of its own, a "Taken from: email N" line and a fixed note: rebuilt
+  from the quoted text of email N, may be incomplete or inexact.
+- **PDF:** the heading "Earlier email (rebuilt from quoted text in email
+  N)" with the same note, no number, "[Rebuilt]" in front of its subject in
+  the index and of its bookmark, and on the cover a count of rebuilt emails
+  and a short explanation. It has no file, so it has no SHA-256
+  fingerprint and is not in the cover's list of files.
+
+**What is changed, and what is not.** Sender, recipients, subject and date
+are read from the quoted header ("From: / Sent: / To:", "On ... wrote:",
+and their French and Dutch forms). In the text, only the "> " quote marks at
+the start of the lines (and the spaces before them) are removed; words and
+line breaks are kept exactly as quoted. A quoted date usually has no time
+zone, so the time is a best guess, shown as "about ..." with the date as
+written; a date that could be read two ways (such as `03/04/2025`) is shown
+only as written.
+
+**When you also add the real earlier email**, the real file is used and
+the rebuilt copy is not shown. This needs the same sender, dates that agree
+and the same words (only a signature may differ); when in doubt, both are
+shown, so an email may appear twice but is never wrongly hidden. An earlier
+email quoted in several of your emails is shown once when the copies agree,
+with a note naming the other emails.
+
+**Choosing what goes in the PDF.** Each rebuilt email has its own
+checkbox, and "Include earlier emails rebuilt from quoted text" in step 2
+leaves them all out at once. A rebuilt email also stays in the PDF only
+while at least one ticked email quotes it: when every email that quotes it
+is unticked, it leaves the PDF too (its card says so). When the email named
+in its "Taken from" line is unticked but another ticked email quotes the
+same text, the PDF takes it from that other email, and the card says which.
+
+**"Put everything in the PDF".** When this is ticked, every ticked email
+is printed whole, its quoted earlier emails included. The rebuilt emails
+are then all left out of the PDF, whatever their own checkboxes and the
+switch say, because they would only repeat that quoted text. A note under
+the checkbox says this. Their cards stay in the preview, marked "Not in
+the PDF while "Put everything in the PDF" is ticked", and the counts say
+"0 of N rebuilt emails will be in the PDF". Nothing you chose is changed:
+untick it and the rebuilt emails come back exactly as you had set them.
+
+**Limits.**
+
+- It may be incomplete or inexact, and it is never a substitute for the
+  original files: if a rebuilt email matters, find the original.
+- When unsure, it rebuilds fewer emails rather than wrong ones. It stops at
+  answers typed between quoted lines, replies written under the quote, and
+  unusual quote formats; those quotes stay folded in the email that holds
+  them.
+- Quote headers are read in English, French and Dutch only.
+- Text typed under an Outlook-style quote (without "> " marks) cannot be
+  told apart from the quote: it ends up in the oldest rebuilt email.
+- In an Outlook-style quote whose To or Cc list wraps over several lines
+  and has names without addresses, only the first line of that list is
+  read (marked "list may be incomplete"). The header lines after it are
+  then not read: **that rebuilt email has no subject** (it shows "subject
+  not in the quote"), and no Cc when the To list is the one that wraps.
+  Those lines appear at the top of its text instead. In the
+  test conversations this happened in Dutch Outlook quotes (2 of 11), but
+  the rule is the same in every language. The text itself is not lost: it
+  is all still in the email that quotes it.
+
+### Accuracy on synthetic test conversations
+
+Measured by `src/engine/reconstruct-measure.test.ts` and
+`src/engine/rebuild-links.measure.test.ts` on 42 **synthetic**
+conversations (166 emails, 124 of them quoted inside later ones), written
+to imitate each mail program's quote style. These numbers say nothing
+certain about real emails.
+
+| Quote style | Quoted emails | Found | Precision | Text exact |
+| --- | --- | --- | --- | --- |
+| Outlook, English | 27 | 100% | 100% | 100% |
+| Outlook, French | 17 | 100% | 100% | 100% |
+| Outlook, Dutch | 11 | 100% | 100% | 82% (9 of 11) |
+| Gmail, English | 22 | 100% | 100% | 100% |
+| Gmail, French | 9 | 100% | 100% | 100% |
+| Gmail, Dutch | 6 | 100% | 100% | 100% |
+| Apple Mail, EN / FR / NL | 18 | 100% | 100% | 100% |
+| Thunderbird, English | 6 | 100% | 100% | 100% |
+| Forwards (Gmail, Apple Mail, Outlook) | 8 | 100% | 100% | 100% |
+
+Precision 100%: every split was at a real quote header.
+The two inexact texts (Outlook, Dutch) are the wrapped names-only list
+described above: for those two, the subject and the end of the recipient
+list were not read, and those lines are part of the rebuilt text.
+
+- **False splits:** 0 on 8 texts that look like quotes but are not (the
+  header finder used for folding alone would have split 4 of them).
+- **Refused on purpose:** answers typed between quoted lines and replies
+  under the quote (2 texts), and 2 conversations in shapes the tool does
+  not rebuild (4 quoted emails): nothing rebuilt, nothing wrong.
+- **All emails added (42 conversations):** 285 rebuilt emails, all 285
+  matched to their real file, so none shown twice.
+- **Only the last email added:** 124 of 124 earlier emails rebuilt, in the
+  right order.
+- **Some emails added (438 combinations):** no added or rebuilt email
+  missing, none shown twice, all in the right order, and 0 wrong matches
+  (678 matched to a real file, 314 to a copy quoted in another email).
 
 ## Known limits
 
@@ -183,9 +305,11 @@ The tool never throws message text away on its own:
 - **File types:** `.eml` and `.msg` only. Mailbox files (`.mbox`, `.pst`,
   `.ost`) and Apple Mail's `.emlx` are not read.
 - **A single email does not give the whole conversation.** If you add only
-  the last email of a thread, the earlier emails quoted inside it are
-  folded and, by default, left out of the PDF. Add the earlier emails too,
-  or tick "Put everything in the PDF".
+  the last email of a thread, the tool rebuilds the earlier emails quoted
+  inside it when it safely can, but they are not the original emails and
+  some may be missing (see
+  [Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text)).
+  Add the earlier emails too when you have them.
 - **Some email text cannot be shown:** a `.msg` whose text is saved only in
   Outlook's RTF format shows no text, and a very long formatted (HTML)
   email is cut short. The email carries a note saying so; the original file
@@ -384,7 +508,9 @@ by default the PDF shows what each writer actually wrote.
 
 The preview marks each folded part "In the PDF" or "Not in the PDF" with
 the reason, using the same rules as the PDF, and "Put everything in the PDF
-(leave nothing out)" puts every part in.
+(leave nothing out)" puts every part in. While it is ticked, emails rebuilt
+from quoted text are left out of the PDF (their text is then already there,
+in full, in the email that quotes them); their cards stay in the preview.
 
 ### R7: Detection logic is pure and testable
 
