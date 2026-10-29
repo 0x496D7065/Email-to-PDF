@@ -437,7 +437,7 @@ summary {
   display: inline;
 }
 
-/* "Put everything in the PDF" and its note (src/ui/pdf-labels.ts): the note
+/* "Print full original text" and its note (src/ui/pdf-labels.ts): the note
    lines up with the label text (checkbox 1.5rem + gap 0.5rem), wraps at any
    width (320 px, 200% zoom) and never makes the toolbar wider than the page. */
 .field-everything {
@@ -459,6 +459,18 @@ summary {
   width: 1.5rem;
   height: 1.5rem;
   margin: 0;
+}
+
+/* A disabled checkbox ("Rebuild conversation from replies" while "Print full
+   original text" is ticked, src/ui/review.ts): its label is muted too, still
+   readable, and the pointer says it cannot be used. */
+.field-checkbox input:disabled,
+.field-checkbox input:disabled + label {
+  cursor: not-allowed;
+}
+
+.field-checkbox input:disabled + label {
+  color: var(--text-muted);
 }
 
 .zone-select {

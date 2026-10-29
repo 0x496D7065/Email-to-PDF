@@ -110,22 +110,22 @@ describe('createPdfLabels', () => {
     expect(box.getAttribute('id')).toBe('pdf-everything');
     const label = part('label');
     expect(label?.getAttribute('for')).toBe('pdf-everything');
-    expect(label?.textContent).toBe('Put everything in the PDF (leave nothing out)');
+    expect(label?.textContent).toBe('Print full original text (quoted replies and signatures included)');
     expect(box.checked).toBe(false);
     expect(labels.getPdfPolicy()).toEqual(DEFAULT_OUTPUT_POLICY);
     expect(labels.currentPlans()).toBeNull();
   });
 
-  it('has a visible note under the checkbox, read with it, and relabelled with the page (task 7.8b)', () => {
+  it('has a visible note under the checkbox, read with it, and relabelled with the page (tasks 7.8b, 7.8c)', () => {
     const note = part('p');
     expect(note?.getAttribute('id')).toBe('pdf-everything-note');
     expect(note?.getAttribute('hidden')).toBeNull();
     expect(checkbox().getAttribute('aria-describedby')).toBe('pdf-everything-note');
     expect(note?.textContent).toBe(en.pdf.everythingNote);
-    // What it must say (user decision 2026-10-28).
+    // What it must say (user decision 2026-10-29: the first part only, nothing about rebuilt emails).
     expect(note?.textContent).toContain('more than once');
     expect(note?.textContent).toContain('cleaner PDF');
-    expect(note?.textContent).toContain('rebuilt emails are left out of the PDF');
+    expect(note?.textContent).not.toMatch(/rebuilt/i);
     setLocale('fr');
     try {
       labels.relabel();

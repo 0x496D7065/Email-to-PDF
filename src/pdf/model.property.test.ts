@@ -203,7 +203,7 @@ describe('PDF document model properties', () => {
     expect(withOmissions).toBeGreaterThan(20);
   });
 
-  it('with rebuilt emails chosen, every real email stays; under "Put everything" each shows its full text and no rebuilt email is in (tasks 7.7, 7.8b)', () => {
+  it('with rebuilt emails chosen, every real email stays; under "Print full original text" each shows its full text and no rebuilt email is in (tasks 7.7, 7.8b)', () => {
     let rebuiltShown = 0;
     for (let seed = 201; seed <= 240; seed++) {
       const random = makeRandom(seed);
@@ -232,7 +232,7 @@ describe('PDF document model properties', () => {
       // Task 7.7: the real emails' text is the same with and without rebuilt emails.
       const plain = realEmails(buildPdfDocument({ ...defaultInput, rebuilt: [] }));
       expect(foldedReal.map((x) => bodyOf(x.e)), `seed ${String(seed)}`).toEqual(plain.map((x) => bodyOf(x.e)));
-      // "Put everything in the PDF" (user decision 2026-10-28): the same choice gives NO rebuilt email.
+      // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
       const doc = buildPdfDocument({ result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
       const real = realEmails(doc);
       expect(doc.emails).toHaveLength(real.length);

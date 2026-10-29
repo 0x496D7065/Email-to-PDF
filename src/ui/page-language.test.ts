@@ -390,7 +390,7 @@ describe('setLanguage with files loaded', () => {
     expect(byClass('fold').map((f) => f.hasAttribute('open'))).toEqual(openBefore);
     expect(folds[0]!.hasAttribute('open')).toBe(true);
     expect(root.descendants().filter((e) => ['details', 'summary', 'input', 'select', 'button', 'option'].includes(e.tagName))).toEqual(controlsBefore);
-    // Ticks, zone, "show quoted text", "Put everything in the PDF" and the plans are untouched.
+    // Ticks, zone, "show quoted text", "Print full original text" and the plans are untouched.
     expect(page.review.includedPositions()).toEqual(included);
     expect(boxes.map((b) => b.checked)).toEqual([false, true, true, true]);
     expect(page.preview.zone()).toBe('Asia/Tokyo');

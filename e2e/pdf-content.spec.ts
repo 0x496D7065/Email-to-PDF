@@ -30,7 +30,7 @@
 //    where its sender first used it, a quote the writer answered between
 //    its lines kept; accents drawn as real glyphs; the emoji drawn as the
 //    code "[U+1F600]" while the copy layer holds the emoji itself.
-// 2. "Put everything in the PDF": the full body of every email is in its
+// 2. "Print full original text": the full body of every email is in its
 //    own part of the PDF, in order (rule R6, collapse never delete), after
 //    the documented display transforms only (tests/support/pdf-reference.ts:
 //    tabs as 4 spaces, at most 2 blank lines, outer blank lines trimmed,
@@ -791,7 +791,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
   await expectNothingLeftThePage(page);
 });
 
-test('"Put everything in the PDF": every email\'s whole text, in order', async ({ page }) => {
+test('"Print full original text": every email\'s whole text, in order', async ({ page }) => {
   test.setTimeout(90_000);
   const emails = await prepare(page);
   await page.getByLabel(en.pdf.everything).check();

@@ -99,14 +99,14 @@
 // the switch that leaves them all out are src/ui/review.ts's
 // (`decorateRebuilt`). A rebuilt card that cannot be built is replaced by
 // a stand-in with its label, a note and its text. While the switch is off
-// (`rebuiltShown`), EVERY rebuilt card in the list is hidden, a stand-in the
+// or "Print full original text" is ticked (`rebuiltShown`), EVERY rebuilt card in the list is hidden, a stand-in the
 // review could not decorate too (`refreshRebuilt` after each change).
 //
 // Not here: the counts, the include/exclude checkboxes and the notes
 // (src/ui/review.ts). They reach the page through three options: `header`
 // (nodes above the toolbar), `decorate` (adds to each email's item) and
 // `onRendered` (told when a list is complete). `toolbarItems` adds controls
-// to the toolbar (the "Put everything in the PDF" checkbox of
+// to the toolbar (the "Print full original text" checkbox of
 // src/ui/pdf-labels.ts).
 
 import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
@@ -374,8 +374,8 @@ export interface PreviewOptions {
    */
   readonly decorateRebuilt?: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
   /**
-   * False while the reader left every rebuilt email out (src/ui/review.ts:
-   * its switch). Then EVERY rebuilt card is hidden, decorated or not (a
+   * False while no rebuilt email is shown (src/ui/review.ts: its switch is
+   * off, or "Print full original text" is ticked). Then EVERY rebuilt card is hidden, decorated or not (a
    * stand-in the hook could not decorate too). Read when a card is put in
    * the list and by refreshRebuilt(). Default: always shown. If it throws,
    * the cards are shown.

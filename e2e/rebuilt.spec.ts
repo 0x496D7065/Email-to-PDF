@@ -126,7 +126,7 @@ test('by default, rebuilt cards appear before the email they come from, labelled
   await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
   await expect(page.locator('#review-rebuilt')).toHaveText('3 of 3 rebuilt emails will be in the PDF.');
   await expect(page.locator('#review-included')).toHaveText('1 of 1 email will be in the PDF.');
-  const all = page.getByRole('checkbox', { name: en.rebuilt.includeAll });
+  const all = page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation });
   await expect(all).toBeVisible();
   await expect(all).toBeChecked();
   for (const box of await rebuilt.getByRole('checkbox').all()) {
@@ -146,9 +146,11 @@ test('the switch leaves every rebuilt email out, with the keyboard, and brings t
   await expect(page.locator('#preview-list > li.message-rebuilt')).toHaveCount(3);
   for (const card of await page.locator('#preview-list > li.message-rebuilt').all()) await expect(card).toBeHidden();
   await expect(items.filter({ visible: true })).toHaveCount(1);
-  await expect(page.locator('#review-rebuilt')).toHaveText('0 of 3 rebuilt emails will be in the PDF.');
-  // Announced through the page's one live region.
-  await expect(page.getByRole('status')).toHaveText('0 of 3 rebuilt emails will be in the PDF.');
+  // Off: the counts do not mention rebuilt emails at all.
+  await expect(page.locator('#review-rebuilt')).toBeHidden();
+  await expect(page.locator('#review-messages')).toHaveText('1 email found.');
+  // The emails line is announced instead, through the page's one live region (no older rebuilt line stays).
+  await expect(page.getByRole('status')).toHaveText('1 of 1 email will be in the PDF.');
   await expect(all).toBeFocused();
   // The next Tab stop is the added email's own checkbox: no hidden card is reached.
   await page.keyboard.press('Tab');
@@ -159,6 +161,8 @@ test('the switch leaves every rebuilt email out, with the keyboard, and brings t
   await expect(all).toBeChecked();
   await expect(items.filter({ visible: true })).toHaveCount(4);
   await expect(page.locator('#review-rebuilt')).toHaveText('3 of 3 rebuilt emails will be in the PDF.');
+  await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
+  await expect(page.getByRole('status')).toHaveText('3 of 3 rebuilt emails will be in the PDF.');
   await expectNothingLeftThePage(page);
 });
 

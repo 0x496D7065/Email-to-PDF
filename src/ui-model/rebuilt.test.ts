@@ -259,7 +259,7 @@ describe('the follow-source rule (rebuiltSources, rebuiltInPdf; task 7.7, user d
     }
   });
 
-  it('"Put everything in the PDF" ticked: never in the PDF, whatever emails are in it (user decision 2026-10-28, task 7.8b)', () => {
+  it('"Print full original text" ticked: never in the PDF, whatever emails are in it (user decision 2026-10-28, task 7.8b)', () => {
     const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
     const entries = rebuiltEntries(result);
     expect(entries.length).toBeGreaterThan(0);

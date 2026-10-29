@@ -364,8 +364,12 @@ export const en = {
     dateAsWritten: 'As written in the quote: {text}',
     // A quoted date the tool could not read (it is shown as written below).
     dateUnreadable: '(date could not be read)',
-    // The checkbox in the step 2 toolbar, ticked by default. Unticking it leaves every rebuilt email out.
-    includeAll: 'Include earlier emails rebuilt from quoted text',
+    // The checkbox in the step 2 toolbar, ticked by default (user decision 2026-10-29, task 7.8c).
+    // Unticking it leaves every rebuilt email out (no cards, none in the PDF).
+    rebuildConversation: 'Rebuild conversation from replies',
+    // Not shown: read as that checkbox's description while it is disabled
+    // because pdf.everything is ticked. Names that checkbox without the part in brackets.
+    offWhileFullText: 'Not available while "Print full original text" is ticked.',
     // A rebuilt card that could not be built (not expected).
     itemFailed: 'Something went wrong while showing this rebuilt email. Its text is still in the email it was taken from.',
     // On a rebuilt card that is ticked, while every email it was taken from is unticked (task 7.7: it follows them).
@@ -374,21 +378,17 @@ export const en = {
     // unticked while another email quoting the same text is ticked: the PDF
     // takes it from that email, e.g. "In the PDF: taken from #5" (task 7.7).
     pdfSource: 'In the PDF: taken from {number}',
-    // On a ticked rebuilt card while "Put everything in the PDF" is ticked
-    // (user decision 2026-10-28, task 7.8b): no rebuilt email is in the PDF
-    // then, as its source email is printed whole. Names the checkbox as
-    // pdf.everything says it, without the part in brackets.
-    everythingExcluded: 'Not in the PDF while "Put everything in the PDF" is ticked: its text is already in the email it comes from',
   },
 
   // What the PDF will leave out, shown on each folded part in step 2
   // (src/ui/preview.ts, src/ui-model/pdf-plan.ts). Always words, not only colour.
   pdf: {
-    // The checkbox in the step 2 toolbar (the "include everything" option).
-    everything: 'Put everything in the PDF (leave nothing out)',
-    // The note under that checkbox, read with it (aria-describedby; user decision 2026-10-28, task 7.8b).
+    // The checkbox in the step 2 toolbar (the "include everything" option; user decision 2026-10-29, task 7.8c).
+    // Ticking it also unticks and disables rebuilt.rebuildConversation.
+    everything: 'Print full original text (quoted replies and signatures included)',
+    // The note under that checkbox, read with it (aria-describedby; user decisions 2026-10-28 and 2026-10-29).
     everythingNote:
-      'Ticking this puts every ticked email in the PDF in full, quoted earlier emails included, so the same text may appear more than once. Leave it unticked for a cleaner PDF. While it is ticked, rebuilt emails are left out of the PDF: they would only repeat the quoted text.',
+      'Ticking this puts every ticked email in the PDF in full, quoted earlier emails included, so the same text may appear more than once. Leave it unticked for a cleaner PDF.',
     // Shown while the labels are being worked out again (they are hidden meanwhile).
     // The line keeps its place when empty, so the list below never moves.
     updating: 'Checking what goes in the PDF...',

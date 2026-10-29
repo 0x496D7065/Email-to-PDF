@@ -110,7 +110,7 @@ describe('pdfBlocks', () => {
     expect(blocks[1]?.label?.signaturesFrom).toEqual([2]);
   });
 
-  it('with "put everything in", every folded block is "in"', () => {
+  it('with "Print full original text", every folded block is "in"', () => {
     const v = view([
       { start: 0, end: A, keep: true, reason: 'text' },
       { start: A, end: B, keep: true, reason: 'repeated-signature' },

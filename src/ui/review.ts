@@ -46,7 +46,8 @@
 // emails rebuilt from quoted text get cards of their own in the preview
 // (decorateRebuilt adds their checkbox, like a real email's). All are in
 // the PDF by default. One switch, `rebuiltSwitch` (for the preview's
-// toolbar, shown only when the result has rebuilt emails), leaves ALL of
+// toolbar, shown only when the result has rebuilt emails or a "could not
+// be rebuilt" note, see switchNeeded), leaves ALL of
 // them out: their cards are then hidden (each is only a second view of a
 // part of an email still in the list, whose card keeps all its text). An
 // unticked card stays, dimmed and marked "Not in the PDF", like a real
@@ -63,16 +64,30 @@
 // a real email's tick is told through `onChange`, with the rebuilt line
 // added when it changed.
 //
-// "Put everything in the PDF" (user decision 2026-10-28, task 7.8b): while
-// it is ticked (`unfoldEverything`, read from src/ui/pdf-labels.ts), NO
-// rebuilt email goes in the PDF: includedRebuilt() is empty, the counts say
-// "0 of N rebuilt emails will be in the PDF", and every card stays in the
-// list (collapse, never delete), dimmed and marked "Not in the PDF while
-// "Put everything in the PDF" is ticked" (or plain "Not in the PDF" when
-// unticked itself), with no "In the PDF: taken from #K" line. Neither the
-// switch nor any card's tick is changed by it: unticking "Put everything"
-// brings back exactly the previous state. The page calls
+// "Print full original text (quoted replies and signatures included)"
+// (pdf.everything, read from src/ui/pdf-labels.ts as `unfoldEverything`;
+// user decision 2026-10-29, task 7.8c): while it is ticked, the switch
+// ("Rebuild conversation from replies", rebuilt.rebuildConversation) shows
+// unticked and is disabled, and NO rebuilt email is shown or put in the
+// PDF, exactly as with the switch off: every card leaves the list and
+// includedRebuilt() is empty. The quoted text stays in the email it comes from, folded
+// as usual (collapse, never delete). The reader's own choices are never
+// changed by it: the switch's own state and every card's tick are kept, and
+// unticking the full-text checkbox brings both back exactly (a switch the
+// reader had turned off stays off). While disabled, the switch is described
+// (aria-describedby) by a short hidden hint saying why. The page calls
 // everythingChanged() after the checkbox changed.
+//
+// Rebuilding off (the switch off, or "Print full original text" ticked;
+// user rule: rebuilt emails then do not figure at all): the counts do not
+// mention rebuilt emails (no "N earlier emails rebuilt" part, no "X of N
+// rebuilt emails" line), and an email's notes that its quote "could not be
+// rebuilt" (reconstruct-failed, reconstruct-limit) are hidden and not
+// counted in "N emails with notes" (PM decision, task 7.8c). All of it comes
+// back as soon as rebuilding is on again (showRebuiltLine writes it all).
+// A change that turns rebuilding off announces the "N of M emails will be
+// in the PDF" line instead of the rebuilt one (rebuiltAnnouncement), so an
+// older rebuilt line never stays in the status line.
 
 import type { EngineCounts, EngineMessage, EngineRebuilt, EngineResult, ReconstructionWarning } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
@@ -172,19 +187,29 @@ export interface Review {
   includedMessages(): readonly EngineMessage[];
   /** Writes the counts and every item's words again in the page language now (nothing is rebuilt). */
   relabel(): void;
-  /** The "include rebuilt emails" switch field, for the preview's toolbar (hidden when there is no rebuilt email). */
+  /**
+   * The "include rebuilt emails" switch field, for the preview's toolbar
+   * (hidden when the result has no rebuilt email and no "could not be
+   * rebuilt" note).
+   */
   readonly rebuiltSwitch: HTMLDivElement;
   /** The preview's `decorateRebuilt` hook: adds the include checkbox to a rebuilt email's card. */
   readonly decorateRebuilt: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
-  /** The switch: false when the reader left every rebuilt email out. */
-  rebuiltIncludeAll(): boolean;
-  /** The rebuilt emails to put in the PDF, in list (timeline) order: ticked, and an email they were read from included; [] when the switch is off or "Put everything in the PDF" is ticked. */
+  /** True while rebuilt cards are shown: the switch is on and "Print full original text" is unticked. */
+  rebuiltShown(): boolean;
+  /** The rebuilt emails to put in the PDF, in list (timeline) order: ticked, and an email they were read from included; [] when the switch is off or "Print full original text" is ticked. */
   includedRebuilt(): readonly EngineRebuilt[];
   /**
-   * "Put everything in the PDF" was ticked or unticked: every rebuilt card
-   * and the rebuilt counts line are written again. Returns the new "N of M
-   * rebuilt emails will be in the PDF" line to announce ('' when there is
-   * no rebuilt email).
+   * "Print full original text" was ticked or unticked: the switch (unticked
+   * and disabled while it is ticked, its own state back after), every
+   * rebuilt card and the counts are written again. Returns the line to
+   * announce: '' only when the switch is hidden; the new "N of M rebuilt
+   * emails will be in the PDF" line while rebuilding is on and there are
+   * rebuilt emails; else (no rebuilt email, "Print full original text"
+   * ticked or the switch off: rebuilt emails then not mentioned) the "N of
+   * M emails will be in the PDF" line, which replaces an older rebuilt line
+   * in the status line. The page then shows or hides the cards
+   * (preview.refreshRebuilt, which asks rebuiltShown).
    */
   everythingChanged(): string;
 }
@@ -234,13 +259,16 @@ export interface ReviewOptions {
   readonly onChange?: (announcement: string) => void;
   /**
    * Called after the switch or a rebuilt card's checkbox changed, with the
-   * new "N of M rebuilt emails will be in the PDF" line to announce.
-   * src/ui/page.ts: step 3 drops a PDF made before and announces the line.
+   * new "N of M rebuilt emails will be in the PDF" line to announce (the
+   * switch turned off: the "N of M emails will be in the PDF" line, see
+   * rebuiltAnnouncement). src/ui/page.ts: step 3 drops a PDF made before
+   * and announces the line ('' announces nothing but the drop).
    */
   readonly onRebuiltChange?: (announcement: string) => void;
   /**
-   * True while "Put everything in the PDF" is ticked (src/ui/page.ts: the
-   * PDF labels' policy): no rebuilt email is in the PDF then (see the top).
+   * True while "Print full original text" is ticked (src/ui/page.ts: the
+   * PDF labels' policy): no rebuilt email is shown or in the PDF then, and
+   * the switch is unticked and disabled (see the top).
    * Default: never ticked. If it throws, it counts as unticked.
    */
   readonly unfoldEverything?: () => boolean;
@@ -256,8 +284,14 @@ export function createReview(options: ReviewOptions = {}): Review {
   let renderedResult: EngineResult | null = null;
   // The parts added to each item, so a second call on the same item adds nothing.
   const added = new WeakMap<HTMLLIElement, Parts>();
-  // How many emails of the result shown have notes (for the counts line).
+  // How many emails of the result shown have notes (for the counts line):
+  // any note, and any note other than "could not be rebuilt" (the count
+  // shown while rebuilding is off, see the top of this file).
   let withNotes = 0;
+  let withNotesNoRebuild = 0;
+  // True if an email of the result shown has a "could not be rebuilt" note
+  // (the switch is then shown even without rebuilt emails, see switchNeeded).
+  let hasRebuildNote = false;
   const labels = createStaticLabels();
   // Rebuilt emails: the choices, the cards decorated (by id) and the cards of the result shown.
   const rebuiltSelection = createRebuiltSelection();
@@ -286,12 +320,16 @@ export function createReview(options: ReviewOptions = {}): Review {
   });
 
   // The switch (ticked: every rebuilt email that is ticked goes in the PDF).
-  // Hidden with its field while there is no rebuilt email (both: a hidden input is never taken for a control).
+  // Hidden with its field while the result has no rebuilt email and no "could
+  // not be rebuilt" note (both: a hidden input is never taken for a control).
   const rebuiltCheckbox = el('input', { attrs: { type: 'checkbox', id: 'rebuilt-include-all', checked: true, hidden: true } });
   rebuiltCheckbox.checked = true;
+  // Why the switch is disabled: never shown, only read as the switch's
+  // description while "Print full original text" is ticked (see syncSwitch).
+  const rebuiltOffHint = labels.text(el('span', { attrs: { id: 'rebuilt-off-hint', hidden: true } }), 'rebuilt.offWhileFullText');
   const rebuiltSwitch = el('div', {
     attrs: { id: 'rebuilt-switch', class: 'field field-checkbox', hidden: true },
-    children: [rebuiltCheckbox, labels.text(el('label', { attrs: { for: 'rebuilt-include-all' } }), 'rebuilt.includeAll')],
+    children: [rebuiltCheckbox, labels.text(el('label', { attrs: { for: 'rebuilt-include-all' } }), 'rebuilt.rebuildConversation'), rebuiltOffHint],
   });
 
   /** True if the email goes into the PDF. A broken entry counts as included: never silently left out. */
@@ -320,19 +358,45 @@ export function createReview(options: ReviewOptions = {}): Review {
     includedLine.textContent = current === null ? '' : t('counts.included', { included: positions().length, count: current.messages.length });
   }
 
-  /** Shows or hides the switch (only shown when the result shown has rebuilt emails). */
+  /** Shows or hides the switch (shown only when switchNeeded). */
   function showSwitch(shown: boolean): void {
     setSafeAttribute(rebuiltSwitch, 'hidden', !shown);
     setSafeAttribute(rebuiltCheckbox, 'hidden', !shown);
   }
 
-  /** True while "Put everything in the PDF" is ticked (see the top of this file). */
+  /**
+   * The switch is shown when the result has rebuilt emails or a "could not
+   * be rebuilt" note (both depend on it): else a reader who turned it off
+   * could not turn it back on to see such a note.
+   */
+  function switchNeeded(): boolean {
+    return current !== null && (rebuiltList.length > 0 || hasRebuildNote);
+  }
+
+  /** True while "Print full original text" is ticked (see the top of this file). */
   function everythingOn(): boolean {
     try {
       return options.unfoldEverything?.() === true;
     } catch {
       return false;
     }
+  }
+
+  /** True while rebuilt emails are shown and may go in the PDF: the switch is on and the full text is not asked for. */
+  function rebuiltOn(): boolean {
+    return rebuiltSelection.includeAll() && !everythingOn();
+  }
+
+  /**
+   * The switch as it must look now: while "Print full original text" is
+   * ticked, unticked, disabled and described by the hint; else enabled with
+   * the reader's own choice (kept in rebuiltSelection, never changed here).
+   */
+  function syncSwitch(): void {
+    const everything = everythingOn();
+    rebuiltCheckbox.checked = rebuiltSelection.includeAll() && !everything;
+    setSafeAttribute(rebuiltCheckbox, 'disabled', everything);
+    setSafeAttribute(rebuiltCheckbox, 'aria-describedby', everything ? 'rebuilt-off-hint' : false);
   }
 
   /** True if this rebuilt card is ticked (a broken entry counts as ticked, as for real emails). */
@@ -366,7 +430,7 @@ export function createReview(options: ReviewOptions = {}): Review {
    * (rebuiltInPdf; the PDF numbers follow the list order, so the smallest
    * list position is the smallest PDF number). Null otherwise, or when it
    * cannot be worked out (then the card simply shows no extra line).
-   * Only asked while the card is in the PDF ("Put everything" unticked).
+   * Only asked while the card is in the PDF.
    */
   function pdfSourceNumber(r: EngineRebuilt, included: ReadonlySet<number>): number | null {
     if (current === null) return null;
@@ -384,18 +448,63 @@ export function createReview(options: ReviewOptions = {}): Review {
    * card the page could not decorate, as for real emails (see `positions`);
    * in both cases only while an email they were read from is in the PDF
    * (user decision Q1 (a): a rebuilt email follows its source email).
-   * None while "Put everything in the PDF" is ticked (user decision 2026-10-28).
+   * None while "Print full original text" is ticked (user decision 2026-10-29).
    */
   function rebuiltIncluded(): EngineRebuilt[] {
-    if (current === null || !rebuiltSelection.includeAll() || everythingOn()) return [];
+    if (current === null || !rebuiltOn()) return [];
     const complete = renderedResult === current;
     const included = new Set(positions());
     return rebuiltList.filter((r) => ((complete && !rebuiltItems.has(r.id)) || isRebuiltTicked(r)) && sourceInPdf(r, included));
   }
 
+  /** True for a note shown only while rebuilding is on ("could not be rebuilt"). */
+  function isRebuildNote(note: MessageNote): boolean {
+    return note.kind === 'rebuild';
+  }
+
+  /** Shows or hides an item's "could not be rebuilt" notes (and its notes list when nothing is left in it). */
+  function applyNotes(parts: Parts, on: boolean = rebuiltOn()): void {
+    if (parts.notesList === null) return;
+    let shown = 0;
+    for (const { element, note } of parts.notes) {
+      const visible = on || !isRebuildNote(note);
+      setSafeAttribute(element, 'hidden', !visible);
+      if (visible) shown++;
+    }
+    setSafeAttribute(parts.notesList, 'hidden', shown === 0);
+  }
+
+  /**
+   * Everything in the counts and notes that depends on whether rebuilding
+   * is on (see the top of this file): the rebuilt part of the messages line,
+   * the "X of N rebuilt emails will be in the PDF" line, the "N emails with
+   * notes" line and every item's "could not be rebuilt" notes. Called after
+   * any change of the switch, of "Print full original text", of a tick, and
+   * on a new result or language.
+   */
   function showRebuiltLine(): void {
-    const count = rebuiltList.length;
-    rebuiltLine.textContent = current === null || count === 0 ? '' : t('counts.rebuiltIncluded', { included: rebuiltIncluded().length, count });
+    const on = rebuiltOn();
+    const shown = current !== null && rebuiltList.length > 0 && on;
+    rebuiltLine.textContent = shown ? t('counts.rebuiltIncluded', { included: rebuiltIncluded().length, count: rebuiltList.length }) : '';
+    setSafeAttribute(rebuiltLine, 'hidden', !shown);
+    if (current === null) return;
+    messagesLine.textContent = messagesText(current.counts, shown ? rebuiltList.length : 0);
+    const notes = on ? withNotes : withNotesNoRebuild;
+    notesLine.textContent = notes > 0 ? t('counts.withNotes', { count: notes }) : '';
+    setSafeAttribute(notesLine, 'hidden', notes === 0);
+    for (const entry of entries.values()) applyNotes(entry, on);
+  }
+
+  /**
+   * What to announce after the switch, a rebuilt card or "Print full
+   * original text" changed: the rebuilt line; while rebuilding is off (no
+   * rebuilt line), the "N of M emails will be in the PDF" line instead, so
+   * the status line never keeps an older rebuilt line; '' when the result
+   * switch is hidden (nothing to say). Call after showRebuiltLine.
+   */
+  function rebuiltAnnouncement(): string {
+    if (rebuiltLine.textContent !== '') return rebuiltLine.textContent;
+    return switchNeeded() ? includedLine.textContent : '';
   }
 
   /**
@@ -403,37 +512,27 @@ export function createReview(options: ReviewOptions = {}): Review {
    * is unticked, or when every email it was read from is unticked (then the
    * mark says so; the card's own tick is kept, and counts again once one of
    * those emails is ticked back). `included`: positions() (see sourceInPdf).
-   * While "Put everything in the PDF" is ticked, a ticked card is marked
-   * "Not in the PDF while ... is ticked" (its own tick is kept).
+   * While the switch is off or "Print full original text" is ticked, the
+   * card leaves the list (its own tick is kept, see the top of this file).
    */
   function applyRebuilt(entry: RebuiltEntry, included: ReadonlySet<number> = new Set(positions())): void {
     const ticked = isRebuiltTicked(entry.rebuilt);
-    const all = rebuiltSelection.includeAll();
-    const everything = everythingOn();
+    const on = rebuiltOn();
     const sourceIn = sourceInPdf(entry.rebuilt, included);
-    const inPdf = ticked && all && sourceIn && !everything;
+    const inPdf = ticked && on && sourceIn;
     entry.checkbox.checked = ticked;
     setSafeAttribute(entry.item, 'data-included', inPdf ? 'true' : 'false');
-    setSafeAttribute(entry.excludedNote, 'hidden', ticked && sourceIn && !everything);
-    // Order matters: a ticked card whose source emails are all unticked says
-    // so even under "Put everything" (its text is NOT in the PDF then).
-    entry.excludedNote.textContent = !ticked
-      ? t('review.excluded')
-      : !sourceIn
-        ? t('rebuilt.sourceExcluded')
-        : everything
-          ? t('rebuilt.everythingExcluded')
-          : // Ticked, source in, "Put everything" off: the note is hidden
-            // (see the 'hidden' line above), so this text is never shown.
-            t('rebuilt.sourceExcluded');
+    setSafeAttribute(entry.excludedNote, 'hidden', ticked && sourceIn);
+    // Hidden when ticked with a source in the PDF; else the reason.
+    entry.excludedNote.textContent = ticked ? t('rebuilt.sourceExcluded') : t('review.excluded');
     // In the PDF, but taken from a copy in another email (its own is left
     // out): the card's "Taken from #N" names the left-out email, so say which
     // email the PDF uses (task 7.7 review).
     const pdfSource = inPdf ? pdfSourceNumber(entry.rebuilt, included) : null;
     setSafeAttribute(entry.pdfSourceNote, 'hidden', pdfSource === null);
     entry.pdfSourceNote.textContent = pdfSource === null ? '' : t('rebuilt.pdfSource', { number: messageNumberText(pdfSource) });
-    // Switch off: the card leaves the list (its text stays in its source email's card).
-    setSafeAttribute(entry.item, 'hidden', !all);
+    // Switch off or full text: the card leaves the list (its text stays in its source email's card).
+    setSafeAttribute(entry.item, 'hidden', !on);
   }
 
   /** Every decorated rebuilt card again (after any change of what goes in the PDF). */
@@ -452,9 +551,8 @@ export function createReview(options: ReviewOptions = {}): Review {
   /** The counts lines of the result shown, in the page language. */
   function writeCounts(result: EngineResult): void {
     filesLine.textContent = filesText(result.counts);
-    messagesLine.textContent = messagesText(result.counts, rebuiltList.length);
-    notesLine.textContent = withNotes > 0 ? t('counts.withNotes', { count: withNotes }) : '';
     showIncludedLine();
+    // Also the messages line and the notes line (both depend on whether rebuilding is on).
     showRebuiltLine();
   }
 
@@ -469,6 +567,8 @@ export function createReview(options: ReviewOptions = {}): Review {
   function emptyCounts(): void {
     current = null;
     withNotes = 0;
+    withNotesNoRebuild = 0;
+    hasRebuildNote = false;
     // Defensive only: each run gives a new result object, so an old
     // renderedResult could never match a later `current` anyway.
     renderedResult = null;
@@ -493,18 +593,23 @@ export function createReview(options: ReviewOptions = {}): Review {
     entries = new Map();
     setSafeAttribute(failedPointer, 'hidden', result.counts.filesFailed === 0);
     withNotes = 0;
+    withNotesNoRebuild = 0;
+    hasRebuildNote = false;
     result.messages.forEach((m, position) => {
-      if (safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings).length > 0) withNotes++;
+      const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings);
+      if (notes.length > 0) withNotes++;
+      if (notes.some((note) => !isRebuildNote(note))) withNotesNoRebuild++;
+      if (notes.some(isRebuildNote)) hasRebuildNote = true;
     });
-    setSafeAttribute(notesLine, 'hidden', withNotes === 0);
     rebuiltItems = new Map();
     try {
       rebuiltList = rebuiltEntries(result);
     } catch {
       rebuiltList = []; // not expected; the real emails are shown either way
     }
-    setSafeAttribute(rebuiltLine, 'hidden', rebuiltList.length === 0);
-    showSwitch(rebuiltList.length > 0);
+    // The rebuilt line and the notes line are shown or hidden by showRebuiltLine (through writeCounts).
+    showSwitch(switchNeeded());
+    syncSwitch();
     writeCounts(result);
   }
 
@@ -572,7 +677,7 @@ export function createReview(options: ReviewOptions = {}): Review {
       // Every shown card: two cards could share a key (see src/ui-model/rebuilt.ts).
       applyAllRebuilt();
       showRebuiltLine();
-      options.onRebuiltChange?.(rebuiltLine.textContent);
+      options.onRebuiltChange?.(rebuiltAnnouncement());
     });
     const field = el('div', { attrs: { class: 'field field-checkbox message-include' }, children: [checkbox, label, excludedNote] });
     item.insertBefore(el('div', { attrs: { class: 'message-review' }, children: [field, pdfSourceNote] }), item.children[1] ?? null);
@@ -601,7 +706,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     rebuiltSelection.setIncludeAll(rebuiltCheckbox.checked);
     applyAllRebuilt();
     showRebuiltLine();
-    options.onRebuiltChange?.(rebuiltLine.textContent);
+    options.onRebuiltChange?.(rebuiltAnnouncement());
   });
 
   const decorate: Review['decorate'] = (item, m, position, result) => {
@@ -614,6 +719,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     // Recorded last: a call that threw above leaves no reference behind.
     const entry: Entry = { item, message: m, ...parts };
     apply(entry);
+    applyNotes(entry);
     entries.set(position, entry);
   };
 
@@ -628,7 +734,11 @@ export function createReview(options: ReviewOptions = {}): Review {
     reset() {
       selection.clear();
       rebuiltSelection.clear();
+      // "Clear everything" also unticks "Print full original text" (src/ui/page.ts), so the switch is enabled again.
+      // Set directly, not through syncSwitch: the PDF labels may be reset after the review, so unfoldEverything could still say ticked here.
       rebuiltCheckbox.checked = true;
+      setSafeAttribute(rebuiltCheckbox, 'disabled', false);
+      setSafeAttribute(rebuiltCheckbox, 'aria-describedby', false);
       emptyCounts();
     },
     rendered: (result) => {
@@ -654,12 +764,13 @@ export function createReview(options: ReviewOptions = {}): Review {
     },
     rebuiltSwitch,
     decorateRebuilt,
-    rebuiltIncludeAll: () => rebuiltSelection.includeAll(),
+    rebuiltShown: rebuiltOn,
     includedRebuilt: rebuiltIncluded,
     everythingChanged() {
+      syncSwitch();
       applyAllRebuilt();
       showRebuiltLine();
-      return rebuiltLine.textContent;
+      return rebuiltAnnouncement();
     },
     includedPositions: positions,
     includedMessages() {

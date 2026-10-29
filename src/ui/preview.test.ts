@@ -1111,7 +1111,7 @@ describe('PDF labels', () => {
     setShowFolded(true);
     setShowFolded(false);
     expect(after[0]!.hasAttribute('open')).toBe(false);
-    // "Put everything in": every label says "In the PDF".
+    // "Print full original text": every label says "In the PDF".
     for (const item of items()) for (const text of labelsOf(item)) expect(text.startsWith('In the PDF: ')).toBe(true);
   });
 
@@ -1134,7 +1134,7 @@ describe('PDF labels', () => {
       // The keyboard focus is on the quote's summary (the second fold).
       const oldSummary = withClass(reply, 'fold-label')[1]!;
       doc.activeElement = oldSummary;
-      // "Put everything in": the two folds become one (a redraw).
+      // "Print full original text": the two folds become one (a redraw).
       preview.setPdfPlans(plansFor(result, [0, 1, 2], true));
       runAll();
       const after = withClass(reply, 'fold-label');

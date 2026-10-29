@@ -358,7 +358,7 @@ describe('step 3: making the PDF', () => {
     expect(lastRun().request.input.rebuilt).toEqual([0]);
   });
 
-  it('sends no rebuilt email while "Put everything in the PDF" is ticked, says so, and sends them again once unticked (task 7.8b)', async () => {
+  it('sends no rebuilt email while "Print full original text" is ticked (the switch unticked and disabled, the card hidden), says so, and sends them again once unticked (tasks 7.8b, 7.8c)', async () => {
     const quoting: NormalizedMessage = {
       ...make(),
       subject: 'Re: Garden bench',
@@ -373,12 +373,18 @@ describe('step 3: making the PDF', () => {
     const everything = byId('pdf-everything');
     everything.checked = true;
     everything.fire('change');
-    // Announced at once, with the rebuilt line (no PDF was made yet: the line alone).
-    expect(status()).toBe('0 of 1 rebuilt email will be in the PDF.');
-    expect(byId('review-rebuilt').textContent).toBe('0 of 1 rebuilt email will be in the PDF.');
+    // Rebuilt emails are then not mentioned at all: no rebuilt line; the emails line is announced instead (no PDF was made yet: the line alone).
+    expect(status()).toBe('1 of 1 email will be in the PDF.');
+    expect(byId('review-rebuilt').textContent).toBe('');
+    expect(byId('review-rebuilt').hasAttribute('hidden')).toBe(true);
+    expect(byId('review-messages').textContent).toBe('1 email found.');
     const card = byId('include-rebuilt-0');
     expect(card.checked).toBe(true); // its own tick is kept
-    expect(byId('rebuilt-include-all').checked).toBe(true); // and so is the switch
+    const all = byId('rebuilt-include-all');
+    expect(all.checked).toBe(false); // the switch shows unticked and is disabled
+    expect(all.hasAttribute('disabled')).toBe(true);
+    expect(page.review.rebuiltShown()).toBe(false);
+    expect(root.descendants().find((e) => e.getAttribute('data-rebuilt-id') === '0')!.hasAttribute('hidden')).toBe(true);
     runTasks();
     button().click();
     expect(lastRun().request.input.rebuilt).toEqual([]);
@@ -386,6 +392,10 @@ describe('step 3: making the PDF', () => {
     everything.checked = false;
     everything.fire('change');
     expect(byId('review-rebuilt').textContent).toBe('1 of 1 rebuilt email will be in the PDF.');
+    expect(byId('review-messages').textContent).toBe('1 email found, 1 earlier email rebuilt from quoted text.');
+    expect(all.checked).toBe(true); // back as it was
+    expect(all.hasAttribute('disabled')).toBe(false);
+    expect(root.descendants().find((e) => e.getAttribute('data-rebuilt-id') === '0')!.hasAttribute('hidden')).toBe(false);
     runTasks();
     button().click();
     expect(lastRun().request.input.rebuilt).toEqual([0]);
@@ -473,7 +483,7 @@ describe('step 3: a change of choice drops the PDF', () => {
       },
     ],
     [
-      '"Put everything in the PDF"',
+      '"Print full original text"',
       () => {
         byId('pdf-everything').checked = true;
         byId('pdf-everything').fire('change');

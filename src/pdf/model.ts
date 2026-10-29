@@ -54,7 +54,8 @@
 // the ones read from that email); the other sources in the PDF are listed
 // as "also in". The source email itself is unchanged: its quoted history is
 // folded or kept by its plan exactly as before (collapse, never delete).
-// "PUT EVERYTHING" RULE (user decision 2026-10-28, task 7.8b): with
+// FULL ORIGINAL TEXT RULE ("Print full original text"; user decision
+// 2026-10-28, task 7.8b, kept as a safety net in task 7.8c): with
 // `policy.unfoldEverything` NO rebuilt email is in the PDF, whatever
 // `rebuilt` says: every source email is then printed whole, quoted history
 // included, so a rebuilt email would only print that text twice. No rebuilt
@@ -764,7 +765,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
 
   // The included emails: positions that exist, each once, in the given
   // order; the rebuilt ones chosen, at their place (planPdfOrder); none
-  // under "Put everything in the PDF" (see the top of this file).
+  // under "Print full original text" (see the top of this file).
   const rebuiltIds = input.policy.unfoldEverything === true ? [] : (input.rebuilt ?? []);
   const { slots, pdfNumberByPosition } = planPdfOrder(result, positions, rebuiltIds);
   const emails: PdfEmail[] = [];

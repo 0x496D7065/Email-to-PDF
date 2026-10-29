@@ -378,7 +378,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
   });
 });
 
-describe('"Put everything in the PDF" (policy.unfoldEverything; user decision 2026-10-28, task 7.8b)', () => {
+describe('"Print full original text" (policy.unfoldEverything; user decision 2026-10-28, task 7.8b)', () => {
   const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
 
   it('leaves every rebuilt email out, whatever was chosen: no heading, no index marker, no bookmark, nothing on the cover', () => {

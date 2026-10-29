@@ -1,7 +1,7 @@
 // Browser test of the preview's PDF labels (src/ui/preview.ts,
 // src/ui/pdf-labels.ts): each folded part says, in words, whether it will be
 // in the PDF, exactly as the PDF's own plan (src/engine/output-plan.ts)
-// decides; unticking an email or ticking "Put everything in the PDF" changes
+// decides; unticking an email or ticking "Print full original text" changes
 // the labels, and a label that may be stale is never shown. In each test
 // browser, against the BUILT site, with the real pipeline.
 //
@@ -389,7 +389,7 @@ test('new labels that redraw a focused fold keep the keyboard focus on it (never
   await expect(firstFold).not.toHaveAttribute('open', /.*/);
 
   // 2. #2 (Bob's Outlook reply): two folds; the focus on the second (the quote).
-  // "Put everything in the PDF", ticked inside the page: the two become one fold.
+  // "Print full original text", ticked inside the page: the two become one fold.
   const second = items.nth(1);
   await expect(second.locator('details.fold')).toHaveCount(2);
   await second.locator('details.fold').nth(1).locator('summary').focus();
@@ -435,7 +435,7 @@ test('a merge that moves the focused fold summary above the window scrolls it ba
   });
   expect(old.top).toBeGreaterThan(0);
   expect(old.bottom).toBeLessThan(240);
-  // "Put everything in the PDF", ticked inside the page: the two folds become one,
+  // "Print full original text", ticked inside the page: the two folds become one,
   // whose summary is where the first fold starts (above the window).
   await page.evaluate(() => document.querySelector<HTMLInputElement>('#pdf-everything')?.click());
   await expect(page.getByLabel(en.pdf.everything)).toBeChecked();
@@ -458,7 +458,7 @@ test('a merge that moves the focused fold summary above the window scrolls it ba
   await expectNothingLeftThePage(page);
 });
 
-test('"Put everything in the PDF" makes every label say so, and Clear everything unticks it', async ({ page }) => {
+test('"Print full original text" makes every label say so, and Clear everything unticks it', async ({ page }) => {
   test.setTimeout(60_000);
   const items = await openWithEmails(page);
   const everything = page.getByLabel(en.pdf.everything);

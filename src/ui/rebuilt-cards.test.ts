@@ -72,7 +72,7 @@ function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}):
       toolbarItems: [review.rebuiltSwitch],
       decorate: review.decorate,
       decorateRebuilt: review.decorateRebuilt,
-      rebuiltShown: () => review.rebuiltIncludeAll(),
+      rebuiltShown: () => review.rebuiltShown(),
       onRendered: (result) => {
         rendered++;
         review.rendered(result);
@@ -309,15 +309,21 @@ describe('the switch, the checkboxes and the counts', () => {
     tick(all, false);
     expect(rebuiltItems().every(isHidden)).toBe(true);
     expect(realItems().some(isHidden)).toBe(false);
-    expect(review.rebuiltIncludeAll()).toBe(false);
+    expect(review.rebuiltShown()).toBe(false);
     expect(review.includedRebuilt()).toEqual([]);
-    expect(byId('review-rebuilt').textContent).toBe('0 of 3 rebuilt emails will be in the PDF.');
-    expect(announced).toEqual(['0 of 3 rebuilt emails will be in the PDF.']);
+    // Off: the counts do not mention rebuilt emails at all, and the emails line is announced instead (so no older rebuilt line stays in the status line).
+    expect(byId('review-rebuilt').textContent).toBe('');
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+    expect(byId('review-messages').textContent).toBe('1 email found.');
+    expect(announced).toEqual(['1 of 1 email will be in the PDF.']);
+    expect(isHidden(byId('rebuilt-switch'))).toBe(false); // still there, to turn it back on
     expect(review.includedPositions()).toEqual([0]); // the real email is not touched
     tick(all, true);
     expect(rebuiltItems().some(isHidden)).toBe(false);
     expect(review.includedRebuilt()).toHaveLength(3);
     expect(announced.at(-1)).toBe('3 of 3 rebuilt emails will be in the PDF.');
+    expect(isHidden(byId('review-rebuilt'))).toBe(false);
+    expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
   });
 
   it('a card unticked stays in the list, dimmed and marked "Not in the PDF"', () => {
@@ -440,9 +446,15 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(line.textContent).toBe('');
   });
 
-  it('"Put everything in the PDF" ticked: every card stays, marked out of the PDF, counted out; unticked: exactly as before (user decision 2026-10-28, task 7.8b)', () => {
+  it('"Print full original text" ticked: the switch is unticked and disabled, every card leaves the list, none in the PDF; unticked: exactly as before (user decision 2026-10-29, task 7.8c)', () => {
     let everything = false;
     mount({}, { unfoldEverything: () => everything });
+    /** What src/ui/page.ts does after the full-text checkbox changed. */
+    const changed = (): string => {
+      const line = review.everythingChanged();
+      preview.refreshRebuilt();
+      return line;
+    };
     const result = engineOf('12-order-3-alice-gmail.eml', LAST);
     show(result);
     // A state worth restoring: one card unticked, and one card taken from a copy (its own email unticked).
@@ -461,66 +473,128 @@ describe('the switch, the checkboxes and the counts', () => {
     const before = snapshot();
     const beforeIds = review.includedRebuilt().map((r) => r.id);
     const beforeLine = byId('review-rebuilt').textContent;
+    const beforePositions = review.includedPositions();
     const count = rebuiltItems().length;
+    const all = byId('rebuilt-include-all');
+    const hint = byId('rebuilt-off-hint');
     expect(beforeIds.length).toBeGreaterThan(0);
-    expect(before.some((s) => s.endsWith('|false|In the PDF: taken from #' + String(result.positionByIndex[result.reconstructed[e.copies[0]!]!.sourceIndex]! + 1)))).toBe(true);
+    expect(before.some((s) => s.includes('|In the PDF: taken from #'))).toBe(true);
+    expect(all.checked).toBe(true);
+    expect(all.hasAttribute('disabled')).toBe(false);
+    expect(all.hasAttribute('aria-describedby')).toBe(false);
+    expect(isHidden(hint)).toBe(true);
+    expect(hint.textContent).toBe(t('rebuilt.offWhileFullText'));
+
+    const beforeMessages = byId('review-messages').textContent;
+    expect(beforeMessages).toBe(`2 emails found, ${String(count)} earlier emails rebuilt from quoted text.`);
 
     everything = true;
-    const line = review.everythingChanged();
-    expect(line).toBe(`0 of ${String(count)} rebuilt emails will be in the PDF.`);
-    expect(byId('review-rebuilt').textContent).toBe(line);
+    // Nothing about rebuilt emails is said or counted while it is ticked: the emails line is announced instead.
+    expect(changed()).toBe('1 of 2 emails will be in the PDF.');
+    expect(byId('review-rebuilt').textContent).toBe('');
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+    expect(byId('review-messages').textContent).toBe('2 emails found.');
     expect(review.includedRebuilt()).toEqual([]);
-    expect(byId('rebuilt-include-all').checked).toBe(true);
-    for (const card of rebuiltItems()) {
-      // Still in the list (collapse, never delete), dimmed, with its own tick kept.
-      expect(isHidden(card)).toBe(false);
-      expect(card.getAttribute('data-included')).toBe('false');
-      expect(isHidden(one(card, 'excluded-note'))).toBe(false);
-      expect(isHidden(one(card, 'rebuilt-pdf-source'))).toBe(true);
-    }
+    expect(review.rebuiltShown()).toBe(false);
+    // The switch: unticked, disabled, described by the hint (never shown itself).
+    expect(all.checked).toBe(false);
+    expect(all.hasAttribute('disabled')).toBe(true);
+    expect(all.getAttribute('aria-describedby')).toBe('rebuilt-off-hint');
+    expect(isHidden(hint)).toBe(true);
+    expect(isHidden(byId('rebuilt-switch'))).toBe(false);
+    // Every card leaves the list, exactly as with the switch off; none is dimmed and left in instead.
+    expect(rebuiltItems().every(isHidden)).toBe(true);
+    for (const card of rebuiltItems()) expect(card.getAttribute('data-included')).toBe('false');
+    // The real emails are not touched; their cards (with every character of their text) stay.
+    expect(realItems().some(isHidden)).toBe(false);
+    expect(review.includedPositions()).toEqual(beforePositions);
+    // Every card's own tick is kept.
     expect(rebuiltItems().map((c) => one(c, 'include-checkbox').checked)).toEqual(before.map((s) => s.startsWith('true')));
-    // Unticked: "Not in the PDF"; ticked with an email it was read from in
-    // the PDF (its note was hidden before): the "Put everything" note;
-    // ticked with every such email left out: still "the email it comes from
-    // is left out" (its text is not in the PDF either way).
-    rebuiltItems().forEach((card, k) => {
-      const [wasTicked, , , noteWasHidden] = before[k]!.split('|');
-      const expected = wasTicked !== 'true' ? t('review.excluded') : noteWasHidden === 'true' ? t('rebuilt.everythingExcluded') : t('rebuilt.sourceExcluded');
-      expect(one(card, 'excluded-note').textContent).toBe(expected);
-    });
-    expect(rebuiltItems().some((c) => one(c, 'excluded-note').textContent === t('rebuilt.everythingExcluded'))).toBe(true);
-    // The real emails are not touched.
-    expect(review.includedPositions()).not.toContain(own);
-    // A tick changed meanwhile still counts nothing in, and is kept.
-    tick(one(other, 'include-checkbox'), true);
+    // A real email ticked meanwhile: still no rebuilt email shown or in the PDF.
+    tick(boxOf(own), true);
     expect(review.includedRebuilt()).toEqual([]);
-    expect(one(other, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
-    tick(one(other, 'include-checkbox'), false);
-    // Review round 2: a ticked card whose source emails are ALL unticked says
-    // so, not "its text is already in the email it comes from" (false then).
-    const cardE = rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === String(e.id))!;
-    expect(one(cardE, 'include-checkbox').checked).toBe(true);
-    expect(one(cardE, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
-    const copySources = [...new Set(e.copies.map((c) => result.positionByIndex[result.reconstructed[c]!.sourceIndex]!))];
-    for (const p of copySources) tick(boxOf(p), false);
-    expect(isHidden(one(cardE, 'excluded-note'))).toBe(false);
-    expect(one(cardE, 'excluded-note').textContent).toBe(t('rebuilt.sourceExcluded'));
-    expect(review.includedRebuilt()).toEqual([]);
-    for (const p of copySources) tick(boxOf(p), true);
-    expect(one(cardE, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
+    expect(rebuiltItems().every(isHidden)).toBe(true);
+    tick(boxOf(own), false);
     // Written again in the page language.
     setLocale('nl');
     review.relabel();
-    const ticked = rebuiltItems().find((c) => one(c, 'include-checkbox').checked)!;
-    expect(one(ticked, 'excluded-note').textContent).toBe(t('rebuilt.everythingExcluded'));
-    expect(one(ticked, 'excluded-note').textContent).toMatch(/^Niet in de PDF/);
+    expect(hint.textContent).toBe(t('rebuilt.offWhileFullText'));
+    expect(hint.textContent).toMatch(/^Niet beschikbaar zolang/);
+    expect(all.hasAttribute('disabled')).toBe(true);
+    // The language change does not bring the rebuilt part of the counts back.
+    expect(byId('review-messages').textContent).toBe(messagesText(result.counts));
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
     setLocale('en');
     review.relabel();
+    expect(byId('review-messages').textContent).toBe('2 emails found.');
 
     everything = false;
-    expect(review.everythingChanged()).toBe(beforeLine);
+    expect(changed()).toBe(beforeLine);
+    expect(byId('review-messages').textContent).toBe(beforeMessages);
+    expect(isHidden(byId('review-rebuilt'))).toBe(false);
+    expect(all.checked).toBe(true);
+    expect(all.hasAttribute('disabled')).toBe(false);
+    expect(all.hasAttribute('aria-describedby')).toBe(false);
     expect(snapshot()).toEqual(before);
     expect(review.includedRebuilt().map((r) => r.id)).toEqual(beforeIds);
+    expect(review.rebuiltShown()).toBe(true);
+  });
+
+  it('"Print full original text" ticked while the switch was off, then unticked: the switch stays off (task 7.8c)', () => {
+    let everything = false;
+    mount({}, { unfoldEverything: () => everything });
+    const changed = (): string => {
+      const line = review.everythingChanged();
+      preview.refreshRebuilt();
+      return line;
+    };
+    show(engineOf(LAST));
+    tick(one(rebuiltItems()[1] as FakeElement, 'include-checkbox'), false);
+    const all = byId('rebuilt-include-all');
+    tick(all, false);
+    expect(rebuiltItems().every(isHidden)).toBe(true);
+    everything = true;
+    expect(changed()).toBe('1 of 1 email will be in the PDF.');
+    expect(all.checked).toBe(false);
+    expect(all.hasAttribute('disabled')).toBe(true);
+    everything = false;
+    // Still off: nothing about rebuilt emails.
+    expect(changed()).toBe('1 of 1 email will be in the PDF.');
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+    expect(byId('review-messages').textContent).toBe('1 email found.');
+    expect(all.checked).toBe(false);
+    expect(all.hasAttribute('disabled')).toBe(false);
+    expect(rebuiltItems().every(isHidden)).toBe(true);
+    expect(review.includedRebuilt()).toEqual([]);
+    // Turned on by the reader: the cards come back with their own ticks.
+    tick(all, true);
+    expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
+    expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF.');
+    expect(rebuiltItems().some(isHidden)).toBe(false);
+    expect(rebuiltItems().map((c) => one(c, 'include-checkbox').checked)).toEqual([true, false, true]);
+    expect(review.includedRebuilt()).toHaveLength(2);
+  });
+
+  it('a new result while "Print full original text" is ticked keeps the switch disabled; "Clear everything" enables it again (task 7.8c)', () => {
+    let everything = false;
+    mount({}, { unfoldEverything: () => everything });
+    show(engineOf(LAST));
+    everything = true;
+    review.everythingChanged();
+    preview.refreshRebuilt();
+    show(engineOf('70-no-date.eml', LAST));
+    const all = byId('rebuilt-include-all');
+    expect(all.checked).toBe(false);
+    expect(all.hasAttribute('disabled')).toBe(true);
+    expect(rebuiltItems()).toHaveLength(3);
+    expect(rebuiltItems().every(isHidden)).toBe(true);
+    expect(review.includedRebuilt()).toEqual([]);
+    preview.reset();
+    review.reset();
+    everything = false; // pdfLabels.reset unticks it right after (src/ui/page.ts)
+    expect(all.checked).toBe(true);
+    expect(all.hasAttribute('disabled')).toBe(false);
+    expect(all.hasAttribute('aria-describedby')).toBe(false);
   });
 
   it('everythingChanged gives no line when nothing was rebuilt', () => {
@@ -569,7 +643,9 @@ describe('the switch, the checkboxes and the counts', () => {
     // The switch leaves it out with the others: off -> the stand-in is hidden too, on -> shown again.
     const all = byId('rebuilt-include-all');
     tick(all, false);
-    expect(byId('review-rebuilt').textContent).toBe('0 of 3 rebuilt emails will be in the PDF.');
+    expect(byId('review-rebuilt').textContent).toBe('');
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+    expect(byId('review-messages').textContent).toBe('1 email found.');
     expect(isHidden(standIn)).toBe(true);
     expect(rebuiltItems().every(isHidden)).toBe(true);
     expect(realItems().some(isHidden)).toBe(false);
@@ -579,10 +655,33 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(newStandIn).not.toBe(standIn);
     expect(hasClass(newStandIn, 'message-failed')).toBe(true);
     expect(rebuiltItems().every(isHidden)).toBe(true);
+    // A new result while off: still nothing about rebuilt emails in the counts.
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+    expect(byId('review-messages').textContent).toBe('1 email found.');
     tick(all, true);
     expect(isHidden(newStandIn)).toBe(false);
     expect(rebuiltItems().some(isHidden)).toBe(false);
     expect(byId('review-rebuilt').textContent).toBe('3 of 3 rebuilt emails will be in the PDF.');
+    expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
+  });
+
+  it('a language change while the switch is off does not bring back the rebuilt part of the counts (task 7.8c)', () => {
+    show(engineOf(LAST));
+    const all = byId('rebuilt-include-all');
+    tick(all, false);
+    setLocale('nl');
+    review.relabel();
+    expect(byId('review-messages').textContent).toBe(messagesText(engineOf(LAST).counts));
+    expect(byId('review-messages').textContent).not.toBe(messagesText(engineOf(LAST).counts, 3));
+    expect(byId('review-rebuilt').textContent).toBe('');
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+    // Back on (still in Dutch): the rebuilt part comes back, in the page language.
+    tick(all, true);
+    expect(byId('review-messages').textContent).toBe(messagesText(engineOf(LAST).counts, 3));
+    expect(byId('review-rebuilt').textContent).toBe(t('counts.rebuiltIncluded', { included: 3, count: 3 }));
+    setLocale('en');
+    review.relabel();
+    expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
   });
 
   it('messagesText adds the rebuilt count only when there is one', () => {
@@ -602,5 +701,123 @@ describe('problems while rebuilding', () => {
     expect(notes).toEqual([t('warnings.rebuild.reconstruct-limit')]);
     expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
     expect(noteText({ kind: 'rebuild', code: 'reconstruct-failed' })).toBe(t('warnings.rebuild.reconstruct-failed'));
+  });
+
+  /** LAST (3 rebuilt emails) with a "could not (all) be rebuilt" note on its email, and optionally a parse note too. */
+  const withRebuildNote = (code: 'reconstruct-failed' | 'reconstruct-limit', parseNote = false): EngineResult => {
+    const base = engineOf(LAST);
+    const m = base.messages[0];
+    if (m === undefined) throw new Error('no message');
+    const messages = parseNote ? [{ ...m, parserWarnings: [...m.parserWarnings, 'html-body-truncated' as const] }] : base.messages;
+    return { ...base, messages, reconstructionWarnings: [{ index: m.index, code }] };
+  };
+  const notesOf = (item: FakeElement): FakeElement[] => withClass(item, 'message-note');
+  const notesListOf = (item: FakeElement): FakeElement => one(item, 'message-notes');
+
+  it.each(['reconstruct-failed', 'reconstruct-limit'] as const)(
+    'the "%s" note is hidden and not counted while the switch is off, and back when it is on (PM decision, task 7.8c)',
+    (code) => {
+      show(withRebuildNote(code));
+      const item = realItems()[0] as FakeElement;
+      expect(notesOf(item).map((n) => n.textContent)).toEqual([t(`warnings.rebuild.${code}`)]);
+      expect(isHidden(notesListOf(item))).toBe(false);
+      expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+      const all = byId('rebuilt-include-all');
+      tick(all, false);
+      expect(notesOf(item).every(isHidden)).toBe(true);
+      expect(isHidden(notesListOf(item))).toBe(true); // nothing left in the list
+      expect(byId('review-notes').textContent).toBe('');
+      expect(isHidden(byId('review-notes'))).toBe(true);
+      // A language change keeps them hidden.
+      setLocale('nl');
+      review.relabel();
+      expect(notesOf(item).every(isHidden)).toBe(true);
+      expect(isHidden(byId('review-notes'))).toBe(true);
+      setLocale('en');
+      review.relabel();
+      tick(all, true);
+      expect(notesOf(item).some(isHidden)).toBe(false);
+      expect(isHidden(notesListOf(item))).toBe(false);
+      expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+      expect(isHidden(byId('review-notes'))).toBe(false);
+    },
+  );
+
+  it('the "could not be rebuilt" note is hidden and not counted while "Print full original text" is ticked; other notes stay (task 7.8c)', () => {
+    let everything = false;
+    mount({}, { unfoldEverything: () => everything });
+    show(withRebuildNote('reconstruct-limit', true));
+    const item = realItems()[0] as FakeElement;
+    const texts = [t('warnings.parse.html-body-truncated'), t('warnings.rebuild.reconstruct-limit')];
+    expect(notesOf(item).map((n) => n.textContent)).toEqual(texts);
+    everything = true;
+    review.everythingChanged();
+    // The parse note stays, so the email still has notes and is still counted.
+    expect(notesOf(item).map((n) => `${n.textContent}|${String(isHidden(n))}`)).toEqual([`${texts[0]}|false`, `${texts[1]}|true`]);
+    expect(isHidden(notesListOf(item))).toBe(false);
+    expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+    everything = false;
+    review.everythingChanged();
+    expect(notesOf(item).some(isHidden)).toBe(false);
+  });
+
+  it('an email whose only note is "could not be rebuilt", put in the list while the switch is off, shows no note and is not counted', () => {
+    show(engineOf(LAST));
+    tick(byId('rebuilt-include-all'), false);
+    // New files (the whole set is run again) while the switch is off.
+    show(withRebuildNote('reconstruct-failed'));
+    const item = realItems()[0] as FakeElement;
+    expect(notesOf(item).every(isHidden)).toBe(true);
+    expect(isHidden(notesListOf(item))).toBe(true);
+    expect(isHidden(byId('review-notes'))).toBe(true);
+    tick(byId('rebuilt-include-all'), true);
+    expect(notesOf(item).some(isHidden)).toBe(false);
+    expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+  });
+
+  /** One email with nothing rebuilt, only a "could not be rebuilt" note. */
+  const notesOnly = (): EngineResult => {
+    const base = engineOf('10-order-1-alice.eml');
+    const m = base.messages[0];
+    if (m === undefined) throw new Error('no message');
+    return { ...base, reconstructionWarnings: [{ index: m.index, code: 'reconstruct-failed' }] };
+  };
+
+  it('the switch stays shown for a note-only result while it is off, so the note can be shown again (task 7.8c review)', () => {
+    show(engineOf(LAST));
+    tick(byId('rebuilt-include-all'), false);
+    show(notesOnly());
+    expect(rebuiltItems()).toHaveLength(0);
+    const all = byId('rebuilt-include-all');
+    expect(isHidden(byId('rebuilt-switch'))).toBe(false);
+    expect(isHidden(all)).toBe(false);
+    expect(all.checked).toBe(false);
+    const item = realItems()[0] as FakeElement;
+    expect(notesOf(item).every(isHidden)).toBe(true);
+    expect(isHidden(byId('review-notes'))).toBe(true);
+    tick(all, true);
+    expect(notesOf(item).map((n) => `${n.textContent}|${String(isHidden(n))}`)).toEqual([`${t('warnings.rebuild.reconstruct-failed')}|false`]);
+    expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+    // Announced: the "N of M emails will be in the PDF" line (there is no rebuilt line).
+    expect(announced.at(-1)).toBe(byId('review-included').textContent);
+    expect(announced.at(-1)).not.toBe('');
+  });
+
+  it('the switch is shown, ticked, for a note-only result while it is on (task 7.8c review)', () => {
+    show(notesOnly());
+    const all = byId('rebuilt-include-all');
+    expect(isHidden(byId('rebuilt-switch'))).toBe(false);
+    expect(isHidden(all)).toBe(false);
+    expect(all.checked).toBe(true);
+    const item = realItems()[0] as FakeElement;
+    expect(notesOf(item).some(isHidden)).toBe(false);
+    expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+    expect(isHidden(byId('review-rebuilt'))).toBe(true);
+  });
+
+  it('the switch is hidden when nothing was rebuilt and no email has a "could not be rebuilt" note', () => {
+    show(engineOf('10-order-1-alice.eml'));
+    expect(isHidden(byId('rebuilt-switch'))).toBe(true);
+    expect(isHidden(byId('rebuilt-include-all'))).toBe(true);
   });
 });

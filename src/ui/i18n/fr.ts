@@ -281,21 +281,23 @@ export const fr: Messages = {
     dateAbout: 'vers {date}',
     dateAsWritten: 'Telle qu’écrite dans la citation\u00A0: {text}',
     dateUnreadable: '(date illisible)',
-    includeAll: 'Inclure les e-mails antérieurs reconstitués à partir du texte cité',
+    // NEEDS USER PROOFREADING (task 7.8c).
+    rebuildConversation: 'Reconstituer la conversation à partir des réponses',
+    // NEEDS USER PROOFREADING (task 7.8c).
+    offWhileFullText: 'Indisponible tant que «\u00A0Imprimer le texte d’origine complet\u00A0» est coché.',
     itemFailed: 'Un problème est survenu à l’affichage de cet e-mail reconstitué. Son texte se trouve toujours dans l’e-mail d’où il est tiré.',
     // NEEDS USER PROOFREADING (task 7.7 draft, see the top of this file).
     sourceExcluded: 'Pas dans le PDF\u00A0: l’e-mail d’où il est tiré est laissé de côté',
     // NEEDS USER PROOFREADING (task 7.7).
     pdfSource: 'Dans le PDF\u00A0: tiré de {number}',
-    // NEEDS USER PROOFREADING (task 7.8b).
-    everythingExcluded: 'Pas dans le PDF tant que «\u00A0Tout mettre dans le PDF\u00A0» est coché\u00A0: son texte est déjà dans l’e-mail d’où il est tiré',
   },
 
   pdf: {
-    everything: 'Tout mettre dans le PDF (ne rien laisser de côté)',
-    // NEEDS USER PROOFREADING (task 7.8b).
+    // NEEDS USER PROOFREADING (task 7.8c).
+    everything: 'Imprimer le texte d’origine complet (citations et signatures comprises)',
+    // Wording given by the user (2026-10-29, task 7.8c).
     everythingNote:
-      'Si cette case est cochée, chaque e-mail coché figure en entier dans le PDF, e-mails antérieurs cités compris\u00A0: le même texte peut donc apparaître plusieurs fois. Laissez-la décochée pour un PDF plus clair. Tant qu’elle est cochée, les e-mails reconstitués ne sont pas mis dans le PDF\u00A0: ils ne feraient que répéter le texte cité.',
+      'Si cette case est cochée, chaque e-mail coché figure en entier dans le PDF, e-mails antérieurs cités compris\u00A0: le même texte peut donc apparaître plusieurs fois. Laissez-la décochée pour un PDF plus clair.',
     updating: 'Vérification de ce qui va dans le PDF…',
     failed: 'L’outil n’a pas pu déterminer quelles parties le PDF laisse de côté, les parties repliées ne sont donc pas signalées.',
     label: {

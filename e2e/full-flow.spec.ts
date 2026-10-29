@@ -604,7 +604,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
       await page.keyboard.press('Space');
       await expect(page.locator('#preview-list details.fold[open]')).toHaveCount(0);
     } else if (focus.tag === 'INPUT' && (await here.getAttribute('id')) === 'pdf-everything') {
-      // "Put everything in the PDF": every label says "In the PDF", then back.
+      // "Print full original text": every label says "In the PDF", then back.
       await expect(here).toHaveAccessibleName(en.pdf.everything);
       const labels = page.locator('#preview-list .pdf-label:visible');
       const ready = page.locator('#preview-list[data-pdf-labels="ready"]');
@@ -646,7 +646,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
 
   // The stops, in order: the language picker (its ticked radio), the privacy
   // panel's summary, step 1's help, choose, clear, zone, folded-text toggle,
-  // "put everything in the PDF", then per email its checkbox and its folded
+  // "Print full original text", then per email its checkbox and its folded
   // blocks, and the download button last.
   const tags = walk.map((f) => f.tag);
   expect(tags.slice(0, 8)).toEqual(['INPUT', 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);

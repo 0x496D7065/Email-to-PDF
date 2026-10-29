@@ -5,10 +5,11 @@
 //
 // States: the empty page, the privacy panel open, step 1's help open, files
 // being read, the list ready (with a file that failed, notes, a very long
-// email, folded text shown, an email left out), "Put everything in the PDF",
+// email, folded text shown, an email left out), "Print full original text",
 // a PDF made, a PDF that could not be made, and after "Clear everything";
 // also earlier emails rebuilt from quoted text (one left out, then all of
-// them with the switch). In each:
+// them with the switch, then "Print full original text" ticked: the switch
+// disabled, named, described, still 24 x 24, and skipped by Tab). In each:
 // - every control is at least 24 x 24 CSS pixels (2.5.8), has a name, and
 //   shows a focus outline of at least 2 px with 3:1 contrast against what
 //   is around it (2.4.7, 2.4.11, 1.4.11);
@@ -247,8 +248,11 @@ async function measureControls(page: Page): Promise<Control[]> {
       }
       return [255, 255, 255, 1];
     };
+    // A disabled control cannot take the focus, so it has no focus outline
+    // to measure (the one disabled control, the rebuilt switch while "Print
+    // full original text" is ticked, is checked on its own below).
     const found = [...document.querySelectorAll<HTMLElement>(selector)]
-      .filter((e) => e.checkVisibility())
+      .filter((e) => e.checkVisibility() && !(e instanceof HTMLInputElement && e.disabled))
       .map((e) => {
         const rect = e.getBoundingClientRect();
         e.focus();
@@ -360,7 +364,7 @@ for (const width of [1280, 320]) {
     expect(await focusedId(page)).toBe('include-2');
     await expectAccessibleState(page, 'list ready', 12);
 
-    // --- "Put everything in the PDF": every label says "In the PDF". --------
+    // --- "Print full original text": every label says "In the PDF". -------
     await page.locator('#pdf-everything').focus();
     await page.keyboard.press('Space');
     await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready');
@@ -676,6 +680,26 @@ for (const width of [1280, 320]) {
     await expect(page.locator('#preview-list > li.message-rebuilt').first()).toBeHidden();
     await expectAccessibleState(page, 'rebuilt emails left out', 8);
     expect(await focusedId(page)).toBe('rebuilt-include-all');
+    // Switch back on, then "Print full original text" ticked with the
+    // keyboard: the switch is unticked and disabled, the focus stays on the
+    // full-text checkbox, and Tab skips the switch and the hidden cards.
+    await page.keyboard.press('Space');
+    await expect(page.locator('#preview-list > li.message-rebuilt').first()).toBeVisible();
+    await page.locator('#pdf-everything').focus();
+    await page.keyboard.press('Space');
+    const rebuildSwitch = page.locator('#rebuilt-include-all');
+    await expect(rebuildSwitch).toBeDisabled();
+    await expect(rebuildSwitch).not.toBeChecked();
+    await expect(rebuildSwitch).toHaveAccessibleName(en.rebuilt.rebuildConversation);
+    await expect(rebuildSwitch).toHaveAccessibleDescription(en.rebuilt.offWhileFullText);
+    const switchBox = await rebuildSwitch.boundingBox();
+    expect(switchBox!.width).toBeGreaterThanOrEqual(24);
+    expect(switchBox!.height).toBeGreaterThanOrEqual(24);
+    await expect(page.locator('#preview-list > li.message-rebuilt').first()).toBeHidden();
+    await expectAccessibleState(page, 'full original text, rebuilt switch disabled', 7);
+    expect(await focusedId(page)).toBe('pdf-everything');
+    await page.keyboard.press('Tab');
+    expect(await focusedId(page)).toBe('include-0');
     await expectNothingLeftThePage(page);
   });
 }

@@ -32,14 +32,16 @@
 // it is in the PDF only while one of them is. The review applies both
 // (src/ui/review.ts, includedRebuilt) and the PDF applies the follow-source
 // rule again with its own list of emails (src/pdf/model.ts, planPdfOrder).
-// And while "Put everything in the PDF" is ticked (OutputPolicy
-// .unfoldEverything; user decision 2026-10-28, task 7.8b), NO rebuilt
-// message goes into the PDF: the source emails are then printed whole, quoted
-// history included, so a rebuilt message would only print the same text a
-// second time (rebuiltInPdf's `unfoldEverything` option, the review and the
-// PDF model). The choices above are not touched by it: unticking "Put
-// everything" brings back exactly the previous state. The cards stay in the
-// preview (collapse, never delete).
+// And while "Print full original text" is ticked (OutputPolicy
+// .unfoldEverything; user decisions 2026-10-28 and 2026-10-29, tasks 7.8b
+// and 7.8c), NO rebuilt message is shown or goes into the PDF: the source
+// emails are then printed whole, quoted history included, so a rebuilt
+// message would only print the same text a second time (rebuiltInPdf's
+// `unfoldEverything` option, the review and the PDF model). The review then
+// shows the switch unticked and disabled. The choices above are not touched
+// by it: unticking "Print full original text" brings back exactly the
+// previous state. The quoted text stays in its source email's card, folded
+// as usual (collapse, never delete).
 //
 // Pure functions, no DOM (README.md, rule R7).
 
@@ -215,7 +217,7 @@ export interface RebuiltInPdf {
 
 /** Options of rebuiltInPdf. */
 export interface RebuiltInPdfOptions {
-  /** "Put everything in the PDF" is ticked (OutputPolicy.unfoldEverything): no rebuilt entry is in the PDF (see the top). */
+  /** "Print full original text" is ticked (OutputPolicy.unfoldEverything): no rebuilt entry is in the PDF (see the top). */
   readonly unfoldEverything?: boolean;
 }
 
@@ -232,7 +234,7 @@ export interface RebuiltInPdfOptions {
  * exactly the ones read from that email. Every other source in the PDF is
  * listed in `also` ("Same quoted text also in email ...").
  *
- * With `options.unfoldEverything` ("Put everything in the PDF" ticked, user
+ * With `options.unfoldEverything` ("Print full original text" ticked, user
  * decision 2026-10-28) the answer is always null: the source emails are
  * printed whole, so the rebuilt entry would only repeat their quoted text.
  */

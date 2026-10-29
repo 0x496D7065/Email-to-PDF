@@ -15,11 +15,15 @@
 // 3. The email they were taken from unticked (another email added, so a
 //    PDF can still be made): the cards are marked "Not in the PDF", and
 //    nothing rebuilt is in the PDF (user decision Q1 (a)).
-// 4. "Put everything in the PDF" ticked (user decision 2026-10-28, task
-//    7.8b): its note is shown and read with it, the cards stay but are
-//    marked out, the PDF holds the email whole (each quoted text once) and
-//    nothing rebuilt; unticked, the earlier choices come back exactly.
-// 5. That note at 320 px wide: it wraps, no sideways scrolling.
+// 4. "Print full original text" ticked (user decision 2026-10-29, task
+//    7.8c): its note is shown and read with it, the "Rebuild conversation
+//    from replies" switch is unticked and disabled (with a short accessible
+//    reason), no rebuilt card is shown, the keyboard skips the switch, the
+//    PDF holds the email whole (each quoted text once) and nothing rebuilt;
+//    unticked, the switch and every card's tick come back exactly, also
+//    when the switch was off before (it stays off).
+// 5. That note and the disabled switch at 320 px wide and at 200% zoom:
+//    they wrap, no sideways scrolling.
 //
 // Throughout (see e2e/support/watch.ts): after the page's own files, only
 // the own-origin blob: URLs of the inlined workers and, at most once, the
@@ -158,8 +162,9 @@ test('by default the PDF holds the three rebuilt emails, marked, before the emai
 test('the switch off: nothing rebuilt in the PDF', async ({ page }) => {
   test.setTimeout(90_000);
   await open(page, [LAST], 4);
-  await page.getByRole('checkbox', { name: en.rebuilt.includeAll }).uncheck();
-  await expect(page.locator('#review-rebuilt')).toHaveText('0 of 3 rebuilt emails will be in the PDF.');
+  await page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation }).uncheck();
+  await expect(page.locator('#review-rebuilt')).toBeHidden();
+  await expect(page.locator('#review-messages')).toHaveText('1 email found.');
   const all = (await makePdfText(page)).join(' ');
   expect(all).toContain('Email 1');
   expect(all).not.toContain(HEADING);
@@ -196,36 +201,53 @@ test('the email they were taken from unticked: the cards say so, and nothing reb
   await expectNothingLeftThePage(page, 2);
 });
 
-test('"Put everything in the PDF" ticked: a note says why, the cards stay but are out, and the PDF holds the email whole with nothing rebuilt; unticked: back (task 7.8b)', async ({ page }) => {
+test('"Print full original text" ticked: the switch is unticked and disabled, no rebuilt card, the PDF holds the email whole with nothing rebuilt; unticked: back exactly (task 7.8c)', async ({ page }) => {
   test.setTimeout(120_000);
   await open(page, [LAST], 4);
   const everything = page.getByRole('checkbox', { name: en.pdf.everything });
   const note = page.locator('#pdf-everything-note');
+  const rebuild = page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation });
+  const hint = page.locator('#rebuilt-off-hint');
   // The note is always there, read with the checkbox.
   await expect(note).toBeVisible();
   await expect(note).toHaveText(en.pdf.everythingNote);
   await expect(everything).toHaveAttribute('aria-describedby', 'pdf-everything-note');
   await expect(everything).toHaveAccessibleDescription(en.pdf.everythingNote);
+  // The switch: on, usable, no description; its hint is never shown.
+  await expect(rebuild).toBeChecked();
+  await expect(rebuild).toBeEnabled();
+  await expect(rebuild).toHaveAccessibleDescription('');
+  await expect(hint).toBeHidden();
   const cards = page.locator('#preview-list > li.message-rebuilt');
+  const source = page.locator('#preview-list > li:not(.message-rebuilt)');
   // One card unticked first: the state to come back to.
   await cards.first().getByRole('checkbox').uncheck();
   await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
 
   await everything.check();
-  await expect(page.locator('#review-rebuilt')).toHaveText('0 of 3 rebuilt emails will be in the PDF.');
-  await expect(page.locator('#status')).toContainText('0 of 3 rebuilt emails will be in the PDF.');
+  // Rebuilt emails are then not mentioned at all: no rebuilt line, no rebuilt part in the counts, nothing announced about them.
+  await expect(page.locator('#review-rebuilt')).toBeHidden();
+  await expect(page.locator('#review-messages')).toHaveText('1 email found.');
+  await expect(page.locator('#status')).not.toContainText('rebuilt');
+  await expect(page.locator('#status')).toContainText('1 of 1 email will be in the PDF.');
+  // The switch: unticked, disabled (also for assistive technology), with a short reason.
+  await expect(rebuild).not.toBeChecked();
+  await expect(rebuild).toBeDisabled();
+  await expect(rebuild).toHaveAttribute('aria-describedby', 'rebuilt-off-hint');
+  await expect(rebuild).toHaveAccessibleDescription(en.rebuilt.offWhileFullText);
+  await expect(hint).toBeHidden();
+  // No rebuilt card is shown: exactly as with the switch off (no dimmed card left behind).
   await expect(cards).toHaveCount(3);
-  const ticks: boolean[] = [];
-  for (const card of await cards.all()) {
-    await expect(card).toBeVisible();
-    await expect(card).toHaveAttribute('data-included', 'false');
-    const ticked = await card.getByRole('checkbox').isChecked();
-    ticks.push(ticked);
-    await expect(card.locator('.excluded-note')).toHaveText(ticked ? en.rebuilt.everythingExcluded : en.review.excluded);
-    await expect(card.locator('.rebuilt-pdf-source')).toBeHidden();
-  }
-  expect(ticks).toEqual([false, true, true]);
-  await expect(page.getByRole('checkbox', { name: en.rebuilt.includeAll })).toBeChecked();
+  for (const card of await cards.all()) await expect(card).toBeHidden();
+  await expect(page.locator('#preview-list > li').filter({ visible: true })).toHaveCount(1);
+  // The email added keeps all its text: its quoted history is still there, folded, one click away.
+  await expect(source).toBeVisible();
+  await expect(source.locator('.fold').first()).toBeAttached();
+  await expect(source.locator('.message-body')).toContainText('Wednesday at 10:00 works for me.');
+  // The keyboard skips the disabled switch and the hidden cards.
+  await everything.focus();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#include-0')).toBeFocused();
   const all = (await makePdfText(page)).join(' ');
   expect(all).toContain('Email 1');
   expect(all).not.toContain(HEADING);
@@ -239,29 +261,81 @@ test('"Put everything in the PDF" ticked: a note says why, the cards stay but ar
 
   await everything.uncheck();
   await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+  await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
+  await expect(rebuild).toBeChecked();
+  await expect(rebuild).toBeEnabled();
+  await expect(rebuild).toHaveAccessibleDescription('');
+  const ticks = [false, true, true];
   for (const [k, card] of (await cards.all()).entries()) {
+    await expect(card).toBeVisible();
     await expect(card.getByRole('checkbox')).toBeChecked({ checked: ticks[k]! });
     await expect(card).toHaveAttribute('data-included', ticks[k]! ? 'true' : 'false');
   }
+  // The switch is a Tab stop again, right after the full-text checkbox.
+  await everything.focus();
+  await page.keyboard.press('Tab');
+  await expect(rebuild).toBeFocused();
   const again = (await makePdfText(page)).join(' ');
   expect(again.split(HEADING)).toHaveLength(3);
   expect(again).toContain('Rebuilt emails 2 earlier emails rebuilt from quoted text');
   await expectNothingLeftThePage(page, 2);
 });
 
-test('the "Put everything" note fits a 320 px wide screen and wraps, with no sideways scrolling', async ({ page }) => {
+test('the switch off, then "Print full original text" ticked and unticked: the switch stays off, and on again brings the cards back as they were (task 7.8c)', async ({ page }) => {
   test.setTimeout(90_000);
-  await page.setViewportSize({ width: 320, height: 640 });
   await open(page, [LAST], 4);
-  const note = page.locator('#pdf-everything-note');
-  await expect(note).toBeVisible();
-  const box = await note.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
-  // It wraps over several lines rather than running off the page.
-  expect(box!.height).toBeGreaterThan(40);
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
-  await expectNothingLeftThePage(page, 0);
+  const everything = page.getByRole('checkbox', { name: en.pdf.everything });
+  const rebuild = page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation });
+  const cards = page.locator('#preview-list > li.message-rebuilt');
+  await cards.nth(1).getByRole('checkbox').uncheck();
+  await rebuild.uncheck();
+  for (const card of await cards.all()) await expect(card).toBeHidden();
+  await everything.check();
+  await expect(rebuild).not.toBeChecked();
+  await expect(rebuild).toBeDisabled();
+  await everything.uncheck();
+  await expect(rebuild).toBeEnabled();
+  await expect(rebuild).not.toBeChecked();
+  await expect(page.locator('#review-rebuilt')).toBeHidden();
+  await expect(page.locator('#review-messages')).toHaveText('1 email found.');
+  for (const card of await cards.all()) await expect(card).toBeHidden();
+  const off = (await makePdfText(page)).join(' ');
+  expect(off).not.toContain(HEADING);
+  expect(off).not.toMatch(/rebuilt/i);
+  await rebuild.check();
+  await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+  await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
+  const ticks = [true, false, true];
+  for (const [k, card] of (await cards.all()).entries()) {
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('checkbox')).toBeChecked({ checked: ticks[k]! });
+  }
+  await expectNothingLeftThePage(page);
 });
+
+for (const [name, size] of [
+  ['320 px wide', { width: 320, height: 640 }],
+  ['200% zoom (640 CSS px wide)', { width: 640, height: 400 }],
+] as const) {
+  test(`the full-text note and the disabled switch fit a ${name} screen and wrap, with no sideways scrolling (task 7.8c)`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize(size);
+    await open(page, [LAST], 4);
+    await page.getByRole('checkbox', { name: en.pdf.everything }).check();
+    await expect(page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation })).toBeDisabled();
+    for (const selector of ['#pdf-everything-note', '#rebuilt-switch']) {
+      const part = page.locator(selector);
+      await expect(part).toBeVisible();
+      const box = await part.boundingBox();
+      expect(box, selector).not.toBeNull();
+      expect(box!.x, selector).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width, selector).toBeLessThanOrEqual(size.width);
+    }
+    // The note wraps over several lines rather than running off the page.
+    expect((await page.locator('#pdf-everything-note').boundingBox())!.height).toBeGreaterThan(size.width < 400 ? 40 : 18);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNothingLeftThePage(page, 0);
+  });
+}
+

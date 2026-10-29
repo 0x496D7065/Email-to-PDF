@@ -32,17 +32,19 @@
 // is announced (onRebuiltChange). The PDF shows the ones the review gives
 // (review.includedRebuilt(), task 7.7: ticked, switch on, and an email they
 // were read from in the PDF), at their place in time (src/pdf/model.ts).
-// While "Put everything in the PDF" is ticked, none of them is (user
-// decision 2026-10-28, task 7.8b): the review reads the PDF labels' policy
-// (unfoldEverything), and a change of that checkbox marks the cards again
-// and announces the new rebuilt line (everythingChanged). The PDF model
-// leaves them out under that policy too (src/pdf/model.ts).
+// While "Print full original text" is ticked, none of them is shown or in
+// the PDF, and the switch is unticked and disabled (user decision
+// 2026-10-29, task 7.8c): the review reads the PDF labels' policy
+// (unfoldEverything); a change of that checkbox sets the switch and the
+// cards again (everythingChanged), shows or hides every card
+// (preview.refreshRebuilt) and announces the new rebuilt line. The PDF
+// model leaves them out under that policy too (src/pdf/model.ts).
 //
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what
 // goes into the PDF drops a PDF made or being made (choicesChanged): files
-// added, a new result, an email ticked or unticked, "Put everything in the
-// PDF", the time zone, and new plans. So a PDF that no longer matches the
+// added, a new result, an email ticked or unticked, "Print full original
+// text", the time zone, and new plans. So a PDF that no longer matches the
 // page is never offered.
 //
 // "Clear everything" (README.md, rule R5: in memory only). The button is
@@ -56,8 +58,8 @@
 // - step 2 (preview.reset, review.reset): empties the list, cancels the
 //   chunks still waiting, puts the time zone and the "show quoted text"
 //   checkbox back to their defaults, forgets every include choice and
-//   empties the counts; (pdfLabels.reset) unticks "Put everything in the
-//   PDF", stops the planning still going and drops every plan;
+//   empties the counts; (pdfLabels.reset) unticks "Print full original
+//   text", stops the planning still going and drops every plan;
 // - step 3 (download.reset): stops a PDF being made (its worker is
 //   terminated), drops a finished one (its blob: URL is revoked, the
 //   "Download again" link removed);
@@ -74,8 +76,8 @@
 // Language (setLanguage, called by the picker in the header, src/ui/app.ts):
 // makes the new language the page language, then each part writes its own
 // words again from its own state (relabel: nothing is rebuilt, so ticks,
-// the time zone, open folds, "show quoted text", "Put everything in the
-// PDF", the plans, the focus and the scroll position all stay), sets
+// the time zone, open folds, "show quoted text", "Print full original
+// text", the plans, the focus and the scroll position all stay), sets
 // <html lang> and the title, and makes ONE announcement through step 3
 // (inputsChanged): the PDF's words and file name follow the language, so a
 // PDF made or being made is dropped like after any other change, and never
@@ -196,11 +198,13 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     // before is dropped (and said so with the new line). The PDF labels of
     // the real emails do not depend on it. Every rebuilt card (a stand-in
     // the review could not decorate too) is shown or hidden with the switch.
+    // No line ('': not expected here, the review gives '' only when the
+    // switch is hidden): only the drop, if any, is announced.
     onRebuiltChange: (announcement) => {
       preview.refreshRebuilt();
-      download.inputsChanged(announcement);
+      download.inputsChanged(announcement === '' ? undefined : announcement);
     },
-    // "Put everything in the PDF" ticked: no rebuilt email in the PDF (src/ui/review.ts).
+    // "Print full original text" ticked: no rebuilt email shown or in the PDF (src/ui/review.ts).
     unfoldEverything: () => pdfLabels.getPdfPolicy().unfoldEverything,
   });
   // The PDF labels of step 2 (src/ui/pdf-labels.ts): their checkbox sits in the preview's toolbar.
@@ -222,13 +226,14 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     // dropped on the user's change itself, whatever the labels then do with
     // their plans (they call neither when plans for those inputs are already
     // on their way). Dropping twice is harmless. The rebuilt cards follow
-    // the checkbox (none in the PDF while it is ticked): their new line is
-    // announced with the drop, when there are rebuilt emails.
-    // The PDF is dropped even if writing the cards again throws.
+    // the checkbox (none shown or in the PDF while it is ticked, the switch
+    // disabled): their new line is announced with the drop, when there are
+    // rebuilt emails. The PDF is dropped even if writing the cards again throws.
     onPolicyChange: () => {
       let line = '';
       try {
         line = review.everythingChanged();
+        preview.refreshRebuilt();
       } finally {
         download.inputsChanged(line === '' ? undefined : line);
       }
@@ -240,7 +245,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     toolbarItems: [pdfLabels.element, review.rebuiltSwitch],
     decorate: review.decorate,
     decorateRebuilt: review.decorateRebuilt,
-    rebuiltShown: () => review.rebuiltIncludeAll(),
+    rebuiltShown: () => review.rebuiltShown(),
     onRendered: (result) => {
       review.rendered(result);
       // Once the list is complete, an email without a decorated item counts as included (src/ui/review.ts).
@@ -291,7 +296,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       positions: plans.positions,
       plans: plans.plans,
       // The rebuilt emails ticked whose source email is in the PDF ([] when
-      // the switch is off, and under "Put everything in the PDF", whose plans
+      // the switch is off, and under "Print full original text", whose plans
       // these are: the PDF model leaves them out then anyway).
       rebuilt: plans.policy.unfoldEverything ? [] : review.includedRebuilt().map((r) => r.id),
       policy: plans.policy,

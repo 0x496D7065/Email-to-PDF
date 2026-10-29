@@ -154,14 +154,14 @@ The tool never throws message text away on its own:
   repeats (it is kept the first time). Each folded part in the preview says
   "In the PDF" or "Not in the PDF" and why. The details, including the
   known edge cases, are under [R6](#r6-collapse-never-delete).
-- **"Put everything in the PDF (leave nothing out)"**: this checkbox in
-  step 2 puts every part of every ticked email in the PDF, quoted earlier
-  emails included, so the same text may appear more than once. A short
-  note under the checkbox says so, and that leaving it unticked gives a
-  cleaner PDF. While it is ticked, the
-  [rebuilt emails](#earlier-emails-rebuilt-from-quoted-text) are left out
-  of the PDF, since their text is already in full in the email they come
-  from.
+- **"Print full original text (quoted replies and signatures
+  included)"**: this checkbox in step 2 puts every part of every ticked
+  email in the PDF, quoted earlier emails included, so the same text may
+  appear more than once. A short note under the checkbox says so, and that
+  leaving it unticked gives a cleaner PDF. While it is ticked, "Rebuild
+  conversation from replies" is unticked and greyed out, so no
+  [rebuilt email](#earlier-emails-rebuilt-from-quoted-text) is shown or
+  printed: their text is already in full in the email they come from.
 - **Duplicates are merged only when provably identical:** same text,
   subject, attachment names and sender, plus the same Message-ID (with
   close dates) or the same date, and one copy's recipients and other
@@ -214,22 +214,33 @@ shown, so an email may appear twice but is never wrongly hidden. An earlier
 email quoted in several of your emails is shown once when the copies agree,
 with a note naming the other emails.
 
-**Choosing what goes in the PDF.** Each rebuilt email has its own
-checkbox, and "Include earlier emails rebuilt from quoted text" in step 2
-leaves them all out at once. A rebuilt email also stays in the PDF only
-while at least one ticked email quotes it: when every email that quotes it
-is unticked, it leaves the PDF too (its card says so). When the email named
+**Choosing what goes in the PDF.** "Rebuild conversation from replies" in
+step 2 (ticked by default) turns this on or off. Ticked: the emails you
+added (their quoted history folded as usual) plus one rebuilt email per
+earlier reply found. Unticked: only the emails you added, with no rebuilt
+email in the list or in the PDF (the counts then do not mention rebuilt
+emails at all, and an email's note that its quoted emails could not be
+rebuilt is hidden too; both come back when you tick it again). The
+switch is shown when rebuilt emails were found, and also when an email's
+quoted emails could not be rebuilt (so that note can be shown again). Each
+rebuilt email also has its own
+checkbox. A rebuilt email stays in the PDF only while at least one ticked
+email quotes it: when every email that quotes it is unticked, it leaves
+the PDF too (its card says so). When the email named
 in its "Taken from" line is unticked but another ticked email quotes the
 same text, the PDF takes it from that other email, and the card says which.
 
-**"Put everything in the PDF".** When this is ticked, every ticked email
-is printed whole, its quoted earlier emails included. The rebuilt emails
-are then all left out of the PDF, whatever their own checkboxes and the
-switch say, because they would only repeat that quoted text. A note under
-the checkbox says this. Their cards stay in the preview, marked "Not in
-the PDF while "Put everything in the PDF" is ticked", and the counts say
-"0 of N rebuilt emails will be in the PDF". Nothing you chose is changed:
-untick it and the rebuilt emails come back exactly as you had set them.
+**"Print full original text".** When this is ticked, every ticked email
+is printed whole, its quoted earlier emails and signatures included.
+"Rebuild conversation from replies" is then unticked and greyed out (a
+screen reader hears why), so no rebuilt email is shown or printed, exactly
+as when you untick it yourself: they would only repeat that quoted text.
+The quoted text itself stays in the email it comes from, folded in the
+preview and printed in full in the PDF. Nothing you chose is changed:
+untick "Print full original text" and "Rebuild conversation from replies"
+and every rebuilt email's checkbox come back exactly as you had set them
+(if you had unticked "Rebuild conversation from replies" before, it stays
+unticked).
 
 **Limits.**
 
@@ -507,10 +518,13 @@ by default the PDF shows what each writer actually wrote.
   lines and the quote, is left out with it. Check the preview.
 
 The preview marks each folded part "In the PDF" or "Not in the PDF" with
-the reason, using the same rules as the PDF, and "Put everything in the PDF
-(leave nothing out)" puts every part in. While it is ticked, emails rebuilt
-from quoted text are left out of the PDF (their text is then already there,
-in full, in the email that quotes them); their cards stay in the preview.
+the reason, using the same rules as the PDF, and "Print full original text
+(quoted replies and signatures included)" puts every part in. While it is
+ticked, "Rebuild conversation from replies" is unticked and greyed out and
+no email rebuilt from quoted text is shown or printed: their text is then
+already there, in full, in the email that quotes them, which keeps all of
+it (folded in the preview, whole in the PDF). Unticking it brings back the
+earlier choices exactly.
 
 ### R7: Detection logic is pure and testable
 
