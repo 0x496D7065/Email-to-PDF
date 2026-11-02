@@ -413,10 +413,20 @@ describe('body', () => {
     expect(doc.emails[1]!.notes).toEqual([]);
   });
 
-  it('shows the whole body with unfoldEverything, whatever the plans say', () => {
+  /** The whole reply as the PDF shows it (task 8.1): its ">" marks removed, the quoted lines at level 1. */
+  const replyShown = reply.bodyText.trimEnd().replace(/^> ?/gmu, '');
+  const replyLevels = reply.bodyText
+    .trimEnd()
+    .split('\n')
+    .map((l) => (l.startsWith('>') ? 1 : 0));
+
+  it('shows the whole body with unfoldEverything, whatever the plans say, quote marks as levels', () => {
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
     const { doc } = build([question, reply].map(ok), { policy, plans: (r, p) => planOutput(p.map((k) => r.messages[k]!)) });
-    expect(bodyOf(doc.emails[1]!)).toBe(reply.bodyText.trimEnd());
+    expect(bodyOf(doc.emails[1]!)).toBe(replyShown);
+    expect(replyShown).toContain('wrote:\nHello Alice,\n\nCan the desks');
+    expect(doc.emails[1]!.bodyLevels).toEqual(replyLevels);
+    expect(replyLevels.filter((n) => n === 1)).toHaveLength(6);
   });
 
   it('keeps the whole body, with a note, when the plan is missing or invalid', () => {
@@ -430,7 +440,8 @@ describe('body', () => {
     for (const plans of cases) {
       const { doc } = build([ok(reply)], { plans });
       const e = doc.emails[0]!;
-      expect(bodyOf(e)).toBe(reply.bodyText.trimEnd());
+      expect(bodyOf(e)).toBe(replyShown);
+      expect(e.bodyLevels).toEqual(replyLevels);
       expect(e.flags.planFallback).toBe(true);
       expect(e.notes.map(text)).toEqual(['The whole email is shown: the tool could not work out which parts to leave out.']);
     }
@@ -457,8 +468,9 @@ describe('body', () => {
       keptAllBecauseEmpty: false,
       fallback: false,
     };
-    expect(pdfBodyText(body, plan, DEFAULT_OUTPUT_POLICY)).toEqual({ text: 'abc\ndef', planFallback: false });
-    expect(pdfBodyText(body, plan, { unfoldEverything: true })).toEqual({ text: body, planFallback: false });
+    // "def" began inside a line of the body: its offset (4) is not a line start for the quote prefixes (task 8.1).
+    expect(pdfBodyText(body, plan, DEFAULT_OUTPUT_POLICY)).toEqual({ text: 'abc\ndef', planFallback: false, notLineStarts: new Set([4]) });
+    expect(pdfBodyText(body, plan, { unfoldEverything: true })).toEqual({ text: body, planFallback: false, notLineStarts: new Set() });
   });
 
   it('pdfBodyText keeps the whole body when the ranges have a gap, overlap or go past the end', () => {
@@ -470,7 +482,7 @@ describe('body', () => {
       keptAllBecauseEmpty: false,
       fallback: false,
     });
-    const whole = { text: body, planFallback: true };
+    const whole = { text: body, planFallback: true, notLineStarts: new Set() };
     // A gap: [0, 3) then [5, 10) would silently drop "de".
     expect(pdfBodyText(body, plan([{ start: 0, end: 3, keep: true }, { start: 5, end: 10, keep: true }]), DEFAULT_OUTPUT_POLICY)).toEqual(whole);
     // An overlap: [0, 5) then [3, 10) would show "de" twice.
@@ -486,8 +498,8 @@ describe('body', () => {
     expect(pdfBodyText(body, null, DEFAULT_OUTPUT_POLICY)).toEqual(whole);
     expect(pdfBodyText(body, undefined, DEFAULT_OUTPUT_POLICY)).toEqual(whole);
     // The same ranges, valid: used as they are.
-    expect(pdfBodyText(body, plan([{ start: 0, end: 3, keep: true }, { start: 3, end: 10, keep: false }]), DEFAULT_OUTPUT_POLICY)).toEqual({ text: 'abc', planFallback: false });
-    expect(pdfBodyText('', plan([]), DEFAULT_OUTPUT_POLICY)).toEqual({ text: '', planFallback: false });
+    expect(pdfBodyText(body, plan([{ start: 0, end: 3, keep: true }, { start: 3, end: 10, keep: false }]), DEFAULT_OUTPUT_POLICY)).toEqual({ text: 'abc', planFallback: false, notLineStarts: new Set() });
+    expect(pdfBodyText('', plan([]), DEFAULT_OUTPUT_POLICY)).toEqual({ text: '', planFallback: false, notLineStarts: new Set() });
   });
 
   it('applies the display transforms and counts control characters', () => {

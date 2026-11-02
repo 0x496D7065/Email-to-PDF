@@ -295,10 +295,40 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
     expect(rebuiltOf(doc).map((e) => e.notes)).toEqual([[], [], []]);
     for (const e of rebuiltOf(doc)) {
       const r = result.reconstructed[e.rebuilt!.id]!;
-      expect(e.body.map(text)).toEqual(bodyLines(r.rebuilt.reconstructedText).lines.map(text));
+      const lines = bodyLines(r.rebuilt.reconstructedText);
+      expect(e.body.map(text)).toEqual(lines.lines.map(text));
+      expect(e.bodyLevels).toEqual(lines.levels);
       expect(e.body.map(text).join('\n')).not.toMatch(/^>/m);
       expect(e.attachments).toBeNull();
     }
+  });
+
+  it('shows a deeper quote left in its text as quote levels, as a real email does (task 8.1)', () => {
+    // A reply quoting Bob, whose own text quotes an older line with no header of its own (">>"):
+    // the rebuilt email is Bob's text, its quote marks removed by the engine; the older line keeps one ">".
+    const reply: NormalizedMessage = {
+      ...fixture(LAST),
+      messageId: 'quote-levels-1@example.test',
+      inReplyTo: null,
+      references: [],
+      subject: 'Re: Oak desks',
+      bodyText:
+        'Thanks, Bob.\n\nAlice\n\nOn Tue, 4 Mar 2025 at 09:00, Bob Sample <bob@furniture.example.test> wrote:\n> I agree with this point:\n>\n>> The desks are oak.\n>> They arrive on Monday.\n>\n> Bob\n',
+      attachments: [],
+    };
+    const result = runEngine([{ ok: true, message: reply }]);
+    const entry = rebuiltEntries(result)[0];
+    expect(entry).toBeDefined();
+    expect(entry!.rebuilt.reconstructedText).toBe('I agree with this point:\n\n> The desks are oak.\n> They arrive on Monday.\n\nBob\n');
+    const doc = build(result);
+    const e = rebuiltById(doc, entry!.id);
+    expect(e.body.map(text)).toEqual(['I agree with this point:', '', 'The desks are oak.', 'They arrive on Monday.', '', 'Bob']);
+    expect(e.bodyLevels).toEqual([0, 0, 1, 1, 0, 0]);
+    // The real email under "Print full original text": the same lines, one level deeper.
+    const whole = build(result, { policy: { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true } }).emails[0]!;
+    const k = whole.body.map(text).indexOf('The desks are oak.');
+    expect(whole.bodyLevels.slice(k - 2, k + 4)).toEqual([1, 1, 2, 2, 1, 1]);
+    expect(whole.body.map(text).slice(k - 2, k + 4)).toEqual(['I agree with this point:', '', 'The desks are oak.', 'They arrive on Monday.', '', 'Bob']);
   });
 
   it('says nowhere that the same text is quoted in another email', () => {

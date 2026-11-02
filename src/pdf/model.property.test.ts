@@ -7,10 +7,15 @@
 // signatures), are run through the real engine and output plan, and:
 // - with "include everything" (README.md, rule R6), every email's body in
 //   the model is the full body after the documented display transforms only
-//   (checked against the independent tests/support/pdf-reference.ts);
+//   (checked against the independent tests/support/pdf-reference.ts), with
+//   the same quote level per line; and compared with the body with every
+//   quote mark kept, the ONLY characters missing are the quote prefixes at
+//   line starts (task 8.1, quotePrefixProblems): every other character of
+//   the message is in the output;
 // - with the default policy, every shown line is a piece of that full text
-//   (nothing is invented, only parts are left out), and the numbering maps
-//   back to the included emails;
+//   (nothing is invented, only parts are left out), a quoted line a piece of
+//   a line of the same level, and the numbering maps back to the included
+//   emails;
 // - with the rebuilt emails ON (task 7.7), every real email's body is still
 //   the same as without them (collapse, never delete), and every email,
 //   rebuilt ones too, is numbered 1..n in PDF order (task 8.3);
@@ -19,7 +24,7 @@
 // special character is written as a \u escape.
 
 import { describe, expect, it } from 'vitest';
-import { referenceDisplayText } from '../../tests/support/pdf-reference';
+import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../tests/support/pdf-reference';
 import { runEngine } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
@@ -119,6 +124,29 @@ const STRUCTURE: readonly string[] = [
   'Thanks,\n',
 ];
 
+/**
+ * Nested and odd quote prefixes (task 8.1): levels, spaces between marks, a
+ * tab, ">" alone, a ">" mid-line, a ">" after U+2028, VT / FF in the
+ * prefix (shown as codes, the prefix stops there). Put into some bodies
+ * at a place chosen from the email's number (withQuotes), not from the
+ * random generator, so the other random choices stay as they were.
+ */
+const QUOTES: readonly string[] = [
+  '>> older line\n> > > oldest line\n',
+  '  >\t> indented marks\n>\n> \n',
+  'a > b stays\n',
+  '\u{2028}> after a line separator\n',
+  '>>>>>> six levels deep\n>>>>> five\n',
+  '\v> vertical tab first\n> \f> form feed between\n>\v after\n',
+];
+
+/** `body` with one of QUOTES put in at a place given by `k` (every second email). */
+function withQuotes(body: string, k: number): string {
+  if (k % 2 === 1) return body;
+  const at = (k * 7919) % (body.length + 1);
+  return body.slice(0, at) + QUOTES[(k >> 1) % QUOTES.length]! + body.slice(at);
+}
+
 function randomBody(random: () => number): string {
   const n = Math.floor(random() * 25);
   let body = '';
@@ -141,7 +169,7 @@ function randomMessage(random: () => number, k: number): NormalizedMessage {
     cc: random() < 0.3 ? [pick(random, PEOPLE)] : [],
     bcc: [],
     subject: random() < 0.1 ? '' : `Re: ${pick(random, PIECES)}`,
-    bodyText: randomBody(random),
+    bodyText: withQuotes(randomBody(random), k),
     attachments: random() < 0.2 ? [{ fileName: `file\u0007${String(k)}.pdf`, size: Math.floor(random() * 2e6), mimeType: 'application/pdf' }] : [],
     source: { fileName: `prop-${String(k)}.eml`, sha256: k.toString(16).padStart(64, '0'), kind: 'eml' },
     warnings: [],
@@ -156,6 +184,7 @@ const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
 
 describe('PDF document model properties', () => {
   it('with "include everything", every body is the full text after the display transforms only', () => {
+    let quoted = 0;
     for (let seed = 1; seed <= 40; seed++) {
       const random = makeRandom(seed);
       const messages = Array.from({ length: 12 }, (_, k) => randomMessage(random, seed * 100 + k));
@@ -172,12 +201,19 @@ describe('PDF document model properties', () => {
       let codes = 0;
       for (const { e, position } of realEmails(doc)) {
         const m = result.messages[position]!;
-        expect(bodyOf(e), `seed ${String(seed)} position ${String(e.position)}`).toBe(referenceDisplayText(m.message.bodyText));
+        const where = `seed ${String(seed)} position ${String(e.position)}`;
+        expect(bodyOf(e), where).toBe(referenceDisplayText(m.message.bodyText));
+        expect(e.bodyLevels, where).toEqual(referenceDisplayLines(m.message.bodyText).map((l) => l.level));
+        // Task 8.1: nothing but the quote prefixes is missing.
+        expect(quotePrefixProblems(m.message.bodyText, e.body.map(lineText), e.bodyLevels), where).toEqual([]);
+        quoted += e.bodyLevels.filter((n) => n > 0).length;
         for (const line of e.body) for (const run of line) expect(run.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
         codes += e.flags.controlChars;
       }
       expect(doc.controlChars).toBe(codes);
     }
+    // The random emails must really hold quoted lines.
+    expect(quoted).toBeGreaterThan(100);
   });
 
   it('with the default policy, every shown line is a piece of the full text, and numbers map back', () => {
@@ -193,11 +229,16 @@ describe('PDF document model properties', () => {
       positions.forEach((p, k) => expect(doc.pdfNumberByPosition[p]).toBe(k + 1));
       expect(doc.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
       for (const { e, position } of realEmails(doc)) {
-        const full = referenceDisplayText(result.messages[position]!.message.bodyText);
-        for (const line of e.body) {
+        const reference = referenceDisplayLines(result.messages[position]!.message.bodyText);
+        const full = reference.map((l) => l.text).join('\n');
+        expect(e.bodyLevels).toHaveLength(e.body.length);
+        e.body.forEach((line, k) => {
           const shown = lineText(line);
           if (shown.trim() !== '') expect(full, `seed ${String(seed)}`).toContain(shown);
-        }
+          // A quoted line is (a piece of) a line of the full text with the same level.
+          const level = e.bodyLevels[k]!;
+          if (level > 0) expect(reference.some((l) => l.level === level && l.text.includes(shown)), `seed ${String(seed)}: ${JSON.stringify(shown)}`).toBe(true);
+        });
       }
     }
     // The random emails must really exercise left-out parts.
@@ -250,7 +291,9 @@ describe('PDF document model properties', () => {
       expect(real.map((x) => x.position)).toEqual(positions);
       expect(real.map((x) => x.e.number)).toEqual(positions.map((_, k) => k + 1));
       for (const { e, position } of real) {
-        expect(bodyOf(e), `seed ${String(seed)} position ${String(position)}`).toBe(referenceDisplayText(result.messages[position]!.message.bodyText));
+        const body = result.messages[position]!.message.bodyText;
+        expect(bodyOf(e), `seed ${String(seed)} position ${String(position)}`).toBe(referenceDisplayText(body));
+        expect(quotePrefixProblems(body, e.body.map(lineText), e.bodyLevels), `seed ${String(seed)} position ${String(position)}`).toEqual([]);
       }
     }
     // The random emails must really give rebuilt emails in the PDF.

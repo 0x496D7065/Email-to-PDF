@@ -35,6 +35,14 @@ export interface LayoutConfig {
   /** Lists (cover): the bullet and the indent of the item text. */
   readonly list: { readonly bullet: string; readonly indent: number; readonly itemGap: number };
   /**
+   * Quoted lines of an email body (task 8.1, src/pdf/text.ts transform g):
+   * a line of quote level n is indented by min(n, maxLevel) * indent, its
+   * wrapped lines too; deeper levels use the indent of maxLevel, so deep
+   * nesting never squeezes the text column. maxLevel * indent is at most
+   * half the text area width (validateLayoutConfig).
+   */
+  readonly quote: { readonly indent: number; readonly maxLevel: number };
+  /**
    * The index table: the widths of its fixed columns (the subject column
    * takes the rest of the text area), the gap between two columns, the space
    * below each row and below the column titles. The date column holds the
@@ -101,6 +109,8 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   footer: { style: { font: 'sans-regular', size: 8.5, color: GREY, lineHeight: 1.3 }, baselineFromBottom: 30, align: 'center' },
   fields: { labelWidth: 78, gap: 10, rowGap: 1.5 },
   list: { bullet: '\u{2022}', indent: 12, itemGap: 3 },
+  // 14 pt (1.4 em of the 10 pt body text): each level is clearly visible; 4 levels take 56 pt, under 12% of A4's text width.
+  quote: { indent: 14, maxLevel: 4 },
   index: { numberWidth: 30, dateWidth: 88, fromWidth: 104, pageWidth: 36, gap: 8, rowGap: 5, headerGap: 4 },
   spacing: {
     afterTitle: 14,
@@ -124,6 +134,15 @@ export const INDEX_PAGE_DIGITS = 6;
 export const MAX_DIGIT_EM = 0.6;
 /** The longest short date of the index ("YYYY-MM-DD HH:mm"), in em, measured from the same fonts (a layout test checks it). */
 export const SHORT_DATE_EM = 8.6;
+
+/**
+ * The indent of a body line of quote `level` (see LayoutConfig.quote): 0
+ * for level 0 and for anything that is not a whole number > 0.
+ */
+export function quoteIndent(config: Pick<LayoutConfig, 'quote'>, level: number): number {
+  if (!Number.isInteger(level) || level <= 0) return 0;
+  return Math.min(level, config.quote.maxLevel) * config.quote.indent;
+}
 
 /** One check of validateLayoutConfig. */
 function check(ok: boolean, what: string): void {
@@ -168,6 +187,10 @@ export function validateLayoutConfig(config: LayoutConfig): void {
   positive(config.list.indent, 'list.indent');
   check(config.list.indent < contentWidth, 'list.indent must be less than the text area width');
   nonNegative(config.list.itemGap, 'list.itemGap');
+  check(typeof config.quote === 'object' && config.quote !== null, 'quote is missing');
+  positive(config.quote.indent, 'quote.indent');
+  check(Number.isInteger(config.quote.maxLevel) && config.quote.maxLevel >= 1, 'quote.maxLevel must be a whole number >= 1');
+  check(config.quote.indent * config.quote.maxLevel <= contentWidth / 2, 'quote.indent * quote.maxLevel must be at most half the text area width');
   const ix = config.index;
   for (const name of ['numberWidth', 'dateWidth', 'fromWidth', 'pageWidth'] as const) positive(ix[name], `index.${name}`);
   for (const name of ['gap', 'rowGap', 'headerGap'] as const) nonNegative(ix[name], `index.${name}`);

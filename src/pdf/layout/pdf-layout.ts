@@ -39,6 +39,11 @@
 // - every page gets the footer "Page X of Y" inside the bottom margin
 //   (fixed height: the text is filled in at the end, once Y is known).
 //
+// Quoted body lines (task 8.1): a body line of quote level n
+// (PdfEmail.bodyLevels) is placed min(n, quote.maxLevel) * quote.indent to
+// the right of the margin and wrapped to the width left; its wrapped lines
+// keep that indent (config.ts, quoteIndent). Level 0 is at the margin.
+//
 // Each email's heading is a named destination (its anchor, emailAnchor in
 // model.ts), and so are the top of the cover ("cover") and the index
 // heading ("index"). anchorPages maps each email anchor to its page as a
@@ -53,7 +58,7 @@ import type { PdfBlock, PdfDocument, PdfEmail } from '../model';
 import type { PdfStrings } from '../strings';
 import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage } from '../writer/layout';
 import { layItem, layRow, linesHeight, placeItem, placeRow, type LaidRow } from './blocks';
-import { DEFAULT_LAYOUT_CONFIG, type LayoutConfig, validateLayoutConfig } from './config';
+import { DEFAULT_LAYOUT_CONFIG, type LayoutConfig, quoteIndent, validateLayoutConfig } from './config';
 import { INDEX_DESTINATION, layIndex, placeIndex } from './index-table';
 import { PageBuilder, type PageInProgress } from './page-builder';
 import { Typesetter } from './typesetter';
@@ -219,7 +224,11 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, anchorPages
   const heading = ts.wrap([{ role: 'heading', text: email.heading }], b.width, 'heading');
   const rows: LaidRow[] = email.fields.map((row) => layRow(b, row));
   const notes = email.notes.flatMap((line) => ts.wrap(line, b.width, 'body'));
-  const body = email.body.flatMap((line) => ts.wrap(line, b.width, 'body'));
+  // Quoted lines indented by their level (task 8.1), wrapped lines too: each line knows its x.
+  const body = email.body.flatMap((line, k) => {
+    const indent = quoteIndent(b.config, email.bodyLevels[k] ?? 0);
+    return ts.wrap(line, b.width - indent, 'body').map((laid) => ({ laid, x: b.left + indent }));
+  });
 
   // The block kept together.
   const headingHeight = linesHeight(heading) + spacing.afterHeading;
@@ -229,7 +238,7 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, anchorPages
     tableHeight +
     spacing.afterFields +
     (notes.length > 0 ? linesHeight(notes) + spacing.afterNotes : 0) +
-    linesHeight(body.slice(0, b.config.keepBodyLines));
+    linesHeight(body.slice(0, b.config.keepBodyLines).map((l) => l.laid));
   if (keep > b.contentHeight) keep = headingHeight + (rows[0]?.height ?? 0);
 
   // After this, the keep block fits below the cursor (or the page is empty).
@@ -253,7 +262,7 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, anchorPages
     b.placeAll(notes);
     b.space(spacing.afterNotes);
   }
-  b.placeAll(body);
+  for (const { laid, x } of body) b.place(laid, x);
 
   if (email.attachments !== null) {
     b.space(spacing.beforeAttachments);

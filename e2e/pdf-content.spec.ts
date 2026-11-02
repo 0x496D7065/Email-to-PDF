@@ -28,13 +28,15 @@
 //    output-plan.ts): quoted history added by the mail app left out of the
 //    reply (and still in the email it came from), a repeated signature only
 //    where its sender first used it, a quote the writer answered between
-//    its lines kept; accents drawn as real glyphs; the emoji drawn as the
+//    its lines kept (its "> " marks not printed, the quoted lines indented
+//    by their quote level instead, task 8.1); accents drawn as real glyphs; the emoji drawn as the
 //    code "[U+1F600]" while the copy layer holds the emoji itself.
 // 2. "Print full original text": the full body of every email is in its
 //    own part of the PDF, in order (rule R6, collapse never delete), after
 //    the documented display transforms only (tests/support/pdf-reference.ts:
 //    tabs as 4 spaces, at most 2 blank lines, outer blank lines trimmed,
-//    control characters as "[U+XXXX]"), compared with white space
+//    control characters as "[U+XXXX]", quote marks at line starts removed),
+//    compared with white space
 //    normalised (the PDF wraps lines). The bodies come from the same
 //    fixture bytes parsed here in Node; the two HTML-only emails, whose text
 //    needs the browser's DOMParser, are checked with the manifest's
@@ -728,13 +730,15 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     expect(sectionText[writers[0]!], text).toContain(text);
   }
 
-  // A quote the writer answered between its lines: kept, attribution and all, in order.
-  const answers = norm(sectionOf(doc, emails, ANSWERS_ID).copied);
+  // A quote the writer answered between its lines: kept, attribution and all, in order;
+  // its "> " marks not printed, the quoted lines indented one step instead (task 8.1).
+  const answersSection = sectionOf(doc, emails, ANSWERS_ID);
+  const answers = norm(answersSection.copied);
+  const quotedLines = ['I will leave the office key at the front desk on Monday, so your team can', 'start whenever suits you. The old desks are already in the storage room.'];
   const inOrder = [
     'My answers are between your lines.',
     'On Fri, 28 Feb 2025 at 17:00, Alice Example <alice@example.test> wrote:',
-    '> I will leave the office key at the front desk on Monday, so your team can',
-    '> start whenever suits you. The old desks are already in the storage room.',
+    ...quotedLines,
     'Good, the van will take the old desks on Friday.',
     'Price list: desk[U+0007]chair',
     'Caf\u{E9} cr\u{E8}me \u{E0} c\u{F4}t\u{E9}.',
@@ -745,6 +749,16 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     expect(found, text).toBeGreaterThan(at);
     at = found;
   }
+  const xOf = (text: string): number => {
+    const line = answersSection.lines.find((l) => norm(l.copied).startsWith(norm(text)));
+    if (line === undefined) throw new Error(`no line ${text}`);
+    return line.runs[0]!.x;
+  };
+  const own = xOf('My answers are between your lines.');
+  expect(xOf('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
+  // One quote level: 14 pt in (src/pdf/layout/config.ts, quote.indent).
+  for (const text of quotedLines) expect(xOf(text) - own, text).toBeCloseTo(14, 2);
+  for (const l of answersSection.lines) expect(l.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
 
   // ANSWERS' header rows, from the manifest: each label, then its value, in
   // order (From, Sent by, To, Cc, Date in the chosen zone, Subject).

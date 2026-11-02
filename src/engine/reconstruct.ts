@@ -198,6 +198,36 @@ export function removeQuoteMarks(text: string, from: number, to: number, depth: 
   return parts.join('');
 }
 
+/**
+ * The quote prefix at the start of one line (its content, line break
+ * excluded): the same reading as `classify` and `removeQuoteMarks` with no
+ * depth limit, so the PDF (src/pdf/text.ts, task 8.1) and the rebuilt texts
+ * agree on what is a quote mark. The prefix is every ">" before the first
+ * other character, with the whitespace before each (isSpace: JavaScript's
+ * \s), then one plain space after the last ">" when there is one. (The PDF
+ * reads the prefix only up to the first VT or FF, so those controls stay
+ * visible as codes there; this function does not.) `level` is the number of
+ * ">" (0: no prefix, `length` 0: whitespace that is not followed by a ">"
+ * is never part of a prefix). The rest of the
+ * line, `line.slice(length)`, never starts with whitespace and a ">".
+ * Linear in the prefix length. Pure.
+ */
+export function quotePrefix(line: string): { readonly level: number; readonly length: number } {
+  let level = 0;
+  let length = 0;
+  let k = 0;
+  while (k < line.length) {
+    const code = line.charCodeAt(k);
+    if (code === 0x3e) {
+      level++;
+      length = k + 1;
+    } else if (!isSpace(code)) break;
+    k++;
+  }
+  if (level > 0 && line.charCodeAt(length) === 0x20) length++;
+  return { level, length };
+}
+
 /** Index of the line starting at `offset` (binary search), or -1. */
 function lineIndexAt(lines: readonly QLine[], offset: number): number {
   let lo = 0;

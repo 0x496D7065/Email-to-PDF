@@ -182,6 +182,16 @@ The tool never throws message text away on its own:
   email may leave the rest of its page blank.
 - Message text is never rewritten or summarised. (Rebuilt emails, below,
   lose only their "> " quote marks.)
+- **Quoted lines in the PDF are indented instead of marked.** In the PDF,
+  a line that starts with "> " quote marks is printed without them,
+  indented one step per quote level (">" one step, ">>" or "> >" two, at
+  most four steps), so the sender's own text stays at the left margin and
+  quoted text is easy to tell apart; the rest of each line is printed
+  exactly as written. Any line that starts with ">" is read as a quote, so
+  a line starting with ">>> " (for example a pasted command prompt) is
+  shown indented three levels without the marks. Only the PDF changes: the
+  preview, your original files and their SHA-256 fingerprints are
+  unchanged.
 
 ## Earlier emails rebuilt from quoted text
 
@@ -543,6 +553,17 @@ no email rebuilt from quoted text is shown or printed: their text is then
 already there, in full, in the email that quotes them, which keeps all of
 it (folded in the preview, whole in the PDF). Unticking it brings back the
 earlier choices exactly.
+
+A second display change, in the PDF only (`src/pdf/text.ts`): the quote
+marks at the start of a line (one or more ">", the spaces before each,
+and one space after the last) are not printed; the line is indented by
+its quote level instead (`src/pdf/layout/config.ts`, 14 pt per level, at
+most 4 levels). The marks are read as the quote detector reads them,
+except that the PDF stops at a vertical tab or form feed control, which is
+always printed as its code; a ">" further on in a line is printed as it
+is, and so is the rest of the line. The text copied out of the PDF
+follows the printed text (no ">" marks, no added spaces). The preview, the original files and their
+SHA-256 fingerprints are unchanged.
 
 ### R7: Detection logic is pure and testable
 

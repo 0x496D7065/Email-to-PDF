@@ -77,28 +77,103 @@ function displayLine(line: string): { text: string; codes: number } {
 }
 
 /**
- * The whole body as the PDF shows it with nothing left out: lines (CRLF, CR,
- * LF, U+2028 and U+2029 all end a line), each transformed, blank lines
- * (white space only, no code) at both ends dropped, at most 2 blank lines in
- * a row, blank lines written empty. Lines joined with LF.
+ * Quote marks at the start of a line, as src/pdf/text.ts (transform g)
+ * documents them, read here with a regular expression instead of a loop:
+ * one or more ">", each after any whitespace (\s, as the engine reads it,
+ * except VT and FF: the PDF stops the prefix there so they stay visible as
+ * codes), then one plain space when there is one. Gives the level (the
+ * number of ">") and the rest of the line; level 0 and the line itself when
+ * there is none.
  */
-export function referenceDisplayText(body: string): string {
-  const lines = body.split(/\r\n|\r|\n|\u{2028}|\u{2029}/u).map(displayLine);
-  const blank = (l: { text: string; codes: number }): boolean => l.codes === 0 && l.text.trim() === '';
+function splitQuote(line: string): { level: number; rest: string } {
+  const marks = /^(?:[^\S\v\f]*>)+/u.exec(line);
+  if (marks === null) return { level: 0, rest: line };
+  const level = marks[0].split('>').length - 1;
+  const rest = line.slice(marks[0].length);
+  return { level, rest: rest.startsWith(' ') ? rest.slice(1) : rest };
+}
+
+/** One line of the reference: its text and its quote level. */
+export interface ReferenceLine {
+  readonly text: string;
+  readonly level: number;
+}
+
+/**
+ * The whole body as the PDF shows it with nothing left out, line by line:
+ * lines (CRLF, CR, LF, U+2028 and U+2029 all end a line); with `quotes`
+ * (the default, as the PDF does since task 8.1), the quote marks at the
+ * start of a line that follows CR, LF or the start of the body (not U+2028
+ * or U+2029) are removed and give the line its level; each line
+ * transformed; blank lines (white space only, no code, no quote mark) at
+ * both ends dropped, at most 2 blank lines in a row, blank lines written
+ * empty. A quoted line with nothing but white space after its marks is
+ * written empty and never dropped. `quotes: false` gives the text as it was
+ * before task 8.1 (every quote mark kept), for the "only the prefixes were
+ * removed" checks.
+ */
+export function referenceDisplayLines(body: string, options: { quotes?: boolean } = {}): ReferenceLine[] {
+  const quotes = options.quotes ?? true;
+  // Pieces at odd indexes are the line breaks.
+  const pieces = body.split(/(\r\n|\r|\n|\u{2028}|\u{2029})/u);
+  const lines: { text: string; codes: number; level: number; quoted: boolean }[] = [];
+  for (let k = 0; k < pieces.length; k += 2) {
+    const after = k === 0 ? '' : pieces[k - 1]!;
+    const atLineStart = after !== '\u{2028}' && after !== '\u{2029}';
+    const q = quotes && atLineStart ? splitQuote(pieces[k]!) : { level: 0, rest: pieces[k]! };
+    const shown = displayLine(q.rest);
+    lines.push({ ...shown, level: q.level, quoted: q.level > 0 });
+  }
+  const blank = (l: { text: string; codes: number; quoted: boolean }): boolean => !l.quoted && l.codes === 0 && l.text.trim() === '';
   let from = 0;
   let to = lines.length;
   while (from < to && blank(lines[from]!)) from++;
   while (to > from && blank(lines[to - 1]!)) to--;
-  const out: string[] = [];
+  const out: ReferenceLine[] = [];
   let run = 0;
   for (const l of lines.slice(from, to)) {
     if (blank(l)) {
       run++;
-      if (run <= 2) out.push('');
+      if (run <= 2) out.push({ text: '', level: 0 });
     } else {
       run = 0;
-      out.push(l.text);
+      out.push({ text: l.quoted && l.codes === 0 && l.text.trim() === '' ? '' : l.text, level: l.level });
     }
   }
-  return out.join('\n');
+  return out;
+}
+
+/** referenceDisplayLines' texts joined with LF. */
+export function referenceDisplayText(body: string, options: { quotes?: boolean } = {}): string {
+  return referenceDisplayLines(body, options)
+    .map((l) => l.text)
+    .join('\n');
+}
+
+/**
+ * What separates the PDF's lines (`shown`, `levels`: a whole body, nothing
+ * left out) from the body with every quote mark kept: line by line, the
+ * kept-marks line must END with the shown line, and what comes before it
+ * may hold only white space and ">" (never a code: VT and FF end the
+ * prefix and stay visible), with exactly `level` ">" in it. So the only
+ * characters missing are the quote prefixes (and the white space after the
+ * marks of a quoted line with no text). Returns the problems found ([] when
+ * none).
+ */
+export function quotePrefixProblems(body: string, shown: readonly string[], levels: readonly number[]): string[] {
+  const kept = referenceDisplayLines(body, { quotes: false });
+  if (kept.length !== shown.length) return [`${String(shown.length)} lines shown, ${String(kept.length)} with the marks kept`];
+  if (levels.length !== shown.length) return [`${String(levels.length)} levels for ${String(shown.length)} lines`];
+  const problems: string[] = [];
+  kept.forEach((k, i) => {
+    const line = shown[i]!;
+    if (!k.text.endsWith(line)) {
+      problems.push(`line ${String(i)}: ${JSON.stringify(line)} is not the end of ${JSON.stringify(k.text)}`);
+      return;
+    }
+    const head = k.text.slice(0, k.text.length - line.length);
+    if (!/^[\s>]*$/u.test(head)) problems.push(`line ${String(i)}: removed ${JSON.stringify(head)}, not a quote prefix`);
+    else if (head.split('>').length - 1 !== levels[i]) problems.push(`line ${String(i)}: level ${String(levels[i])} for the prefix ${JSON.stringify(head)}`);
+  });
+  return problems;
 }

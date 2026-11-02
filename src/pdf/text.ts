@@ -28,7 +28,30 @@
 //     dropped (it looks empty in the PDF);
 // (f) characters the font lacks (emoji, rare scripts) are NOT handled here:
 //     that is the renderer's job. Text is split into runs only by meaning
-//     (normal / muted / code / mono), never by font coverage.
+//     (normal / muted / code / mono), never by font coverage;
+// (g) email bodies only, quote levels (user decision 2026-11-02, task 8.1,
+//     an approved display change for the PDF only): a line that starts with
+//     ">" quote marks loses them and gets a quote LEVEL instead (the number
+//     of ">"), which the layout shows as an indent (src/pdf/layout/config.ts,
+//     `quote`). The prefix is read exactly as the engine reads quote marks
+//     (quotePrefix in src/engine/reconstruct.ts, the same rule as the
+//     rebuilt texts' quote-mark removal and the lines the ">" detector
+//     marks, src/engine/quote-markers.ts): every ">" before the first other
+//     character, with the whitespace before each (JavaScript's \s: spaces,
+//     tabs, U+00A0, U+FEFF...), then one space after the last ">" when
+//     there is one (">", "> ", ">>", "> > >", "  > x"; "> >  x" keeps one
+//     space before the x). One difference: the VT and FF controls are \s
+//     for the engine, but the PDF stops the prefix at the first of them, so
+//     they are always shown as codes, with everything after them as written
+//     ("\v> x" is level 0 and shows "[U+000B]> x"; "> \f> x" is level 1 and
+//     shows "[U+000C]> x"). Only that prefix is removed; the rest of the
+//     line is kept exactly as written (a ">" further on stays). It is read
+//     on the line as written, before tabs are expanded, and only at the
+//     start of a line of the original body: not after U+2028 / U+2029 (no
+//     line break for the engine) and not where a kept part began inside a
+//     line (joinKeptLines). A quoted line with nothing after its marks is an
+//     empty line at its level, never dropped by (e). Level 0 is the
+//     writer's own text. The preview and the original files are unchanged.
 //
 // The contract with the renderer (src/pdf/ writer, milestone 5.4). Three
 // groups of special characters:
@@ -70,6 +93,8 @@
 //
 // Pure functions, no DOM (README.md, rule R7). Email text stays plain data:
 // it is never read as markup or code (README.md, rule R4).
+
+import { quotePrefix } from '../engine/reconstruct';
 
 /** Spaces per tab (transform b). */
 export const TAB_WIDTH = 4;
@@ -229,35 +254,83 @@ export function lineText(line: PdfLine): string {
   return line.map((r) => r.text).join('');
 }
 
-/** Body lines and how many characters were replaced by a code. */
+/** Body lines, their quote levels and how many characters were replaced by a code. */
 export interface BodyLines {
   readonly lines: PdfLine[];
+  /** The quote level of each line (transform g), same length as `lines`: 0 for the writer's own text. */
+  readonly levels: number[];
   readonly replaced: number;
 }
 
 /** Most blank lines kept in a row (transform e). */
 export const MAX_BLANK_LINES = 2;
 
+/** Options of bodyLines. */
+export interface BodyLinesOptions {
+  /**
+   * Offsets in the text where a line starts that did NOT start a line in the
+   * original body (a kept part that began inside a line, joinKeptLines): no
+   * quote prefix is read there (transform g).
+   */
+  readonly notLineStarts?: ReadonlySet<number>;
+}
+
+/** The line breaks of transform (a), one at a time (CRLF as one). */
+const LINE_BREAK = /\r\n|[\r\n\u{2028}\u{2029}]/gu;
+
+/** No quote prefix. */
+const NO_PREFIX = { level: 0, length: 0 } as const;
+
 /**
- * An email's text as lines of 'body' runs: transforms (a), (b), (c) and
- * (e). A line with a code is never blank (the code is shown).
+ * An email's text as lines of 'body' runs: transforms (a), (b), (c), (e)
+ * and (g). A line with a code is never blank (the code is shown). A quoted
+ * line whose rest is blank (">" alone) is an empty line at its level; it is
+ * never dropped or merged by transform (e): it held a quote mark, so it was
+ * never a blank line.
  */
-export function bodyLines(text: string): BodyLines {
+export function bodyLines(text: string, options: BodyLinesOptions = {}): BodyLines {
   const lines: PdfLine[] = [];
+  const levels: number[] = [];
   let replaced = 0;
   let blanks = 0; // blank lines waiting (written only when a non-blank line follows: trailing ones are dropped)
-  for (const raw of normalizeLineEnds(text).split('\n')) {
-    const s = sanitizeRuns(raw, 'body');
-    replaced += s.replaced;
-    if (s.replaced === 0 && /^\s*$/u.test(raw)) {
-      if (lines.length > 0) blanks++; // leading blank lines are dropped
-      continue;
+  const line = (start: number, end: number, quotable: boolean): void => {
+    const raw = text.slice(start, end);
+    // Transform (g), on the line as written (before tabs are expanded).
+    let prefix = quotable && options.notLineStarts?.has(start) !== true ? quotePrefix(raw) : NO_PREFIX;
+    // VT and FF are \s for the engine, but the PDF must show them as codes (collapse, never delete): the prefix
+    // stops at the first of them, and everything from it on is printed as written.
+    if (prefix.length > 0) {
+      const cut = raw.search(/[\v\f]/u);
+      if (cut >= 0 && cut < prefix.length) prefix = quotePrefix(raw.slice(0, cut));
     }
-    for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--) lines.push([]);
+    const rest = prefix.length === 0 ? raw : raw.slice(prefix.length);
+    const s = sanitizeRuns(rest, 'body');
+    replaced += s.replaced;
+    const blank = s.replaced === 0 && /^\s*$/u.test(rest);
+    if (blank && prefix.level === 0) {
+      if (lines.length > 0) blanks++; // leading blank lines are dropped
+      return;
+    }
+    for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--) {
+      lines.push([]);
+      levels.push(0);
+    }
     blanks = 0;
-    lines.push(s.runs);
+    lines.push(blank ? [] : s.runs);
+    levels.push(prefix.level);
+  };
+  // A line can hold a quote prefix when it starts the text or follows CR or LF; not after
+  // U+2028 / U+2029, which the engine does not count as line breaks (src/engine/segments.ts, lineRanges).
+  let start = 0;
+  let quotable = true;
+  LINE_BREAK.lastIndex = 0;
+  for (let m = LINE_BREAK.exec(text); m !== null; m = LINE_BREAK.exec(text)) {
+    line(start, m.index, quotable);
+    start = m.index + m[0].length;
+    quotable = m[0] !== '\u{2028}' && m[0] !== '\u{2029}';
   }
-  return { lines, replaced };
+  line(start, text.length, quotable);
+  return { lines, levels, replaced };
 }
 
 /** A plan range, as far as joining needs it. */
@@ -265,6 +338,18 @@ export interface KeptRange {
   readonly start: number;
   readonly end: number;
   readonly keep: boolean;
+}
+
+/** The kept parts joined (joinKeptLines). */
+export interface JoinedKept {
+  readonly text: string;
+  /**
+   * Offsets in `text` where a kept part begins that began INSIDE a line of
+   * the body (not at its start, nor after CR or LF): a ">" there is not at
+   * the start of a line of the original, so bodyLines reads no quote prefix
+   * there (transform g).
+   */
+  readonly notLineStarts: ReadonlySet<number>;
 }
 
 /**
@@ -275,17 +360,30 @@ export interface KeptRange {
  * breaks as in transform a). `ranges` must be sorted, inside the body and
  * not overlapping (the caller checks it). Linear in the number of ranges.
  */
-export function joinKept(body: string, ranges: readonly KeptRange[]): string {
+export function joinKeptLines(body: string, ranges: readonly KeptRange[]): JoinedKept {
   const parts: string[] = [];
+  const notLineStarts = new Set<number>();
+  let length = 0;
   let lastEnd = -1;
   let endsLine = false; // the last kept piece ends with a line break
   for (const r of ranges) {
     if (!r.keep || r.end <= r.start) continue;
     const piece = body.slice(r.start, r.end);
-    if (parts.length > 0 && r.start !== lastEnd && !endsLine && !isLineBreak(piece.charCodeAt(0))) parts.push('\n');
+    if (parts.length > 0 && r.start !== lastEnd && !endsLine && !isLineBreak(piece.charCodeAt(0))) {
+      parts.push('\n');
+      length++;
+    }
+    const before = body.charCodeAt(r.start - 1);
+    if (r.start > 0 && before !== 0x0a && before !== 0x0d) notLineStarts.add(length);
     parts.push(piece);
+    length += piece.length;
     endsLine = isLineBreak(piece.charCodeAt(piece.length - 1));
     lastEnd = r.end;
   }
-  return parts.join('');
+  return { text: parts.join(''), notLineStarts };
+}
+
+/** The text of joinKeptLines alone. */
+export function joinKept(body: string, ranges: readonly KeptRange[]): string {
+  return joinKeptLines(body, ranges).text;
 }

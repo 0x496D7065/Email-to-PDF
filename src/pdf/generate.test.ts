@@ -6,7 +6,7 @@
 // the test reader (link annotations, named destinations, drawn text).
 // Special characters are written as braced escapes (ASCII file).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPdf } from '../../tests/support/pdf-reader';
+import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
 import { runEngine } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
@@ -474,5 +474,66 @@ describe('generatePdf in Dutch (locale "nl", its own texts)', () => {
     expect(text).not.toContain('Email correspondence');
     const outline = readOutline(pdf)!;
     expect(outline.items[0]?.title).toBe('Voorblad');
+  });
+});
+
+describe('generatePdf: quoted lines as indentation (task 8.1), read back from the file', () => {
+  const LEFT = CONFIG.margin.left;
+  const STEP = CONFIG.quote.indent;
+  const long = 'alpha beta gamma delta epsilon zeta eta theta '.repeat(8).trim();
+  const quoted =
+    '> Can the desks come on Monday?\nYes, Monday works.\n\n> > And the chairs, Alice?\n>> They come later.\n>> ' +
+    long +
+    '\n>\n> Bob\n> -> a mark inside: kept\n>>>>>>> Seven levels deep.\n';
+
+  /** The body lines of the email pages as read back: copied text and x of the line's first run. */
+  async function bodyLinesOf(input: GeneratePdfInput): Promise<{ text: string; x: number; inserted: number }[]> {
+    const made = await generatePdf(input);
+    const { layout } = docAndLayout(input);
+    const pages = (await readPageRuns(readPdf(made.bytes))).slice(layout.frontPages);
+    return pages.flatMap((runs) =>
+      textLines(runs.filter((r) => r.y > CONFIG.margin.bottom && r.size === CONFIG.roles.body.size)).map((l) => ({ text: l.copied, x: l.runs[0]!.x, inserted: l.insertedSpaces })),
+    );
+  }
+
+  function check(lines: readonly { text: string; x: number; inserted: number }[]): void {
+    const xOf = (text: string): number => {
+      const found = lines.find((l) => l.text === text);
+      if (found === undefined) throw new Error(`not found: ${text}`);
+      return found.x;
+    };
+    // Own text at the margin; each quote level one step in; above the cap (4) at the cap.
+    expect(xOf('Hello Bob,')).toBeCloseTo(LEFT, 3);
+    expect(xOf('Yes, Monday works.')).toBeCloseTo(LEFT, 3);
+    expect(xOf('Alice')).toBeCloseTo(LEFT, 3);
+    expect(xOf('Can the desks come on Monday?')).toBeCloseTo(LEFT + STEP, 3);
+    expect(xOf('And the chairs, Alice?')).toBeCloseTo(LEFT + 2 * STEP, 3);
+    expect(xOf('They come later.')).toBeCloseTo(LEFT + 2 * STEP, 3);
+    expect(xOf('Bob')).toBeCloseTo(LEFT + STEP, 3);
+    expect(xOf('-> a mark inside: kept')).toBeCloseTo(LEFT + STEP, 3);
+    expect(xOf('Seven levels deep.')).toBeCloseTo(LEFT + 4 * STEP, 3);
+    // The long quoted line wraps; every piece keeps the level-2 indent, and together they are the text as written.
+    const pieces = lines.filter((l) => l.text.includes('alpha') || l.text.includes('theta'));
+    expect(pieces.length).toBeGreaterThan(1);
+    for (const p of pieces) expect(p.x).toBeCloseTo(LEFT + 2 * STEP, 3);
+    expect(pieces.map((p) => p.text.trim()).join(' ')).toBe(long);
+    // No ">" at the start of any line (the text copied out follows the printed text), none added inside one.
+    for (const l of lines) {
+      expect(l.text).not.toMatch(/^\s*>/u);
+      expect(l.inserted).toBe(0);
+    }
+  }
+
+  it('keeps a pasted quote (no reply header) indented by level, without its ">" marks', async () => {
+    const message = make(0, { bodyText: `Hello Bob,\n\n${quoted}\nAlice\n` });
+    check(await bodyLinesOf(inputFor([message])));
+  });
+
+  it('prints the whole quoted history the same way with "Print full original text"', async () => {
+    const message = make(0, { bodyText: `Hello Bob,\n\nOn Tue, 4 Mar 2025 at 09:00, Bob Sample <bob@sample.test> wrote:\n${quoted}\nAlice\n` });
+    const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
+    const lines = await bodyLinesOf(inputFor([message], { policy }));
+    check(lines);
+    expect(lines.find((l) => l.text.startsWith('On Tue, 4 Mar 2025'))!.x).toBeCloseTo(LEFT, 3);
   });
 });

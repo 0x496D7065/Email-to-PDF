@@ -68,6 +68,15 @@
 // src/pdf/text.ts apply (line ends, tabs, control and broken characters as
 // codes in runs of role 'code', blank lines). That file also holds the
 // contract with the renderer about invisible characters.
+// Quote levels (user decision 2026-11-02, task 8.1, PDF only): a body line
+// that starts with ">" quote marks is shown WITHOUT them, indented by its
+// quote level instead (`bodyLevels`, src/pdf/text.ts transform g; the
+// indent is the renderer's, src/pdf/layout/config.ts `quote`). Only the
+// prefix is removed, read as the engine reads quote marks; the rest of the
+// line is unchanged. This applies to the kept parts of a body, to the whole
+// body under "Print full original text" and to the deeper quotes left in a
+// rebuilt email's text (whose own quote marks the engine removed already).
+// The preview and the original files (and their SHA-256) are unchanged.
 //
 // Undated emails: shown with the "no date" text in the index and their
 // header (plus the date text as written, when there is one); the cover's
@@ -100,7 +109,7 @@ import { displayAuthor } from '../ui-model/display-author';
 import { joinMailboxes } from '../ui-model/mailbox-list';
 import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../ui-model/rebuilt';
 import type { PdfStrings } from './strings';
-import { bodyLines, inlineRuns, joinKept, lineText, type PdfLine, type PdfRole } from './text';
+import { bodyLines, inlineRuns, joinKeptLines, lineText, type PdfLine, type PdfRole } from './text';
 // Pure and backend-neutral (it only reads src/pdf/text.ts): the bookmark cut follows the same rule as the copy layer.
 import { copyLayerCutIndex } from './writer/copy-text';
 
@@ -239,6 +248,12 @@ export interface PdfEmail {
   readonly notes: readonly PdfLine[];
   /** The text: one entry per line, [] for an empty line (see src/pdf/text.ts). */
   readonly body: readonly PdfLine[];
+  /**
+   * The quote level of each line of `body`, same length (src/pdf/text.ts,
+   * transform g): 0 for the writer's own text, 1 for a line that started
+   * with ">", 2 for ">>" or "> >", and so on. The renderer indents by it.
+   */
+  readonly bodyLevels: readonly number[];
   /** One line per attachment (listed only, never opened); null when there is none. */
   readonly attachments: { readonly label: string; readonly items: readonly PdfLine[] } | null;
   readonly flags: PdfEmailFlags;
@@ -475,16 +490,23 @@ function validRanges(plan: MessagePlan | null | undefined, length: number): plan
   return last === length;
 }
 
-/** What the PDF shows of a body, before the display transforms. */
+/** Nothing joined: every line of the text starts a line of the body. */
+const NO_JOINS: ReadonlySet<number> = new Set();
+
+/**
+ * What the PDF shows of a body, before the display transforms; with
+ * `notLineStarts` for bodyLines (src/pdf/text.ts, joinKeptLines).
+ */
 export function pdfBodyText(
   body: string,
   plan: MessagePlan | null | undefined,
   policy: Pick<OutputPolicy, 'unfoldEverything'>,
-): { readonly text: string; readonly planFallback: boolean } {
-  if (policy.unfoldEverything) return { text: body, planFallback: false };
-  if (!validRanges(plan, body.length)) return { text: body, planFallback: true };
-  if (plan.fallback) return { text: body, planFallback: true };
-  return { text: joinKept(body, plan.ranges), planFallback: false };
+): { readonly text: string; readonly planFallback: boolean; readonly notLineStarts: ReadonlySet<number> } {
+  if (policy.unfoldEverything) return { text: body, planFallback: false, notLineStarts: NO_JOINS };
+  if (!validRanges(plan, body.length)) return { text: body, planFallback: true, notLineStarts: NO_JOINS };
+  if (plan.fallback) return { text: body, planFallback: true, notLineStarts: NO_JOINS };
+  const joined = joinKeptLines(body, plan.ranges);
+  return { text: joined.text, planFallback: false, notLineStarts: joined.notLineStarts };
 }
 
 /** Sanitizes one-line texts (src/pdf/text.ts, inlineRuns) and adds up the characters replaced by a code. */
@@ -610,8 +632,8 @@ function buildEmail(
   fields.push({ label: strings.fileLabel, value: files.map((f) => (f.trim() === '' ? own(strings.noFileName, 'muted') : s.line(f, 'muted'))) });
 
   // Body.
-  const { text, planFallback } = pdfBodyText(message.bodyText, plan, policy);
-  const lines = bodyLines(text);
+  const { text, planFallback, notLineStarts } = pdfBodyText(message.bodyText, plan, policy);
+  const lines = bodyLines(text, { notLineStarts });
   s.count += lines.replaced;
   const keptAllBecauseEmpty = !policy.unfoldEverything && !planFallback && plan?.keptAllBecauseEmpty === true;
 
@@ -661,6 +683,7 @@ function buildEmail(
     fields,
     notes,
     body: lines.lines,
+    bodyLevels: lines.levels,
     attachments: items.length === 0 ? null : { label: strings.attachmentsLabel, items },
     flags: {
       undated: !dated,
@@ -762,7 +785,9 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
 /**
  * One rebuilt email (see the top of this file): numbered and shown like a
  * real email (task 8.3), with the copy chosen by rebuiltInPdf. Its text is
- * the rebuilt text (quote marks removed), whole: no plan applies to it.
+ * the rebuilt text (its own quote marks already removed), whole: no plan
+ * applies to it. Deeper quotes left in it (">" lines of an older email it
+ * quoted) get quote levels like a real email's (src/pdf/text.ts, transform g).
  */
 function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: number, input: BuildPdfInput): EmailParts {
   const { strings } = input;
@@ -816,6 +841,7 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
     fields,
     notes,
     body: lines.lines,
+    bodyLevels: lines.levels,
     attachments: null,
     flags: { undated: date.when === null, zoneUnknown: date.zoneUnknown, keptAllBecauseEmpty: false, planFallback: false, htmlConverted: false, controlChars: s.count },
   };

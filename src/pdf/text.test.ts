@@ -12,6 +12,7 @@ import {
   isDrawnAsNothing,
   isLineBreak,
   joinKept,
+  joinKeptLines,
   KEPT_FLAG_TAGS,
   lineText,
   normalizeLineEnds,
@@ -409,6 +410,184 @@ describe('bodyLines', () => {
   it('gives no line for an empty or blank body', () => {
     expect(bodyLines('').lines).toEqual([]);
     expect(bodyLines('\n \n\t').lines).toEqual([]);
+  });
+});
+
+describe('bodyLines: quote levels (transform g, task 8.1)', () => {
+  /** Each line as [text, level]. */
+  const shown = (text: string, notLineStarts?: ReadonlySet<number>): [string, number][] => {
+    const b = bodyLines(text, notLineStarts === undefined ? {} : { notLineStarts });
+    expect(b.levels).toHaveLength(b.lines.length);
+    return b.lines.map((line, k) => [lineText(line), b.levels[k]!]);
+  };
+
+  it('reads the level from the number of ">" and removes only the prefix', () => {
+    expect(shown('Own text.\n> One.\n>> Two.\n>>> Three.\n> > Two again.\n> > > Three again.\nOwn again.')).toEqual([
+      ['Own text.', 0],
+      ['One.', 1],
+      ['Two.', 2],
+      ['Three.', 3],
+      ['Two again.', 2],
+      ['Three again.', 3],
+      ['Own again.', 0],
+    ]);
+  });
+
+  it('removes the spaces before the marks and one space after the last mark, never more', () => {
+    expect(shown('   > Indented mark.')).toEqual([['Indented mark.', 1]]);
+    expect(shown('>No space.')).toEqual([['No space.', 1]]);
+    expect(shown('>  Two spaces: one kept.')).toEqual([[' Two spaces: one kept.', 1]]);
+    expect(shown('> >  x')).toEqual([[' x', 2]]);
+    // Whitespace between marks (tab, nbsp) is part of the prefix; a tab after the last mark is kept (as 4 spaces).
+    expect(shown('>\t>\u{00A0}> deep')).toEqual([['deep', 3]]);
+    expect(shown('>\tTabbed.')).toEqual([['    Tabbed.', 1]]);
+    // Leading spaces with no ">" after them are the writer's own indentation: kept.
+    expect(shown('    code line')).toEqual([['    code line', 0]]);
+  });
+
+  it('leaves a ">" that is not at the start of a line exactly as it is', () => {
+    expect(shown('a > b\n-> next\n=> result\nx >> y')).toEqual([
+      ['a > b', 0],
+      ['-> next', 0],
+      ['=> result', 0],
+      ['x >> y', 0],
+    ]);
+    // After the prefix, the rest is as written, its own ">" included.
+    expect(shown('> a > b >> c')).toEqual([['a > b >> c', 1]]);
+    expect(shown('> [U+0007] stays text')).toEqual([['[U+0007] stays text', 1]]);
+  });
+
+  it('shows a quoted line with nothing after its marks as an empty line at its level, never dropped', () => {
+    expect(shown('> One.\n>\n> Two.')).toEqual([
+      ['One.', 1],
+      ['', 1],
+      ['Two.', 1],
+    ]);
+    expect(shown('>> a\n>>  \n> >\n>> b')).toEqual([
+      ['a', 2],
+      ['', 2],
+      ['', 2],
+      ['b', 2],
+    ]);
+    // Not merged as blank lines (transform e), not dropped at the ends: they held a quote mark.
+    expect(shown('>\n>\n>\n>\nx\n>')).toEqual([
+      ['', 1],
+      ['', 1],
+      ['', 1],
+      ['', 1],
+      ['x', 0],
+      ['', 1],
+    ]);
+    // Own blank lines around quotes still follow transform (e), at level 0.
+    expect(shown('\n\nOwn.\n\n\n\n\n> Quote.\n\n\n')).toEqual([
+      ['Own.', 0],
+      ['', 0],
+      ['', 0],
+      ['Quote.', 1],
+    ]);
+  });
+
+  it('gives levels above any cap as they are (the layout caps the indent)', () => {
+    expect(shown('>>>>>>>>>> ten')).toEqual([['ten', 10]]);
+    expect(shown(`${'>'.repeat(500)} deep`)).toEqual([['deep', 500]]);
+  });
+
+  it('reads CRLF, CR and LF lines alike; not a line after U+2028 or U+2029', () => {
+    expect(shown('Own.\r\n> One.\r\n>> Two.\r\n>\r\nEnd.\r\n')).toEqual([
+      ['Own.', 0],
+      ['One.', 1],
+      ['Two.', 2],
+      ['', 1],
+      ['End.', 0],
+    ]);
+    expect(shown('> a\r> b\n> c')).toEqual([
+      ['a', 1],
+      ['b', 1],
+      ['c', 1],
+    ]);
+    // U+2028 / U+2029 end a PDF line, but the engine does not count them as line breaks: no prefix there.
+    expect(shown('a\u{2028}> b\u{2029}> c\n> d')).toEqual([
+      ['a', 0],
+      ['> b', 0],
+      ['> c', 0],
+      ['d', 1],
+    ]);
+  });
+
+  it('reads no prefix where a kept part began inside a line (notLineStarts)', () => {
+    expect(shown('own\n> x\n> y', new Set([4]))).toEqual([
+      ['own', 0],
+      ['> x', 0],
+      ['y', 1],
+    ]);
+  });
+
+  it('counts codes only in the text kept, and keeps a line with a code in its rest', () => {
+    const b = bodyLines('> \u0007\n>\u0000>');
+    expect(b.lines.map(lineText)).toEqual(['[U+0007]', '[U+0000]>']);
+    expect(b.levels).toEqual([1, 1]);
+    expect(b.replaced).toBe(2);
+  });
+
+  it('stops the prefix at a VT or FF, which stays visible as a code with everything after it as written', () => {
+    // Before the first mark: no prefix at all (as before task 8.1).
+    let b = bodyLines('\v> x');
+    expect(b.lines.map(lineText)).toEqual(['[U+000B]> x']);
+    expect(b.levels).toEqual([0]);
+    expect(b.replaced).toBe(1);
+    // Between marks: the prefix ends before the control; the next ">" stays, in its place.
+    b = bodyLines('> \f> x');
+    expect(b.lines.map(lineText)).toEqual(['[U+000C]> x']);
+    expect(b.levels).toEqual([1]);
+    expect(b.replaced).toBe(1);
+    // After the last mark: never part of the prefix anyway.
+    b = bodyLines('>\v');
+    expect(b.lines.map(lineText)).toEqual(['[U+000B]']);
+    expect(b.levels).toEqual([1]);
+    expect(b.replaced).toBe(1);
+    // One space after the last mark is removed; a second space and the control stay.
+    b = bodyLines('>  \v');
+    expect(b.lines.map(lineText)).toEqual([' [U+000B]']);
+    expect(b.levels).toEqual([1]);
+    expect(b.replaced).toBe(1);
+    // Spaces before the control still count; a later VT is just text.
+    b = bodyLines('  >\v>\n> a\fb');
+    expect(b.lines.map(lineText)).toEqual(['[U+000B]>', 'a[U+000C]b']);
+    expect(b.levels).toEqual([1, 1]);
+    expect(b.replaced).toBe(2);
+  });
+
+  it('gives levels [] for an empty body, and all 0 for text without quotes', () => {
+    expect(bodyLines('')).toEqual({ lines: [], levels: [], replaced: 0 });
+    expect(bodyLines('a\n\nb').levels).toEqual([0, 0, 0]);
+  });
+});
+
+describe('joinKeptLines', () => {
+  const ranges = (...r: [number, number, boolean][]): KeptRange[] => r.map(([start, end, keep]) => ({ start, end, keep }));
+
+  it('marks a kept part that began inside a line, at its offset in the joined text', () => {
+    // "abc" kept, "XY" left out, "> def" kept: it began after "Y", inside the line.
+    const body = 'abcXY> def\n> ghi';
+    expect(joinKeptLines(body, ranges([0, 3, true], [3, 5, false], [5, body.length, true]))).toEqual({ text: 'abc\n> def\n> ghi', notLineStarts: new Set([4]) });
+    expect(linesText(bodyLines('abc\n> def\n> ghi', { notLineStarts: new Set([4]) }).lines)).toBe('abc\n> def\nghi');
+  });
+
+  it('marks nothing for a part that begins a line of the body (after LF or CR, or at 0)', () => {
+    const body = 'own\nskip\n> quoted\rmore';
+    expect(joinKeptLines(body, ranges([0, 4, true], [4, 9, false], [9, body.length, true]))).toEqual({ text: 'own\n> quoted\rmore', notLineStarts: new Set() });
+    expect(joinKeptLines('ab\rcd', ranges([0, 1, false], [1, 3, false], [3, 5, true]))).toEqual({ text: 'cd', notLineStarts: new Set() });
+  });
+
+  it('marks a part after U+2028 (no line break for the engine)', () => {
+    const body = 'a\u{2028}x> b';
+    expect(joinKeptLines(body, ranges([0, 2, true], [2, 3, false], [3, body.length, true]))).toEqual({ text: 'a\u{2028}> b', notLineStarts: new Set([2]) });
+  });
+
+  it('gives the same text as joinKept', () => {
+    const body = 'own text\n> quoted\nsig\nforwarded';
+    const r = ranges([0, 9, true], [9, 18, false], [18, 22, true], [22, body.length, false]);
+    expect(joinKeptLines(body, r).text).toBe(joinKept(body, r));
   });
 });
 

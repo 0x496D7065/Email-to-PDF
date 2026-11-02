@@ -8,7 +8,7 @@ import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../engine/output-plan';
 import { buildPdfDocument, type PdfDocument, type PdfEmail } from './model';
-import { referenceDisplayText } from '../../tests/support/pdf-reference';
+import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../tests/support/pdf-reference';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
 
@@ -77,10 +77,18 @@ describe('PDF document model over the parsed fixtures', () => {
   it('with "include everything", every body is the full text after the display transforms only', async () => {
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
     const { doc: d, result: r } = await doc(policy);
+    let quoted = 0;
     for (const { e, position } of realEmails(d)) {
       const m = r.messages[position]!;
       expect(bodyOf(e), m.message.source.fileName).toBe(referenceDisplayText(m.message.bodyText));
+      expect(e.bodyLevels, m.message.source.fileName).toEqual(referenceDisplayLines(m.message.bodyText).map((l) => l.level));
+      // Task 8.1: only the quote prefixes are missing; no line starts with a quote mark.
+      expect(quotePrefixProblems(m.message.bodyText, e.body.map(lineText), e.bodyLevels), m.message.source.fileName).toEqual([]);
+      expect(bodyOf(e), m.message.source.fileName).not.toMatch(/^\s*>/mu);
+      quoted += e.bodyLevels.filter((n) => n > 0).length;
       expect(e.flags.planFallback).toBe(false);
     }
+    // The fixtures hold ">" quotes (Gmail, Thunderbird, HTML blockquotes).
+    expect(quoted).toBeGreaterThan(10);
   });
 });
