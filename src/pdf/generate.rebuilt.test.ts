@@ -8,12 +8,13 @@
 // thread, whose quote holds 3 earlier emails).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { readDests, readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { type PdfValue, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
 import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { NormalizedMessage } from '../parsing/types';
 import { rebuiltEntries } from '../ui-model/rebuilt';
 import { generatePdf, type PdfFonts } from './generate';
+import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './layout';
 import { loadPdfFonts } from './load-fonts';
 import { createPdfStrings } from './strings';
 
@@ -135,5 +136,42 @@ describe('the PDF with rebuilt emails, read back', () => {
     expect(all).toContain('E-mail antérieur (reconstitué à partir du texte cité dans l’e-mail 1)');
     expect(all).toContain('[Reconstitué]');
     expect(all).toContain('Ce ne sont pas des fichiers d’origine.');
+  });
+
+  it('each email, rebuilt or real, starts at the top of a new page; no empty page; index numbers and bookmarks point there', async () => {
+    const { pdf, pages } = await pdfText();
+    const dests = readDests(pdf);
+    const runs = await readPageRuns(pdf);
+    // PDF order, as the bookmarks give it: the three rebuilt emails (oldest first), then the real one.
+    const anchors = readOutline(pdf)!.items.slice(2).map((i) => i.dest);
+    expect([...anchors].sort()).toEqual(['email-1', 'rebuilt-0', 'rebuilt-1', 'rebuilt-2']);
+    expect(anchors[3]).toBe('email-1');
+    const starts = anchors.map((a) => dests.get(a)!.page);
+    // The first right after the index, then one page each (the rebuilt emails are short), in PDF order.
+    expect(starts[0]).toBe(dests.get('index')!.page + 1);
+    for (let k = 1; k < starts.length; k++) expect(starts[k]).toBe(starts[k - 1]! + 1);
+    // Each destination at the same height (the top of the text area), its heading the first line of its page.
+    const top = CONFIG.page.height - CONFIG.margin.top + CONFIG.spacing.destinationAbove;
+    for (const [k, anchor] of anchors.entries()) {
+      expect(dests.get(anchor)!.top).toBeCloseTo(top, 3);
+      const first = pages[starts[k]!]![0]!;
+      expect(first).toBe(anchor === 'email-1' ? 'Email 1' : 'Earlier email (rebuilt from quoted text in email 1)');
+    }
+    // No empty page: each has text above its footer.
+    const footerY = CONFIG.footer.baselineFromBottom + 1;
+    for (const page of runs) expect(page.some((r) => r.y > footerY)).toBe(true);
+    // Index: each row's link goes to its email, the number drawn in the row's page column is that page + 1.
+    const pageColumn = CONFIG.page.width - CONFIG.margin.right - CONFIG.index.pageWidth;
+    const shown = new Map<string, string[]>();
+    for (const [i, pageDict] of pdf.pages().entries()) {
+      for (const a of (pageDict.get('Annots') as PdfValue[] | undefined) ?? []) {
+        const link = pdf.dict(a);
+        const dest = pdf.name(link.get('Dest'));
+        const [, y1, , y2] = link.get('Rect') as number[];
+        shown.set(dest, runs[i]!.filter((r) => r.x >= pageColumn - 0.01 && r.y > y1! && r.y < y2!).map((r) => r.shown));
+      }
+    }
+    expect([...shown.keys()].sort()).toEqual([...anchors].sort());
+    for (const [k, anchor] of anchors.entries()) expect(shown.get(anchor)).toEqual([String(starts[k]! + 1)]);
   });
 });

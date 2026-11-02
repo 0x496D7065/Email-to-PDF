@@ -96,6 +96,13 @@ function checkLayout(doc: PdfDocument, layout: PdfLayout): void {
   const total = document.pages.length;
   const index = indexPages(layout);
   expect(anchorPages.get(doc.emails[0]!.anchor)).toBe(frontPages);
+  // The default (task 8.4): each email from the top of a new page, in order, never an empty page between two.
+  for (const [k, email] of doc.emails.entries()) {
+    const destination = document.destinations.find((d) => d.name === email.anchor)!;
+    expect(destination.y).toBeCloseTo(CONFIG.margin.top - CONFIG.spacing.destinationAbove, 6);
+    if (k > 0) expect(anchorPages.get(email.anchor)).toBeGreaterThan(anchorPages.get(doc.emails[k - 1]!.anchor)!);
+  }
+  for (const page of document.pages) expect(page.text.some((r) => r.y <= BOTTOM)).toBe(true);
   for (const entry of doc.index.entries) {
     const page = anchorPages.get(entry.anchor)!;
     expect(document.pages[page]!.text.some((r) => r.copyText === `Email ${String(entry.number)}`)).toBe(true);

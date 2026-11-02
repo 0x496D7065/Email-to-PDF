@@ -22,12 +22,17 @@
 // at one level.
 //
 // Pagination rules:
-// - emails follow each other on the same page, with a thin rule between
-//   them (or each on a new page, option newPagePerEmail);
+// - every email starts at the top of a new page (option newPagePerEmail,
+//   on by default); never an empty page: an email already at the top of a
+//   page (the first one, right after the index) gets no extra break. With
+//   the option off, emails follow each other on the same page, with a thin
+//   rule between them;
 // - an email heading is never left alone at the bottom of a page: an email
 //   starts on a page only if its heading, its whole header table, its notes
 //   and its first keepBodyLines (2) body lines fit there; when that block is
-//   taller than a page, only the heading and the first header row must fit;
+//   taller than a page, only the heading and the first header row must fit
+//   (this matters mainly with newPagePerEmail off, or when a header table
+//   is taller than a page);
 // - a header row, a list item (cover) stays on one page when it fits on one;
 //   a table may break between its rows, a body between its lines;
 // - a cover section heading is kept with the start of its section;
@@ -228,6 +233,7 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, anchorPages
   if (keep > b.contentHeight) keep = headingHeight + (rows[0]?.height ?? 0);
 
   // After this, the keep block fits below the cursor (or the page is empty).
+  // `first` is only a safeguard: the first email starts on a fresh PageBuilder, so `!b.atTop` is already false for it.
   if (!b.atTop) {
     if (b.config.newPagePerEmail && !first) b.newPage();
     else if (!b.fits(spacing.betweenEmails + keep)) b.newPage();

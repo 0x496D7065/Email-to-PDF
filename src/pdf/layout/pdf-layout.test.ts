@@ -116,10 +116,11 @@ describe('layoutPdf: document', () => {
     expect(pageOf(document, 'Index')).toBe(1);
     expect(frontPages).toBe(2);
     expect(passes).toBe(2);
+    // Each email on a page of its own (the default, task 8.4).
     expect([...anchorPages.entries()]).toEqual([
       ['email-1', 2],
-      ['email-2', 2],
-      ['email-3', 2],
+      ['email-2', 3],
+      ['email-3', 4],
     ]);
     expect(placeholders).toBe(0);
     expectInsideTextArea(document);
@@ -174,37 +175,73 @@ describe('layoutPdf: document', () => {
 
 describe('layoutPdf: pagination', () => {
   it('never leaves a heading alone: header table and the first two body lines are on its page', () => {
-    // Bodies of varying length, so emails start all over the page.
+    // Bodies of varying length, so emails start all over the page when they follow each other (option off).
     const doc = build(Array.from({ length: 60 }, (_, k) => make({ bodyText: lines(k + 1, 1 + ((k * 7) % 23)) })));
-    const { document, anchorPages } = lay(doc);
-    expect(document.pages.length).toBeGreaterThan(5);
-    for (const email of doc.emails) {
-      const page = anchorPages.get(email.anchor)!;
-      const n = String(email.number);
-      expect(pageOf(document, `Email ${n}`)).toBe(page);
-      expect(pageOf(document, `Line 1 of email ${n}.`)).toBe(page);
-      if (email.body.length > 1) expect(pageOf(document, `Line 2 of email ${n}.`)).toBe(page);
+    for (const newPagePerEmail of [false, true]) {
+      const { document, anchorPages } = lay(doc, newPagePerEmail);
+      expect(document.pages.length).toBeGreaterThan(5);
+      for (const email of doc.emails) {
+        const page = anchorPages.get(email.anchor)!;
+        const n = String(email.number);
+        expect(pageOf(document, `Email ${n}`)).toBe(page);
+        expect(pageOf(document, `Line 1 of email ${n}.`)).toBe(page);
+        if (email.body.length > 1) expect(pageOf(document, `Line 2 of email ${n}.`)).toBe(page);
+      }
+      expectInsideTextArea(document);
     }
-    expectInsideTextArea(document);
   });
 
-  it('draws a rule between emails on one page; newPagePerEmail puts each on its own page', () => {
+  it('puts each email on its own page by default; with newPagePerEmail off, emails follow each other with a rule between', () => {
     const doc = build(Array.from({ length: 5 }, () => make()));
-    const together = lay(doc);
-    // Four short emails start on the first email page (after the cover and the index), the fifth on the next one,
-    // below the end of the fourth; a rule between each two.
+    expect(CONFIG.newPagePerEmail).toBe(true);
+    const apart = lay(doc);
+    expect(apart.frontPages).toBe(2);
+    expect([...apart.anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
+    expect(apart.document.pages).toHaveLength(7);
+    for (const page of apart.document.pages.slice(2)) expect(page.lines).toHaveLength(0);
+    // The explicit option does the same.
+    expect([...lay(doc, true).anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
+    // Switched off (option or config): four short emails start on the first email page (after the cover and
+    // the index), the fifth on the next one, below the end of the fourth; a rule between each two.
+    const together = lay(doc, false);
     expect(together.frontPages).toBe(2);
     expect([...together.anchorPages.values()]).toEqual([2, 2, 2, 2, 3]);
     expect(together.document.pages.slice(2).flatMap((p) => p.lines)).toHaveLength(4);
     const rules = together.document.pages[2]!.lines;
     for (const rule of rules) expect(rule).toMatchObject({ x1: CONFIG.margin.left, x2: CONFIG.page.width - CONFIG.margin.right, width: CONFIG.rule.width });
-    const apart = lay(doc, true);
-    expect([...apart.anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
-    expect(apart.document.pages).toHaveLength(7);
-    for (const page of apart.document.pages.slice(2)) expect(page.lines).toHaveLength(0);
-    // The option in the config does the same.
-    const viaConfig = layoutPdf(doc, fonts, { strings, config: { ...CONFIG, newPagePerEmail: true } });
-    expect([...viaConfig.anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
+    const viaConfig = layoutPdf(doc, fonts, { strings, config: { ...CONFIG, newPagePerEmail: false } });
+    expect([...viaConfig.anchorPages.values()]).toEqual([2, 2, 2, 2, 3]);
+  });
+
+  it('by default starts every email at the top of a new page, with no empty page, whatever the length of the one before', () => {
+    // The email before ends anywhere on its page, its last page full too; one longer than a page.
+    const above = new Typesetter(fonts, CONFIG).wrap([{ role: 'heading', text: 'Email 1' }], 1e6, 'heading')[0]!.above;
+    for (let n = 1; n <= 130; n += 3) {
+      const counts = [n, 1, 2 * n, 3];
+      const doc = build(counts.map((c, k) => make({ bodyText: lines(k + 1, c) })));
+      const { document, anchorPages, frontPages } = lay(doc);
+      const starts = doc.emails.map((e) => anchorPages.get(e.anchor)!);
+      expect(starts[0]).toBe(frontPages);
+      for (let k = 1; k < starts.length; k++) expect(starts[k]).toBeGreaterThan(starts[k - 1]!);
+      for (const [k, email] of doc.emails.entries()) {
+        const page = document.pages[starts[k]!]!;
+        // The heading is the first line of its page, at the top of the text area; its destination just above it.
+        const first = page.text.filter((r) => !isFooter(r)).reduce((a, b) => (b.y < a.y ? b : a));
+        expect(first.copyText).toBe(`Email ${String(email.number)}`);
+        expect(first.y).toBeCloseTo(TOP + above, 6);
+        const dest = document.destinations.find((d) => d.name === email.anchor)!;
+        expect(dest.page).toBe(starts[k]);
+        expect(dest.y).toBeCloseTo(TOP - CONFIG.spacing.destinationAbove, 6);
+        // Each email's pages hold only that email: its last body line is before the next email's page.
+        const lastLine = pageOf(document, `Line ${String(counts[k])} of email ${String(email.number)}.`, frontPages);
+        expect(lastLine).toBeGreaterThanOrEqual(starts[k]!);
+        if (k + 1 < starts.length) expect(lastLine).toBe(starts[k + 1]! - 1);
+      }
+      // No empty page: every page has text besides its footer, and no rules between emails.
+      for (const page of document.pages) expect(page.text.some((r) => !isFooter(r))).toBe(true);
+      for (const page of document.pages.slice(frontPages)) expect(page.lines).toHaveLength(0);
+      expectInsideTextArea(document);
+    }
   });
 
   it('breaks a header row taller than a page between its lines, then goes on', () => {
@@ -305,11 +342,12 @@ describe('layoutPdf: keeping things together', () => {
 
   it('starts an email whose keep block is taller than a page where its heading and first header row fit, together', () => {
     // First row 10 lines, second row 70 lines (taller than a page): only the heading and the first row are kept together.
+    // Emails following each other (newPagePerEmail off): the only case where an email may start below another.
     let shared = 0;
     for (let n = 1; n <= 60; n++) {
       const before = syntheticEmail(1, Array.from({ length: n }, (_, i) => `Line ${String(i + 1)} of email 1.`));
       const email: PdfEmail = { ...syntheticEmail(2, ['Body.']), fields: [tallRow('A', 10), tallRow('B', 70)] };
-      const { document, anchorPages } = lay(syntheticDoc([before, email]));
+      const { document, anchorPages } = lay(syntheticDoc([before, email]), false);
       const headingPage = pageOf(document, 'Email 2');
       expect(headingPage).toBe(anchorPages.get('email-2'));
       expect([...pagesOfRow(document, 'A')]).toEqual([headingPage]);

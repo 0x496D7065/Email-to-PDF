@@ -72,7 +72,10 @@ export interface LayoutConfig {
   };
   /** The thin rule between two emails. */
   readonly rule: { readonly width: number; readonly color: LaidOutColor };
-  /** Start every email on a new page (default: emails follow each other). */
+  /**
+   * Start every email on a new page (default true, user decision 2026-11-02);
+   * false: emails follow each other, a rule between.
+   */
   readonly newPagePerEmail: boolean;
   /** An email starts on a page only if its heading, header table, notes and this many body lines fit there. */
   readonly keepBodyLines: number;
@@ -111,7 +114,7 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
     destinationAbove: 8,
   },
   rule: { width: 0.5, color: { gray: 0.75 } },
-  newPagePerEmail: false,
+  newPagePerEmail: true,
   keepBodyLines: 2,
 };
 

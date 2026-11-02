@@ -174,7 +174,9 @@ The tool never throws message text away on its own:
   included) with its SHA-256 fingerprint, so anyone can check that a file
   is exactly the one used. Files that could not be read are listed too.
   Then come the index (number, date, sender, subject, attachments, page)
-  and the emails, with page numbers and PDF bookmarks.
+  and the emails, with page numbers and PDF bookmarks. Every email
+  (rebuilt ones included) starts at the top of a new page, so a short
+  email may leave the rest of its page blank.
 - Message text is never rewritten or summarised. (Rebuilt emails, below,
   lose only their "> " quote marks.)
 
