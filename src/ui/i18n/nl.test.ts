@@ -9,7 +9,6 @@ import { PDF_FONTS, type PdfFontName } from '../../pdf/fonts';
 import { createPdfStrings } from '../../pdf/strings';
 import { en } from './en';
 import { nl } from './nl';
-import nlSource from './nl.ts?raw';
 import { isPluralForms, type Messages, pickLocale, placeholdersIn, translator } from './index';
 
 // Type check: nl has every key of en, and nothing else (an object literal
@@ -175,10 +174,6 @@ describe('Dutch strings', () => {
       expect(nl.help.clients.outlookClassic.how).toContain('.eml- of .msg-bestand, afhankelijk van uw Outlook-versie');
       for (const [key, text] of nlTexts) expect(text, key).not.toMatch(/https?:|www\.|@/);
     });
-  });
-
-  it('nl.ts says it needs proofreading', () => {
-    expect(nlSource).toContain('NEEDS USER PROOFREADING');
   });
 });
 

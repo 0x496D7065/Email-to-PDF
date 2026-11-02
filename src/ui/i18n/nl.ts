@@ -2,9 +2,6 @@
 // `Messages` type makes a missing or extra key a compile error); the
 // comments there say where each text is shown.
 //
-// NEEDS USER PROOFREADING before release: these translations have not yet
-// been read by the user (not blocking).
-//
 // Rules for this file (on top of those of en.ts):
 // - Formal "u", plain calm words: "e-mailbestand", never jargon. Standard
 //   Dutch that reads naturally in Belgium and in the Netherlands alike (no
@@ -236,7 +233,6 @@ export const nl: Messages = {
     seeFailed: 'Zie stap 1 voor de reden.',
     messagesFound: { one: '{count} e-mail gevonden', other: '{count} e-mails gevonden' },
     duplicatesMerged: { one: '{count} identieke kopie samengevoegd', other: '{count} identieke kopieën samengevoegd' },
-    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
     rebuiltFound: { one: '{count} eerdere e-mail gereconstrueerd uit geciteerde tekst', other: '{count} eerdere e-mails gereconstrueerd uit geciteerde tekst' },
     // The form follows {count} (the total), as in English, so no verb that
     // would have to agree with {included}: hence "In de PDF: 1 van 5 e-mails".
@@ -244,7 +240,6 @@ export const nl: Messages = {
       one: 'In de PDF: {included} van {count} e-mail.',
       other: 'In de PDF: {included} van {count} e-mails.',
     },
-    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
     rebuiltIncluded: {
       one: 'In de PDF: {included} van {count} gereconstrueerde e-mail.',
       other: 'In de PDF: {included} van {count} gereconstrueerde e-mails.',
@@ -268,7 +263,6 @@ export const nl: Messages = {
     },
   },
 
-  // NEEDS USER PROOFREADING (task 7.6 drafts; user decision Q4, proofread in task 7.8).
   rebuilt: {
     label: 'Gereconstrueerd',
     noSubject: '(onderwerp staat niet in het citaat)',
@@ -282,19 +276,14 @@ export const nl: Messages = {
     dateAbout: 'omstreeks {date}',
     dateAsWritten: 'Zoals geschreven in het citaat: {text}',
     dateUnreadable: '(datum kon niet worden gelezen)',
-    // NEEDS USER PROOFREADING (task 7.8c).
     rebuildConversation: 'Gesprek reconstrueren uit de antwoorden',
-    // NEEDS USER PROOFREADING (task 7.8c).
     offWhileFullText: 'Niet beschikbaar zolang “Volledige originele tekst afdrukken” is aangevinkt.',
     itemFailed: 'Er ging iets mis bij het tonen van deze gereconstrueerde e-mail. De tekst staat nog in de e-mail waaruit hij is overgenomen.',
-    // NEEDS USER PROOFREADING (task 7.7 draft, see the top of this file).
     sourceExcluded: 'Niet in de PDF: de e-mail waaruit hij is overgenomen, wordt weggelaten',
-    // NEEDS USER PROOFREADING (task 7.7).
     pdfSource: 'In de PDF: overgenomen uit {number}',
   },
 
   pdf: {
-    // NEEDS USER PROOFREADING (task 7.8c).
     everything: 'Volledige originele tekst afdrukken (geciteerde tekst en handtekeningen inbegrepen)',
     // Wording given by the user (2026-10-29, task 7.8c).
     everythingNote:
@@ -396,7 +385,6 @@ export const nl: Messages = {
       'folding-disabled': 'Deze e-mail wordt volledig getoond; geciteerde tekst kon niet worden ingeklapt.',
       'dedupe-failed': 'Identieke kopieën konden niet worden gecontroleerd, dus elke e-mail wordt bewaard.',
     },
-    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
     rebuild: {
       'reconstruct-failed': 'De eerdere e-mails die in deze e-mail worden geciteerd, konden niet als afzonderlijke e-mails worden gereconstrueerd. De geciteerde tekst staat nog volledig in deze e-mail.',
       'reconstruct-limit': 'Niet alle eerdere e-mails die in deze e-mail worden geciteerd, konden worden gereconstrueerd (te veel, of de e-mail is te lang). De geciteerde tekst staat nog volledig in deze e-mail.',

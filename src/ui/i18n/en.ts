@@ -338,9 +338,10 @@ export const en = {
 
   // Step 2: earlier emails rebuilt from the quoted text of an email added
   // (src/ui/preview.ts, src/ui-model/rebuilt.ts). Drafts (user decision Q4,
-  // 2026-10-27): the user proofreads them in task 7.8. A rebuilt card never
-  // has a number of its own; its words always say it was rebuilt, never
-  // only its dashed border.
+  // 2026-10-27), accepted by the user 2026-11-01. In the preview, a rebuilt
+  // card never has a number of its own (the PDF numbers it with the others,
+  // task 8.3); its words always say it was rebuilt, never only its dashed
+  // border.
   rebuilt: {
     // The text label at the start of every rebuilt card's heading.
     label: 'Rebuilt',

@@ -2,9 +2,6 @@
 // `Messages` type makes a missing or extra key a compile error); the
 // comments there say where each text is shown.
 //
-// NEEDS USER PROOFREADING before release: these translations have not yet
-// been read by the user (not blocking).
-//
 // Rules for this file (on top of those of en.ts):
 // - Formal "vous", plain calm words: "fichier e-mail", never jargon.
 // - Same meaning as English, with the SAME caution: the mail-client help
@@ -235,7 +232,6 @@ export const fr: Messages = {
     seeFailed: 'Voir pourquoi à l’étape 1.',
     messagesFound: { one: '{count} e-mail trouvé', other: '{count} e-mails trouvés' },
     duplicatesMerged: { one: '{count} copie identique fusionnée', other: '{count} copies identiques fusionnées' },
-    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
     rebuiltFound: { one: '{count} e-mail antérieur reconstitué à partir du texte cité', other: '{count} e-mails antérieurs reconstitués à partir du texte cité' },
     // The form follows {count} (the total), as in English, so the verb must
     // not agree with {included}: hence "E-mails dans le PDF : 1 sur 5".
@@ -243,7 +239,6 @@ export const fr: Messages = {
       one: 'E-mail dans le PDF\u00A0: {included} sur {count}.',
       other: 'E-mails dans le PDF\u00A0: {included} sur {count}.',
     },
-    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
     rebuiltIncluded: {
       one: 'E-mail reconstitué dans le PDF\u00A0: {included} sur {count}.',
       other: 'E-mails reconstitués dans le PDF\u00A0: {included} sur {count}.',
@@ -267,7 +262,6 @@ export const fr: Messages = {
     },
   },
 
-  // NEEDS USER PROOFREADING (task 7.6 drafts; user decision Q4, proofread in task 7.8).
   rebuilt: {
     label: 'Reconstitué',
     noSubject: '(objet absent de la citation)',
@@ -281,19 +275,14 @@ export const fr: Messages = {
     dateAbout: 'vers {date}',
     dateAsWritten: 'Telle qu’écrite dans la citation\u00A0: {text}',
     dateUnreadable: '(date illisible)',
-    // NEEDS USER PROOFREADING (task 7.8c).
     rebuildConversation: 'Reconstituer la conversation à partir des réponses',
-    // NEEDS USER PROOFREADING (task 7.8c).
     offWhileFullText: 'Indisponible tant que «\u00A0Imprimer le texte d’origine complet\u00A0» est coché.',
     itemFailed: 'Un problème est survenu à l’affichage de cet e-mail reconstitué. Son texte se trouve toujours dans l’e-mail d’où il est tiré.',
-    // NEEDS USER PROOFREADING (task 7.7 draft, see the top of this file).
     sourceExcluded: 'Pas dans le PDF\u00A0: l’e-mail d’où il est tiré est laissé de côté',
-    // NEEDS USER PROOFREADING (task 7.7).
     pdfSource: 'Dans le PDF\u00A0: tiré de {number}',
   },
 
   pdf: {
-    // NEEDS USER PROOFREADING (task 7.8c).
     everything: 'Imprimer le texte d’origine complet (citations et signatures comprises)',
     // Wording given by the user (2026-10-29, task 7.8c).
     everythingNote:
@@ -395,7 +384,6 @@ export const fr: Messages = {
       'folding-disabled': 'Cet e-mail est affiché en entier\u202F; le texte cité n’a pas pu être replié.',
       'dedupe-failed': 'Les copies identiques n’ont pas pu être vérifiées, tous les e-mails sont donc conservés.',
     },
-    // NEEDS USER PROOFREADING (task 7.6 draft, see the top of this file).
     rebuild: {
       'reconstruct-failed': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas pu être reconstitués séparément. Tout le texte cité reste dans cet e-mail.',
       'reconstruct-limit': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas tous pu être reconstitués (trop nombreux, ou e-mail trop long). Tout le texte cité reste dans cet e-mail.',
