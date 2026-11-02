@@ -50,28 +50,24 @@ describe('createPdfStrings', () => {
   });
 });
 
-describe('the texts of rebuilt emails (task 7.7)', () => {
-  it('mark them, name the email they were taken from by its PDF number, and reuse the preview words', () => {
-    const s = createPdfStrings('en');
-    expect(s.rebuiltHeading(3)).toBe('Earlier email (rebuilt from quoted text in email 3)');
-    expect(s.rebuiltMarker).toBe('[Rebuilt]');
-    expect(s.rebuiltBookmark('2025-03-03', 'Alice Example', 'Desks')).toBe('[Rebuilt] 2025-03-03, Alice Example: Desks');
-    expect(s.rebuiltNote(3, true)).toBe('Rebuilt from the quoted text in email 3. Quote marks removed; may be incomplete or inexact.');
-    expect(s.rebuiltNote(3, false)).toBe('Rebuilt from the quoted text in email 3. May be incomplete or inexact.');
-    expect(s.rebuiltAlso([])).toBe('');
-    expect(s.rebuiltAlso([4])).toBe('Same quoted text also in email 4.');
-    expect(s.rebuiltAlso([4, 1006])).toBe('Same quoted text also in emails 4, 1006.');
-    expect(s.takenFromLabel).toBe('Taken from');
-    expect(s.takenFrom(1234)).toBe('email 1234');
-    expect(s.dateAbout('2025-03-03 09:15')).toBe('about 2025-03-03 09:15');
-    expect(s.quoteDateAsWritten('maandag')).toBe('As written in the quote: maandag');
-    expect(s.rebuiltCount(1)).toBe('1 earlier email rebuilt from quoted text');
-    expect(s.rebuiltCount(2)).toBe('2 earlier emails rebuilt from quoted text');
-    // The paragraph names the marker the index uses, in every language.
+describe('no text of its own for rebuilt emails (user decision 2026-11-02, task 8.3)', () => {
+  // In the PDF a rebuilt email is shown like a real one, with the same texts:
+  // the PDF strings have no member for it and no text that says "rebuilt".
+  it('has no member for rebuilt emails, and none of its texts says rebuilt, in every language', () => {
+    const words: Record<string, RegExp> = { en: /rebuilt/i, fr: /reconstitu/i, nl: /gereconstrueerd/i };
     for (const locale of ['en', 'fr', 'nl']) {
-      const x = createPdfStrings(locale);
-      expect(x.rebuiltIntro).toContain(x.rebuiltMarker);
-      expect(x.rebuiltBookmark('d', 'f', 's').startsWith(`${x.rebuiltMarker} `)).toBe(true);
+      const s = createPdfStrings(locale);
+      expect(Object.keys(s).filter((k) => /rebuilt|takenFrom|listIncomplete|dateAbout|quoteDate/i.test(k)), locale).toEqual([]);
+      const texts: string[] = [];
+      const collect = (value: unknown): void => {
+        if (typeof value === 'string') texts.push(value);
+        else if (typeof value === 'object' && value !== null) Object.values(value).forEach(collect);
+      };
+      collect(s);
+      // The functions too, with sample values.
+      texts.push(s.emailHeading(3), s.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'), s.dateAsWritten('maandag'), s.emailCount(2));
+      expect(texts.length).toBeGreaterThan(40);
+      for (const text of texts) expect(text, locale).not.toMatch(words[locale]!);
     }
   });
 });

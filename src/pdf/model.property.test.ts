@@ -12,7 +12,8 @@
 //   (nothing is invented, only parts are left out), and the numbering maps
 //   back to the included emails;
 // - with the rebuilt emails ON (task 7.7), every real email's body is still
-//   its full text (collapse, never delete);
+//   the same as without them (collapse, never delete), and every email,
+//   rebuilt ones too, is numbered 1..n in PDF order (task 8.3);
 // - 2000 emails build in well under a second.
 // Synthetic data only: made-up names, *.test addresses. Every invisible or
 // special character is written as a \u escape.
@@ -228,7 +229,14 @@ describe('PDF document model properties', () => {
       const foldedReal = realEmails(folded);
       rebuiltShown += folded.emails.length - foldedReal.length;
       expect(foldedReal.map((x) => x.position)).toEqual(positions);
-      expect(foldedReal.map((x) => x.e.number)).toEqual(positions.map((_, k) => k + 1));
+      // Task 8.3: every email, rebuilt ones too, is numbered 1..n in PDF order, index alike;
+      // the real emails keep their order and carry the number pdfNumberByPosition gives.
+      const all = folded.emails.map((_, k) => k + 1);
+      expect(folded.emails.map((x) => x.number)).toEqual(all);
+      expect(folded.index.entries.map((x) => x.number)).toEqual(all);
+      expect(folded.cover.emailCount).toBe(folded.emails.length);
+      for (const { e, position } of foldedReal) expect(folded.pdfNumberByPosition[position]).toBe(e.number);
+      expect(folded.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
       // Task 7.7: the real emails' text is the same with and without rebuilt emails.
       const plain = realEmails(buildPdfDocument({ ...defaultInput, rebuilt: [] }));
       expect(foldedReal.map((x) => bodyOf(x.e)), `seed ${String(seed)}`).toEqual(plain.map((x) => bodyOf(x.e)));
@@ -236,7 +244,7 @@ describe('PDF document model properties', () => {
       const doc = buildPdfDocument({ result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
       const real = realEmails(doc);
       expect(doc.emails).toHaveLength(real.length);
-      expect(doc.cover.rebuiltCount).toBe(0);
+      expect(doc.cover.emailCount).toBe(real.length);
       expect(doc.index.entries.every((x) => !x.rebuilt)).toBe(true);
       // Every included real email is there once, numbered 1..k in list order, with its full text.
       expect(real.map((x) => x.position)).toEqual(positions);

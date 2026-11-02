@@ -1,5 +1,6 @@
 // Browser test of the emails rebuilt from quoted text IN THE PDF (milestone
-// 7, task 7.7: src/pdf/model.ts, src/ui/review.ts, src/ui/page.ts), in each
+// 7, task 7.7, and task 8.3: src/pdf/model.ts, src/ui/review.ts,
+// src/ui/page.ts), in each
 // test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts), with the real pipeline and the real workers. The
 // downloaded file is read back as text (tests/support/pdf-reader.ts: the
@@ -8,10 +9,12 @@
 // The file added is the LAST email of a synthetic thread
 // (tests/fixtures/eml/13-order-4-bob-outlook-nl.eml): alone, it gives three
 // rebuilt cards before its own (e2e/rebuilt.spec.ts checks the cards).
-// 1. By default, the three rebuilt emails are in the PDF: the cover's count
-//    and paragraph, the index marker, each one's heading, "Taken from" row
-//    and fixed note; the SHA-256 of the real file only.
-// 2. The switch off: none of it is in the PDF.
+// 1. By default, the three rebuilt emails are in the PDF, shown and
+//    numbered exactly like real emails (user decision 2026-11-02, task 8.3:
+//    emails 1 to 4, nothing saying they were rebuilt: no marker, no note,
+//    no "Taken from" row, no cover count or section); the cover counts 4
+//    emails; the SHA-256 of the real file only.
+// 2. The switch off: only the real email, as email 1.
 // 3. The email they were taken from unticked (another email added, so a
 //    PDF can still be made): the cards are marked "Not in the PDF", and
 //    nothing rebuilt is in the PDF (user decision Q1 (a)).
@@ -58,8 +61,8 @@ const LAST = fixture('13-order-4-bob-outlook-nl.eml');
 /** An email of another conversation, with nothing quoted: no rebuilt email of its own. */
 const OTHER = fixture('70-no-date.eml');
 
-const HEADING = en.pdf.document.rebuiltHeading.replace('{number}', '1');
-const MARKER = en.pdf.document.rebuiltMarker;
+/** "Email N": the heading of every email in the PDF, rebuilt ones too (task 8.3). */
+const heading = (n: number): string => en.pdf.document.emailHeading.replace('{number}', String(n));
 
 test.use({ timezoneId: 'Africa/Lagos' });
 
@@ -133,33 +136,34 @@ async function expectNothingLeftThePage(page: Page, pdfs = 1): Promise<void> {
   expect(stored).toEqual({ localStorage: 0, sessionStorage: 0, indexedDB: 0, cookie: '' });
 }
 
-test('by default the PDF holds the three rebuilt emails, marked, before the email they were taken from', async ({ page }) => {
+test('by default the PDF holds the three rebuilt emails, shown and numbered like real emails, before the email they were taken from', async ({ page }) => {
   test.setTimeout(90_000);
   await open(page, [LAST], 4);
   await expect(page.locator('#review-rebuilt')).toHaveText('3 of 3 rebuilt emails will be in the PDF.');
   const pages = await makePdfText(page);
   const all = pages.join(' ');
-  // The cover: the count and the paragraph saying what they are.
-  expect(pages[0]).toContain('Emails 1 email');
-  expect(pages[0]).toContain('Rebuilt emails 3 earlier emails rebuilt from quoted text');
-  expect(pages[0]).toContain(en.pdf.document.rebuiltSection);
-  expect(pages[0]).toContain('They are not original files.');
-  // The index: three marked rows (no number), then email 1.
-  expect(pages[1]!.split(MARKER)).toHaveLength(4);
-  expect(pages[1]).toContain(`${MARKER} Re: Office desks and chairs`);
-  // Each one: its heading, "Taken from", its note; then the real email.
-  expect(all.split(HEADING)).toHaveLength(4);
-  expect(all.split('Taken from email 1')).toHaveLength(4);
-  expect(all).toContain(en.rebuilt.noteNoMarks.replace('{number}', '1'));
-  expect(all).toContain(en.rebuilt.noteMarks.replace('{number}', '1'));
-  expect(all).toMatch(/Date about 2025-03-03 \d\d:40 UTC\+01:00 As written in the quote: maandag 3 maart 2025 15:40/);
-  expect(all.lastIndexOf(HEADING)).toBeLessThan(all.indexOf('Email 1 From'));
+  // The cover: all four emails counted, nothing about rebuilt emails.
+  expect(pages[0]).toContain('Emails 4 emails');
+  // Nothing in the PDF says an email was rebuilt (the real email's text has no such word either).
+  expect(all).not.toMatch(/rebuilt/i);
+  expect(all).not.toContain('Taken from');
+  expect(all).not.toContain(en.rebuilt.noteNoMarks.replace('{number}', '1'));
+  expect(all).not.toContain(en.rebuilt.noteMarks.replace('{number}', '1'));
+  expect(all).not.toContain('As written in the quote');
+  // The index lists the rebuilt ones too.
+  expect(pages[1]).toContain('Re: Office desks and chairs');
+  // Emails 1 to 4 in timeline order: the three rebuilt ones, then the email added.
+  for (const n of [1, 2, 3, 4]) expect(all.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
+  expect(all.indexOf(`${heading(3)} From`)).toBeLessThan(all.indexOf(`${heading(4)} From`));
+  // A quoted time is shown as a real email's date (no "about").
+  expect(all).toMatch(/Date 2025-03-03 \d\d:40:00 UTC\+01:00/);
+  expect(all).not.toMatch(/Date about/);
   // The SHA-256 of the real file only.
   expect(all.match(/\b[0-9a-f]{64}\b/g)).toHaveLength(1);
   await expectNothingLeftThePage(page);
 });
 
-test('the switch off: nothing rebuilt in the PDF', async ({ page }) => {
+test('the switch off: nothing rebuilt in the PDF, the real email is email 1', async ({ page }) => {
   test.setTimeout(90_000);
   await open(page, [LAST], 4);
   await page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation }).uncheck();
@@ -167,8 +171,8 @@ test('the switch off: nothing rebuilt in the PDF', async ({ page }) => {
   await expect(page.locator('#review-messages')).toHaveText('1 email found.');
   const all = (await makePdfText(page)).join(' ');
   expect(all).toContain('Email 1');
-  expect(all).not.toContain(HEADING);
-  expect(all).not.toContain(MARKER);
+  expect(all).toContain('Emails 1 email');
+  expect(all).not.toContain(heading(2));
   expect(all).not.toMatch(/rebuilt/i);
   await expectNothingLeftThePage(page);
 });
@@ -190,14 +194,17 @@ test('the email they were taken from unticked: the cards say so, and nothing reb
   const all = (await makePdfText(page)).join(' ');
   expect(all).toContain('Email 1');
   expect(all).not.toContain('Email 2');
-  expect(all).not.toContain(HEADING);
-  expect(all).not.toContain(MARKER);
+  expect(all).not.toMatch(/rebuilt/i);
   expect(all).not.toContain('Office desks and chairs');
-  // Ticked again: the rebuilt emails come back (the source is email 1: the undated email comes last).
+  // Ticked again: the rebuilt emails come back, numbered with the others: the three rebuilt
+  // ones and their source are emails 1 to 4, the undated email comes last (email 5).
   await source.getByRole('checkbox', { name: en.actions.include }).check();
   await expect(page.locator('#review-rebuilt')).toHaveText('3 of 3 rebuilt emails will be in the PDF.');
   const again = (await makePdfText(page)).join(' ');
-  expect(again.split(HEADING)).toHaveLength(4);
+  expect(again).toContain('Emails 5 emails');
+  expect(again).toContain(`${heading(5)} From`);
+  expect(again).not.toContain(heading(6));
+  expect(again).not.toMatch(/rebuilt/i);
   await expectNothingLeftThePage(page, 2);
 });
 
@@ -250,8 +257,7 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
   await expect(page.locator('#include-0')).toBeFocused();
   const all = (await makePdfText(page)).join(' ');
   expect(all).toContain('Email 1');
-  expect(all).not.toContain(HEADING);
-  expect(all).not.toContain(MARKER);
+  expect(all).not.toContain(heading(2));
   expect(all).not.toMatch(/rebuilt/i);
   // The source email is printed whole: its quoted history (the earlier emails' text) is in, once each.
   for (const quoted of ['Wednesday at 10:00 works for me.', 'I can come by on Wednesday 5 March', 'We are furnishing a small office']) {
@@ -276,8 +282,11 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
   await page.keyboard.press('Tab');
   await expect(rebuild).toBeFocused();
   const again = (await makePdfText(page)).join(' ');
-  expect(again.split(HEADING)).toHaveLength(3);
-  expect(again).toContain('Rebuilt emails 2 earlier emails rebuilt from quoted text');
+  // Two rebuilt emails and the email added: emails 1 to 3.
+  expect(again).toContain('Emails 3 emails');
+  expect(again).toContain(`${heading(3)} From`);
+  expect(again).not.toContain(heading(4));
+  expect(again).not.toMatch(/rebuilt/i);
   await expectNothingLeftThePage(page, 2);
 });
 
@@ -300,7 +309,7 @@ test('the switch off, then "Print full original text" ticked and unticked: the s
   await expect(page.locator('#review-messages')).toHaveText('1 email found.');
   for (const card of await cards.all()) await expect(card).toBeHidden();
   const off = (await makePdfText(page)).join(' ');
-  expect(off).not.toContain(HEADING);
+  expect(off).not.toContain(heading(2));
   expect(off).not.toMatch(/rebuilt/i);
   await rebuild.check();
   await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');

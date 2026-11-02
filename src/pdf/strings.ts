@@ -90,36 +90,8 @@ export interface PdfStrings {
     readonly rtfOnlyBody: string;
     readonly forwardedNotExpanded: string;
   };
-
-  // Earlier emails rebuilt from quoted text (task 7.7): no number, no file, no fingerprint.
-  /** "Earlier email (rebuilt from quoted text in email 3)": the PDF number of the email it was taken from. */
-  rebuiltHeading(number: number): string;
-  /** "[Rebuilt]": in front of its subject in the index, and of its bookmark. */
-  readonly rebuiltMarker: string;
-  /** Its bookmark: the marker, its day (or a "no date" text), its sender and its subject. */
-  rebuiltBookmark(date: string, from: string, subject: string): string;
-  /** The preview's fixed note, with the PDF number of the email it was taken from. */
-  rebuiltNote(number: number, quoteMarksRemoved: boolean): string;
-  /** "Same quoted text also in emails 4 and 6." (PDF numbers); '' for none. */
-  rebuiltAlso(numbers: readonly number[]): string;
-  readonly takenFromLabel: string;
-  /** "email 3". */
-  takenFrom(number: number): string;
-  /** "(list may be incomplete)". */
-  readonly listIncomplete: string;
-  /** The quoted header has no subject. */
-  readonly rebuiltNoSubject: string;
-  /** "about {date}": a quoted time read without a zone of its own. */
-  dateAbout(date: string): string;
-  /** "As written in the quote: ...". */
-  quoteDateAsWritten(text: string): string;
-  /** A quoted date that could not be read. */
-  readonly quoteDateUnreadable: string;
-  /** Cover: the row label, its value, and the section that says what rebuilt emails are. */
-  readonly rebuiltLabel: string;
-  rebuiltCount(count: number): string;
-  readonly rebuiltSection: string;
-  readonly rebuiltIntro: string;
+  // Emails rebuilt from quoted text use the texts above, like real emails:
+  // the PDF has no text of its own for them (user decision 2026-11-02, task 8.3).
 
   // Small pieces.
   /** "Name <address>" (both parts present). */
@@ -141,7 +113,7 @@ function roundSize(n: number): number {
 
 /** The PDF texts in `locale` (a language the page ships; throws for any other, see translator()). */
 export function createPdfStrings(locale: string): PdfStrings {
-  const { t, list } = translator(locale);
+  const { t } = translator(locale);
   const size = (bytes: number | null): string => {
     if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return t('preview.size.unknown');
     if (bytes < 1024) return t('preview.size.bytes', { count: bytes });
@@ -213,27 +185,6 @@ export function createPdfStrings(locale: string): PdfStrings {
       rtfOnlyBody: t('warnings.parse.rtf-only-body'),
       forwardedNotExpanded: t('warnings.parse.forwarded-message-not-expanded'),
     },
-    // Strings, like the email numbers above.
-    rebuiltHeading: (number) => t('pdf.document.rebuiltHeading', { number: String(number) }),
-    rebuiltMarker: t('pdf.document.rebuiltMarker'),
-    rebuiltBookmark: (date, from, subject) => t('pdf.document.rebuiltBookmark', { marker: t('pdf.document.rebuiltMarker'), date, from, subject }),
-    rebuiltNote: (number, quoteMarksRemoved) => t(quoteMarksRemoved ? 'rebuilt.noteMarks' : 'rebuilt.noteNoMarks', { number: String(number) }),
-    rebuiltAlso: (numbers) => {
-      if (numbers.length === 0) return '';
-      const joined = list(numbers.map((n) => String(n)));
-      return numbers.length === 1 ? t('rebuilt.alsoOne', { list: joined }) : t('rebuilt.alsoMany', { list: joined });
-    },
-    takenFromLabel: t('rebuilt.takenFrom'),
-    takenFrom: (number) => t('rebuilt.takenFromValue', { number: String(number) }),
-    listIncomplete: t('rebuilt.listIncomplete'),
-    rebuiltNoSubject: t('rebuilt.noSubject'),
-    dateAbout: (date) => t('rebuilt.dateAbout', { date }),
-    quoteDateAsWritten: (text) => t('rebuilt.dateAsWritten', { text }),
-    quoteDateUnreadable: t('rebuilt.dateUnreadable'),
-    rebuiltLabel: t('pdf.document.rebuilt'),
-    rebuiltCount: (count) => t('pdf.document.rebuiltCount', { count }),
-    rebuiltSection: t('pdf.document.rebuiltSection'),
-    rebuiltIntro: t('pdf.document.rebuiltIntro'),
     mailbox: (name, address) => t('preview.mailbox', { name, address }),
     size,
     attachmentDetails: (sizeText, type) =>

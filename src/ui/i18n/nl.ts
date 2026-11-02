@@ -367,18 +367,6 @@ export const nl: Messages = {
       // ASCII only, like the English one.
       fileName: 'correspondentie-{date}.pdf',
       fileNameNoDate: 'correspondentie.pdf',
-      // NEEDS USER PROOFREADING (task 7.7 drafts, see the top of this file).
-      rebuiltHeading: 'Eerdere e-mail (gereconstrueerd uit de geciteerde tekst in e-mail {number})',
-      rebuiltMarker: '[Gereconstrueerd]',
-      rebuiltBookmark: '{marker} {date}, {from}: {subject}',
-      rebuilt: 'Gereconstrueerde e-mails',
-      rebuiltCount: {
-        one: '{count} eerdere e-mail gereconstrueerd uit geciteerde tekst',
-        other: '{count} eerdere e-mails gereconstrueerd uit geciteerde tekst',
-      },
-      rebuiltSection: 'Eerdere e-mails gereconstrueerd uit geciteerde tekst',
-      rebuiltIntro:
-        'Gereconstrueerde e-mails zijn eerdere e-mails die niet bij de toegevoegde bestanden zaten: de tool heeft ze gereconstrueerd uit de tekst die in een latere e-mail wordt geciteerd. Elk ervan vermeldt uit welke e-mail hij is overgenomen en heeft geen eigen nummer, bestand of SHA-256-vingerafdruk; in de inhoudsopgave zijn ze gemarkeerd met “[Gereconstrueerd]”. Eventuele citaattekens (>) zijn uit hun tekst verwijderd, en ze kunnen onvolledig of onnauwkeurig zijn. Het zijn geen originele bestanden.',
     },
   },
 

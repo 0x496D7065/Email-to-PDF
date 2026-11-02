@@ -209,9 +209,13 @@ export function rebuiltSources(r: EngineRebuilt, result: Pick<EngineResult, 'pos
 export interface RebuiltInPdf {
   /** The copy shown: the entry's own when its email is in the PDF, else the copy from the first such email. */
   readonly shown: RebuiltSource;
-  /** The PDF number of the email `shown` was taken from ("Taken from: email N"). */
+  /** The number (as given by `numberOf`) of the email `shown` was taken from. The PDF never prints it (task 8.3). */
   readonly number: number;
-  /** The PDF numbers of the OTHER emails in the PDF quoting the same text, ascending, unique. */
+  /**
+   * The numbers (as given by `numberOf`: the real-email rank from the PDF
+   * model, the list number from the preview) of the OTHER emails in the PDF
+   * quoting the same text, ascending, unique.
+   */
   readonly also: readonly number[];
 }
 
@@ -229,10 +233,11 @@ export interface RebuiltInPdfOptions {
  * email is not in the PDF. Returns null when no source is in the PDF.
  *
  * The copy shown is the entry's own when its source is in the PDF, else the
- * copy whose source has the smallest PDF number: so "Taken from: email N"
- * always names an email in the PDF, and the text and header shown are
- * exactly the ones read from that email. Every other source in the PDF is
- * listed in `also` ("Same quoted text also in email ...").
+ * copy whose source has the smallest PDF number: so the source named (the
+ * preview's "In the PDF: taken from #N") is always an email in the PDF, and
+ * the text and header shown are exactly the ones read from that email.
+ * Every other source in the PDF is listed in `also`. (The PDF itself names
+ * neither, user decision 2026-11-02, task 8.3.)
  *
  * With `options.unfoldEverything` ("Print full original text" ticked, user
  * decision 2026-10-28) the answer is always null: the source emails are

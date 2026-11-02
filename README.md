@@ -43,7 +43,8 @@ these, otherwise in English. A switch at the top changes it. The choice is
 not saved.
 
 If you add only the last email of a conversation, the earlier emails quoted
-inside it are also shown as separate emails, clearly marked "Rebuilt" (see
+inside it are also shown as separate emails, clearly marked "Rebuilt" in
+the preview; in the PDF they are not marked (see
 [Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text)).
 
 **Status:** working and tested, not yet released.
@@ -172,7 +173,9 @@ The tool never throws message text away on its own:
   lists the date range, the people, the number of emails, the time zone
   used, and every file that gave an email in the PDF (merged copies
   included) with its SHA-256 fingerprint, so anyone can check that a file
-  is exactly the one used. Files that could not be read are listed too.
+  is exactly the one used (rebuilt emails count in the number of emails,
+  the date range and the people, but have no file, so they are not in that
+  list). Files that could not be read are listed too.
   Then come the index (number, date, sender, subject, attachments, page)
   and the emails, with page numbers and PDF bookmarks. Every email
   (rebuilt ones included) starts at the top of a new page, so a short
@@ -188,26 +191,38 @@ earlier email it can find as a separate email, in date order, in the
 preview and in the PDF. The email you added is not changed: its quoted
 history stays in it, folded as usual.
 
-**How they are marked.** A rebuilt email is never presented as an original
-file:
+**How they are marked.**
 
 - **Preview:** a dashed card whose heading starts with "Rebuilt", with no
   number of its own, a "Taken from: email N" line and a fixed note: rebuilt
-  from the quoted text of email N, may be incomplete or inexact.
-- **PDF:** the heading "Earlier email (rebuilt from quoted text in email
-  N)" with the same note, no number, "[Rebuilt]" in front of its subject in
-  the index and of its bookmark, and on the cover a count of rebuilt emails
-  and a short explanation. It has no file, so it has no SHA-256
-  fingerprint and is not in the cover's list of files.
+  from the quoted text of email N, may be incomplete or inexact. Check them
+  here before you make the PDF.
+- **PDF: not marked, by the user's choice.** In the PDF a rebuilt email
+  looks exactly like an email you added: the same "Email N" heading, the
+  same rows (From, To, Cc, Date, Subject), the same index line and
+  bookmark, and nothing saying it was rebuilt (no note, no "Taken from",
+  no marker, nothing on the cover). All emails in the PDF, rebuilt or not,
+  are numbered 1, 2, 3... in date order, so two rebuilt earlier emails and
+  the email you added are emails 1, 2 and 3 (the preview's "#N" numbers
+  count only the emails you added, so they can differ). Its date is shown
+  like a real email's: a quoted time without a time zone of its own gets
+  the usual "time zone is not given" line, a quoted day alone is shown as
+  that day. The cover's number of emails, date range and people include
+  rebuilt emails; a rebuilt email has no file, so it has no SHA-256
+  fingerprint and is not in the cover's list of files (that list still
+  shows only the files you added). It has no File row either: only the
+  File row and the cover's list of files show which emails came from a
+  file.
 
 **What is changed, and what is not.** Sender, recipients, subject and date
 are read from the quoted header ("From: / Sent: / To:", "On ... wrote:",
 and their French and Dutch forms). In the text, only the "> " quote marks at
 the start of the lines (and the spaces before them) are removed; words and
 line breaks are kept exactly as quoted. A quoted date usually has no time
-zone, so the time is a best guess, shown as "about ..." with the date as
-written; a date that could be read two ways (such as `03/04/2025`) is shown
-only as written.
+zone, so the time is a best guess, shown in the preview as "about ..." with
+the date as written; a date that could be read two ways (such as
+`03/04/2025`) is shown only as written (in the PDF: "no date" and the date
+as written, as for an email you added).
 
 **When you also add the real earlier email**, the real file is used and
 the rebuilt copy is not shown. This needs the same sender, dates that agree
@@ -257,9 +272,10 @@ unticked).
   told apart from the quote: it ends up in the oldest rebuilt email.
 - In an Outlook-style quote whose To or Cc list wraps over several lines
   and has names without addresses, only the first line of that list is
-  read (marked "list may be incomplete"). The header lines after it are
-  then not read: **that rebuilt email has no subject** (it shows "subject
-  not in the quote"), and no Cc when the To list is the one that wraps.
+  read (marked "list may be incomplete" in the preview; not marked in the
+  PDF). The header lines after it are then not read: **that rebuilt email
+  has no subject** (the preview shows "subject not in the quote", the PDF
+  "(no subject)"), and no Cc when the To list is the one that wraps.
   Those lines appear at the top of its text instead. In the
   test conversations this happened in Dutch Outlook quotes (2 of 11), but
   the rule is the same in every language. The text itself is not lost: it
