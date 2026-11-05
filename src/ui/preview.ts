@@ -5,7 +5,10 @@
 // - Dates in the time zone picked in the toolbar (default: the browser's).
 //   When the sender's own clock (from their Date header) differs from the
 //   shown time, it is shown too. Changing the zone only rewrites the date
-//   texts; the bodies are not rebuilt.
+//   texts; the bodies are not rebuilt. A date that could not be read shows
+//   "(no date)" and the date as written (the PDF shows that text alone),
+//   and a zone the browser does not know gets a note under the list (dates
+//   then in UTC). Task 8.8: the PDF has no notes, so the page says these.
 // - The body as display blocks (src/ui-model/display-blocks.ts). Shown text
 //   goes into the page as text. Each folded block is a <details> element
 //   with a short label (why it was folded, how long it is, which earlier
@@ -111,7 +114,7 @@
 
 import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
 import type { PlanReason } from '../engine/output-plan';
-import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, listTimeZones } from '../engine/time-format';
+import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, isValidTimeZone, listTimeZones } from '../engine/time-format';
 import type { AttachmentInfo, EmailAddress, EmailDate } from '../parsing/types';
 import type { ProcessResult } from '../pipeline/process-files';
 import { displayAuthor } from '../ui-model/display-author';
@@ -196,14 +199,21 @@ export interface DateTexts {
   readonly iso: string | null;
   /** "Sender's local time: ...", only when known and different from `main`; else null. */
   readonly senderLocal: string | null;
+  /** "As written in the email: ...": without a usable date, the date text the email gave, if any; else null. */
+  readonly asWritten: string | null;
 }
 
 export function dateTexts(date: EmailDate, zone: string): DateTexts {
   const shown = formatInZone(date.utcMs, zone, getLocale());
-  if (shown.kind === 'no-date' || !isDisplayableMs(date.utcMs)) return { main: t('preview.noDate'), iso: null, senderLocal: null };
+  if (shown.kind === 'no-date' || !isDisplayableMs(date.utcMs)) {
+    // The PDF shows this text alone in the Date row (task 8.8): the reader sees it here first.
+    const original = typeof date.original === 'string' ? date.original : '';
+    const asWritten = original.trim() === '' ? null : t('preview.dateAsWritten', { text: original });
+    return { main: t('preview.noDate'), iso: null, senderLocal: null, asWritten };
+  }
   const sender = formatSenderLocal(date);
   const senderLocal = sender.kind === 'local' && sender.text !== shown.text ? t('preview.senderTime', { time: sender.text }) : null;
-  return { main: shown.text, iso: new Date(Math.floor(date.utcMs)).toISOString(), senderLocal };
+  return { main: shown.text, iso: new Date(Math.floor(date.utcMs)).toISOString(), senderLocal, asWritten: null };
 }
 
 /**
@@ -680,13 +690,15 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   const homeOption = zoneOptions[zones.indexOf(homeZone)] ?? null;
   const zoneSelect = el('select', { attrs: { id: 'preview-zone', class: 'zone-select' }, children: zoneOptions });
   zoneSelect.value = zone;
+  // Shown only while the zone picked is not one this browser knows (see syncZoneNote).
+  const zoneNote = labels.text(el('p', { attrs: { id: 'preview-zone-note', class: 'field-note zone-note', hidden: true } }), 'preview.zoneNotRecognized');
   const foldToggle = el('input', { attrs: { type: 'checkbox', id: 'preview-show-folded' } });
   const toolbar = el('div', {
     attrs: { id: 'preview-toolbar', class: 'preview-toolbar' },
     children: [
       el('div', {
         attrs: { class: 'field' },
-        children: [labels.text(el('label', { attrs: { for: 'preview-zone' } }), 'preview.zone'), zoneSelect],
+        children: [labels.text(el('label', { attrs: { for: 'preview-zone' } }), 'preview.zone'), zoneSelect, zoneNote],
       }),
       el('div', {
         attrs: { class: 'field field-checkbox' },
@@ -719,13 +731,29 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   }
   setPdfState('off');
 
+  /**
+   * The zone note: shown (and read as the list's description) only while the
+   * zone picked is not one this browser knows, so its dates, here and in the
+   * PDF, are in UTC (src/engine/time-format.ts, formatInZone). Not expected:
+   * the list only offers zones the browser knows. The PDF names just "UTC"
+   * then, without a note (task 8.8).
+   */
+  function syncZoneNote(): void {
+    const unknown = !isValidTimeZone(zone);
+    setSafeAttribute(zoneNote, 'hidden', !unknown);
+    setSafeAttribute(zoneSelect, 'aria-describedby', unknown ? 'preview-zone-note' : false);
+  }
+  syncZoneNote();
+
   // --- Building one email ---------------------------------------------------
   function applyDate(slot: DateSlot): void {
     const texts = dateTexts(slot.date, zone);
     slot.time.textContent = texts.main;
     setSafeAttribute(slot.time, 'datetime', texts.iso ?? false);
-    slot.senderNote.textContent = texts.senderLocal ?? '';
-    setSafeAttribute(slot.senderNote, 'hidden', texts.senderLocal === null);
+    // One line under the date: the sender's own time, or the date as written when it could not be read.
+    const extra = texts.senderLocal ?? texts.asWritten;
+    slot.senderNote.textContent = extra ?? '';
+    setSafeAttribute(slot.senderNote, 'hidden', extra === null);
   }
 
   /** The PDF view of one email under the plans in use; null: no labels (not in the PDF, or no plans). */
@@ -1290,6 +1318,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   // --- Controls -------------------------------------------------------------
   zoneSelect.addEventListener('change', () => {
     zone = zoneSelect.value;
+    syncZoneNote();
     for (const slot of slots) applyDate(slot);
     for (const slot of rebuiltSlots.values()) applyRebuiltDate(slot.date, zone);
     try {
@@ -1314,6 +1343,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       // Back to the start: the next person or batch begins from the defaults.
       zone = homeZone;
       zoneSelect.value = homeZone;
+      syncZoneNote();
       showFolded = false;
       foldToggle.checked = false;
     },

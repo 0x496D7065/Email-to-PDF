@@ -276,9 +276,9 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
     expect(outlookNl!.fields.map((f) => f.label)).toEqual(['From', 'To', 'Date', 'Subject']);
     expect(fieldOf(outlookNl!, 'From')).toEqual(['Alice Example <alice@example.test>']);
     expect(fieldOf(outlookNl!, 'Subject')).toEqual(['Re: Office desks and chairs']);
-    // A time read without a zone of its own: written as a real email's date, with the real
-    // emails' "time zone not given" line; no "about", no "As written in the quote".
-    expect(fieldOf(outlookNl!, 'Date')).toEqual([expect.stringMatching(/^2025-03-03 \d\d:40:00 UTC\+01:00$/), EN.zoneUnknown]);
+    // A time read without a zone of its own: written as a real email's date, alone (task 8.8: no
+    // "time zone not given" line, the app says it); no "about", no "As written in the quote".
+    expect(fieldOf(outlookNl!, 'Date')).toEqual([expect.stringMatching(/^2025-03-03 \d\d:40:00 UTC\+01:00$/)]);
     expect(outlookNl!.flags.zoneUnknown).toBe(true);
     for (const e of rebuiltOf(doc)) {
       expect(fieldOf(e, 'File')).toBeUndefined();
@@ -361,11 +361,10 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
     const timeDoc = build(base);
     const timeEntry = timeDoc.index.entries.find((x) => x.anchor === rebuiltById(timeDoc, 0).anchor)!;
     expect(text(timeEntry.date)).toMatch(/^2025-03-03 \d\d:40$/);
-    // Unreadable: "no date" and the real emails' "Date as written in the email" line.
+    // Unreadable: the date text as written, alone in its row (task 8.8: no note).
     const unreadable = withRebuilt(base, 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, dateText: 'gisteren', date: null } }));
     const unreadableEmail = rebuiltById(build(unreadable), 0);
-    expect(fieldOf(unreadableEmail, 'Date')).toEqual([EN.noDate, EN.dateAsWritten('gisteren')]);
-    expect(EN.dateAsWritten('gisteren')).toBe('Date as written in the email: gisteren');
+    expect(fieldOf(unreadableEmail, 'Date')).toEqual(['gisteren']);
     expect(unreadableEmail.flags.undated).toBe(true);
     // None.
     const none = withRebuilt(base, 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, dateText: null, date: null } }));
@@ -431,8 +430,8 @@ describe('nothing in the PDF says an email was rebuilt (task 8.3), in every lang
       }
       // The anchors and bookmarks too.
       for (const e of doc.emails) expect(e.anchor).toMatch(/^email-\d+$/);
-      // The one place the date as written is shown: a date that could not be read, with the real emails' words.
-      expect(texts).toContain(strings.dateAsWritten('gisteren'));
+      // A date that could not be read: shown as written, alone in its row (task 8.8: no note).
+      expect(texts).toContain('gisteren');
     });
   }
 });
@@ -499,7 +498,8 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
     const result = withRebuilt(engineOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, dateText: null, date: null } }));
     const doc = build(result);
     expect(doc.cover.undated).toBe(1);
-    expect(blockTexts(doc.cover.blocks)).toContain(`Dates: ${EN.dateRange(doc.cover.dateRange!.first, doc.cover.dateRange!.last)} / ${EN.undated(1)}`);
+    // Counted in the data only: the cover shows the date range alone (task 8.8).
+    expect(blockTexts(doc.cover.blocks)).toContain(`Dates: ${EN.dateRange(doc.cover.dateRange!.first, doc.cover.dateRange!.last)}`);
   });
 
   it('cover: SHA-256 hashes of the REAL files only, under the real email\'s number in this PDF; a rebuilt email has none', () => {

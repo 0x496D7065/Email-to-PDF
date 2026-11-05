@@ -6,6 +6,8 @@
 //   nothing is counted again here;
 // - on each email (through the preview's `decorate` hook), an "Include in
 //   the PDF" checkbox and the email's notes (src/ui-model/message-notes.ts).
+//   The PDF has no notes (user rule, task 8.8): what the tool was unsure
+//   about is said here and in the preview only, before the download.
 //
 // Include/exclude (README.md, rule R6: collapse, never delete): every email
 // starts ticked. An unticked email stays in the list with all its text,
@@ -47,7 +49,8 @@
 // (decorateRebuilt adds their checkbox, like a real email's). All are in
 // the PDF by default. One switch, `rebuiltSwitch` (for the preview's
 // toolbar, shown only when the result has rebuilt emails or a "could not
-// be rebuilt" note, see switchNeeded), leaves ALL of
+// be rebuilt" note, see switchNeeded; under it, a short explanation of what
+// rebuilt emails are, also its description, task 8.8), leaves ALL of
 // them out: their cards are then hidden (each is only a second view of a
 // part of an email still in the list, whose card keeps all its text). An
 // unticked card stays, dimmed and marked "Not in the PDF", like a real
@@ -125,6 +128,8 @@ export function noteText(note: MessageNote): string {
       return t(`warnings.engine.${note.code}`);
     case 'rebuild':
       return t(`warnings.rebuild.${note.code}`);
+    case 'chars':
+      return t('review.codedCharacters');
     case 'dedupe': {
       const label = t(`warnings.dedupe.${note.code}`);
       const related = relatedText(note.related, note.more);
@@ -322,14 +327,23 @@ export function createReview(options: ReviewOptions = {}): Review {
   // The switch (ticked: every rebuilt email that is ticked goes in the PDF).
   // Hidden with its field while the result has no rebuilt email and no "could
   // not be rebuilt" note (both: a hidden input is never taken for a control).
-  const rebuiltCheckbox = el('input', { attrs: { type: 'checkbox', id: 'rebuilt-include-all', checked: true, hidden: true } });
+  const rebuiltCheckbox = el('input', { attrs: { type: 'checkbox', id: 'rebuilt-include-all', checked: true, hidden: true, 'aria-describedby': 'rebuilt-explain' } });
   rebuiltCheckbox.checked = true;
   // Why the switch is disabled: never shown, only read as the switch's
   // description while "Print full original text" is ticked (see syncSwitch).
   const rebuiltOffHint = labels.text(el('span', { attrs: { id: 'rebuilt-off-hint', hidden: true } }), 'rebuilt.offWhileFullText');
+  // What rebuilt emails are, under the switch and read as its description
+  // (task 8.8: the PDF shows them like the others and never says so).
+  const rebuiltExplain = labels.text(el('p', { attrs: { id: 'rebuilt-explain', class: 'field-note' } }), 'rebuilt.explain');
   const rebuiltSwitch = el('div', {
-    attrs: { id: 'rebuilt-switch', class: 'field field-checkbox', hidden: true },
-    children: [rebuiltCheckbox, labels.text(el('label', { attrs: { for: 'rebuilt-include-all' } }), 'rebuilt.rebuildConversation'), rebuiltOffHint],
+    attrs: { id: 'rebuilt-switch', class: 'field field-everything', hidden: true },
+    children: [
+      el('div', {
+        attrs: { class: 'field-checkbox' },
+        children: [rebuiltCheckbox, labels.text(el('label', { attrs: { for: 'rebuilt-include-all' } }), 'rebuilt.rebuildConversation'), rebuiltOffHint],
+      }),
+      rebuiltExplain,
+    ],
   });
 
   /** True if the email goes into the PDF. A broken entry counts as included: never silently left out. */
@@ -396,7 +410,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     const everything = everythingOn();
     rebuiltCheckbox.checked = rebuiltSelection.includeAll() && !everything;
     setSafeAttribute(rebuiltCheckbox, 'disabled', everything);
-    setSafeAttribute(rebuiltCheckbox, 'aria-describedby', everything ? 'rebuilt-off-hint' : false);
+    setSafeAttribute(rebuiltCheckbox, 'aria-describedby', everything ? 'rebuilt-off-hint rebuilt-explain' : 'rebuilt-explain');
   }
 
   /** True if this rebuilt card is ticked (a broken entry counts as ticked, as for real emails). */
@@ -738,7 +752,7 @@ export function createReview(options: ReviewOptions = {}): Review {
       // Set directly, not through syncSwitch: the PDF labels may be reset after the review, so unfoldEverything could still say ticked here.
       rebuiltCheckbox.checked = true;
       setSafeAttribute(rebuiltCheckbox, 'disabled', false);
-      setSafeAttribute(rebuiltCheckbox, 'aria-describedby', false);
+      setSafeAttribute(rebuiltCheckbox, 'aria-describedby', 'rebuilt-explain');
       emptyCounts();
     },
     rendered: (result) => {

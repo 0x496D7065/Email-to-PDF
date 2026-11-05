@@ -2,7 +2,7 @@
 // about or had to work around for it (a missing date, an unknown time zone,
 // text converted from HTML, a look-alike email that was not merged, a fold
 // detector that failed, earlier emails in its quote that could not be
-// rebuilt, ...). The words come from the strings module
+// rebuilt, characters the PDF will show as codes, ...). The words come from the strings module
 // (src/ui/i18n/en.ts); this file only decides WHICH notes an email gets, in
 // which order, and which other emails they point to.
 //
@@ -15,7 +15,10 @@
 import type { DedupeWarningCode } from '../engine/dedupe';
 import type { EngineMessage, EngineWarningCode, ReconstructionWarning, ReconstructionWarningCode } from '../engine/engine';
 import type { MessagePlan } from '../engine/output-plan';
+import { isDisplayableMs } from '../engine/time-format';
 import type { ParseWarning } from '../parsing/types';
+// Pure, no DOM: the PDF's own rule for which characters become a code.
+import { codedCharacterCount } from '../pdf/text';
 
 /**
  * Compile-time check that `List` names every member of `Union`: resolves to
@@ -96,6 +99,8 @@ export type MessageNote =
       readonly more: number;
     }
   | { readonly kind: 'engine'; readonly code: EngineWarningCode }
+  // Some of its characters will show in the PDF as codes such as "[U+0000]" (task 8.8: said here, not in the PDF).
+  | { readonly kind: 'chars'; readonly code: 'coded-characters' }
   // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
   | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode };
 
@@ -111,6 +116,25 @@ export function relatedListNumbers(related: readonly number[], ownPosition: numb
     if (typeof position === 'number' && position !== ownPosition) numbers.add(position + 1);
   }
   return [...numbers].sort((a, b) => a - b);
+}
+
+/**
+ * How many characters of an email the PDF writes as codes such as
+ * "[U+0000]" (src/pdf/text.ts, group 1: control characters, broken
+ * characters and the like): in the texts the PDF can show of it, which are
+ * its header fields, attachment names and types, file names, its date as
+ * written when that date could not be read, and its whole text (the parts
+ * the PDF leaves out included: the count does not depend on the plan).
+ */
+export function codedCharacters(m: EngineMessage): number {
+  const message = m.message;
+  const texts: string[] = [message.subject, message.bodyText, message.source.fileName, ...m.duplicates.map((d) => d.source.fileName)];
+  for (const box of [...message.from, ...message.to, ...message.cc, ...message.bcc, ...(message.sender === undefined ? [] : [message.sender])]) {
+    texts.push(box.name, box.address);
+  }
+  for (const a of message.attachments) texts.push(a.fileName, a.mimeType);
+  if (!isDisplayableMs(message.date.utcMs)) texts.push(message.date.original);
+  return texts.reduce((n, text) => n + (typeof text === 'string' ? codedCharacterCount(text) : 0), 0);
 }
 
 /**
@@ -144,6 +168,7 @@ export function messageNotes(
       });
     }
   }
+  if (codedCharacters(m) > 0) notes.push({ kind: 'chars', code: 'coded-characters' });
   const engine = new Set<EngineWarningCode>(m.engineWarnings);
   for (const code of ENGINE_WARNINGS) if (engine.has(code)) notes.push({ kind: 'engine', code });
   const rebuild = new Set<ReconstructionWarningCode>(rebuildWarnings.filter((w) => w.index === m.index).map((w) => w.code));

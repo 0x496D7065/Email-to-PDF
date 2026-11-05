@@ -68,7 +68,7 @@ describe('PDF document model over the parsed fixtures', () => {
     expect(d.cover.sources.filter((s) => s.mergedCopy)).toHaveLength(r.counts.duplicatesMerged);
     expect(r.counts.duplicatesMerged).toBeGreaterThan(0);
     expect(new Set(d.cover.sources.map((s) => s.inputIndex)).size).toBe(r.counts.messagesFound);
-    expect(d.cover.unreadable).toEqual([]);
+    expect(d.cover.blocks.filter((b) => b.kind === 'heading')).toHaveLength(3);
     expect(d.cover.participants.length).toBeGreaterThan(2);
     expect(d.cover.undated).toBe(r.counts.undated);
     for (const s of d.cover.sources) expect(s.sha256).toMatch(/^[0-9a-f]{64}$/);

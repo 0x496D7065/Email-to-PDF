@@ -9,8 +9,8 @@
 // the time zone, the generation moment and the fixed texts, and returns a
 // PdfDocument:
 // - cover: title, date range, people, email count, generation date, time
-//   zone, the source files with their SHA-256, and the files that could not
-//   be read (as `blocks` for the renderer, and as data);
+//   zone and the source files with their SHA-256 (as `blocks` for the
+//   renderer, and as data);
 // - index: one entry per email (number, date, author, subject, attachment
 //   count and lines, anchor, bookmark title); the renderer resolves each
 //   anchor to a page number;
@@ -35,11 +35,9 @@
 // that it was rebuilt: the same heading ("Email N"), the same rows (From, To
 // and Cc when there are any, Date, Subject; no File row, as it has no
 // file), the same "Unknown sender", "(no subject)" and "no date" texts as a
-// real email, its date shown as a real email's (a time read without a zone
-// of its own carries the real emails' "time zone not given" line; a day
-// alone is shown as that day; a date that could not be read as "no date"
-// plus the real emails' "Date as written in the email" line), no marker in
-// the index or the bookmarks. On the cover it counts in "Emails", the date
+// real email, its date shown as a real email's (a time in the chosen zone,
+// a day alone as that day, a date that could not be read as written), no
+// marker in the index or the bookmarks. On the cover it counts in "Emails", the date
 // range and the people like a real email; it is NOT in the source files and
 // their SHA-256 (it has no file: no entry is ever made up for it). The
 // PREVIEW keeps marking rebuilt emails (src/ui/preview.ts), unchanged.
@@ -79,22 +77,32 @@
 // marks the engine removed already). The preview and the original files
 // (and their SHA-256) are unchanged.
 //
-// Undated emails: shown with the "no date" text in the index and their
-// header (plus the date text as written, when there is one); the cover's
-// date range covers the dated emails only (real and rebuilt; a rebuilt
-// email dated by a day alone counts from the start of that day in the
-// chosen zone, dayStartInZone, and shows as that day) and says how many
-// have no date (real ones are at the end of the list, in file order,
-// src/engine/order.ts).
+// No notes in the PDF (user rule 2026-11-05, task 8.8): the PDF is the
+// final product. Nothing in it says that something went wrong, may be
+// missing or inaccurate, or how the tool works; the app says all of that in
+// step 2 before the download (src/ui/review.ts, src/ui/preview.ts). The PDF
+// keeps only the placeholders of blank fields ("(no subject)", "(no date)",
+// "Unknown sender", "(no text)", "(attachment without a name)"), the page
+// footer, headings, labels, the index, the bookmarks and the file list with
+// its SHA-256. The data behind the removed notes stays in the model
+// (`flags`, `cover.undated`, `zoneFallback`, `controlChars`, `mergedCopy`),
+// for tests and checks; the renderer never prints it.
+//
+// Undated emails: shown with the "no date" text in the index; their Date
+// row shows the date text as written when there is one, else "no date". The
+// cover's date range covers the dated emails only (real and rebuilt; a
+// rebuilt email dated by a day alone counts from the start of that day in
+// the chosen zone, dayStartInZone, and shows as that day); with no dated
+// email at all it shows "no date". Real undated emails are at the end of
+// the list, in file order (src/engine/order.ts).
 //
 // Source files: every file that gave an included email: the kept copy and
 // every identical copy merged into it (src/engine/dedupe.ts), one entry per
-// dropped file, in PDF order, each with the email it gave. A file is not
-// opened again: name, SHA-256 and format come from the parse result (its
-// size is not known there). Files that could not be read are NOT sources
-// (nothing of theirs is in the PDF); they are listed apart, "could not be
-// read", so the reader knows the set given was larger (option
-// `listUnreadable`, on by default).
+// dropped file, in PDF order, each with the email it gave, listed alike (a
+// merged copy is not marked). A file is not opened again: name, SHA-256 and
+// format come from the parse result (its size is not known there). Files
+// that could not be read are not in the PDF at all (step 1 of the app lists
+// them with the reasons).
 // The cover's "Source files" heading is followed by the list itself, with
 // no note of ours (user decision 2026-11-05, task 8.7): the file names and
 // their SHA-256 stay (brief section 8.5). The cover has no text about
@@ -109,7 +117,7 @@
 import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
 import type { MessagePlan, OutputPolicy } from '../engine/output-plan';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
-import type { EmailAddress, NormalizedMessage, ParseErrorCode } from '../parsing/types';
+import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
 import { joinMailboxes } from '../ui-model/mailbox-list';
 import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../ui-model/rebuilt';
@@ -161,14 +169,6 @@ export interface PdfSourceFile {
   readonly mergedCopy: boolean;
 }
 
-/** A dropped file that could not be read (not a source: nothing of it is in the PDF). */
-export interface PdfUnreadableFile {
-  readonly fileName: string;
-  readonly sha256: string | null;
-  readonly error: ParseErrorCode;
-  readonly inputIndex: number;
-}
-
 export interface PdfCover {
   /** What the cover shows, in order. */
   readonly blocks: readonly PdfBlock[];
@@ -180,7 +180,6 @@ export interface PdfCover {
   readonly generated: string;
   readonly participants: readonly PdfParticipant[];
   readonly sources: readonly PdfSourceFile[];
-  readonly unreadable: readonly PdfUnreadableFile[];
 }
 
 /** One line of the index. The renderer adds the page of `anchor`. */
@@ -249,7 +248,7 @@ export interface PdfEmail {
    * row: it has no file).
    */
   readonly fields: readonly PdfFieldRow[];
-  /** Short notes above the text (role 'muted'), e.g. "The whole email is shown: ...". */
+  /** Lines above the text (role 'muted'): only the "(no text)" placeholder of an empty text (task 8.8: the PDF has no notes). */
   readonly notes: readonly PdfLine[];
   /** The text: one entry per line, [] for an empty line (see src/pdf/text.ts). */
   readonly body: readonly PdfLine[];
@@ -264,7 +263,7 @@ export interface PdfDocument {
   readonly fileName: string;
   /** The zone the dates are shown in, as Intl names it ("UTC" after a fallback). */
   readonly timeZone: string;
-  /** True when the asked-for zone was not valid and UTC was used. */
+  /** True when the asked-for zone was not valid and UTC was used (data only: the cover names just the zone used, task 8.8). */
   readonly zoneFallback: boolean;
   readonly cover: PdfCover;
   readonly index: PdfIndex;
@@ -283,13 +282,11 @@ export interface BuildPdfInput {
   /** One plan per position, same order (src/ui/pdf-labels.ts, currentPlans). */
   readonly plans: readonly MessagePlan[];
   readonly policy: OutputPolicy;
-  /** IANA zone name (an invalid one falls back to UTC, and the cover says so). */
+  /** IANA zone name (an invalid one falls back to UTC; the cover then names UTC). */
   readonly timeZone: string;
   /** When the PDF is made, in ms since 1970 UTC. */
   readonly generatedAt: number;
   readonly strings: PdfStrings;
-  /** List the files that could not be read on the cover (default true). */
-  readonly listUnreadable?: boolean;
   /**
    * Ids (in `result.reconstructed`) of the rebuilt emails the reader wants in
    * the PDF (src/ui/review.ts, includedRebuilt; [] or absent when the switch
@@ -618,10 +615,11 @@ function buildEmail(
     dateLines.push(own(shown.text, 'field-value'));
     const local = formatSenderLocal(message.date);
     if (local.kind === 'local' && local.text !== shown.text) dateLines.push(own(strings.senderLocal(local.text), 'muted'));
-    if (zoneUnknown) dateLines.push(own(strings.zoneUnknown, 'muted'));
+  } else if (message.date.original.trim() !== '') {
+    // A date that could not be read: its text as written, with no note (task 8.8).
+    dateLines.push(s.line(message.date.original, 'field-value'));
   } else {
     dateLines.push(own(strings.noDate, 'muted'));
-    if (message.date.original.trim() !== '') dateLines.push(s.line(strings.dateAsWritten(message.date.original), 'muted'));
   }
   fields.push({ label: strings.dateLabel, value: dateLines });
 
@@ -636,16 +634,11 @@ function buildEmail(
   s.count += lines.replaced;
   const keptAllBecauseEmpty = !policy.unfoldEverything && !planFallback && plan?.keptAllBecauseEmpty === true;
 
-  // Notes.
-  const notes: PdfLine[] = [];
-  if (planFallback) notes.push(own(strings.fallback, 'muted'));
-  else if (keptAllBecauseEmpty) notes.push(own(strings.keptAllEmpty, 'muted'));
+  // The only line above the text: the "(no text)" placeholder of an empty
+  // text. What the tool was unsure about is said in the app, never in the
+  // PDF (user rule, task 8.8).
+  const notes: PdfLine[] = lines.lines.length === 0 ? [own(strings.noText, 'muted')] : [];
   const w = message.warnings;
-  if (w.includes('html-body-truncated')) notes.push(own(strings.contentNotes.htmlBodyTruncated, 'muted'));
-  if (w.includes('html-body-unreadable')) notes.push(own(strings.contentNotes.htmlBodyUnreadable, 'muted'));
-  if (w.includes('rtf-only-body')) notes.push(own(strings.contentNotes.rtfOnlyBody, 'muted'));
-  if (w.includes('forwarded-message-not-expanded')) notes.push(own(strings.contentNotes.forwardedNotExpanded, 'muted'));
-  if (lines.lines.length === 0) notes.push(own(strings.noText, 'muted'));
 
   // Attachments.
   const items = message.attachments.map((a): PdfLine => {
@@ -705,7 +698,7 @@ interface RebuiltDateParts {
   readonly index: PdfLine;
   readonly day: string;
   readonly when: CoverDate | null;
-  /** A time read without a zone of its own (the real emails' "time zone not given" line). */
+  /** A time read without a zone of its own (data only: the PDF does not say it, task 8.8). */
   readonly zoneUnknown: boolean;
 }
 
@@ -746,17 +739,17 @@ export function dayStartInZone(day: string, zone: string): number | null {
 /**
  * The date of a rebuilt email, shown as a real email's (task 8.3; see the
  * top of this file), from the best value read: a time in the chosen zone,
- * written as a real email's date, with the real emails' "time zone not
- * given" line when the quote gave no zone of its own; a day alone as that
- * day; a date that could not be read as "no date" plus the real emails'
- * "Date as written in the email" line; none: "no date".
+ * written as a real email's date (`zoneUnknown` when the quote gave no zone
+ * of its own: data only, the app says it); a day alone as that day; a date
+ * that could not be read as written; none: "no date".
  */
 function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer): RebuiltDateParts {
   const { strings, timeZone } = input;
   const date = rebuiltDate(r);
   const undated = (lines: readonly PdfLine[]): RebuiltDateParts => ({ lines, index: own(strings.noDate, 'muted'), day: strings.noDate, when: null, zoneUnknown: false });
   if (date.kind === 'none') return undated([own(strings.noDate, 'muted')]);
-  const unreadable = (): RebuiltDateParts => undated([own(strings.noDate, 'muted'), s.line(strings.dateAsWritten(date.text), 'muted')]);
+  // A date that could not be read: its text as written, with no note (task 8.8).
+  const unreadable = (): RebuiltDateParts => undated([date.text.trim() === '' ? own(strings.noDate, 'muted') : s.line(date.text, 'field-value')]);
   if (date.kind === 'unreadable') return unreadable();
   if (date.kind === 'day') {
     // The start of that day in the chosen zone, to place it in the cover's date range.
@@ -772,7 +765,7 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
   const shown = formatInZone(date.utcMs, timeZone);
   if (shown.kind !== 'date') return unreadable();
   return {
-    lines: date.approximate ? [own(shown.text, 'field-value'), own(strings.zoneUnknown, 'muted')] : [own(shown.text, 'field-value')],
+    lines: [own(shown.text, 'field-value')],
     index: own(shown.shortText, 'body'),
     day: shown.text.slice(0, 10),
     when: { ms: date.utcMs, text: shown.text },
@@ -897,10 +890,11 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   // The zone as the cover's "Time zone" row writes it (underscores as spaces).
   const zoneShown = usedZone.replaceAll('_', ' ');
 
-  const dateLines: PdfLine[] = [];
-  if (dateRange === null) dateLines.push(own(strings.noDates, 'muted'));
-  else dateLines.push(own(dateRange.first === dateRange.last ? dateRange.first : strings.dateRange(dateRange.first, dateRange.last), 'field-value'));
-  if (undated > 0 && dateRange !== null) dateLines.push(own(strings.undated(undated), 'muted'));
+  // No dated email: the same "(no date)" placeholder as an email's own Date row (task 8.8).
+  const dateLine: PdfLine =
+    dateRange === null
+      ? own(strings.noDate, 'muted')
+      : own(dateRange.first === dateRange.last ? dateRange.first : strings.dateRange(dateRange.first, dateRange.last), 'field-value');
 
   const participants = participantsOf(people, strings.locale);
 
@@ -913,22 +907,20 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
       sources.push({ fileName: d.source.fileName, sha256: d.source.sha256, kind: d.source.kind, inputIndex: d.index, email, mergedCopy: true });
     }
   });
-  const unreadable: PdfUnreadableFile[] =
-    input.listUnreadable === false ? [] : result.failed.map((f) => ({ fileName: f.fileName, sha256: f.sha256, error: f.error, inputIndex: f.index }));
 
   const blocks: PdfBlock[] = [
     { kind: 'heading', level: 1, line: own(strings.title, 'title') },
     {
       kind: 'fields',
       rows: [
-        { label: strings.datesLabel, value: dateLines },
+        { label: strings.datesLabel, value: [dateLine] },
         { label: strings.emailsLabel, value: [own(strings.emailCount(emails.length), 'field-value')] },
-        { label: strings.timeZoneLabel, value: [c.line(zoneFallback ? strings.zoneFallback(usedZone) : zoneShown, 'field-value')] },
+        // Just the zone used (UTC after a fallback): the app says when the chosen zone was not recognized (task 8.8).
+        { label: strings.timeZoneLabel, value: [c.line(zoneShown, 'field-value')] },
         { label: strings.generatedLabel, value: [own(generated, 'field-value')] },
       ],
     },
   ];
-  if (controlChars > 0) blocks.push({ kind: 'paragraph', line: own(strings.controlChars(controlChars), 'muted') });
   if (participants.length > 0) {
     blocks.push({ kind: 'heading', level: 2, line: own(strings.peopleHeading, 'heading') });
     blocks.push({ kind: 'list', items: participants.map((p) => [c.line(mailboxText(p, strings), 'body')]) });
@@ -938,17 +930,10 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     blocks.push({
       kind: 'list',
       items: sources.map((f) => [
-        [...fileNameLine(f.fileName), ...own(strings.separator + (f.mergedCopy ? strings.sourceCopy(f.email) : strings.sourceEmail(f.email)), 'muted')],
+        // A merged identical copy is listed like any other file, with no explanation (task 8.8).
+        [...fileNameLine(f.fileName), ...own(strings.separator + strings.sourceEmail(f.email), 'muted')],
         c.line(f.sha256, 'mono'),
       ]),
-    });
-  }
-  if (unreadable.length > 0) {
-    blocks.push({ kind: 'heading', level: 2, line: own(strings.unreadableHeading, 'heading') });
-    blocks.push({ kind: 'paragraph', line: own(strings.unreadableIntro, 'muted') });
-    blocks.push({
-      kind: 'list',
-      items: unreadable.map((f) => [fileNameLine(f.fileName), f.sha256 === null ? own(strings.noFingerprint, 'muted') : c.line(f.sha256, 'mono')]),
     });
   }
 
@@ -957,7 +942,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     fileName: pdfFileName(generatedAt, timeZone, strings),
     timeZone: usedZone,
     zoneFallback,
-    cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants, sources, unreadable },
+    cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants, sources },
     index: {
       heading: strings.indexHeading,
       // The zone name passes the same sanitizer as on the cover (a title is plain text, so codes stay as their text).

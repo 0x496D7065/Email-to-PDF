@@ -29,7 +29,7 @@ export interface GeneratePdfInput {
   /** Ids of the rebuilt emails chosen (src/ui/review.ts, includedRebuilt); absent or [] for none. See BuildPdfInput.rebuilt. */
   readonly rebuilt?: readonly number[];
   readonly policy: OutputPolicy;
-  /** IANA zone the dates are shown in (an invalid one falls back to UTC, and the cover says so). */
+  /** IANA zone the dates are shown in (an invalid one falls back to UTC; the cover then names UTC). */
   readonly timeZone: string;
   /** When the PDF is made, in ms since 1970 UTC. */
   readonly generatedAt: number;

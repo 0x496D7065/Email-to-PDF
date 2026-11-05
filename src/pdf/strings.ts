@@ -31,22 +31,14 @@ export interface PdfStrings {
   // Cover page.
   readonly datesLabel: string;
   dateRange(first: string, last: string): string;
-  readonly noDates: string;
-  undated(count: number): string;
   readonly emailsLabel: string;
   emailCount(count: number): string;
   readonly generatedLabel: string;
   readonly timeZoneLabel: string;
-  zoneFallback(zone: string): string;
   readonly peopleHeading: string;
   readonly sourcesHeading: string;
   sourceEmail(number: number): string;
-  sourceCopy(number: number): string;
-  readonly unreadableHeading: string;
-  readonly unreadableIntro: string;
-  readonly noFingerprint: string;
   readonly noFileName: string;
-  controlChars(count: number): string;
 
   // Index.
   readonly indexHeading: string;
@@ -77,18 +69,10 @@ export interface PdfStrings {
   readonly noText: string;
   readonly unknownSender: string;
   readonly noAttachmentName: string;
+  /** "Sender's local time: ..." under the date, when the sender's clock showed another time. */
   senderLocal(time: string): string;
-  dateAsWritten(text: string): string;
-  readonly zoneUnknown: string;
-  readonly keptAllEmpty: string;
-  readonly fallback: string;
-  /** Notes about content the reader cannot see in full (parser warnings). */
-  readonly contentNotes: {
-    readonly htmlBodyTruncated: string;
-    readonly htmlBodyUnreadable: string;
-    readonly rtfOnlyBody: string;
-    readonly forwardedNotExpanded: string;
-  };
+  // No note of any kind: what the tool was unsure about is said in the app,
+  // never in the PDF (user rule 2026-11-05, task 8.8).
   // Emails rebuilt from quoted text use the texts above, like real emails:
   // the PDF has no text of its own for them (user decision 2026-11-02, task 8.3).
 
@@ -130,23 +114,15 @@ export function createPdfStrings(locale: string): PdfStrings {
     emailBookmark: (number, date, from, subject) => t('pdf.document.emailBookmark', { number: String(number), date, from, subject }),
     datesLabel: t('pdf.document.dates'),
     dateRange: (first, last) => t('pdf.document.dateRange', { first, last }),
-    noDates: t('pdf.document.noDates'),
-    undated: (count) => t('pdf.document.undated', { count }),
     emailsLabel: t('pdf.document.emails'),
     emailCount: (count) => t('pdf.document.emailCount', { count }),
     generatedLabel: t('pdf.document.generated'),
     timeZoneLabel: t('pdf.document.timeZone'),
-    zoneFallback: (zone) => t('pdf.document.zoneFallback', { zone }),
     peopleHeading: t('pdf.document.people'),
     sourcesHeading: t('pdf.document.sources'),
     // Strings, so an email number is never written with a thousands separator.
     sourceEmail: (number) => t('pdf.document.sourceEmail', { number: String(number) }),
-    sourceCopy: (number) => t('pdf.document.sourceCopy', { number: String(number) }),
-    unreadableHeading: t('pdf.document.unreadable'),
-    unreadableIntro: t('pdf.document.unreadableIntro'),
-    noFingerprint: t('pdf.document.noFingerprint'),
     noFileName: t('added.noName'),
-    controlChars: (count) => t('pdf.document.controlChars', { count }),
     indexHeading: t('pdf.document.index'),
     columns: {
       number: t('pdf.document.column.number'),
@@ -173,16 +149,6 @@ export function createPdfStrings(locale: string): PdfStrings {
     unknownSender: t('preview.author.none'),
     noAttachmentName: t('preview.noAttachmentName'),
     senderLocal: (time) => t('preview.senderTime', { time }),
-    dateAsWritten: (text) => t('pdf.document.dateAsWritten', { text }),
-    zoneUnknown: t('warnings.parse.unknown-time-zone'),
-    keptAllEmpty: t('pdf.document.keptAllEmpty'),
-    fallback: t('pdf.document.fallback'),
-    contentNotes: {
-      htmlBodyTruncated: t('warnings.parse.html-body-truncated'),
-      htmlBodyUnreadable: t('warnings.parse.html-body-unreadable'),
-      rtfOnlyBody: t('warnings.parse.rtf-only-body'),
-      forwardedNotExpanded: t('warnings.parse.forwarded-message-not-expanded'),
-    },
     mailbox: (name, address) => t('preview.mailbox', { name, address }),
     size,
     attachmentDetails: (sizeText, type) =>

@@ -227,7 +227,7 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
   // The switch: on, usable, no description; its hint is never shown.
   await expect(rebuild).toBeChecked();
   await expect(rebuild).toBeEnabled();
-  await expect(rebuild).toHaveAccessibleDescription('');
+  await expect(rebuild).toHaveAccessibleDescription(en.rebuilt.explain);
   await expect(hint).toBeHidden();
   const cards = page.locator('#preview-list > li.message-rebuilt');
   const source = page.locator('#preview-list > li:not(.message-rebuilt)');
@@ -244,8 +244,8 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
   // The switch: unticked, disabled (also for assistive technology), with a short reason.
   await expect(rebuild).not.toBeChecked();
   await expect(rebuild).toBeDisabled();
-  await expect(rebuild).toHaveAttribute('aria-describedby', 'rebuilt-off-hint');
-  await expect(rebuild).toHaveAccessibleDescription(en.rebuilt.offWhileFullText);
+  await expect(rebuild).toHaveAttribute('aria-describedby', 'rebuilt-off-hint rebuilt-explain');
+  await expect(rebuild).toHaveAccessibleDescription(`${en.rebuilt.offWhileFullText} ${en.rebuilt.explain}`);
   await expect(hint).toBeHidden();
   // No rebuilt card is shown: exactly as with the switch off (no dimmed card left behind).
   await expect(cards).toHaveCount(3);
@@ -274,7 +274,7 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
   await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
   await expect(rebuild).toBeChecked();
   await expect(rebuild).toBeEnabled();
-  await expect(rebuild).toHaveAccessibleDescription('');
+  await expect(rebuild).toHaveAccessibleDescription(en.rebuilt.explain);
   const ticks = [false, true, true];
   for (const [k, card] of (await cards.all()).entries()) {
     await expect(card).toBeVisible();

@@ -174,3 +174,50 @@ test('the undated email shows its notes; the choices survive adding another file
   await expect(page.locator('#preview-list > li[data-included="false"]')).toHaveCount(1);
   await expectNothingLeftThePage(page);
 });
+
+test('task 8.8: what the PDF no longer says is shown in step 2 before the download', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await expect(page.locator('#drop-zone')).toBeVisible();
+  loadedAt = watch.requests.length;
+  await page
+    .locator('#file-input')
+    .setInputFiles([
+      fixture('71-bad-date.eml'),
+      fixture('73-date-no-zone.eml'),
+      fixture('93-answers-between-lines.eml'),
+      fixture('11-order-2-bob-outlook-en.eml'),
+      fixture('30-dup-order-2-copy.eml'),
+      { name: 'notes.txt', mimeType: 'text/plain', buffer: NodeBuffer.from(new TextEncoder().encode('Order notes, not an email.')) as never },
+    ]);
+  await expect(page.locator('#add-summary-text')).toHaveText('6 files added. 1 could not be read. 5 emails found. 1 identical copy merged.', { timeout: 30_000 });
+  await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
+  const card = (subject: string): Locator =>
+    page.locator('#preview-list > li.message:not(.message-rebuilt)').filter({ has: page.locator('.message-subject', { hasText: subject }) });
+  const notesOf = (subject: string): Locator => card(subject).getByRole('list', { name: en.review.notesLabel }).locator('li');
+
+  // The file that could not be read: in step 1 with its reason, counted in step 2.
+  await expect(page.locator('#add-failed-list > li .failed-reason')).toHaveText([`notes.txt ${en.errors.file['unsupported-type']}`]);
+  await expect(page.locator('#review-files')).toHaveText(`6 files, 1 could not be read. ${en.counts.seeFailed}`);
+  // Two files with the same email, merged: counted, and the card names the other file.
+  await expect(page.locator('#review-messages')).toHaveText(/^5 emails found, 1 identical copy merged/);
+  await expect(card('RE: Office desks and chairs').locator('dd.meta-also-in')).toHaveText('30-dup-order-2-copy.eml');
+  // A date that could not be read: "(no date)", the date as written, why, and where it is placed.
+  await expect(card('Cable trays').locator('dd.meta-date')).toHaveText(`${en.preview.noDate} As written in the email: not a date`);
+  await expect(notesOf('Cable trays')).toHaveText([en.warnings.parse['unparseable-date'], en.preview.order['file-order']]);
+  // The sender's time zone not given.
+  await expect(notesOf('Old desks')).toHaveText([en.warnings.parse['unknown-time-zone']]);
+  // A control character (a BEL) the PDF shows as a code.
+  await expect(notesOf('Answers between the lines')).toContainText([en.review.codedCharacters]);
+  // What rebuilt emails are, under the switch, read as its description.
+  const rebuild = page.getByRole('checkbox', { name: en.rebuilt.rebuildConversation });
+  await expect(rebuild).toBeVisible();
+  await expect(page.locator('#rebuilt-explain')).toHaveText(en.rebuilt.explain);
+  await expect(page.locator('#rebuilt-explain')).toBeVisible();
+  await expect(rebuild).toHaveAccessibleDescription(en.rebuilt.explain);
+  // A zone the browser knows: no zone note.
+  await expect(page.locator('#preview-zone-note')).toBeHidden();
+  // Calm and readable: the new texts meet the contrast rules.
+  expect(await contrastFailures(page, '#step-check', 20)).toEqual([]);
+  await expectNothingLeftThePage(page);
+});

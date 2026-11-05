@@ -232,6 +232,10 @@ export const en = {
     // The toolbar above the list.
     zone: 'Show dates in this time zone',
     zoneThisComputer: '{zone} (this computer)',
+    // Under the zone list, only when the zone picked is not one this browser
+    // knows (not expected: the list only offers zones it knows). The PDF then
+    // names just "UTC", without this note (task 8.8).
+    zoneNotRecognized: 'This time zone was not recognized, so dates are shown in UTC, here and in the PDF.',
     showFolded: 'Show quoted text and signatures',
     // Accessible name of the list of emails.
     listLabel: 'Your emails, oldest first',
@@ -239,6 +243,9 @@ export const en = {
     messageNumber: '#{number}',
     // Shown under the date when the sender's own clock showed another time.
     senderTime: "Sender's local time: {time}",
+    // Shown after "(no date)" when the email's date could not be read: the
+    // date exactly as the email wrote it (the PDF shows that text alone, task 8.8).
+    dateAsWritten: 'As written in the email: {text}',
     // One mailbox with both parts, e.g. "Alice Example <alice@example.test>".
     mailbox: '{name} <{address}>',
     // Files this email was also found in (identical copies merged into it).
@@ -334,6 +341,9 @@ export const en = {
       'pdf-kept-all-empty': 'The whole email will be in the PDF: the tool could not tell its own text from the quote.',
       'pdf-fallback': 'The whole email will be in the PDF: the tool could not work out which parts to leave out.',
     } satisfies Record<PdfNoteCode, string>,
+    // An email with control or broken characters (src/ui-model/message-notes.ts,
+    // codedCharacters). Said here only: the PDF has no notes (task 8.8).
+    codedCharacters: 'This email contains hidden or damaged characters. In the PDF they may appear as codes such as [U+0000].',
   },
 
   // Step 2: earlier emails rebuilt from the quoted text of an email added
@@ -368,6 +378,9 @@ export const en = {
     // The checkbox in the step 2 toolbar, ticked by default (user decision 2026-10-29, task 7.8c).
     // Unticking it leaves every rebuilt email out (no cards, none in the PDF).
     rebuildConversation: 'Rebuild conversation from replies',
+    // Under that checkbox, also its description (task 8.8): what rebuilt emails are.
+    // The PDF shows them like the others, without saying they were rebuilt.
+    explain: 'Rebuilt emails are earlier emails that the tool rebuilt from the text quoted in a reply. They may be incomplete or inexact, so check them before you make the PDF.',
     // Not shown: read as that checkbox's description while it is disabled
     // because pdf.everything is ticked. Names that checkbox without the part in brackets.
     offWhileFullText: 'Not available while "Print full original text" is ticked.',
@@ -420,36 +433,22 @@ export const en = {
     // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
     messageFailed: 'The tool could not show what the PDF leaves out for this email.',
     // The texts written in the PDF itself (src/pdf/model.ts, through src/pdf/strings.ts).
+    // No notes here (user rule 2026-11-05, task 8.8): anything about what went
+    // wrong, may be missing or inaccurate, or how the tool works is said in the app.
     document: {
       title: 'Email correspondence',
       // Cover page: the rows of the summary.
       dates: 'Dates',
       // E.g. "2025-03-01 09:00:00 UTC+01:00 to 2025-04-02 11:00:42 UTC+02:00".
       dateRange: '{first} to {last}',
-      noDates: 'No email in this PDF has a usable date.',
-      undated: {
-        one: '{count} email has no usable date. It is placed after the dated emails, in the order the files were added.',
-        other: '{count} emails have no usable date. They are placed after the dated emails, in the order the files were added.',
-      },
       emails: 'Emails',
       emailCount: { one: '{count} email', other: '{count} emails' },
       generated: 'Made on',
       timeZone: 'Dates shown in',
-      // The time zone asked for was not valid: UTC was used.
-      zoneFallback: '{zone} (the chosen time zone was not recognized)',
       people: 'People',
       sources: 'Source files',
-      // After a source file's name: which email it gave.
+      // After a source file's name: which email it gave (a merged identical copy too).
       sourceEmail: 'email {number}',
-      // A file whose email was an identical copy of another file's email, merged into it.
-      sourceCopy: 'email {number} (identical copy, merged)',
-      unreadable: 'Files that could not be read',
-      unreadableIntro: 'These files were added but could not be read. Nothing from them is in this PDF.',
-      noFingerprint: 'no fingerprint (the file was not read)',
-      controlChars: {
-        one: '{count} control or broken character in the emails is shown as a code such as [U+0000].',
-        other: '{count} control or broken characters in the emails are shown as codes such as [U+0000].',
-      },
       // The index (table of contents).
       index: 'Index',
       column: {
@@ -469,10 +468,6 @@ export const en = {
       // After an attachment's name (listed only, never opened), e.g. "(12 KB, application/pdf)".
       attachment: '({size}, {type})',
       attachmentNoType: '({size})',
-      // A date the tool could not read, shown as it was written.
-      dateAsWritten: 'Date as written in the email: {text}',
-      keptAllEmpty: 'The whole email is shown: the tool could not tell its own text from the quote.',
-      fallback: 'The whole email is shown: the tool could not work out which parts to leave out.',
       // The footer of every page, e.g. "Page 3 of 12".
       pageFooter: 'Page {page} of {total}',
       // Bookmarks (the side panel of a PDF reader): the cover page, then one per email,

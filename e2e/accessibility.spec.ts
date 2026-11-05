@@ -691,7 +691,7 @@ for (const width of [1280, 320]) {
     await expect(rebuildSwitch).toBeDisabled();
     await expect(rebuildSwitch).not.toBeChecked();
     await expect(rebuildSwitch).toHaveAccessibleName(en.rebuilt.rebuildConversation);
-    await expect(rebuildSwitch).toHaveAccessibleDescription(en.rebuilt.offWhileFullText);
+    await expect(rebuildSwitch).toHaveAccessibleDescription(`${en.rebuilt.offWhileFullText} ${en.rebuilt.explain}`);
     const switchBox = await rebuildSwitch.boundingBox();
     expect(switchBox!.width).toBeGreaterThanOrEqual(24);
     expect(switchBox!.height).toBeGreaterThanOrEqual(24);

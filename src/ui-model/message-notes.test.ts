@@ -4,7 +4,7 @@ import type { DedupeWarning } from '../engine/dedupe';
 import { runEngine, type EngineMessage } from '../engine/engine';
 import type { NormalizedMessage, ParseResult } from '../parsing/types';
 import { t } from '../ui/i18n';
-import { DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
+import { codedCharacters, DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
 
 let counter = 0;
 function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage {
@@ -133,5 +133,36 @@ describe('messageNotes', () => {
     const notes = result.messages.map((m, position) => messageNotes(m, position, result.positionByIndex));
     expect(notes[0]).toContainEqual({ kind: 'dedupe', code: 'same-id-different-content', related: [2], more: 0 });
     expect(notes[1]).toContainEqual({ kind: 'dedupe', code: 'same-id-different-content', related: [1], more: 0 });
+  });
+});
+
+describe('codedCharacters (task 8.8: the PDF shows them as codes without a note, so the app says it)', () => {
+  it('counts what the PDF writes as a code, in every text the PDF can show of the email', () => {
+    expect(codedCharacters(engineMessage())).toBe(0);
+    const at = (fields: Partial<NormalizedMessage>, extra: Partial<EngineMessage> = {}): number => codedCharacters(engineMessage({ message: make(fields), ...extra }));
+    // Body: a NUL and a lone surrogate; tabs, line breaks, U+2028 and emoji are not codes.
+    expect(at({ bodyText: 'a\u0000b\tc\r\nd\u2028e \u{1F600} \uD800' })).toBe(2);
+    expect(at({ subject: 'Re\u0007' })).toBe(1);
+    expect(at({ from: [{ name: 'Ali\u001Bce', address: 'alice@example.test' }] })).toBe(1);
+    expect(at({ to: [{ name: '', address: 'b\u202Eob@example.test' }] })).toBe(1);
+    expect(at({ cc: [{ name: '\u0085', address: '' }], bcc: [{ name: '\u0001', address: '' }] })).toBe(2);
+    expect(at({ sender: { name: 'Desk\u0002', address: 'desk@example.test' } })).toBe(1);
+    expect(at({ attachments: [{ fileName: 'plan\u0000.png', size: 1, mimeType: 'image/png\u0003' }] })).toBe(2);
+    expect(at({ source: { fileName: 'odd\u0004.eml', sha256: 'a'.repeat(64), kind: 'eml' } })).toBe(1);
+    const copy = { ...make({ source: { fileName: 'copy\u0005.eml', sha256: 'b'.repeat(64), kind: 'eml' } }) };
+    expect(at({}, { duplicates: [{ index: 1, source: copy.source, rule: 'message-id' }] })).toBe(1);
+    // The date as written only counts when the PDF shows it: when the date could not be read.
+    expect(at({ date: { utcMs: Date.parse('2025-03-03T08:15:00Z'), original: 'Mon\u0007', offsetMinutes: 0, zoneKnown: true } })).toBe(0);
+    expect(at({ date: { utcMs: null, original: 'Mon\u0007', offsetMinutes: null, zoneKnown: false } })).toBe(1);
+  });
+
+  it('gives an email with such characters one note, after the look-alike notes; none without', () => {
+    expect(messageNotes(engineMessage(), 0, [0])).toEqual([]);
+    const notes = messageNotes(engineMessage({ message: make({ bodyText: 'a\u0000b\u0000c' }), parserWarnings: ['missing-message-id'] }), 0, [0]);
+    expect(notes).toEqual([
+      { kind: 'parse', code: 'missing-message-id' },
+      { kind: 'chars', code: 'coded-characters' },
+    ]);
+    expect(t('review.codedCharacters')).toBe('This email contains hidden or damaged characters. In the PDF they may appear as codes such as [U+0000].');
   });
 });

@@ -65,8 +65,8 @@ describe('no text of its own for rebuilt emails (user decision 2026-11-02, task 
       };
       collect(s);
       // The functions too, with sample values.
-      texts.push(s.emailHeading(3), s.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'), s.dateAsWritten('maandag'), s.emailCount(2));
-      expect(texts.length).toBeGreaterThan(40);
+      texts.push(s.emailHeading(3), s.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'), s.senderLocal('2025-03-03 09:00'), s.emailCount(2));
+      expect(texts.length).toBeGreaterThan(30);
       for (const text of texts) expect(text, locale).not.toMatch(words[locale]!);
     }
   });

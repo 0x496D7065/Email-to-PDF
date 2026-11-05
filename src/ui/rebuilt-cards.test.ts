@@ -289,6 +289,26 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(byId('review-messages').textContent).toBe('1 email found.');
   });
 
+  it('explain under the switch what rebuilt emails are, read as its description, in the page language (task 8.8)', () => {
+    show(engineOf(LAST));
+    const explain = byId('rebuilt-explain');
+    expect(isHidden(byId('rebuilt-switch'))).toBe(false);
+    expect(isHidden(explain)).toBe(false);
+    expect(explain.textContent).toBe(
+      'Rebuilt emails are earlier emails that the tool rebuilt from the text quoted in a reply. They may be incomplete or inexact, so check them before you make the PDF.',
+    );
+    expect(byId('rebuilt-include-all').getAttribute('aria-describedby')).toBe('rebuilt-explain');
+    // Inside the switch's own field, so it is hidden with it when nothing was rebuilt.
+    expect(byId('rebuilt-switch').descendants()).toContain(explain);
+    setLocale('fr');
+    review.relabel();
+    expect(explain.textContent).toBe(t('rebuilt.explain'));
+    expect(explain.textContent).toContain('peuvent être incomplets ou inexacts');
+    setLocale('nl');
+    review.relabel();
+    expect(explain.textContent).toContain('onvolledig of onnauwkeurig');
+  });
+
   it('include every rebuilt email by default, and count them', () => {
     show(engineOf(LAST));
     expect(isHidden(byId('rebuilt-switch'))).toBe(false);
@@ -481,7 +501,7 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(before.some((s) => s.includes('|In the PDF: taken from #'))).toBe(true);
     expect(all.checked).toBe(true);
     expect(all.hasAttribute('disabled')).toBe(false);
-    expect(all.hasAttribute('aria-describedby')).toBe(false);
+    expect(all.getAttribute('aria-describedby')).toBe('rebuilt-explain');
     expect(isHidden(hint)).toBe(true);
     expect(hint.textContent).toBe(t('rebuilt.offWhileFullText'));
 
@@ -499,7 +519,7 @@ describe('the switch, the checkboxes and the counts', () => {
     // The switch: unticked, disabled, described by the hint (never shown itself).
     expect(all.checked).toBe(false);
     expect(all.hasAttribute('disabled')).toBe(true);
-    expect(all.getAttribute('aria-describedby')).toBe('rebuilt-off-hint');
+    expect(all.getAttribute('aria-describedby')).toBe('rebuilt-off-hint rebuilt-explain');
     expect(isHidden(hint)).toBe(true);
     expect(isHidden(byId('rebuilt-switch'))).toBe(false);
     // Every card leaves the list, exactly as with the switch off; none is dimmed and left in instead.
@@ -534,7 +554,7 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(isHidden(byId('review-rebuilt'))).toBe(false);
     expect(all.checked).toBe(true);
     expect(all.hasAttribute('disabled')).toBe(false);
-    expect(all.hasAttribute('aria-describedby')).toBe(false);
+    expect(all.getAttribute('aria-describedby')).toBe('rebuilt-explain');
     expect(snapshot()).toEqual(before);
     expect(review.includedRebuilt().map((r) => r.id)).toEqual(beforeIds);
     expect(review.rebuiltShown()).toBe(true);
@@ -594,7 +614,7 @@ describe('the switch, the checkboxes and the counts', () => {
     everything = false; // pdfLabels.reset unticks it right after (src/ui/page.ts)
     expect(all.checked).toBe(true);
     expect(all.hasAttribute('disabled')).toBe(false);
-    expect(all.hasAttribute('aria-describedby')).toBe(false);
+    expect(all.getAttribute('aria-describedby')).toBe('rebuilt-explain');
   });
 
   it('everythingChanged gives no line when nothing was rebuilt', () => {

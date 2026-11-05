@@ -146,6 +146,7 @@ describe('texts', () => {
       { kind: 'order', code: 'file-order' },
       ...DEDUPE_WARNINGS.map((code): MessageNote => ({ kind: 'dedupe', code, related: [], more: 0 })),
       ...ENGINE_WARNINGS.map((code): MessageNote => ({ kind: 'engine', code })),
+      { kind: 'chars', code: 'coded-characters' },
     ];
     const texts = notes.map(noteText);
     for (const [k, text] of texts.entries()) {
@@ -520,6 +521,23 @@ describe('include checkboxes', () => {
 });
 
 describe('notes', () => {
+  it('says on the card when the PDF will show some characters as codes (task 8.8: not in the PDF), in the page language', () => {
+    show(engineOf([make({ subject: 'Odd', bodyText: 'Line\u0000one\n' }), make({ subject: 'Plain' })]));
+    const odd = items().find((i) => i.descendants().some((e) => e.textContent === 'Odd'))!;
+    const plain = items().find((i) => i.descendants().some((e) => e.textContent === 'Plain'))!;
+    expect(notesOf(odd)).toEqual(['This email contains hidden or damaged characters. In the PDF they may appear as codes such as [U+0000].']);
+    expect(notesOf(plain)).toEqual([]);
+    expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
+    setLocale('nl');
+    try {
+      review.relabel();
+      expect(notesOf(odd)).toEqual([t('review.codedCharacters')]);
+      expect(notesOf(odd)[0]).toContain('beschadigde tekens');
+    } finally {
+      setLocale('en');
+    }
+  });
+
   it('shows an undated email\'s notes: no date found, placed at the end', () => {
     show(engineOf([make({ subject: 'Undated', date: NO_DATE, warnings: ['missing-date'] }), make({ subject: 'Dated' })]));
     expect(subjects()).toEqual(['Dated', 'Undated']);

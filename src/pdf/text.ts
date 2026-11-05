@@ -13,8 +13,8 @@
 //     nothing, and a fixed width is simple to explain and to test;
 // (c) characters that must not be written as they are become a visible
 //     code such as "[U+0000]", in a run of role 'code' (see "The contract
-//     with the renderer" below). They are counted, so the cover can say how
-//     many were replaced;
+//     with the renderer" below). They are counted (data only: the PDF has no
+//     note, task 8.8; the app says it, codedCharacterCount);
 // (d) combining marks are left exactly as they are ("e" + U+0301 stays two
 //     code points): the renderer shapes them;
 // (e) email bodies only: leading and trailing blank lines are removed, and
@@ -253,6 +253,16 @@ export function sanitizeRuns(text: string, role: PdfRole): SanitizedRuns {
  */
 export function inlineRuns(text: string, role: PdfRole): SanitizedRuns {
   return sanitizeRuns(text.replace(/\r\n|[\r\n\u{2028}\u{2029}]/gu, ' '), role);
+}
+
+/**
+ * How many characters of `text` the PDF writes as a visible code (group 1
+ * of the contract; line breaks are not counted): the same count inlineRuns
+ * and bodyLines give for it. For the app, which says so before the PDF is
+ * made (src/ui-model/message-notes.ts; task 8.8: the PDF has no note).
+ */
+export function codedCharacterCount(text: string): number {
+  return inlineRuns(text, 'body').replaced;
 }
 
 /** The plain text of a line (its runs joined). */

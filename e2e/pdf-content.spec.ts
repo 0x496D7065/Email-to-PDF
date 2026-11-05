@@ -18,7 +18,7 @@
 // "America/New_York" is picked (the browser's own zone is Tokyo).
 //
 // 1. "the PDF as made by default": the cover (title, date range, count,
-//    zone, generation time, the control character note, the people, every
+//    zone, generation time, no note of any kind (task 8.8), the people, every
 //    source file with its SHA-256 computed here, in Node, over the exact
 //    bytes dropped); the index (one row per email, in order: number, short
 //    date in the chosen zone, sender, subject, attachments, and the page
@@ -387,12 +387,15 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
   expect(coverText).toContain(`${d.dates} ${range}`);
   const undated = E - dated.length;
   expect(undated).toBe(3);
-  expect(coverText).toContain(fill(d.undated.other, { count: undated }));
   expect(coverText).toContain(`${d.emails} ${fill(d.emailCount.other, { count: E })}`);
   expect(coverText).toContain(`${d.timeZone} ${ZONE.replaceAll('_', ' ')}`);
   expect(coverText).toContain(`${d.generated} ${made}`);
-  // ANSWERS holds the only control character of the fixtures (a BEL, quoted-printable encoded).
-  expect(coverText).toContain(fill(d.controlChars.one, { count: 1 }));
+  // No notes on the cover (task 8.8): not about the undated emails, nor about
+  // ANSWERS's control character (a BEL, quoted-printable encoded), which the
+  // app notes on its card instead.
+  for (const removed of ['have no usable date', 'has no usable date', 'control or broken character', 'could not be read', 'not recognized']) {
+    expect(coverText).not.toContain(removed);
+  }
 
   // People: exactly the addresses of From, Sender, To and Cc of the included emails, each with a name it was given.
   const peopleAt = doc.cover.findIndex((l) => l.copied === d.people);
@@ -438,20 +441,17 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
   const coverBare = bare(cover);
   let sourceCount = 0;
   for (const [k, e] of emails.entries()) {
-    let keptFiles = 0;
     for (const f of e.files) {
-      // "<name> - email 3" or "<name> - email 3 (identical copy, merged)", then the SHA-256 on the next line.
-      const kept = bare(`${f.name} - ${fill(d.sourceEmail, { number: k + 1 })}`);
-      const merged = bare(fill(d.sourceCopy, { number: k + 1 }).slice(fill(d.sourceEmail, { number: k + 1 }).length));
+      // "<name> - email 3", then the SHA-256 on the next line; a merged copy alike (task 8.8: no "(identical copy, merged)").
+      const line = bare(`${f.name} - ${fill(d.sourceEmail, { number: k + 1 })}`);
       // (The 64 hex digits right after the number keep "email 1" from matching "email 12".)
-      const pattern = new RegExp(`${escapeRegExp(kept)}(${escapeRegExp(merged)})?${f.sha256}`);
-      const match = pattern.exec(coverBare);
+      const match = new RegExp(`${escapeRegExp(line)}${f.sha256}`).exec(coverBare);
       expect(match, `${f.name} with its SHA-256 on the cover`).not.toBeNull();
-      if (match?.[1] === undefined) keptFiles++;
       sourceCount++;
     }
-    expect(keptFiles, `${e.first.id}: one kept file`).toBe(1);
+    expect(e.files.length, `${e.first.id}: at least its kept file`).toBeGreaterThanOrEqual(1);
   }
+  expect(cover).not.toContain('identical copy');
   // Every file but the unticked one, and no other source line.
   expect(sourceCount).toBe(sources.length - 1);
   expect(coverBare.match(/-email\d+/g)).toHaveLength(sourceCount);

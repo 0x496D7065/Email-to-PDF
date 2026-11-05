@@ -247,15 +247,58 @@ describe('helpers', () => {
 
   it('shows dates in the zone, the sender time only when known and different', () => {
     const date = dateAt('2025-03-03T08:15:00Z', -300);
-    expect(dateTexts(date, 'America/New_York')).toEqual({ main: '2025-03-03 03:15:00 UTC-05:00', iso: '2025-03-03T08:15:00.000Z', senderLocal: null });
+    expect(dateTexts(date, 'America/New_York')).toEqual({ main: '2025-03-03 03:15:00 UTC-05:00', iso: '2025-03-03T08:15:00.000Z', senderLocal: null, asWritten: null });
     expect(dateTexts(date, 'Asia/Tokyo')).toEqual({
       main: '2025-03-03 17:15:00 UTC+09:00',
       iso: '2025-03-03T08:15:00.000Z',
       senderLocal: "Sender's local time: 2025-03-03 03:15:00 UTC-05:00",
+      asWritten: null,
     });
     expect(dateTexts(dateAt('2025-03-03T08:15:00Z', null, false), 'Asia/Tokyo').senderLocal).toBeNull();
-    expect(dateTexts(NO_DATE, 'UTC')).toEqual({ main: t('preview.noDate'), iso: null, senderLocal: null });
+    expect(dateTexts(NO_DATE, 'UTC')).toEqual({ main: t('preview.noDate'), iso: null, senderLocal: null, asWritten: null });
     expect(dateTexts({ ...NO_DATE, utcMs: 1e18 }, 'UTC').main).toBe(t('preview.noDate'));
+  });
+
+  it('gives the date as written when it could not be read (task 8.8: the PDF shows that text alone)', () => {
+    const bad = { ...NO_DATE, original: 'Someday, around noon' };
+    expect(dateTexts(bad, 'UTC')).toEqual({ main: '(no date)', iso: null, senderLocal: null, asWritten: 'As written in the email: Someday, around noon' });
+    expect(dateTexts({ ...bad, original: '   ' }, 'UTC').asWritten).toBeNull();
+    // A usable date never shows it.
+    expect(dateTexts(dateAt('2025-03-03T08:15:00Z'), 'UTC').asWritten).toBeNull();
+  });
+});
+
+describe('task 8.8: what the PDF no longer says, shown in step 2', () => {
+  it('shows the date as written under "(no date)" on the card, in the page language', () => {
+    const bad = make({ date: { ...NO_DATE, original: 'Someday, around noon' }, warnings: ['unparseable-date'] });
+    preview.show(engineOf([bad]));
+    const note = one(items()[0]!, 'sender-time');
+    expect(note.textContent).toBe('As written in the email: Someday, around noon');
+    expect(note.hasAttribute('hidden')).toBe(false);
+    setLocale('fr');
+    try {
+      preview.relabel();
+      expect(note.textContent).toBe('Date telle qu’écrite dans l’e-mail : Someday, around noon');
+    } finally {
+      setLocale('en');
+      preview.relabel();
+    }
+  });
+
+  it('says when the zone picked is not recognized (dates in UTC), and only then', () => {
+    expect(byId('preview-zone-note').hasAttribute('hidden')).toBe(true);
+    expect(byId('preview-zone').hasAttribute('aria-describedby')).toBe(false);
+    mount({ zones: ['UTC', 'Not/A_Zone'], initialZone: 'Not/A_Zone' });
+    const note = byId('preview-zone-note');
+    expect(note.hasAttribute('hidden')).toBe(false);
+    expect(note.textContent).toBe('This time zone was not recognized, so dates are shown in UTC, here and in the PDF.');
+    expect(byId('preview-zone').getAttribute('aria-describedby')).toBe('preview-zone-note');
+    // Picking a zone the browser knows hides it.
+    const select = byId('preview-zone');
+    select.value = 'UTC';
+    select.fire('change');
+    expect(note.hasAttribute('hidden')).toBe(true);
+    expect(select.hasAttribute('aria-describedby')).toBe(false);
   });
 });
 

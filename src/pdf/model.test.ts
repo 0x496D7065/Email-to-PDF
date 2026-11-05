@@ -47,7 +47,7 @@ const undatedDate: NormalizedMessage['date'] = { utcMs: null, original: '', offs
 /** Runs the engine and the plans on every email (or the given positions), then builds the document. */
 function build(
   results: readonly ParseResult[],
-  options: { positions?: (r: EngineResult) => number[]; policy?: OutputPolicy; timeZone?: string; generatedAt?: number; plans?: (r: EngineResult, p: number[]) => MessagePlan[]; listUnreadable?: boolean } = {},
+  options: { positions?: (r: EngineResult) => number[]; policy?: OutputPolicy; timeZone?: string; generatedAt?: number; plans?: (r: EngineResult, p: number[]) => MessagePlan[] } = {},
 ): { doc: PdfDocument; result: EngineResult; input: BuildPdfInput } {
   const result = runEngine(results);
   const positions = options.positions?.(result) ?? result.messages.map((_, k) => k);
@@ -61,7 +61,6 @@ function build(
     timeZone: options.timeZone ?? 'UTC',
     generatedAt: options.generatedAt ?? Date.UTC(2025, 5, 1, 12, 0, 0),
     strings,
-    ...(options.listUnreadable === undefined ? {} : { listUnreadable: options.listUnreadable }),
   };
   return { doc: buildPdfDocument(input), result, input };
 }
@@ -183,14 +182,15 @@ describe('header fields', () => {
     expect(field(lagos, 'Date')!.map(text)).toEqual(['2025-03-04 09:00:00 UTC+01:00']);
   });
 
-  it('notes an unknown sender time zone', () => {
+  it('flags an unknown sender time zone, but writes no note about it (task 8.8: the app says it)', () => {
     const m = make({
       date: { utcMs: BASE_MS, original: 'Tue, 4 Mar 2025 08:00:00', offsetMinutes: null, zoneKnown: false },
       warnings: ['unknown-time-zone'],
     });
     const e = build([ok(m)]).doc.emails[0]!;
-    expect(field(e, 'Date')!.map(text)).toEqual(['2025-03-04 08:00:00 UTC+00:00', "The sender's time zone is not given, so the time may be off by a few hours."]);
+    expect(field(e, 'Date')!.map(text)).toEqual(['2025-03-04 08:00:00 UTC+00:00']);
     expect(e.flags.zoneUnknown).toBe(true);
+    expect(e.notes).toEqual([]);
   });
 
   it('shows "(no subject)" for an empty or blank subject, in header and index', () => {
@@ -215,7 +215,7 @@ describe('header fields', () => {
 });
 
 describe('undated emails', () => {
-  it('shows "(no date)" with the date as written, and keeps them out of the date range', () => {
+  it('shows an unreadable date as written, "(no date)" without one, and keeps them out of the date range (no note, task 8.8)', () => {
     const dated = make({ date: { utcMs: Date.UTC(2025, 2, 1, 9, 0, 0), original: 'x', offsetMinutes: 0, zoneKnown: true } });
     const later = make({ date: { utcMs: Date.UTC(2025, 3, 2, 9, 0, 0), original: 'x', offsetMinutes: 0, zoneKnown: true } });
     const bad = make({ date: { utcMs: null, original: 'Someday, around noon', offsetMinutes: null, zoneKnown: false }, warnings: ['unparseable-date'] });
@@ -223,22 +223,34 @@ describe('undated emails', () => {
     const { doc } = build([bad, later, none, dated].map(ok));
     const [first, second, third, fourth] = doc.emails;
     expect([first, second, third, fourth].map((e) => e!.flags.undated)).toEqual([false, false, true, true]);
-    expect(field(third!, 'Date')!.map(text)).toEqual(['(no date)', 'Date as written in the email: Someday, around noon']);
+    expect(field(third!, 'Date')).toEqual([[{ role: 'field-value', text: 'Someday, around noon' }]]);
     expect(field(fourth!, 'Date')).toEqual([[{ role: 'muted', text: '(no date)' }]]);
     expect(doc.index.entries[2]!.date).toEqual([{ role: 'muted', text: '(no date)' }]);
+    expect(third!.notes).toEqual([]);
     expect(doc.cover.dateRange).toEqual({ first: '2025-03-01 09:00:00 UTC+00:00', last: '2025-04-02 09:00:00 UTC+00:00' });
+    // Counted in the data, not written on the cover.
     expect(doc.cover.undated).toBe(2);
-    const dates = coverRow(doc, 'Dates');
-    expect(dates.map(text)).toEqual([
-      '2025-03-01 09:00:00 UTC+00:00 to 2025-04-02 09:00:00 UTC+00:00',
-      '2 emails have no usable date. They are placed after the dated emails, in the order the files were added.',
-    ]);
+    expect(coverRow(doc, 'Dates').map(text)).toEqual(['2025-03-01 09:00:00 UTC+00:00 to 2025-04-02 09:00:00 UTC+00:00']);
   });
 
-  it('says so when no email has a date', () => {
+  it('writes an unreadable date with control characters as codes, counted', () => {
+    const bad = make({ date: { utcMs: null, original: 'Mon\u0007day', offsetMinutes: null, zoneKnown: false }, warnings: ['unparseable-date'] });
+    const { doc } = build([ok(bad)]);
+    expect(field(doc.emails[0]!, 'Date')).toEqual([
+      [
+        { role: 'field-value', text: 'Mon' },
+        { role: 'code', text: '[U+0007]' },
+        { role: 'field-value', text: 'day' },
+      ],
+    ]);
+    expect(doc.controlChars).toBe(1);
+  });
+
+  it('shows the "(no date)" placeholder on the cover when no email has a date', () => {
     const { doc } = build([ok(make({ date: undatedDate })), ok(make({ date: undatedDate }))]);
     expect(doc.cover.dateRange).toBeNull();
-    expect(coverRow(doc, 'Dates').map(text)).toEqual(['No email in this PDF has a usable date.']);
+    expect(doc.cover.undated).toBe(2);
+    expect(coverRow(doc, 'Dates')).toEqual([[{ role: 'muted', text: '(no date)' }]]);
   });
 });
 
@@ -284,11 +296,11 @@ describe('cover', () => {
     expect(build([ok(make())]).doc.cover.blocks.some((b) => b.kind === 'paragraph' && text(b.line).includes('control'))).toBe(false);
   });
 
-  it('falls back to UTC for an unknown zone, and says so', () => {
+  it('falls back to UTC for an unknown zone, and names just UTC (task 8.8: the app says the zone was not recognized)', () => {
     const { doc } = build([ok(make())], { timeZone: 'Not/AZone' });
     expect(doc.timeZone).toBe('UTC');
     expect(doc.zoneFallback).toBe(true);
-    expect(coverRow(doc, 'Dates shown in').map(text)).toEqual(['UTC (the chosen time zone was not recognized)']);
+    expect(coverRow(doc, 'Dates shown in').map(text)).toEqual(['UTC']);
     expect(doc.fileName).toBe('correspondence-2025-06-01.pdf');
   });
 
@@ -352,34 +364,26 @@ describe('cover', () => {
       { fileName: 'copy-of-it.msg', sha256: 'c'.repeat(64), kind: 'msg', inputIndex: 3, email: 1, mergedCopy: true },
       { fileName: other.source.fileName, sha256: other.source.sha256, kind: 'eml', inputIndex: 2, email: 2, mergedCopy: false },
     ]);
-    expect(doc.cover.unreadable).toEqual([
-      { fileName: 'broken.eml', sha256: 'f'.repeat(64), error: 'corrupt', inputIndex: 1 },
-      { fileName: 'huge.eml', sha256: null, error: 'too-large', inputIndex: 5 },
-    ]);
     const lists = doc.cover.blocks.filter((b) => b.kind === 'list');
+    expect(lists).toHaveLength(2);
     const sourceList = lists[1];
+    // A merged copy is listed like the others: name, its email, its hash (task 8.8: no explanation).
     expect(sourceList?.kind === 'list' ? sourceList.items.map((item) => item.map(text)) : null).toEqual([
       [`${original.source.fileName} - email 1`, original.source.sha256],
-      ['copy-of-it.msg - email 1 (identical copy, merged)', 'c'.repeat(64)],
+      ['copy-of-it.msg - email 1', 'c'.repeat(64)],
       [`${other.source.fileName} - email 2`, other.source.sha256],
     ]);
     expect(sourceList?.kind === 'list' ? sourceList.items[0]![1] : null).toEqual([{ role: 'mono', text: original.source.sha256 }]);
-    const unreadableList = lists[2];
-    expect(unreadableList?.kind === 'list' ? unreadableList.items.map((item) => item.map(text)) : null).toEqual([
-      ['broken.eml', 'f'.repeat(64)],
-      ['huge.eml', 'no fingerprint (the file was not read)'],
-    ]);
+    // The files that could not be read are not on the cover (task 8.8: step 1 of the app lists them).
     const headings = doc.cover.blocks.filter((b) => b.kind === 'heading').map((b) => (b.kind === 'heading' ? text(b.line) : ''));
-    expect(headings).toEqual(['Email correspondence', 'People', 'Source files', 'Files that could not be read']);
+    expect(headings).toEqual(['Email correspondence', 'People', 'Source files']);
+    expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
+    const coverText = JSON.stringify(doc.cover.blocks);
+    expect(coverText).not.toContain('broken.eml');
+    expect(coverText).not.toContain('huge.eml');
+    expect(coverText).not.toContain('f'.repeat(64));
     // The email header names its files too.
     expect(field(doc.emails[0]!, 'File')!.map(text)).toEqual([original.source.fileName, 'copy-of-it.msg']);
-  });
-
-  it('can leave the unreadable files off the cover', () => {
-    const failed: ParseResult = { ok: false, fileName: 'broken.eml', sha256: null, error: 'corrupt', detail: 'synthetic' };
-    const { doc } = build([ok(make()), failed], { listUnreadable: false });
-    expect(doc.cover.unreadable).toEqual([]);
-    expect(doc.cover.blocks.some((b) => b.kind === 'heading' && text(b.line) === 'Files that could not be read')).toBe(false);
   });
 
   it('gives a nameless file a visible text', () => {
@@ -424,7 +428,7 @@ describe('body', () => {
     expect(reply.bodyText.split('\n').filter((l) => l.startsWith('>'))).toHaveLength(6);
   });
 
-  it('keeps the whole body, with a note, when the plan is missing or invalid', () => {
+  it('keeps the whole body, with no note (task 8.8), when the plan is missing or invalid', () => {
     const cases: ((r: EngineResult) => MessagePlan[])[] = [
       () => [],
       (r) => [{ ...planOutput([r.messages[0]!])[0]!, ranges: [{ start: 0, end: 3, keep: true, reason: 'text' }] }], // a gap
@@ -437,16 +441,16 @@ describe('body', () => {
       const e = doc.emails[0]!;
       expect(bodyOf(e)).toBe(replyShown);
       expect(e.flags.planFallback).toBe(true);
-      expect(e.notes.map(text)).toEqual(['The whole email is shown: the tool could not work out which parts to leave out.']);
+      expect(e.notes).toEqual([]);
     }
   });
 
-  it('notes a body kept whole because nothing else would remain', () => {
+  it('flags a body kept whole because nothing else would remain, with no note (task 8.8)', () => {
     const { doc } = build([ok(reply)], {
       plans: (r) => [{ ...planOutput([r.messages[0]!])[0]!, keptAllBecauseEmpty: true }],
     });
     expect(doc.emails[0]!.flags.keptAllBecauseEmpty).toBe(true);
-    expect(doc.emails[0]!.notes.map(text)).toEqual(['The whole email is shown: the tool could not tell its own text from the quote.']);
+    expect(doc.emails[0]!.notes).toEqual([]);
   });
 
   it('pdfBodyText adds a line break only where two kept parts would run together', () => {
@@ -508,8 +512,8 @@ describe('body', () => {
     ]);
     expect(e.flags.controlChars).toBe(2);
     expect(doc.controlChars).toBe(2);
-    const note = doc.cover.blocks.find((b) => b.kind === 'paragraph' && text(b.line).includes('control'));
-    expect(note?.kind === 'paragraph' ? text(note.line) : null).toBe('2 control or broken characters in the emails are shown as codes such as [U+0000].');
+    // Counted in the data; the cover has no note about it (task 8.8: the app says it).
+    expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
   });
 
   it('says "(no text)" for an empty body', () => {
@@ -518,14 +522,12 @@ describe('body', () => {
     expect(doc.emails[0]!.notes.map(text)).toEqual(['(no text)']);
   });
 
-  it('notes content the reader cannot see in full', () => {
-    const { doc } = build([ok(make({ warnings: ['html-converted-body', 'html-body-truncated', 'forwarded-message-not-expanded'] }))]);
+  it('writes no note about content the reader cannot see in full (task 8.8: the app says it)', () => {
+    const warnings = ['html-converted-body', 'html-body-truncated', 'html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'] as const;
+    const { doc } = build([ok(make({ warnings: [...warnings] }))]);
     const e = doc.emails[0]!;
     expect(e.flags.htmlConverted).toBe(true);
-    expect(e.notes.map(text)).toEqual([
-      'This email is very long, so its text was cut short here. The full text is still in the original file.',
-      'A forwarded email inside this one is listed as an attachment. Its text is not shown.',
-    ]);
+    expect(e.notes).toEqual([]);
   });
 });
 

@@ -135,7 +135,8 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
     const newest = between(all, 'Email 3 From', 'Email 4 From');
     expect(newest).toContain('From Alice Example <alice@example.test>');
     expect(newest).toMatch(/Date 2025-03-03 \d\d:40:00 UTC\+01:00/);
-    expect(newest).toContain(EN.zoneUnknown);
+    // No "time zone not given" line (task 8.8: the app says it).
+    expect(newest).not.toContain("The sender's time zone is not given");
     expect(newest).toContain('Subject Re: Office desks and chairs');
     expect(newest).not.toContain('Taken from');
     expect(newest).not.toContain('As written in the quote');

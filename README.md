@@ -176,9 +176,24 @@ The tool never throws message text away on its own:
   is exactly the one used (rebuilt emails count in the number of emails,
   the date range and the people, but have no file, so they are not in that
   list). The list has no note of its own: under the "Source files"
-  heading come the file names and fingerprints directly. The cover says
-  nothing about rebuilt emails. Files that could not be read are listed
-  too.
+  heading come the file names and fingerprints directly, a merged copy
+  listed like any other file. The cover says nothing about rebuilt emails.
+  Files that could not be read are not in the PDF (step 1 lists them, with
+  the reason).
+- **The PDF holds no notes.** The PDF is the final document: nothing in it
+  says that something went wrong, may be missing or may be inaccurate, or
+  explains how the tool works. All of that is shown in step 2 before you
+  download: emails without a usable date and where they are placed, a
+  date that could not be read (the PDF shows it as written), a sender's
+  time zone that is not given, a time zone that was not recognized (the
+  PDF then names just UTC), characters the PDF shows as codes such as
+  "[U+0000]", an email the PDF prints whole because the tool could not tell
+  what to leave out, text that could not be shown in full, identical
+  copies merged (the "Also in" line), and what rebuilt emails are (under
+  "Rebuild conversation from replies"). The PDF keeps only the
+  placeholders for blank fields ("(no subject)", "(no date)", "Unknown
+  sender", "(no text)"), its headings, labels, index, bookmarks, page
+  numbers and the list of files with their fingerprints.
   Then come the index (number, date, sender, subject, attachments, page)
   and the emails, with page numbers and PDF bookmarks. Every email
   (rebuilt ones included) starts at the top of a new page, so a short
@@ -210,8 +225,9 @@ history stays in it, folded as usual.
 
 - **Preview:** a dashed card whose heading starts with "Rebuilt", with no
   number of its own, a "Taken from: email N" line and a fixed note: rebuilt
-  from the quoted text of email N, may be incomplete or inexact. Check them
-  here before you make the PDF.
+  from the quoted text of email N, may be incomplete or inexact. A short
+  explanation under "Rebuild conversation from replies" says what rebuilt
+  emails are. Check them here before you make the PDF.
 - **PDF: not marked, by the user's choice.** In the PDF a rebuilt email
   looks exactly like an email you added: the same "Email N" heading, the
   same rows (From, To, Cc, Date, Subject), the same index line and
@@ -220,9 +236,9 @@ history stays in it, folded as usual.
   are numbered 1, 2, 3... in date order, so two rebuilt earlier emails and
   the email you added are emails 1, 2 and 3 (the preview's "#N" numbers
   count only the emails you added, so they can differ). Its date is shown
-  like a real email's: a quoted time without a time zone of its own gets
-  the usual "time zone is not given" line, a quoted day alone is shown as
-  that day. The cover's number of emails, date range and people include
+  like a real email's: a quoted time without a time zone of its own is
+  shown in the chosen zone with no note (the preview says "about ..."), a
+  quoted day alone is shown as that day. The cover's number of emails, date range and people include
   rebuilt emails; a rebuilt email has no file, so it has no SHA-256
   fingerprint and is not in the cover's list of files (that list still
   shows only the files you added). It has no File row either: only the
@@ -236,8 +252,8 @@ the start of the lines (and the spaces before them) are removed; words and
 line breaks are kept exactly as quoted. A quoted date usually has no time
 zone, so the time is a best guess, shown in the preview as "about ..." with
 the date as written; a date that could be read two ways (such as
-`03/04/2025`) is shown only as written (in the PDF: "no date" and the date
-as written, as for an email you added).
+`03/04/2025`) is shown only as written (in the PDF too, alone in its Date
+row, as for an email you added).
 
 **When you also add the real earlier email**, the real file is used and
 the rebuilt copy is not shown. This needs the same sender, dates that agree
@@ -341,8 +357,8 @@ list were not read, and those lines are part of the rebuilt text.
   such as Hebrew, Arabic, Chinese, Japanese, Korean, Thai or Hindi, and
   emoji show as codes such as `[U+05D0]`. The monospaced font, used only
   for the SHA-256 fingerprints and those codes, has no Greek. Control or
-  broken characters are also shown as codes, and the cover page counts
-  them. The preview and your files are unchanged.
+  broken characters are also shown as codes; step 2 notes it on each email
+  that has them. The preview and your files are unchanged.
 - **Attachments are listed, not included:** name, size and type only. They
   are never opened. A forwarded email attached to another one is listed
   the same way; its text is not shown.
@@ -356,8 +372,8 @@ list were not read, and those lines are part of the rebuilt text.
   Add the earlier emails too when you have them.
 - **Some email text cannot be shown:** a `.msg` whose text is saved only in
   Outlook's RTF format shows no text, and a very long formatted (HTML)
-  email is cut short. The email carries a note saying so; the original file
-  keeps everything.
+  email is cut short. The email carries a note saying so in step 2 (not
+  in the PDF); the original file keeps everything.
 - **Size and time limits:** 50 MB per file, 500 MB per batch; reading one
   file is stopped after 20 seconds. A file built to exhaust memory can
   still crash the tab, which is why `.msg` files get a structure check

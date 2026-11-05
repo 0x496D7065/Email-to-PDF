@@ -192,7 +192,7 @@ describe('task 8.7: no text about rebuilt emails, no note under "Source files", 
           const at = cover.indexOf(s.sourcesHeading);
           expect(at).toBeGreaterThan(0);
           const firstFile = doc.cover.sources[0]!;
-          expect(cover[at + 1]).toBe(`• ${firstFile.fileName}${s.separator}${firstFile.mergedCopy ? s.sourceCopy(firstFile.email) : s.sourceEmail(firstFile.email)}`);
+          expect(cover[at + 1]).toBe(`• ${firstFile.fileName}${s.separator}${s.sourceEmail(firstFile.email)}`);
           expect(cover[at + 2]).toBe(firstFile.sha256);
           // Each file line is followed by its SHA-256 line, and the cover ends with the list (then the footer).
           // Assumes the cover fits on one page and nothing follows the source list (true for
