@@ -95,6 +95,10 @@
 // (nothing of theirs is in the PDF); they are listed apart, "could not be
 // read", so the reader knows the set given was larger (option
 // `listUnreadable`, on by default).
+// The cover's "Source files" heading is followed by the list itself, with
+// no note of ours (user decision 2026-11-05, task 8.7): the file names and
+// their SHA-256 stay (brief section 8.5). The cover has no text about
+// rebuilt emails either (task 8.3, checked again in task 8.7).
 //
 // Safety: email text is plain data here. It is never read as markup or
 // code (README.md, rule R4); the renderer writes it as text. Nothing is
@@ -931,7 +935,6 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   }
   if (sources.length > 0) {
     blocks.push({ kind: 'heading', level: 2, line: own(strings.sourcesHeading, 'heading') });
-    blocks.push({ kind: 'paragraph', line: own(strings.sourcesIntro, 'muted') });
     blocks.push({
       kind: 'list',
       items: sources.map((f) => [

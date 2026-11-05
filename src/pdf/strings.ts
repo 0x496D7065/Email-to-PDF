@@ -40,7 +40,6 @@ export interface PdfStrings {
   zoneFallback(zone: string): string;
   readonly peopleHeading: string;
   readonly sourcesHeading: string;
-  readonly sourcesIntro: string;
   sourceEmail(number: number): string;
   sourceCopy(number: number): string;
   readonly unreadableHeading: string;
@@ -140,7 +139,6 @@ export function createPdfStrings(locale: string): PdfStrings {
     zoneFallback: (zone) => t('pdf.document.zoneFallback', { zone }),
     peopleHeading: t('pdf.document.people'),
     sourcesHeading: t('pdf.document.sources'),
-    sourcesIntro: t('pdf.document.sourcesIntro'),
     // Strings, so an email number is never written with a thousands separator.
     sourceEmail: (number) => t('pdf.document.sourceEmail', { number: String(number) }),
     sourceCopy: (number) => t('pdf.document.sourceCopy', { number: String(number) }),

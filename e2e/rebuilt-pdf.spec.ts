@@ -13,7 +13,8 @@
 //    numbered exactly like real emails (user decision 2026-11-02, task 8.3:
 //    emails 1 to 4, nothing saying they were rebuilt: no marker, no note,
 //    no "Taken from" row, no cover count or section); the cover counts 4
-//    emails; the SHA-256 of the real file only.
+//    emails; the SHA-256 of the real file only, with no note under the
+//    "Source files" heading (task 8.7).
 // 2. The switch off: only the real email, as email 1.
 // 3. The email they were taken from unticked (another email added, so a
 //    PDF can still be made): the cards are marked "Not in the PDF", and
@@ -144,6 +145,9 @@ test('by default the PDF holds the three rebuilt emails, shown and numbered like
   const all = pages.join(' ');
   // The cover: all four emails counted, nothing about rebuilt emails.
   expect(pages[0]).toContain('Emails 4 emails');
+  // Under "Source files", straight into the list: no note (task 8.7).
+  expect(pages[0]).toMatch(new RegExp(`${en.pdf.document.sources} • ${LAST.name.replaceAll('.', '\\.')} - email 4 [0-9a-f]{64} Page 1 of`));
+  expect(all).not.toContain('SHA-256 fingerprint');
   // Nothing in the PDF says an email was rebuilt (the real email's text has no such word either).
   expect(all).not.toMatch(/rebuilt/i);
   expect(all).not.toContain('Taken from');

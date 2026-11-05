@@ -439,8 +439,6 @@ export const en = {
       zoneFallback: '{zone} (the chosen time zone was not recognized)',
       people: 'People',
       sources: 'Source files',
-      sourcesIntro:
-        'Every file that gave an email in this PDF, with its SHA-256 fingerprint. A file with the same fingerprint is exactly the same file.',
       // After a source file's name: which email it gave.
       sourceEmail: 'email {number}',
       // A file whose email was an identical copy of another file's email, merged into it.

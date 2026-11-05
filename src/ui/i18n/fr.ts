@@ -321,8 +321,6 @@ export const fr: Messages = {
       zoneFallback: '{zone} (le fuseau horaire choisi n’a pas été reconnu)',
       people: 'Participants',
       sources: 'Fichiers sources',
-      sourcesIntro:
-        'Chaque fichier dont provient un e-mail de ce PDF, avec son empreinte SHA-256. Un fichier qui a la même empreinte est exactement le même fichier.',
       sourceEmail: 'e-mail {number}',
       sourceCopy: 'e-mail {number} (copie identique, fusionnée)',
       unreadable: 'Fichiers qui n’ont pas pu être lus',

@@ -175,7 +175,10 @@ The tool never throws message text away on its own:
   included) with its SHA-256 fingerprint, so anyone can check that a file
   is exactly the one used (rebuilt emails count in the number of emails,
   the date range and the people, but have no file, so they are not in that
-  list). Files that could not be read are listed too.
+  list). The list has no note of its own: under the "Source files"
+  heading come the file names and fingerprints directly. The cover says
+  nothing about rebuilt emails. Files that could not be read are listed
+  too.
   Then come the index (number, date, sender, subject, attachments, page)
   and the emails, with page numbers and PDF bookmarks. Every email
   (rebuilt ones included) starts at the top of a new page, so a short

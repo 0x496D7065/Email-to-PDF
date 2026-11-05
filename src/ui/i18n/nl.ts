@@ -322,8 +322,6 @@ export const nl: Messages = {
       zoneFallback: '{zone} (de gekozen tijdzone werd niet herkend)',
       people: 'Personen',
       sources: 'Bronbestanden',
-      sourcesIntro:
-        'Elk bestand waaruit een e-mail in deze PDF komt, met zijn SHA-256-vingerafdruk. Een bestand met dezelfde vingerafdruk is precies hetzelfde bestand.',
       sourceEmail: 'e-mail {number}',
       sourceCopy: 'e-mail {number} (identieke kopie, samengevoegd)',
       unreadable: 'Bestanden die niet konden worden gelezen',
