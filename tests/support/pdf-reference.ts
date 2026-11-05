@@ -77,103 +77,109 @@ function displayLine(line: string): { text: string; codes: number } {
 }
 
 /**
- * Quote marks at the start of a line, as src/pdf/text.ts (transform g)
- * documents them, read here with a regular expression instead of a loop:
- * one or more ">", each after any whitespace (\s, as the engine reads it,
- * except VT and FF: the PDF stops the prefix there so they stay visible as
- * codes), then one plain space when there is one. Gives the level (the
- * number of ">") and the rest of the line; level 0 and the line itself when
- * there is none.
+ * May this code point come before or between the ">" of a quote prefix,
+ * as src/pdf/text.ts (transform g) documents it? Whitespace (\s) except VT
+ * and FF (the PDF stops the prefix there so they stay visible as codes),
+ * and the invisible characters drawn as nothing: soft hyphen, CGJ, ALM,
+ * ZWSP to RLM (U+200B to U+200F), U+2060 to U+2064, the variation
+ * selectors U+FE00 to U+FE0F and the variation selectors supplement
+ * U+E0100 to U+E01EF (written out here again, not imported). Not the tag
+ * characters (codes), not the blank-looking characters the PDF fonts print
+ * as codes (Hangul fillers U+115F, U+1160, U+3164, U+FFA0, braille blank
+ * U+2800, U+180E), not a lone surrogate.
  */
-function splitQuote(line: string): { level: number; rest: string } {
-  const marks = /^(?:[^\S\v\f]*>)+/u.exec(line);
-  if (marks === null) return { level: 0, rest: line };
-  const level = marks[0].split('>').length - 1;
-  const rest = line.slice(marks[0].length);
-  return { level, rest: rest.startsWith(' ') ? rest.slice(1) : rest };
+function inPrefix(c: number): boolean {
+  if (c === 0x0b || c === 0x0c) return false;
+  if (c === 0xad || c === 0x34f || c === 0x61c || (c >= 0x200b && c <= 0x200f) || (c >= 0x2060 && c <= 0x2064) || (c >= 0xfe00 && c <= 0xfe0f)) return true;
+  if (c >= 0xe0100 && c <= 0xe01ef) return true;
+  return c <= 0xffff && /\s/u.test(String.fromCharCode(c));
 }
 
-/** One line of the reference: its text and its quote level. */
-export interface ReferenceLine {
-  readonly text: string;
-  readonly level: number;
+/**
+ * Quote marks at the start of a line, read here differently from
+ * src/pdf/text.ts: first the longest start made only of ">" and inPrefix
+ * characters (by code point), then back to its last ">"; then one plain or
+ * no-break space when there is one. Gives whether there was a prefix and
+ * the rest of the line (the line itself when there is none).
+ */
+function splitQuote(line: string): { quoted: boolean; rest: string } {
+  let ok = 0; // line[0, ok) holds only ">" and inPrefix characters
+  for (const ch of line) {
+    if (ch !== '>' && !inPrefix(ch.codePointAt(0)!)) break;
+    ok += ch.length;
+  }
+  const end = ok === 0 ? 0 : line.lastIndexOf('>', ok - 1) + 1;
+  if (end === 0) return { quoted: false, rest: line };
+  const rest = line.slice(end);
+  return { quoted: true, rest: rest.startsWith(' ') || rest.startsWith('\u{00A0}') ? rest.slice(1) : rest };
 }
 
 /**
  * The whole body as the PDF shows it with nothing left out, line by line:
  * lines (CRLF, CR, LF, U+2028 and U+2029 all end a line); with `quotes`
- * (the default, as the PDF does since task 8.1), the quote marks at the
- * start of a line that follows CR, LF or the start of the body (not U+2028
- * or U+2029) are removed and give the line its level; each line
- * transformed; blank lines (white space only, no code, no quote mark) at
- * both ends dropped, at most 2 blank lines in a row, blank lines written
- * empty. A quoted line with nothing but white space after its marks is
- * written empty and never dropped. `quotes: false` gives the text as it was
- * before task 8.1 (every quote mark kept), for the "only the prefixes were
- * removed" checks.
+ * (the default, as the PDF does since tasks 8.1 and 8.6), the quote marks
+ * at the start of every line are removed; each line transformed; blank
+ * lines (white space only, no code, no quote mark) at both ends dropped, at
+ * most 2 blank lines in a row, blank lines written empty. A quoted line
+ * with nothing but white space after its marks is written empty and never
+ * dropped. `quotes: false` gives the text as it was before task 8.1 (every
+ * quote mark kept), for the "only the prefixes were removed" checks.
  */
-export function referenceDisplayLines(body: string, options: { quotes?: boolean } = {}): ReferenceLine[] {
+export function referenceDisplayLines(body: string, options: { quotes?: boolean } = {}): string[] {
   const quotes = options.quotes ?? true;
   // Pieces at odd indexes are the line breaks.
   const pieces = body.split(/(\r\n|\r|\n|\u{2028}|\u{2029})/u);
-  const lines: { text: string; codes: number; level: number; quoted: boolean }[] = [];
+  const lines: { text: string; codes: number; quoted: boolean }[] = [];
   for (let k = 0; k < pieces.length; k += 2) {
-    const after = k === 0 ? '' : pieces[k - 1]!;
-    const atLineStart = after !== '\u{2028}' && after !== '\u{2029}';
-    const q = quotes && atLineStart ? splitQuote(pieces[k]!) : { level: 0, rest: pieces[k]! };
-    const shown = displayLine(q.rest);
-    lines.push({ ...shown, level: q.level, quoted: q.level > 0 });
+    const q = quotes ? splitQuote(pieces[k]!) : { quoted: false, rest: pieces[k]! };
+    lines.push({ ...displayLine(q.rest), quoted: q.quoted });
   }
   const blank = (l: { text: string; codes: number; quoted: boolean }): boolean => !l.quoted && l.codes === 0 && l.text.trim() === '';
   let from = 0;
   let to = lines.length;
   while (from < to && blank(lines[from]!)) from++;
   while (to > from && blank(lines[to - 1]!)) to--;
-  const out: ReferenceLine[] = [];
+  const out: string[] = [];
   let run = 0;
   for (const l of lines.slice(from, to)) {
     if (blank(l)) {
       run++;
-      if (run <= 2) out.push({ text: '', level: 0 });
+      if (run <= 2) out.push('');
     } else {
       run = 0;
-      out.push({ text: l.quoted && l.codes === 0 && l.text.trim() === '' ? '' : l.text, level: l.level });
+      out.push(l.quoted && l.codes === 0 && l.text.trim() === '' ? '' : l.text);
     }
   }
   return out;
 }
 
-/** referenceDisplayLines' texts joined with LF. */
+/** referenceDisplayLines joined with LF. */
 export function referenceDisplayText(body: string, options: { quotes?: boolean } = {}): string {
-  return referenceDisplayLines(body, options)
-    .map((l) => l.text)
-    .join('\n');
+  return referenceDisplayLines(body, options).join('\n');
 }
 
 /**
- * What separates the PDF's lines (`shown`, `levels`: a whole body, nothing
- * left out) from the body with every quote mark kept: line by line, the
- * kept-marks line must END with the shown line, and what comes before it
- * may hold only white space and ">" (never a code: VT and FF end the
- * prefix and stay visible), with exactly `level` ">" in it. So the only
- * characters missing are the quote prefixes (and the white space after the
- * marks of a quoted line with no text). Returns the problems found ([] when
- * none).
+ * What separates the PDF's lines (`shown`: a whole body, nothing left out)
+ * from the body with every quote mark kept: line by line, the kept-marks
+ * line must END with the shown line, and what comes before it may hold
+ * only white space, invisible characters and ">" (never a code: VT and FF
+ * end the prefix and stay visible). So the only characters missing are the
+ * quote prefixes (and the white space after the marks of a quoted line
+ * with no text). Returns the problems found ([] when none).
  */
-export function quotePrefixProblems(body: string, shown: readonly string[], levels: readonly number[]): string[] {
+export function quotePrefixProblems(body: string, shown: readonly string[]): string[] {
   const kept = referenceDisplayLines(body, { quotes: false });
   if (kept.length !== shown.length) return [`${String(shown.length)} lines shown, ${String(kept.length)} with the marks kept`];
-  if (levels.length !== shown.length) return [`${String(levels.length)} levels for ${String(shown.length)} lines`];
   const problems: string[] = [];
   kept.forEach((k, i) => {
     const line = shown[i]!;
-    if (!k.text.endsWith(line)) {
-      problems.push(`line ${String(i)}: ${JSON.stringify(line)} is not the end of ${JSON.stringify(k.text)}`);
+    if (!k.endsWith(line)) {
+      problems.push(`line ${String(i)}: ${JSON.stringify(line)} is not the end of ${JSON.stringify(k)}`);
       return;
     }
-    const head = k.text.slice(0, k.text.length - line.length);
-    if (!/^[\s>]*$/u.test(head)) problems.push(`line ${String(i)}: removed ${JSON.stringify(head)}, not a quote prefix`);
-    else if (head.split('>').length - 1 !== levels[i]) problems.push(`line ${String(i)}: level ${String(levels[i])} for the prefix ${JSON.stringify(head)}`);
+    const head = k.slice(0, k.length - line.length);
+    if (![...head].every((ch) => ch === '>' || inPrefix(ch.codePointAt(0)!))) problems.push(`line ${String(i)}: removed ${JSON.stringify(head)}, not a quote prefix`);
+    else if (head !== '' && !head.includes('>')) problems.push(`line ${String(i)}: removed ${JSON.stringify(head)} without a quote mark`);
   });
   return problems;
 }

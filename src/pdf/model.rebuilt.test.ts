@@ -297,13 +297,12 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
       const r = result.reconstructed[e.rebuilt!.id]!;
       const lines = bodyLines(r.rebuilt.reconstructedText);
       expect(e.body.map(text)).toEqual(lines.lines.map(text));
-      expect(e.bodyLevels).toEqual(lines.levels);
       expect(e.body.map(text).join('\n')).not.toMatch(/^>/m);
       expect(e.attachments).toBeNull();
     }
   });
 
-  it('shows a deeper quote left in its text as quote levels, as a real email does (task 8.1)', () => {
+  it('shows a deeper quote left in its text without its marks, as a real email does (tasks 8.1 and 8.6)', () => {
     // A reply quoting Bob, whose own text quotes an older line with no header of its own (">>"):
     // the rebuilt email is Bob's text, its quote marks removed by the engine; the older line keeps one ">".
     const reply: NormalizedMessage = {
@@ -323,11 +322,9 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
     const doc = build(result);
     const e = rebuiltById(doc, entry!.id);
     expect(e.body.map(text)).toEqual(['I agree with this point:', '', 'The desks are oak.', 'They arrive on Monday.', '', 'Bob']);
-    expect(e.bodyLevels).toEqual([0, 0, 1, 1, 0, 0]);
-    // The real email under "Print full original text": the same lines, one level deeper.
+    // The real email under "Print full original text": the same lines (one level deeper there, which the PDF does not show).
     const whole = build(result, { policy: { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true } }).emails[0]!;
     const k = whole.body.map(text).indexOf('The desks are oak.');
-    expect(whole.bodyLevels.slice(k - 2, k + 4)).toEqual([1, 1, 2, 2, 1, 1]);
     expect(whole.body.map(text).slice(k - 2, k + 4)).toEqual(['I agree with this point:', '', 'The desks are oak.', 'They arrive on Monday.', '', 'Bob']);
   });
 

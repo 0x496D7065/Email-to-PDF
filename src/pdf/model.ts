@@ -68,15 +68,16 @@
 // src/pdf/text.ts apply (line ends, tabs, control and broken characters as
 // codes in runs of role 'code', blank lines). That file also holds the
 // contract with the renderer about invisible characters.
-// Quote levels (user decision 2026-11-02, task 8.1, PDF only): a body line
-// that starts with ">" quote marks is shown WITHOUT them, indented by its
-// quote level instead (`bodyLevels`, src/pdf/text.ts transform g; the
-// indent is the renderer's, src/pdf/layout/config.ts `quote`). Only the
-// prefix is removed, read as the engine reads quote marks; the rest of the
-// line is unchanged. This applies to the kept parts of a body, to the whole
-// body under "Print full original text" and to the deeper quotes left in a
-// rebuilt email's text (whose own quote marks the engine removed already).
-// The preview and the original files (and their SHA-256) are unchanged.
+// Quote marks (user decisions 2026-11-02, task 8.1, and 2026-11-05, task
+// 8.6, PDF only): a body line that starts with ">" quote marks is shown
+// WITHOUT them (src/pdf/text.ts transform g). Quote levels are not kept:
+// the renderer indents every body line by one fixed step
+// (src/pdf/layout/config.ts, bodyIndent), quoted or not. Only the prefix is
+// removed; the rest of the line is unchanged. This applies to the kept
+// parts of a body, to the whole body under "Print full original text" and
+// to the deeper quotes left in a rebuilt email's text (whose own quote
+// marks the engine removed already). The preview and the original files
+// (and their SHA-256) are unchanged.
 //
 // Undated emails: shown with the "no date" text in the index and their
 // header (plus the date text as written, when there is one); the cover's
@@ -248,12 +249,6 @@ export interface PdfEmail {
   readonly notes: readonly PdfLine[];
   /** The text: one entry per line, [] for an empty line (see src/pdf/text.ts). */
   readonly body: readonly PdfLine[];
-  /**
-   * The quote level of each line of `body`, same length (src/pdf/text.ts,
-   * transform g): 0 for the writer's own text, 1 for a line that started
-   * with ">", 2 for ">>" or "> >", and so on. The renderer indents by it.
-   */
-  readonly bodyLevels: readonly number[];
   /** One line per attachment (listed only, never opened); null when there is none. */
   readonly attachments: { readonly label: string; readonly items: readonly PdfLine[] } | null;
   readonly flags: PdfEmailFlags;
@@ -683,7 +678,6 @@ function buildEmail(
     fields,
     notes,
     body: lines.lines,
-    bodyLevels: lines.levels,
     attachments: items.length === 0 ? null : { label: strings.attachmentsLabel, items },
     flags: {
       undated: !dated,
@@ -787,7 +781,7 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
  * real email (task 8.3), with the copy chosen by rebuiltInPdf. Its text is
  * the rebuilt text (its own quote marks already removed), whole: no plan
  * applies to it. Deeper quotes left in it (">" lines of an older email it
- * quoted) get quote levels like a real email's (src/pdf/text.ts, transform g).
+ * quoted) lose their quote marks like a real email's (src/pdf/text.ts, transform g).
  */
 function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: number, input: BuildPdfInput): EmailParts {
   const { strings } = input;
@@ -841,7 +835,6 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
     fields,
     notes,
     body: lines.lines,
-    bodyLevels: lines.levels,
     attachments: null,
     flags: { undated: date.when === null, zoneUnknown: date.zoneUnknown, keptAllBecauseEmpty: false, planFallback: false, htmlConverted: false, controlChars: s.count },
   };

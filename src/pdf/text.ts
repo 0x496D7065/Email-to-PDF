@@ -29,29 +29,37 @@
 // (f) characters the font lacks (emoji, rare scripts) are NOT handled here:
 //     that is the renderer's job. Text is split into runs only by meaning
 //     (normal / muted / code / mono), never by font coverage;
-// (g) email bodies only, quote levels (user decision 2026-11-02, task 8.1,
-//     an approved display change for the PDF only): a line that starts with
-//     ">" quote marks loses them and gets a quote LEVEL instead (the number
-//     of ">"), which the layout shows as an indent (src/pdf/layout/config.ts,
-//     `quote`). The prefix is read exactly as the engine reads quote marks
-//     (quotePrefix in src/engine/reconstruct.ts, the same rule as the
-//     rebuilt texts' quote-mark removal and the lines the ">" detector
-//     marks, src/engine/quote-markers.ts): every ">" before the first other
-//     character, with the whitespace before each (JavaScript's \s: spaces,
-//     tabs, U+00A0, U+FEFF...), then one space after the last ">" when
-//     there is one (">", "> ", ">>", "> > >", "  > x"; "> >  x" keeps one
-//     space before the x). One difference: the VT and FF controls are \s
-//     for the engine, but the PDF stops the prefix at the first of them, so
-//     they are always shown as codes, with everything after them as written
-//     ("\v> x" is level 0 and shows "[U+000B]> x"; "> \f> x" is level 1 and
-//     shows "[U+000C]> x"). Only that prefix is removed; the rest of the
-//     line is kept exactly as written (a ">" further on stays). It is read
-//     on the line as written, before tabs are expanded, and only at the
-//     start of a line of the original body: not after U+2028 / U+2029 (no
-//     line break for the engine) and not where a kept part began inside a
-//     line (joinKeptLines). A quoted line with nothing after its marks is an
-//     empty line at its level, never dropped by (e). Level 0 is the
-//     writer's own text. The preview and the original files are unchanged.
+// (g) email bodies only, quote marks (user decisions 2026-11-02, task 8.1,
+//     and 2026-11-05, task 8.6: approved display changes for the PDF only):
+//     a line that starts with ">" quote marks is shown WITHOUT them. Quote
+//     levels are not shown: the layout indents every body line by the same
+//     single step, quoted or not (src/pdf/layout/config.ts, bodyIndent). The
+//     prefix (quotePrefixLength) is every ">" before the first other
+//     character, with what comes before each: whitespace (JavaScript's \s:
+//     spaces, tabs, U+00A0, U+FEFF...) and the invisible characters drawn
+//     as nothing (beforeMark: ZWSP, ZWNJ, ZWJ, LRM, RLM, ALM, CGJ, word
+//     joiner, variation selectors U+FE00 to U+FE0F and U+E0100 to U+E01EF,
+//     soft hyphen; a ">" after them would look like a quote mark; never the
+//     tag characters, nor other characters our fonts print as a code, such
+//     as the Hangul fillers or the braille blank, except whitespace: U+3000,
+//     U+205F and U+1680 have no glyph in the fonts but count as spaces, so
+//     they are removed with the marks), then one space (U+0020 or U+00A0)
+//     after the last ">" when there is one (">", "> ", ">>", "> > >",
+//     ">  >", "  > x"; "> >  x" keeps one space before the x: the writer's
+//     own indent). The VT and FF controls (\s too) are never part of a
+//     prefix: it stops at the first of them, so they are always shown as
+//     codes, with everything after them as written ("\v> x" shows
+//     "[U+000B]> x"; "> \f> x" shows "[U+000C]> x"). The same holds for
+//     every character of group 1 below: a code is never removed. Only
+//     that prefix is removed; the rest of the line is kept exactly as
+//     written (a ">" further on, as in "a > b", stays). It is read on the
+//     line as written, before tabs are expanded, at the start of every
+//     line (after CR, LF, U+2028 or U+2029: each starts a line in the
+//     PDF), except where a kept part began inside a line of the body
+//     (joinKeptLines): a ">" there was in the middle of a line, so it is
+//     text, not a quote mark. A quoted line with nothing after its marks
+//     is an empty line, never dropped or merged by (e). The engine, the
+//     preview and the original files are unchanged.
 //
 // The contract with the renderer (src/pdf/ writer, milestone 5.4). Three
 // groups of special characters:
@@ -93,8 +101,6 @@
 //
 // Pure functions, no DOM (README.md, rule R7). Email text stays plain data:
 // it is never read as markup or code (README.md, rule R4).
-
-import { quotePrefix } from '../engine/reconstruct';
 
 /** Spaces per tab (transform b). */
 export const TAB_WIDTH = 4;
@@ -254,11 +260,9 @@ export function lineText(line: PdfLine): string {
   return line.map((r) => r.text).join('');
 }
 
-/** Body lines, their quote levels and how many characters were replaced by a code. */
+/** Body lines and how many characters were replaced by a code. */
 export interface BodyLines {
   readonly lines: PdfLine[];
-  /** The quote level of each line (transform g), same length as `lines`: 0 for the writer's own text. */
-  readonly levels: number[];
   readonly replaced: number;
 }
 
@@ -278,59 +282,97 @@ export interface BodyLinesOptions {
 /** The line breaks of transform (a), one at a time (CRLF as one). */
 const LINE_BREAK = /\r\n|[\r\n\u{2028}\u{2029}]/gu;
 
-/** No quote prefix. */
-const NO_PREFIX = { level: 0, length: 0 } as const;
+/** The variation selectors supplement (U+E0100 to U+E01EF): group 2, outside the BMP. */
+const VS_SUPPLEMENT_FIRST = 0xe0100;
+const VS_SUPPLEMENT_LAST = 0xe01ef;
+
+/**
+ * True for a code unit of the BMP that may come before or between the ">"
+ * of a quote prefix (transform g): whitespace (JavaScript's \s) except VT
+ * and FF, and the invisible characters: group 2 of the contract
+ * (isDrawnAsNothing) in the BMP and the soft hyphen (group 3). A surrogate
+ * is in no range of DRAWN_AS_NOTHING, so it never matches here: the only
+ * characters outside the BMP a prefix may hold are the variation selectors
+ * supplement, read whole by quotePrefixLength. The tag characters (U+E0000
+ * to U+E007F; outside a kept flag they are codes, group 1, and a code is
+ * never removed) are never part of a prefix.
+ *
+ * Left out on purpose: characters that often look blank but that the PDF
+ * fonts (IBM Plex) have no glyph for, so the renderer prints them as a
+ * visible code (src/pdf/layout/shape.ts): the Hangul fillers U+115F,
+ * U+1160, U+3164, U+FFA0, the braille blank U+2800 and the Mongolian vowel
+ * separator U+180E. A ">" after such a code is not at the start of the
+ * line, and a code is never removed. The exception is whitespace: the fonts
+ * have no glyph for U+3000, U+205F or U+1680 either, but \s matches them,
+ * so they count as spaces and are removed with the marks.
+ */
+function beforeMark(code: number): boolean {
+  if (code === 0x0b || code === 0x0c) return false;
+  return code === SOFT_HYPHEN || isDrawnAsNothing(code) || /\s/u.test(String.fromCharCode(code));
+}
+
+/**
+ * The length of the quote prefix at the start of one line (transform g),
+ * its line break excluded: 0 when the line does not start with quote marks.
+ * After the last ">", one plain space or one no-break space (U+00A0) is
+ * part of the prefix too. `line.slice(length)` never starts with
+ * whitespace (VT and FF aside) or invisible characters followed by a ">".
+ * Linear in the prefix length (one pass, no backtracking). Pure.
+ */
+export function quotePrefixLength(line: string): number {
+  let length = 0;
+  for (let k = 0; k < line.length; k++) {
+    const code = line.charCodeAt(k);
+    if (code === 0x3e) length = k + 1;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      // A high surrogate: only a whole variation selector of the supplement may be in a prefix.
+      const codePoint = line.codePointAt(k)!;
+      if (codePoint < VS_SUPPLEMENT_FIRST || codePoint > VS_SUPPLEMENT_LAST) break;
+      k++; // its low surrogate
+    } else if (!beforeMark(code)) break;
+  }
+  if (length > 0) {
+    const after = line.charCodeAt(length);
+    if (after === 0x20 || after === 0xa0) length++;
+  }
+  return length;
+}
 
 /**
  * An email's text as lines of 'body' runs: transforms (a), (b), (c), (e)
  * and (g). A line with a code is never blank (the code is shown). A quoted
- * line whose rest is blank (">" alone) is an empty line at its level; it is
- * never dropped or merged by transform (e): it held a quote mark, so it was
+ * line whose rest is blank (">" alone) is an empty line; it is never
+ * dropped or merged by transform (e): it held a quote mark, so it was
  * never a blank line.
  */
 export function bodyLines(text: string, options: BodyLinesOptions = {}): BodyLines {
   const lines: PdfLine[] = [];
-  const levels: number[] = [];
   let replaced = 0;
   let blanks = 0; // blank lines waiting (written only when a non-blank line follows: trailing ones are dropped)
-  const line = (start: number, end: number, quotable: boolean): void => {
+  const line = (start: number, end: number): void => {
     const raw = text.slice(start, end);
     // Transform (g), on the line as written (before tabs are expanded).
-    let prefix = quotable && options.notLineStarts?.has(start) !== true ? quotePrefix(raw) : NO_PREFIX;
-    // VT and FF are \s for the engine, but the PDF must show them as codes (collapse, never delete): the prefix
-    // stops at the first of them, and everything from it on is printed as written.
-    if (prefix.length > 0) {
-      const cut = raw.search(/[\v\f]/u);
-      if (cut >= 0 && cut < prefix.length) prefix = quotePrefix(raw.slice(0, cut));
-    }
-    const rest = prefix.length === 0 ? raw : raw.slice(prefix.length);
+    const prefix = options.notLineStarts?.has(start) === true ? 0 : quotePrefixLength(raw);
+    const rest = raw.slice(prefix);
     const s = sanitizeRuns(rest, 'body');
     replaced += s.replaced;
     const blank = s.replaced === 0 && /^\s*$/u.test(rest);
-    if (blank && prefix.level === 0) {
+    if (blank && prefix === 0) {
       if (lines.length > 0) blanks++; // leading blank lines are dropped
       return;
     }
-    for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--) {
-      lines.push([]);
-      levels.push(0);
-    }
+    for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--) lines.push([]);
     blanks = 0;
     lines.push(blank ? [] : s.runs);
-    levels.push(prefix.level);
   };
-  // A line can hold a quote prefix when it starts the text or follows CR or LF; not after
-  // U+2028 / U+2029, which the engine does not count as line breaks (src/engine/segments.ts, lineRanges).
   let start = 0;
-  let quotable = true;
   LINE_BREAK.lastIndex = 0;
   for (let m = LINE_BREAK.exec(text); m !== null; m = LINE_BREAK.exec(text)) {
-    line(start, m.index, quotable);
+    line(start, m.index);
     start = m.index + m[0].length;
-    quotable = m[0] !== '\u{2028}' && m[0] !== '\u{2029}';
   }
-  line(start, text.length, quotable);
-  return { lines, levels, replaced };
+  line(start, text.length);
+  return { lines, replaced };
 }
 
 /** A plan range, as far as joining needs it. */
@@ -345,9 +387,9 @@ export interface JoinedKept {
   readonly text: string;
   /**
    * Offsets in `text` where a kept part begins that began INSIDE a line of
-   * the body (not at its start, nor after CR or LF): a ">" there is not at
-   * the start of a line of the original, so bodyLines reads no quote prefix
-   * there (transform g).
+   * the body (not at its start, nor after a line break of transform a): a
+   * ">" there was in the middle of a line, so bodyLines reads no quote
+   * prefix there (transform g).
    */
   readonly notLineStarts: ReadonlySet<number>;
 }
@@ -373,8 +415,7 @@ export function joinKeptLines(body: string, ranges: readonly KeptRange[]): Joine
       parts.push('\n');
       length++;
     }
-    const before = body.charCodeAt(r.start - 1);
-    if (r.start > 0 && before !== 0x0a && before !== 0x0d) notLineStarts.add(length);
+    if (r.start > 0 && !isLineBreak(body.charCodeAt(r.start - 1))) notLineStarts.add(length);
     parts.push(piece);
     length += piece.length;
     endsLine = isLineBreak(piece.charCodeAt(piece.length - 1));

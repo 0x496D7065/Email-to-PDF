@@ -81,11 +81,10 @@ describe('PDF document model over the parsed fixtures', () => {
     for (const { e, position } of realEmails(d)) {
       const m = r.messages[position]!;
       expect(bodyOf(e), m.message.source.fileName).toBe(referenceDisplayText(m.message.bodyText));
-      expect(e.bodyLevels, m.message.source.fileName).toEqual(referenceDisplayLines(m.message.bodyText).map((l) => l.level));
-      // Task 8.1: only the quote prefixes are missing; no line starts with a quote mark.
-      expect(quotePrefixProblems(m.message.bodyText, e.body.map(lineText), e.bodyLevels), m.message.source.fileName).toEqual([]);
+      // Tasks 8.1 and 8.6: only the quote prefixes are missing; no line starts with a quote mark.
+      expect(quotePrefixProblems(m.message.bodyText, e.body.map(lineText)), m.message.source.fileName).toEqual([]);
       expect(bodyOf(e), m.message.source.fileName).not.toMatch(/^\s*>/mu);
-      quoted += e.bodyLevels.filter((n) => n > 0).length;
+      quoted += referenceDisplayLines(m.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
       expect(e.flags.planFallback).toBe(false);
     }
     // The fixtures hold ">" quotes (Gmail, Thunderbird, HTML blockquotes).

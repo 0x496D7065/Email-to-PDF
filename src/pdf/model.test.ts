@@ -413,20 +413,15 @@ describe('body', () => {
     expect(doc.emails[1]!.notes).toEqual([]);
   });
 
-  /** The whole reply as the PDF shows it (task 8.1): its ">" marks removed, the quoted lines at level 1. */
+  /** The whole reply as the PDF shows it (tasks 8.1 and 8.6): its ">" marks removed. */
   const replyShown = reply.bodyText.trimEnd().replace(/^> ?/gmu, '');
-  const replyLevels = reply.bodyText
-    .trimEnd()
-    .split('\n')
-    .map((l) => (l.startsWith('>') ? 1 : 0));
 
-  it('shows the whole body with unfoldEverything, whatever the plans say, quote marks as levels', () => {
+  it('shows the whole body with unfoldEverything, whatever the plans say, without the quote marks', () => {
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
     const { doc } = build([question, reply].map(ok), { policy, plans: (r, p) => planOutput(p.map((k) => r.messages[k]!)) });
     expect(bodyOf(doc.emails[1]!)).toBe(replyShown);
     expect(replyShown).toContain('wrote:\nHello Alice,\n\nCan the desks');
-    expect(doc.emails[1]!.bodyLevels).toEqual(replyLevels);
-    expect(replyLevels.filter((n) => n === 1)).toHaveLength(6);
+    expect(reply.bodyText.split('\n').filter((l) => l.startsWith('>'))).toHaveLength(6);
   });
 
   it('keeps the whole body, with a note, when the plan is missing or invalid', () => {
@@ -441,7 +436,6 @@ describe('body', () => {
       const { doc } = build([ok(reply)], { plans });
       const e = doc.emails[0]!;
       expect(bodyOf(e)).toBe(replyShown);
-      expect(e.bodyLevels).toEqual(replyLevels);
       expect(e.flags.planFallback).toBe(true);
       expect(e.notes.map(text)).toEqual(['The whole email is shown: the tool could not work out which parts to leave out.']);
     }

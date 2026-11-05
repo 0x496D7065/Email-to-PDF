@@ -16,6 +16,7 @@ import {
   KEPT_FLAG_TAGS,
   lineText,
   normalizeLineEnds,
+  quotePrefixLength,
   sanitizeRuns,
   SOFT_HYPHEN,
   TAB_WIDTH,
@@ -413,153 +414,175 @@ describe('bodyLines', () => {
   });
 });
 
-describe('bodyLines: quote levels (transform g, task 8.1)', () => {
-  /** Each line as [text, level]. */
-  const shown = (text: string, notLineStarts?: ReadonlySet<number>): [string, number][] => {
-    const b = bodyLines(text, notLineStarts === undefined ? {} : { notLineStarts });
-    expect(b.levels).toHaveLength(b.lines.length);
-    return b.lines.map((line, k) => [lineText(line), b.levels[k]!]);
-  };
+describe('bodyLines: quote marks removed (transform g, tasks 8.1 and 8.6)', () => {
+  /** Each line's text. */
+  const shown = (text: string, notLineStarts?: ReadonlySet<number>): string[] =>
+    bodyLines(text, notLineStarts === undefined ? {} : { notLineStarts }).lines.map(lineText);
 
-  it('reads the level from the number of ">" and removes only the prefix', () => {
-    expect(shown('Own text.\n> One.\n>> Two.\n>>> Three.\n> > Two again.\n> > > Three again.\nOwn again.')).toEqual([
-      ['Own text.', 0],
-      ['One.', 1],
-      ['Two.', 2],
-      ['Three.', 3],
-      ['Two again.', 2],
-      ['Three again.', 3],
-      ['Own again.', 0],
+  it('removes the marks of every level and nesting form, and keeps no level', () => {
+    expect(shown('Own text.\n> One.\n>> Two.\n>>> Three.\n> > Two again.\n> > > Three again.\n>  > Spaced.\n  >   >  >  Wide.\nOwn again.')).toEqual([
+      'Own text.',
+      'One.',
+      'Two.',
+      'Three.',
+      'Two again.',
+      'Three again.',
+      'Spaced.',
+      ' Wide.',
+      'Own again.',
     ]);
+    expect(bodyLines('> a')).toEqual({ lines: [[{ role: 'body', text: 'a' }]], replaced: 0 });
   });
 
   it('removes the spaces before the marks and one space after the last mark, never more', () => {
-    expect(shown('   > Indented mark.')).toEqual([['Indented mark.', 1]]);
-    expect(shown('>No space.')).toEqual([['No space.', 1]]);
-    expect(shown('>  Two spaces: one kept.')).toEqual([[' Two spaces: one kept.', 1]]);
-    expect(shown('> >  x')).toEqual([[' x', 2]]);
-    // Whitespace between marks (tab, nbsp) is part of the prefix; a tab after the last mark is kept (as 4 spaces).
-    expect(shown('>\t>\u{00A0}> deep')).toEqual([['deep', 3]]);
-    expect(shown('>\tTabbed.')).toEqual([['    Tabbed.', 1]]);
+    expect(shown('   > Indented mark.')).toEqual(['Indented mark.']);
+    expect(shown('>No space.')).toEqual(['No space.']);
+    expect(shown('>  Two spaces: one kept.')).toEqual([' Two spaces: one kept.']);
+    expect(shown('> >  x')).toEqual([' x']);
+    // Whitespace between marks (tab, nbsp, ideographic space) is part of the prefix; a tab after the last mark is kept (as 4 spaces).
+    expect(shown('>\t>\u{00A0}>\u{3000}> deep')).toEqual(['deep']);
+    expect(shown('>\tTabbed.')).toEqual(['    Tabbed.']);
     // Leading spaces with no ">" after them are the writer's own indentation: kept.
-    expect(shown('    code line')).toEqual([['    code line', 0]]);
+    expect(shown('    code line')).toEqual(['    code line']);
+  });
+
+  it('removes invisible characters (drawn as nothing) before and between the marks with them', () => {
+    const supplement = ['\u{E0100}', '\u{E01EF}']; // variation selectors supplement: outside the BMP, drawn as nothing too
+    for (const invisible of ['\u{200B}', '\u{200C}', '\u{200D}', '\u{200E}', '\u{200F}', '\u{061C}', '\u{034F}', '\u{2060}', '\u{FE0F}', '\u{00AD}', ...supplement]) {
+      const where = JSON.stringify(invisible);
+      expect(shown(`${invisible}> a`), where).toEqual(['a']);
+      expect(shown(`>${invisible}> b`), where).toEqual(['b']);
+      expect(shown(`> ${invisible}> c`), where).toEqual(['c']);
+      // Not followed by a mark: the line is text, as written.
+      expect(shown(`${invisible}d`), where).toEqual([`${invisible}d`]);
+    }
+    // After the last mark (and its one space), an invisible character is text.
+    expect(shown('> \u{200B}x')).toEqual(['\u{200B}x']);
+    // A tag character is a code (group 1), so it ends the prefix and stays visible.
+    expect(shown('\u{E0041}> a')).toEqual(['[U+E0041]> a']);
+    expect(shown('>\u{E0041}> a')).toEqual(['[U+E0041]> a']);
+    expect(shown('\u{E007F}> a')).toEqual(['[U+E007F]> a']);
+    // The supplement around tags and mixed with BMP invisibles; just outside its range is not invisible.
+    expect(shown('\u{E0100}\u{200B}>\u{E0100}\u{FE0F}> \u{E01EF}> vs')).toEqual(['vs']);
+    expect(shown('\u{E01F0}> a')).toEqual(['\u{E01F0}> a']);
+    expect(shown('\u{E00FF}> a')).toEqual(['\u{E00FF}> a']);
+    // A lone surrogate is a code: it ends the prefix ("\uDB40" is the high half of U+E0100).
+    expect(shown('\uDB40> a')).toEqual(['[U+DB40]> a']);
+    expect(shown('>\uDD00> a')).toEqual(['[U+DD00]> a']);
+  });
+
+  it('keeps blank-looking characters the PDF fonts print as codes: a ">" after them is not at the start', () => {
+    // Hangul fillers, braille blank, Mongolian vowel separator: no glyph in IBM Plex, so the renderer
+    // prints "[U+XXXX]" (src/pdf/layout/shape.ts); they are text here, and the line is kept as written.
+    for (const blank of ['\u{3164}', '\u{115F}', '\u{1160}', '\u{FFA0}', '\u{2800}', '\u{180E}']) {
+      const where = JSON.stringify(blank);
+      expect(shown(`${blank}> a`), where).toEqual([`${blank}> a`]);
+      // Between marks: the prefix ends before it; the ">" after it stays, after the visible code.
+      expect(shown(`>${blank}> b`), where).toEqual([`${blank}> b`]);
+      expect(quotePrefixLength(`> ${blank}> c`), where).toBe(2);
+    }
+  });
+
+  it('removes one no-break space (U+00A0) after the last mark, like one plain space, never more', () => {
+    expect(shown('>\u{00A0}nbsp')).toEqual(['nbsp']);
+    expect(shown('>>\u{00A0}deep')).toEqual(['deep']);
+    expect(shown('> >\u{00A0}x')).toEqual(['x']);
+    expect(shown('>\u{00A0}\u{00A0}two')).toEqual(['\u{00A0}two']);
+    expect(shown('>\u{00A0} mixed')).toEqual([' mixed']);
+    expect(shown('> \u{00A0}mixed')).toEqual(['\u{00A0}mixed']);
+    // Other spaces after the last mark are the writer's own text.
+    expect(shown('>\u{2007}figure')).toEqual(['\u{2007}figure']);
+    expect(shown('>\u{3000}wide')).toEqual(['\u{3000}wide']);
+    // No mark: an NBSP at the start is kept.
+    expect(shown('\u{00A0}text')).toEqual(['\u{00A0}text']);
+    expect(quotePrefixLength('>\u{00A0}')).toBe(2);
   });
 
   it('leaves a ">" that is not at the start of a line exactly as it is', () => {
-    expect(shown('a > b\n-> next\n=> result\nx >> y')).toEqual([
-      ['a > b', 0],
-      ['-> next', 0],
-      ['=> result', 0],
-      ['x >> y', 0],
-    ]);
+    expect(shown('a > b\n-> next\n=> result\nx >> y\n| > z')).toEqual(['a > b', '-> next', '=> result', 'x >> y', '| > z']);
     // After the prefix, the rest is as written, its own ">" included.
-    expect(shown('> a > b >> c')).toEqual([['a > b >> c', 1]]);
-    expect(shown('> [U+0007] stays text')).toEqual([['[U+0007] stays text', 1]]);
+    expect(shown('> a > b >> c')).toEqual(['a > b >> c']);
+    expect(shown('> [U+0007] stays text')).toEqual(['[U+0007] stays text']);
+    // Look-alikes are not quote marks.
+    expect(shown('&gt; a\n\u{FF1E} b\n\u{203A} c')).toEqual(['&gt; a', '\u{FF1E} b', '\u{203A} c']);
   });
 
-  it('shows a quoted line with nothing after its marks as an empty line at its level, never dropped', () => {
-    expect(shown('> One.\n>\n> Two.')).toEqual([
-      ['One.', 1],
-      ['', 1],
-      ['Two.', 1],
-    ]);
-    expect(shown('>> a\n>>  \n> >\n>> b')).toEqual([
-      ['a', 2],
-      ['', 2],
-      ['', 2],
-      ['b', 2],
-    ]);
+  it('shows a quoted line with nothing after its marks as an empty line, never dropped', () => {
+    expect(shown('> One.\n>\n> Two.')).toEqual(['One.', '', 'Two.']);
+    expect(shown('>> a\n>>  \n> >\n>> b')).toEqual(['a', '', '', 'b']);
     // Not merged as blank lines (transform e), not dropped at the ends: they held a quote mark.
-    expect(shown('>\n>\n>\n>\nx\n>')).toEqual([
-      ['', 1],
-      ['', 1],
-      ['', 1],
-      ['', 1],
-      ['x', 0],
-      ['', 1],
-    ]);
-    // Own blank lines around quotes still follow transform (e), at level 0.
-    expect(shown('\n\nOwn.\n\n\n\n\n> Quote.\n\n\n')).toEqual([
-      ['Own.', 0],
-      ['', 0],
-      ['', 0],
-      ['Quote.', 1],
-    ]);
+    expect(shown('>\n>\n>\n>\nx\n>')).toEqual(['', '', '', '', 'x', '']);
+    // Own blank lines around quotes still follow transform (e).
+    expect(shown('\n\nOwn.\n\n\n\n\n> Quote.\n\n\n')).toEqual(['Own.', '', '', 'Quote.']);
   });
 
-  it('gives levels above any cap as they are (the layout caps the indent)', () => {
-    expect(shown('>>>>>>>>>> ten')).toEqual([['ten', 10]]);
-    expect(shown(`${'>'.repeat(500)} deep`)).toEqual([['deep', 500]]);
+  it('removes any number of marks', () => {
+    expect(shown('>>>>>>>>>> ten')).toEqual(['ten']);
+    expect(shown(`${'>'.repeat(500)} deep`)).toEqual(['deep']);
+    expect(shown(`${'> '.repeat(500)}deep`)).toEqual(['deep']);
   });
 
-  it('reads CRLF, CR and LF lines alike; not a line after U+2028 or U+2029', () => {
-    expect(shown('Own.\r\n> One.\r\n>> Two.\r\n>\r\nEnd.\r\n')).toEqual([
-      ['Own.', 0],
-      ['One.', 1],
-      ['Two.', 2],
-      ['', 1],
-      ['End.', 0],
-    ]);
-    expect(shown('> a\r> b\n> c')).toEqual([
-      ['a', 1],
-      ['b', 1],
-      ['c', 1],
-    ]);
-    // U+2028 / U+2029 end a PDF line, but the engine does not count them as line breaks: no prefix there.
-    expect(shown('a\u{2028}> b\u{2029}> c\n> d')).toEqual([
-      ['a', 0],
-      ['> b', 0],
-      ['> c', 0],
-      ['d', 1],
-    ]);
+  it('reads the marks at the start of every line: after CRLF, CR, LF, U+2028 and U+2029', () => {
+    expect(shown('Own.\r\n> One.\r\n>> Two.\r\n>\r\nEnd.\r\n')).toEqual(['Own.', 'One.', 'Two.', '', 'End.']);
+    expect(shown('> a\r> b\n> c')).toEqual(['a', 'b', 'c']);
+    // U+2028 / U+2029 start a line in the PDF, so a ">" after them would look like a quote mark there.
+    expect(shown('a\u{2028}> b\u{2029}>> c\n> d')).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it('reads no prefix where a kept part began inside a line (notLineStarts)', () => {
-    expect(shown('own\n> x\n> y', new Set([4]))).toEqual([
-      ['own', 0],
-      ['> x', 0],
-      ['y', 1],
-    ]);
+  it('reads no prefix where a kept part began inside a line (notLineStarts): that ">" is text', () => {
+    expect(shown('own\n> x\n> y', new Set([4]))).toEqual(['own', '> x', 'y']);
   });
 
   it('counts codes only in the text kept, and keeps a line with a code in its rest', () => {
     const b = bodyLines('> \u0007\n>\u0000>');
     expect(b.lines.map(lineText)).toEqual(['[U+0007]', '[U+0000]>']);
-    expect(b.levels).toEqual([1, 1]);
     expect(b.replaced).toBe(2);
   });
 
   it('stops the prefix at a VT or FF, which stays visible as a code with everything after it as written', () => {
-    // Before the first mark: no prefix at all (as before task 8.1).
+    // Before the first mark: no prefix at all.
     let b = bodyLines('\v> x');
     expect(b.lines.map(lineText)).toEqual(['[U+000B]> x']);
-    expect(b.levels).toEqual([0]);
     expect(b.replaced).toBe(1);
     // Between marks: the prefix ends before the control; the next ">" stays, in its place.
     b = bodyLines('> \f> x');
     expect(b.lines.map(lineText)).toEqual(['[U+000C]> x']);
-    expect(b.levels).toEqual([1]);
     expect(b.replaced).toBe(1);
     // After the last mark: never part of the prefix anyway.
     b = bodyLines('>\v');
     expect(b.lines.map(lineText)).toEqual(['[U+000B]']);
-    expect(b.levels).toEqual([1]);
     expect(b.replaced).toBe(1);
     // One space after the last mark is removed; a second space and the control stay.
     b = bodyLines('>  \v');
     expect(b.lines.map(lineText)).toEqual([' [U+000B]']);
-    expect(b.levels).toEqual([1]);
     expect(b.replaced).toBe(1);
     // Spaces before the control still count; a later VT is just text.
     b = bodyLines('  >\v>\n> a\fb');
     expect(b.lines.map(lineText)).toEqual(['[U+000B]>', 'a[U+000C]b']);
-    expect(b.levels).toEqual([1, 1]);
     expect(b.replaced).toBe(2);
   });
 
-  it('gives levels [] for an empty body, and all 0 for text without quotes', () => {
-    expect(bodyLines('')).toEqual({ lines: [], levels: [], replaced: 0 });
-    expect(bodyLines('a\n\nb').levels).toEqual([0, 0, 0]);
+  it('quotePrefixLength: only marks, whitespace and invisible characters, and nothing quote-like left after it', () => {
+    const parts = ['>', '> ', ' ', '\t', '\u{00A0}', '\u{FEFF}', '\u{200B}', '\u{200E}', '\u{00AD}', '\u{E0100}', '\u{E0041}', '\u{3164}', '\uDB40', 'a', 'b ', '-', '\u0007', '\u000B', '\u000C'];
+    let seed = 11;
+    const next = (): number => {
+      seed = (seed * 48271) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let t = 0; t < 5000; t++) {
+      let line = '';
+      const n = Math.floor(next() * 8);
+      for (let k = 0; k < n; k++) line += parts[Math.floor(next() * parts.length)]!;
+      const where = JSON.stringify(line);
+      const length = quotePrefixLength(line);
+      const prefix = line.slice(0, length);
+      // (With the u flag, a lone half of U+E0100 does not match \u{E0100}: the prefix never cuts a pair in two.
+      // U+E0100 is outside the character class: a variation selector there would read as joined to the one before.)
+      expect(prefix, where).toMatch(/^(?:[> \t\u{00A0}\u{FEFF}\u{200B}\u{200E}\u{00AD}]|\u{E0100})*$/u);
+      if (length > 0) expect(prefix, where).toContain('>');
+      // What is left never starts with a quote mark (after whitespace other than VT / FF, or invisible characters).
+      expect(line.slice(length), where).not.toMatch(/^(?:[ \t\u{00A0}\u{FEFF}\u{200B}\u{200E}\u{00AD}]|\u{E0100})*>/u);
+    }
   });
 });
 
@@ -579,9 +602,11 @@ describe('joinKeptLines', () => {
     expect(joinKeptLines('ab\rcd', ranges([0, 1, false], [1, 3, false], [3, 5, true]))).toEqual({ text: 'cd', notLineStarts: new Set() });
   });
 
-  it('marks a part after U+2028 (no line break for the engine)', () => {
-    const body = 'a\u{2028}x> b';
-    expect(joinKeptLines(body, ranges([0, 2, true], [2, 3, false], [3, body.length, true]))).toEqual({ text: 'a\u{2028}> b', notLineStarts: new Set([2]) });
+  it('marks nothing for a part after U+2028 or U+2029 (they start a line in the PDF), but marks one begun after other text', () => {
+    const body = 'a\u{2028}x\u{2029}> b';
+    expect(joinKeptLines(body, ranges([0, 2, true], [2, 4, false], [4, body.length, true]))).toEqual({ text: 'a\u{2028}> b', notLineStarts: new Set() });
+    const inside = 'a\u{2028}x> b';
+    expect(joinKeptLines(inside, ranges([0, 2, true], [2, 3, false], [3, inside.length, true]))).toEqual({ text: 'a\u{2028}> b', notLineStarts: new Set([2]) });
   });
 
   it('gives the same text as joinKept', () => {

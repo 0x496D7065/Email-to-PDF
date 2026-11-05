@@ -5,8 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { NEGATIVE_CASES, THREAD_CASES } from '../../tests/support/thread-cases';
 import { FORWARDED_SEPARATOR } from '../parsing/forwarded-block';
-import { detectQuoteMarkers } from './quote-markers';
-import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, quotePrefix, reconstructQuotedMessages, removeQuoteMarks, type ReconstructedMessage } from './reconstruct';
+import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks, type ReconstructedMessage } from './reconstruct';
 
 const rebuild = (body: string, subject = 'Re: Office desks', sourceOffsetMinutes: number | null = 0): ReconstructedMessage[] =>
   reconstructQuotedMessages(body, { subject, sourceOffsetMinutes });
@@ -267,53 +266,6 @@ describe('removeQuoteMarks (option A)', () => {
 
   it('reads only [from, to)', () => {
     expect(removeQuoteMarks('xx> a\n> b\nyy', 2, 10, 1)).toBe('a\nb\n');
-  });
-});
-
-describe('quotePrefix (the PDF quote levels, task 8.1)', () => {
-  it.each([
-    ['> a', 1, 2],
-    ['>a', 1, 1],
-    ['>> a', 2, 3],
-    ['> > > a', 3, 6],
-    ['  > a', 1, 4],
-    ['>  a', 1, 2], // one space only
-    ['>\ta', 1, 1], // a tab is not the space after the last mark
-    ['>\t> a', 2, 4], // but whitespace before a mark is part of the prefix
-    ['>', 1, 1],
-    ['> ', 1, 2],
-    ['a > b', 0, 0],
-    ['   a', 0, 0], // whitespace with no mark after it is not a prefix
-    ['', 0, 0],
-  ] as const)('%j: level %d, length %d', (line, level, length) => {
-    expect(quotePrefix(line)).toEqual({ level, length });
-  });
-
-  it('agrees with removeQuoteMarks and the depth the rebuilt messages use, on every line', () => {
-    const parts = ['>', '> ', ' ', '\t', '\u{00A0}', '\u{FEFF}', 'a', 'b ', '-', '\u0007', '\u000B'];
-    let seed = 7;
-    const next = (): number => {
-      seed = (seed * 48271) % 2147483647;
-      return seed / 2147483647;
-    };
-    for (let t = 0; t < 5000; t++) {
-      let line = '';
-      const n = Math.floor(next() * 8);
-      for (let k = 0; k < n; k++) line += parts[Math.floor(next() * parts.length)]!;
-      const { level, length } = quotePrefix(line);
-      // Removing `level` marks (the rebuilt texts' rule) leaves exactly the rest; no more marks to remove after it.
-      expect(removeQuoteMarks(line, 0, line.length, level), JSON.stringify(line)).toBe(line.slice(length));
-      expect(removeQuoteMarks(line, 0, line.length, level + 1), JSON.stringify(line)).toBe(line.slice(length));
-      // The prefix holds `level` marks and whitespace only; the rest never starts with whitespace and a mark.
-      const prefix = line.slice(0, length);
-      expect(prefix.split('>').length - 1).toBe(level);
-      expect(prefix).toMatch(/^[\s>]*$/u);
-      expect(line.slice(length)).not.toMatch(/^\s*>/u);
-      if (level === 0) expect(length).toBe(0);
-      // The ">" detector folds two such lines exactly when they are quoted lines with text after the marks.
-      const withText = level > 0 && /\S/u.test(line.slice(length));
-      expect(detectQuoteMarkers(`${line}\n${line}`).length > 0, JSON.stringify(line)).toBe(withText);
-    }
   });
 });
 

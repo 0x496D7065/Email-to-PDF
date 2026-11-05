@@ -477,9 +477,9 @@ describe('generatePdf in Dutch (locale "nl", its own texts)', () => {
   });
 });
 
-describe('generatePdf: quoted lines as indentation (task 8.1), read back from the file', () => {
+describe('generatePdf: quote marks removed, one body indent (tasks 8.1 and 8.6), read back from the file', () => {
   const LEFT = CONFIG.margin.left;
-  const STEP = CONFIG.quote.indent;
+  const STEP = CONFIG.bodyIndent;
   const long = 'alpha beta gamma delta epsilon zeta eta theta '.repeat(8).trim();
   const quoted =
     '> Can the desks come on Monday?\nYes, Monday works.\n\n> > And the chairs, Alice?\n>> They come later.\n>> ' +
@@ -502,20 +502,14 @@ describe('generatePdf: quoted lines as indentation (task 8.1), read back from th
       if (found === undefined) throw new Error(`not found: ${text}`);
       return found.x;
     };
-    // Own text at the margin; each quote level one step in; above the cap (4) at the cap.
-    expect(xOf('Hello Bob,')).toBeCloseTo(LEFT, 3);
-    expect(xOf('Yes, Monday works.')).toBeCloseTo(LEFT, 3);
-    expect(xOf('Alice')).toBeCloseTo(LEFT, 3);
-    expect(xOf('Can the desks come on Monday?')).toBeCloseTo(LEFT + STEP, 3);
-    expect(xOf('And the chairs, Alice?')).toBeCloseTo(LEFT + 2 * STEP, 3);
-    expect(xOf('They come later.')).toBeCloseTo(LEFT + 2 * STEP, 3);
-    expect(xOf('Bob')).toBeCloseTo(LEFT + STEP, 3);
-    expect(xOf('-> a mark inside: kept')).toBeCloseTo(LEFT + STEP, 3);
-    expect(xOf('Seven levels deep.')).toBeCloseTo(LEFT + 4 * STEP, 3);
-    // The long quoted line wraps; every piece keeps the level-2 indent, and together they are the text as written.
+    // Own text and every quote level: the same single step in.
+    for (const text of ['Hello Bob,', 'Yes, Monday works.', 'Alice', 'Can the desks come on Monday?', 'And the chairs, Alice?', 'They come later.', 'Bob', '-> a mark inside: kept', 'Seven levels deep.']) {
+      expect(xOf(text), text).toBeCloseTo(LEFT + STEP, 3);
+    }
+    // The long quoted line wraps; every piece keeps the step, and together they are the text as written.
     const pieces = lines.filter((l) => l.text.includes('alpha') || l.text.includes('theta'));
     expect(pieces.length).toBeGreaterThan(1);
-    for (const p of pieces) expect(p.x).toBeCloseTo(LEFT + 2 * STEP, 3);
+    for (const p of pieces) expect(p.x).toBeCloseTo(LEFT + STEP, 3);
     expect(pieces.map((p) => p.text.trim()).join(' ')).toBe(long);
     // No ">" at the start of any line (the text copied out follows the printed text), none added inside one.
     for (const l of lines) {
@@ -524,7 +518,7 @@ describe('generatePdf: quoted lines as indentation (task 8.1), read back from th
     }
   }
 
-  it('keeps a pasted quote (no reply header) indented by level, without its ">" marks', async () => {
+  it('prints a pasted quote (no reply header) one step in, without its ">" marks', async () => {
     const message = make(0, { bodyText: `Hello Bob,\n\n${quoted}\nAlice\n` });
     check(await bodyLinesOf(inputFor([message])));
   });
@@ -534,6 +528,6 @@ describe('generatePdf: quoted lines as indentation (task 8.1), read back from th
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
     const lines = await bodyLinesOf(inputFor([message], { policy }));
     check(lines);
-    expect(lines.find((l) => l.text.startsWith('On Tue, 4 Mar 2025'))!.x).toBeCloseTo(LEFT, 3);
+    expect(lines.find((l) => l.text.startsWith('On Tue, 4 Mar 2025'))!.x).toBeCloseTo(LEFT + STEP, 3);
   });
 });

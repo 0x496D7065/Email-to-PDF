@@ -12,9 +12,10 @@ import { type ParsedFont, readWoffFont } from '../font/font';
 import { PDF_FONTS, type PdfFontName } from '../fonts';
 import { buildPdfDocument, emailAnchor, type PdfBlock, type PdfDocument, type PdfEmail, type PdfFieldRow } from '../model';
 import { createPdfStrings } from '../strings';
+import { lineText } from '../text';
 import { OwnPdfWriter } from '../writer';
 import type { LaidOutDocument, LaidOutTextRun } from '../writer/layout';
-import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, type LayoutConfig, MAX_DIGIT_EM, quoteIndent, SHORT_DATE_EM, type TextStyle } from './config';
+import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, type LayoutConfig, MAX_DIGIT_EM, SHORT_DATE_EM, type TextStyle } from './config';
 import { layoutPdf, type PdfLayout } from './pdf-layout';
 import { Typesetter } from './typesetter';
 
@@ -418,12 +419,10 @@ describe('layoutPdf: config and footer checks', () => {
     ['index page column too narrow for 6 digits', { ...CONFIG, index: { ...CONFIG.index, pageWidth: 35 } }, /index\.pageWidth must hold a 6-digit page number/],
     ['index page column too narrow for a bigger body size', role({ size: 11 }), /index\.pageWidth must hold/],
     ['index date column too narrow for a short date', { ...CONFIG, index: { ...CONFIG.index, dateWidth: 60 } }, /index\.dateWidth must hold a date/],
-    ['quote indent 0', { ...CONFIG, quote: { ...CONFIG.quote, indent: 0 } }, /quote\.indent/],
-    ['quote indent NaN', { ...CONFIG, quote: { ...CONFIG.quote, indent: Number.NaN } }, /quote\.indent/],
-    ['quote max level 0', { ...CONFIG, quote: { ...CONFIG.quote, maxLevel: 0 } }, /quote\.maxLevel/],
-    ['quote max level not whole', { ...CONFIG, quote: { ...CONFIG.quote, maxLevel: 2.5 } }, /quote\.maxLevel/],
-    ['quote indents wider than half the text area', { ...CONFIG, quote: { indent: 61, maxLevel: 4 } }, /at most half the text area width/],
-    ['quote missing', { ...CONFIG, quote: undefined as unknown as LayoutConfig['quote'] }, /quote is missing/],
+    ['body indent 0', { ...CONFIG, bodyIndent: 0 }, /bodyIndent/],
+    ['body indent NaN', { ...CONFIG, bodyIndent: Number.NaN }, /bodyIndent/],
+    ['body indent missing', { ...CONFIG, bodyIndent: undefined as unknown as number }, /bodyIndent/],
+    ['body indent wider than half the text area', { ...CONFIG, bodyIndent: 242 }, /bodyIndent must be at most half the text area width/],
   ])('rejects an invalid config with a clear Error (%s)', (_label, config, message) => {
     expect(withConfig(config)).toThrow(/^layout: invalid config: /);
     expect(withConfig(config)).toThrow(message);
@@ -463,8 +462,8 @@ describe('layoutPdf: config and footer checks', () => {
   });
 });
 
-describe('layoutPdf: quoted lines (task 8.1)', () => {
-  const STEP = CONFIG.quote.indent;
+describe('layoutPdf: one body indent for every line (task 8.6)', () => {
+  const STEP = CONFIG.bodyIndent;
   const LEFT = CONFIG.margin.left;
   /** The body runs (regular body text) of the first email page, in order. */
   const bodyRuns = (document: LaidOutDocument, frontPages: number): LaidOutTextRun[] =>
@@ -475,14 +474,11 @@ describe('layoutPdf: quoted lines (task 8.1)', () => {
     return run.x;
   };
 
-  it('uses a fixed step per level, capped at maxLevel (default 14 pt, 4 levels)', () => {
-    expect(CONFIG.quote).toEqual({ indent: 14, maxLevel: 4 });
-    expect([0, 1, 2, 3, 4, 5, 9, 1000].map((n) => quoteIndent(CONFIG, n))).toEqual([0, 14, 28, 42, 56, 56, 56, 56]);
-    // Not a whole number > 0: no indent (never a negative or odd x).
-    for (const bad of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) expect(quoteIndent(CONFIG, bad)).toBe(0);
+  it('uses one fixed step (default 14 pt)', () => {
+    expect(CONFIG.bodyIndent).toBe(14);
   });
 
-  it('places each quoted line of a real email at the margin plus its level step, own text at the margin', () => {
+  it('places every body line of a real email one step in, quoted or not, whatever its level; the header rows at the margin', () => {
     const body = 'My own answer.\n\n> First level.\n>> Second level.\n> > > Third level.\n>>>> Fourth level.\n>>>>>> Sixth level.\nBack to my text.\n';
     // "Print full original text": the whole body, quotes included.
     const results: ParseResult[] = [{ ok: true, message: make({ bodyText: body }) }];
@@ -496,53 +492,49 @@ describe('layoutPdf: quoted lines (task 8.1)', () => {
       generatedAt: 0,
       strings,
     });
-    expect(doc.emails[0]!.bodyLevels).toEqual([0, 0, 1, 2, 3, 4, 6, 0]);
+    expect(doc.emails[0]!.body.map(lineText)).toEqual(['My own answer.', '', 'First level.', 'Second level.', 'Third level.', 'Fourth level.', 'Sixth level.', 'Back to my text.']);
     const { document, frontPages } = lay(doc);
     const runs = bodyRuns(document, frontPages);
-    expect(xOf(runs, 'My own answer.')).toBeCloseTo(LEFT, 6);
-    expect(xOf(runs, 'First level.')).toBeCloseTo(LEFT + STEP, 6);
-    expect(xOf(runs, 'Second level.')).toBeCloseTo(LEFT + 2 * STEP, 6);
-    expect(xOf(runs, 'Third level.')).toBeCloseTo(LEFT + 3 * STEP, 6);
-    expect(xOf(runs, 'Fourth level.')).toBeCloseTo(LEFT + 4 * STEP, 6);
-    expect(xOf(runs, 'Sixth level.')).toBeCloseTo(LEFT + 4 * STEP, 6); // above the cap: the cap's indent
-    expect(xOf(runs, 'Back to my text.')).toBeCloseTo(LEFT, 6);
+    for (const text of ['My own answer.', 'First level.', 'Second level.', 'Third level.', 'Fourth level.', 'Sixth level.', 'Back to my text.']) {
+      expect(xOf(runs, text), text).toBeCloseTo(LEFT + STEP, 6);
+    }
     // No ">" drawn at the start of any body line.
     for (const r of runs) expect(r.copyText).not.toMatch(/^\s*>/);
+    // The heading and the header rows (labels) stay at the margin.
+    const page = document.pages[frontPages]!.text;
+    expect(page.find((r) => r.copyText.startsWith('Email 1'))!.x).toBeCloseTo(LEFT, 6);
+    expect(page.find((r) => r.copyText === 'From')!.x).toBeCloseTo(LEFT, 6);
     expectInsideTextArea(document);
   });
 
-  it('keeps the indent on every wrapped line of a quoted line, and wraps it to the width left', () => {
+  it('keeps the step on every wrapped line, and wraps to the width left', () => {
     const long = 'alpha beta gamma delta epsilon '.repeat(20).trim();
-    const doc = syntheticDoc([syntheticEmail(1, ['Own text.', long, long, long], [0, 0, 2, 7])]);
+    const doc = syntheticDoc([syntheticEmail(1, ['Own text.', long, long])]);
     const { document, frontPages } = lay(doc);
     const runs = bodyRuns(document, frontPages);
     const width = CONFIG.page.width - CONFIG.margin.left - CONFIG.margin.right;
     // The first x of each line (one y per line).
     const byY = new Map<number, number>();
     for (const r of runs) if (!byY.has(r.y)) byY.set(r.y, r.x);
-    const xs = [...byY.entries()].sort((a, b) => a[0] - b[0]).map(([, x]) => x);
-    const at = (indent: number): number => xs.filter((x) => Math.abs(x - (LEFT + indent)) < 1e-6).length;
+    const xs = [...byY.values()];
     const ts = new Typesetter(fonts, CONFIG);
-    const count = (indent: number): number => ts.wrap([{ role: 'body', text: long }], width - indent, 'body').length;
-    expect(count(0)).toBeGreaterThan(1);
-    expect(count(4 * STEP)).toBeGreaterThan(count(0)); // a narrower column: more lines
-    expect(at(0)).toBe(1 + count(0));
-    expect(at(2 * STEP)).toBe(count(2 * STEP));
-    expect(at(4 * STEP)).toBe(count(4 * STEP)); // level 7, above the cap
-    expect(xs).toHaveLength(1 + count(0) + count(2 * STEP) + count(4 * STEP));
+    const count = ts.wrap([{ role: 'body', text: long }], width - STEP, 'body').length;
+    expect(count).toBeGreaterThan(1);
+    expect(xs).toHaveLength(1 + 2 * count);
+    for (const x of xs) expect(x).toBeCloseTo(LEFT + STEP, 6);
     expectInsideTextArea(document);
   });
 
-  it('places a blank quoted line as an empty line (nothing drawn) and follows the config given', () => {
-    const config: LayoutConfig = { ...CONFIG, quote: { indent: 20, maxLevel: 2 } };
-    const doc = syntheticDoc([syntheticEmail(1, ['Own.', 'One.', '', 'Two.', 'Three.'], [0, 1, 1, 2, 3])]);
+  it('places an empty line (nothing drawn) and follows the config given', () => {
+    const config: LayoutConfig = { ...CONFIG, bodyIndent: 30 };
+    const doc = syntheticDoc([syntheticEmail(1, ['Own.', 'One.', '', 'Two.', 'Three.'])]);
     const { document, frontPages } = layoutPdf(doc, fonts, { strings, config });
     const runs = bodyRuns(document, frontPages);
     expect(runs.map((r) => [r.copyText, r.x - LEFT])).toEqual([
-      ['Own.', 0],
-      ['One.', 20],
-      ['Two.', 40],
-      ['Three.', 40],
+      ['Own.', 30],
+      ['One.', 30],
+      ['Two.', 30],
+      ['Three.', 30],
     ]);
     // The empty line takes its line height: "Two." is two lines below "One.".
     const y = (t: string): number => runs.find((r) => r.copyText === t)!.y;
@@ -607,7 +599,7 @@ describe('layoutPdf + OwnPdfWriter', () => {
 
 // ---------------------------------------------------------------- time bounds
 
-function syntheticEmail(n: number, body: readonly string[], levels: readonly number[] = body.map(() => 0)): PdfEmail {
+function syntheticEmail(n: number, body: readonly string[]): PdfEmail {
   const value = (text: string) => [[{ role: 'field-value' as const, text }]];
   return {
     number: n,
@@ -623,7 +615,6 @@ function syntheticEmail(n: number, body: readonly string[], levels: readonly num
     ],
     notes: [],
     body: body.map((text) => (text === '' ? [] : [{ role: 'body' as const, text }])),
-    bodyLevels: levels,
     attachments: null,
     flags: { undated: false, zoneUnknown: false, keptAllBecauseEmpty: false, planFallback: false, htmlConverted: false, controlChars: 0 },
   };

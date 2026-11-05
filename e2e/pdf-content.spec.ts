@@ -28,8 +28,9 @@
 //    output-plan.ts): quoted history added by the mail app left out of the
 //    reply (and still in the email it came from), a repeated signature only
 //    where its sender first used it, a quote the writer answered between
-//    its lines kept (its "> " marks not printed, the quoted lines indented
-//    by their quote level instead, task 8.1); accents drawn as real glyphs; the emoji drawn as the
+//    its lines kept (its "> " marks not printed; every body line, quoted or
+//    not, one step in from the header rows, tasks 8.1 and 8.6); accents
+//    drawn as real glyphs; the emoji drawn as the
 //    code "[U+1F600]" while the copy layer holds the emoji itself.
 // 2. "Print full original text": the full body of every email is in its
 //    own part of the PDF, in order (rule R6, collapse never delete), after
@@ -731,7 +732,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
   }
 
   // A quote the writer answered between its lines: kept, attribution and all, in order;
-  // its "> " marks not printed, the quoted lines indented one step instead (task 8.1).
+  // its "> " marks not printed; quoted and own lines at the same x, one step in from the header rows (tasks 8.1, 8.6).
   const answersSection = sectionOf(doc, emails, ANSWERS_ID);
   const answers = norm(answersSection.copied);
   const quotedLines = ['I will leave the office key at the front desk on Monday, so your team can', 'start whenever suits you. The old desks are already in the storage room.'];
@@ -756,8 +757,10 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
   };
   const own = xOf('My answers are between your lines.');
   expect(xOf('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
-  // One quote level: 14 pt in (src/pdf/layout/config.ts, quote.indent).
-  for (const text of quotedLines) expect(xOf(text) - own, text).toBeCloseTo(14, 2);
+  // No step per quote level: the quoted lines at the same x as the own text,
+  // which is 14 pt in from the header labels (src/pdf/layout/config.ts, bodyIndent).
+  for (const text of quotedLines) expect(xOf(text), text).toBeCloseTo(own, 2);
+  expect(own - xOf('From')).toBeCloseTo(14, 2);
   for (const l of answersSection.lines) expect(l.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
 
   // ANSWERS' header rows, from the manifest: each label, then its value, in
