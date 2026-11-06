@@ -477,9 +477,14 @@ describe('generatePdf in Dutch (locale "nl", its own texts)', () => {
   });
 });
 
-describe('generatePdf: quote marks removed, one body indent (tasks 8.1 and 8.6), read back from the file', () => {
+describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.1, 8.6 and 8.9), read back from the file', () => {
   const LEFT = CONFIG.margin.left;
-  const STEP = CONFIG.bodyIndent;
+  /** One tab: 4 normal spaces of the body font at the body size, straight from the font's tables. */
+  let STEP = Number.NaN;
+  beforeAll(() => {
+    const font = fonts[CONFIG.roles.body.font];
+    STEP = (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
+  });
   const long = 'alpha beta gamma delta epsilon zeta eta theta '.repeat(8).trim();
   const quoted =
     '> Can the desks come on Monday?\nYes, Monday works.\n\n> > And the chairs, Alice?\n>> They come later.\n>> ' +

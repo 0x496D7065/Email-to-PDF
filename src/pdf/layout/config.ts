@@ -8,7 +8,7 @@
 // the config first (validateLayoutConfig) and throws a clear Error for one
 // it cannot lay out.
 import type { PdfFontName } from '../fonts';
-import type { PdfRole } from '../text';
+import { type PdfRole, TAB_WIDTH } from '../text';
 import type { LaidOutColor } from '../writer/layout';
 
 /** How one kind of text looks. */
@@ -35,14 +35,21 @@ export interface LayoutConfig {
   /** Lists (cover): the bullet and the indent of the item text. */
   readonly list: { readonly bullet: string; readonly indent: number; readonly itemGap: number };
   /**
-   * How far every line of an email body is indented from the left margin
-   * (task 8.6, user decision 2026-11-05, PDF only): one fixed step for every
-   * body line, wrapped lines included, whatever its quote level (quote marks
-   * are removed, src/pdf/text.ts transform g), for real and rebuilt emails
-   * alike. The heading, the header rows, the notes and the attachments stay
-   * at the margin. At most half the text area width (validateLayoutConfig).
+   * How far every line of an email body is indented from the left margin,
+   * as a number of normal spaces (U+0020) of the body style: the indent is
+   * this many times the space's advance in roles.body's font at roles.body's
+   * size, measured from the font when the layout starts (pdf-layout.ts,
+   * bodyIndentWidth). Default TAB_WIDTH (4): one tab, as a tab in the text
+   * is printed (src/pdf/text.ts transform b; user decision 2026-11-06, task
+   * 8.9; before it a fixed 14 pt, task 8.6). One step for every body line,
+   * wrapped lines included, whatever its quote level (quote marks are
+   * removed, src/pdf/text.ts transform g), for real and rebuilt emails
+   * alike. The heading, the header rows and the attachments stay at the
+   * margin. A whole number >= 1 (validateLayoutConfig); the width it gives
+   * must be at most half the text area width (checked by layoutPdf, which
+   * has the fonts).
    */
-  readonly bodyIndent: number;
+  readonly bodyIndentSpaces: number;
   /**
    * The index table: the widths of its fixed columns (the subject column
    * takes the rest of the text area), the gap between two columns, the space
@@ -110,8 +117,8 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   footer: { style: { font: 'sans-regular', size: 8.5, color: GREY, lineHeight: 1.3 }, baselineFromBottom: 30, align: 'center' },
   fields: { labelWidth: 78, gap: 10, rowGap: 1.5 },
   list: { bullet: '\u{2022}', indent: 12, itemGap: 3 },
-  // 14 pt (1.4 em of the 10 pt body text): clearly sets the body apart from the header rows, under 3% of A4's text width.
-  bodyIndent: 14,
+  // One tab: 4 spaces of IBM Plex Sans Regular (0.236 em each) at 10 pt, 9.44 pt (task 8.9).
+  bodyIndentSpaces: TAB_WIDTH,
   index: { numberWidth: 30, dateWidth: 88, fromWidth: 104, pageWidth: 36, gap: 8, rowGap: 5, headerGap: 4 },
   spacing: {
     afterTitle: 14,
@@ -179,8 +186,7 @@ export function validateLayoutConfig(config: LayoutConfig): void {
   positive(config.list.indent, 'list.indent');
   check(config.list.indent < contentWidth, 'list.indent must be less than the text area width');
   nonNegative(config.list.itemGap, 'list.itemGap');
-  positive(config.bodyIndent, 'bodyIndent');
-  check(config.bodyIndent <= contentWidth / 2, 'bodyIndent must be at most half the text area width');
+  check(Number.isInteger(config.bodyIndentSpaces) && config.bodyIndentSpaces >= 1, 'bodyIndentSpaces must be a whole number >= 1');
   const ix = config.index;
   for (const name of ['numberWidth', 'dateWidth', 'fromWidth', 'pageWidth'] as const) positive(ix[name], `index.${name}`);
   for (const name of ['gap', 'rowGap', 'headerGap'] as const) nonNegative(ix[name], `index.${name}`);

@@ -33,7 +33,8 @@
 //     and 2026-11-05, task 8.6: approved display changes for the PDF only):
 //     a line that starts with ">" quote marks is shown WITHOUT them. Quote
 //     levels are not shown: the layout indents every body line by the same
-//     single step, quoted or not (src/pdf/layout/config.ts, bodyIndent). The
+//     single step, one tab (4 spaces of the body font), quoted or not
+//     (src/pdf/layout/config.ts, bodyIndentSpaces; task 8.9). The
 //     prefix (quotePrefixLength) is every ">" before the first other
 //     character, with what comes before each: whitespace (JavaScript's \s:
 //     spaces, tabs, U+00A0, U+FEFF...) and the invisible characters drawn

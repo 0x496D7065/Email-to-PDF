@@ -22,11 +22,14 @@
 // at one level.
 //
 // Pagination rules:
-// - every email starts at the top of a new page (option newPagePerEmail,
-//   on by default); never an empty page: an email already at the top of a
+// - every email, real or rebuilt from quoted text, starts at the top of a
+//   new page, its heading and header rows included, however much of the
+//   page before stays blank (option newPagePerEmail, on by default and
+//   never switched off by the app, user decisions 2026-11-02 and
+//   2026-11-06); never an empty page: an email already at the top of a
 //   page (the first one, right after the index) gets no extra break. With
-//   the option off, emails follow each other on the same page, with a thin
-//   rule between them;
+//   the option off (tests and other callers only), emails follow each other
+//   on the same page, with a thin rule between them;
 // - an email heading is never left alone at the bottom of a page: an email
 //   starts on a page only if its heading, its whole header table, its notes
 //   and its first keepBodyLines (2) body lines fit there; when that block is
@@ -39,11 +42,13 @@
 // - every page gets the footer "Page X of Y" inside the bottom margin
 //   (fixed height: the text is filled in at the end, once Y is known).
 //
-// Email bodies (task 8.6): every body line, wrapped lines included, is
-// placed config.bodyIndent to the right of the margin and wrapped to the
-// width left. One step for every line, quoted or not (quote marks are
-// removed, src/pdf/text.ts transform g), for real and rebuilt emails alike;
-// the heading, header rows, notes and attachments stay at the margin.
+// Email bodies (tasks 8.6 and 8.9): every body line, wrapped lines
+// included, is placed one tab to the right of the margin (bodyIndentWidth:
+// config.bodyIndentSpaces, default 4, normal spaces of the body font at the
+// body size, measured from the font) and wrapped to the width left. One
+// step for every line, quoted or not (quote marks are removed,
+// src/pdf/text.ts transform g), for real and rebuilt emails alike; the
+// heading, header rows and attachments stay at the margin.
 //
 // Each email's heading is a named destination (its anchor, emailAnchor in
 // model.ts), and so are the top of the cover ("cover") and the index
@@ -94,6 +99,20 @@ export interface PdfLayout {
   readonly frontPages: number;
   /** How many times the cover and index were laid out (2 in practice). */
   readonly passes: number;
+  /** How far every email body line is from the left margin, in points (bodyIndentWidth). */
+  readonly bodyIndent: number;
+}
+
+/**
+ * The body indent in points: config.bodyIndentSpaces normal spaces of the
+ * body style (its font, its size), as the typesetter measures them. Throws
+ * a clear Error when that is wider than half the text area.
+ */
+export function bodyIndentWidth(typesetter: Typesetter, config: LayoutConfig): number {
+  const width = config.bodyIndentSpaces * typesetter.spaceWidth('body');
+  const textWidth = config.page.width - config.margin.left - config.margin.right;
+  if (!(width <= textWidth / 2)) throw new Error('layout: invalid config: bodyIndentSpaces makes the body indent wider than half the text area width');
+  return width;
 }
 
 /**
@@ -128,11 +147,12 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
   const config: LayoutConfig = options.newPagePerEmail === undefined ? base : { ...base, newPagePerEmail: options.newPagePerEmail };
   validateLayoutConfig(config);
   const typesetter = new Typesetter(fonts, config);
+  const bodyIndent = bodyIndentWidth(typesetter, config);
 
   // The emails, once, on pages of their own (page numbers relative to the first email page).
   const emails = new PageBuilder(config, typesetter);
   const emailPages = new Map<string, number>();
-  for (const [k, email] of doc.emails.entries()) placeEmail(emails, email, k === 0, emailPages);
+  for (const [k, email] of doc.emails.entries()) placeEmail(emails, email, k === 0, bodyIndent, emailPages);
   const emailPageList = doc.emails.length > 0 ? emails.pages : [];
 
   const entries = doc.index.entries;
@@ -178,6 +198,7 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
     placeholders: typesetter.placeholders - discarded,
     frontPages,
     passes,
+    bodyIndent,
   };
 }
 
@@ -219,15 +240,15 @@ function placeBlock(b: PageBuilder, block: PdfBlock): void {
 }
 
 /** One email (see the pagination rules at the top of this file). */
-function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, anchorPages: Map<string, number>): void {
+function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent: number, anchorPages: Map<string, number>): void {
   const ts = b.typesetter;
   const { spacing } = b.config;
   const heading = ts.wrap([{ role: 'heading', text: email.heading }], b.width, 'heading');
   const rows: LaidRow[] = email.fields.map((row) => layRow(b, row));
   const notes = email.notes.flatMap((line) => ts.wrap(line, b.width, 'body'));
-  // Every body line one step in (task 8.6), wrapped lines too.
-  const bodyX = b.left + b.config.bodyIndent;
-  const body = email.body.flatMap((line) => ts.wrap(line, b.width - b.config.bodyIndent, 'body'));
+  // Every body line one tab in (tasks 8.6 and 8.9), wrapped lines too, wrapped to the width left.
+  const bodyX = b.left + bodyIndent;
+  const body = email.body.flatMap((line) => ts.wrap(line, b.width - bodyIndent, 'body'));
 
   // The block kept together.
   const headingHeight = linesHeight(heading) + spacing.afterHeading;

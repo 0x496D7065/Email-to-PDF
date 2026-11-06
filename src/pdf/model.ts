@@ -69,8 +69,9 @@
 // Quote marks (user decisions 2026-11-02, task 8.1, and 2026-11-05, task
 // 8.6, PDF only): a body line that starts with ">" quote marks is shown
 // WITHOUT them (src/pdf/text.ts transform g). Quote levels are not kept:
-// the renderer indents every body line by one fixed step
-// (src/pdf/layout/config.ts, bodyIndent), quoted or not. Only the prefix is
+// the renderer indents every body line by one fixed step, one tab (4 spaces
+// of the body font; src/pdf/layout/config.ts, bodyIndentSpaces, task 8.9),
+// quoted or not. Only the prefix is
 // removed; the rest of the line is unchanged. This applies to the kept
 // parts of a body, to the whole body under "Print full original text" and
 // to the deeper quotes left in a rebuilt email's text (whose own quote

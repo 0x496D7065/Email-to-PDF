@@ -3,7 +3,8 @@
 // (engine, plans, generatePdf with the real fonts and our own writer) and
 // read back from the written file: no line of the PDF starts with a ">"
 // quote mark; every body line, wrapped lines included, is one fixed step
-// (bodyIndent) in from the margin, whatever its quote level, for real
+// (one tab: 4 spaces of the body font, bodyIndentSpaces, task 8.9) in from
+// the margin, whatever its quote level, for real
 // emails and for emails rebuilt from quoted text alike; the heading and
 // header rows stay at the margin; a ">" inside a line is kept; VT / FF stay
 // visible as codes. And the full text is still there: the engine's messages
@@ -28,13 +29,16 @@ import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
 
+const LEFT = CONFIG.margin.left;
+/** Where every body line starts: one tab (4 normal spaces of the body font at the body size, from the font's tables) in from the margin. */
+let BODY_X = Number.NaN;
+
 let fonts: PdfFonts;
 beforeAll(async () => {
   fonts = await loadPdfFonts();
+  const font = fonts[CONFIG.roles.body.font];
+  BODY_X = LEFT + (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
 });
-
-const LEFT = CONFIG.margin.left;
-const BODY_X = LEFT + CONFIG.bodyIndent;
 /** Where a header row's value starts (a wrapped value or a note under it). */
 const VALUE_X = LEFT + CONFIG.fields.labelWidth + CONFIG.fields.gap;
 const LONG = 'The delivery van can only park in the side street between nine and eleven, so please keep the gate open and the hall free of boxes.';

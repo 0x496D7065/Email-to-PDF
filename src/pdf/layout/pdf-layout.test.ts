@@ -5,18 +5,21 @@
 // Special characters are written as braced escapes (ASCII file).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseToUnicode, readContent, readDests, readPdf, type ParsedPdf, PdfString } from '../../../tests/support/pdf-reader';
+import { buildThread } from '../../../tests/support/thread-builder';
+import { chain } from '../../../tests/support/thread-cases';
 import { runEngine } from '../../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../parsing/types';
+import { rebuiltEntries } from '../../ui-model/rebuilt';
 import { type ParsedFont, readWoffFont } from '../font/font';
 import { PDF_FONTS, type PdfFontName } from '../fonts';
 import { buildPdfDocument, emailAnchor, type PdfBlock, type PdfDocument, type PdfEmail, type PdfFieldRow } from '../model';
 import { createPdfStrings } from '../strings';
-import { lineText } from '../text';
+import { lineText, TAB_WIDTH } from '../text';
 import { OwnPdfWriter } from '../writer';
 import type { LaidOutDocument, LaidOutTextRun } from '../writer/layout';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, type LayoutConfig, MAX_DIGIT_EM, SHORT_DATE_EM, type TextStyle } from './config';
-import { layoutPdf, type PdfLayout } from './pdf-layout';
+import { bodyIndentWidth, layoutPdf, type PdfLayout } from './pdf-layout';
 import { Typesetter } from './typesetter';
 
 const fonts = {} as Record<PdfFontName, ParsedFont>;
@@ -59,6 +62,42 @@ function build(messages: readonly NormalizedMessage[]): PdfDocument {
     DEFAULT_OUTPUT_POLICY,
   );
   return buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings });
+}
+
+/**
+ * The last email of a thread of `earlier + 1` short emails (tests/support/thread-cases.ts, synthetic), alone,
+ * with every email rebuilt from its quotes chosen: `earlier` rebuilt emails, then the real one.
+ */
+function buildRebuilt(earlier: number): PdfDocument {
+  // One quote style per reply: `earlier` styles make a chain of `earlier + 1` emails.
+  const thread = buildThread(chain(Array.from({ length: earlier }, (_, k) => (k % 2 === 0 ? 'gmail-en' : 'outlook-en'))));
+  const message = make({
+    bodyText: thread.body,
+    subject: thread.subject,
+    date: { utcMs: Date.parse(thread.instantUtc), original: '', offsetMinutes: 0, zoneKnown: true },
+  });
+  const result = runEngine([{ ok: true, message }]);
+  const rebuilt = rebuiltEntries(result).map((r) => r.id);
+  expect(rebuilt).toHaveLength(earlier);
+  return buildPdfDocument({
+    result,
+    positions: [0],
+    plans: planOutput([result.messages[0]!], DEFAULT_OUTPUT_POLICY),
+    rebuilt,
+    policy: DEFAULT_OUTPUT_POLICY,
+    timeZone: 'UTC',
+    generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
+    strings,
+  });
+}
+
+/**
+ * 4 normal spaces of the body font at the body size, in points, straight
+ * from the font file's tables (not through the layout's own measuring).
+ */
+function fourSpaces(): number {
+  const font = fonts[CONFIG.roles.body.font];
+  return (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
 }
 
 const lay = (doc: PdfDocument, newPagePerEmail?: boolean): PdfLayout =>
@@ -245,6 +284,47 @@ describe('layoutPdf: pagination', () => {
     }
   });
 
+  it('starts every email, real or rebuilt, at the top of a new page even when they would all fit on one; the index numbers are those pages', () => {
+    const above = new Typesetter(fonts, CONFIG).wrap([{ role: 'heading', text: 'Email 1' }], 1e6, 'heading')[0]!.above;
+    const pageColumn = CONFIG.page.width - CONFIG.margin.right - CONFIG.index.pageWidth;
+    const short = build(Array.from({ length: 4 }, (_, k) => make({ bodyText: `Short note ${String(k + 1)}.` })));
+    // All four would fit on one page: with the option off they share it.
+    expect(new Set(lay(short, false).anchorPages.values()).size).toBe(1);
+    for (const doc of [short, buildRebuilt(3)]) {
+      const { document, anchorPages, frontPages } = lay(doc);
+      expect(doc.emails.length).toBeGreaterThanOrEqual(4);
+      // One page per email (each is short), right after the index, in PDF order; no empty page.
+      expect(document.pages).toHaveLength(frontPages + doc.emails.length);
+      for (const page of document.pages) expect(page.text.some((r) => !isFooter(r))).toBe(true);
+      for (const [k, email] of doc.emails.entries()) {
+        const page = frontPages + k;
+        expect(anchorPages.get(email.anchor)).toBe(page);
+        // The heading is the first line of the page, at the top of the text area, the header block below it there.
+        const runs = document.pages[page]!.text.filter((r) => !isFooter(r));
+        const first = runs.reduce((a, b) => (b.y < a.y ? b : a));
+        expect(first.copyText).toBe(`Email ${String(email.number)}`);
+        expect(first.y).toBeCloseTo(TOP + above, 6);
+        expect(runs.some((r) => r.copyText === 'From' && r.x === CONFIG.margin.left)).toBe(true);
+        const dest = document.destinations.find((d) => d.name === email.anchor)!;
+        expect(dest.page).toBe(page);
+        expect(dest.y).toBeCloseTo(TOP - CONFIG.spacing.destinationAbove, 6);
+      }
+      // The index: each row's link goes to its email; the number in the row's page column is that page + 1.
+      const shown = new Map<string, string[]>();
+      for (const page of document.pages.slice(0, frontPages)) {
+        for (const link of page.links) {
+          const { y, height } = link.rect;
+          shown.set(
+            link.destination,
+            page.text.filter((r) => r.x >= pageColumn - 1e-6 && r.y > y && r.y < y + height).map((r) => r.copyText),
+          );
+        }
+      }
+      expect([...shown.keys()].sort()).toEqual(doc.emails.map((e) => e.anchor).sort());
+      for (const email of doc.emails) expect(shown.get(email.anchor)).toEqual([String(anchorPages.get(email.anchor)! + 1)]);
+    }
+  });
+
   it('breaks a header row taller than a page between its lines, then goes on', () => {
     const many = Array.from({ length: 600 }, (_, k) => ({ name: `Person ${String(k)} Example`, address: `person${String(k)}@example.test` }));
     const doc = build([make({ to: many, bodyText: 'Short body.' })]);
@@ -419,10 +499,12 @@ describe('layoutPdf: config and footer checks', () => {
     ['index page column too narrow for 6 digits', { ...CONFIG, index: { ...CONFIG.index, pageWidth: 35 } }, /index\.pageWidth must hold a 6-digit page number/],
     ['index page column too narrow for a bigger body size', role({ size: 11 }), /index\.pageWidth must hold/],
     ['index date column too narrow for a short date', { ...CONFIG, index: { ...CONFIG.index, dateWidth: 60 } }, /index\.dateWidth must hold a date/],
-    ['body indent 0', { ...CONFIG, bodyIndent: 0 }, /bodyIndent/],
-    ['body indent NaN', { ...CONFIG, bodyIndent: Number.NaN }, /bodyIndent/],
-    ['body indent missing', { ...CONFIG, bodyIndent: undefined as unknown as number }, /bodyIndent/],
-    ['body indent wider than half the text area', { ...CONFIG, bodyIndent: 242 }, /bodyIndent must be at most half the text area width/],
+    ['body indent 0 spaces', { ...CONFIG, bodyIndentSpaces: 0 }, /bodyIndentSpaces must be a whole number >= 1/],
+    ['body indent not whole', { ...CONFIG, bodyIndentSpaces: 2.5 }, /bodyIndentSpaces must be a whole number >= 1/],
+    ['body indent NaN', { ...CONFIG, bodyIndentSpaces: Number.NaN }, /bodyIndentSpaces/],
+    ['body indent missing', { ...CONFIG, bodyIndentSpaces: undefined as unknown as number }, /bodyIndentSpaces/],
+    // IBM Plex Sans Regular's space is 0.236 em: 103 spaces at 10 pt are 243.08 pt, more than half of A4's 483.28 pt text width.
+    ['body indent wider than half the text area', { ...CONFIG, bodyIndentSpaces: 103 }, /bodyIndentSpaces makes the body indent wider than half the text area width/],
   ])('rejects an invalid config with a clear Error (%s)', (_label, config, message) => {
     expect(withConfig(config)).toThrow(/^layout: invalid config: /);
     expect(withConfig(config)).toThrow(message);
@@ -430,6 +512,8 @@ describe('layoutPdf: config and footer checks', () => {
 
   it('accepts the default config, and zero margins and spacings', () => {
     expect(withConfig(CONFIG)).not.toThrow();
+    // 102 spaces (240.72 pt) are still at most half the text area width.
+    expect(withConfig({ ...CONFIG, bodyIndentSpaces: 102 })).not.toThrow();
     const zero: LayoutConfig = {
       ...CONFIG,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -462,8 +546,11 @@ describe('layoutPdf: config and footer checks', () => {
   });
 });
 
-describe('layoutPdf: one body indent for every line (task 8.6)', () => {
-  const STEP = CONFIG.bodyIndent;
+describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and 8.9)', () => {
+  let STEP = Number.NaN;
+  beforeAll(() => {
+    STEP = fourSpaces();
+  });
   const LEFT = CONFIG.margin.left;
   /** The body runs (regular body text) of the first email page, in order. */
   const bodyRuns = (document: LaidOutDocument, frontPages: number): LaidOutTextRun[] =>
@@ -474,8 +561,24 @@ describe('layoutPdf: one body indent for every line (task 8.6)', () => {
     return run.x;
   };
 
-  it('uses one fixed step (default 14 pt)', () => {
-    expect(CONFIG.bodyIndent).toBe(14);
+  it('uses one fixed step: the width of 4 normal spaces of the body font at the body size (one tab)', () => {
+    expect(CONFIG.bodyIndentSpaces).toBe(4);
+    // A real width, measured from the font, not the old fixed 14 pt.
+    // IBM Plex Sans Regular's space is 236/1000 em: 4 x 0.236 x 10 pt.
+    expect(STEP).toBeCloseTo(9.44, 9);
+    const ts = new Typesetter(fonts, CONFIG);
+    expect(bodyIndentWidth(ts, CONFIG)).toBeCloseTo(STEP, 9);
+    expect(lay(syntheticDoc([syntheticEmail(1, ['Body.'])])).bodyIndent).toBeCloseTo(STEP, 9);
+    // The same as 4 spaces in a line of body text: "x    x" is 4 spaces wider than "xx".
+    const width = (text: string): number => ts.wrap([{ role: 'body', text }], 1e6, 'body')[0]!.width;
+    expect(width('x    x') - width('xx')).toBeCloseTo(STEP, 9);
+    // And as a tab in the text (printed as 4 spaces, src/pdf/text.ts transform b).
+    expect(width(`x${' '.repeat(TAB_WIDTH)}x`) - width('xx')).toBeCloseTo(STEP, 9);
+    // It follows the body style: twice the size, twice the indent; the other roles do not count.
+    const big: LayoutConfig = { ...CONFIG, roles: { ...CONFIG.roles, body: { ...CONFIG.roles.body, size: 20 } }, index: { ...CONFIG.index, pageWidth: 80, dateWidth: 180 } };
+    expect(bodyIndentWidth(new Typesetter(fonts, big), big)).toBeCloseTo(2 * STEP, 9);
+    const bigHeading: LayoutConfig = { ...CONFIG, roles: { ...CONFIG.roles, heading: { ...CONFIG.roles.heading, size: 30 } } };
+    expect(bodyIndentWidth(new Typesetter(fonts, bigHeading), bigHeading)).toBeCloseTo(STEP, 9);
   });
 
   it('places every body line of a real email one step in, quoted or not, whatever its level; the header rows at the margin', () => {
@@ -525,17 +628,34 @@ describe('layoutPdf: one body indent for every line (task 8.6)', () => {
     expectInsideTextArea(document);
   });
 
+  it('keeps the heading, every header label and the attachment list at the margin, the header values where they were', () => {
+    const email: PdfEmail = {
+      ...syntheticEmail(1, ['Own text.', 'More text.']),
+      attachments: { label: 'Attachments', items: [[{ role: 'body', text: 'plan.pdf' }], [{ role: 'body', text: 'photo.jpg' }]] },
+    };
+    const { document, frontPages } = lay(syntheticDoc([email]));
+    const page = document.pages[frontPages]!.text;
+    const run = (text: string): LaidOutTextRun => {
+      const found = page.find((r) => r.copyText === text);
+      if (found === undefined) throw new Error(`not found: ${text}`);
+      return found;
+    };
+    for (const text of ['Email 1', 'From', 'To', 'Date', 'Subject', 'Attachments', CONFIG.list.bullet]) expect(run(text).x, text).toBeCloseTo(LEFT, 6);
+    // The item text after the bullet, as on the cover (list.indent), not one body step in.
+    for (const text of ['plan.pdf', 'photo.jpg']) expect(run(text).x, text).toBeCloseTo(LEFT + CONFIG.list.indent, 6);
+    expect(run('Alice Example <alice@example.test>').x).toBeCloseTo(LEFT + CONFIG.fields.labelWidth + CONFIG.fields.gap, 6);
+    for (const text of ['Own text.', 'More text.']) expect(run(text).x, text).toBeCloseTo(LEFT + STEP, 6);
+  });
+
   it('places an empty line (nothing drawn) and follows the config given', () => {
-    const config: LayoutConfig = { ...CONFIG, bodyIndent: 30 };
+    // 8 spaces: twice the default step.
+    const config: LayoutConfig = { ...CONFIG, bodyIndentSpaces: 8 };
     const doc = syntheticDoc([syntheticEmail(1, ['Own.', 'One.', '', 'Two.', 'Three.'])]);
-    const { document, frontPages } = layoutPdf(doc, fonts, { strings, config });
+    const { document, frontPages, bodyIndent } = layoutPdf(doc, fonts, { strings, config });
+    expect(bodyIndent).toBeCloseTo(2 * STEP, 9);
     const runs = bodyRuns(document, frontPages);
-    expect(runs.map((r) => [r.copyText, r.x - LEFT])).toEqual([
-      ['Own.', 30],
-      ['One.', 30],
-      ['Two.', 30],
-      ['Three.', 30],
-    ]);
+    expect(runs.map((r) => r.copyText)).toEqual(['Own.', 'One.', 'Two.', 'Three.']);
+    for (const r of runs) expect(r.x - LEFT, r.copyText).toBeCloseTo(2 * STEP, 6);
     // The empty line takes its line height: "Two." is two lines below "One.".
     const y = (t: string): number => runs.find((r) => r.copyText === t)!.y;
     expect(y('Two.') - y('One.')).toBeCloseTo(2 * (y('Three.') - y('Two.')), 6);

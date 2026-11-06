@@ -62,6 +62,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { createServer } from 'vite';
+import type * as FontModule from '../src/pdf/font/font.ts';
+import type * as ConfigModule from '../src/pdf/layout/config.ts';
 import type * as EmlModule from '../src/parsing/eml.ts';
 import type * as MsgModule from '../src/parsing/msg.ts';
 import type { EmailParser } from '../src/parsing/types.ts';
@@ -137,6 +139,8 @@ interface Source {
 
 /** Built in beforeAll, in drop order (a fixed shuffle, as in e2e/full-flow.spec.ts). */
 let sources: Source[] = [];
+/** One tab in the body font at the body size, in points (measured in beforeAll). */
+let bodyIndent = Number.NaN;
 
 const hex = (bytes: ArrayBuffer): string => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -169,6 +173,14 @@ test.beforeAll(async () => {
     const { MSG_SPECS } = (await server.ssrLoadModule('/tests/fixtures/msg/specs.ts')) as typeof Specs;
     const { createEmlParser } = (await server.ssrLoadModule('/src/parsing/eml.ts')) as typeof EmlModule;
     const { createMsgParser } = (await server.ssrLoadModule('/src/parsing/msg.ts')) as typeof MsgModule;
+    // The body indent expected in the PDF: one tab, 4 normal spaces of the body font at the body size (task 8.9),
+    // measured here from the bundled font file's own tables.
+    const { readWoffFont } = (await server.ssrLoadModule('/src/pdf/font/font.ts')) as typeof FontModule;
+    const { DEFAULT_LAYOUT_CONFIG } = (await server.ssrLoadModule('/src/pdf/layout/config.ts')) as typeof ConfigModule;
+    const body = DEFAULT_LAYOUT_CONFIG.roles.body;
+    expect(body.font).toBe('sans-regular');
+    const plex = await readWoffFont(new Uint8Array(readFileSync(`${ROOT}src/fonts/IBMPlexSans-Regular.woff`)));
+    bodyIndent = (4 * plex.advance(plex.glyphFor(0x20)) * body.size) / plex.unitsPerEm;
     // Node has no DOMParser: an HTML body is marked, and its email is checked with the manifest's snippets.
     const HTML = '\u{0}html';
     const htmlToText = (): { text: string; truncated: boolean } => ({ text: HTML, truncated: false });
@@ -758,9 +770,11 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
   const own = xOf('My answers are between your lines.');
   expect(xOf('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
   // No step per quote level: the quoted lines at the same x as the own text,
-  // which is 14 pt in from the header labels (src/pdf/layout/config.ts, bodyIndent).
+  // which is one tab (4 spaces of the body font) in from the header labels
+  // (src/pdf/layout/config.ts, bodyIndentSpaces; task 8.9).
   for (const text of quotedLines) expect(xOf(text), text).toBeCloseTo(own, 2);
-  expect(own - xOf('From')).toBeCloseTo(14, 2);
+  expect(bodyIndent).toBeGreaterThan(5);
+  expect(own - xOf('From')).toBeCloseTo(bodyIndent, 2);
   for (const l of answersSection.lines) expect(l.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
 
   // ANSWERS' header rows, from the manifest: each label, then its value, in

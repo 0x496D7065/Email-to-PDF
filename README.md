@@ -196,16 +196,19 @@ The tool never throws message text away on its own:
   numbers and the list of files with their fingerprints.
   Then come the index (number, date, sender, subject, attachments, page)
   and the emails, with page numbers and PDF bookmarks. Every email
-  (rebuilt ones included) starts at the top of a new page, so a short
-  email may leave the rest of its page blank.
+  (rebuilt ones included) starts at the top of a new page, its header
+  included, so a short email may leave the rest of its page blank; a long
+  one goes on over as many pages as it needs.
 - Message text is never rewritten or summarised. (Rebuilt emails, below,
   lose only their "> " quote marks.)
 - **No "> " quote marks in the PDF, one indent for every email text.** In
   the PDF, a line that starts with "> " quote marks (any number, in any
   form: ">", ">>", "> >", ">  >") is printed without them. The header of
   each email (Date, From, To, Subject and so on) stays at the left margin,
-  and every line of its text is indented by the same single step, quoted
-  or not, whatever the quote level, wrapped lines too: rebuilt emails look
+  and every line of its text is indented by the same single step, one tab
+  (the width of 4 spaces of the text's font), quoted or not, whatever the
+  quote level, wrapped lines too; the attachment list stays at the margin
+  with the header. Rebuilt emails look
   exactly like the others. The rest of each line is printed exactly as
   written (a ">" inside a line, as in "a > b", stays). Any line that starts
   with ">" is read as a quote, so a line starting with ">>> " (for example
@@ -582,8 +585,11 @@ are not printed. The invisible characters are the ones the PDF draws as
 nothing: zero-width space and joiners, direction marks, the word joiner,
 the soft hyphen and all variation selectors (U+FE00 to U+FE0F and U+E0100
 to U+E01EF). Quote levels are not shown: every line of an email's text is
-indented by one fixed step (`src/pdf/layout/config.ts`, `bodyIndent`,
-14 pt), quoted or not; the header rows stay at the margin. The PDF stops
+indented by one fixed step, one tab: the width of 4 normal spaces of the
+body font at the body size, measured from the font
+(`src/pdf/layout/config.ts`, `bodyIndentSpaces`; 9.44 pt with the
+default 10 pt IBM Plex Sans), quoted or not; the header rows and the
+attachment list stay at the margin. The PDF stops
 reading the marks at a vertical tab or form feed control, or at any other
 character it prints as a code (such as a tag character, or a Hangul
 filler or braille blank, which the PDF fonts cannot draw), except

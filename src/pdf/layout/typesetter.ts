@@ -99,6 +99,18 @@ export class Typesetter {
   }
 
   /**
+   * The advance of one normal space (U+0020) in a role's font at its size,
+   * in points: what a space in that role's text takes on a line (the shaper
+   * uses the same advance). An Error when the font has no space glyph.
+   */
+  spaceWidth(role: PdfRole): number {
+    const { metrics, style } = this.styles[this.styleOf(role)]!;
+    const glyph = metrics.glyph(0x20);
+    if (glyph === 0) throw new Error(`layout: the font of the ${role} text has no space`);
+    return metrics.advance(glyph) * style.size;
+  }
+
+  /**
    * Wraps one line to `maxWidth` points. Runs use the style of their role,
    * or `style` for all of them when given (the footer). `strut` is the
    * context's role (its line box always counts).
