@@ -642,6 +642,35 @@ export function readQuotedHeader(bodyText: string, header: Pick<FoundHeader, 'st
   }
 }
 
+/**
+ * How many label lines of each role (from, sent, to, cc, bcc, subject) the
+ * header lines [start, headerEnd) of `bodyText` hold, read as readQuotedHeader
+ * reads them (any ">" depth; lines that are not label lines are not
+ * counted). The PDF uses it to know whether a rebuilt email's header rows
+ * show everything its original header lines say (a Bcc line or a repeated
+ * label is never shown: src/pdf/model.ts, the no-repeat rule, task 8.10).
+ * Odd input (not a string, bounds outside the text) gives an empty map.
+ * Never throws.
+ */
+export function headerLabelCounts(bodyText: string, start: number, headerEnd: number): ReadonlyMap<Role, number> {
+  const counts = new Map<Role, number>();
+  if (typeof (bodyText as unknown) !== 'string' || !Number.isInteger(start) || !Number.isInteger(headerEnd) || start < 0 || headerEnd > bodyText.length || start >= headerEnd) {
+    return counts;
+  }
+  try {
+    for (let pos = start; pos < headerEnd; ) {
+      const line = lineAt(bodyText, pos, headerEnd - pos);
+      if (line === null) break;
+      const label = labelOf(bodyText, line);
+      if (label !== null) counts.set(label.role, (counts.get(label.role) ?? 0) + 1);
+      pos = line.end;
+    }
+  } catch {
+    // never happens: the reader only slices and tests strings
+  }
+  return counts;
+}
+
 function readHeader(text: string, start: number, headEnd: number): QuotedHeaderFields | null {
   // The header's own lines.
   const own: Line[] = [];

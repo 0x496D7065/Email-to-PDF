@@ -21,6 +21,17 @@
 // it ends can only be checked against the quoted email itself. When that
 // email is not among the included emails, text typed inside or below such a
 // quote is left out with it. The preview shows what is left out.
+// On top of this plan, the PDF leaves out of a body every part it prints as
+// an email of its own (a rebuilt email in the PDF, or the real file a
+// rebuilt one is linked to), forwarded parts included: the no-repeat rule
+// of src/pdf/model.ts (printedElsewhere, user decision 2026-11-06, task
+// 8.10). This plan does not know which rebuilt emails are chosen, so it
+// still says 'forwarded', kept, for such a part. A range this plan labels
+// 'text' (the writer's own, rule 2b included) or a kept signature is never
+// left out that way, and a part that holds one is not cut at all (its
+// header lines and quote stay around it); quoted header lines stay unless
+// the header printed shows all they say (user decisions 2026-11-06, B1 and
+// B2; review round 3 of task 8.10).
 // This plan never changes text: it only marks ranges of the original body as
 // kept or left out. The preview, the original files and the "include
 // everything" option still give the full text. When a case is not covered by
@@ -39,8 +50,10 @@
 // RULES
 // 1. Forwards (forwardBoundary). The writer's OWN PART of a body ends at the
 //    first forward boundary; everything from there on is FORWARDED and always
-//    kept, folded or not (even when the overlap detector folded it because the
-//    forwarded email is also in the batch). A forward boundary is:
+//    kept by this plan, folded or not (even when the overlap detector folded
+//    it because the forwarded email is also in the batch; the PDF then
+//    leaves out the parts it prints as emails of their own, see the
+//    no-repeat rule above). A forward boundary is:
 //    a. a forward header found by the reply-header detector (findReplyHeaders,
 //       kind 'forward': a "Forwarded message" / "Begin forwarded message"
 //       / FR / NL marker with its header lines, or the first unmarked header

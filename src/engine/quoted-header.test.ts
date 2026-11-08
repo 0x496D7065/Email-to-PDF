@@ -11,7 +11,7 @@ import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { expectedFields, fieldDiffs } from '../../tests/support/quoted-header-truth';
 import { THREAD_CASES } from '../../tests/support/thread-cases';
 import type { EmailAddress } from '../parsing/types';
-import { MAX_MAILBOXES, parseMailboxList, readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
+import { headerLabelCounts, MAX_MAILBOXES, parseMailboxList, readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
 import { findReplyHeaders } from './reply-header';
 
 /** The fields of every header findReplyHeaders finds in `body`. */
@@ -731,5 +731,30 @@ describe('readQuotedHeader: odd input', () => {
     // Commas without addresses make one name; that name is too long to keep: left empty, nothing invented.
     expect(got.to).toEqual([]);
     expect(got.subject).toBeNull(); // the over-long line stops the block
+  });
+});
+
+describe('headerLabelCounts (task 8.10)', () => {
+  it('counts the label lines of each role in the header lines, Bcc and repeats included, at any depth', () => {
+    const body = 'Hi.\n\n> From: Bob Example <bob@example.test>\n> Sent: Monday, March 3, 2025 9:15 AM\n> To: Carol <carol@example.test>\n> Bcc: Dan <dan@example.test>\n> To: Erin <erin@example.test>\n> Subject: Plan\n>\n> Text.\n';
+    const start = body.indexOf('> From');
+    const end = body.indexOf('>\n> Text');
+    const counts = headerLabelCounts(body, start, end);
+    expect(Object.fromEntries(counts)).toEqual({ from: 1, sent: 1, to: 2, bcc: 1, subject: 1 });
+    // CRLF line breaks read the same.
+    const crlf = body.replace(/\n/gu, '\r\n');
+    expect(Object.fromEntries(headerLabelCounts(crlf, crlf.indexOf('> From'), crlf.indexOf('>\r\n> Text')))).toEqual({ from: 1, sent: 1, to: 2, bcc: 1, subject: 1 });
+  });
+
+  it('an attribution or text lines: no label line', () => {
+    const body = 'On Mon, 3 Mar 2025 at 09:15, Bob <bob@example.test> wrote:\n> Text.\n';
+    expect(headerLabelCounts(body, 0, body.indexOf('>')).size).toBe(0);
+  });
+
+  it('odd input gives an empty map, never throws', () => {
+    expect(headerLabelCounts('From: Bob\n', 0, 99).size).toBe(0);
+    expect(headerLabelCounts('From: Bob\n', -1, 4).size).toBe(0);
+    expect(headerLabelCounts('From: Bob\n', 4, 4).size).toBe(0);
+    expect(headerLabelCounts(null as unknown as string, 0, 4).size).toBe(0);
   });
 });

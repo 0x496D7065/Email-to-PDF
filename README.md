@@ -151,8 +151,12 @@ The tool never throws message text away on its own:
   email can still be read in full in the preview, and your files are never
   changed.
 - **What the PDF leaves out by default:** the quoted history the mail
-  program added under a reply header, and a signature or notice a sender
-  repeats (it is kept the first time). Each folded part in the preview says
+  program added under a reply header, a signature or notice a sender
+  repeats (it is kept the first time), and any part of an email that the
+  PDF already prints as an email of its own (such as the emails a forward
+  passes on), so no email is printed twice (the writer's own text and
+  quoted header lines the PDF cannot otherwise show always stay, so a few
+  can repeat). Each folded part in the preview says
   "In the PDF" or "Not in the PDF" and why. The details, including the
   known edge cases, are under [R6](#r6-collapse-never-delete).
 - **"Print full original text (quoted replies and signatures
@@ -207,7 +211,8 @@ The tool never throws message text away on its own:
   each email (Date, From, To, Subject and so on) stays at the left margin,
   and every line of its text is indented by the same single step, one tab
   (the width of 4 spaces of the text's font), quoted or not, whatever the
-  quote level, wrapped lines too; the attachment list stays at the margin
+  quote level, wrapped lines too; so is "(no text)" for an email with no
+  text. The attachment list stays at the margin
   with the header. Rebuilt emails look
   exactly like the others. The rest of each line is printed exactly as
   written (a ">" inside a line, as in "a > b", stays). Any line that starts
@@ -221,8 +226,13 @@ The tool never throws message text away on its own:
 People often have only the last email of a conversation, with the earlier
 ones quoted inside it. The tool then reads those quotes and shows each
 earlier email it can find as a separate email, in date order, in the
-preview and in the PDF. The email you added is not changed: its quoted
-history stays in it, folded as usual.
+preview and in the PDF. In the preview, the email you added is not
+changed: its quoted history stays in it, folded as usual. In the PDF, the
+part of it that a rebuilt email prints is left out of it, so the same
+email is not printed twice, except text the tool takes for the writer's
+own and quoted header lines the rebuilt email's header cannot show (see
+[R6](#r6-collapse-never-delete)); with "Print full original text" it is
+printed whole.
 
 **How they are marked.**
 
@@ -549,18 +559,56 @@ by default the PDF shows what each writer actually wrote.
   time). Also text pasted at the very end of an email, without "> " marks
   or a reply header, when it comes from another email that is in the PDF
   too.
+- **No email twice:** a part of an email that the PDF prints as an email
+  of its own is left out of it: an earlier email rebuilt from it (see
+  [Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text))
+  that is in the PDF, or one the tool found to be an email you added that
+  is in the PDF too. So a forward no longer prints the emails it passes on
+  inside its own text when they also have their own pages; a forward with
+  nothing of its own then shows "(no text)", or only the header lines
+  below. Two things always stay:
+  - Text the tool takes for the writer's own (also answers typed inside or
+    below an Outlook-style quote, see "Kept"), and a signature the PDF
+    keeps, stay in the writer's own email, even where the rebuilt email
+    prints them too. Who wrote what comes first: when such text sits
+    inside the part of a quoted email, that whole part stays as it is
+    (its header lines, the quoted text and the answer), so an answer is
+    never printed right under the quoted sender's "From:" line. A wrapped
+    To or Cc line, or a Subject line, that the tool reads as part of the
+    quoted header is not taken for an answer: it stays with the header.
+  - The quoted header lines ("From:", "Sent:", "To:", "Subject:"...) stay
+    unless the header the PDF prints for that email shows everything they
+    say. They always stay when they hold a "Bcc:" line or a label written
+    twice, when there is not exactly one sender ("Unknown sender", several
+    senders), when no date could be found, or when a To or Cc list may be
+    incomplete. For a rebuilt email they also stay when the sender has no
+    name (an "On ... wrote:" line that could not be read) or the date has
+    no time zone of its own (the PDF shows an estimate, so the date as
+    written is kept). When the email they match is one you added, they
+    also stay when it has another sender, subject or recipients (a
+    recipient quoted by name only, as Outlook often writes them, counts
+    when that email has a recipient of that name), or when the quoted
+    date has no time zone of its own, unless the tool matched that date
+    to your email's own date with certainty (then your email's Date row
+    shows it). Only header lines repeat this way, never the text of an
+    email.
 - **Kept:** the writer's own text, quotes pasted without a reply header
-  (except the case above), forwarded emails, and answers typed between or
-  below quoted lines. For an Outlook-style quote (no "> " marks), the tool
-  compares the quote with the quoted email: when that email is in the PDF
-  and anything after the "From: / Sent:" lines (a signature aside) is not
-  part of it or of the emails it quotes, the whole email is kept, quote
-  included. One word, number or emoji is enough; a line of only
-  punctuation (such as "--") is not. A short line such as "Yes." counts as
-  part of the quote only where it stands, in the same order, in the quoted
-  email. Text that only repeats the quoted emails is left out with the
-  quote. An email is never left empty: if nothing else would remain, it is
-  shown in full.
+  (except the case above), forwarded emails that are not printed as
+  emails of their own (for example a rebuilt email you unticked, or with
+  "Rebuild conversation from replies" unticked: they stay inside the
+  forward), and answers typed between or below quoted lines. For an
+  Outlook-style quote (no "> " marks), the tool compares the quote with
+  the quoted email: when that email is in the PDF and anything after the
+  "From: / Sent:" lines (a signature aside) is not part of it or of the
+  emails it quotes, the whole email is kept, quote included, except the
+  parts printed as emails of their own (above): a quoted email's part with
+  no answer in it is left out when a rebuilt email or an email you added
+  prints it; a part with an answer in it stays whole. One word, number or
+  emoji is enough; a line of only punctuation (such as "--") is not. A
+  short line such as "Yes." counts as part of the quote only where it
+  stands, in the same order, in the quoted email. Text that only repeats
+  the quoted emails is left out with the quote. An email is never left
+  empty: if nothing else would remain, it is shown in full.
 - **Known limit:** when the email quoted in an Outlook-style quote is not
   in the PDF, or is too short to check (a line or two), the tool cannot
   tell where the quote ends, so text typed inside or below it is left out
@@ -568,9 +616,27 @@ by default the PDF shows what each writer actually wrote.
   ending in "ok?" is taken for part of the quote, and a paragraph repeated
   from an earlier email of your own, placed between the "From: / Sent:"
   lines and the quote, is left out with it. Check the preview.
+- **Known limit (repeats):** when unsure, the tool prints a text twice
+  rather than lose it. An email can still appear twice when a rebuilt
+  email could not be proved to be the same as an email you added (both
+  are printed), when a forwarded part could not be rebuilt at all (it
+  stays in the forward even if you added that email too), and when two of
+  your emails both keep the same earlier email inside them because its
+  rebuilt email is unticked. Also, by the rule above, the writer's own
+  answer typed inside or below an Outlook-style quote is printed twice: in
+  the writer's email, with the quoted part around it, and inside the
+  rebuilt email of the quoted sender (the tool cannot tell where that
+  quoted email ended). This is deliberate: when you add the first and the
+  last email of an Outlook-style conversation but not the ones in
+  between, the tool cannot prove that those middle emails are only
+  quotes, takes them for the last writer's own text and keeps them in the
+  last email, while their rebuilt emails print them too. Untick those
+  rebuilt emails, or add the middle emails, to print them once.
 
 The preview marks each folded part "In the PDF" or "Not in the PDF" with
-the reason, using the same rules as the PDF, and "Print full original text
+the reason, using the same rules as the PDF (the plan of each email on its
+own; the preview does not show which parts the PDF also leaves out because
+they are printed as emails of their own, see "No email twice" above), and "Print full original text
 (quoted replies and signatures included)" puts every part in. While it is
 ticked, "Rebuild conversation from replies" is unticked and greyed out and
 no email rebuilt from quoted text is shown or printed: their text is then
@@ -588,8 +654,8 @@ to U+E01EF). Quote levels are not shown: every line of an email's text is
 indented by one fixed step, one tab: the width of 4 normal spaces of the
 body font at the body size, measured from the font
 (`src/pdf/layout/config.ts`, `bodyIndentSpaces`; 9.44 pt with the
-default 10 pt IBM Plex Sans), quoted or not; the header rows and the
-attachment list stay at the margin. The PDF stops
+default 10 pt IBM Plex Sans), quoted or not, and so is the "(no text)"
+placeholder; the header rows and the attachment list stay at the margin. The PDF stops
 reading the marks at a vertical tab or form feed control, or at any other
 character it prints as a code (such as a tag character, or a Hangul
 filler or braille blank, which the PDF fonts cannot draw), except

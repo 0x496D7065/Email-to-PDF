@@ -15,17 +15,26 @@
 // - with the default policy, every shown line is a piece of that full text
 //   (nothing is invented, only parts are left out), and the numbering maps
 //   back to the included emails;
-// - with the rebuilt emails ON (task 7.7), every real email's body is still
-//   the same as without them (collapse, never delete), and every email,
-//   rebuilt ones too, is numbered 1..n in PDF order (task 8.3);
+// - with the rebuilt emails ON (task 7.7), every real email stays, and its
+//   body is the same as without them except for lines left out because a
+//   rebuilt email in the PDF prints them (task 8.10, the no-repeat rule:
+//   each such line comes from where that rebuilt email was read, and is in
+//   another email's text or is a line of the quoted header), and every
+//   email, rebuilt ones too, is numbered 1..n in PDF order (task 8.3);
+// - S6 (review round 3 of task 8.10): every non-blank range the plan calls
+//   the writer's own text ('text') is still in the writer's own email with
+//   rebuilt emails chosen, also in unmarked Outlook chains with answers
+//   typed inside the quotes and random files and rebuilt emails in;
 // - 2000 emails build in well under a second.
 // Synthetic data only: made-up names, *.test addresses. Every invisible or
 // special character is written as a \u escape.
 
 import { describe, expect, it } from 'vitest';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../tests/support/pdf-reference';
+import { buildThread, instantOf } from '../../tests/support/thread-builder';
+import { THREAD_CASES } from '../../tests/support/thread-cases';
 import { runEngine } from '../engine/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
+import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { rebuiltEntries } from '../ui-model/rebuilt';
 import { buildPdfDocument, type PdfDocument, type PdfEmail } from './model';
@@ -178,6 +187,27 @@ function randomMessage(random: () => number, k: number): NormalizedMessage {
 
 const strings = createPdfStrings('en');
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
+const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
+
+/**
+ * S6 (review round 3 of task 8.10): every kept range of reason 'text' with
+ * text other than white space (the writer's own text, B1) is still in the
+ * writer's own PDF email `e`, after the display transforms, white space
+ * squashed. Returns how many ranges were checked.
+ */
+function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEmail, where: string): number {
+  if (plan === undefined || plan.fallback) return 0;
+  const shown = squash(bodyOf(e));
+  let checked = 0;
+  for (const r of plan.ranges) {
+    if (!r.keep || r.reason !== 'text') continue;
+    const own = squash(referenceDisplayText(body.slice(r.start, r.end)));
+    if (own === '') continue;
+    expect(shown, `${where}: own text [${String(r.start)}, ${String(r.end)})`).toContain(own);
+    checked++;
+  }
+  return checked;
+}
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */
 const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
   d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
@@ -241,6 +271,8 @@ describe('PDF document model properties', () => {
 
   it('with rebuilt emails chosen, every real email stays; under "Print full original text" each shows its full text and no rebuilt email is in (tasks 7.7, 7.8b)', () => {
     let rebuiltShown = 0;
+    let changed = 0;
+    let ownTextChecked = 0;
     for (let seed = 201; seed <= 240; seed++) {
       const random = makeRandom(seed);
       const messages = Array.from({ length: 12 }, (_, k) => {
@@ -272,9 +304,63 @@ describe('PDF document model properties', () => {
       expect(folded.cover.emailCount).toBe(folded.emails.length);
       for (const { e, position } of foldedReal) expect(folded.pdfNumberByPosition[position]).toBe(e.number);
       expect(folded.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
-      // Task 7.7: the real emails' text is the same with and without rebuilt emails.
+      // Task 8.10 (the no-repeat rule; before it, task 7.7 wanted the real
+      // emails' text the same with and without rebuilt emails): a real
+      // email's text changes only where it quotes a rebuilt email that is in
+      // the PDF (flag printedElsewhere), and then only by lines left out,
+      // each one from the place such a rebuilt email was read from, and
+      // printed elsewhere (in another email's text) unless it is a line of
+      // the quoted header (shown as that email's header rows).
       const plain = realEmails(buildPdfDocument({ ...defaultInput, rebuilt: [] }));
-      expect(foldedReal.map((x) => bodyOf(x.e)), `seed ${String(seed)}`).toEqual(plain.map((x) => bodyOf(x.e)));
+      expect(foldedReal.map((x) => x.position)).toEqual(plain.map((x) => x.position));
+      const inPdf = new Set(folded.emails.flatMap((e) => (e.rebuilt === null ? [] : [e.rebuilt.id])));
+      const otherTexts = (self: PdfEmail): string => folded.emails.filter((e) => e !== self).map(bodyOf).join('\n');
+      for (const [k, { e, position }] of foldedReal.entries()) {
+        const before = plain[k]!.e;
+        if (!e.flags.printedElsewhere) {
+          expect(bodyOf(e), `seed ${String(seed)} position ${String(position)}`).toBe(bodyOf(before));
+          continue;
+        }
+        changed++;
+        const body = result.messages[position]!.message.bodyText;
+        const index = result.messages[position]!.index;
+        const realInPdf = (r: (typeof result.reconstructed)[number]): boolean => {
+          const p = r.realIndex === null ? null : result.positionByIndex[r.realIndex];
+          return typeof p === 'number' && p !== position && folded.pdfNumberByPosition[p] !== null;
+        };
+        const places = result.reconstructed.filter(
+          (r) =>
+            r.sourceIndex === index &&
+            ((r.link === 'entry' && inPdf.has(r.id)) || (r.link === 'same-as' && r.sameAs !== null && inPdf.has(r.sameAs)) || (r.link === 'real' && realInPdf(r))),
+        );
+        expect(places.length, `seed ${String(seed)} position ${String(position)}`).toBeGreaterThan(0);
+        // What is left out: the lines of the text before that are not in the text now (as a multiset).
+        const left = new Map<string, number>();
+        for (const line of e.body.map(lineText)) left.set(line, (left.get(line) ?? 0) + 1);
+        // Whole lines are compared (a short line such as "Ok" must be a line there, not a piece of one).
+        const linesOf = (text: string): Set<string> => new Set(text.split('\n').map((x) => x.trim()));
+        const others = linesOf(otherTexts(e));
+        const placeLines = places.map((r) => linesOf(referenceDisplayText(body.slice(r.rebuilt.start, r.rebuilt.end))));
+        const headerLines = places.map((r) => linesOf(referenceDisplayText(body.slice(r.rebuilt.start, r.rebuilt.headerEnd))));
+        for (const line of before.body.map(lineText)) {
+          const n = left.get(line) ?? 0;
+          if (n > 0) {
+            left.set(line, n - 1);
+            continue;
+          }
+          if (line.trim() === '') continue;
+          const where = `seed ${String(seed)} position ${String(position)}: "${line}"`;
+          expect(placeLines.some((set) => set.has(line.trim())), where).toBe(true);
+          const asHeader = headerLines.some((set) => set.has(line.trim()));
+          expect(asHeader || others.has(line.trim()), where).toBe(true);
+        }
+        // Nothing new: every line now was a line before.
+        for (const [line, n] of left) expect(n, `seed ${String(seed)} position ${String(position)}: extra "${line}"`).toBe(0);
+      }
+      // S6 (review round 3 of task 8.10): the writer's own text is still in the writer's own email.
+      for (const [k, { e, position }] of foldedReal.entries()) {
+        ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[k], e, `seed ${String(seed)} position ${String(position)}`);
+      }
       // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
       const doc = buildPdfDocument({ result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
       const real = realEmails(doc);
@@ -292,6 +378,72 @@ describe('PDF document model properties', () => {
     }
     // The random emails must really give rebuilt emails in the PDF.
     expect(rebuiltShown).toBeGreaterThan(20);
+    // And some real emails must really lose a part printed elsewhere (task 8.10).
+    expect(changed).toBeGreaterThan(0);
+    expect(ownTextChecked).toBeGreaterThan(100);
+  });
+
+  it('S6: in unmarked Outlook chains with answers typed inside the quotes, the writer\'s own text stays in the writer\'s email, whatever files and rebuilt emails are in (task 8.10)', () => {
+    const chains = THREAD_CASES.filter((c) => c.group.startsWith('outlook') || c.id === 'outlook-en 7 generations');
+    expect(chains.length).toBeGreaterThan(8);
+    let checked = 0;
+    let inPlaces = 0;
+    for (let seed = 301; seed <= 360; seed++) {
+      const random = makeRandom(seed);
+      const c = pick(random, chains);
+      const messages = c.messages!;
+      const last = messages.length - 1;
+      // The last email, with an answer typed at a random line start inside its quoted history.
+      const built = buildThread(messages).body;
+      const quoteStart = built.indexOf('\n', built.indexOf(messages[last]!.text.split('\n\n')[1]!.split('\n')[0]!)) + 1;
+      const lineStarts = [...built.matchAll(/\n/gu)].map((m) => m.index + 1).filter((at) => at > quoteStart && at < built.length);
+      const at = pick(random, lineStarts);
+      const answer = `My answer ${String(seed)}: the desks arrive on Thursday morning.\n\n`;
+      const lastBody = built.slice(0, at) + answer + built.slice(at);
+      const files = messages.flatMap((m, i): NormalizedMessage[] => {
+        if (i !== last && random() < 0.5) return [];
+        const utcMs = instantOf(m.sent, m.zone);
+        return [
+          {
+            messageId: `s6-${String(seed)}-${String(i)}@example.test`,
+            inReplyTo: null,
+            references: [],
+            date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true },
+            from: [m.from],
+            to: m.to,
+            cc: m.cc ?? [],
+            bcc: [],
+            subject: m.subject,
+            bodyText: i === last ? lastBody : buildThread(messages.slice(0, i + 1)).body,
+            attachments: [],
+            source: { fileName: `s6-${String(i)}.eml`, sha256: (seed * 100 + i).toString(16).padStart(64, '0'), kind: 'eml' },
+            warnings: [],
+          },
+        ];
+      });
+      const result = runEngine(files.map((message) => ({ ok: true as const, message })));
+      const positions = result.messages.map((_, k) => k);
+      const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
+      const rebuilt = rebuiltEntries(result)
+        .map((r) => r.id)
+        .filter(() => random() < 0.7);
+      const doc = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt });
+      for (const { e, position } of realEmails(doc)) {
+        const body = result.messages[position]!.message.bodyText;
+        const where = `seed ${String(seed)} ${c.id} position ${String(position)}`;
+        checked += expectOwnTextKept(body, plans[position], e, where);
+        // How often own text sits inside a place the rule could cut (the case S6 guards).
+        for (const r of result.reconstructed) {
+          if (r.sourceIndex !== result.messages[position]!.index) continue;
+          if (plans[position]!.ranges.some((x) => x.keep && x.reason === 'text' && x.start < r.rebuilt.end && r.rebuilt.headerEnd < x.end && /\S/u.test(body.slice(Math.max(x.start, r.rebuilt.headerEnd), Math.min(x.end, r.rebuilt.end))))) inPlaces++;
+        }
+      }
+      // (The answer itself is checked only where the plan calls it the writer's own: typed inside a
+      // quote the plan cannot confirm, the plan leaves it out with the quote, the accepted limit at
+      // the top of src/engine/output-plan.ts, unchanged by task 8.10.)
+    }
+    expect(checked).toBeGreaterThan(100);
+    expect(inPlaces).toBeGreaterThan(20);
   });
 
   it('builds 2000 emails in well under a second', () => {

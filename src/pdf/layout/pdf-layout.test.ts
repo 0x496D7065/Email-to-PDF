@@ -647,6 +647,24 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
     for (const text of ['Own text.', 'More text.']) expect(run(text).x, text).toBeCloseTo(LEFT + STEP, 6);
   });
 
+  it('places the "(no text)" placeholder one step in, where the text would be (task 8.10)', () => {
+    const email: PdfEmail = { ...syntheticEmail(1, []), notes: [[{ role: 'muted', text: strings.noText }]] };
+    const { document, frontPages } = lay(syntheticDoc([email, syntheticEmail(2, ['Own text.'])]));
+    const placeholder = document.pages[frontPages]!.text.find((r) => r.copyText === strings.noText);
+    expect(placeholder).toBeDefined();
+    expect(placeholder!.x).toBeCloseTo(LEFT + STEP, 6);
+    // The header rows of that email stay at the margin.
+    expect(document.pages[frontPages]!.text.find((r) => r.copyText === 'From')!.x).toBeCloseTo(LEFT, 6);
+    // A long placeholder (another language, a big font) wraps to the width left.
+    const long = 'alpha beta gamma delta epsilon '.repeat(20).trim();
+    const wide: PdfEmail = { ...syntheticEmail(1, []), notes: [[{ role: 'muted', text: long }]] };
+    const laid = lay(syntheticDoc([wide]));
+    const runs = laid.document.pages[laid.frontPages]!.text.filter((r) => long.includes(r.copyText.trim()) && r.copyText.trim() !== '');
+    expect(new Set(runs.map((r) => r.y)).size).toBeGreaterThan(1);
+    for (const r of runs) expect(r.x).toBeGreaterThanOrEqual(LEFT + STEP - 1e-6);
+    expectInsideTextArea(laid.document);
+  });
+
   it('places an empty line (nothing drawn) and follows the config given', () => {
     // 8 spaces: twice the default step.
     const config: LayoutConfig = { ...CONFIG, bodyIndentSpaces: 8 };
@@ -736,7 +754,7 @@ function syntheticEmail(n: number, body: readonly string[]): PdfEmail {
     notes: [],
     body: body.map((text) => (text === '' ? [] : [{ role: 'body' as const, text }])),
     attachments: null,
-    flags: { undated: false, zoneUnknown: false, keptAllBecauseEmpty: false, planFallback: false, htmlConverted: false, controlChars: 0 },
+    flags: { undated: false, zoneUnknown: false, keptAllBecauseEmpty: false, planFallback: false, htmlConverted: false, controlChars: 0, printedElsewhere: false },
   };
 }
 

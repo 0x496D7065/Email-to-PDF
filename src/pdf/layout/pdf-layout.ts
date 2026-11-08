@@ -47,8 +47,10 @@
 // config.bodyIndentSpaces, default 4, normal spaces of the body font at the
 // body size, measured from the font) and wrapped to the width left. One
 // step for every line, quoted or not (quote marks are removed,
-// src/pdf/text.ts transform g), for real and rebuilt emails alike; the
-// heading, header rows and attachments stay at the margin.
+// src/pdf/text.ts transform g), for real and rebuilt emails alike. The
+// "(no text)" placeholder of an empty text (the email's notes) is indented
+// the same way, where the text would be (task 8.10). The heading, header
+// rows and attachments stay at the margin.
 //
 // Each email's heading is a named destination (its anchor, emailAnchor in
 // model.ts), and so are the top of the cover ("cover") and the index
@@ -245,9 +247,10 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent:
   const { spacing } = b.config;
   const heading = ts.wrap([{ role: 'heading', text: email.heading }], b.width, 'heading');
   const rows: LaidRow[] = email.fields.map((row) => layRow(b, row));
-  const notes = email.notes.flatMap((line) => ts.wrap(line, b.width, 'body'));
-  // Every body line one tab in (tasks 8.6 and 8.9), wrapped lines too, wrapped to the width left.
+  // Every body line one tab in (tasks 8.6 and 8.9), wrapped lines too, wrapped to the width left;
+  // the notes too (only the "(no text)" placeholder, where the text would be: task 8.10).
   const bodyX = b.left + bodyIndent;
+  const notes = email.notes.flatMap((line) => ts.wrap(line, b.width - bodyIndent, 'body'));
   const body = email.body.flatMap((line) => ts.wrap(line, b.width - bodyIndent, 'body'));
 
   // The block kept together.
@@ -279,7 +282,7 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent:
   for (const row of rows) placeRow(b, row);
   b.space(spacing.afterFields);
   if (notes.length > 0) {
-    b.placeAll(notes);
+    b.placeAll(notes, bodyX);
     b.space(spacing.afterNotes);
   }
   for (const laid of body) b.place(laid, bodyX);

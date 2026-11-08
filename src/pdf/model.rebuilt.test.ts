@@ -597,8 +597,9 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
     expect(off.emails.map((e) => e.heading)).toEqual(['Email 1']);
     expect(off.cover.emailCount).toBe(1);
     expect(blockTexts(off.cover.blocks).some((t) => /rebuilt/i.test(t))).toBe(false);
-    // Collapse, never delete: the source email is untouched (its quoted history folded
-    // exactly as before); only its number (and so its heading and anchor) follows its place.
+    // The source email is the same (a reply: its quoted history is left out by its plan
+    // either way, so the no-repeat rule of task 8.10 has nothing more to leave out);
+    // only its number (and so its heading and anchor) follows its place.
     const real = on.emails.find((e) => e.position === 0)!;
     expect(real.number).toBe(4);
     expect(real).toEqual({ ...off.emails[0]!, number: 4, anchor: emailAnchor(4), heading: 'Email 4' });
