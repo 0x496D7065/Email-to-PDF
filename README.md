@@ -634,10 +634,17 @@ by default the PDF shows what each writer actually wrote.
   rebuilt emails, or add the middle emails, to print them once.
 
 The preview marks each folded part "In the PDF" or "Not in the PDF" with
-the reason, using the same rules as the PDF (the plan of each email on its
-own; the preview does not show which parts the PDF also leaves out because
-they are printed as emails of their own, see "No email twice" above), and "Print full original text
-(quoted replies and signatures included)" puts every part in. While it is
+the reason, using the same rules as the PDF. Each part the PDF leaves out
+of an email or folds in it because it prints that part as an email of its
+own (see "No email twice" above) is marked "Not in this email in the PDF: printed as
+email #N" (an email you added, by its number in the list) or "printed as a
+rebuilt email (Email N in the PDF)" (a rebuilt email, by its heading in the
+PDF). These marks come from the same calculation the PDF makes, so they
+follow, after a short moment, when you tick or untick an email or a
+rebuilt email, switch "Rebuild conversation from replies" on or off, or
+switch "Print full original text (quoted replies and signatures
+included)": turning it on removes the "printed as" marks, turning it off
+brings them back. "Print full original text" puts every part in. While it is
 ticked, "Rebuild conversation from replies" is unticked and greyed out and
 no email rebuilt from quoted text is shown or printed: their text is then
 already there, in full, in the email that quotes them, which keeps all of

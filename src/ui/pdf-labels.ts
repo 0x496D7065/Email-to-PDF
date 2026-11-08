@@ -35,6 +35,17 @@
 // tick would cost about as much as working the plans out, and the worker is
 // stopped once its run is over. Short slices keep the page responsive.
 //
+// Printed as an email of its own (task 8.11): with the checkbox unticked,
+// the PDF also leaves out of a body the parts it prints as emails of their
+// own (the no-repeat rule of src/pdf/model.ts, task 8.10), which depends on
+// the rebuilt emails chosen too (`includedRebuilt`, src/ui/review.ts). The
+// views handed to the preview carry that cut (pdfRanges), worked out by the
+// PDF model's own functions (src/ui-model/printed-elsewhere.ts) from the
+// same input the PDF step gets. It is worked out again each time plans are
+// handed over, and on rebuiltChanged() (the switch or a rebuilt card
+// changed: the plans stay, only the cut changes). If it fails, the labels
+// are reported as failed (never a label that may be wrong).
+//
 // Memory only (README.md, rule R5): the checkbox, the policy and the plans
 // live in this page; reset() ("Clear everything") unticks the checkbox and
 // drops every plan.
@@ -42,6 +53,7 @@
 import type { EngineMessage, EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutputSteps, type MessagePlan, type OutputPolicy } from '../engine/output-plan';
 import { signatureSources, type PdfView, type PlannedEmail } from '../ui-model/pdf-plan';
+import { printedElsewhereRanges } from '../ui-model/printed-elsewhere';
 import { el } from './dom';
 import { createStaticLabels } from './labels';
 import type { PreviewPdfPlans } from './preview';
@@ -75,6 +87,11 @@ export interface PdfLabelsOptions {
   readonly now?: () => number;
   /** Called after the user ticked or unticked the checkbox (src/ui/page.ts: a PDF made before is dropped). */
   readonly onPolicyChange?: () => void;
+  /**
+   * Ids of the rebuilt emails the PDF gets (src/ui/review.ts,
+   * includedRebuilt), for the no-repeat labels (see the top). Default: none.
+   */
+  readonly includedRebuilt?: () => readonly number[];
 }
 
 export interface PdfLabels {
@@ -92,6 +109,8 @@ export interface PdfLabels {
   currentPlans(): PdfPlans | null;
   /** Writes the checkbox's label and note again in the page language (the plans do not depend on it). */
   relabel(): void;
+  /** The rebuilt emails chosen changed: the plans in use go to the preview again with the new no-repeat cut (see the top). */
+  rebuiltChanged(): void;
 }
 
 /** The input of one planning: everything the plans depend on. */
@@ -165,6 +184,36 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
     const positions = planned.map((e) => e.position);
     made = { inputs, plans: { result: inputs.result, policy: inputs.policy, positions, plans }, preview };
     upToDate = true;
+    handOver(made);
+  }
+
+  /**
+   * The views of `m` with the no-repeat cut of the PDF (see the top): the
+   * same input as the PDF step (src/ui/page.ts, pdfInput), with the rebuilt
+   * emails chosen now.
+   */
+  function withCut(m: NonNullable<typeof made>): PreviewPdfPlans {
+    if (m.plans.policy.unfoldEverything) return m.preview;
+    const rebuilt = [...(options.includedRebuilt?.() ?? [])];
+    const cut = printedElsewhereRanges({ ...m.plans, rebuilt });
+    if (cut.size === 0) return m.preview;
+    const views = new Map(m.preview.views);
+    for (const [position, pdfRanges] of cut) {
+      const view = views.get(position);
+      if (view !== undefined) views.set(position, { ...view, pdfRanges });
+    }
+    return { result: m.preview.result, views };
+  }
+
+  /** Hands the plans of `m` to the preview, with the no-repeat cut; if that cannot be worked out, the labels fail (never a wrong one). */
+  function handOver(m: NonNullable<typeof made>): void {
+    let preview: PreviewPdfPlans;
+    try {
+      preview = withCut(m);
+    } catch {
+      options.failed();
+      return;
+    }
     options.setPdfPlans(preview);
   }
 
@@ -230,7 +279,8 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
       stopJob();
       if (!upToDate) {
         upToDate = true;
-        options.setPdfPlans(made.preview);
+        // The rebuilt emails chosen may have changed meanwhile: the cut is worked out again.
+        handOver(made);
       }
       return;
     }
@@ -270,5 +320,9 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
     getPdfPolicy: policy,
     currentPlans: () => (upToDate && made !== null && made.inputs.result === result ? made.plans : null),
     relabel: () => labels.relabel(),
+    rebuiltChanged() {
+      // Only plans in use go again; plans on their way get the new choice when they are handed over.
+      if (upToDate && made !== null && made.inputs.result === result) handOver(made);
+    },
   };
 }

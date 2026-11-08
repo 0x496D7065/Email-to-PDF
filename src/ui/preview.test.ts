@@ -9,7 +9,11 @@ import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import type { DisplayBlock } from '../ui-model/display-blocks';
+import { buildThread, instantOf } from '../../tests/support/thread-builder';
+import { THREAD_CASES } from '../../tests/support/thread-cases';
 import { signatureSources } from '../ui-model/pdf-plan';
+import { printedElsewhereRanges } from '../ui-model/printed-elsewhere';
+import { rebuiltEntries } from '../ui-model/rebuilt';
 import { setLocale, t } from './i18n';
 import {
   attachmentText,
@@ -901,6 +905,132 @@ describe('PDF labels', () => {
     );
     return { result, views: new Map(positions.map((p, k) => [p, { plan: plans[k]!, signatureFrom: sources.get(p) ?? new Map<number, number>() }])) };
   }
+  /** plansFor with the PDF's no-repeat cut for the rebuilt emails `rebuilt`, as src/ui/pdf-labels.ts hands them over (task 8.11). */
+  function plansWithCut(result: EngineResult, positions: readonly number[], rebuilt: readonly number[], unfoldEverything = false): PreviewPdfPlans {
+    const base = plansFor(result, positions, unfoldEverything);
+    const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything };
+    const plans = positions.map((p) => base.views.get(p)!.plan);
+    const cut = printedElsewhereRanges({ result, positions, plans, policy, rebuilt });
+    const views = new Map(base.views);
+    for (const [p, pdfRanges] of cut) views.set(p, { ...views.get(p)!, pdfRanges });
+    return { result, views };
+  }
+
+  it('helpers: a part printed as an email of its own names that email (task 8.11), in every language', () => {
+    const asReal = { status: 'out' as const, reasons: ['forwarded' as const], signaturesFrom: [], printedAs: { kind: 'email' as const, position: 4, number: 3 } };
+    const asRebuilt = { ...asReal, printedAs: { kind: 'rebuilt' as const, id: 7, number: 2 } };
+    expect(pdfLabelText(asReal)).toBe('Not in this email in the PDF: printed as email #5');
+    expect(pdfLabelText(asRebuilt)).toBe('Not in this email in the PDF: printed as a rebuilt email (Email 2 in the PDF)');
+    // Only for a part left out: another status keeps its own label.
+    expect(pdfLabelText({ ...asReal, status: 'in' })).toBe('In the PDF: forwarded email');
+    expect(pdfLabelText({ ...asReal, printedAs: null })).toBe('Not in the PDF: forwarded email');
+    setLocale('fr');
+    try {
+      expect(pdfLabelText(asReal)).toBe('Pas dans cet e-mail dans le PDF : imprimé comme e-mail #5');
+      expect(pdfLabelText(asRebuilt)).toBe('Pas dans cet e-mail dans le PDF : imprimé comme e-mail reconstitué (E-mail 2 du PDF)');
+      setLocale('nl');
+      expect(pdfLabelText(asReal)).toBe('Niet in deze e-mail in de PDF: afgedrukt als e-mail #5');
+      expect(pdfLabelText(asRebuilt)).toBe('Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail 2 in de PDF)');
+    } finally {
+      setLocale('en');
+    }
+  });
+
+  describe('a forward whose forwarded emails are printed as emails of their own (task 8.11)', () => {
+    const FORWARD = THREAD_CASES.find((c) => c.id === 'gmail forward of an outlook thread')!;
+    /** Message `i` of FORWARD as a real file (its body quotes the ones before it). */
+    const realFile = (i: number): NormalizedMessage => {
+      const m = FORWARD.messages![i]!;
+      const utcMs = instantOf(m.sent, m.zone);
+      return make({
+        from: [m.from],
+        to: [...m.to],
+        subject: m.subject,
+        bodyText: buildThread(FORWARD.messages!.slice(0, i + 1)).body,
+        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true },
+      });
+    };
+    const forwardText = (k: number): string => FORWARD.messages![k]!.text.split('\n\n')[1]!.split('\n')[0]!;
+
+    it('the forward alone, its rebuilt emails ticked: each forwarded part says which PDF email prints it; unticked, back to "In the PDF: forwarded email"', () => {
+      const result = engineOf([realFile(2)]);
+      const ids = rebuiltEntries(result).map((r) => r.id);
+      expect(ids).toHaveLength(2);
+      preview.show(result);
+      runAll();
+      const forward = items().find((i) => i.getAttribute('data-position') === '0')!;
+      preview.setPdfPlans(plansWithCut(result, [0], ids));
+      runAll();
+      expect(state()).toBe('ready');
+      // Rebuilt emails 1 and 2 come before the forward (email 3) in the PDF.
+      const labels = labelsOf(forward).filter((s) => s !== '');
+      expect(labels).toContain('Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)');
+      expect(labels).toContain('Not in this email in the PDF: printed as a rebuilt email (Email 2 in the PDF)');
+      expect(labels.some((s) => s.startsWith('In the PDF: forwarded email'))).toBe(true); // the header lines the PDF keeps (B2)
+      // A real label element, text only, marked "out" like any part left out.
+      const marks = withClass(forward, 'pdf-label').filter((e) => e.textContent.includes('printed as'));
+      for (const mark of marks) expect(mark.getAttribute('data-pdf')).toBe('out');
+      // The forwarded texts sit under those labels (a fold, or shown text with its mark above it,
+      // as the forwarded email shown unfolded); every character is still in the page.
+      const parts = one(forward, 'message-body').children.filter((c): c is FakeElement => c instanceof FakeElement);
+      const under = (n: number): string =>
+        parts
+          .flatMap((c, k) => {
+            if (!c.textContent.includes(`(Email ${String(n)} in the PDF)`)) return [];
+            return hasClass(c, 'pdf-label-shown') ? [parts[k + 1]!.textContent] : [c.textContent];
+          })
+          .join('');
+      expect(under(1)).toContain(forwardText(0));
+      expect(under(2)).toContain(forwardText(1));
+      expect(under(2)).not.toContain(forwardText(0));
+      expect(renderedBody(forward)).toBe(result.messages[0]!.message.bodyText);
+
+      // Only the older one ticked: the newer part goes back to the plan's own label.
+      const older = rebuiltEntries(result).find((r) => r.rebuilt.generation === 2)!;
+      preview.setPdfPlans(plansWithCut(result, [0], [older.id]));
+      runAll();
+      const some = labelsOf(forward).filter((s) => s !== '');
+      expect(some).toContain('Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)');
+      expect(some.some((s) => s.includes('Email 2'))).toBe(false);
+      // None ticked (or the switch off): as before task 8.11.
+      preview.setPdfPlans(plansWithCut(result, [0], []));
+      runAll();
+      expect(labelsOf(forward).filter((s) => s !== '')).toEqual(labelsOf(forward).filter((s) => s !== '').map(() => 'In the PDF: forwarded email'));
+      expect(renderedBody(forward)).toBe(result.messages[0]!.message.bodyText);
+    });
+
+    it('every email as a file: the forwarded parts name the real emails by their list number', () => {
+      const result = engineOf([realFile(0), realFile(1), realFile(2)]);
+      preview.show(result);
+      runAll();
+      preview.setPdfPlans(plansWithCut(result, [0, 1, 2], []));
+      runAll();
+      const forward = items().find((i) => i.getAttribute('data-position') === '2')!;
+      const labels = labelsOf(forward).filter((s) => s !== '');
+      expect(labels).toContain('Not in this email in the PDF: printed as email #1');
+      expect(labels).toContain('Not in this email in the PDF: printed as email #2');
+      // #2 unticked: its part is no longer printed elsewhere (its own file is out).
+      preview.setPdfPlans(plansWithCut(result, [0, 2], []));
+      runAll();
+      const after = labelsOf(forward).filter((s) => s !== '');
+      expect(after).toContain('Not in this email in the PDF: printed as email #1');
+      expect(after.some((s) => s.includes('#2'))).toBe(false);
+    });
+
+    it('"Print full original text": nothing changes compared with before task 8.11, every label "In the PDF: ..."', () => {
+      const result = engineOf([realFile(2)]);
+      const ids = rebuiltEntries(result).map((r) => r.id);
+      preview.show(result);
+      runAll();
+      preview.setPdfPlans(plansWithCut(result, [0], ids, true));
+      runAll();
+      const texts = labelsOf(items().find((i) => i.getAttribute('data-position') === '0')!).filter((s) => s !== '');
+      expect(texts.length).toBeGreaterThan(0);
+      for (const text of texts) expect(text.startsWith('In the PDF: ')).toBe(true);
+      const plain = plansFor(result, [0], true);
+      expect(plansWithCut(result, [0], ids, true).views.get(0)).toEqual(plain.views.get(0));
+    });
+  });
 
   it('helpers: label and reason texts', () => {
     expect(pdfLabelText({ status: 'out', reasons: ['app-quoted-history'], signaturesFrom: [] })).toBe(

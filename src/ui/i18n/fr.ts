@@ -308,6 +308,11 @@ export const fr: Messages = {
     },
     repeatedFrom: 'même signature que dans l’e-mail {number}',
     repeatedFromMany: 'même signature que dans les e-mails {list}',
+    // NEEDS USER PROOFREADING (task 8.11): both texts below.
+    printedAs: {
+      email: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail {number}',
+      rebuilt: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail reconstitué (E-mail {number} du PDF)',
+    },
     messageFailed: 'L’outil n’a pas pu afficher ce que le PDF laisse de côté pour cet e-mail.',
     document: {
       title: 'Correspondance par e-mail',

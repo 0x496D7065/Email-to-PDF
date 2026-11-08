@@ -5,6 +5,8 @@
 // e2e/clear.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../tests/support/fake-dom';
+import { buildThread, instantOf } from '../../tests/support/thread-builder';
+import { THREAD_CASES } from '../../tests/support/thread-cases';
 import { runEngine, type EngineResult } from '../engine/engine';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import type { ProcessOptions, ProcessResult } from '../pipeline/process-files';
@@ -233,6 +235,82 @@ describe('mountPage', () => {
     // Clear everything: the checkbox and the plans are gone too (see expectEmpty).
     clearButton().click();
     expectEmpty([]);
+  });
+
+  it('a part printed as an email of its own says so, and follows the rebuild switch, a rebuilt card and "Print full original text" (task 8.11)', async () => {
+    const FORWARD = THREAD_CASES.find((c) => c.id === 'gmail forward of an outlook thread')!;
+    const m = FORWARD.messages![2]!;
+    const utcMs = instantOf(m.sent, m.zone);
+    const forward = make({
+      from: [m.from],
+      to: [...m.to],
+      subject: m.subject,
+      bodyText: buildThread(FORWARD.messages!).body,
+      date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true },
+    });
+    const result = engineOf([forward]);
+    choose(forward.source.fileName);
+    control.calls.at(-1)?.resolve({ ok: true, engine: result });
+    await settle();
+    const run = (): void => {
+      while (tasks.length > 0) tasks.shift()?.task();
+    };
+    run();
+    expect(page.preview.pdfLabelState()).toBe('ready');
+    const item = (): FakeElement => items().find((i) => i.getAttribute('data-position') === '0')!;
+    const labels = (): string[] =>
+      item()
+        .descendants()
+        .filter((e) => hasClass(e, 'pdf-label') && !e.hasAttribute('hidden'))
+        .map((e) => e.textContent.trim());
+    const printed = (): string[] => labels().filter((s) => s.includes('printed as'));
+    // Both rebuilt emails ticked by default: emails 1 and 2 of the PDF, the forward is email 3.
+    expect(printed()).toEqual([
+      'Not in this email in the PDF: printed as a rebuilt email (Email 2 in the PDF)',
+      'Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)',
+    ]);
+    // The labels say what the PDF step gets: the same input, the same cut.
+    expect(page.review.includedRebuilt()).toHaveLength(2);
+
+    // One rebuilt card unticked: its part goes back to the plan's label at once (no new planning).
+    const cards = items().filter((i) => hasClass(i, 'message-rebuilt'));
+    const older = cards.find((card) => card.getAttribute('data-rebuilt-id') === String(result.reconstructed.find((r) => r.rebuilt.generation === 2)!.id))!;
+    const olderBox = older.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
+    olderBox.checked = false;
+    olderBox.fire('change');
+    run();
+    expect(page.preview.pdfLabelState()).toBe('ready');
+    // The newer one is now email 1 of the PDF.
+    expect(printed()).toEqual(['Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)']);
+    olderBox.checked = true;
+    olderBox.fire('change');
+    run();
+    expect(printed()).toHaveLength(2);
+
+    // The switch off: no rebuilt email in the PDF, so nothing printed elsewhere.
+    const toggle = byId('rebuilt-include-all');
+    toggle.checked = false;
+    toggle.fire('change');
+    run();
+    expect(printed()).toEqual([]);
+    expect(labels().every((s) => s.startsWith('In the PDF: '))).toBe(true);
+    toggle.checked = true;
+    toggle.fire('change');
+    run();
+    expect(printed()).toHaveLength(2);
+
+    // "Print full original text": every label "In the PDF: ..." (as before task 8.11); unticked: back.
+    const everything = byId('pdf-everything');
+    everything.checked = true;
+    everything.fire('change');
+    run();
+    expect(page.preview.pdfLabelState()).toBe('ready');
+    expect(labels().length).toBeGreaterThan(0);
+    expect(labels().every((s) => s.startsWith('In the PDF: '))).toBe(true);
+    everything.checked = false;
+    everything.fire('change');
+    run();
+    expect(printed()).toHaveLength(2);
   });
 
   /** The user focuses `element` (the browser fires 'focusin' at the document). */

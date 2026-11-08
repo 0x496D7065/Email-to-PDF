@@ -430,6 +430,18 @@ export const en = {
     repeatedFrom: 'same signature as in email {number}',
     // The same, when a part holds signatures kept in several emails, e.g. "same signature as in emails #1, #3".
     repeatedFromMany: 'same signature as in emails {list}',
+    // Instead of label.out, on a part the PDF leaves out of this email because
+    // it prints that part as an email of its own (task 8.11; the no-repeat rule
+    // of task 8.10, only while pdf.everything is unticked).
+    printedAs: {
+      // Printed as an email of the list, named by its list number, e.g.
+      // "Not in this email in the PDF: printed as email #5".
+      email: 'Not in this email in the PDF: printed as email {number}',
+      // Printed as a rebuilt email (it has no list number), named by its
+      // heading in the PDF (pdf.document.emailHeading), e.g.
+      // "Not in this email in the PDF: printed as a rebuilt email (Email 3 in the PDF)".
+      rebuilt: 'Not in this email in the PDF: printed as a rebuilt email (Email {number} in the PDF)',
+    },
     // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
     messageFailed: 'The tool could not show what the PDF leaves out for this email.',
     // The texts written in the PDF itself (src/pdf/model.ts, through src/pdf/strings.ts).

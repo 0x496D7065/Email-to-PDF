@@ -105,6 +105,7 @@ const R = en.pdf.reason;
 const IN = (reasons: string): string => en.pdf.label.in.replace('{reasons}', reasons);
 const OUT = (reasons: string): string => en.pdf.label.out.replace('{reasons}', reasons);
 const SAME_SIGNATURE = (n: number): string => en.pdf.repeatedFrom.replace('{number}', `#${String(n)}`);
+const PRINTED_AS_REBUILT = (n: number): string => en.pdf.printedAs.rebuilt.replace('{number}', String(n));
 
 test.use({ timezoneId: 'Africa/Lagos' });
 
@@ -190,8 +191,11 @@ test('each folded part says whether it will be in the PDF', async ({ page }) => 
   expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
   // #4, Bob's second Outlook reply: his signature again (as in #2) and the quote.
   expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
-  // #5, a forward: the forwarded email stays in the PDF.
-  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);
+  // #5, a forward: the forwarded email is rebuilt from it and printed as an
+  // email of its own (Email 5 in the PDF, before the forward), so its text is
+  // not in the forward in the PDF (task 8.11); its header lines stay (their
+  // date has no zone of its own, so the rebuilt header cannot show it as written).
+  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded), PRINTED_AS_REBUILT(5)]);
   // #6, quotes the writer put between their own answers: they stay.
   const writerLabels = await labelsOf(items.nth(5));
   expect(writerLabels.length).toBeGreaterThan(0);
@@ -208,6 +212,15 @@ test('each folded part says whether it will be in the PDF', async ({ page }) => 
   expect(shown).toBe(raw.slice(raw.indexOf('\n\n') + 2));
   // Readable: the labels (and everything else in step 2) meet the contrast rules.
   expect(await contrastFailures(page, '#step-check', 20)).toEqual([]);
+
+  // "Rebuild conversation from replies" off: no rebuilt email in the PDF, so the
+  // forwarded email stays in the forward; on again: printed as its own email again.
+  await page.locator('#rebuilt-include-all').uncheck();
+  await expectReady(page);
+  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);
+  await page.locator('#rebuilt-include-all').check();
+  await expectReady(page);
+  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded), PRINTED_AS_REBUILT(5)]);
 
   await expectNothingLeftThePage(page);
 });
@@ -470,10 +483,13 @@ test('"Print full original text" makes every label say so, and Clear everything 
   expect(all.length).toBe(await page.locator('#preview-list details.fold').count());
   for (const text of all) expect(text.trim().startsWith(en.pdf.label.in.replace('{reasons}', ''))).toBe(true);
   expect(await labelsOf(items.nth(2))).toEqual([IN(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+  // The forward is printed whole: its forwarded email is in it (task 8.11: no "printed as" label).
+  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);
 
   await everything.uncheck();
   await expectReady(page);
   expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded), PRINTED_AS_REBUILT(5)]);
 
   await everything.check();
   await page.getByRole('button', { name: en.actions.clearEverything }).click();

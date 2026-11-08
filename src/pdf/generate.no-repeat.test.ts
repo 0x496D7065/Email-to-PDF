@@ -112,6 +112,32 @@ function counts(texts: readonly string[], all: readonly string[]): { emails: num
 }
 
 const last = (c: ThreadCase): number => c.messages!.length - 1;
+
+/**
+ * Message `k` of a conversation is a middle one whose text reaches the last
+ * email through unmarked Outlook quotes only: every later message quotes the
+ * one before it in an outlook-* style (no ">" marks), so the plan of the last
+ * email cannot tell that text from an answer typed in the quote (rule 2b).
+ */
+function outlookAllTheWay(c: ThreadCase, k: number): boolean {
+  if (k === 0 || k === last(c)) return false;
+  return c.messages!.slice(k + 1).every((m) => m.quote?.style.startsWith('outlook') === true);
+}
+
+/**
+ * The first and the last files only (3a, option A): the sentences printed
+ * twice, pinned for some named conversations (by conversation index). Found
+ * by running the whole PDF path; a change here is a change of behaviour.
+ */
+const PINNED_REPEATS: ReadonlyMap<string, readonly number[]> = new Map([
+  ['outlook-en x3', [1, 2]],
+  ['outlook-en 7 generations', [1, 2, 3, 4, 5, 6]],
+  ['fixture-13 shape', [2]],
+  ['gmail-fr forward, then outlook-fr reply', [1]],
+  // No repeat: a three-message Outlook chain (as observed), and a Gmail chain (">" marks).
+  ['outlook-en names only', []],
+  ['gmail-en x3', []],
+]);
 const once = (n: number): { emails: number; times: number }[] => Array.from({ length: n }, () => ({ emails: 1, times: 1 }));
 
 describe('no email twice in the PDF (task 8.10), every conversation of thread-cases.ts', () => {
@@ -171,6 +197,29 @@ describe('no email twice in the PDF (task 8.10), every conversation of thread-ca
         // first: a place that holds own text is not cut, holdsOwnText), while its rebuilt email
         // prints it too. Exactly those sentences are expected in two emails (the last one and
         // their rebuilt one), once each.
+        const got = counts(texts, sentences(c));
+        // The expectation does not come from the code under test (review finding G2, task 8.11):
+        // - only a middle email whose text reaches the last email through UNMARKED Outlook quotes
+        //   alone (every later message quotes in an outlook-* style: no ">" marks on the way) can
+        //   be repeated; every other sentence is printed exactly once;
+        // - a repeated one is in exactly two emails, once each;
+        // - for the cases of PINNED_REPEATS, exactly the listed sentences are repeated.
+        for (const [k, n] of got.entries()) {
+          const where = `sentence ${String(k)}`;
+          if (outlookAllTheWay(c, k)) expect([1, 2], where).toContain(n.emails);
+          else expect(n.emails, where).toBe(1);
+          expect(n.times, where).toBe(n.emails);
+        }
+        const repeated = got.flatMap((n, k) => (n.emails === 2 ? [k] : []));
+        const pinned = PINNED_REPEATS.get(c.id);
+        if (pinned !== undefined) expect(repeated).toEqual(pinned);
+        // The repeats are the outlook* groups' and the cases whose last reply quotes in an Outlook style.
+        if (repeated.length > 0) expect(c.group.startsWith('outlook') || c.messages![last(c)]!.quote!.style.startsWith('outlook')).toBe(true);
+        // Such a sentence is in the writer's (last) email, the one place it must be, and in its rebuilt email.
+        const lastText = texts[texts.length - 1]!;
+        for (const k of repeated) expect(lastText).toContain(sentences(c)[k]);
+        // Consistency with the mechanism (not the expectation): exactly the places the plan keeps
+        // as the writer's own text (attribution first, holdsOwnText).
         const lastPosition = result.messages.findIndex((m) => (m.message.messageId ?? '').endsWith(`-${String(last(c))}@example.test`));
         const body = result.messages[lastPosition]!.message.bodyText;
         const plan = planOutput(result.messages, DEFAULT_OUTPUT_POLICY)[lastPosition]!;
@@ -178,13 +227,7 @@ describe('no email twice in the PDF (task 8.10), every conversation of thread-ca
           const r = result.reconstructed.find((x) => result.positionByIndex[x.sourceIndex] === lastPosition && x.rebuilt.generation === last(c) - k);
           return r !== undefined && holdsOwnText(body, plan.ranges, headerLinesEnd(body, r.rebuilt), r.rebuilt.end);
         };
-        const expected = sentences(c).map((_, k) => (k !== 0 && k !== last(c) && keptAsOwn(k) ? { emails: 2, times: 2 } : { emails: 1, times: 1 }));
-        expect(counts(texts, sentences(c))).toEqual(expected);
-        // Such a sentence is in the writer's (last) email, the one place it must be.
-        const lastText = texts[texts.length - 1]!;
-        sentences(c).forEach((s, k) => {
-          if (expected[k]!.emails === 2) expect(lastText).toContain(s);
-        });
+        expect(repeated).toEqual(sentences(c).flatMap((_, k) => (k !== 0 && k !== last(c) && keptAsOwn(k) ? [k] : [])));
       });
     });
   }

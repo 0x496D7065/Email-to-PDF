@@ -193,17 +193,26 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
  * S6 (review round 3 of task 8.10): every kept range of reason 'text' with
  * text other than white space (the writer's own text, B1) is still in the
  * writer's own PDF email `e`, after the display transforms, white space
- * squashed. Returns how many ranges were checked.
+ * squashed. Matched IN ORDER, each range after the end of the one before it
+ * (review finding G5, task 8.11): a short range ("Ok") cannot pass by
+ * matching the same letters elsewhere in the body (in an earlier range's
+ * words, or in quoted text before it); each range has its own place, in
+ * the order of the body. The match is searched from the end of the previous
+ * one (the kept text in between may be quoted text the plan keeps). Returns
+ * how many ranges were checked.
  */
 function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEmail, where: string): number {
   if (plan === undefined || plan.fallback) return 0;
   const shown = squash(bodyOf(e));
   let checked = 0;
+  let from = 0;
   for (const r of plan.ranges) {
     if (!r.keep || r.reason !== 'text') continue;
     const own = squash(referenceDisplayText(body.slice(r.start, r.end)));
     if (own === '') continue;
-    expect(shown, `${where}: own text [${String(r.start)}, ${String(r.end)})`).toContain(own);
+    const at = shown.indexOf(own, from);
+    expect(at, `${where}: own text [${String(r.start)}, ${String(r.end)}) "${own.slice(0, 40)}", in order after ${String(from)}`).toBeGreaterThanOrEqual(0);
+    from = at + own.length;
     checked++;
   }
   return checked;

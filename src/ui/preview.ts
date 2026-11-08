@@ -37,6 +37,10 @@
 // the PDF: ..." or "Not in the PDF: ...", from the PDF's own plan
 // (src/engine/output-plan.ts, mapped by src/ui-model/pdf-plan.ts). The plans
 // are worked out by src/ui/pdf-labels.ts and handed over with setPdfPlans().
+// With "Print full original text" off, a part the PDF prints as an email of
+// its own (the no-repeat rule of src/pdf/model.ts, task 8.10) is labelled
+// "Not in this email in the PDF: printed as email #N" instead (task 8.11;
+// the views carry the PDF's own cut, src/ui-model/printed-elsewhere.ts).
 // Rules:
 // - A folded block is all in the PDF or all left out: when the plan changes
 //   inside one, the block is cut in two (its text is not changed).
@@ -272,8 +276,20 @@ export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly numbe
   return signaturesFrom.length === 1 ? t('pdf.repeatedFrom', { number: list }) : t('pdf.repeatedFromMany', { list });
 }
 
-/** A block's PDF label: "Not in the PDF: earlier email quoted by the mail app". */
+/**
+ * A block's PDF label: "Not in the PDF: earlier email quoted by the mail
+ * app"; for a part the PDF prints as an email of its own (task 8.11):
+ * "Not in this email in the PDF: printed as email #5" (a real email, by its
+ * list number) or "... printed as a rebuilt email (Email 3 in the PDF)" (a
+ * rebuilt email has no list number: its heading in the PDF).
+ */
 export function pdfLabelText(label: PdfLabel): string {
+  const printedAs = label.status === 'out' ? (label.printedAs ?? null) : null;
+  if (printedAs !== null) {
+    return printedAs.kind === 'email'
+      ? t('pdf.printedAs.email', { number: messageNumberText(printedAs.position + 1) })
+      : t('pdf.printedAs.rebuilt', { number: String(printedAs.number) });
+  }
   const list = label.reasons.length === 0 ? ['text' as const] : label.reasons;
   // The reasons are parts, not a list: a plain ", " (no "et" in French; a
   // reason may itself hold a list of email numbers, "#1 et #3").
@@ -835,7 +851,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
           built.push({ start: block.start, end: block.end, details: null, summary: null, nodes: [text], label: null, pdf: null, what: null });
           continue;
         }
-        // Shown text the plan leaves out (a bug, never expected): said all the same.
+        // Shown text the PDF leaves out (by the plan: a bug, never expected;
+        // or printed as an email of its own, task 8.11): said all the same.
         const mark = el('p', { attrs: { class: 'pdf-label pdf-label-shown' } });
         applyLabel(mark, label);
         children.push(mark, text);

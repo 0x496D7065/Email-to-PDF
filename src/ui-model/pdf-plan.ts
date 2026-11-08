@@ -24,6 +24,17 @@
 //   several repeated signatures lists every distinct source ("#1, #3").
 //   When none is found (not expected), the label just says "repeated
 //   signature".
+// - Printed as an email of its own (task 8.11): with "Print full original
+//   text" off, the PDF also leaves out of a body the parts it prints as
+//   emails of their own (the no-repeat rule of src/pdf/model.ts, task
+//   8.10). A view then carries the body's ranges as the PDF prints them
+//   (`pdfRanges`, from src/ui-model/printed-elsewhere.ts, which calls the
+//   PDF model's own functions); they replace the plan's ranges here. Such
+//   a piece is left out (status 'out') and carries the email it is printed
+//   as (`printedAs`): the label says so instead of the plan's reasons. A
+//   block is cut where that email changes, as where `keep` changes, so a
+//   label never covers a part printed elsewhere and one that is not (or
+//   two parts printed as two different emails).
 //
 // Collapse, never delete (README.md, rule R6): blocks only group and cut
 // the body; their texts joined always give the body back unchanged.
@@ -34,7 +45,10 @@ import type { MessagePlan, PlanRange, PlanReason } from '../engine/output-plan';
 import type { Segment } from '../engine/segments';
 import { senderKeyOf, signatureBlockKey } from '../engine/signature';
 import type { NormalizedMessage } from '../parsing/types';
+import type { PdfRange, PrintedAs } from '../pdf/model';
 import { displayBlocks, type DisplayBlock } from './display-blocks';
+
+export type { PrintedAs } from '../pdf/model';
 
 /** 'partly': a block with kept and left-out text (never produced by pdfBlocks; a safe default). */
 export type PdfStatus = 'in' | 'out' | 'partly';
@@ -50,6 +64,11 @@ export interface PdfLabel {
    * more than one repeated signature). Empty if none is known.
    */
   readonly signaturesFrom: readonly number[];
+  /**
+   * Status 'out' only: the block is left out because the PDF prints it as
+   * this email (the no-repeat rule, see the top). Absent or null otherwise.
+   */
+  readonly printedAs?: PrintedAs | null;
 }
 
 /** One email's plan, as the preview needs it. */
@@ -57,6 +76,27 @@ export interface PdfView {
   readonly plan: MessagePlan;
   /** Start of a 'repeated-signature' range -> the list number (1-based) of the email where that signature is kept. */
   readonly signatureFrom: ReadonlyMap<number, number>;
+  /**
+   * The body's ranges as the PDF prints them, when the no-repeat rule
+   * leaves something out of it (src/ui-model/printed-elsewhere.ts); they
+   * replace `plan.ranges` for the labels. Absent: the plan's ranges.
+   */
+  readonly pdfRanges?: readonly PdfRange[];
+}
+
+/** A range for the labels: a plan range, or a PDF range (with `printedAs`). */
+type LabelRange = PlanRange & { readonly printedAs?: PrintedAs | null };
+
+/** The ranges the labels follow (see PdfView.pdfRanges). */
+function rangesOf(view: PdfView): readonly LabelRange[] {
+  return view.pdfRanges ?? view.plan.ranges;
+}
+
+/** A short key of where a range is printed instead ('' when it is not left out that way). */
+function printedKey(r: LabelRange): string {
+  const p = r.printedAs;
+  if (p === null || p === undefined) return '';
+  return p.kind === 'rebuilt' ? `r${String(p.id)}#${String(p.number)}` : `e${String(p.position)}#${String(p.number)}`;
 }
 
 /** A display block and its label (null: a shown block, fully in the PDF, or no plan). */
@@ -72,23 +112,25 @@ export function hasNonSpace(text: string, start: number, end: number): boolean {
 
 /**
  * Where the preview must start a new block: the start of each range with
- * text whose `keep` differs from the previous range with text. Whitespace
- * ranges in between stay with the block above.
+ * text whose `keep`, or the email it is printed as (`printedAs`, see the
+ * top), differs from the previous range with text. Whitespace ranges in
+ * between stay with the block above.
  */
-export function pdfBreaks(text: string, ranges: readonly PlanRange[]): number[] {
+export function pdfBreaks(text: string, ranges: readonly LabelRange[]): number[] {
   const breaks: number[] = [];
-  let lastKeep: boolean | null = null;
+  let last: string | null = null;
   for (const r of ranges) {
     if (!hasNonSpace(text, r.start, r.end)) continue;
-    if (lastKeep !== null && r.keep !== lastKeep) breaks.push(r.start);
-    lastKeep = r.keep;
+    const key = `${r.keep ? '+' : '-'}${printedKey(r)}`;
+    if (last !== null && key !== last) breaks.push(r.start);
+    last = key;
   }
   return breaks;
 }
 
 /** The label of text[start, end) under `view` (see the rules at the top). */
 export function labelOf(text: string, start: number, end: number, view: PdfView): PdfLabel {
-  const overlapping = view.plan.ranges.filter((r) => r.start < end && r.end > start);
+  const overlapping = rangesOf(view).filter((r) => r.start < end && r.end > start);
   const withText = overlapping.filter((r) => hasNonSpace(text, Math.max(r.start, start), Math.min(r.end, end)));
   const deciding = withText.length > 0 ? withText : overlapping;
   const kept = deciding.filter((r) => r.keep).length;
@@ -100,7 +142,12 @@ export function labelOf(text: string, start: number, end: number, view: PdfView)
     const n = view.signatureFrom.get(r.start);
     if (n !== undefined) from.add(n);
   }
-  return { status, reasons, signaturesFrom: [...from].sort((a, b) => a - b) };
+  const label: PdfLabel = { status, reasons, signaturesFrom: [...from].sort((a, b) => a - b) };
+  // Printed as an email of its own: only when every deciding range is, as the same email.
+  const first = deciding[0];
+  const printedAs = first?.printedAs ?? null;
+  if (status === 'out' && printedAs !== null && deciding.every((r) => printedKey(r) === printedKey(first!))) return { ...label, printedAs };
+  return label;
 }
 
 /**
@@ -110,10 +157,11 @@ export function labelOf(text: string, start: number, end: number, view: PdfView)
  */
 export function pdfBlocks(text: string, segments: readonly Segment[], view: PdfView | null): PdfBlock[] {
   if (view === null) return displayBlocks(text, segments, { unfoldAll: false }).map((block) => ({ block, label: null }));
-  const blocks = displayBlocks(text, segments, { unfoldAll: false, breaks: pdfBreaks(text, view.plan.ranges) });
+  const blocks = displayBlocks(text, segments, { unfoldAll: false, breaks: pdfBreaks(text, rangesOf(view)) });
   return blocks.map((block) => {
     const label = labelOf(text, block.start, block.end, view);
-    // A shown block is labelled only if the plan leaves something of it out (a bug, see the top).
+    // A shown block is labelled only if the PDF leaves something of it out
+    // (by the plan: a bug, see the top; or printed as an email of its own).
     return { block, label: block.folded || label.status !== 'in' ? label : null };
   });
 }
@@ -171,5 +219,6 @@ export function viewKey(view: PdfView | null): string {
   const p = view.plan;
   const ranges = p.ranges.map((r) => `${String(r.start)}-${String(r.end)}${r.keep ? '+' : '-'}${r.reason}`).join(',');
   const from = [...view.signatureFrom].map(([s, n]) => `${String(s)}>${String(n)}`).join(',');
-  return `${ranges}|${p.keptAllBecauseEmpty ? 'E' : ''}${p.fallback ? 'F' : ''}|${from}`;
+  const cut = (view.pdfRanges ?? []).map((r) => `${String(r.start)}-${String(r.end)}${r.keep ? '+' : '-'}${printedKey(r)}`).join(',');
+  return `${ranges}|${p.keptAllBecauseEmpty ? 'E' : ''}${p.fallback ? 'F' : ''}|${from}|${cut}`;
 }

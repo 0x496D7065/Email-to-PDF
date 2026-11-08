@@ -12,7 +12,8 @@ import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type PlanRange } f
 import { buildSegments, type FoldRange } from '../engine/segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { displayBlocks } from './display-blocks';
-import { labelOf, pdfBlocks, pdfBreaks, signatureSources, viewKey, type PdfBlock, type PdfView } from './pdf-plan';
+import type { PdfRange } from '../pdf/model';
+import { labelOf, pdfBlocks, pdfBreaks, signatureSources, viewKey, type PdfBlock, type PdfView, type PrintedAs } from './pdf-plan';
 
 const plan = (ranges: PlanRange[], extra: Partial<MessagePlan> = {}): MessagePlan => ({
   ranges,
@@ -186,6 +187,96 @@ describe('viewKey', () => {
     expect(viewKey({ plan: plan(ranges, { keptAllBecauseEmpty: true }), signatureFrom: new Map() })).not.toBe(base);
     expect(viewKey({ plan: plan(ranges, { fallback: true }), signatureFrom: new Map() })).not.toBe(base);
     expect(viewKey(view(ranges, new Map([[0, 1]])))).not.toBe(base);
+  });
+});
+
+describe('a view with the PDF\'s ranges (the no-repeat rule, task 8.11)', () => {
+  // The quote is kept by the plan (say a forwarded part); the PDF prints its
+  // header and its first paragraph as two different emails.
+  const QUOTE_HEAD = 'From: Alice Example\nSent: Monday\n\n'.length;
+  const PLAN: PlanRange[] = [
+    { start: 0, end: A, keep: true, reason: 'text' },
+    { start: A, end: B, keep: true, reason: 'signature' },
+    { start: B, end: C, keep: true, reason: 'text' },
+    { start: C, end: BODY.length, keep: true, reason: 'forwarded' },
+  ];
+  const REBUILT: PrintedAs = { kind: 'rebuilt', id: 4, number: 2 };
+  const REAL: PrintedAs = { kind: 'email', position: 0, number: 1 };
+  const cutView = (pieces: PdfRange[]): PdfView => ({ ...view(PLAN), pdfRanges: pieces });
+  const pieces = (head: PrintedAs | null, rest: PrintedAs | null): PdfRange[] => [
+    { start: 0, end: A, keep: true, reason: 'text', printedAs: null },
+    { start: A, end: B, keep: true, reason: 'signature', printedAs: null },
+    { start: B, end: C, keep: true, reason: 'text', printedAs: null },
+    { start: C, end: C + QUOTE_HEAD, keep: head === null, reason: 'forwarded', printedAs: head },
+    { start: C + QUOTE_HEAD, end: BODY.length, keep: rest === null, reason: 'forwarded', printedAs: rest },
+  ];
+
+  it('without PDF ranges, the plan\'s ranges as before ("In the PDF: forwarded email")', () => {
+    expect(brief(pdfBlocks(BODY, SEGMENTS, view(PLAN)))).toEqual([
+      [OWN, false, null, null],
+      [SIG + GAP + QUOTE, true, 'in', ['signature', 'forwarded']],
+    ]);
+  });
+
+  it('a part printed as an email of its own is "out" with that email, cut from what stays', () => {
+    const blocks = pdfBlocks(BODY, SEGMENTS, cutView(pieces(REBUILT, REBUILT)));
+    expect(brief(blocks)).toEqual([
+      [OWN, false, null, null],
+      [SIG + GAP, true, 'in', ['signature']],
+      [QUOTE, true, 'out', ['forwarded']],
+    ]);
+    expect(blocks[1]?.label?.printedAs ?? null).toBeNull();
+    expect(blocks[2]?.label?.printedAs).toEqual(REBUILT);
+    expect(blocks.map((b) => b.block.text).join('')).toBe(BODY);
+  });
+
+  it('a block is cut where the email it is printed as changes; a part the PDF keeps stays "in"', () => {
+    const two = pdfBlocks(BODY, SEGMENTS, cutView(pieces(REAL, REBUILT)));
+    expect(two.map((b) => [b.block.text, b.label?.status ?? null, b.label?.printedAs ?? null])).toEqual([
+      [OWN, null, null],
+      [SIG + GAP, 'in', null],
+      [QUOTE.slice(0, QUOTE_HEAD), 'out', REAL],
+      [QUOTE.slice(QUOTE_HEAD), 'out', REBUILT],
+    ]);
+    // Header lines kept (B2), the text printed elsewhere.
+    const kept = pdfBlocks(BODY, SEGMENTS, cutView(pieces(null, REBUILT)));
+    expect(kept.map((b) => [b.block.text, b.label?.status ?? null, b.label?.printedAs ?? null])).toEqual([
+      [OWN, null, null],
+      [SIG + GAP + QUOTE.slice(0, QUOTE_HEAD), 'in', null],
+      [QUOTE.slice(QUOTE_HEAD), 'out', REBUILT],
+    ]);
+  });
+
+  it('a block left out by the plan next to one printed elsewhere: two blocks, each with its own label', () => {
+    const v: PdfView = {
+      ...view(PLAN),
+      pdfRanges: [
+        ...pieces(null, null).slice(0, 3),
+        { start: C, end: C + QUOTE_HEAD, keep: false, reason: 'app-quoted-history', printedAs: null },
+        { start: C + QUOTE_HEAD, end: BODY.length, keep: false, reason: 'forwarded', printedAs: REAL },
+      ],
+    };
+    const blocks = pdfBlocks(BODY, SEGMENTS, v);
+    expect(blocks.slice(-2).map((b) => [b.block.text, b.label?.status ?? null, b.label?.reasons ?? null, b.label?.printedAs ?? null])).toEqual([
+      [QUOTE.slice(0, QUOTE_HEAD), 'out', ['app-quoted-history'], null],
+      [QUOTE.slice(QUOTE_HEAD), 'out', ['forwarded'], REAL],
+    ]);
+  });
+
+  it('labelOf names the email only when all of the block\'s text is printed as that one email', () => {
+    const v = cutView(pieces(REAL, REBUILT));
+    expect(labelOf(BODY, C + QUOTE_HEAD, BODY.length, v).printedAs).toEqual(REBUILT);
+    // Two emails in one span (never produced by pdfBlocks): no email named.
+    expect(labelOf(BODY, C, BODY.length, v)).toEqual({ status: 'out', reasons: ['forwarded'], signaturesFrom: [] });
+  });
+
+  it('viewKey changes with the PDF ranges and the email named', () => {
+    const base = viewKey(view(PLAN));
+    const a = viewKey(cutView(pieces(REBUILT, REBUILT)));
+    expect(a).not.toBe(base);
+    expect(viewKey(cutView(pieces(REAL, REBUILT)))).not.toBe(a);
+    expect(viewKey(cutView(pieces(REBUILT, { ...REBUILT, number: 3 })))).not.toBe(a);
+    expect(viewKey(cutView(pieces(REBUILT, REBUILT)))).toBe(a);
   });
 });
 

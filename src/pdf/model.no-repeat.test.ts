@@ -24,16 +24,19 @@ import {
   headerLinesEnd,
   headerShownInPdf,
   holdsOwnText,
+  noRepeat,
   pdfBodyText,
+  pdfRanges,
   planPdfOrder,
   printedElsewhere,
+  printedElsewhereParts,
   withoutPrintedElsewhere,
   type BodyIntervals,
   type PdfDocument,
   type PdfEmail,
 } from './model';
 import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { bodyLines, lineText } from './text';
 
 const EN = createPdfStrings('en');
 const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -598,6 +601,120 @@ describe('the cut places: CRLF bodies, touching and overlapping places', () => {
   });
 });
 
+describe('printedElsewhereParts, pdfRanges, noRepeat: where the PDF prints each part left out (task 8.11, for the preview)', () => {
+  const slotNumber = (order: ReturnType<typeof planPdfOrder>, id: number): number => order.slots.find((s) => s.kind === 'rebuilt' && s.entry.id === id)!.number;
+
+  it('each part names the rebuilt email that prints it (its entry and PDF number); merged, the parts are printedElsewhere', () => {
+    const result = engineOf(FORWARD, [2]);
+    const entries = rebuiltEntries(result);
+    const order = planPdfOrder(result, [0], entries.map((r) => r.id));
+    const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition).get(0)!;
+    // The dates have no zone of their own (B2): the texts only.
+    const expected = entries
+      .map((r) => ({ start: r.rebuilt.headerEnd, end: r.rebuilt.end, printedAs: { kind: 'rebuilt' as const, id: r.id, number: slotNumber(order, r.id) } }))
+      .sort((a, b) => a.start - b.start);
+    expect(parts).toEqual(expected);
+    expect(printedElsewhere(result, order.slots, order.pdfNumberByPosition).get(0)).toEqual(expected.map((p) => [p.start, p.end]));
+  });
+
+  it('a part linked to a real file names that file: its list position and PDF number', () => {
+    const result = engineOf(FORWARD, [0, 1, 2]);
+    const order = planPdfOrder(result, [0, 1, 2]);
+    const all = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition);
+    const linked = result.reconstructed.filter((r) => r.link === 'real');
+    expect(linked.length).toBeGreaterThan(0);
+    for (const r of linked) {
+      const source = result.positionByIndex[r.sourceIndex]!;
+      const real = result.positionByIndex[r.realIndex!]!;
+      const part = all.get(source)!.find((p) => p.start <= r.rebuilt.headerEnd && r.rebuilt.end <= p.end)!;
+      expect(part.printedAs).toEqual({ kind: 'email', position: real, number: order.pdfNumberByPosition[real] });
+    }
+  });
+
+  it('touching places of a real file and of a rebuilt entry: two parts (one per email), one cut', () => {
+    const result = runEngine([
+      { ok: true, message: realFile(FORWARD.messages!, 1) },
+      { ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) },
+    ]);
+    const forward = result.messages.findIndex((m) => m.message.subject === FORWARD.messages![2]!.subject);
+    const [newer, older] = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === forward).sort((a, b) => a.rebuilt.start - b.rebuilt.start);
+    const order = planPdfOrder(result, result.messages.map((_, k) => k), rebuiltEntries(result).map((r) => r.id));
+    const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition).get(forward)!;
+    const real = result.positionByIndex[newer!.realIndex!]!;
+    const entry = older!.link === 'entry' ? older!.id : older!.sameAs!;
+    expect(parts).toEqual([
+      { start: newer!.rebuilt.start, end: newer!.rebuilt.end, printedAs: { kind: 'email', position: real, number: order.pdfNumberByPosition[real] } },
+      { start: older!.rebuilt.start, end: older!.rebuilt.end, printedAs: { kind: 'rebuilt', id: entry, number: slotNumber(order, entry) } },
+    ]);
+    expect(printedElsewhere(result, order.slots, order.pdfNumberByPosition).get(forward)).toEqual([[newer!.rebuilt.start, older!.rebuilt.end]]);
+  });
+
+  it('overlapping places (odd offsets): each piece goes to the innermost place, nothing covered twice', () => {
+    const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
+    const e1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!;
+    const e2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!;
+    const g1 = e1.rebuilt;
+    const odd: EngineResult = {
+      ...result,
+      reconstructed: result.reconstructed.map((r) => (r === e2 ? { ...r, rebuilt: { ...r.rebuilt, start: g1.headerEnd, headerEnd: g1.headerEnd } } : r)),
+    };
+    const order = planPdfOrder(odd, [0], rebuiltEntries(odd).map((r) => r.id));
+    expect(printedElsewhereParts(odd, order.slots, order.pdfNumberByPosition).get(0)).toEqual([
+      { start: g1.start, end: g1.headerEnd, printedAs: { kind: 'rebuilt', id: e1.id, number: slotNumber(order, e1.id) } },
+      { start: g1.headerEnd, end: e2.rebuilt.end, printedAs: { kind: 'rebuilt', id: e2.id, number: slotNumber(order, e2.id) } },
+    ]);
+  });
+
+  it('pdfRanges: the plan cut exactly as withoutPrintedElsewhere cuts it, each piece left out naming its email; null when the PDF prints the plan or the whole body', () => {
+    const result = engineOf(FORWARD, [2]);
+    const order = planPdfOrder(result, [0], rebuiltEntries(result).map((r) => r.id));
+    const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition).get(0)!;
+    const body = result.messages[0]!.message.bodyText;
+    const plan = planOutput(result.messages, DEFAULT_OUTPUT_POLICY)[0]!;
+    const ranges = pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, parts)!;
+    expect(ranges).not.toBeNull();
+    // The same characters kept as the PDF's own cut.
+    const keptBy = (list: readonly PlanRange[]): string => list.map((r) => (r.keep ? body.slice(r.start, r.end) : '\u0000'.repeat(r.end - r.start))).join('');
+    expect(keptBy(ranges)).toBe(keptBy(withoutPrintedElsewhere(body, plan.ranges, printedElsewhere(result, order.slots, order.pdfNumberByPosition).get(0)!).ranges));
+    // A contiguous cover of the body; a piece names an email only when left out, and then lies inside a part of that email.
+    expect(ranges[0]!.start).toBe(0);
+    ranges.forEach((r, k) => expect(r.start).toBe(k === 0 ? 0 : ranges[k - 1]!.end));
+    expect(ranges.at(-1)!.end).toBe(body.length);
+    const named = ranges.filter((r) => r.printedAs !== null);
+    expect(named.length).toBeGreaterThan(0);
+    for (const r of named) {
+      expect(r.keep).toBe(false);
+      expect(parts.some((p) => p.start <= r.start && r.end <= p.end && p.printedAs === r.printedAs)).toBe(true);
+    }
+    // Nothing named for what the plan already left out.
+    for (const r of ranges) if (r.printedAs === null && !r.keep) expect(plan.ranges.some((x) => !x.keep && x.start <= r.start && r.end <= x.end)).toBe(true);
+    // The whole body printed, or nothing left out this way: null.
+    expect(pdfRanges(body, plan, EVERYTHING, parts)).toBeNull();
+    expect(pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, [])).toBeNull();
+    expect(pdfRanges(body, { ...plan, fallback: true }, DEFAULT_OUTPUT_POLICY, parts)).toBeNull();
+    expect(pdfRanges(body, null, DEFAULT_OUTPUT_POLICY, parts)).toBeNull();
+  });
+
+  it('noRepeat is what buildPdfDocument uses: the same order and parts; none and no rebuilt email under "Print full original text"', () => {
+    const result = engineOf(FORWARD, [2]);
+    const ids = rebuiltEntries(result).map((r) => r.id);
+    const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
+    const got = noRepeat({ result, positions: [0], plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: ids });
+    const order = planPdfOrder(result, [0], ids);
+    expect(got.order).toEqual(order);
+    expect(got.parts).toEqual(printedElsewhereParts(result, order.slots, order.pdfNumberByPosition, new Map([[0, plans[0]]])));
+    expect(got.elsewhere).toEqual(printedElsewhere(result, order.slots, order.pdfNumberByPosition, new Map([[0, plans[0]]])));
+    const doc = build(result, { positions: [0], plans, rebuilt: ids });
+    expect(doc.pdfNumberByPosition).toEqual(order.pdfNumberByPosition);
+    const printed = pdfBodyText(result.messages[0]!.message.bodyText, plans[0], DEFAULT_OUTPUT_POLICY, got.elsewhere.get(0));
+    expect(bodyOf(realOf(doc, 0))).toBe(bodyLines(printed.text, { notLineStarts: printed.notLineStarts }).lines.map(lineText).join('\n'));
+    const everything = noRepeat({ result, positions: [0], plans, policy: EVERYTHING, rebuilt: ids });
+    expect(everything.parts.size).toBe(0);
+    expect(everything.elsewhere.size).toBe(0);
+    expect(everything.order.slots.every((s) => s.kind === 'email')).toBe(true);
+  });
+});
+
 // Review round 3 of task 8.10: attribution first (finding 1), a kept
 // signature like own text (S5), name-only recipients (S3), a strong match
 // with a real file (S4), and the deliberate repeat of option A (3a).
@@ -740,6 +857,33 @@ describe('header lines against a real file: name-only recipients (S3), a strong 
     expect(headerShownInPdf(body, namesOnly, { kind: 'real', message: realNames })).toBe(true);
     // An address read must still be among the file's addresses.
     expect(headerShownInPdf(body, r, { kind: 'real', message: realNames })).toBe(false);
+  });
+
+  it('G3 (task 8.11): a To / Cc mailbox read with a name and an address needs the same name when the file\'s mailbox of that address has one', () => {
+    const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactBody) }]);
+    const body = result.messages[0]!.message.bodyText;
+    const r = result.reconstructed.find((x) => x.rebuilt.generation === 1)!.rebuilt;
+    const real = realFile(FORWARD.messages!, 1);
+    const read = r.to[0]!;
+    expect(read.name).not.toBe('');
+    expect(read.address).not.toBe('');
+    // The baseline: same name and address, the lines may go.
+    expect(headerShownInPdf(body, r, { kind: 'real', message: real })).toBe(true);
+    // "Robert <bob@x>" read, the file says "Bob <bob@x>": the row does not show the name written, the lines stay (B2).
+    const robert = { ...r, to: [{ name: 'Robert', address: read.address }, ...r.to.slice(1)] };
+    const bob = { ...real, to: real.to.map((m) => (m.address.toLowerCase() === read.address.toLowerCase() ? { ...m, name: 'Bob' } : m)) };
+    expect(headerShownInPdf(body, robert, { kind: 'real', message: bob })).toBe(false);
+    expect(headerShownInPdf(body, r, { kind: 'real', message: bob })).toBe(false);
+    // Same normalisation as before: outer and inner white space do not count, letter case does.
+    const spaced = { ...r, to: [{ name: ` ${read.name.replace(' ', '   ')} `, address: read.address.toUpperCase() }, ...r.to.slice(1)] };
+    expect(headerShownInPdf(body, spaced, { kind: 'real', message: real })).toBe(true);
+    const shouted = { ...r, to: [{ name: read.name.toUpperCase(), address: read.address }, ...r.to.slice(1)] };
+    expect(headerShownInPdf(body, shouted, { kind: 'real', message: real })).toBe(false);
+    // Only one side has a name: the address alone decides, as before.
+    const nameless = { ...r, to: [{ name: '', address: read.address }, ...r.to.slice(1)] };
+    expect(headerShownInPdf(body, nameless, { kind: 'real', message: real })).toBe(true);
+    const fileNameless = { ...real, to: real.to.map((m) => (m.address.toLowerCase() === read.address.toLowerCase() ? { ...m, name: '' } : m)) };
+    expect(headerShownInPdf(body, r, { kind: 'real', message: fileNameless })).toBe(true);
   });
 
   it('S4: an estimated date stops it, unless the link has a strong date match; the other reasons still stop it', () => {

@@ -5,6 +5,10 @@
 // page.test.ts, the real page in e2e/pdf-labels.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
+import { buildThread, instantOf } from '../../tests/support/thread-builder';
+import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { printedElsewhereRanges } from '../ui-model/printed-elsewhere';
+import { rebuiltEntries } from '../ui-model/rebuilt';
 import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
@@ -50,6 +54,7 @@ let clock: number;
 let applied: (PreviewPdfPlans | null)[];
 let failures: number;
 let included: number[];
+let rebuiltChosen: () => readonly number[];
 let labels: PdfLabels;
 
 function mount(): void {
@@ -60,6 +65,7 @@ function mount(): void {
   let next = 0;
   labels = createPdfLabels({
     includedPositions: () => included,
+    includedRebuilt: () => rebuiltChosen(),
     setPdfPlans: (plans) => applied.push(plans),
     failed: () => failures++,
     schedule: (task, delay) => {
@@ -93,6 +99,7 @@ const checkbox = (): FakeElement => part('input')!;
 beforeEach(() => {
   vi.stubGlobal('document', new FakeDocument());
   included = [];
+  rebuiltChosen = () => [];
   mount();
 });
 
@@ -323,5 +330,86 @@ describe('createPdfLabels', () => {
     expect(failures).toBe(1);
     expect(labels.currentPlans()).toBeNull();
     expect(applied).toEqual([null]);
+  });
+});
+
+describe('the no-repeat cut in the views (task 8.11)', () => {
+  const FORWARD = THREAD_CASES.find((c) => c.id === 'gmail forward of an outlook thread')!;
+  /** The forward of FORWARD alone: two earlier emails rebuilt from it. */
+  function forwardAlone(): EngineResult {
+    const m = FORWARD.messages![2]!;
+    const utcMs = instantOf(m.sent, m.zone);
+    return engineOf([
+      { ...make(m.from, buildThread(FORWARD.messages!).body), to: [...m.to], subject: m.subject, date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true } },
+    ]);
+  }
+  const printedAsOf = (plans: PreviewPdfPlans | null | undefined): unknown[] => (plans?.views.get(0)?.pdfRanges ?? []).flatMap((r) => (r.printedAs === null ? [] : [r.printedAs]));
+
+  it('hands over the views with the PDF\'s cut for the rebuilt emails chosen; rebuiltChanged hands them over again without planning', () => {
+    const result = forwardAlone();
+    const ids = rebuiltEntries(result).map((r) => r.id);
+    expect(ids).toHaveLength(2);
+    included = [0];
+    rebuiltChosen = () => ids;
+    labels.show(result);
+    runAll();
+    const plans = labels.currentPlans()!;
+    expect(last()?.views.get(0)?.pdfRanges).toEqual(printedElsewhereRanges({ ...plans, rebuilt: ids }).get(0));
+    expect(new Set(printedAsOf(last()).map((p) => (p as { id: number }).id))).toEqual(new Set(ids));
+    // One unticked: the same plans (no planning), the new cut.
+    rebuiltChosen = () => [ids[0]!];
+    labels.rebuiltChanged();
+    expect(tasks).toEqual([]);
+    expect(labels.currentPlans()).toBe(plans);
+    expect(new Set(printedAsOf(last()).map((p) => (p as { id: number }).id))).toEqual(new Set([ids[0]]));
+    // None: the plan's own ranges.
+    rebuiltChosen = () => [];
+    labels.rebuiltChanged();
+    expect(last()?.views.get(0)?.pdfRanges).toBeUndefined();
+  });
+
+  it('nothing is handed over while plans are on their way; they get the choice made by then', () => {
+    const result = forwardAlone();
+    const ids = rebuiltEntries(result).map((r) => r.id);
+    included = [0];
+    labels.show(result);
+    expect(applied).toEqual([null]);
+    labels.rebuiltChanged();
+    expect(applied).toEqual([null]);
+    rebuiltChosen = () => ids;
+    runAll();
+    expect(printedAsOf(last()).length).toBeGreaterThan(0);
+  });
+
+  it('"Print full original text": no cut, the rebuilt emails are not even asked for', () => {
+    const result = forwardAlone();
+    included = [0];
+    let asked = 0;
+    rebuiltChosen = () => {
+      asked++;
+      return rebuiltEntries(result).map((r) => r.id);
+    };
+    checkbox().checked = true;
+    checkbox().fire('change');
+    labels.show(result);
+    runAll();
+    expect(last()?.views.get(0)?.pdfRanges).toBeUndefined();
+    expect(asked).toBe(0);
+  });
+
+  it('a cut that cannot be worked out: the labels fail (never a label that may be wrong)', () => {
+    const result = forwardAlone();
+    included = [0];
+    rebuiltChosen = () => {
+      throw new Error('synthetic failure');
+    };
+    labels.show(result);
+    runAll();
+    expect(failures).toBe(1);
+    expect(applied).toEqual([null]);
+    // Working again: the next hand-over shows the labels.
+    rebuiltChosen = () => [];
+    labels.rebuiltChanged();
+    expect(last()).not.toBeNull();
   });
 });

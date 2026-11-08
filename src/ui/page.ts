@@ -195,14 +195,18 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       pdfLabels.refresh();
     },
     // The rebuilt emails' switch or a rebuilt card's checkbox: a PDF made
-    // before is dropped (and said so with the new line). The PDF labels of
-    // the real emails do not depend on it. Every rebuilt card (a stand-in
-    // the review could not decorate too) is shown or hidden with the switch.
-    // No line ('': not expected here, the review gives '' only when the
-    // switch is hidden): only the drop, if any, is announced.
+    // before is dropped (and said so with the new line). The plans of the
+    // real emails do not depend on it, but their no-repeat labels do (task
+    // 8.11): the plans in use go to the preview again with the new cut,
+    // after the announcement (so its drop is the one announced; handing the
+    // plans over again then has nothing left to drop). Every rebuilt card
+    // (a stand-in the review could not decorate too) is shown or hidden with
+    // the switch. No line ('': not expected here, the review gives '' only
+    // when the switch is hidden): only the drop, if any, is announced.
     onRebuiltChange: (announcement) => {
       preview.refreshRebuilt();
       download.inputsChanged(announcement === '' ? undefined : announcement);
+      pdfLabels.rebuiltChanged();
     },
     // "Print full original text" ticked: no rebuilt email shown or in the PDF (src/ui/review.ts).
     unfoldEverything: () => pdfLabels.getPdfPolicy().unfoldEverything,
@@ -212,6 +216,8 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
   const pdfLabels = createPdfLabels({
     ...options.pdfLabels,
     includedPositions: () => review.includedPositions(),
+    // The same rebuilt emails as the PDF step (pdfInput), for the no-repeat labels (task 8.11).
+    includedRebuilt: () => review.includedRebuilt().map((r) => r.id),
     setPdfPlans: (plans) => {
       plansFailed = false;
       preview.setPdfPlans(plans);
@@ -250,6 +256,8 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       review.rendered(result);
       // Once the list is complete, an email without a decorated item counts as included (src/ui/review.ts).
       pdfLabels.refresh();
+      // A rebuilt card without a decorated item too: the no-repeat labels follow (task 8.11).
+      pdfLabels.rebuiltChanged();
       download.refresh();
     },
     onZoneChange: choicesChanged,

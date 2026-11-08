@@ -309,6 +309,11 @@ export const nl: Messages = {
     },
     repeatedFrom: 'dezelfde handtekening als in e-mail {number}',
     repeatedFromMany: 'dezelfde handtekening als in e-mails {list}',
+    // NEEDS USER PROOFREADING (task 8.11): both texts below.
+    printedAs: {
+      email: 'Niet in deze e-mail in de PDF: afgedrukt als e-mail {number}',
+      rebuilt: 'Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail {number} in de PDF)',
+    },
     messageFailed: 'De tool kon niet tonen wat de PDF van deze e-mail weglaat.',
     document: {
       title: 'E-mailcorrespondentie',

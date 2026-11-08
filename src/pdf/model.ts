@@ -57,7 +57,10 @@
 // a real email that is in the PDF ("the real file wins"). This is what
 // stops a forward from printing its forwarded emails inline when they are
 // also printed on their own pages (the plan keeps a forwarded part, rule 1
-// of src/engine/output-plan.ts).
+// of src/engine/output-plan.ts). The preview labels each such part with
+// the email that prints it, from the same calculation (noRepeat,
+// printedElsewhereParts, pdfRanges; src/ui-model/printed-elsewhere.ts,
+// task 8.11).
 // - THE WRITER'S OWN TEXT STAYS, ATTRIBUTION FIRST (user decision
 //   2026-11-06, B1; review round 3 of task 8.10, findings 1 and S5): text
 //   the plan calls the writer's own (reason 'text') or a kept signature is
@@ -82,7 +85,8 @@
 //   the PDF, a moment with its own zone, or an estimated one when the link
 //   has a strong date match (user decision 2026-11-07, S4), the sender in
 //   that file's From, the same subject, and every recipient in that file's
-//   To or Cc (by address, or by name for a name-only recipient, S3).
+//   To or Cc (by address, with the same display name when both have one,
+//   task 8.11, G3; or by name for a name-only recipient, S3).
 //   Otherwise they stay in the body (ALLOWED REPEAT: only header lines may
 //   repeat, never email text), so that, say, an estimated date or a Bcc
 //   line is still printed as written somewhere.
@@ -580,15 +584,20 @@ const sameMailboxes = (a: readonly EmailAddress[], b: readonly EmailAddress[]): 
   return x.length === y.length && x.every((m, k) => sameMailbox(m, y[k]!));
 };
 /**
- * `m` is one of `list`: the same address (letter case ignored); or, when `m`
- * has no address (an Outlook header often writes names only: "To: Bob
- * Sample"), a mailbox of `list` with the same name (nameKey), with or
- * without an address (task 8.10, S3). The real file's row shows that name.
+ * `m` is one of `list`: the same address (letter case ignored), and, when
+ * both have a display name, the same name too (nameKey; task 8.11, review
+ * finding G3: "Robert <bob@x>" is not shown by a row that says "Bob
+ * <bob@x>", so its header lines stay, B2); or, when `m` has no address (an
+ * Outlook header often writes names only: "To: Bob Sample"), a mailbox of
+ * `list` with the same name (nameKey), with or without an address (task
+ * 8.10, S3). The real file's row shows that name.
  */
 const amongMailboxes = (m: EmailAddress, list: readonly EmailAddress[]): boolean => {
   const address = m.address.trim().toLowerCase();
-  if (address !== '') return list.some((x) => x.address.trim().toLowerCase() === address);
   const name = nameKey(m.name);
+  if (address !== '') {
+    return list.some((x) => x.address.trim().toLowerCase() === address && (name === '' || nameKey(x.name) === '' || nameKey(x.name) === name));
+  }
   return name !== '' && list.some((x) => nameKey(x.name) === name);
 };
 
@@ -617,8 +626,8 @@ const amongMailboxes = (m: EmailAddress, list: readonly EmailAddress[]): boolean
  *   the moment written. The sender must be in the file's From: the same
  *   name (and address, when one was read), or, with no name read, the same
  *   address. A subject read must be the file's, and every To / Cc mailbox
- *   read must be in the file's To or Cc (by address, or by name when it has
- *   none, S3).
+ *   read must be in the file's To or Cc (by address, with the same name
+ *   when both have one, G3; or by name when it has no address, S3).
  */
 export function headerShownInPdf(body: string, r: ReconstructedMessage, printed: PrintedHeader): boolean {
   const labels = headerLabelCounts(body, r.start, r.headerEnd);
@@ -759,26 +768,112 @@ export function printedElsewhere(
   pdfNumberByPosition: readonly (number | null)[],
   plans?: ReadonlyMap<number, MessagePlan | undefined>,
 ): Map<number, BodyIntervals> {
+  const out = new Map<number, BodyIntervals>();
+  for (const [position, parts] of printedElsewhereParts(result, slots, pdfNumberByPosition, plans)) out.set(position, mergeParts(parts));
+  return out;
+}
+
+/**
+ * Where the PDF prints a part it leaves out of a body (the no-repeat rule,
+ * task 8.10), for the preview's labels (task 8.11): a rebuilt email in the
+ * PDF (`id`: its entry in `result.reconstructed`, the one with a slot) or a
+ * real email in the PDF (`position`: its list position). `number`: its PDF
+ * number (1..n over every email in the PDF).
+ */
+export type PrintedAs =
+  | { readonly kind: 'rebuilt'; readonly id: number; readonly number: number }
+  | { readonly kind: 'email'; readonly position: number; readonly number: number };
+
+/** A part [start, end) of one body that the PDF prints as the email `printedAs` (printedElsewhereParts). */
+export interface PrintedPart {
+  readonly start: number;
+  readonly end: number;
+  readonly printedAs: PrintedAs;
+}
+
+const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean =>
+  a.kind === 'rebuilt' ? b.kind === 'rebuilt' && a.id === b.id : b.kind === 'email' && a.position === b.position;
+
+/** The parts of a body as BodyIntervals: sorted, overlapping or touching parts merged. */
+function mergeParts(parts: readonly { readonly start: number; readonly end: number }[]): BodyIntervals {
+  const list = parts.map((p): [number, number] => [p.start, p.end]).sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [a, b] of list) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  return merged;
+}
+
+/**
+ * The places found for one body, made into parts that do not overlap: each
+ * piece of text covered goes to the innermost place covering it (the one
+ * that starts last; then the one that ends first; then the first found),
+ * and touching pieces of the same email are joined. Their union is exactly
+ * the union of the places (so mergeParts of the result is mergeParts of the
+ * places).
+ */
+function disjointParts(found: readonly PrintedPart[]): PrintedPart[] {
+  const bounds = [...new Set(found.flatMap((p) => [p.start, p.end]))].sort((a, b) => a - b);
+  const out: PrintedPart[] = [];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const a = bounds[k]!;
+    const b = bounds[k + 1]!;
+    let best: PrintedPart | undefined;
+    for (const p of found) {
+      if (p.start > a || p.end < b) continue;
+      if (best === undefined || p.start > best.start || (p.start === best.start && p.end < best.end)) best = p;
+    }
+    if (best === undefined) continue;
+    const last = out[out.length - 1];
+    if (last !== undefined && last.end === a && samePrintedAs(last.printedAs, best.printedAs)) out[out.length - 1] = { ...last, end: b };
+    else out.push({ start: a, end: b, printedAs: best.printedAs });
+  }
+  return out;
+}
+
+/**
+ * printedElsewhere with, for each part, the email the PDF prints it as
+ * (task 8.11: the preview labels a part left out with that email; the PDF
+ * and the preview read the same parts). Per list position: parts sorted,
+ * not overlapping (disjointParts); mergeParts of them is printedElsewhere's
+ * value. Same rules, same arguments (see printedElsewhere).
+ * Pure: `result` and `plans` are never changed.
+ */
+export function printedElsewhereParts(
+  result: EngineResult,
+  slots: readonly PdfSlot[],
+  pdfNumberByPosition: readonly (number | null)[],
+  plans?: ReadonlyMap<number, MessagePlan | undefined>,
+): Map<number, readonly PrintedPart[]> {
   const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
-  // Each entry in the PDF, with the copy whose header and text it prints (rebuiltInPdf).
-  const entries = new Map<number, EngineRebuilt>();
-  for (const slot of slots) if (slot.kind === 'rebuilt') entries.set(slot.entry.id, slot.source.shown.rebuilt);
-  const found = new Map<number, [number, number][]>();
+  // Each entry in the PDF, with the copy whose header and text it prints (rebuiltInPdf), and its PDF number.
+  const entries = new Map<number, { readonly copy: EngineRebuilt; readonly number: number }>();
+  for (const slot of slots) if (slot.kind === 'rebuilt') entries.set(slot.entry.id, { copy: slot.source.shown.rebuilt, number: slot.number });
+  const found = new Map<number, PrintedPart[]>();
   const reconstructed: readonly EngineRebuilt[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
   for (const r of reconstructed) {
     const position = result.positionByIndex[r.sourceIndex];
     if (!inPdf(position)) continue;
     let shownAs: PrintedHeader | null = null;
+    let printedAs: PrintedAs | null = null;
     if (r.link === 'entry' || r.link === 'same-as') {
       const id = r.link === 'entry' ? r.id : r.sameAs;
-      const copy = id === null ? undefined : entries.get(id);
-      if (copy !== undefined) shownAs = { kind: 'rebuilt', rebuilt: copy.rebuilt };
+      const entry = id === null ? undefined : entries.get(id);
+      if (id !== null && entry !== undefined) {
+        shownAs = { kind: 'rebuilt', rebuilt: entry.copy.rebuilt };
+        printedAs = { kind: 'rebuilt', id, number: entry.number };
+      }
     } else if (r.link === 'real' && r.realIndex !== null) {
       const real = result.positionByIndex[r.realIndex];
       const message = real === undefined || real === position || !inPdf(real) ? undefined : result.messages[real]?.message;
-      if (message !== undefined) shownAs = { kind: 'real', message, strong: r.match?.strong === true && !r.match.ambiguousDate };
+      if (message !== undefined && inPdf(real)) {
+        shownAs = { kind: 'real', message, strong: r.match?.strong === true && !r.match.ambiguousDate };
+        printedAs = { kind: 'email', position: real, number: pdfNumberByPosition[real]! };
+      }
     }
-    if (shownAs === null) continue;
+    if (shownAs === null || printedAs === null) continue;
     const { start, headerEnd, end } = r.rebuilt;
     const body = result.messages[position]?.message.bodyText ?? '';
     if (!Number.isInteger(start) || !Number.isInteger(headerEnd) || !Number.isInteger(end) || start < 0 || headerEnd < start || end < headerEnd || end > body.length) continue;
@@ -797,19 +892,10 @@ export function printedElsewhere(
       list = [];
       found.set(position, list);
     }
-    list.push([from, end]);
+    list.push({ start: from, end, printedAs });
   }
-  const out = new Map<number, BodyIntervals>();
-  for (const [position, list] of found) {
-    list.sort((a, b) => a[0] - b[0]);
-    const merged: [number, number][] = [];
-    for (const [a, b] of list) {
-      const last = merged[merged.length - 1];
-      if (last !== undefined && a <= last[1]) last[1] = Math.max(last[1], b);
-      else merged.push([a, b]);
-    }
-    out.set(position, merged);
-  }
+  const out = new Map<number, readonly PrintedPart[]>();
+  for (const [position, list] of found) out.set(position, disjointParts(list));
   return out;
 }
 
@@ -820,9 +906,13 @@ export function printedElsewhere(
  * space alone; a piece with text keeps the range whole there. Returns
  * whether text other than white space was left out.
  */
-function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, blankOnly: boolean, out: PlanRange[]): boolean {
+function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, blankOnly: boolean, out: CutRanges): boolean {
   let leftOut = false;
   let from = r.start;
+  const push = (range: PlanRange, cut: boolean): void => {
+    out.ranges.push(range);
+    out.cut.push(cut);
+  };
   for (const [a, b] of intervals) {
     if (b <= from) continue;
     if (a >= r.end || from >= r.end) break;
@@ -830,13 +920,34 @@ function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, blankOnl
     const end = Math.min(b, r.end);
     const hasText = /\S/.test(body.slice(start, end));
     if (blankOnly && hasText) continue;
-    if (start > from) out.push({ ...r, start: from, end: start });
-    out.push({ ...r, start, end, keep: false });
+    if (start > from) push({ ...r, start: from, end: start }, false);
+    push({ ...r, start, end, keep: false }, true);
     if (hasText) leftOut = true;
     from = end;
   }
-  if (from < r.end) out.push({ ...r, start: from, end: r.end });
+  if (from < r.end) push({ ...r, start: from, end: r.end }, false);
   return leftOut;
+}
+
+/** Ranges, and for each one whether the no-repeat rule left it out (same order). */
+interface CutRanges {
+  readonly ranges: PlanRange[];
+  readonly cut: boolean[];
+}
+
+/** withoutPrintedElsewhere, with which ranges the rule left out. */
+function cutPrintedElsewhere(body: string, ranges: readonly PlanRange[], parts: BodyIntervals): CutRanges & { readonly leftOut: boolean } {
+  const out: CutRanges = { ranges: [], cut: [] };
+  let leftOut = false;
+  for (const r of ranges) {
+    if (!r.keep) {
+      out.ranges.push(r);
+      out.cut.push(false);
+      continue;
+    }
+    if (cutRange(body, r, near(parts, r.start, r.end), isOwn(r), out)) leftOut = true;
+  }
+  return { ...out, leftOut };
 }
 
 /** The intervals of a sorted list that may touch [start, end), as a slice (binary search on the end). */
@@ -872,16 +983,87 @@ export function withoutPrintedElsewhere(
   parts: BodyIntervals,
 ): { readonly ranges: readonly PlanRange[]; readonly leftOut: boolean } {
   if (parts.length === 0) return { ranges, leftOut: false };
-  const out: PlanRange[] = [];
-  let leftOut = false;
-  for (const r of ranges) {
-    if (!r.keep) {
-      out.push(r);
-      continue;
+  const cut = cutPrintedElsewhere(body, ranges, parts);
+  return { ranges: cut.ranges, leftOut: cut.leftOut };
+}
+
+/** A range of a body as the PDF prints it: a plan range, or a piece of one the no-repeat rule left out (`printedAs`: where the PDF prints it). */
+export interface PdfRange extends PlanRange {
+  /** Set only on a piece the no-repeat rule left out (then `keep` is false): the email the PDF prints it as. */
+  readonly printedAs: PrintedAs | null;
+}
+
+/**
+ * The ranges of a real email's body as the PDF prints them (task 8.11, for
+ * the preview's labels): the plan's ranges cut exactly as bodyTextOf cuts
+ * them (withoutPrintedElsewhere with mergeParts of `parts`, the same call
+ * the PDF makes), each piece the rule left out carrying the email the PDF
+ * prints it as (from `parts`, printedElsewhereParts; a piece that spans two
+ * parts is split between them). null when the PDF prints the body whole
+ * ("Print full original text", a plan missing, not valid or failed: see
+ * bodyTextOf), or when nothing is left out this way: the plan's ranges are
+ * then what the PDF prints.
+ */
+export function pdfRanges(
+  body: string,
+  plan: MessagePlan | null | undefined,
+  policy: Pick<OutputPolicy, 'unfoldEverything'>,
+  parts: readonly PrintedPart[],
+): readonly PdfRange[] | null {
+  if (policy.unfoldEverything || parts.length === 0 || !validRanges(plan, body.length) || plan.fallback) return null;
+  const cut = cutPrintedElsewhere(body, plan.ranges, mergeParts(parts));
+  if (!cut.cut.includes(true)) return null;
+  const out: PdfRange[] = [];
+  cut.ranges.forEach((r, k) => {
+    if (cut.cut[k] !== true) {
+      out.push({ ...r, printedAs: null });
+      return;
     }
-    if (cutRange(body, r, near(parts, r.start, r.end), isOwn(r), out)) leftOut = true;
-  }
-  return { ranges: out, leftOut };
+    // A piece left out lies inside the union of the parts, which tile it.
+    let from = r.start;
+    for (const p of parts) {
+      if (p.end <= from || p.start >= r.end) continue;
+      const start = Math.max(from, p.start);
+      const end = Math.min(r.end, p.end);
+      if (start > from) out.push({ ...r, start: from, end: start, printedAs: null }); // not expected (parts tile it)
+      out.push({ ...r, start, end, printedAs: p.printedAs });
+      from = end;
+    }
+    if (from < r.end) out.push({ ...r, start: from, end: r.end, printedAs: null }); // not expected
+  });
+  return out;
+}
+
+/** What the no-repeat rule needs: the PDF's input, less what only the layout uses. */
+export type NoRepeatInput = Pick<BuildPdfInput, 'result' | 'positions' | 'plans' | 'policy' | 'rebuilt'>;
+
+/** The emails in the PDF and the parts of their bodies printed elsewhere (noRepeat). */
+export interface NoRepeat {
+  readonly order: PdfOrder;
+  /** Per list position, the parts left out and where they are printed (printedElsewhereParts); empty under "Print full original text". */
+  readonly parts: ReadonlyMap<number, readonly PrintedPart[]>;
+  /** Per list position, the same parts merged: what bodyTextOf leaves out (printedElsewhere). */
+  readonly elsewhere: ReadonlyMap<number, BodyIntervals>;
+}
+
+/**
+ * The order of the PDF (planPdfOrder, no rebuilt email under "Print full
+ * original text") and the no-repeat rule's parts, exactly as
+ * buildPdfDocument works them out: it calls this, and so does the preview
+ * (src/ui-model/printed-elsewhere.ts, task 8.11), so the labels say what
+ * the PDF does.
+ */
+export function noRepeat(input: NoRepeatInput): NoRepeat {
+  const { result, positions, plans } = input;
+  const unfold = input.policy.unfoldEverything === true;
+  const order = planPdfOrder(result, positions, unfold ? [] : (input.rebuilt ?? []));
+  if (unfold) return { order, parts: new Map(), elsewhere: new Map() };
+  const planByPosition = new Map<number, MessagePlan | undefined>();
+  for (const slot of order.slots) if (slot.kind === 'email') planByPosition.set(slot.position, plans[slot.plan]);
+  const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition, planByPosition);
+  const elsewhere = new Map<number, BodyIntervals>();
+  for (const [position, list] of parts) elsewhere.set(position, mergeParts(list));
+  return { order, parts, elsewhere };
 }
 
 /** pdfBodyText, and whether the no-repeat rule left something out. */
@@ -1268,12 +1450,12 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   // The included emails: positions that exist, each once, in the given
   // order; the rebuilt ones chosen, at their place (planPdfOrder); none
   // under "Print full original text" (see the top of this file).
-  const rebuiltIds = input.policy.unfoldEverything === true ? [] : (input.rebuilt ?? []);
-  const { slots, pdfNumberByPosition } = planPdfOrder(result, positions, rebuiltIds);
-  // The no-repeat rule (task 8.10): nothing is printed twice unless the whole text is.
-  const planByPosition = new Map<number, MessagePlan | undefined>();
-  for (const slot of slots) if (slot.kind === 'email') planByPosition.set(slot.position, plans[slot.plan]);
-  const elsewhere = input.policy.unfoldEverything === true ? new Map<number, BodyIntervals>() : printedElsewhere(result, slots, pdfNumberByPosition, planByPosition);
+  // The no-repeat rule (task 8.10): nothing is printed twice unless the whole
+  // text is. The preview's labels use the same call (noRepeat, task 8.11).
+  const {
+    order: { slots, pdfNumberByPosition },
+    elsewhere,
+  } = noRepeat({ result, positions, plans, policy: input.policy, rebuilt: input.rebuilt });
   const emails: PdfEmail[] = [];
   const entries: PdfIndexEntry[] = [];
   const people: ParticipantSource[] = [];
