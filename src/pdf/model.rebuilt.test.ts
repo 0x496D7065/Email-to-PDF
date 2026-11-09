@@ -502,14 +502,17 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
     expect(blockTexts(doc.cover.blocks)).toContain(`Dates: ${EN.dateRange(doc.cover.dateRange!.first, doc.cover.dateRange!.last)}`);
   });
 
-  it('cover: SHA-256 hashes of the REAL files only, under the real email\'s number in this PDF; a rebuilt email has none', () => {
+  it('cover: no source files and no SHA-256 (task 8.12); the real file is named in its own email only, a rebuilt email has no file', () => {
     const doc = build(engineOf(LAST));
     const file = fixture(LAST).source;
-    expect(doc.cover.sources).toEqual([{ fileName: file.fileName, sha256: file.sha256, kind: file.kind, inputIndex: 0, email: 4, mergedCopy: false }]);
     const texts = blockTexts(doc.cover.blocks).join('\n');
-    expect(texts.match(/\b[0-9a-f]{64}\b/g)).toEqual([file.sha256]);
-    expect(texts).toContain(`${file.fileName}${EN.separator}${EN.sourceEmail(4)}`);
-    for (const e of rebuiltOf(doc)) expect(e.fields.map((f) => f.value.map(text).join(' ')).join(' ')).not.toMatch(/[0-9a-f]{64}/);
+    expect(texts).not.toMatch(/[0-9a-f]{64}/);
+    expect(texts).not.toContain(file.fileName);
+    expect(fieldOf(doc.emails.find((e) => e.number === 4)!, EN.fileLabel)).toEqual([file.fileName]);
+    for (const e of rebuiltOf(doc)) {
+      expect(fieldOf(e, EN.fileLabel)).toBeUndefined();
+      expect(e.fields.map((f) => f.value.map(text).join(' ')).join(' ')).not.toMatch(/[0-9a-f]{64}/);
+    }
   });
 
   it('cover: a rebuilt email dated by a day alone starts at the start of that day IN THE CHOSEN ZONE, so the range never runs backwards', () => {
@@ -546,46 +549,43 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
     expect(docOf('2025-03-02T14:00:00Z', 'Asia/Tokyo').cover.dateRange).toEqual({ first: '2025-03-02 23:00:00 UTC+09:00', last: '2025-03-03' });
   });
 
-  it('cover: source files with several real files and rebuilt emails between them: real files only, under their PDF numbers', () => {
+  it('several real files and rebuilt emails between them: each real file named in its own email, under its PDF number; none on the cover', () => {
     const result = engineOf('10-order-1-alice.eml', LAST);
     const ids = rebuiltEntries(result).map((r) => r.id);
     const doc = build(result);
     const order = planPdfOrder(result, [0, 1], ids);
+    const fileOf = (d: PdfDocument, n: number): string[] | undefined => fieldOf(d.emails.find((e) => e.number === n)!, EN.fileLabel);
     // Real #1, rebuilt #2 and #3, real #4.
     expect(doc.emails.map((e) => `${e.rebuilt === null ? 'real' : 'rebuilt'} ${String(e.number)}`)).toEqual(['real 1', 'rebuilt 2', 'rebuilt 3', 'real 4']);
     expect(order.pdfNumberByPosition).toEqual([1, 4]);
-    expect(doc.cover.sources.map((s) => s.email)).toEqual([1, 4]);
-    expect(doc.cover.sources.map((s) => s.email)).toEqual(order.pdfNumberByPosition);
-    expect(doc.cover.sources.map((s) => s.fileName)).toEqual([fixture('10-order-1-alice.eml').source.fileName, fixture(LAST).source.fileName]);
+    expect(doc.pdfNumberByPosition).toEqual(order.pdfNumberByPosition);
+    expect(fileOf(doc, 1)).toEqual([fixture('10-order-1-alice.eml').source.fileName]);
+    expect(fileOf(doc, 4)).toEqual([fixture(LAST).source.fileName]);
     const texts = blockTexts(doc.cover.blocks).join('\n');
-    expect(texts.match(/\b[0-9a-f]{64}\b/g)).toHaveLength(2);
-    expect(texts).toContain(`${fixture(LAST).source.fileName}${EN.separator}${EN.sourceEmail(4)}`);
+    expect(texts).not.toMatch(/[0-9a-f]{64}/);
+    expect(texts).not.toContain(fixture(LAST).source.fileName);
 
     // The first real email unticked: LAST and the rebuilt emails read from it stay; LAST is the last email.
     const without = build(result, { positions: [1] });
     const withoutOrder = planPdfOrder(result, [1], ids);
     expect(without.emails.map((e) => e.rebuilt === null)).toEqual([false, false, true]);
-    expect(without.cover.sources.map((s) => s.email)).toEqual([3]);
-    expect(without.cover.sources.map((s) => s.email)).toEqual([withoutOrder.pdfNumberByPosition[1]]);
     expect(withoutOrder.pdfNumberByPosition).toEqual([null, 3]);
-    expect(without.cover.sources.map((s) => s.fileName)).toEqual([fixture(LAST).source.fileName]);
+    expect(fileOf(without, 3)).toEqual([fixture(LAST).source.fileName]);
     // LAST unticked: its rebuilt emails go with it (follow-source rule); the first email is number 1.
     const first = build(result, { positions: [0] });
     expect(first.emails.map((e) => e.rebuilt)).toEqual([null]);
-    expect(first.cover.sources.map((s) => s.email)).toEqual([1]);
+    expect(fileOf(first, 1)).toEqual([fixture('10-order-1-alice.eml').source.fileName]);
   });
 
-  it('cover: a merged duplicate copy is listed under the number of the email it was merged into, rebuilt emails between', () => {
+  it('a merged duplicate copy is named in the File row of the email it was merged into, rebuilt emails between', () => {
     const result = engineOf('10-order-1-alice.eml', '10-order-1-alice.eml', LAST);
     expect(result.messages).toHaveLength(2);
     const doc = build(result);
     expect(doc.emails.map((e) => `${e.rebuilt === null ? 'real' : 'rebuilt'} ${String(e.number)}`)).toEqual(['real 1', 'rebuilt 2', 'rebuilt 3', 'real 4']);
-    expect(doc.cover.sources.map((s) => [s.email, s.mergedCopy, s.inputIndex])).toEqual([
-      [1, false, 0],
-      [1, true, 1],
-      [4, false, 2],
-    ]);
-    expect([...new Set(doc.cover.sources.map((s) => s.email))]).toEqual(doc.pdfNumberByPosition);
+    const name = fixture('10-order-1-alice.eml').source.fileName;
+    expect(fieldOf(doc.emails[0]!, EN.fileLabel)).toEqual([name, name]);
+    expect(fieldOf(doc.emails[3]!, EN.fileLabel)).toEqual([fixture(LAST).source.fileName]);
+    expect(doc.pdfNumberByPosition).toEqual([1, 4]);
   });
 
   it('nothing about rebuilt emails when none is chosen (switch off), and the real email is the same either way but for its number', () => {
@@ -606,7 +606,6 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () => {
     const entry = on.index.entries.find((e) => !e.rebuilt)!;
     const offEntry = off.index.entries[0]!;
     expect(entry).toEqual({ ...offEntry, number: 4, anchor: emailAnchor(4), bookmark: `4.${offEntry.bookmark.slice(2)}` });
-    expect(on.cover.sources).toEqual(off.cover.sources.map((s) => ({ ...s, email: 4 })));
   });
 
   it('the source email unticked: no rebuilt email at all (it follows its source)', () => {

@@ -118,7 +118,7 @@ export interface NormalizedMessage {
    */
   readonly bodyText: string;
   readonly attachments: readonly AttachmentInfo[];
-  /** Which dropped file this came from, and the SHA-256 of that file's bytes (for the PDF cover page). */
+  /** Which dropped file this came from, and the SHA-256 of that file's bytes (the app's key for the file: src/parsing/hash.ts; not printed in the PDF). */
   readonly source: {
     readonly fileName: string;
     readonly sha256: string;

@@ -112,7 +112,6 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
     body: { font: 'sans-regular', size: 10, color: TEXT, lineHeight: 1.35 },
     muted: { font: 'sans-italic', size: 9.5, color: GREY, lineHeight: 1.35 },
     code: { font: 'mono-regular', size: 9, color: GREY, lineHeight: 1.35 },
-    mono: { font: 'mono-regular', size: 8.5, color: TEXT, lineHeight: 1.35 },
   },
   footer: { style: { font: 'sans-regular', size: 8.5, color: GREY, lineHeight: 1.3 }, baselineFromBottom: 30, align: 'center' },
   fields: { labelWidth: 78, gap: 10, rowGap: 1.5 },
@@ -158,7 +157,7 @@ function checkStyle(style: TextStyle | undefined, what: string): void {
   positive(style!.lineHeight, `${what}.lineHeight`);
 }
 
-const ROLE_NAMES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-value', 'body', 'muted', 'code', 'mono'];
+const ROLE_NAMES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-value', 'body', 'muted', 'code'];
 
 /**
  * Throws a clear Error when a config cannot be laid out: lengths that are

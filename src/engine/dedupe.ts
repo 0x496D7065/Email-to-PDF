@@ -4,9 +4,9 @@
 // copy in "Sent", an .eml and an .msg export of one message, a message re-sent
 // through a relay. This module finds copies that are PROVABLY identical and
 // keeps one of them. Nothing is thrown away: every merged copy is listed next
-// to the kept message (file name, SHA-256, which rule matched), so the PDF
-// cover page can still name every source file (README.md, rule R6: collapse,
-// never delete).
+// to the kept message (file name, SHA-256, which rule matched), so the
+// preview and the kept email's File row in the PDF can still name every
+// source file (README.md, rule R6: collapse, never delete).
 //
 // Pure function: no DOM, no workers, no storage, and the input is never
 // modified (README.md, rule R7).

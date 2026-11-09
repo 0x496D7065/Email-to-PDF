@@ -2,9 +2,10 @@
 // document (src/pdf/writer/layout.ts) out, ready for a PdfBackend's
 // render(). Everything is placed here; the backend draws exactly that.
 //
-// Order of the pages: the cover (its blocks), then the index from a new
-// page (src/pdf/layout/index-table.ts: one row per email with its page
-// number, each row a link to the email), then the emails, from a new page.
+// Order of the pages: the cover (its blocks), then the index right below
+// them, on the same page when its start fits there (task 8.12;
+// src/pdf/layout/index-table.ts: one row per email with its page number,
+// each row a link to the email), then the emails, from a new page.
 //
 // Page numbers in the index: the emails are laid out once, on pages of
 // their own, counted from 0; the cover and the index ("the front") come

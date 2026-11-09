@@ -123,7 +123,7 @@ describe('numbering and the index', () => {
     expect(doc.emails).toEqual([]);
     expect(doc.index.entries).toEqual([]);
     expect(doc.cover.dateRange).toBeNull();
-    expect(doc.cover.sources).toEqual([]);
+    expect(doc.cover.participants).toEqual([]);
     expect(doc.pdfNumberByPosition).toEqual([null]);
   });
 });
@@ -348,7 +348,7 @@ describe('cover', () => {
     expect(participantsOf([nameless], 'en')).toEqual([{ name: '', address: 'Finn@Example.TEST' }]);
   });
 
-  it('lists every source file of the included emails, merged copies too, with their hashes', () => {
+  it('has no source file list and no hash on the cover (task 8.12); each email names its files, merged copies too', () => {
     const original = make({ messageId: 'same@example.test' });
     const copy = { ...original, source: { fileName: 'copy-of-it.msg', sha256: 'c'.repeat(64), kind: 'msg' as const } };
     const other = make();
@@ -359,31 +359,19 @@ describe('cover', () => {
       positions: (r) => r.messages.flatMap((m, k) => (m.message === excluded ? [] : [k])),
     });
     expect(result.counts.duplicatesMerged).toBe(1);
-    expect(doc.cover.sources).toEqual([
-      { fileName: original.source.fileName, sha256: original.source.sha256, kind: 'eml', inputIndex: 0, email: 1, mergedCopy: false },
-      { fileName: 'copy-of-it.msg', sha256: 'c'.repeat(64), kind: 'msg', inputIndex: 3, email: 1, mergedCopy: true },
-      { fileName: other.source.fileName, sha256: other.source.sha256, kind: 'eml', inputIndex: 2, email: 2, mergedCopy: false },
-    ]);
-    const lists = doc.cover.blocks.filter((b) => b.kind === 'list');
-    expect(lists).toHaveLength(2);
-    const sourceList = lists[1];
-    // A merged copy is listed like the others: name, its email, its hash (task 8.8: no explanation).
-    expect(sourceList?.kind === 'list' ? sourceList.items.map((item) => item.map(text)) : null).toEqual([
-      [`${original.source.fileName} - email 1`, original.source.sha256],
-      ['copy-of-it.msg - email 1', 'c'.repeat(64)],
-      [`${other.source.fileName} - email 2`, other.source.sha256],
-    ]);
-    expect(sourceList?.kind === 'list' ? sourceList.items[0]![1] : null).toEqual([{ role: 'mono', text: original.source.sha256 }]);
-    // The files that could not be read are not on the cover (task 8.8: step 1 of the app lists them).
+    expect(Object.keys(doc.cover)).not.toContain('sources');
+    // The cover: title, summary, people; one list (the people), no source files heading.
+    expect(doc.cover.blocks.filter((b) => b.kind === 'list')).toHaveLength(1);
     const headings = doc.cover.blocks.filter((b) => b.kind === 'heading').map((b) => (b.kind === 'heading' ? text(b.line) : ''));
-    expect(headings).toEqual(['Email correspondence', 'People', 'Source files']);
+    expect(headings).toEqual(['Email correspondence', 'People']);
     expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
+    // No file name and no hash on the cover, read or not.
     const coverText = JSON.stringify(doc.cover.blocks);
-    expect(coverText).not.toContain('broken.eml');
-    expect(coverText).not.toContain('huge.eml');
-    expect(coverText).not.toContain('f'.repeat(64));
-    // The email header names its files too.
+    for (const name of [original.source.fileName, 'copy-of-it.msg', other.source.fileName, 'broken.eml', 'huge.eml']) expect(coverText, name).not.toContain(name);
+    expect(coverText).not.toMatch(/[0-9a-f]{64}/);
+    // Collapse, never delete: each email header still names its files, the merged copy included.
     expect(field(doc.emails[0]!, 'File')!.map(text)).toEqual([original.source.fileName, 'copy-of-it.msg']);
+    expect(field(doc.emails[1]!, 'File')!.map(text)).toEqual([other.source.fileName]);
   });
 
   it('gives a nameless file a visible text', () => {

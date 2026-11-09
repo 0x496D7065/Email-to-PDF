@@ -69,7 +69,7 @@ const graphemes = (text: string): string[] => [...new Intl.Segmenter('en', { gra
 describe('glyph mapping', () => {
   const ACCENTS = '\u{E9} \u{E8} \u{EA} \u{EB} \u{E0} \u{E7} \u{EF} \u{F4} \u{FC} \u{DF} \u{153} \u{20AC} \u{201C} \u{201D} \u{2018} \u{2019} \u{AB} \u{BB} \u{2013} \u{2014} \u{2026} \u{142} \u{151} \u{15F} \u{11F}';
 
-  it.each<PdfRole>(['body', 'heading', 'muted', 'field-label', 'mono'])('draws common accents and punctuation with real glyphs (%s)', (role) => {
+  it.each<PdfRole>(['body', 'heading', 'muted', 'field-label', 'code'])('draws common accents and punctuation with real glyphs (%s)', (role) => {
     const { ts, runs, copies } = wrap([{ role, text: ACCENTS }]);
     expect(ts.placeholders).toBe(0);
     expect(runs).toHaveLength(1);

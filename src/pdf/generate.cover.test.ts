@@ -5,10 +5,11 @@
 // - nothing in the PDF (cover, index, emails, bookmarks) says or hints that
 //   an email was rebuilt from quoted text (task 8.3, checked again here in
 //   every language, default and "Print full original text");
-// - the cover's "Source files" heading is followed by the list itself: the
-//   small note that used to sit there is gone;
-// - the cover still has its title, date range, email count, generation
-//   date, people and every source file with its SHA-256 (brief section 8.5);
+// - the cover has its title, date range, email count, generation date and
+//   people, and NO source files: no heading, no file names, no SHA-256
+//   (user decision 2026-11-09, task 8.12, replacing brief section 8.5);
+// - the index follows the cover information directly on page 1, and every
+//   email starts at the top of a page of its own (task 8.12);
 // - collapse, never delete: the engine result (every message and every
 //   rebuilt email) is the same after the PDF is made.
 // Synthetic fixtures only (tests/fixtures/eml/): the last email of a thread
@@ -139,10 +140,13 @@ const REMOVED: Record<Locale, string[]> = {
   ],
 };
 
+/** The cover's old "Source files" heading (removed in task 8.12, with the file list and the SHA-256). */
+const SOURCES_HEADING: Record<Locale, string> = { en: 'Source files', fr: 'Fichiers sources', nl: 'Bronbestanden' };
+
 /** The PDF read back: lines may wrap anywhere, so texts are compared with spaces collapsed. */
 const flat = (text: string): string => text.replace(/\s+/g, ' ');
 
-describe('task 8.7: no text about rebuilt emails, no note under "Source files", the cover otherwise whole', () => {
+describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or SHA-256, the index right after the cover', () => {
   it('the fixtures give rebuilt emails, and catalog fragments to look for', () => {
     for (const set of Object.keys(SETS) as SetName[]) {
       const result = runEngine(messagesOf(set).map((message) => ({ ok: true as const, message })));
@@ -150,8 +154,11 @@ describe('task 8.7: no text about rebuilt emails, no note under "Source files", 
     }
     for (const locale of LOCALES) expect(rebuiltFragments(locale).length, locale).toBeGreaterThan(10);
     // The note is gone from the PDF texts.
-    expect(Object.keys(createPdfStrings('en'))).not.toContain('sourcesIntro');
-    for (const locale of LOCALES) expect(Object.keys(CATALOG[locale]!.pdf.document)).not.toContain('sourcesIntro');
+    // So are the source file texts (task 8.12).
+    for (const key of ['sourcesIntro', 'sourcesHeading', 'sourceEmail', 'separator']) expect(Object.keys(createPdfStrings('en'))).not.toContain(key);
+    for (const locale of LOCALES) {
+      for (const key of ['sourcesIntro', 'sources', 'sourceEmail']) expect(Object.keys(CATALOG[locale]!.pdf.document), locale).not.toContain(key);
+    }
   });
 
   for (const set of Object.keys(SETS) as SetName[]) {
@@ -174,7 +181,7 @@ describe('task 8.7: no text about rebuilt emails, no note under "Source files", 
           for (const f of [...rebuiltFragments(locale), ...REMOVED[locale]]) expect(text, `"${f}"`).not.toContain(flat(f));
           for (const title of bookmarks) expect(title).not.toMatch(REBUILT_WORDS[locale]);
 
-          // The cover: title, dates, count, zone, made on; people; every source file and its SHA-256.
+          // The cover: title, dates, count, zone, made on; people. No source files, no SHA-256 (task 8.12).
           expect(cover[0]).toBe(s.title);
           const range = doc.cover.dateRange!;
           expect(coverText).toContain(flat(`${s.datesLabel} ${range.first === range.last ? range.first : s.dateRange(range.first, range.last)}`));
@@ -183,31 +190,33 @@ describe('task 8.7: no text about rebuilt emails, no note under "Source files", 
           expect(cover).toContain(s.peopleHeading);
           expect(doc.cover.participants.length).toBeGreaterThan(0);
           for (const p of doc.cover.participants) expect(coverText).toContain(p.name === '' ? p.address : s.mailbox(p.name, p.address));
-          // Real files only: every dropped file once, merged copies included.
-          expect(doc.cover.sources).toHaveLength(SETS[set].length);
-          expect(new Set(doc.cover.sources.map((f) => f.fileName))).toEqual(new Set(SETS[set]));
-          expect(coverText.match(/\b[0-9a-f]{64}\b/g)).toEqual(doc.cover.sources.map((f) => f.sha256));
+          // Task 8.12: no source file list, no file names, no SHA-256 anywhere in the PDF.
+          // (The file names are only in each real email's own File row, never before the first email.)
+          expect(text).not.toMatch(/\b[0-9a-f]{64}\b/);
+          expect(text).not.toContain(SOURCES_HEADING[locale]);
+          const firstEmailPage = pages.findIndex((lines) => lines[0] === doc.emails[0]!.heading);
+          expect(firstEmailPage).toBeGreaterThan(0);
+          const front = pages.slice(0, firstEmailPage);
+          const frontText = flat(front.map((lines) => lines.join(' ')).join(' '));
+          for (const name of SETS[set]) expect(frontText, name).not.toContain(name);
+          expect(Object.keys(doc.cover)).not.toContain('sources');
+          // The cover blocks end with the people list: no other heading after it.
+          const headings = doc.cover.blocks.filter((b) => b.kind === 'heading').map((b) => b.line.map((r) => r.text).join(''));
+          expect(headings).toEqual([s.title, s.peopleHeading]);
 
-          // Under "Source files": straight into the list (its first file, then its SHA-256), no note.
-          const at = cover.indexOf(s.sourcesHeading);
-          expect(at).toBeGreaterThan(0);
-          const firstFile = doc.cover.sources[0]!;
-          expect(cover[at + 1]).toBe(`• ${firstFile.fileName}${s.separator}${s.sourceEmail(firstFile.email)}`);
-          expect(cover[at + 2]).toBe(firstFile.sha256);
-          // Each file line is followed by its SHA-256 line, and the cover ends with the list (then the footer).
-          // Assumes the cover fits on one page and nothing follows the source list (true for
-          // these fixtures: no unreadable files), so only the footer is cut off.
-          const rest = cover.slice(at + 1, -1);
-          expect(rest).toHaveLength(2 * doc.cover.sources.length);
-          doc.cover.sources.forEach((f, k) => {
-            expect(rest[2 * k]!.startsWith(`• ${f.fileName}${s.separator}`)).toBe(true);
-            expect(rest[2 * k + 1]).toBe(f.sha256);
-          });
+          // The index follows the cover information on page 1: its heading right after the people list.
+          const people = cover.indexOf(s.peopleHeading);
+          const indexAt = cover.indexOf(s.indexHeading);
+          expect(people).toBeGreaterThan(0);
+          expect(indexAt).toBe(people + 1 + doc.cover.participants.length);
+          // Every email starts at the top of a page of its own (its heading first), in order, after the front.
+          let previous = firstEmailPage - 1;
+          for (const e of doc.emails) {
+            const at = pages.findIndex((lines, i) => i > previous && lines[0] === e.heading);
+            expect(at, e.heading).toBeGreaterThan(previous);
+            previous = at;
+          }
           expect(cover.at(-1)).toBe(s.pageFooter(1, pages.length));
-          // No paragraph in the model either: heading, then the list.
-          const blocks = doc.cover.blocks;
-          const h = blocks.findIndex((b) => b.kind === 'heading' && b.line.map((r) => r.text).join('') === s.sourcesHeading);
-          expect(blocks[h + 1]?.kind).toBe('list');
 
           // Collapse, never delete: the engine data is unchanged by making the PDF.
           expect(JSON.stringify(result)).toBe(before);

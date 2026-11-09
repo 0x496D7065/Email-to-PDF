@@ -13,8 +13,8 @@
 //    numbered exactly like real emails (user decision 2026-11-02, task 8.3:
 //    emails 1 to 4, nothing saying they were rebuilt: no marker, no note,
 //    no "Taken from" row, no cover count or section); the cover counts 4
-//    emails; the SHA-256 of the real file only, with no note under the
-//    "Source files" heading (task 8.7).
+//    emails; no source file list and no SHA-256, the index right after the
+//    People list on the cover page (task 8.12).
 // 2. The switch off: only the real email, as email 1.
 // 3. The email they were taken from unticked (another email added, so a
 //    PDF can still be made): the cards are marked "Not in the PDF", and
@@ -145,8 +145,10 @@ test('by default the PDF holds the three rebuilt emails, shown and numbered like
   const all = pages.join(' ');
   // The cover: all four emails counted, nothing about rebuilt emails.
   expect(pages[0]).toContain('Emails 4 emails');
-  // Under "Source files", straight into the list: no note (task 8.7).
-  expect(pages[0]).toMatch(new RegExp(`${en.pdf.document.sources} • ${LAST.name.replaceAll('.', '\\.')} - email 4 [0-9a-f]{64} Page 1 of`));
+  // No source files (task 8.12): after the People list comes the index, on the same page; no file name before the emails.
+  expect(pages[0]).toMatch(new RegExp(`${en.pdf.document.people} • .+ ${en.pdf.document.index} ${en.pdf.document.column.number} `));
+  expect(pages[0]).not.toContain('Source files');
+  expect(pages[0]).not.toContain(LAST.name);
   expect(all).not.toContain('SHA-256 fingerprint');
   // Nothing in the PDF says an email was rebuilt (the real email's text has no such word either).
   expect(all).not.toMatch(/rebuilt/i);
@@ -154,16 +156,16 @@ test('by default the PDF holds the three rebuilt emails, shown and numbered like
   expect(all).not.toContain(en.rebuilt.noteNoMarks.replace('{number}', '1'));
   expect(all).not.toContain(en.rebuilt.noteMarks.replace('{number}', '1'));
   expect(all).not.toContain('As written in the quote');
-  // The index lists the rebuilt ones too.
-  expect(pages[1]).toContain('Re: Office desks and chairs');
+  // The index (on the cover page) lists the rebuilt ones too.
+  expect(pages[0]).toContain('Re: Office desks and chairs');
   // Emails 1 to 4 in timeline order: the three rebuilt ones, then the email added.
   for (const n of [1, 2, 3, 4]) expect(all.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
   expect(all.indexOf(`${heading(3)} From`)).toBeLessThan(all.indexOf(`${heading(4)} From`));
   // A quoted time is shown as a real email's date (no "about").
   expect(all).toMatch(/Date 2025-03-03 \d\d:40:00 UTC\+01:00/);
   expect(all).not.toMatch(/Date about/);
-  // The SHA-256 of the real file only.
-  expect(all.match(/\b[0-9a-f]{64}\b/g)).toHaveLength(1);
+  // No SHA-256 at all (task 8.12).
+  expect(all).not.toMatch(/\b[0-9a-f]{64}\b/);
   await expectNothingLeftThePage(page);
 });
 
@@ -267,7 +269,9 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
   for (const quoted of ['Wednesday at 10:00 works for me.', 'I can come by on Wednesday 5 March', 'We are furnishing a small office']) {
     expect(all.split(quoted), quoted).toHaveLength(2);
   }
-  expect(all.match(/\b[0-9a-f]{64}\b/g)).toHaveLength(1);
+  // No source file list and no SHA-256 in this mode either (task 8.12).
+  expect(all).not.toMatch(/\b[0-9a-f]{64}\b/);
+  expect(all).not.toContain('Source files');
 
   await everything.uncheck();
   await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');

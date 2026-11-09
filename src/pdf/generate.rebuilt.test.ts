@@ -5,8 +5,8 @@
 // rebuilt email looks and is numbered exactly like a real one, so the PDF
 // holds no rebuilt heading, marker, note, "Taken from" row, cover count or
 // cover section, in any language; every email is numbered 1..n in PDF
-// order (index, headings, bookmarks, links); the cover's SHA-256 list holds
-// the real file only. Synthetic fixture only
+// order (index, headings, bookmarks, links); the cover has no source file
+// list and no SHA-256 (task 8.12). Synthetic fixture only
 // (tests/fixtures/eml/13-order-4-bob-outlook-nl.eml: the last email of a
 // thread, whose quote holds 3 earlier emails).
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -30,8 +30,6 @@ beforeAll(async () => {
   if (found === undefined) throw new Error('no fixture');
   last = found;
 });
-
-const EN = createPdfStrings('en');
 
 /** The PDF of the last email alone, with the given rebuilt ids (default: every entry), read back as text. */
 async function pdfText(options: { rebuilt?: readonly number[]; positions?: readonly number[]; locale?: 'en' | 'fr' | 'nl' } = {}) {
@@ -93,16 +91,19 @@ function removedTexts(locale: 'en' | 'fr' | 'nl'): { fragments: string[]; word: 
 }
 
 describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emails)', () => {
-  it('cover: "Emails" counts all four, no rebuilt row or section; the hash of the real file only', async () => {
-    const { pages, result } = await pdfText();
+  it('cover: "Emails" counts all four, no rebuilt row or section; no source file list and no hash (task 8.12)', async () => {
+    const { pages, result, pdf } = await pdfText();
+    const dests = readDests(pdf);
     const cover = pages[0]!.join(' ');
     expect(cover).toContain('Emails 4 emails');
     expect(cover).not.toMatch(/rebuilt/i);
-    // The real file, under the real email's number in this PDF.
-    expect(cover).toContain(`${last.source.fileName}${EN.separator}${EN.sourceEmail(4)}`);
-    // SHA-256: exactly one, the file's own (one file; the rebuilt emails have none).
-    const hashes = pages.flat().join('\n').match(/\b[0-9a-f]{64}\b/g);
-    expect(hashes).toEqual([last.source.sha256]);
+    // The real file is named only in its own email's File row, never before the first email.
+    const front = pages.slice(0, dests.get('email-1')!.page).flat().join('\n');
+    expect(front).not.toContain(last.source.fileName);
+    expect(front).not.toContain('Source files');
+    expect(pages.flat().join('\n')).not.toMatch(/\b[0-9a-f]{64}\b/);
+    // The index starts on the cover page.
+    expect(dests.get('index')!.page).toBe(0);
     expect(result.messages).toHaveLength(1);
   });
 

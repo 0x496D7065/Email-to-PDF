@@ -180,19 +180,77 @@ describe('loadPdfFonts', () => {
 });
 
 describe('generatePdf: index page numbers', () => {
-  it.each([1, 2, 3])('small batch of %i: cover, index, emails; numbers, links and destinations agree', async (count) => {
+  it.each([1, 2, 3])('small batch of %i: cover and index on page 1, then the emails; numbers, links and destinations agree', async (count) => {
     const input = inputFor(many(count));
     const { doc, layout } = docAndLayout(input);
-    expect(layout.frontPages).toBe(2);
-    expect(indexPages(layout)).toEqual([1]);
-    expect(layout.passes).toBe(2);
+    // Task 8.12: no source files on the cover, the index right below the cover information, on the same page.
+    expect(layout.frontPages).toBe(1);
+    expect(indexPages(layout)).toEqual([0]);
+    expect(layout.passes).toBe(1);
     checkLayout(doc, layout);
+    // The index heading below the last cover line (the last person), one section gap below it.
+    const page0 = layout.document.pages[0]!.text;
+    const indexTop = layout.document.destinations.find((d) => d.name === INDEX_DESTINATION)!.y + CONFIG.spacing.destinationAbove;
+    const lastPerson = Math.max(...page0.filter((r) => PEOPLE.some((p) => r.copyText.includes(p.address))).map((r) => r.y));
+    expect(lastPerson).toBeLessThan(indexTop);
+    expect(page0.filter((r) => r.y > lastPerson && r.y < indexTop && r.y <= BOTTOM)).toEqual([]);
+    expect(page0.find((r) => r.copyText === 'Index')!.y).toBeGreaterThanOrEqual(indexTop - 1e-6);
     const { bytes, fileName } = await generatePdf(input);
     expect(fileName).toBe('correspondence-2025-06-01.pdf');
     const pdf = await checkPdf(bytes, doc);
     expect(pdf.pages()).toHaveLength(layout.document.pages.length);
     expect(readDests(pdf).get(COVER_DESTINATION)!.page).toBe(0);
-    expect(readDests(pdf).get(INDEX_DESTINATION)!.page).toBe(1);
+    expect(readDests(pdf).get(INDEX_DESTINATION)!.page).toBe(0);
+  });
+
+  it('starts the index on a new page only when its heading, column titles and first row do not fit below the cover', () => {
+    // Many people make a long cover (one line each); find the first count whose cover pushes the index to page 2.
+    const crowd = (people: number, first: Partial<NormalizedMessage> = {}): NormalizedMessage[] => [
+      make(0, { to: Array.from({ length: people }, (_, i) => ({ name: `Person ${String(i + 1)}`, address: `person-${String(i + 1)}@example.test` })), ...first }),
+      make(1),
+    ];
+    const indexDestination = (layout: PdfLayout) => layout.document.destinations.find((d) => d.name === INDEX_DESTINATION)!;
+    /** Page (0-based) of the first index row: the page holding email 1's first link area. */
+    const firstRowPage = (doc: PdfDocument, layout: PdfLayout): number =>
+      layout.document.pages.findIndex((p) => p.links.some((l) => l.destination === doc.index.entries[0]!.anchor));
+    let people = 1;
+    let indexPage = 0;
+    while (indexPage === 0) {
+      people++;
+      expect(people).toBeLessThan(200);
+      const { layout } = docAndLayout(inputFor(crowd(people)));
+      indexPage = indexDestination(layout).page;
+    }
+    const checkNewPage = (doc: PdfDocument, layout: PdfLayout): void => {
+      // On a new page, the index (heading and first row) is at its top; the cover's page holds no part of it.
+      const dest = indexDestination(layout);
+      expect(dest.page).toBe(1);
+      expect(firstRowPage(doc, layout)).toBe(1);
+      expect(dest.y).toBeCloseTo(CONFIG.margin.top - CONFIG.spacing.destinationAbove, 6);
+      expect(layout.document.pages[0]!.text.some((r) => r.copyText === 'No.' || r.copyText === 'Index')).toBe(false);
+      expect(layout.document.pages[0]!.links).toEqual([]);
+    };
+    for (const [count, page] of [
+      [people - 1, 0],
+      [people, 1],
+    ] as const) {
+      const { doc, layout } = docAndLayout(inputFor(crowd(count)));
+      expect(indexDestination(layout).page, `${String(count)} people`).toBe(page);
+      if (page === 0) expect(firstRowPage(doc, layout), 'first index row with the heading').toBe(0);
+      else checkNewPage(doc, layout);
+      checkLayout(doc, layout);
+    }
+    // With people - 1, the heading, column titles and a one-line first row fit below the cover; so
+    // do the heading and the column titles alone. A first row made taller (several attachments, one
+    // line each) no longer fits there: the whole index moves to page 2, though the cover is the same.
+    const short = docAndLayout(inputFor(crowd(people - 1)));
+    const attachments = Array.from({ length: 6 }, (_, i) => ({ fileName: `plan-${String(i + 1)}.pdf`, size: 2048, mimeType: 'application/pdf' }));
+    const tall = docAndLayout(inputFor(crowd(people - 1, { attachments })));
+    const coverText = (layout: PdfLayout): string[] => layout.document.pages[0]!.text.filter((r) => r.y <= BOTTOM).map((r) => r.copyText);
+    expect(coverText(tall.layout)).toEqual(coverText(short.layout).slice(0, coverText(tall.layout).length));
+    expect(coverText(short.layout)).toEqual(expect.arrayContaining(['Index', 'No.']));
+    checkNewPage(tall.doc, tall.layout);
+    checkLayout(tall.doc, tall.layout);
   });
 
   it('is right on both sides of the index growing from one page to two', async () => {
@@ -281,7 +339,8 @@ describe('generatePdf: index rows', () => {
       make(1),
     ]);
     const { doc, layout } = docAndLayout(input);
-    const page = layout.document.pages[1]!;
+    // The index is on the cover page (task 8.12).
+    const page = layout.document.pages[0]!;
     const rect = page.links.find((l) => l.destination === 'email-1')!.rect;
     const inRow = page.text.filter((r) => r.y > rect.y && r.y < rect.y + rect.height).map((r) => r.copyText);
     // Number, short date (one line), sender, subject, page; then the attachments, one per line.
@@ -290,7 +349,7 @@ describe('generatePdf: index rows', () => {
       '2025-03-04 08:00',
       'Alice Example',
       'Office desks, part 1',
-      '3',
+      '2',
       'Attachments',
       '\u{2022}',
       'plan.pdf',
@@ -304,7 +363,7 @@ describe('generatePdf: index rows', () => {
     expect(page.text.filter((r) => r.y > rect2.y && r.y < rect2.y + rect2.height && r.copyText === 'Attachments')).toEqual([]);
     // The same in the written file.
     const runs = await pageRuns(readPdf((await generatePdf(input)).bytes));
-    const texts = runs[1]!.map((r) => r.text);
+    const texts = runs[0]!.map((r) => r.text);
     expect(texts).toEqual(expect.arrayContaining(['Attachments', 'plan.pdf', ' (12 KB, application/pdf)', '(attachment without a name) (size unknown)']));
   });
 });
@@ -375,7 +434,8 @@ describe('generatePdf: file name and output', () => {
       },
     };
     await generatePdf(inputFor([make(0)], { backend }));
-    expect(seen).toEqual([3]);
+    // The cover with the index, then the email (task 8.12).
+    expect(seen).toEqual([2]);
   });
 });
 
@@ -397,11 +457,14 @@ describe('index page numbers: the pass bound', () => {
     expect(() => settlePageCount(growing, 0)).toThrow(/maxPasses must be a whole number >= 1/);
   });
 
-  it('applies the bound to a real layout: one pass is never enough with an index, two are', () => {
-    const input = inputFor(many(3));
-    const doc = buildPdfDocument({ ...input, strings });
-    expect(() => layoutPdf(doc, fonts, { strings, maxPasses: 1 })).toThrow(/^layout: the index page numbers did not settle after 1 passes$/);
-    expect(layoutPdf(doc, fonts, { strings, maxPasses: 2 }).passes).toBe(2);
+  it('applies the bound to a real layout: one pass when the front is one page, two when it is longer', () => {
+    // The cover and the index on one page (task 8.12): the first guess (1 page) is right.
+    const small = buildPdfDocument({ ...inputFor(many(3)), strings });
+    expect(layoutPdf(small, fonts, { strings, maxPasses: 1 }).passes).toBe(1);
+    // An index that runs onto a second page: the first guess is wrong, the second is right.
+    const big = buildPdfDocument({ ...inputFor(many(60)), strings });
+    expect(() => layoutPdf(big, fonts, { strings, maxPasses: 1 })).toThrow(/^layout: the index page numbers did not settle after 1 passes$/);
+    expect(layoutPdf(big, fonts, { strings, maxPasses: 2 }).passes).toBe(2);
   });
 });
 

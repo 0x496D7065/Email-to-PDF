@@ -323,8 +323,6 @@ export const fr: Messages = {
       generated: 'Créé le',
       timeZone: 'Fuseau horaire',
       people: 'Participants',
-      sources: 'Fichiers sources',
-      sourceEmail: 'e-mail {number}',
       index: 'Sommaire',
       column: {
         number: 'Nº',

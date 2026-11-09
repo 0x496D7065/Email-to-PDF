@@ -36,8 +36,7 @@ export interface PdfStrings {
   readonly generatedLabel: string;
   readonly timeZoneLabel: string;
   readonly peopleHeading: string;
-  readonly sourcesHeading: string;
-  sourceEmail(number: number): string;
+  /** An email's File row when the file has no name. */
   readonly noFileName: string;
 
   // Index.
@@ -83,8 +82,6 @@ export interface PdfStrings {
   size(bytes: number | null): string;
   /** "(12 KB, application/pdf)" after an attachment name; type may be ''. */
   attachmentDetails(size: string, type: string): string;
-  /** The separator between a source file's name and its email. */
-  readonly separator: string;
   /** The PDF's file name for the day it is made ("YYYY-MM-DD"), or without a day (null). ASCII only. */
   fileName(day: string | null): string;
 }
@@ -119,9 +116,6 @@ export function createPdfStrings(locale: string): PdfStrings {
     generatedLabel: t('pdf.document.generated'),
     timeZoneLabel: t('pdf.document.timeZone'),
     peopleHeading: t('pdf.document.people'),
-    sourcesHeading: t('pdf.document.sources'),
-    // Strings, so an email number is never written with a thousands separator.
-    sourceEmail: (number) => t('pdf.document.sourceEmail', { number: String(number) }),
     noFileName: t('added.noName'),
     indexHeading: t('pdf.document.index'),
     columns: {
@@ -153,7 +147,6 @@ export function createPdfStrings(locale: string): PdfStrings {
     size,
     attachmentDetails: (sizeText, type) =>
       type.trim() === '' ? t('pdf.document.attachmentNoType', { size: sizeText }) : t('pdf.document.attachment', { size: sizeText, type }),
-    separator: ' - ',
     fileName: (day) => (day === null ? t('pdf.document.fileNameNoDate') : t('pdf.document.fileName', { date: day })),
   };
 }

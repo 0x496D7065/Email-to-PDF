@@ -61,17 +61,19 @@ describe('PDF document model over the parsed fixtures', () => {
     }
   });
 
-  it('numbers every email, lists every file as a source and none as unreadable', async () => {
+  it('numbers every email, names every file in its email (merged copies too), no source list or hash on the cover', async () => {
     const { doc: d, result: r } = await doc(DEFAULT_OUTPUT_POLICY);
+    const s = createPdfStrings('en');
     expect(d.emails.map((e) => e.number)).toEqual(r.messages.map((_, k) => k + 1));
-    expect(d.cover.sources).toHaveLength(r.counts.messagesFound);
-    expect(d.cover.sources.filter((s) => s.mergedCopy)).toHaveLength(r.counts.duplicatesMerged);
+    // Collapse, never delete: every read file is still named, in the File row of the email it gave.
+    const named = d.emails.flatMap((e) => e.fields.filter((f) => f.label === s.fileLabel).flatMap((f) => f.value.map(lineText)));
+    expect(named).toHaveLength(r.counts.messagesFound);
     expect(r.counts.duplicatesMerged).toBeGreaterThan(0);
-    expect(new Set(d.cover.sources.map((s) => s.inputIndex)).size).toBe(r.counts.messagesFound);
-    expect(d.cover.blocks.filter((b) => b.kind === 'heading')).toHaveLength(3);
+    // Task 8.12: the cover is the title, the summary and the people, nothing else.
+    expect(d.cover.blocks.map((b) => b.kind)).toEqual(['heading', 'fields', 'heading', 'list']);
+    expect(d.cover.blocks.flatMap((b) => (b.kind === 'list' ? b.items.flat().map(lineText) : [])).join('\n')).not.toMatch(/[0-9a-f]{64}/);
     expect(d.cover.participants.length).toBeGreaterThan(2);
     expect(d.cover.undated).toBe(r.counts.undated);
-    for (const s of d.cover.sources) expect(s.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('with "include everything", every body is the full text after the display transforms only', async () => {

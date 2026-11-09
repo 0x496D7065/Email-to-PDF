@@ -12,7 +12,8 @@
 //    'too-large', not read. Only files that go to a parser count. A smaller
 //    file further down the list can still fit.
 // 4. SHA-256 of the bytes (Web Crypto), so every file that was read, even
-//    one that then fails, is listed with its hash.
+//    one that then fails, has its hash (the app's key for the file, see
+//    hash.ts).
 // 5. Parsed in its own Web Worker with a time limit (worker-runner.ts). A
 //    .msg file is checked by cfb-check.ts before msgreader reads it.
 // Files are parsed one after another, never at the same time: only one

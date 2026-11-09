@@ -8,9 +8,9 @@
 // the same plans the preview labels show, src/ui/pdf-labels.ts), the policy,
 // the time zone, the generation moment and the fixed texts, and returns a
 // PdfDocument:
-// - cover: title, date range, people, email count, generation date, time
-//   zone and the source files with their SHA-256 (as `blocks` for the
-//   renderer, and as data);
+// - cover: title, date range, people, email count, generation date and time
+//   zone (as `blocks` for the renderer, and as data); no source files and no
+//   SHA-256 (user decision 2026-11-09, task 8.12);
 // - index: one entry per email (number, date, author, subject, attachment
 //   count and lines, anchor, bookmark title); the renderer resolves each
 //   anchor to a page number;
@@ -38,8 +38,7 @@
 // real email, its date shown as a real email's (a time in the chosen zone,
 // a day alone as that day, a date that could not be read as written), no
 // marker in the index or the bookmarks. On the cover it counts in "Emails", the date
-// range and the people like a real email; it is NOT in the source files and
-// their SHA-256 (it has no file: no entry is ever made up for it). The
+// range and the people like a real email. The
 // PREVIEW keeps marking rebuilt emails (src/ui/preview.ts), unchanged.
 // PdfEmail.rebuilt and PdfIndexEntry.rebuilt still tell the two apart in
 // the data (for tests and checks); the renderer never prints them.
@@ -147,10 +146,10 @@
 // step 2 before the download (src/ui/review.ts, src/ui/preview.ts). The PDF
 // keeps only the placeholders of blank fields ("(no subject)", "(no date)",
 // "Unknown sender", "(no text)", "(attachment without a name)"), the page
-// footer, headings, labels, the index, the bookmarks and the file list with
-// its SHA-256. The data behind the removed notes stays in the model
-// (`flags`, `cover.undated`, `zoneFallback`, `controlChars`, `mergedCopy`),
-// for tests and checks; the renderer never prints it.
+// footer, headings, labels, the index and the bookmarks. The data behind the
+// removed notes stays in the model (`flags`, `cover.undated`,
+// `zoneFallback`, `controlChars`), for tests and checks; the renderer never
+// prints it.
 //
 // Undated emails: shown with the "no date" text in the index; their Date
 // row shows the date text as written when there is one, else "no date". The
@@ -160,17 +159,13 @@
 // email at all it shows "no date". Real undated emails are at the end of
 // the list, in file order (src/engine/order.ts).
 //
-// Source files: every file that gave an included email: the kept copy and
-// every identical copy merged into it (src/engine/dedupe.ts), one entry per
-// dropped file, in PDF order, each with the email it gave, listed alike (a
-// merged copy is not marked). A file is not opened again: name, SHA-256 and
-// format come from the parse result (its size is not known there). Files
-// that could not be read are not in the PDF at all (step 1 of the app lists
-// them with the reasons).
-// The cover's "Source files" heading is followed by the list itself, with
-// no note of ours (user decision 2026-11-05, task 8.7): the file names and
-// their SHA-256 stay (brief section 8.5). The cover has no text about
-// rebuilt emails either (task 8.3, checked again in task 8.7).
+// No source files on the cover (user decision 2026-11-09, task 8.12, which
+// replaces the list with SHA-256 of brief section 8.5): no heading, no file
+// names, no hashes. The index follows the cover information directly
+// (src/pdf/layout/index-table.ts). Each real email still names its file in
+// its own File row. Files that could not be read are not in the PDF at all
+// (step 1 of the app lists them with the reasons). The cover has no text
+// about rebuilt emails either (task 8.3, checked again in task 8.7).
 //
 // Safety: email text is plain data here. It is never read as markup or
 // code (README.md, rule R4); the renderer writes it as text. Nothing is
@@ -223,19 +218,6 @@ export interface PdfParticipant {
   readonly address: string;
 }
 
-/** A dropped file that gave an included email. */
-export interface PdfSourceFile {
-  readonly fileName: string;
-  readonly sha256: string;
-  readonly kind: 'eml' | 'msg';
-  /** Its position in the engine input (drop order). */
-  readonly inputIndex: number;
-  /** The PDF number of the email it gave. */
-  readonly email: number;
-  /** True: its email was an identical copy merged into the email of another file. */
-  readonly mergedCopy: boolean;
-}
-
 export interface PdfCover {
   /** What the cover shows, in order. */
   readonly blocks: readonly PdfBlock[];
@@ -246,7 +228,6 @@ export interface PdfCover {
   readonly emailCount: number;
   readonly generated: string;
   readonly participants: readonly PdfParticipant[];
-  readonly sources: readonly PdfSourceFile[];
 }
 
 /** One line of the index. The renderer adds the page of `anchor`. */
@@ -1459,8 +1440,6 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   const emails: PdfEmail[] = [];
   const entries: PdfIndexEntry[] = [];
   const people: ParticipantSource[] = [];
-  // The real emails in the PDF and their PDF numbers (for the source files: real files only).
-  const included: { readonly m: EngineMessage; readonly number: number }[] = [];
   // The cover counts every email alike, rebuilt ones included (task 8.3).
   let undated = 0;
   let first: CoverDate | null = null;
@@ -1472,7 +1451,6 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     } else {
       const m = result.messages[slot.position]!;
       parts = buildEmail(m, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NOWHERE);
-      included.push({ m, number: slot.number });
     }
     emails.push(parts.email);
     entries.push(parts.entry);
@@ -1488,7 +1466,6 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
 
   // Cover.
   const c = sanitizer(); // the cover repeats names from the emails: not counted
-  const fileNameLine = (name: string): PdfLine => (name.trim() === '' ? own(strings.noFileName, 'muted') : c.line(name, 'body'));
   const generatedShown = formatInZone(generatedAt, timeZone);
   const generated = generatedShown.kind === 'date' ? generatedShown.text : strings.noDate;
   const usedZone = generatedShown.kind === 'date' ? generatedShown.zone : 'UTC';
@@ -1504,16 +1481,6 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
       : own(dateRange.first === dateRange.last ? dateRange.first : strings.dateRange(dateRange.first, dateRange.last), 'field-value');
 
   const participants = participantsOf(people, strings.locale);
-
-  // Real files only: a rebuilt email has no file, so no entry is ever made for it.
-  const sources: PdfSourceFile[] = [];
-  included.forEach(({ m, number: email }) => {
-    const s = m.message.source;
-    sources.push({ fileName: s.fileName, sha256: s.sha256, kind: s.kind, inputIndex: m.index, email, mergedCopy: false });
-    for (const d of [...m.duplicates].sort((a, b) => a.index - b.index)) {
-      sources.push({ fileName: d.source.fileName, sha256: d.source.sha256, kind: d.source.kind, inputIndex: d.index, email, mergedCopy: true });
-    }
-  });
 
   const blocks: PdfBlock[] = [
     { kind: 'heading', level: 1, line: own(strings.title, 'title') },
@@ -1532,24 +1499,13 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     blocks.push({ kind: 'heading', level: 2, line: own(strings.peopleHeading, 'heading') });
     blocks.push({ kind: 'list', items: participants.map((p) => [c.line(mailboxText(p, strings), 'body')]) });
   }
-  if (sources.length > 0) {
-    blocks.push({ kind: 'heading', level: 2, line: own(strings.sourcesHeading, 'heading') });
-    blocks.push({
-      kind: 'list',
-      items: sources.map((f) => [
-        // A merged identical copy is listed like any other file, with no explanation (task 8.8).
-        [...fileNameLine(f.fileName), ...own(strings.separator + strings.sourceEmail(f.email), 'muted')],
-        c.line(f.sha256, 'mono'),
-      ]),
-    });
-  }
 
   return {
     title: strings.title,
     fileName: pdfFileName(generatedAt, timeZone, strings),
     timeZone: usedZone,
     zoneFallback,
-    cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants, sources },
+    cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants },
     index: {
       heading: strings.indexHeading,
       // The zone name passes the same sanitizer as on the cover (a title is plain text, so codes stay as their text).

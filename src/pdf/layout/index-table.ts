@@ -17,7 +17,9 @@
 // title names the zone); its title, like any column title, may wrap: the
 // titles are wrapped once, so they are equally tall on every index page.
 //
-// Pagination: the index starts on a new page; the column titles are repeated
+// Pagination: the index starts right after the cover information, on the
+// same page when its heading, column titles and first row fit there, else
+// on a new page (task 8.12); the column titles are repeated
 // at the top of every index page; a row stays on one page when it fits on
 // one, else it breaks between its lines (its link is then split in one area
 // per page). Pure (README.md, rule R7); email text only ever becomes glyphs
@@ -173,19 +175,25 @@ function placeHeader(b: PageBuilder, laid: LaidIndex): void {
 }
 
 /**
- * Places the index from a new page (see the top of this file). `pageOf`
+ * Places the index below the cover (see the top of this file). `pageOf`
  * gives the page number shown for an email anchor (1-based, as the footer
  * counts). Every row gets a link to its anchor.
  */
 export function placeIndex(b: PageBuilder, laid: LaidIndex, pageOf: (anchor: string) => number): void {
   const ts = b.typesetter;
   const { spacing, index } = b.config;
-  if (!b.atTop) b.newPage();
+  const roomBelowHeader = b.contentHeight - laid.headerHeight - index.headerGap;
+  // Right after the cover information, like a cover section (task 8.12): its
+  // heading, the column titles and the first row are kept together, else
+  // they start on a new page.
+  b.space(spacing.beforeSection);
+  const firstRow = laid.rows[0];
+  const firstRowKeep = firstRow === undefined ? 0 : firstRow.height <= roomBelowHeader ? firstRow.height : firstRow.bands[0]!;
+  b.ensure(linesHeight(laid.heading) + spacing.afterHeading + laid.headerHeight + index.headerGap + firstRowKeep);
   b.destination(INDEX_DESTINATION, b.y - spacing.destinationAbove);
   b.placeAll(laid.heading);
   b.space(spacing.afterHeading);
   placeHeader(b, laid);
-  const roomBelowHeader = b.contentHeight - laid.headerHeight - index.headerGap;
 
   for (const row of laid.rows) {
     let segmentTop = b.y;

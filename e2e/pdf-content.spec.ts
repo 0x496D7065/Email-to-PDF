@@ -18,9 +18,10 @@
 // "America/New_York" is picked (the browser's own zone is Tokyo).
 //
 // 1. "the PDF as made by default": the cover (title, date range, count,
-//    zone, generation time, no note of any kind (task 8.8), the people, every
-//    source file with its SHA-256 computed here, in Node, over the exact
-//    bytes dropped); the index (one row per email, in order: number, short
+//    zone, generation time, no note of any kind (task 8.8), the people, and
+//    no source file list: no file name before the emails and no SHA-256
+//    (computed here, in Node, over the exact bytes dropped) anywhere, task
+//    8.12); the index right after the cover (one row per email, in order: number, short
 //    date in the chosen zone, sender, subject, attachments, and the page
 //    where that email's heading really is; each row a link to it); the
 //    bookmarks; "Page X of Y" on every page; the unticked email nowhere;
@@ -293,8 +294,11 @@ interface Section {
 
 interface ReadBack {
   readonly pageCount: number;
+  /** The cover's lines: everything above the index heading (task 8.12: the index may start on the cover's page). */
   readonly cover: readonly TextLine[];
   readonly indexPages: readonly number[];
+  /** The index's lines, from its heading to the last index page (footers left out). */
+  readonly indexLines: readonly TextLine[];
   /** Lines per page, footer left out. */
   readonly pages: readonly (readonly TextLine[])[];
   readonly runs: readonly (readonly PageRun[])[];
@@ -321,11 +325,27 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack> {
   }
 
   const dests = readDests(pdf);
-  const indexPage = dests.get('index')?.page;
+  const indexDest = dests.get('index');
   const firstEmailPage = dests.get('email-1')?.page;
-  if (indexPage === undefined || firstEmailPage === undefined) throw new Error('no index or no first email destination');
+  if (indexDest === undefined || firstEmailPage === undefined) throw new Error('no index or no first email destination');
+  const indexPage = indexDest.page;
   expect(dests.get('cover')?.page).toBe(0);
-  expect(indexPage).toBeGreaterThan(0);
+  // Task 8.12: the index follows the cover information directly (no source file list between),
+  // on the page where the cover ends, unless its start does not fit there.
+  expect(indexPage).toBeLessThan(firstEmailPage);
+  /** Above the index heading on its page (PDF coordinates: y up). */
+  const aboveIndex = (line: TextLine, page: number): boolean => page < indexPage || (page === indexPage && line.y > indexDest.top);
+  const coverLines = pages.flatMap((lines, page) => lines.filter((line) => aboveIndex(line, page)));
+  const indexLines = pages.flatMap((lines, page) => (page >= indexPage && page < firstEmailPage ? lines.filter((line) => !aboveIndex(line, page)) : []));
+  expect(indexLines[0]?.copied).toBe(en.pdf.document.index);
+  if (pages[indexPage]!.some((line) => aboveIndex(line, indexPage))) {
+    // Same page: the line just above the index heading is the cover's last (a person of the People list).
+    const lastCover = coverLines.at(-1)?.copied ?? '';
+    expect(lastCover.startsWith('\u{2022}'), lastCover).toBe(true);
+  } else {
+    // A page of its own only when the cover filled the page before.
+    expect(indexPage).toBeGreaterThan(0);
+  }
 
   // Each email's heading: the first line below its destination, on its page.
   const flat = pages.flatMap((lines, page) => (page >= firstEmailPage ? lines.map((line) => ({ line, page })) : []));
@@ -350,7 +370,7 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack> {
   const d = en.pdf.document;
   const v = en.preview;
   const labels = new Set([d.dates, d.emails, d.generated, d.timeZone, v.from, v.author.sender, v.to, v.cc, v.bcc, v.date, v.subject, d.file, '\u{2022}']);
-  for (const line of [...pages.slice(0, indexPage).flat(), ...flat.map((x) => x.line)]) {
+  for (const line of [...coverLines, ...flat.map((x) => x.line)]) {
     if (line.insertedSpaces === 0) continue;
     const label = line.runs[0]?.copied ?? '';
     expect({ line: line.copied, label: labels.has(label), spaces: line.insertedSpaces }).toEqual({ line: line.copied, label: true, spaces: 1 });
@@ -360,8 +380,9 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack> {
   if (outline === undefined) throw new Error('no outline');
   return {
     pageCount,
-    cover: pages.slice(0, indexPage).flat(),
+    cover: coverLines,
     indexPages: Array.from({ length: firstEmailPage - indexPage }, (_, i) => indexPage + i),
+    indexLines,
     pages,
     runs,
     sections,
@@ -411,11 +432,10 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
 
   // People: exactly the addresses of From, Sender, To and Cc of the included emails, each with a name it was given.
   const peopleAt = doc.cover.findIndex((l) => l.copied === d.people);
-  const sourcesAt = doc.cover.findIndex((l) => l.copied === d.sources);
   expect(peopleAt).toBeGreaterThan(0);
-  expect(sourcesAt).toBeGreaterThan(peopleAt);
+  // The People list is the last part of the cover (task 8.12: no source files after it).
   const peopleText = doc.cover
-    .slice(peopleAt + 1, sourcesAt)
+    .slice(peopleAt + 1)
     .map((l) => l.copied)
     .join('\n');
   const names = new Map<string, Set<string>>();
@@ -449,27 +469,25 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     expect(norm(peopleText), person.address).toContain(`${person.name} <${person.address}>`);
   }
 
-  // Source files: every file of every included email (merged copies too), with the SHA-256 computed here.
+  // No source files (task 8.12): no heading, no file name and no SHA-256 (computed here over
+  // the exact bytes dropped) anywhere in the PDF; each file is named only in its own email's File row.
   const coverBare = bare(cover);
-  let sourceCount = 0;
+  const everything = doc.pages.flat().map((l) => l.copied).join('\n');
+  expect(everything).not.toContain('Source files');
+  expect(bare(everything)).not.toMatch(/[0-9a-f]{64}/);
+  const frontBare = bare([...doc.cover, ...doc.indexLines].map((l) => l.copied).join('\n'));
   for (const [k, e] of emails.entries()) {
-    for (const f of e.files) {
-      // "<name> - email 3", then the SHA-256 on the next line; a merged copy alike (task 8.8: no "(identical copy, merged)").
-      const line = bare(`${f.name} - ${fill(d.sourceEmail, { number: k + 1 })}`);
-      // (The 64 hex digits right after the number keep "email 1" from matching "email 12".)
-      const match = new RegExp(`${escapeRegExp(line)}${f.sha256}`).exec(coverBare);
-      expect(match, `${f.name} with its SHA-256 on the cover`).not.toBeNull();
-      sourceCount++;
-    }
     expect(e.files.length, `${e.first.id}: at least its kept file`).toBeGreaterThanOrEqual(1);
+    for (const f of e.files) {
+      expect(bare(everything), `${f.name}: its SHA-256`).not.toContain(f.sha256);
+      expect(frontBare, `${f.name}: not before the emails`).not.toContain(bare(f.name));
+      // Collapse, never delete: still named, merged copies too, in the File row of its email.
+      expect(bare(doc.sections[k]?.copied ?? ''), `${f.name} in email ${String(k + 1)}`).toContain(bare(f.name));
+    }
   }
-  expect(cover).not.toContain('identical copy');
-  // Every file but the unticked one, and no other source line.
-  expect(sourceCount).toBe(sources.length - 1);
-  expect(coverBare.match(/-email\d+/g)).toHaveLength(sourceCount);
 
   // --- Index ---------------------------------------------------------------
-  const indexLines = doc.indexPages.flatMap((p) => doc.pages[p] ?? []);
+  const indexLines = doc.indexLines;
   expect(indexLines[0]?.copied).toBe(d.index);
   const titleLine = indexLines.find((l) => l.runs[0]?.copied === d.column.number);
   if (titleLine === undefined) throw new Error('no column titles');

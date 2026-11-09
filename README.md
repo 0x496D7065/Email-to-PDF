@@ -173,17 +173,16 @@ The tool never throws message text away on its own:
   header data must cover the other's (so nothing is lost by keeping it).
   Anything less, and both copies are kept, with a note. The page says how
   many copies were merged.
-- **Every source file in the PDF is accounted for.** The PDF's cover page
-  lists the date range, the people, the number of emails, the time zone
-  used, and every file that gave an email in the PDF (merged copies
-  included) with its SHA-256 fingerprint, so anyone can check that a file
-  is exactly the one used (rebuilt emails count in the number of emails,
-  the date range and the people, but have no file, so they are not in that
-  list). The list has no note of its own: under the "Source files"
-  heading come the file names and fingerprints directly, a merged copy
-  listed like any other file. The cover says nothing about rebuilt emails.
-  Files that could not be read are not in the PDF (step 1 lists them, with
-  the reason).
+- **The cover page and the index.** The PDF's first page shows the title,
+  the date range, the number of emails, the time zone used, the date the
+  PDF was made and the people (rebuilt emails count in the number of
+  emails, the date range and the people). The index follows directly
+  below, on the same page when it fits, and goes on over as many pages as
+  it needs. The PDF has no list of source files and no SHA-256
+  fingerprints; each email you added names its file (and any identical
+  copy merged into it) in its own "File" row. The cover says nothing about
+  rebuilt emails. Files that could not be read are not in the PDF (step 1
+  lists them, with the reason).
 - **The PDF holds no notes.** The PDF is the final document: nothing in it
   says that something went wrong, may be missing or may be inaccurate, or
   explains how the tool works. All of that is shown in step 2 before you
@@ -196,10 +195,11 @@ The tool never throws message text away on its own:
   copies merged (the "Also in" line), and what rebuilt emails are (under
   "Rebuild conversation from replies"). The PDF keeps only the
   placeholders for blank fields ("(no subject)", "(no date)", "Unknown
-  sender", "(no text)"), its headings, labels, index, bookmarks, page
-  numbers and the list of files with their fingerprints.
-  Then come the index (number, date, sender, subject, attachments, page)
-  and the emails, with page numbers and PDF bookmarks. Every email
+  sender", "(no text)"), its headings, labels, index, bookmarks and page
+  numbers.
+  After the cover information come the index (number, date, sender,
+  subject, attachments, page) and the emails, with page numbers and PDF
+  bookmarks. Every email
   (rebuilt ones included) starts at the top of a new page, its header
   included, so a short email may leave the rest of its page blank; a long
   one goes on over as many pages as it needs.
@@ -218,8 +218,8 @@ The tool never throws message text away on its own:
   written (a ">" inside a line, as in "a > b", stays). Any line that starts
   with ">" is read as a quote, so a line starting with ">>> " (for example
   a pasted command prompt) is shown without the marks. Text copied out of
-  the PDF has no quote levels. Only the PDF changes: the preview, your
-  original files and their SHA-256 fingerprints are unchanged.
+  the PDF has no quote levels. Only the PDF changes: the preview and your
+  original files are unchanged.
 
 ## Earlier emails rebuilt from quoted text
 
@@ -252,11 +252,8 @@ printed whole.
   like a real email's: a quoted time without a time zone of its own is
   shown in the chosen zone with no note (the preview says "about ..."), a
   quoted day alone is shown as that day. The cover's number of emails, date range and people include
-  rebuilt emails; a rebuilt email has no file, so it has no SHA-256
-  fingerprint and is not in the cover's list of files (that list still
-  shows only the files you added). It has no File row either: only the
-  File row and the cover's list of files show which emails came from a
-  file.
+  rebuilt emails. A rebuilt email has no file, so it has no File row:
+  only the File row shows which emails came from a file.
 
 **What is changed, and what is not.** Sender, recipients, subject and date
 are read from the quoted header ("From: / Sent: / To:", "On ... wrote:",
@@ -369,7 +366,7 @@ list were not read, and those lines are part of the rebuilt text.
   Plex) cover Latin (accents included), Greek and Cyrillic. Other scripts,
   such as Hebrew, Arabic, Chinese, Japanese, Korean, Thai or Hindi, and
   emoji show as codes such as `[U+05D0]`. The monospaced font, used only
-  for the SHA-256 fingerprints and those codes, has no Greek. Control or
+  for those codes, has no Greek. Control or
   broken characters are also shown as codes; step 2 notes it on each email
   that has them. The preview and your files are unchanged.
 - **Attachments are listed, not included:** name, size and type only. They
@@ -672,8 +669,7 @@ as its code. A ">" further on in a line is printed as it is, and so is
 the rest of the line. A ">" where a printed part begins in the middle of
 a line of the email is text, not a quote mark, and is printed. The text
 copied out of the PDF follows the printed text (no ">" marks, no added
-spaces). The preview, the original files and their SHA-256 fingerprints
-are unchanged.
+spaces). The preview and the original files are unchanged.
 
 ### R7: Detection logic is pure and testable
 

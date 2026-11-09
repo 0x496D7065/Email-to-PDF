@@ -1,5 +1,8 @@
-// SHA-256 of a file's bytes, printed on the PDF cover page so a reader can
-// check that the source files were not altered (an integrity check).
+// SHA-256 of a file's bytes. The app uses it to recognize a file again: the
+// reader's include/exclude choices are kept by file hash
+// (src/ui-model/selection.ts) and so are the ids of rebuilt emails
+// (src/ui-model/rebuilt.ts). It is no longer printed in the PDF (user
+// decision 2026-11-09, task 8.12).
 //
 // Uses the Web Crypto API (`crypto.subtle`), built into every modern browser
 // and into Node 22 as a global, so no hashing library is needed. It runs

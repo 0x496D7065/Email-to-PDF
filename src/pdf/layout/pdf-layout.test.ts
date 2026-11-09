@@ -141,7 +141,7 @@ function expectInsideTextArea(doc: LaidOutDocument): void {
 }
 
 describe('layoutPdf: document', () => {
-  it('lays out the cover, the index from a new page, then the emails from a new page; info and outline', () => {
+  it('lays out the cover, the index right below it on the same page, then the emails from a new page; info and outline', () => {
     const doc = build([make(), make(), make()]);
     const { document, anchorPages, placeholders, frontPages, passes } = lay(doc);
     expect(document.pageSize).toEqual({ width: 595.28, height: 841.89 });
@@ -152,15 +152,21 @@ describe('layoutPdf: document', () => {
       ...doc.index.entries.map((e) => [e.bookmark, e.anchor]),
     ]);
     expect(pageOf(document, 'Email correspondence')).toBe(0);
-    expect(pageOf(document, 'Source files')).toBe(0);
-    expect(pageOf(document, 'Index')).toBe(1);
-    expect(frontPages).toBe(2);
-    expect(passes).toBe(2);
+    // No source files (task 8.12): no heading, no file names, no hash before the emails.
+    expect(pageOf(document, 'Source files')).toBe(-1);
+    const front = document.pages[0]!.text.map((r) => r.copyText).join('\n');
+    expect(front).not.toMatch(/file-\d+\.eml|[0-9a-f]{64}/);
+    // The index on the cover page, below the People list.
+    expect(pageOf(document, 'Index')).toBe(0);
+    const yOf = (text: string): number => document.pages[0]!.text.find((r) => r.copyText === text)!.y;
+    expect(yOf('Index')).toBeGreaterThan(yOf('People'));
+    expect(frontPages).toBe(1);
+    expect(passes).toBe(1);
     // Each email on a page of its own (the default, task 8.4).
     expect([...anchorPages.entries()]).toEqual([
-      ['email-1', 2],
-      ['email-2', 3],
-      ['email-3', 4],
+      ['email-1', 1],
+      ['email-2', 2],
+      ['email-3', 3],
     ]);
     expect(placeholders).toBe(0);
     expectInsideTextArea(document);
@@ -169,14 +175,17 @@ describe('layoutPdf: document', () => {
   });
 
   it('counts each placeholder once, though the cover is laid out on every pass', () => {
-    // A file name with a character the fonts lack: drawn as a code on the cover (source list) and in the email (File row).
-    const doc = build([make({ source: { fileName: '\u{4E00}.eml', sha256: 'a'.repeat(64), kind: 'eml' } })]);
+    // A name with a character the fonts lack: drawn as a code on the cover (People list) and in the email (From row).
+    // Enough emails for an index of two pages, so the cover is laid out twice.
+    const odd: EmailAddress = { name: '\u{4E00} Example', address: 'odd@example.test' };
+    const doc = build([make({ from: [odd] }), ...Array.from({ length: 60 }, () => make())]);
     const { document, placeholders, passes } = lay(doc);
     expect(passes).toBe(2);
     const drawn = document.pages.flatMap((p) => p.text).filter((r) => r.glyphText.join('').includes('[U+4E00]'));
-    expect(drawn.map((r) => r.copyText)).toEqual(['\u{4E00}', '\u{4E00}']);
+    // Cover, index row (short author), email: once each.
+    expect(drawn).toHaveLength(3);
     expect(pageOf(document, '\u{4E00}')).toBe(0);
-    expect(placeholders).toBe(2);
+    expect(placeholders).toBe(3);
   });
 
   it('writes "Page X of Y" in the footer of every page, centred', () => {
@@ -235,22 +244,23 @@ describe('layoutPdf: pagination', () => {
     const doc = build(Array.from({ length: 5 }, () => make()));
     expect(CONFIG.newPagePerEmail).toBe(true);
     const apart = lay(doc);
-    expect(apart.frontPages).toBe(2);
-    expect([...apart.anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
-    expect(apart.document.pages).toHaveLength(7);
-    for (const page of apart.document.pages.slice(2)) expect(page.lines).toHaveLength(0);
+    // The cover and the index on one page (task 8.12).
+    expect(apart.frontPages).toBe(1);
+    expect([...apart.anchorPages.values()]).toEqual([1, 2, 3, 4, 5]);
+    expect(apart.document.pages).toHaveLength(6);
+    for (const page of apart.document.pages.slice(1)) expect(page.lines).toHaveLength(0);
     // The explicit option does the same.
-    expect([...lay(doc, true).anchorPages.values()]).toEqual([2, 3, 4, 5, 6]);
+    expect([...lay(doc, true).anchorPages.values()]).toEqual([1, 2, 3, 4, 5]);
     // Switched off (option or config): four short emails start on the first email page (after the cover and
     // the index), the fifth on the next one, below the end of the fourth; a rule between each two.
     const together = lay(doc, false);
-    expect(together.frontPages).toBe(2);
-    expect([...together.anchorPages.values()]).toEqual([2, 2, 2, 2, 3]);
-    expect(together.document.pages.slice(2).flatMap((p) => p.lines)).toHaveLength(4);
-    const rules = together.document.pages[2]!.lines;
+    expect(together.frontPages).toBe(1);
+    expect([...together.anchorPages.values()]).toEqual([1, 1, 1, 1, 2]);
+    expect(together.document.pages.slice(1).flatMap((p) => p.lines)).toHaveLength(4);
+    const rules = together.document.pages[1]!.lines;
     for (const rule of rules) expect(rule).toMatchObject({ x1: CONFIG.margin.left, x2: CONFIG.page.width - CONFIG.margin.right, width: CONFIG.rule.width });
     const viaConfig = layoutPdf(doc, fonts, { strings, config: { ...CONFIG, newPagePerEmail: false } });
-    expect([...viaConfig.anchorPages.values()]).toEqual([2, 2, 2, 2, 3]);
+    expect([...viaConfig.anchorPages.values()]).toEqual([1, 1, 1, 1, 2]);
   });
 
   it('by default starts every email at the top of a new page, with no empty page, whatever the length of the one before', () => {
@@ -372,11 +382,11 @@ describe('layoutPdf: pagination', () => {
       }),
     ]);
     const { document } = lay(doc);
-    // In the index (page 1) and in the email (page 2).
-    expect(pageOf(document, 'Attachments')).toBe(1);
-    expect(pageOf(document, 'plan.pdf')).toBe(1);
-    expect(pageOf(document, 'Attachments', 2)).toBe(2);
-    expect(pageOf(document, 'plan.pdf', 2)).toBe(2);
+    // In the index (on the cover page, task 8.12) and in the email (page 2).
+    expect(pageOf(document, 'Attachments')).toBe(0);
+    expect(pageOf(document, 'plan.pdf')).toBe(0);
+    expect(pageOf(document, 'Attachments', 1)).toBe(1);
+    expect(pageOf(document, 'plan.pdf', 1)).toBe(1);
     const empty: PdfDocument = { ...doc, cover: { ...doc.cover, blocks: [] }, index: { ...doc.index, entries: [] }, emails: [] };
     const laidEmpty = lay(empty);
     expect(laidEmpty.document.pages).toHaveLength(1);

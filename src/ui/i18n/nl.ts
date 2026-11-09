@@ -324,8 +324,6 @@ export const nl: Messages = {
       generated: 'Gemaakt op',
       timeZone: 'Tijdzone',
       people: 'Personen',
-      sources: 'Bronbestanden',
-      sourceEmail: 'e-mail {number}',
       index: 'Inhoudsopgave',
       column: {
         number: 'Nr.',

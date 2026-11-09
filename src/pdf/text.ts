@@ -28,7 +28,7 @@
 //     dropped (it looks empty in the PDF);
 // (f) characters the font lacks (emoji, rare scripts) are NOT handled here:
 //     that is the renderer's job. Text is split into runs only by meaning
-//     (normal / muted / code / mono), never by font coverage;
+//     (normal / muted / code), never by font coverage;
 // (g) email bodies only, quote marks (user decisions 2026-11-02, task 8.1,
 //     and 2026-11-05, task 8.6: approved display changes for the PDF only):
 //     a line that starts with ">" quote marks is shown WITHOUT them. Quote
@@ -114,10 +114,9 @@ export const TAB_WIDTH = 4;
  * - 'body': email text; 'muted': secondary text (notes, "(no subject)");
  * - 'code': the visible code of a replaced character ("[U+0007]", transform
  *   c): the renderer shows it greyed and may give it the original character
- *   as ActualText; text that merely looks like a code stays in its own role;
- * - 'mono': fixed-width text (SHA-256 hashes).
+ *   as ActualText; text that merely looks like a code stays in its own role.
  */
-export type PdfRole = 'title' | 'heading' | 'field-label' | 'field-value' | 'body' | 'muted' | 'code' | 'mono';
+export type PdfRole = 'title' | 'heading' | 'field-label' | 'field-value' | 'body' | 'muted' | 'code';
 
 /** A run of text with one role. `text` never contains a line break and is never empty. */
 export interface PdfRun {

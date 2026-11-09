@@ -265,14 +265,9 @@ describe('task 8.8: the PDF holds no notes', () => {
         // Kept: the zone used, and nothing after it.
         const zoneShown = timeZone === 'Not/A_Zone' ? 'UTC' : 'Africa/Lagos';
         expect(all).toContain(`${s.timeZoneLabel} ${zoneShown} ${s.generatedLabel}`);
-        // Kept: every source file with its SHA-256, the merged copy listed like the others.
-        const coverText = flat(pages[0]!.join(' '));
-        expect(doc.cover.sources).toHaveLength(result.counts.messagesFound);
-        for (const f of doc.cover.sources) {
-          expect(bare(coverText), f.fileName).toContain(bare(`${f.fileName}${s.separator}${s.sourceEmail(f.email)} ${f.sha256}`));
-        }
-        const copy = doc.cover.sources.find((f) => f.fileName === COPY_FILE)!;
-        expect(copy.mergedCopy).toBe(true);
+        // No source file list and no SHA-256 (task 8.12); the merged copy is still named, in its email's File row.
+        expect(bare(all)).not.toMatch(/[0-9a-f]{64}/);
+        expect(bare(all)).toContain(bare(COPY_FILE));
         // Kept: "Page X of Y" at the foot of every page; one bookmark per email after the cover and the index.
         pages.forEach((lines, k) => expect(lines.at(-1)).toBe(s.pageFooter(k + 1, pages.length)));
         expect(bookmarks).toHaveLength(doc.emails.length + 2);

@@ -32,7 +32,7 @@ import { FontMetrics } from './font-metrics';
 import { breakLines, SHY_NONE } from './line-break';
 import { type ResolvedStyle, type ShapedText, Shaper, SOFT_HYPHEN_ITEM, type StyledText } from './shape';
 
-const ROLES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-value', 'body', 'muted', 'code', 'mono'];
+const ROLES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-value', 'body', 'muted', 'code'];
 const HYPHEN = 0x2d;
 
 /** One wrapped line, ready to be drawn. */

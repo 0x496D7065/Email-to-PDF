@@ -458,9 +458,6 @@ export const en = {
       generated: 'Made on',
       timeZone: 'Dates shown in',
       people: 'People',
-      sources: 'Source files',
-      // After a source file's name: which email it gave (a merged identical copy too).
-      sourceEmail: 'email {number}',
       // The index (table of contents).
       index: 'Index',
       column: {
@@ -475,7 +472,7 @@ export const en = {
       },
       // One email.
       emailHeading: 'Email {number}',
-      // The file the email came from (its fingerprint is on the cover page).
+      // The file the email came from.
       file: 'File',
       // After an attachment's name (listed only, never opened), e.g. "(12 KB, application/pdf)".
       attachment: '({size}, {type})',
