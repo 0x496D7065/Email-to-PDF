@@ -218,6 +218,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     includedPositions: () => review.includedPositions(),
     // The same rebuilt emails as the PDF step (pdfInput), for the no-repeat labels (task 8.11).
     includedRebuilt: () => review.includedRebuilt().map((r) => r.id),
+    // The switch off: no rebuilt email is "unticked", forwarded parts stay (task 8.13a, Q2), as in pdfInput.
+    rebuildingOff: () => !review.rebuiltShown(),
+    // Only the cards the reader really unticked leave their forwarded parts out (task 8.13a review round 2), as in pdfInput.
+    untickedRebuilt: () => review.untickedRebuilt(),
     setPdfPlans: (plans) => {
       plansFailed = false;
       preview.setPdfPlans(plans);
@@ -307,6 +311,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
       // the switch is off, and under "Print full original text", whose plans
       // these are: the PDF model leaves them out then anyway).
       rebuilt: plans.policy.unfoldEverything ? [] : review.includedRebuilt().map((r) => r.id),
+      // The switch off (task 8.13a, Q2): no rebuilt email counts as unticked, forwarded parts stay in their forward.
+      rebuildingOff: !review.rebuiltShown(),
+      // The rebuilt cards the reader unticked: only their forwarded parts are left out (an entry merely not chosen stays inline).
+      unticked: plans.policy.unfoldEverything ? [] : [...review.untickedRebuilt()],
       policy: plans.policy,
       timeZone: preview.zone(),
       generatedAt,

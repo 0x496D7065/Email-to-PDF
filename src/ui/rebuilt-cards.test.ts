@@ -354,6 +354,12 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(card.getAttribute('data-included')).toBe('false');
     expect(isHidden(one(card, 'excluded-note'))).toBe(false);
     expect(review.includedRebuilt().map((r) => r.id)).toEqual([1, 0]);
+    // Reported as unticked by the reader (task 8.13a review round 2); none while the switch is off.
+    expect(review.untickedRebuilt()).toEqual([2]);
+    tick(byId('rebuilt-include-all'), false);
+    expect(review.untickedRebuilt()).toEqual([]);
+    tick(byId('rebuilt-include-all'), true);
+    expect(review.untickedRebuilt()).toEqual([2]);
     expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF.');
     expect(byId('review-included').textContent).toBe('1 of 1 email will be in the PDF.');
     // Its checkbox is named by its label and its heading.
@@ -373,6 +379,8 @@ describe('the switch, the checkboxes and the counts', () => {
     // One announcement with both lines (the rebuilt line changed too).
     expect(changes).toEqual(['0 of 1 email will be in the PDF. 0 of 3 rebuilt emails will be in the PDF.']);
     expect(review.includedRebuilt()).toEqual([]);
+    // Only the card unticked by itself is reported as unticked; the others are out because of their source.
+    expect(review.untickedRebuilt()).toEqual([2]);
     for (const card of rebuiltItems()) {
       expect(isHidden(card)).toBe(false);
       expect(card.getAttribute('data-included')).toBe('false');
@@ -651,6 +659,7 @@ describe('the switch, the checkboxes and the counts', () => {
     show(engineOf(LAST));
     tick(one(rebuiltItems()[2] as FakeElement, 'include-checkbox'), false);
     expect(review.includedRebuilt().map((r) => r.id)).toEqual([2, 1]);
+    expect(review.untickedRebuilt()).toEqual([0]);
     // The same files again, but this card's checkbox cannot be added: its plain stand-in shows no
     // checkbox and no "Not in the PDF" mark, so it counts as included.
     broken = true;
@@ -659,6 +668,8 @@ describe('the switch, the checkboxes and the counts', () => {
     expect(hasClass(standIn, 'message-failed')).toBe(true);
     expect(withClass(standIn, 'include-checkbox')).toEqual([]);
     expect(review.includedRebuilt().map((r) => r.id)).toEqual([2, 1, 0]);
+    // Its kept choice is unticked, but the reader cannot see it: never reported as unticked (task 8.13a review round 2).
+    expect(review.untickedRebuilt()).toEqual([]);
     expect(byId('review-rebuilt').textContent).toBe('3 of 3 rebuilt emails will be in the PDF.');
     // The switch leaves it out with the others: off -> the stand-in is hidden too, on -> shown again.
     const all = byId('rebuilt-include-all');

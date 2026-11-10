@@ -21,9 +21,12 @@
 //   each such line comes from where that rebuilt email was read, and is in
 //   another email's text or is a line of the quoted header), and every
 //   email, rebuilt ones too, is numbered 1..n in PDF order (task 8.3);
-// - S6 (review round 3 of task 8.10): every non-blank range the plan calls
-//   the writer's own text ('text') is still in the writer's own email with
-//   rebuilt emails chosen, also in unmarked Outlook chains with answers
+// - S6 (review round 3 of task 8.10, as changed by task 8.13a, Q3): every
+//   non-blank range the plan calls the writer's own text ('text') is still
+//   printed with rebuilt emails chosen, in the writer's own email, or, only
+//   where its place holds no text the plan marks as a quote (the plan could
+//   not check any of it: a middle email of an Outlook chain), in the email
+//   that prints that place; also in unmarked Outlook chains with answers
 //   typed inside the quotes and random files and rebuilt emails in;
 // - 2000 emails build in well under a second.
 // Synthetic data only: made-up names, *.test addresses. Every invisible or
@@ -37,7 +40,8 @@ import { runEngine } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { rebuiltEntries } from '../ui-model/rebuilt';
-import { buildPdfDocument, type PdfDocument, type PdfEmail } from './model';
+import type { ReconstructedMessage } from '../engine/reconstruct';
+import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PdfDocument, type PdfEmail, type PrintedPart } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
 
@@ -201,15 +205,36 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
  * one (the kept text in between may be quoted text the plan keeps). Returns
  * how many ranges were checked.
  */
-function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEmail, where: string): number {
+function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEmail, where: string, made?: { doc: PdfDocument; parts: readonly PrintedPart[]; places: readonly ReconstructedMessage[] }): number {
   if (plan === undefined || plan.fallback) return 0;
   const shown = squash(bodyOf(e));
+  // Task 8.13a, Q3: the plan's ranges as the PDF cuts them; a 'text' piece left out names the email that prints it.
+  const ranges = (made === undefined ? null : pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, made.parts)) ?? plan.ranges.map((r) => ({ ...r, printedAs: null }));
   let checked = 0;
   let from = 0;
-  for (const r of plan.ranges) {
-    if (!r.keep || r.reason !== 'text') continue;
+  for (const r of ranges) {
+    if (r.reason !== 'text') continue;
     const own = squash(referenceDisplayText(body.slice(r.start, r.end)));
     if (own === '') continue;
+    if (r.printedAs != null && made !== undefined) {
+      // Printed elsewhere: only from a place whose text holds no quoted text, and in the email named.
+      const place = made.places.find((p) => p.start <= r.start && r.end <= p.end);
+      expect(place, `${where}: own text [${String(r.start)}, ${String(r.end)}) cut inside a place`).toBeDefined();
+      expect(r.printedAs.kind, where).not.toBe('unticked');
+      const linesEnd = headerLinesEnd(body, place!);
+      if (!/\S/u.test(body.slice(Math.max(r.start, linesEnd), r.end))) {
+        // Header lines the plan took for own text (a wrapped list, a Subject line): moved to the rebuilt
+        // email, or dropped for a real file that shows its own header (Q4).
+        if (r.printedAs.kind === 'rebuilt') expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: header lines "${own.slice(0, 40)}" moved`).toContain(own);
+      } else {
+        expect(holdsQuotedText(body, plan.ranges, linesEnd, place!.end), `${where}: own text cut next to quoted text`).toBe(false);
+        if (r.printedAs.kind !== 'unticked') expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: own text "${own.slice(0, 40)}" in Email ${String(r.printedAs.number)}`).toContain(own);
+      }
+      movedOwn++;
+      checked++;
+      continue;
+    }
+    if (!r.keep) continue;
     const at = shown.indexOf(own, from);
     expect(at, `${where}: own text [${String(r.start)}, ${String(r.end)}) "${own.slice(0, 40)}", in order after ${String(from)}`).toBeGreaterThanOrEqual(0);
     from = at + own.length;
@@ -217,6 +242,8 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEm
   }
   return checked;
 }
+/** How many own-text pieces S6 found printed as another email (Q3). */
+let movedOwn = 0;
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */
 const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
   d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
@@ -392,7 +419,7 @@ describe('PDF document model properties', () => {
     expect(ownTextChecked).toBeGreaterThan(100);
   });
 
-  it('S6: in unmarked Outlook chains with answers typed inside the quotes, the writer\'s own text stays in the writer\'s email, whatever files and rebuilt emails are in (task 8.10)', () => {
+  it('S6: in unmarked Outlook chains with answers typed inside the quotes, the writer\'s own text stays in the writer\'s email, unless its place holds no quoted text (then the email that prints the place has it: Q3, task 8.13a), whatever files and rebuilt emails are in (task 8.10)', () => {
     const chains = THREAD_CASES.filter((c) => c.group.startsWith('outlook') || c.id === 'outlook-en 7 generations');
     expect(chains.length).toBeGreaterThan(8);
     let checked = 0;
@@ -437,10 +464,12 @@ describe('PDF document model properties', () => {
         .map((r) => r.id)
         .filter(() => random() < 0.7);
       const doc = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt });
+      const { parts } = noRepeat({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
       for (const { e, position } of realEmails(doc)) {
         const body = result.messages[position]!.message.bodyText;
         const where = `seed ${String(seed)} ${c.id} position ${String(position)}`;
-        checked += expectOwnTextKept(body, plans[position], e, where);
+        const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
+        checked += expectOwnTextKept(body, plans[position], e, where, { doc, parts: parts.get(position) ?? [], places });
         // How often own text sits inside a place the rule could cut (the case S6 guards).
         for (const r of result.reconstructed) {
           if (r.sourceIndex !== result.messages[position]!.index) continue;
@@ -453,6 +482,8 @@ describe('PDF document model properties', () => {
     }
     expect(checked).toBeGreaterThan(100);
     expect(inPlaces).toBeGreaterThan(20);
+    // Q3 (task 8.13a): some own-text pieces are middle emails the plan could not check, printed as their rebuilt emails.
+    expect(movedOwn).toBeGreaterThan(5);
   });
 
   it('builds 2000 emails in well under a second', () => {

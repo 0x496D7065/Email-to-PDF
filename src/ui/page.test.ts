@@ -263,16 +263,20 @@ describe('mountPage', () => {
         .descendants()
         .filter((e) => hasClass(e, 'pdf-label') && !e.hasAttribute('hidden'))
         .map((e) => e.textContent.trim());
-    const printed = (): string[] => labels().filter((s) => s.includes('printed as'));
+    // The labels of the parts printed as emails of their own, in order, repeats of one label in a row as one
+    // (a place's header lines and its text may be two display blocks, both printed as that email: task 8.13a, Q4).
+    const printed = (): string[] => labels().filter((s, k, all) => s.includes('printed as') && s !== all[k - 1]);
+    const unticked = 'Not in the PDF: forwarded email whose rebuilt email is unticked';
     // Both rebuilt emails ticked by default: emails 1 and 2 of the PDF, the forward is email 3.
     expect(printed()).toEqual([
       'Not in this email in the PDF: printed as a rebuilt email (Email 2 in the PDF)',
       'Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)',
     ]);
+    expect(labels()).not.toContain(unticked);
     // The labels say what the PDF step gets: the same input, the same cut.
     expect(page.review.includedRebuilt()).toHaveLength(2);
 
-    // One rebuilt card unticked: its part goes back to the plan's label at once (no new planning).
+    // One rebuilt card unticked: its forwarded part is not in the PDF at all (task 8.13a, Q2), at once (no new planning).
     const cards = items().filter((i) => hasClass(i, 'message-rebuilt'));
     const older = cards.find((card) => card.getAttribute('data-rebuilt-id') === String(result.reconstructed.find((r) => r.rebuilt.generation === 2)!.id))!;
     const olderBox = older.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
@@ -282,12 +286,14 @@ describe('mountPage', () => {
     expect(page.preview.pdfLabelState()).toBe('ready');
     // The newer one is now email 1 of the PDF.
     expect(printed()).toEqual(['Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)']);
+    expect(labels()).toContain(unticked);
     olderBox.checked = true;
     olderBox.fire('change');
     run();
     expect(printed()).toHaveLength(2);
+    expect(labels()).not.toContain(unticked);
 
-    // The switch off: no rebuilt email in the PDF, so nothing printed elsewhere.
+    // The switch off: no rebuilt email in the PDF and none "unticked", so nothing left out (the forwarded parts stay).
     const toggle = byId('rebuilt-include-all');
     toggle.checked = false;
     toggle.fire('change');

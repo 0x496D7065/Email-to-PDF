@@ -54,6 +54,12 @@ describe('message checks', () => {
   it('accepts a request with or without the rebuilt emails chosen', () => {
     expect(isToPdfWorker({ ...REQUEST, input: { ...REQUEST.input, rebuilt: [] } })).toBe(true);
     expect(isToPdfWorker(structuredClone({ ...REQUEST, input: { ...REQUEST.input, rebuilt: [2, 0] } }))).toBe(true);
+    // The rebuild switch off (task 8.13a): absent, or a boolean.
+    expect(isToPdfWorker(structuredClone({ ...REQUEST, input: { ...REQUEST.input, rebuilt: [], rebuildingOff: true } }))).toBe(true);
+    expect(isToPdfWorker({ ...REQUEST, input: { ...REQUEST.input, rebuildingOff: false } })).toBe(true);
+    // The rebuilt emails unticked (task 8.13a review round 2): absent, or a list of ids.
+    expect(isToPdfWorker({ ...REQUEST, input: { ...REQUEST.input, unticked: [] } })).toBe(true);
+    expect(isToPdfWorker(structuredClone({ ...REQUEST, input: { ...REQUEST.input, rebuilt: [1], unticked: [0, 2] } }))).toBe(true);
   });
 
   it.each([
@@ -78,6 +84,14 @@ describe('message checks', () => {
     ['rebuilt ids that are not a list', { ...REQUEST, input: { ...REQUEST.input, rebuilt: 3 } }],
     ['a rebuilt id that is not a whole number', { ...REQUEST, input: { ...REQUEST.input, rebuilt: [0, '1'] } }],
     ['a rebuilt id that is a fraction', { ...REQUEST, input: { ...REQUEST.input, rebuilt: [0.5] } }],
+    ['a rebuild switch that is not a boolean', { ...REQUEST, input: { ...REQUEST.input, rebuildingOff: 'yes' } }],
+    ['unticked ids that are not a list', { ...REQUEST, input: { ...REQUEST.input, unticked: 0 } }],
+    ['unticked ids given as a boolean', { ...REQUEST, input: { ...REQUEST.input, unticked: true } }],
+    ['an unticked id that is not a whole number', { ...REQUEST, input: { ...REQUEST.input, unticked: [0, '1'] } }],
+    ['an unticked id that is a fraction', { ...REQUEST, input: { ...REQUEST.input, unticked: [1.5] } }],
+    ['an unticked id that is negative', { ...REQUEST, input: { ...REQUEST.input, unticked: [-1] } }],
+    ['an unticked id that is not finite', { ...REQUEST, input: { ...REQUEST.input, unticked: [Number.NaN] } }],
+    ['an unticked id that is null', { ...REQUEST, input: { ...REQUEST.input, unticked: [null] } }],
   ])('rejects %s as a request', (_label, data) => {
     expect(isToPdfWorker(data)).toBe(false);
   });

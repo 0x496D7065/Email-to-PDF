@@ -34,7 +34,15 @@
 //   as (`printedAs`): the label says so instead of the plan's reasons. A
 //   block is cut where that email changes, as where `keep` changes, so a
 //   label never covers a part printed elsewhere and one that is not (or
-//   two parts printed as two different emails).
+//   two parts printed as two different emails). The same holds for a
+//   forwarded part the PDF leaves out because its rebuilt email is
+//   unticked (task 8.13a, Q2: `printedAs` kind 'unticked', printed
+//   nowhere in the PDF). Two ADJACENT blocks with the very same "printed
+//   as" label (both left out, the same email and number, or the same
+//   unticked email) are then joined into one block with one label
+//   (mergeSamePrintedAs, task 8.13a review round 2): a forward's header
+//   lines and its text, say, no longer show the label twice. The joined
+//   block is folded only when both were, else shown.
 //
 // Collapse, never delete (README.md, rule R6): blocks only group and cut
 // the body; their texts joined always give the body back unchanged.
@@ -42,7 +50,7 @@
 // Pure functions, no DOM (README.md, rule R7).
 
 import type { MessagePlan, PlanRange, PlanReason } from '../engine/output-plan';
-import type { Segment } from '../engine/segments';
+import { FOLD_REASONS, type Segment } from '../engine/segments';
 import { senderKeyOf, signatureBlockKey } from '../engine/signature';
 import type { NormalizedMessage } from '../parsing/types';
 import type { PdfRange, PrintedAs } from '../pdf/model';
@@ -94,9 +102,33 @@ function rangesOf(view: PdfView): readonly LabelRange[] {
 
 /** A short key of where a range is printed instead ('' when it is not left out that way). */
 function printedKey(r: LabelRange): string {
-  const p = r.printedAs;
+  return printedAsKey(r.printedAs);
+}
+
+/** A short key of a PrintedAs: the same kind, email and number give the same key ('' for none). */
+function printedAsKey(p: PrintedAs | null | undefined): string {
   if (p === null || p === undefined) return '';
-  return p.kind === 'rebuilt' ? `r${String(p.id)}#${String(p.number)}` : `e${String(p.position)}#${String(p.number)}`;
+  switch (p.kind) {
+    case 'rebuilt':
+      return `r${String(p.id)}#${String(p.number)}`;
+    case 'email':
+      return `e${String(p.position)}#${String(p.number)}`;
+    case 'unticked':
+      return `u${String(p.id)}`;
+  }
+}
+
+/**
+ * Whether the PDF leaves text (not white space alone) of `body` out because
+ * it prints it as an email of its own (a rebuilt email or a real file; not
+ * an unticked forwarded part, which is printed nowhere): then the note of
+ * an email kept whole says so (task 8.11, finding S1, done in task 8.13a;
+ * src/ui-model/message-notes.ts, pdfPlanNote). `view` null or without
+ * `pdfRanges`: false.
+ */
+export function printedAsEmailOfItsOwn(view: Pick<PdfView, 'pdfRanges'> | null, body: string): boolean {
+  // 'unticked' never meets keptAllBecauseEmpty anyway: keepsKind always keeps 'forwarded', so a plan with a forwarded part with text is never "kept whole because empty".
+  return (view?.pdfRanges ?? []).some((r) => r.printedAs != null && r.printedAs.kind !== 'unticked' && hasNonSpace(body, r.start, r.end));
 }
 
 /** A display block and its label (null: a shown block, fully in the PDF, or no plan). */
@@ -158,12 +190,72 @@ export function labelOf(text: string, start: number, end: number, view: PdfView)
 export function pdfBlocks(text: string, segments: readonly Segment[], view: PdfView | null): PdfBlock[] {
   if (view === null) return displayBlocks(text, segments, { unfoldAll: false }).map((block) => ({ block, label: null }));
   const blocks = displayBlocks(text, segments, { unfoldAll: false, breaks: pdfBreaks(text, rangesOf(view)) });
-  return blocks.map((block) => {
+  const labelled = blocks.map((block) => {
     const label = labelOf(text, block.start, block.end, view);
     // A shown block is labelled only if the PDF leaves something of it out
     // (by the plan: a bug, see the top; or printed as an email of its own).
     return { block, label: block.folded || label.status !== 'in' ? label : null };
   });
+  return mergeSamePrintedAs(labelled);
+}
+
+/** Whether two labels both say "left out, printed as" the very same email (or both "unticked", the same one). */
+function samePrintedAsLabel(a: PdfLabel | null, b: PdfLabel | null): boolean {
+  if (a === null || b === null || a.status !== 'out' || b.status !== 'out') return false;
+  const key = printedAsKey(a.printedAs);
+  return key !== '' && key === printedAsKey(b.printedAs);
+}
+
+/**
+ * Adjacent blocks whose labels are the same "printed as" label (see the top:
+ * both left out, the same kind, email and number; samePrintedAsLabel) made
+ * into ONE block with one label (user decision, task 8.13a review round 2:
+ * a forward's header lines, a folded block, and its text, a shown one, used
+ * to show "printed as Email 5" twice). Only directly adjacent blocks: a block
+ * between them (even shown white space) keeps them apart. The merged block
+ * is folded only when BOTH were (user decision, task 8.13a final round,
+ * option (a)): then its reasons and links are the union of theirs and its
+ * fold label that of the longer one. Otherwise it is shown (reasons, links
+ * and fold label empty, as for any shown block), so header lines that were
+ * folded become visible: e.g. a folded header [H,T) and a shown text [T,E)
+ * give one shown block [H,E) with one label. Collapse, never delete (rule
+ * R6): its text is the two texts joined, so the blocks still give the body
+ * back unchanged.
+ * Done here, in the preview's blocks only: the PDF and the no-repeat parts
+ * (src/pdf/model.ts, noRepeat) are not changed by it.
+ */
+export function mergeSamePrintedAs(blocks: readonly PdfBlock[]): PdfBlock[] {
+  const out: PdfBlock[] = [];
+  for (const b of blocks) {
+    const last = out[out.length - 1];
+    if (last === undefined || last.block.end !== b.block.start || !samePrintedAsLabel(last.label, b.label)) {
+      out.push(b);
+      continue;
+    }
+    const x = last.block;
+    const y = b.block;
+    const folded = x.folded && y.folded;
+    const block: DisplayBlock = {
+      start: x.start,
+      end: y.end,
+      text: x.text + y.text,
+      folded,
+      reasons: folded ? FOLD_REASONS.filter((r) => x.reasons.includes(r) || y.reasons.includes(r)) : [],
+      related: folded ? [...new Set([...x.related, ...y.related])].sort((p, q) => p - q) : [],
+      label: folded ? (y.end - y.start > x.end - x.start ? y.label : x.label) : null,
+      collapsed: folded && (x.collapsed || y.collapsed),
+    };
+    const a = last.label!;
+    const c = b.label!;
+    const label: PdfLabel = {
+      status: 'out',
+      reasons: [...new Set([...a.reasons, ...c.reasons])],
+      signaturesFrom: [...new Set([...a.signaturesFrom, ...c.signaturesFrom])].sort((p, q) => p - q),
+      printedAs: a.printedAs ?? null,
+    };
+    out[out.length - 1] = { block, label };
+  }
+  return out;
 }
 
 /** One included email, for signatureSources. */

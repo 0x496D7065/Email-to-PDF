@@ -47,7 +47,16 @@ function realFile(messages: readonly ThreadMessage[], i: number, tag: string): N
 
 const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
-const keyOf = (p: PrintedAs): string => (p.kind === 'rebuilt' ? `rebuilt ${String(p.id)} = Email ${String(p.number)}` : `email #${String(p.position + 1)} = Email ${String(p.number)}`);
+const keyOf = (p: PrintedAs): string => {
+  switch (p.kind) {
+    case 'rebuilt':
+      return `rebuilt ${String(p.id)} = Email ${String(p.number)}`;
+    case 'email':
+      return `email #${String(p.position + 1)} = Email ${String(p.number)}`;
+    case 'unticked':
+      return `unticked rebuilt ${String(p.id)} (not in the PDF)`;
+  }
+};
 
 /** Where `sentence` (white space squashed) starts in `body`, white space and ">" quote marks between its words allowed; -1 if not found. */
 function placeOf(body: string, sentence: string): number {
@@ -88,8 +97,11 @@ function setUp(c: ThreadCase, s: Scenario, policy: OutputPolicy = DEFAULT_OUTPUT
     positions.map((p) => result.messages[p]!),
     policy,
   );
-  const rebuilt = s.rebuilt(rebuiltEntries(result).map((r) => r.id));
-  const input = { result, positions, plans, policy, rebuilt };
+  const ids = rebuiltEntries(result).map((r) => r.id);
+  const rebuilt = s.rebuilt(ids);
+  // Every rebuilt email not chosen is one the reader unticked (src/ui/review.ts, untickedRebuilt, with every card shown).
+  const unticked = ids.filter((id) => !rebuilt.includes(id));
+  const input = { result, positions, plans, policy, rebuilt, unticked };
   const doc: PdfDocument = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
   // The preview's views, as src/ui/pdf-labels.ts makes them.
   const sources = signatureSources(
@@ -133,6 +145,7 @@ describe('"printed as email #N" labels say exactly what the PDF leaves out (task
   let labelledSomewhere = 0;
   let rebuiltTargets = 0;
   let realTargets = 0;
+  let untickedTargets = 0;
   let sentencesLabelled = 0;
   let sentencesKept = 0;
 
@@ -159,6 +172,14 @@ describe('"printed as email #N" labels say exactly what the PDF leaves out (task
             labelledSomewhere += marks.size > 0 ? 1 : 0;
             // 2. N names the email the PDF prints it as.
             for (const target of new Map([...marks.values()].map((p) => [keyOf(p), p])).values()) {
+              if (target.kind === 'unticked') {
+                // Q2 (task 8.13a): a forwarded part of an unticked rebuilt email, printed nowhere.
+                untickedTargets++;
+                expect(input.rebuilt, keyOf(target)).not.toContain(target.id);
+                expect(input.unticked, keyOf(target)).toContain(target.id);
+                expect(doc.emails.some((e) => e.rebuilt?.id === target.id), keyOf(target)).toBe(false);
+                continue;
+              }
               const shown = doc.emails[target.number - 1]!;
               expect(shown.number, keyOf(target)).toBe(target.number);
               if (target.kind === 'rebuilt') {
@@ -180,7 +201,8 @@ describe('"printed as email #N" labels say exactly what the PDF leaves out (task
               if (target !== undefined) {
                 sentencesLabelled++;
                 expect(shownHere, `${c.id}: "${sentence}" labelled ${keyOf(target)}`).not.toContain(sentence);
-                expect(squash(bodyOf(doc.emails[target.number - 1]!)), `${c.id}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+                if (target.kind === 'unticked') expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence)), `${c.id}: "${sentence}" nowhere in the PDF`).toHaveLength(0);
+                else expect(squash(bodyOf(doc.emails[target.number - 1]!)), `${c.id}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
               } else if (plan.ranges.some((r) => r.keep && r.start <= start && start < r.end)) {
                 sentencesKept++;
                 expect(shownHere, `${c.id}: "${sentence}" kept`).toContain(sentence);
@@ -207,6 +229,8 @@ describe('"printed as email #N" labels say exactly what the PDF leaves out (task
     expect(labelledSomewhere).toBeGreaterThan(50);
     expect(rebuiltTargets).toBeGreaterThan(15);
     expect(realTargets).toBeGreaterThan(50);
+    // Task 8.13a, Q2: forwarded parts left out with their unticked rebuilt emails.
+    expect(untickedTargets).toBeGreaterThan(5);
     expect(sentencesLabelled).toBeGreaterThan(80);
     expect(sentencesKept).toBeGreaterThan(500);
   });

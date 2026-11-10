@@ -193,9 +193,20 @@ test('each folded part says whether it will be in the PDF', async ({ page }) => 
   expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
   // #5, a forward: the forwarded email is rebuilt from it and printed as an
   // email of its own (Email 5 in the PDF, before the forward), so its text is
-  // not in the forward in the PDF (task 8.11); its header lines stay (their
-  // date has no zone of its own, so the rebuilt header cannot show it as written).
-  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded), PRINTED_AS_REBUILT(5)]);
+  // not in the forward in the PDF (task 8.11); its header lines go too (task
+  // 8.13a, Q4: their date has no zone of its own, so they are printed at the
+  // top of the rebuilt email): header lines and text, both printed as Email 5,
+  // are one block with one label (task 8.13a review round 2).
+  expect(await labelsOf(items.nth(4))).toEqual([PRINTED_AS_REBUILT(5)]);
+  // The header lines were folded, the text shown: the one block is SHOWN
+  // (user decision, task 8.13a final round, option (a)), so the header lines
+  // are visible with the text, in no fold.
+  const forwardShown = await items.nth(4).evaluate((li) =>
+    [...li.querySelectorAll('.message-body .body-text')].filter((b) => b.closest('details.fold') === null).map((b) => b.textContent).join(''),
+  );
+  expect(forwardShown).toContain('---------- Forwarded message ---------\nFrom: Depot Desk <depot@example.test>');
+  expect(forwardShown).toContain('The delivery slot is Tuesday morning, between eight and ten.');
+  await expect(items.nth(4).locator('details.fold', { hasText: 'Forwarded message' })).toHaveCount(0);
   // #6, quotes the writer put between their own answers: they stay.
   const writerLabels = await labelsOf(items.nth(5));
   expect(writerLabels.length).toBeGreaterThan(0);
@@ -220,7 +231,15 @@ test('each folded part says whether it will be in the PDF', async ({ page }) => 
   expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);
   await page.locator('#rebuilt-include-all').check();
   await expectReady(page);
-  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded), PRINTED_AS_REBUILT(5)]);
+  expect(await labelsOf(items.nth(4))).toEqual([PRINTED_AS_REBUILT(5)]);
+  // Its rebuilt card unticked (the switch on): the forwarded email is left out of the PDF (task 8.13a, Q2), one label.
+  const card = page.locator('#preview-list > li.message-rebuilt').locator('input.include-checkbox');
+  await card.uncheck();
+  await expectReady(page);
+  expect(await labelsOf(items.nth(4))).toEqual([en.pdf.printedAs.unticked]);
+  await card.check();
+  await expectReady(page);
+  expect(await labelsOf(items.nth(4))).toEqual([PRINTED_AS_REBUILT(5)]);
 
   await expectNothingLeftThePage(page);
 });
@@ -489,7 +508,7 @@ test('"Print full original text" makes every label say so, and Clear everything 
   await everything.uncheck();
   await expectReady(page);
   expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
-  expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded), PRINTED_AS_REBUILT(5)]);
+  expect(await labelsOf(items.nth(4))).toEqual([PRINTED_AS_REBUILT(5)]);
 
   await everything.check();
   await page.getByRole('button', { name: en.actions.clearEverything }).click();

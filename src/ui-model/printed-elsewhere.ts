@@ -4,13 +4,17 @@
 // email of its own (a rebuilt email in the PDF, or the real file a rebuilt
 // one is linked to) is left out of that email in the PDF. The preview labels
 // such a part "Not in this email in the PDF: printed as email #N"
-// (src/ui/preview.ts, pdfLabelText) instead of the plan's own label.
+// (src/ui/preview.ts, pdfLabelText) instead of the plan's own label. A
+// forwarded part whose rebuilt email the reader unticked (task 8.13a, Q2)
+// is left out too, labelled "Not in the PDF: forwarded email whose rebuilt
+// email is unticked".
 //
 // It decides nothing on its own: it calls the PDF model's own functions
 // (src/pdf/model.ts: noRepeat, which buildPdfDocument calls too, and
 // pdfRanges, which cuts the plan with the same call the PDF makes) on the
 // same input the PDF step gets (src/ui/page.ts, pdfInput: the included
-// emails, their plans, the policy and the rebuilt emails chosen). So the
+// emails, their plans, the policy, the rebuilt emails chosen and those
+// unticked). So the
 // parts labelled are exactly the parts the PDF leaves out, and the email
 // named is the one it prints them as.
 //
@@ -30,6 +34,10 @@ export interface PrintedElsewhereInput {
   readonly policy: OutputPolicy;
   /** Ids of the rebuilt emails chosen (src/ui/review.ts, includedRebuilt; ignored under "Print full original text"). */
   readonly rebuilt: readonly number[];
+  /** True when "Rebuild conversation from replies" is off (src/pdf/model.ts, BuildPdfInput.rebuildingOff). Absent: false. */
+  readonly rebuildingOff?: boolean;
+  /** Ids of the rebuilt emails the reader unticked (src/ui/review.ts, untickedRebuilt; src/pdf/model.ts, BuildPdfInput.unticked). Absent: none. */
+  readonly unticked?: readonly number[];
 }
 
 /**

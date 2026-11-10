@@ -205,6 +205,16 @@ export interface Review {
   /** The rebuilt emails to put in the PDF, in list (timeline) order: ticked, and an email they were read from included; [] when the switch is off or "Print full original text" is ticked. */
   includedRebuilt(): readonly EngineRebuilt[];
   /**
+   * Ids of the rebuilt emails the reader UNTICKED (task 8.13a review round
+   * 2): only cards the page decorated (so the reader saw them) whose own
+   * checkbox is unticked, while rebuilt cards are shown (rebuiltShown); [] otherwise.
+   * An entry left out of includedRebuilt for any other reason (no card, a
+   * list that fell back, its source unticked, a broken entry) is not in it.
+   * The PDF leaves out the forwarded parts of these only (src/pdf/model.ts,
+   * BuildPdfInput.unticked).
+   */
+  untickedRebuilt(): readonly number[];
+  /**
    * "Print full original text" was ticked or unticked: the switch (unticked
    * and disabled while it is ticked, its own state back after), every
    * rebuilt card and the counts are written again. Returns the line to
@@ -469,6 +479,17 @@ export function createReview(options: ReviewOptions = {}): Review {
     const complete = renderedResult === current;
     const included = new Set(positions());
     return rebuiltList.filter((r) => ((complete && !rebuiltItems.has(r.id)) || isRebuiltTicked(r)) && sourceInPdf(r, included));
+  }
+
+  /**
+   * The ids of the rebuilt cards the reader unticked (see Review.untickedRebuilt):
+   * decorated cards of the result shown whose own tick is off (a broken entry
+   * counts as ticked, isRebuiltTicked), in list order; [] while the switch is
+   * off or "Print full original text" is ticked.
+   */
+  function rebuiltUnticked(): number[] {
+    if (current === null || !rebuiltOn()) return [];
+    return rebuiltList.filter((r) => rebuiltItems.has(r.id) && !isRebuiltTicked(r)).map((r) => r.id);
   }
 
   /** True for a note shown only while rebuilding is on ("could not be rebuilt"). */
@@ -780,6 +801,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     decorateRebuilt,
     rebuiltShown: rebuiltOn,
     includedRebuilt: rebuiltIncluded,
+    untickedRebuilt: rebuiltUnticked,
     everythingChanged() {
       syncSwitch();
       applyAllRebuilt();

@@ -125,7 +125,7 @@ import { displayAuthor } from '../ui-model/display-author';
 import type { DisplayBlock } from '../ui-model/display-blocks';
 import { joinMailboxes, joinPlain } from '../ui-model/mailbox-list';
 import { pdfPlanNote, type PdfNoteCode } from '../ui-model/message-notes';
-import { pdfBlocks, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
+import { pdfBlocks, printedAsEmailOfItsOwn, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
 import { previewOrder, rebuiltCard, type PreviewSlot, type RebuiltCard, type RebuiltDate } from '../ui-model/rebuilt';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
@@ -281,14 +281,21 @@ export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly numbe
  * app"; for a part the PDF prints as an email of its own (task 8.11):
  * "Not in this email in the PDF: printed as email #5" (a real email, by its
  * list number) or "... printed as a rebuilt email (Email 3 in the PDF)" (a
- * rebuilt email has no list number: its heading in the PDF).
+ * rebuilt email has no list number: its heading in the PDF); for a
+ * forwarded part left out with its unticked rebuilt email (task 8.13a, Q2):
+ * "Not in the PDF: forwarded email whose rebuilt email is unticked".
  */
 export function pdfLabelText(label: PdfLabel): string {
   const printedAs = label.status === 'out' ? (label.printedAs ?? null) : null;
   if (printedAs !== null) {
-    return printedAs.kind === 'email'
-      ? t('pdf.printedAs.email', { number: messageNumberText(printedAs.position + 1) })
-      : t('pdf.printedAs.rebuilt', { number: String(printedAs.number) });
+    switch (printedAs.kind) {
+      case 'email':
+        return t('pdf.printedAs.email', { number: messageNumberText(printedAs.position + 1) });
+      case 'rebuilt':
+        return t('pdf.printedAs.rebuilt', { number: String(printedAs.number) });
+      case 'unticked':
+        return t('pdf.printedAs.unticked');
+    }
   }
   const list = label.reasons.length === 0 ? ['text' as const] : label.reasons;
   // The reasons are parts, not a list: a plain ", " (no "et" in French; a
@@ -906,7 +913,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       drawBlocks(slot, blocks, wasOpen);
       slot.shape = shape;
     }
-    const note = view === null ? null : pdfPlanNote(view.plan);
+    // Parts printed as emails of their own (task 8.11, S1): the note does not say "the whole email".
+    const note = view === null ? null : pdfPlanNote(view.plan, printedAsEmailOfItsOwn(view, m.message.bodyText));
     slot.noteCode = note;
     writeNote(slot);
     setSafeAttribute(slot.note, 'hidden', note === null);

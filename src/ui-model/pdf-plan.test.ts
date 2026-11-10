@@ -9,11 +9,11 @@ import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { runEngine, type EngineMessage } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type PlanRange } from '../engine/output-plan';
-import { buildSegments, type FoldRange } from '../engine/segments';
+import { buildSegments, type FoldRange, type FoldReason } from '../engine/segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { displayBlocks } from './display-blocks';
 import type { PdfRange } from '../pdf/model';
-import { labelOf, pdfBlocks, pdfBreaks, signatureSources, viewKey, type PdfBlock, type PdfView, type PrintedAs } from './pdf-plan';
+import { labelOf, mergeSamePrintedAs, pdfBlocks, pdfBreaks, printedAsEmailOfItsOwn, signatureSources, viewKey, type PdfBlock, type PdfLabel, type PdfView, type PrintedAs } from './pdf-plan';
 
 const plan = (ranges: PlanRange[], extra: Partial<MessagePlan> = {}): MessagePlan => ({
   ranges,
@@ -378,5 +378,129 @@ describe('every fixture, through the real engine and plan', () => {
         expect(repeatedWithSource).toBeGreaterThan(5);
       }
     }
+  });
+});
+
+describe('printedAsEmailOfItsOwn (task 8.11, S1, done in task 8.13a)', () => {
+  const body = 'Own text.\nFrom: x\nQuoted text.\n\n';
+  // 32 characters: 'Own text.\n' [0, 10), 'From: x\n' [10, 18), 'Quoted text.' [18, 30), then white space alone [30, 32).
+  const range = (start: number, end: number, printedAs: PrintedAs | null): PdfRange => ({ start, end, keep: printedAs === null, reason: 'forwarded', printedAs });
+
+  it('is true when text is left out because it is printed as a rebuilt or a real email', () => {
+    expect(body).toHaveLength(32);
+    expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 10, null), range(10, 32, { kind: 'rebuilt', id: 0, number: 1 })] }, body)).toBe(true);
+    expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 10, null), range(10, 32, { kind: 'email', position: 1, number: 2 })] }, body)).toBe(true);
+  });
+
+  it('is false for an unticked forwarded part (printed nowhere), white space alone, no cut, or no view', () => {
+    expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 10, null), range(10, 32, { kind: 'unticked', id: 0 })] }, body)).toBe(false);
+    expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 30, null), range(30, 32, { kind: 'rebuilt', id: 0, number: 1 })] }, body)).toBe(false);
+    expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 32, null)] }, body)).toBe(false);
+    expect(printedAsEmailOfItsOwn({}, body)).toBe(false);
+    expect(printedAsEmailOfItsOwn(null, body)).toBe(false);
+  });
+});
+
+describe('adjacent blocks with the same "printed as" label are one block (task 8.13a review round 2)', () => {
+  // A forward: own text, then the forwarded email's header lines (folded) and its text (shown), as the e2e forward.
+  const OWN_TEXT = 'Bob, see below.\n\n';
+  const HEADER = '---------- Forwarded message ---------\nFrom: Depot Desk <depot@example.test>\nDate: Fri, 21 Mar 2025 at 09:00\n\n';
+  const TEXT = 'The delivery slot is Tuesday morning.\n';
+  const WS = '\n\n';
+  const FWD = OWN_TEXT + HEADER + TEXT;
+  const H = OWN_TEXT.length;
+  const T = H + HEADER.length;
+  const fwdSegments = buildSegments(FWD, [{ start: H, end: T, reason: 'reply-header' }] satisfies FoldRange[]);
+  const cutView = (pieces: readonly [number, number, PrintedAs | null][], body = FWD): PdfView => {
+    const ranges: PdfRange[] = pieces.map(([start, end, printedAs]) => ({ start, end, keep: printedAs === null, reason: start === 0 ? 'text' : 'forwarded', printedAs }));
+    return { plan: plan([{ start: 0, end: H, keep: true, reason: 'text' }, { start: H, end: body.length, keep: true, reason: 'forwarded' }]), signatureFrom: new Map(), pdfRanges: ranges };
+  };
+  const rebuilt5: PrintedAs = { kind: 'rebuilt', id: 0, number: 5 };
+
+  it('the header lines (folded) and the text (shown) printed as the same email: one SHOWN block, one label; the body comes back whole', () => {
+    // Two ranges (as the PDF cut gives them when the header lines and the text are cut apart), one email.
+    const v = cutView([
+      [0, H, null],
+      [H, T, rebuilt5],
+      [T, FWD.length, rebuilt5],
+    ]);
+    // Without the merge the display blocks are two: the folded header, the shown text.
+    expect(displayBlocks(FWD, fwdSegments, { unfoldAll: false, breaks: pdfBreaks(FWD, v.pdfRanges!) }).map((b) => b.folded)).toEqual([false, true, false]);
+    const blocks = pdfBlocks(FWD, fwdSegments, v);
+    expect(blocks.map((b) => [b.block.start, b.block.end, b.block.folded, b.label?.printedAs ?? null])).toEqual([
+      [0, H, false, null],
+      [H, FWD.length, false, rebuilt5],
+    ]);
+    expect(blocks[1]!.label).toEqual({ status: 'out', reasons: ['forwarded'], signaturesFrom: [], printedAs: rebuilt5 });
+    // Folded + shown -> shown (user decision, option (a)): the header lines are visible.
+    expect(blocks[1]!.block).toMatchObject({ reasons: [], related: [], label: null, collapsed: false, text: HEADER + TEXT });
+    // Collapse, never delete (R6).
+    expect(blocks.map((b) => b.block.text).join('')).toBe(FWD);
+  });
+
+  // The merge itself, on hand-made blocks (two folded blocks with the same
+  // "printed as" are already one display block, so this case is not reached
+  // through pdfBlocks; the rule is checked directly).
+  const outLabel = (printedAs: PrintedAs): PdfLabel => ({ status: 'out', reasons: ['forwarded'], signaturesFrom: [], printedAs });
+  const blk = (start: number, end: number, folded: boolean, reason: FoldReason | null, related: number[] = []): PdfBlock => ({
+    block: { start, end, text: FWD.slice(start, end), folded, reasons: reason === null ? [] : [reason], related, label: reason, collapsed: folded },
+    label: outLabel(rebuilt5),
+  });
+
+  it('merge rule: folded + folded -> folded (reasons and links joined, the longer one names it); folded + shown or shown + shown -> shown', () => {
+    const ff = mergeSamePrintedAs([blk(H, T, true, 'reply-header', [2]), blk(T, FWD.length, true, 'quote-marker', [1, 2])]);
+    expect(ff).toHaveLength(1);
+    // HEADER is longer than TEXT.
+    expect(ff[0]!.block).toMatchObject({ start: H, end: FWD.length, folded: true, collapsed: true, related: [1, 2], label: 'reply-header', text: FWD.slice(H) });
+    expect([...ff[0]!.block.reasons].sort()).toEqual(['quote-marker', 'reply-header']);
+    for (const [a, b] of [
+      [true, false],
+      [false, true],
+      [false, false],
+    ] as const) {
+      const m = mergeSamePrintedAs([blk(H, T, a, a ? 'reply-header' : null), blk(T, FWD.length, b, b ? 'quote-marker' : null)]);
+      expect(m).toHaveLength(1);
+      expect(m[0]!.block).toMatchObject({ start: H, end: FWD.length, folded: false, collapsed: false, reasons: [], related: [], label: null });
+      expect(m[0]!.label).toEqual(outLabel(rebuilt5));
+      // R6: the joined text is exactly the body slice.
+      expect(m[0]!.block.text).toBe(FWD.slice(H));
+    }
+  });
+
+  it('also for a forwarded email whose rebuilt email is unticked (the same id)', () => {
+    const unticked: PrintedAs = { kind: 'unticked', id: 3 };
+    const blocks = pdfBlocks(FWD, fwdSegments, cutView([[0, H, null], [H, T, unticked], [T, FWD.length, unticked]]));
+    expect(blocks.map((b) => b.label?.printedAs ?? null)).toEqual([null, unticked]);
+    expect(blocks.map((b) => b.block.text).join('')).toBe(FWD);
+  });
+
+  it('never for two different emails, two numbers, two unticked emails, or a block in between', () => {
+    const cases: [PrintedAs, PrintedAs][] = [
+      [rebuilt5, { kind: 'rebuilt', id: 1, number: 6 }],
+      [rebuilt5, { kind: 'rebuilt', id: 0, number: 6 }],
+      [rebuilt5, { kind: 'email', position: 0, number: 5 }],
+      [{ kind: 'unticked', id: 1 }, { kind: 'unticked', id: 2 }],
+      [rebuilt5, { kind: 'unticked', id: 0 }],
+    ];
+    for (const [a, b] of cases) {
+      const blocks = pdfBlocks(FWD, fwdSegments, cutView([[0, H, null], [H, T, a], [T, FWD.length, b]]));
+      expect(blocks.map((x) => x.label?.printedAs ?? null)).toEqual([null, a, b]);
+      expect(blocks.map((x) => x.block.text).join('')).toBe(FWD);
+    }
+    // A shown block between the two (text the PDF keeps: no label): they stay apart.
+    const KEPT = 'A line the PDF keeps.\n';
+    const body = OWN_TEXT + HEADER + KEPT + WS + TEXT;
+    const K = T + KEPT.length;
+    const blocks = pdfBlocks(body, buildSegments(body, [{ start: H, end: T, reason: 'reply-header' }] satisfies FoldRange[]), cutView([[0, H, null], [H, T, rebuilt5], [T, K, null], [K, body.length, rebuilt5]], body));
+    expect(blocks.map((b) => b.block.text).join('')).toBe(body);
+    expect(blocks.map((b) => [b.block.folded, b.label?.printedAs ?? null])).toEqual([
+      [false, null],
+      [true, rebuilt5],
+      [false, null],
+      [false, rebuilt5],
+    ]);
+    // Kept text and a left-out block side by side: never merged (only two 'out' labels are).
+    const kept = pdfBlocks(FWD, fwdSegments, cutView([[0, H, null], [H, FWD.length, rebuilt5]]));
+    expect(kept.map((b) => b.label?.status ?? null)).toEqual([null, 'out']);
   });
 });

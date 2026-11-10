@@ -394,6 +394,8 @@ describe('layoutPdf: pagination', () => {
     expect(laidEmpty.document.outline.map((o) => o.destination)).toEqual(['cover']);
     // An index entry whose email is not there is a clear Error (its link and page would be wrong).
     expect(() => lay({ ...empty, index: doc.index })).toThrow(/^layout: the index entry email-1 has no email$/);
+    // And an email without its index entry too (task 8.13): no email heading and header rows without an index line.
+    expect(() => lay({ ...doc, index: { ...doc.index, entries: [] } })).toThrow(/^layout: the email email-1 has no index entry$/);
   });
 });
 
@@ -770,7 +772,10 @@ function syntheticEmail(n: number, body: readonly string[]): PdfEmail {
 
 function syntheticDoc(emails: readonly PdfEmail[]): PdfDocument {
   const doc = build([make()]);
-  return { ...doc, emails, pdfNumberByPosition: emails.map((e) => e.number) };
+  // One index entry per email (layoutPdf requires it, task 8.13), each a copy of the one built, renumbered.
+  const entry = doc.index.entries[0]!;
+  const entries = emails.map((e) => ({ ...entry, number: e.number, anchor: e.anchor }));
+  return { ...doc, index: { ...doc.index, entries }, emails, pdfNumberByPosition: emails.map((e) => e.number) };
 }
 
 describe('layoutPdf: time bounds', () => {

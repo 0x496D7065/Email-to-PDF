@@ -28,6 +28,10 @@ export interface GeneratePdfInput {
   readonly plans: readonly MessagePlan[];
   /** Ids of the rebuilt emails chosen (src/ui/review.ts, includedRebuilt); absent or [] for none. See BuildPdfInput.rebuilt. */
   readonly rebuilt?: readonly number[];
+  /** True when "Rebuild conversation from replies" is off. See BuildPdfInput.rebuildingOff. */
+  readonly rebuildingOff?: boolean;
+  /** Ids of the rebuilt emails the reader unticked (src/ui/review.ts, untickedRebuilt). See BuildPdfInput.unticked. */
+  readonly unticked?: readonly number[];
   readonly policy: OutputPolicy;
   /** IANA zone the dates are shown in (an invalid one falls back to UTC; the cover then names UTC). */
   readonly timeZone: string;
@@ -64,6 +68,8 @@ export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf
     positions: input.positions,
     plans: input.plans,
     ...(input.rebuilt === undefined ? {} : { rebuilt: input.rebuilt }),
+    ...(input.rebuildingOff === undefined ? {} : { rebuildingOff: input.rebuildingOff }),
+    ...(input.unticked === undefined ? {} : { unticked: input.unticked }),
     policy: input.policy,
     timeZone: input.timeZone,
     generatedAt: input.generatedAt,

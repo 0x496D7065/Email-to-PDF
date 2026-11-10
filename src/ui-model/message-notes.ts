@@ -70,14 +70,22 @@ void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete, reb
  * what to leave out. They depend on which emails are included, so the
  * preview shows them with its PDF labels (src/ui/preview.ts), not with the
  * notes above.
+ * 'pdf-kept-all-empty-elsewhere' (task 8.11, finding S1, done in task
+ * 8.13a): rule 4 keeps the whole email, but the PDF's no-repeat rule
+ * (src/pdf/model.ts) still leaves out of it the parts it prints as emails
+ * of their own, so "the whole email" would not be true.
  */
-export const PDF_NOTES = ['pdf-kept-all-empty', 'pdf-fallback'] as const;
+export const PDF_NOTES = ['pdf-kept-all-empty', 'pdf-kept-all-empty-elsewhere', 'pdf-fallback'] as const;
 export type PdfNoteCode = (typeof PDF_NOTES)[number];
 
-/** The PDF note of a plan, or null. */
-export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>): PdfNoteCode | null {
+/**
+ * The PDF note of a plan, or null. `printedElsewhere`: the PDF leaves parts
+ * of this email out because it prints them as emails of their own (the
+ * preview's view of the email has such parts, src/ui-model/pdf-plan.ts).
+ */
+export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>, printedElsewhere = false): PdfNoteCode | null {
   if (plan.fallback) return 'pdf-fallback';
-  if (plan.keptAllBecauseEmpty) return 'pdf-kept-all-empty';
+  if (plan.keptAllBecauseEmpty) return printedElsewhere ? 'pdf-kept-all-empty-elsewhere' : 'pdf-kept-all-empty';
   return null;
 }
 

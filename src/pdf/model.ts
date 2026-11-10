@@ -177,7 +177,7 @@ import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engin
 import type { MessagePlan, OutputPolicy, PlanRange } from '../engine/output-plan';
 import { headerLabelCounts } from '../engine/quoted-header';
 import type { ReconstructedMessage } from '../engine/reconstruct';
-import { comparableText } from '../engine/rebuild-links';
+import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../engine/rebuild-links';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
@@ -279,6 +279,12 @@ export interface PdfRebuiltInfo {
   readonly shownId: number;
   /** The list position of the email it was taken from (in the PDF). */
   readonly sourcePosition: number;
+  /**
+   * How many blocks of original header lines were moved to the top of its
+   * text (task 8.13a, Q4: the quoted header lines its header rows cannot
+   * show; NoRepeat.moved). 0 usually.
+   */
+  readonly movedHeaders: number;
 }
 
 export interface PdfEmail {
@@ -344,6 +350,26 @@ export interface BuildPdfInput {
    * Ignored (none in the PDF) when `policy.unfoldEverything` is true.
    */
   readonly rebuilt?: readonly number[];
+  /**
+   * True when "Rebuild conversation from replies" is off (src/ui/review.ts,
+   * rebuiltShown false): no rebuilt email figures at all, so none counts as
+   * unticked and a forwarded part stays in its forward as the plan says
+   * (task 8.13a, Q2 applies only to a rebuilt email the reader UNTICKED):
+   * `unticked` is ignored then. Absent: false.
+   */
+  readonly rebuildingOff?: boolean;
+  /**
+   * Ids (in `result.reconstructed`) of the rebuilt emails whose card the
+   * reader saw and UNTICKED while the switch is on (src/ui/review.ts,
+   * untickedRebuilt; task 8.13a review round 2): only a forwarded part of
+   * one of these is left out of its forward (Q2). An entry merely missing
+   * from `rebuilt` (a card that could not be shown, a list that fell back
+   * to the plain order) is NOT unticked: its text stays where the plan puts
+   * it. Absent or []: none (when unsure, keep). An id also in `rebuilt`
+   * does not count. Ignored when `rebuildingOff` or
+   * `policy.unfoldEverything` is true.
+   */
+  readonly unticked?: readonly number[];
 }
 
 // ---------------------------------------------------------------- helpers
@@ -651,24 +677,47 @@ export function headerShownInPdf(body: string, r: ReconstructedMessage, printed:
   return [...r.to, ...r.cc].every((x) => isBlank(x) || amongMailboxes(x, recipients));
 }
 
-/** The kept ranges the no-repeat rule never cuts: the writer's own text (B1) and a kept signature (S5). */
+/** The kept ranges of the writer's own: the writer's own text (B1) and a kept signature (S5). */
 const isOwn = (r: PlanRange): boolean => r.keep && (r.reason === 'text' || r.reason === 'signature' || r.reason === 'repeated-signature');
+
+/** The ranges the plan marks as a quote (kept or not): a quote of the writer, app quoted history, a forwarded part. */
+const isQuoted = (r: PlanRange): boolean => r.reason === 'writer-quote' || r.reason === 'app-quoted-history' || r.reason === 'forwarded';
+
+/** Whether [start, end) of `body` overlaps, with text other than white space, a range of `ranges` that passes `test`. */
+function holdsText(body: string, ranges: readonly PlanRange[], start: number, end: number, test: (r: PlanRange) => boolean): boolean {
+  for (const r of ranges) {
+    if (r.end <= start || r.start >= end) continue;
+    if (test(r) && /\S/u.test(body.slice(Math.max(r.start, start), Math.min(r.end, end)))) return true;
+  }
+  return false;
+}
 
 /**
  * Whether [start, end) of `body` overlaps, with text other than white
- * space, a kept range of `ranges` that the no-repeat rule never cuts
- * (reason 'text', the writer's own text, B1; or a kept 'signature' /
- * 'repeated-signature', S5). printedElsewhere uses it on a place's text
- * (then the place is not cut at all, task 8.10, review round 3:
- * attribution first, so the writer's answer is never printed under the
- * quoted sender's header lines) and on its header lines (then they stay).
+ * space, a kept range of `ranges` of the writer's own (reason 'text', the
+ * writer's own text, B1; or a kept 'signature' / 'repeated-signature', S5).
+ * printedElsewhere uses it, with holdsQuotedText, on a place's text: a
+ * place that holds both is not cut at all (the writer's answer, see
+ * printedElsewhere).
  */
 export function holdsOwnText(body: string, ranges: readonly PlanRange[], start: number, end: number): boolean {
-  for (const r of ranges) {
-    if (r.end <= start || r.start >= end) continue;
-    if (isOwn(r) && /\S/u.test(body.slice(Math.max(r.start, start), Math.min(r.end, end)))) return true;
-  }
-  return false;
+  return holdsText(body, ranges, start, end, isOwn);
+}
+
+/**
+ * Whether [start, end) of `body` overlaps, with text other than white
+ * space, a range of `ranges` that the plan marks as a quote, kept or not
+ * (reason 'writer-quote', 'app-quoted-history' or 'forwarded'; task
+ * 8.13a). In a place that also holds own text (holdsOwnText), the plan
+ * told the writer's answer from the quote around it there.
+ */
+export function holdsQuotedText(body: string, ranges: readonly PlanRange[], start: number, end: number): boolean {
+  return holdsText(body, ranges, start, end, isQuoted);
+}
+
+/** Where the forwarded part of a plan starts (rule 1 of output-plan.ts: everything from there on), or null. */
+function forwardedFrom(ranges: readonly PlanRange[]): number | null {
+  return ranges.find((r) => r.reason === 'forwarded')?.start ?? null;
 }
 
 /**
@@ -708,39 +757,75 @@ export function headerLinesEnd(body: string, r: ReconstructedMessage): number {
 }
 
 /**
- * THE NO-REPEAT RULE (user decision 2026-11-06, task 8.10): which parts of
- * each real email's body the PDF prints elsewhere AS AN EMAIL OF ITS OWN,
- * per list position (only emails in the PDF; an email with none is not in
- * the map). A part is the place a rebuilt message was read from
- * (src/engine/reconstruct.ts): its text [headerEnd, end), and its header
- * lines [start, headerEnd) too when the header rows printed for it show
- * everything those lines say (headerShownInPdf; else they stay, an allowed
- * repeat of header lines only), when that message is in the PDF:
+ * THE NO-REPEAT RULE (user decisions 2026-11-06, task 8.10, and
+ * 2026-11-09, task 8.13a): which parts of each real email's body the PDF
+ * leaves out because it prints them elsewhere AS AN EMAIL OF ITS OWN (or,
+ * for a forwarded part, because the reader unticked its rebuilt email), per
+ * list position (only emails in the PDF; an email with none is not in the
+ * map). A part is the WHOLE place a rebuilt message was read from
+ * (src/engine/reconstruct.ts), [start, end): its header lines and its
+ * text, when that message is in the PDF:
  * - an entry (link 'entry') with a slot in this PDF;
  * - a copy of such an entry (link 'same-as'): the entry prints the same
  *   words (rebuild-links.ts, rule 2; only a signature block at the end of
- *   one copy may differ);
+ *   one copy may differ: see A DIFFERING SIGNATURE below);
  * - one linked to a real email (link 'real', "the real file wins") when
  *   that real email is in the PDF too: it prints the same words as its own
  *   text (rebuild-links.ts, rule 1c; only a signature block may differ).
- * A rebuilt message not in the PDF (its card unticked, the switch off, its
- * entry not placed) covers nothing: its text stays where its source's plan
- * puts it. HEADER LINES here are [start, headerLinesEnd): the header's own
- * lines and, for a header read short, the lines left of it at the top of
- * the text; the place's TEXT is the rest, up to `end`. ATTRIBUTION FIRST
- * (task 8.10, review round 3): a place whose text overlaps, with text, a
- * kept range of its source's plan (`plans`, by list position) that is the
- * writer's own text ('text') or a kept signature covers nothing either
- * (holdsOwnText): its header lines and quoted text stay with that text, as
- * the plan says, so the writer's answer is never printed right under the
- * quoted sender's header lines (an allowed repeat: the rebuilt email
- * prints it too). When only its header lines hold such a range (the plan
- * may take a wrapped To / Cc line or a Subject line for own text), the
- * header lines stay whole (B1: never cut; only header lines repeat) and
- * its text may still be left out. An email whose plan
- * is missing or not trusted is printed whole anyway; no `plans` given
- * (some tests): no such check. Malformed entries (offsets outside the
- * body) are skipped: when unsure, keep.
+ * HEADER LINES (task 8.13a, Q4; they no longer stay in the body, B2): the
+ * header lines [start, headerLinesEnd) always leave the body with the
+ * place. When the place is printed as a REBUILT email whose header rows do
+ * not show everything they say (headerShownInPdf), or when the plan took
+ * some of them for own text (a wrapped To / Cc line, a Subject line), they
+ * are MOVED, as plain text, to the top of that rebuilt email's own text
+ * (noRepeat, `moved`; buildRebuiltEmail), so nothing is lost and they sit
+ * under a real header. Only lines the body would have printed are moved:
+ * its trusted plan keeps some of them (lines the plan leaves out anyway,
+ * say the quoted history of a reply, are not added to the rebuilt email).
+ * When it is printed as a REAL FILE, they are dropped:
+ * that file's own header rows are the real header.
+ * UNTICKED FORWARDED PARTS (task 8.13a, Q2): a place inside the forwarded
+ * part of its source's plan (rule 1 of output-plan.ts: from the forward
+ * boundary on) whose rebuilt email the reader unticked (its id, or the id
+ * of the entry it is a copy of, is in `unticked`: its card seen and
+ * unticked while "Rebuild conversation from replies" is on,
+ * BuildPdfInput.unticked) is left out too, header lines and text
+ * (`printedAs` kind 'unticked'): the PDF does not show it; the preview,
+ * "Print full original text" and the original files still do. Only ids
+ * actually in `unticked` count (task 8.13a review round 2): an entry merely
+ * not chosen is never taken for unticked. Only when `unticked` and `plans`
+ * are given (noRepeat gives no `unticked` while the switch is off,
+ * BuildPdfInput.rebuildingOff: then no forwarded part is cut).
+ * A DIFFERING SIGNATURE (task 8.13a review round 2): a copy linked to the
+ * email that prints it (link 'same-as', or 'real') may end with a signature
+ * block the printed text does not have (rebuild-links.ts, rules 1c and 2:
+ * one of the two texts may end with one). That block is printed nowhere
+ * else, so it stays INLINE (the part ends where it starts, extraTail); only
+ * the words the other email prints are cut. When it is unclear where in the
+ * body the block starts, the whole place stays (when unsure, keep).
+ * Kept INLINE, as the plan says (nothing else would show it): a rebuilt
+ * message that is not in the PDF for any other reason (not a forwarded
+ * part, its entry chosen but not placed, a real file linked to it that is
+ * not in the PDF), and any quoted part the engine could not rebuild at all
+ * (reconstruct.ts, REFUSAL: there is no place for it).
+ * THE WRITER'S ANSWER STAYS (task 8.10, B1, review round 3, as narrowed by
+ * task 8.13a, Q3): a place whose text holds BOTH text the plan calls the
+ * writer's own ('text', or a kept signature: holdsOwnText) AND text the
+ * plan marks as a quote (holdsQuotedText) covers nothing: there the plan
+ * told the writer's answer apart from the quote around it (an answer typed
+ * inside or below a quote it could check, output-plan.ts rule 2b), so the
+ * whole place stays as the plan says, header lines included, and the answer
+ * is never printed right under the quoted sender's header lines (an allowed
+ * repeat: the rebuilt email prints it too). A place whose text holds own
+ * text and NO quoted text IS CUT like any other: the plan could not check
+ * any of it and only labelled it 'text' because it could not prove it a
+ * quote (rule 2b, say a middle email of an unmarked Outlook chain whose own
+ * file is not in the PDF: the deliberate repeat of task 8.10, 3a, option A,
+ * is gone). Its rebuilt email (or the real file) prints that text, under
+ * the quoted header. An email whose plan is missing or not trusted is
+ * printed whole anyway; no `plans` given (some tests): no such check.
+ * Malformed entries (offsets outside the body) are skipped: when unsure,
+ * keep.
  * Pure: `result` and `plans` are never changed.
  */
 export function printedElsewhere(
@@ -748,22 +833,26 @@ export function printedElsewhere(
   slots: readonly PdfSlot[],
   pdfNumberByPosition: readonly (number | null)[],
   plans?: ReadonlyMap<number, MessagePlan | undefined>,
+  unticked?: ReadonlySet<number>,
 ): Map<number, BodyIntervals> {
   const out = new Map<number, BodyIntervals>();
-  for (const [position, parts] of printedElsewhereParts(result, slots, pdfNumberByPosition, plans)) out.set(position, mergeParts(parts));
+  for (const [position, parts] of printedElsewhereParts(result, slots, pdfNumberByPosition, plans, unticked)) out.set(position, mergeParts(parts));
   return out;
 }
 
 /**
- * Where the PDF prints a part it leaves out of a body (the no-repeat rule,
- * task 8.10), for the preview's labels (task 8.11): a rebuilt email in the
- * PDF (`id`: its entry in `result.reconstructed`, the one with a slot) or a
- * real email in the PDF (`position`: its list position). `number`: its PDF
- * number (1..n over every email in the PDF).
+ * Why the PDF leaves a part out of a body (the no-repeat rule, task 8.10),
+ * for the preview's labels (task 8.11): it prints it as a rebuilt email in
+ * the PDF (`id`: its entry in `result.reconstructed`, the one with a slot)
+ * or as a real email in the PDF (`position`: its list position), `number`
+ * being its PDF number (1..n over every email in the PDF); or (kind
+ * 'unticked', task 8.13a, Q2) it does not print it at all: a forwarded part
+ * whose rebuilt email (entry `id`) the reader unticked (BuildPdfInput.unticked).
  */
 export type PrintedAs =
   | { readonly kind: 'rebuilt'; readonly id: number; readonly number: number }
-  | { readonly kind: 'email'; readonly position: number; readonly number: number };
+  | { readonly kind: 'email'; readonly position: number; readonly number: number }
+  | { readonly kind: 'unticked'; readonly id: number };
 
 /** A part [start, end) of one body that the PDF prints as the email `printedAs` (printedElsewhereParts). */
 export interface PrintedPart {
@@ -772,8 +861,16 @@ export interface PrintedPart {
   readonly printedAs: PrintedAs;
 }
 
-const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean =>
-  a.kind === 'rebuilt' ? b.kind === 'rebuilt' && a.id === b.id : b.kind === 'email' && a.position === b.position;
+const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean => {
+  switch (a.kind) {
+    case 'rebuilt':
+      return b.kind === 'rebuilt' && a.id === b.id;
+    case 'email':
+      return b.kind === 'email' && a.position === b.position;
+    case 'unticked':
+      return b.kind === 'unticked' && a.id === b.id;
+  }
+};
 
 /** The parts of a body as BodyIntervals: sorted, overlapping or touching parts merged. */
 function mergeParts(parts: readonly { readonly start: number; readonly end: number }[]): BodyIntervals {
@@ -827,24 +924,114 @@ export function printedElsewhereParts(
   slots: readonly PdfSlot[],
   pdfNumberByPosition: readonly (number | null)[],
   plans?: ReadonlyMap<number, MessagePlan | undefined>,
+  unticked?: ReadonlySet<number>,
 ): Map<number, readonly PrintedPart[]> {
+  return noRepeatParts(result, slots, pdfNumberByPosition, plans, unticked).parts;
+}
+
+/** A block of quoted header lines a place leaves behind for its rebuilt email (task 8.13a, Q4). */
+interface MoveCandidate {
+  readonly entry: number;
+  /** The id of the place (its EngineRebuilt). */
+  readonly copy: number;
+  readonly position: number;
+  readonly start: number;
+  readonly headerEnd: number;
+  readonly linesEnd: number;
+}
+
+/**
+ * One line set of header lines, compared: line ends unified, the quote marks
+ * at a line start and outer white space removed, blank lines dropped.
+ */
+function headerKey(text: string): string {
+  return text
+    .split(/\r\n?|\n/u)
+    .map((line) => line.replace(/^(?:[ \t]*>)+[ \t]?/u, '').trim())
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+/**
+ * Where, in `body`, a signature block starts that ends the text of `place`
+ * and that `printedText` (the text the email printing this place prints: the
+ * copy a rebuilt email shows, or a real file's body) does not print, or null
+ * (task 8.13a review round 2). The link rules let ONE of two linked texts end
+ * with a signature block the other lacks (rebuild-links.ts, rules 1c and 2;
+ * signatureStart, with the place's sender names). Null when the place has
+ * no such block, or when `printedText` holds all the place's words in the
+ * same order (comparableText: the header leftovers a header read short
+ * leaves at the top of its text aside), block included: then it is printed
+ * there. Otherwise the block's offset: the start of its first line in `body`
+ * (the place's text keeps its lines one for one, only quote marks are
+ * removed, reconstruct.ts step 4). 'unsure' (task 8.13a final round) when
+ * the block is there but its line cannot be found inside the place (the
+ * lines do not map one for one: the place's text has more lines than the
+ * place, or the line falls at or past its end), or the texts are not
+ * strings: the caller then KEEPS the whole place (when unsure, keep; null
+ * would cut it all, block included). Words are compared as the link rules
+ * compare them (wordsOf).
+ */
+export function extraTail(body: string, place: ReconstructedMessage, printedText: string): number | null | 'unsure' {
+  const text = place.reconstructedText;
+  if (typeof text !== 'string' || typeof printedText !== 'string') return 'unsure';
+  const at = signatureStart(text, nameWordsOf(Array.isArray(place.from) ? place.from : []));
+  if (at === null) return null;
+  const whole = wordsOf(comparableText(place)).tokens;
+  if (whole.length === 0) return null;
+  if (` ${wordsOf(printedText).tokens.join(' ')} `.includes(` ${whole.join(' ')} `)) return null;
+  // The block's first line, counted from the start of the place's text.
+  let lines = 0;
+  for (let k = text.indexOf('\n'); k >= 0 && k < at; k = text.indexOf('\n', k + 1)) lines++;
+  let offset = place.headerEnd;
+  for (let k = 0; k < lines; k++) {
+    const nl = body.indexOf('\n', offset);
+    if (nl < 0 || nl >= place.end) return 'unsure';
+    offset = nl + 1;
+  }
+  return offset < place.end ? offset : 'unsure';
+}
+
+/** printedElsewhereParts, and the header lines moved to each rebuilt email (see noRepeat). */
+function noRepeatParts(
+  result: EngineResult,
+  slots: readonly PdfSlot[],
+  pdfNumberByPosition: readonly (number | null)[],
+  plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
+  unticked: ReadonlySet<number> | undefined,
+): { readonly parts: Map<number, readonly PrintedPart[]>; readonly moved: Map<number, readonly string[]> } {
   const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
   // Each entry in the PDF, with the copy whose header and text it prints (rebuiltInPdf), and its PDF number.
-  const entries = new Map<number, { readonly copy: EngineRebuilt; readonly number: number }>();
-  for (const slot of slots) if (slot.kind === 'rebuilt') entries.set(slot.entry.id, { copy: slot.source.shown.rebuilt, number: slot.number });
+  const entries = new Map<number, { readonly copy: EngineRebuilt; readonly position: number; readonly number: number }>();
+  for (const slot of slots) if (slot.kind === 'rebuilt') entries.set(slot.entry.id, { copy: slot.source.shown.rebuilt, position: slot.source.shown.position, number: slot.number });
   const found = new Map<number, PrintedPart[]>();
+  const candidates: MoveCandidate[] = [];
+  // The entries whose printed copy's header lines are printed nowhere (its plan leaves them out, its rows cannot show them).
+  const unshown = new Set<number>();
   const reconstructed: readonly EngineRebuilt[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
   for (const r of reconstructed) {
     const position = result.positionByIndex[r.sourceIndex];
     if (!inPdf(position)) continue;
+    const { start, headerEnd, end } = r.rebuilt;
+    const body = result.messages[position]?.message.bodyText ?? '';
+    if (!Number.isInteger(start) || !Number.isInteger(headerEnd) || !Number.isInteger(end) || start < 0 || headerEnd < start || end < headerEnd || end > body.length) continue;
+    const plan = plans?.get(position);
+    const own = plan !== undefined && validRanges(plan, body.length) && !plan.fallback ? plan.ranges : null;
     let shownAs: PrintedHeader | null = null;
     let printedAs: PrintedAs | null = null;
+    // The text the other email prints (null: this place is that text, or nothing prints it).
+    let printedText: string | null = null;
     if (r.link === 'entry' || r.link === 'same-as') {
       const id = r.link === 'entry' ? r.id : r.sameAs;
       const entry = id === null ? undefined : entries.get(id);
       if (id !== null && entry !== undefined) {
         shownAs = { kind: 'rebuilt', rebuilt: entry.copy.rebuilt };
         printedAs = { kind: 'rebuilt', id, number: entry.number };
+        if (entry.copy.id !== r.id) printedText = entry.copy.rebuilt.reconstructedText;
+      } else if (id !== null && unticked !== undefined && unticked.has(id) && reconstructed[id]?.link === 'entry' && own !== null) {
+        // Q2: a forwarded part whose rebuilt email the reader unticked (only an id the reader really unticked).
+        const forwarded = forwardedFrom(own);
+        if (forwarded !== null && start >= forwarded) printedAs = { kind: 'unticked', id };
       }
     } else if (r.link === 'real' && r.realIndex !== null) {
       const real = result.positionByIndex[r.realIndex];
@@ -852,42 +1039,100 @@ export function printedElsewhereParts(
       if (message !== undefined && inPdf(real)) {
         shownAs = { kind: 'real', message, strong: r.match?.strong === true && !r.match.ambiguousDate };
         printedAs = { kind: 'email', position: real, number: pdfNumberByPosition[real]! };
+        printedText = typeof message.bodyText === 'string' ? message.bodyText : '';
       }
     }
-    if (shownAs === null || printedAs === null) continue;
-    const { start, headerEnd, end } = r.rebuilt;
-    const body = result.messages[position]?.message.bodyText ?? '';
-    if (!Number.isInteger(start) || !Number.isInteger(headerEnd) || !Number.isInteger(end) || start < 0 || headerEnd < start || end < headerEnd || end > body.length) continue;
-    const plan = plans?.get(position);
-    const own = plan !== undefined && validRanges(plan, body.length) && !plan.fallback ? plan.ranges : null;
+    if (printedAs === null) continue;
     // The header lines, with what is left of a header read short at the top of the text.
     const linesEnd = headerLinesEnd(body, r.rebuilt);
-    // Attribution first: own text in the place's text keeps the whole place.
-    if (own !== null && holdsOwnText(body, own, linesEnd, end)) continue;
-    // Header lines the plan took for own text (a wrapped To / Cc line, say) stay whole with the rest of the header.
-    const headerKept = (own !== null && holdsOwnText(body, own, start, linesEnd)) || !headerShownInPdf(body, r.rebuilt, shownAs);
-    const from = headerKept ? linesEnd : start;
-    if (end <= from) continue;
+    // The writer's answer (Q3): own text and quoted text in the place's text keep the whole place.
+    if (own !== null && holdsOwnText(body, own, linesEnd, end) && holdsQuotedText(body, own, linesEnd, end)) continue;
+    // A signature block only this copy has stays inline: the other email does not print it (see printedElsewhere).
+    const tail = printedText === null ? null : extraTail(body, r.rebuilt, printedText);
+    // A block whose line cannot be found ('unsure'), or found where it cannot be (in the header lines):
+    // when unsure, keep the whole place.
+    if (tail === 'unsure' || (tail !== null && (tail < linesEnd || tail >= end))) continue;
+    const cutEnd = tail ?? end;
+    if (cutEnd <= start) continue;
     let list = found.get(position);
     if (list === undefined) {
       list = [];
       found.set(position, list);
     }
-    list.push({ start: from, end, printedAs });
+    list.push({ start, end: cutEnd, printedAs });
+    // Q4: header lines the rebuilt email's rows cannot show (or that the plan took for own text) move to it,
+    // when this body would have printed them (its trusted plan keeps some of them; lines the plan leaves
+    // out, say the quoted history of a reply, were never printed and are not added; an untrusted plan
+    // prints the body whole, lines included, so moving them would print them twice).
+    if (printedAs.kind === 'rebuilt' && shownAs !== null && linesEnd > start) {
+      const shown = !(own !== null && holdsOwnText(body, own, start, linesEnd)) && headerShownInPdf(body, r.rebuilt, shownAs);
+      const kept = own !== null && holdsText(body, own, start, linesEnd, (x) => x.keep);
+      if (!shown && kept) candidates.push({ entry: printedAs.id, copy: r.id, position, start, headerEnd, linesEnd });
+      else if (!shown && own !== null && entries.get(printedAs.id)?.copy.id === r.id) unshown.add(printedAs.id);
+    }
   }
-  const out = new Map<number, readonly PrintedPart[]>();
-  for (const [position, list] of found) out.set(position, disjointParts(list));
+  const parts = new Map<number, readonly PrintedPart[]>();
+  for (const [position, list] of found) parts.set(position, disjointParts(list));
+  return { parts, moved: movedHeaders(result, entries, candidates, unshown, pdfNumberByPosition) };
+}
+
+/**
+ * The header lines moved to each rebuilt email in the PDF (task 8.13a, Q4),
+ * by entry id, in the order printed: first those of the copy it prints
+ * (its own [start, headerEnd): what is left of a header read short is
+ * already at the top of its text), then those of the other places that
+ * print as it, in PDF order ([start, headerLinesEnd)). Lines that say the
+ * same as lines already printed or shown there (headerKey: the copy
+ * printed, moved, kept in its body or shown by the header rows; or a block
+ * taken before) are not taken twice: they are printed once. When the
+ * printed copy's own lines are printed nowhere (`unshown`: its plan leaves
+ * them out and the rows cannot show them), the same lines of another copy
+ * are taken.
+ */
+function movedHeaders(
+  result: EngineResult,
+  entries: ReadonlyMap<number, { readonly copy: EngineRebuilt; readonly position: number }>,
+  candidates: readonly MoveCandidate[],
+  unshown: ReadonlySet<number>,
+  pdfNumberByPosition: readonly (number | null)[],
+): Map<number, readonly string[]> {
+  const out = new Map<number, readonly string[]>();
+  const bodyAt = (position: number): string => result.messages[position]?.message.bodyText ?? '';
+  for (const [id, entry] of entries) {
+    const mine = candidates.filter((c) => c.entry === id);
+    if (mine.length === 0) continue;
+    const shownBody = bodyAt(entry.position);
+    const shownCopy = entry.copy.rebuilt;
+    const seen = new Set<string>(unshown.has(id) ? [] : [headerKey(shownBody.slice(shownCopy.start, headerLinesEnd(shownBody, shownCopy)))]);
+    const texts: string[] = [];
+    const take = (text: string): void => {
+      if (text.trim() === '') return;
+      texts.push(/[\r\n]$/u.test(text) ? text : `${text}\n`);
+    };
+    const own = mine.find((c) => c.copy === entry.copy.id && c.position === entry.position);
+    if (own !== undefined) take(bodyAt(own.position).slice(own.start, own.headerEnd));
+    const others = mine
+      .filter((c) => c !== own)
+      .sort((a, b) => (pdfNumberByPosition[a.position] ?? 0) - (pdfNumberByPosition[b.position] ?? 0) || a.start - b.start);
+    for (const c of others) {
+      const text = bodyAt(c.position).slice(c.start, c.linesEnd);
+      const key = headerKey(text);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      take(text);
+    }
+    if (texts.length > 0) out.set(id, texts);
+  }
   return out;
 }
 
 /**
  * `r` cut at the bounds of `intervals` (sorted), its pieces inside them left
- * out. With `blankOnly` (a range of reason 'text', the writer's own text,
- * B1, or a kept signature, S5) a piece is left out only when it is white
- * space alone; a piece with text keeps the range whole there. Returns
+ * out, whatever its reason (task 8.13a: printedElsewhere alone decides what
+ * is cut; it keeps every place that holds the writer's answer, Q3). Returns
  * whether text other than white space was left out.
  */
-function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, blankOnly: boolean, out: CutRanges): boolean {
+function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, out: CutRanges): boolean {
   let leftOut = false;
   let from = r.start;
   const push = (range: PlanRange, cut: boolean): void => {
@@ -900,7 +1145,6 @@ function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, blankOnl
     const start = Math.max(a, from);
     const end = Math.min(b, r.end);
     const hasText = /\S/.test(body.slice(start, end));
-    if (blankOnly && hasText) continue;
     if (start > from) push({ ...r, start: from, end: start }, false);
     push({ ...r, start, end, keep: false }, true);
     if (hasText) leftOut = true;
@@ -926,7 +1170,7 @@ function cutPrintedElsewhere(body: string, ranges: readonly PlanRange[], parts: 
       out.cut.push(false);
       continue;
     }
-    if (cutRange(body, r, near(parts, r.start, r.end), isOwn(r), out)) leftOut = true;
+    if (cutRange(body, r, near(parts, r.start, r.end), out)) leftOut = true;
   }
   return { ...out, leftOut };
 }
@@ -948,15 +1192,13 @@ function near(intervals: BodyIntervals, start: number, end: number): BodyInterva
 /**
  * A plan's ranges with the parts printed elsewhere (`parts`, from
  * printedElsewhere) left out: a kept range is cut at the bounds of those
- * parts and its pieces inside them are left out. A range of reason 'text'
- * (the writer's own text, also an answer typed inside or below an Outlook
- * quote, output-plan.ts rule 2b) or a kept signature is never cut there,
- * only its white space is (user decision 2026-11-06, B1, and review round
- * 3, S5: the writer's own text always stays in the writer's own email; the
- * rebuilt email may repeat it, an allowed repeat). printedElsewhere already
- * drops every place that holds such text (holdsOwnText); this is a second
- * guard. `leftOut`: some text other than white space was left out by this
- * rule.
+ * parts and its pieces inside them are left out, whatever their reason.
+ * Which text may go is decided by printedElsewhere alone (task 8.13a): it
+ * gives no part for a place that holds the writer's answer (own text next
+ * to quoted text, B1 / Q3), while a place whose own text is only text the
+ * plan could not check (Q3) is cut whole, 'text' ranges included (before
+ * task 8.13a, a 'text' range or a kept signature was never cut here).
+ * `leftOut`: some text other than white space was left out by this rule.
  */
 export function withoutPrintedElsewhere(
   body: string,
@@ -1016,7 +1258,7 @@ export function pdfRanges(
 }
 
 /** What the no-repeat rule needs: the PDF's input, less what only the layout uses. */
-export type NoRepeatInput = Pick<BuildPdfInput, 'result' | 'positions' | 'plans' | 'policy' | 'rebuilt'>;
+export type NoRepeatInput = Pick<BuildPdfInput, 'result' | 'positions' | 'plans' | 'policy' | 'rebuilt' | 'rebuildingOff' | 'unticked'>;
 
 /** The emails in the PDF and the parts of their bodies printed elsewhere (noRepeat). */
 export interface NoRepeat {
@@ -1025,6 +1267,14 @@ export interface NoRepeat {
   readonly parts: ReadonlyMap<number, readonly PrintedPart[]>;
   /** Per list position, the same parts merged: what bodyTextOf leaves out (printedElsewhere). */
   readonly elsewhere: ReadonlyMap<number, BodyIntervals>;
+  /**
+   * Per rebuilt entry in the PDF (its id), the blocks of original header
+   * lines moved to the top of its text, in order (task 8.13a, Q4; see
+   * printedElsewhere): each exactly as written in its source body (quote
+   * marks included: the PDF drops them, src/pdf/text.ts), ending with a
+   * line break. An entry with none is not in the map.
+   */
+  readonly moved: ReadonlyMap<number, readonly string[]>;
 }
 
 /**
@@ -1038,13 +1288,17 @@ export function noRepeat(input: NoRepeatInput): NoRepeat {
   const { result, positions, plans } = input;
   const unfold = input.policy.unfoldEverything === true;
   const order = planPdfOrder(result, positions, unfold ? [] : (input.rebuilt ?? []));
-  if (unfold) return { order, parts: new Map(), elsewhere: new Map() };
+  if (unfold) return { order, parts: new Map(), elsewhere: new Map(), moved: new Map() };
   const planByPosition = new Map<number, MessagePlan | undefined>();
   for (const slot of order.slots) if (slot.kind === 'email') planByPosition.set(slot.position, plans[slot.plan]);
-  const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition, planByPosition);
+  // The rebuilt emails the reader really unticked, for the unticked forwarded parts (Q2; task 8.13a review
+  // round 2: never inferred from what `rebuilt` lacks). The switch off: none is unticked. Chosen ones never are.
+  const chosen = new Set(input.rebuilt ?? []);
+  const unticked = input.rebuildingOff === true ? undefined : new Set((input.unticked ?? []).filter((id) => !chosen.has(id)));
+  const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked);
   const elsewhere = new Map<number, BodyIntervals>();
   for (const [position, list] of parts) elsewhere.set(position, mergeParts(list));
-  return { order, parts, elsewhere };
+  return { order, parts, elsewhere, moved };
 }
 
 /** pdfBodyText, and whether the no-repeat rule left something out. */
@@ -1355,8 +1609,12 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
  * the rebuilt text (its own quote marks already removed), whole: no plan
  * applies to it. Deeper quotes left in it (">" lines of an older email it
  * quoted) lose their quote marks like a real email's (src/pdf/text.ts, transform g).
+ * `moved` (task 8.13a, Q4; NoRepeat.moved): original header lines its
+ * header rows cannot show, left out of the emails that quote it; they come
+ * first in its text, as plain text (the same role, font and indent as the
+ * rest of its text), so nothing is lost and they sit under its header.
  */
-function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: number, input: BuildPdfInput): EmailParts {
+function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: number, input: BuildPdfInput, moved: readonly string[]): EmailParts {
   const { strings } = input;
   const r = source.shown.rebuilt;
   const m = r.rebuilt;
@@ -1381,7 +1639,7 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
   const subject = m.subject !== null && m.subject.trim() !== '' ? m.subject : null;
   fields.push({ label: strings.subjectLabel, value: [subject !== null ? s.line(subject, 'field-value') : own(strings.noSubject, 'muted')] });
 
-  const lines = bodyLines(m.reconstructedText);
+  const lines = bodyLines(moved.join('') + m.reconstructedText);
   s.count += lines.replaced;
   const notes: PdfLine[] = lines.lines.length === 0 ? [own(strings.noText, 'muted')] : [];
 
@@ -1404,7 +1662,7 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
     anchor,
     position: null,
     heading: strings.emailHeading(number),
-    rebuilt: { id: entry.id, shownId: r.id, sourcePosition: source.shown.position },
+    rebuilt: { id: entry.id, shownId: r.id, sourcePosition: source.shown.position, movedHeaders: moved.length },
     fields,
     notes,
     body: lines.lines,
@@ -1436,7 +1694,8 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   const {
     order: { slots, pdfNumberByPosition },
     elsewhere,
-  } = noRepeat({ result, positions, plans, policy: input.policy, rebuilt: input.rebuilt });
+    moved,
+  } = noRepeat({ result, positions, plans, policy: input.policy, rebuilt: input.rebuilt, rebuildingOff: input.rebuildingOff, unticked: input.unticked });
   const emails: PdfEmail[] = [];
   const entries: PdfIndexEntry[] = [];
   const people: ParticipantSource[] = [];
@@ -1447,7 +1706,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
   for (const slot of slots) {
     let parts: EmailParts;
     if (slot.kind === 'rebuilt') {
-      parts = buildRebuiltEmail(slot.entry, slot.source, slot.number, input);
+      parts = buildRebuiltEmail(slot.entry, slot.source, slot.number, input, moved.get(slot.entry.id) ?? []);
     } else {
       const m = result.messages[slot.position]!;
       parts = buildEmail(m, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NOWHERE);

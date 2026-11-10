@@ -35,6 +35,19 @@ export interface PdfJobInput {
    * applies the follow-source rule (src/pdf/model.ts, planPdfOrder).
    */
   readonly rebuilt?: readonly number[];
+  /**
+   * True when "Rebuild conversation from replies" is off: no rebuilt email
+   * counts as unticked (src/pdf/model.ts, BuildPdfInput.rebuildingOff, task
+   * 8.13a). Absent: false.
+   */
+  readonly rebuildingOff?: boolean;
+  /**
+   * Ids of the rebuilt emails whose card the reader unticked (src/ui/review.ts,
+   * untickedRebuilt): only their forwarded parts are left out of a forward
+   * (src/pdf/model.ts, BuildPdfInput.unticked, task 8.13a review round 2).
+   * Absent: none.
+   */
+  readonly unticked?: readonly number[];
   readonly policy: OutputPolicy;
   readonly timeZone: string;
   /** When the PDF is made (ms since 1970 UTC), taken on the page. */
@@ -88,6 +101,8 @@ export function isToPdfWorker(data: unknown): data is ToPdfWorker {
     Array.isArray(input.plans) &&
     input.positions.length === input.plans.length &&
     (input.rebuilt === undefined || (Array.isArray(input.rebuilt) && input.rebuilt.every((id) => Number.isInteger(id)))) &&
+    (input.rebuildingOff === undefined || typeof input.rebuildingOff === 'boolean') &&
+    (input.unticked === undefined || (Array.isArray(input.unticked) && input.unticked.every((id) => Number.isInteger(id) && (id as number) >= 0))) &&
     isRecord(input.policy) &&
     typeof input.timeZone === 'string' &&
     typeof input.generatedAt === 'number' &&

@@ -55,6 +55,10 @@ let applied: (PreviewPdfPlans | null)[];
 let failures: number;
 let included: number[];
 let rebuiltChosen: () => readonly number[];
+/** The rebuilt cards the reader unticked (task 8.13a review round 2). */
+let rebuiltUnticked: () => readonly number[];
+/** "Rebuild conversation from replies" off (task 8.13a, Q2). */
+let switchOff: boolean;
 let labels: PdfLabels;
 
 function mount(): void {
@@ -66,6 +70,8 @@ function mount(): void {
   labels = createPdfLabels({
     includedPositions: () => included,
     includedRebuilt: () => rebuiltChosen(),
+    rebuildingOff: () => switchOff,
+    untickedRebuilt: () => rebuiltUnticked(),
     setPdfPlans: (plans) => applied.push(plans),
     failed: () => failures++,
     schedule: (task, delay) => {
@@ -100,6 +106,8 @@ beforeEach(() => {
   vi.stubGlobal('document', new FakeDocument());
   included = [];
   rebuiltChosen = () => [];
+  rebuiltUnticked = () => [];
+  switchOff = false;
   mount();
 });
 
@@ -355,15 +363,32 @@ describe('the no-repeat cut in the views (task 8.11)', () => {
     runAll();
     const plans = labels.currentPlans()!;
     expect(last()?.views.get(0)?.pdfRanges).toEqual(printedElsewhereRanges({ ...plans, rebuilt: ids }).get(0));
-    expect(new Set(printedAsOf(last()).map((p) => (p as { id: number }).id))).toEqual(new Set(ids));
-    // One unticked: the same plans (no planning), the new cut.
+    const kinds = (): string[] => printedAsOf(last()).map((p) => `${(p as { kind: string }).kind} ${String((p as { id: number }).id)}`);
+    expect(new Set(kinds())).toEqual(new Set(ids.map((id) => `rebuilt ${String(id)}`)));
+    // One unticked: the same plans (no planning), the new cut; the unticked forwarded part is left out too (Q2, task 8.13a).
     rebuiltChosen = () => [ids[0]!];
+    rebuiltUnticked = () => [ids[1]!];
     labels.rebuiltChanged();
     expect(tasks).toEqual([]);
     expect(labels.currentPlans()).toBe(plans);
-    expect(new Set(printedAsOf(last()).map((p) => (p as { id: number }).id))).toEqual(new Set([ids[0]]));
-    // None: the plan's own ranges.
+    expect(new Set(kinds())).toEqual(new Set([`rebuilt ${String(ids[0])}`, `unticked ${String(ids[1])}`]));
+    expect(last()?.views.get(0)?.pdfRanges).toEqual(printedElsewhereRanges({ ...plans, rebuilt: [ids[0]!], unticked: [ids[1]!] }).get(0));
+    // One merely not chosen (not reported unticked, review round 2): its forwarded part stays, only the chosen one is cut.
+    rebuiltUnticked = () => [];
+    labels.rebuiltChanged();
+    expect(new Set(kinds())).toEqual(new Set([`rebuilt ${String(ids[0])}`]));
+    // None ticked: both forwarded parts left out, printed nowhere.
     rebuiltChosen = () => [];
+    rebuiltUnticked = () => ids;
+    labels.rebuiltChanged();
+    expect(new Set(kinds())).toEqual(new Set(ids.map((id) => `unticked ${String(id)}`)));
+    // None chosen and none reported unticked: nothing is cut.
+    rebuiltUnticked = () => [];
+    labels.rebuiltChanged();
+    expect(last()?.views.get(0)?.pdfRanges).toBeUndefined();
+    // The switch off: no rebuilt email is unticked, the plan's own ranges.
+    rebuiltUnticked = () => ids;
+    switchOff = true;
     labels.rebuiltChanged();
     expect(last()?.views.get(0)?.pdfRanges).toBeUndefined();
   });

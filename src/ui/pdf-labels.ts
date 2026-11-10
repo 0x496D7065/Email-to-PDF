@@ -38,7 +38,8 @@
 // Printed as an email of its own (task 8.11): with the checkbox unticked,
 // the PDF also leaves out of a body the parts it prints as emails of their
 // own (the no-repeat rule of src/pdf/model.ts, task 8.10), which depends on
-// the rebuilt emails chosen too (`includedRebuilt`, src/ui/review.ts). The
+// the rebuilt emails chosen too (`includedRebuilt`, src/ui/review.ts) and
+// on those the reader unticked (`untickedRebuilt`, task 8.13a, Q2). The
 // views handed to the preview carry that cut (pdfRanges), worked out by the
 // PDF model's own functions (src/ui-model/printed-elsewhere.ts) from the
 // same input the PDF step gets. It is worked out again each time plans are
@@ -92,6 +93,19 @@ export interface PdfLabelsOptions {
    * includedRebuilt), for the no-repeat labels (see the top). Default: none.
    */
   readonly includedRebuilt?: () => readonly number[];
+  /**
+   * True while "Rebuild conversation from replies" is off (src/ui/review.ts,
+   * rebuiltShown false): no rebuilt email counts as unticked, so no
+   * forwarded part is left out for it (task 8.13a, Q2). Default: false.
+   */
+  readonly rebuildingOff?: () => boolean;
+  /**
+   * Ids of the rebuilt emails whose card the reader unticked
+   * (src/ui/review.ts, untickedRebuilt), the same as the PDF step gets: only
+   * their forwarded parts are left out (task 8.13a review round 2). Default:
+   * none (an entry merely not chosen is never taken for unticked).
+   */
+  readonly untickedRebuilt?: () => readonly number[];
 }
 
 export interface PdfLabels {
@@ -195,7 +209,8 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
   function withCut(m: NonNullable<typeof made>): PreviewPdfPlans {
     if (m.plans.policy.unfoldEverything) return m.preview;
     const rebuilt = [...(options.includedRebuilt?.() ?? [])];
-    const cut = printedElsewhereRanges({ ...m.plans, rebuilt });
+    const unticked = [...(options.untickedRebuilt?.() ?? [])];
+    const cut = printedElsewhereRanges({ ...m.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
     if (cut.size === 0) return m.preview;
     const views = new Map(m.preview.views);
     for (const [position, pdfRanges] of cut) {

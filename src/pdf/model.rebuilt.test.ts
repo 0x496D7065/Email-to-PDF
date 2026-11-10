@@ -266,7 +266,8 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
     expect(doc.emails.map((e) => e.position)).toEqual([null, null, null, 0]);
     expect(doc.emails.map((e) => e.anchor)).toEqual([1, 2, 3, 4].map(emailAnchor));
     // Data only (never printed): which entry it is and where it was read.
-    expect(rebuiltOf(doc).map((e) => e.rebuilt)).toEqual([2, 1, 0].map((id) => ({ id, shownId: id, sourcePosition: 0 })));
+    // No header lines moved to them (task 8.13a, Q4): the reply's plan leaves its quoted history out, header lines included.
+    expect(rebuiltOf(doc).map((e) => e.rebuilt)).toEqual([2, 1, 0].map((id) => ({ id, shownId: id, sourcePosition: 0, movedHeaders: 0 })));
     expect(doc.pdfNumberByPosition).toEqual([4]);
   });
 

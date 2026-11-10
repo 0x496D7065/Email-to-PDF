@@ -905,12 +905,24 @@ describe('PDF labels', () => {
     );
     return { result, views: new Map(positions.map((p, k) => [p, { plan: plans[k]!, signatureFrom: sources.get(p) ?? new Map<number, number>() }])) };
   }
-  /** plansFor with the PDF's no-repeat cut for the rebuilt emails `rebuilt`, as src/ui/pdf-labels.ts hands them over (task 8.11). */
-  function plansWithCut(result: EngineResult, positions: readonly number[], rebuilt: readonly number[], unfoldEverything = false): PreviewPdfPlans {
+  /**
+   * plansFor with the PDF's no-repeat cut for the rebuilt emails `rebuilt`, as src/ui/pdf-labels.ts hands them over
+   * (task 8.11); `unticked` (default: every rebuilt email not in `rebuilt`, as when the reader unticked their cards).
+   */
+  function plansWithCut(
+    result: EngineResult,
+    positions: readonly number[],
+    rebuilt: readonly number[],
+    unfoldEverything = false,
+    rebuildingOff = false,
+    unticked: readonly number[] = rebuiltEntries(result)
+      .map((r) => r.id)
+      .filter((id) => !rebuilt.includes(id)),
+  ): PreviewPdfPlans {
     const base = plansFor(result, positions, unfoldEverything);
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything };
     const plans = positions.map((p) => base.views.get(p)!.plan);
-    const cut = printedElsewhereRanges({ result, positions, plans, policy, rebuilt });
+    const cut = printedElsewhereRanges({ result, positions, plans, policy, rebuilt, rebuildingOff, unticked });
     const views = new Map(base.views);
     for (const [p, pdfRanges] of cut) views.set(p, { ...views.get(p)!, pdfRanges });
     return { result, views };
@@ -924,13 +936,18 @@ describe('PDF labels', () => {
     // Only for a part left out: another status keeps its own label.
     expect(pdfLabelText({ ...asReal, status: 'in' })).toBe('In the PDF: forwarded email');
     expect(pdfLabelText({ ...asReal, printedAs: null })).toBe('Not in the PDF: forwarded email');
+    // A forwarded part of an unticked rebuilt email (task 8.13a, Q2): printed nowhere.
+    const asUnticked = { ...asReal, printedAs: { kind: 'unticked' as const, id: 7 } };
+    expect(pdfLabelText(asUnticked)).toBe('Not in the PDF: forwarded email whose rebuilt email is unticked');
     setLocale('fr');
     try {
       expect(pdfLabelText(asReal)).toBe('Pas dans cet e-mail dans le PDF : imprimé comme e-mail #5');
       expect(pdfLabelText(asRebuilt)).toBe('Pas dans cet e-mail dans le PDF : imprimé comme e-mail reconstitué (E-mail 2 du PDF)');
+      expect(pdfLabelText(asUnticked)).toBe('Pas dans le PDF : e-mail transféré dont l’e-mail reconstitué est décoché');
       setLocale('nl');
       expect(pdfLabelText(asReal)).toBe('Niet in deze e-mail in de PDF: afgedrukt als e-mail #5');
       expect(pdfLabelText(asRebuilt)).toBe('Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail 2 in de PDF)');
+      expect(pdfLabelText(asUnticked)).toBe('Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt');
     } finally {
       setLocale('en');
     }
@@ -952,7 +969,7 @@ describe('PDF labels', () => {
     };
     const forwardText = (k: number): string => FORWARD.messages![k]!.text.split('\n\n')[1]!.split('\n')[0]!;
 
-    it('the forward alone, its rebuilt emails ticked: each forwarded part says which PDF email prints it; unticked, back to "In the PDF: forwarded email"', () => {
+    it('the forward alone, its rebuilt emails ticked: each forwarded part says which PDF email prints it; unticked, "not in the PDF" (task 8.13a, Q2); the switch off, back to "In the PDF: forwarded email"', () => {
       const result = engineOf([realFile(2)]);
       const ids = rebuiltEntries(result).map((r) => r.id);
       expect(ids).toHaveLength(2);
@@ -966,7 +983,11 @@ describe('PDF labels', () => {
       const labels = labelsOf(forward).filter((s) => s !== '');
       expect(labels).toContain('Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)');
       expect(labels).toContain('Not in this email in the PDF: printed as a rebuilt email (Email 2 in the PDF)');
-      expect(labels.some((s) => s.startsWith('In the PDF: forwarded email'))).toBe(true); // the header lines the PDF keeps (B2)
+      // Each forwarded email's header lines and text are one block with one label (task 8.13a review round 2).
+      expect(labels.filter((s) => s.includes('(Email 1 in the PDF)'))).toHaveLength(1);
+      expect(labels.filter((s) => s.includes('(Email 2 in the PDF)'))).toHaveLength(1);
+      // The header lines go with the forwarded parts (task 8.13a, Q4: moved to the rebuilt emails); nothing of them stays.
+      expect(labels.some((s) => s.startsWith('In the PDF: forwarded email'))).toBe(false);
       // A real label element, text only, marked "out" like any part left out.
       const marks = withClass(forward, 'pdf-label').filter((e) => e.textContent.includes('printed as'));
       for (const mark of marks) expect(mark.getAttribute('data-pdf')).toBe('out');
@@ -985,15 +1006,31 @@ describe('PDF labels', () => {
       expect(under(2)).not.toContain(forwardText(0));
       expect(renderedBody(forward)).toBe(result.messages[0]!.message.bodyText);
 
-      // Only the older one ticked: the newer part goes back to the plan's own label.
+      // Only the older one ticked: the newer part (its rebuilt email unticked) is not in the PDF at all (Q2).
       const older = rebuiltEntries(result).find((r) => r.rebuilt.generation === 2)!;
       preview.setPdfPlans(plansWithCut(result, [0], [older.id]));
       runAll();
       const some = labelsOf(forward).filter((s) => s !== '');
       expect(some).toContain('Not in this email in the PDF: printed as a rebuilt email (Email 1 in the PDF)');
+      expect(some).toContain('Not in the PDF: forwarded email whose rebuilt email is unticked');
       expect(some.some((s) => s.includes('Email 2'))).toBe(false);
-      // None ticked (or the switch off): as before task 8.11.
+      expect(renderedBody(forward)).toBe(result.messages[0]!.message.bodyText);
+      // None ticked: both forwarded parts are not in the PDF; the preview still shows every character.
       preview.setPdfPlans(plansWithCut(result, [0], []));
+      runAll();
+      const none = labelsOf(forward).filter((s) => s !== '');
+      // One label per forwarded email (two unticked emails: two labels, never merged across them).
+      expect(none).toHaveLength(2);
+      expect(none.every((s) => s === 'Not in the PDF: forwarded email whose rebuilt email is unticked')).toBe(true);
+      expect(renderedBody(forward)).toBe(result.messages[0]!.message.bodyText);
+      // None chosen but none reported unticked either (a card list that fell back, review round 2): kept inline.
+      preview.setPdfPlans(plansWithCut(result, [0], [], false, false, []));
+      runAll();
+      const kept = labelsOf(forward).filter((s) => s !== '');
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.every((s) => s.startsWith('In the PDF: '))).toBe(true);
+      // The switch off: as before task 8.11.
+      preview.setPdfPlans(plansWithCut(result, [0], [], false, true));
       runAll();
       expect(labelsOf(forward).filter((s) => s !== '')).toEqual(labelsOf(forward).filter((s) => s !== '').map(() => 'In the PDF: forwarded email'));
       expect(renderedBody(forward)).toBe(result.messages[0]!.message.bodyText);

@@ -55,7 +55,19 @@ describe('pdfPlanNote', () => {
     expect(pdfPlanNote({ keptAllBecauseEmpty: true, fallback: false })).toBe('pdf-kept-all-empty');
     expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: true })).toBe('pdf-fallback');
     expect(new Set(PDF_NOTES).size).toBe(PDF_NOTES.length);
-    for (const code of PDF_NOTES) expect(t(`review.pdfNote.${code}`)).toMatch(/^The whole email will be in the PDF: /);
+    expect(t('review.pdfNote.pdf-kept-all-empty')).toMatch(/^The whole email will be in the PDF: /);
+    expect(t('review.pdfNote.pdf-fallback')).toMatch(/^The whole email will be in the PDF: /);
+  });
+
+  it('does not say "the whole email" when parts of it are printed as emails of their own (task 8.11, S1, done in task 8.13a)', () => {
+    expect(pdfPlanNote({ keptAllBecauseEmpty: true, fallback: false }, true)).toBe('pdf-kept-all-empty-elsewhere');
+    expect(pdfPlanNote({ keptAllBecauseEmpty: true, fallback: false }, false)).toBe('pdf-kept-all-empty');
+    // A plan not trusted: the body is printed whole anyway (no part is left out of it).
+    expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: true }, true)).toBe('pdf-fallback');
+    expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: false }, true)).toBeNull();
+    expect(t('review.pdfNote.pdf-kept-all-empty-elsewhere')).toBe(
+      'The tool could not tell its own text from the quote: everything is in the PDF except the parts printed as emails of their own.',
+    );
   });
 });
 

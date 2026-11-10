@@ -335,13 +335,28 @@ describe('step 3: making the PDF', () => {
     runTasks();
     button().click();
     expect(lastRun().request.input.rebuilt).toEqual([0]);
-    // The switch off: none (and the PDF made before is dropped).
+    expect(lastRun().request.input.rebuildingOff).toBe(false);
+    expect(lastRun().request.input.unticked).toEqual([]);
+    // Its card unticked by the reader: reported as unticked (task 8.13a review round 2), the only way a forwarded part is left out.
+    const card = byId('include-rebuilt-0');
+    card.checked = false;
+    card.fire('change');
+    runTasks();
+    button().click();
+    expect(lastRun().request.input.rebuilt).toEqual([]);
+    expect(lastRun().request.input.unticked).toEqual([0]);
+    card.checked = true;
+    card.fire('change');
+    runTasks();
+    // The switch off: none (and the PDF made before is dropped), and said so: no rebuilt email counts as unticked (task 8.13a, Q2).
     const all = byId('rebuilt-include-all');
     all.checked = false;
     all.fire('change');
     runTasks();
     button().click();
     expect(lastRun().request.input.rebuilt).toEqual([]);
+    expect(lastRun().request.input.rebuildingOff).toBe(true);
+    expect(lastRun().request.input.unticked).toEqual([]);
     all.checked = true;
     all.fire('change');
     runTasks();
@@ -351,6 +366,8 @@ describe('step 3: making the PDF', () => {
     source.fire('change');
     runTasks();
     expect(page.review.includedRebuilt()).toEqual([]);
+    // Left out because its source is, not unticked by the reader.
+    expect(page.review.untickedRebuilt()).toEqual([]);
     source.checked = true;
     source.fire('change');
     runTasks();

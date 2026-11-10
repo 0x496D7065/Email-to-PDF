@@ -260,6 +260,7 @@ export const fr: Messages = {
     relatedOnlyMore: { one: '{count} autre fichier est concerné.', other: '{count} autres fichiers sont concernés.' },
     pdfNote: {
       'pdf-kept-all-empty': 'L’e-mail entier sera dans le PDF\u00A0: l’outil n’a pas pu distinguer son propre texte de la citation.',
+      'pdf-kept-all-empty-elsewhere': 'L’outil n’a pas pu distinguer son propre texte de la citation\u00A0: tout est dans le PDF, sauf les parties imprimées comme e-mails à part entière.',
       'pdf-fallback': 'L’e-mail entier sera dans le PDF\u00A0: l’outil n’a pas pu déterminer quelles parties laisser de côté.',
     },
     codedCharacters: 'Cet e-mail contient des caractères invisibles ou endommagés. Dans le PDF, ils peuvent apparaître sous forme de codes, comme [U+0000].',
@@ -308,10 +309,10 @@ export const fr: Messages = {
     },
     repeatedFrom: 'même signature que dans l’e-mail {number}',
     repeatedFromMany: 'même signature que dans les e-mails {list}',
-    // NEEDS USER PROOFREADING (task 8.11): both texts below.
     printedAs: {
       email: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail {number}',
       rebuilt: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail reconstitué (E-mail {number} du PDF)',
+      unticked: 'Pas dans le PDF\u00A0: e-mail transféré dont l’e-mail reconstitué est décoché',
     },
     messageFailed: 'L’outil n’a pas pu afficher ce que le PDF laisse de côté pour cet e-mail.',
     document: {

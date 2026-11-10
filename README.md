@@ -154,9 +154,11 @@ The tool never throws message text away on its own:
   program added under a reply header, a signature or notice a sender
   repeats (it is kept the first time), and any part of an email that the
   PDF already prints as an email of its own (such as the emails a forward
-  passes on), so no email is printed twice (the writer's own text and
-  quoted header lines the PDF cannot otherwise show always stay, so a few
-  can repeat). Each folded part in the preview says
+  passes on), so no email is printed twice (an answer the writer typed
+  next to a quote always stays, so a few can repeat). A forwarded email
+  whose rebuilt email you unticked is left out too. A quoted part inside
+  such a forwarded email that the tool could not rebuild is left out with
+  it. Each folded part in the preview says
   "In the PDF" or "Not in the PDF" and why. The details, including the
   known edge cases, are under [R6](#r6-collapse-never-delete).
 - **"Print full original text (quoted replies and signatures
@@ -229,10 +231,12 @@ earlier email it can find as a separate email, in date order, in the
 preview and in the PDF. In the preview, the email you added is not
 changed: its quoted history stays in it, folded as usual. In the PDF, the
 part of it that a rebuilt email prints is left out of it, so the same
-email is not printed twice, except text the tool takes for the writer's
-own and quoted header lines the rebuilt email's header cannot show (see
-[R6](#r6-collapse-never-delete)); with "Print full original text" it is
-printed whole.
+email is not printed twice, except an answer the writer typed next to a
+quote (see [R6](#r6-collapse-never-delete)); quoted header lines the
+rebuilt email's header cannot show are printed, as written, at the top of
+the rebuilt email's text. A forwarded email whose rebuilt email you
+untick is left out of the forward in the PDF. With "Print full original
+text" the email you added is printed whole.
 
 **How they are marked.**
 
@@ -562,38 +566,57 @@ by default the PDF shows what each writer actually wrote.
   that is in the PDF, or one the tool found to be an email you added that
   is in the PDF too. So a forward no longer prints the emails it passes on
   inside its own text when they also have their own pages; a forward with
-  nothing of its own then shows "(no text)", or only the header lines
-  below. Two things always stay:
-  - Text the tool takes for the writer's own (also answers typed inside or
-    below an Outlook-style quote, see "Kept"), and a signature the PDF
-    keeps, stay in the writer's own email, even where the rebuilt email
-    prints them too. Who wrote what comes first: when such text sits
-    inside the part of a quoted email, that whole part stays as it is
-    (its header lines, the quoted text and the answer), so an answer is
-    never printed right under the quoted sender's "From:" line. A wrapped
-    To or Cc line, or a Subject line, that the tool reads as part of the
-    quoted header is not taken for an answer: it stays with the header.
-  - The quoted header lines ("From:", "Sent:", "To:", "Subject:"...) stay
-    unless the header the PDF prints for that email shows everything they
-    say. They always stay when they hold a "Bcc:" line or a label written
-    twice, when there is not exactly one sender ("Unknown sender", several
-    senders), when no date could be found, or when a To or Cc list may be
-    incomplete. For a rebuilt email they also stay when the sender has no
-    name (an "On ... wrote:" line that could not be read) or the date has
-    no time zone of its own (the PDF shows an estimate, so the date as
-    written is kept). When the email they match is one you added, they
-    also stay when it has another sender, subject or recipients (a
-    recipient quoted by name only, as Outlook often writes them, counts
-    when that email has a recipient of that name), or when the quoted
-    date has no time zone of its own, unless the tool matched that date
-    to your email's own date with certainty (then your email's Date row
-    shows it). Only header lines repeat this way, never the text of an
-    email.
+  nothing of its own then shows "(no text)". Who wrote what comes first:
+  - An answer the writer typed inside or below the part of a quoted email,
+    which the tool told apart from the quote around it (text it takes for
+    the writer's own, or a signature the PDF keeps, next to quoted text it
+    could check), stays in the writer's own email with that whole part
+    (its header lines, the quoted text and the answer), even where the
+    rebuilt email prints it too, so an answer is never printed right under
+    the quoted sender's "From:" line. A part the tool could not check at
+    all (it holds no text it knows to be quoted, such as a middle email of
+    an Outlook-style conversation when only the first and the last email
+    are added) is left out like any other part: its rebuilt email prints
+    it.
+  - Two copies of one email may differ by a signature block at the end of
+    one of them (a name and contact lines). When the copy left out has
+    such a block and the email printed in its place does not, that block
+    stays in the email it comes from, so it is not lost (where a quote is
+    folded, it stays in that fold); only the words
+    printed elsewhere are left out. The kept block sits under the other
+    writer's own text, with no header above it; its name line shows who
+    wrote it.
+  - The quoted header lines ("From:", "Sent:", "To:", "Subject:"...) leave
+    the email with that part. When the header the PDF prints for a
+    rebuilt email cannot show everything they say, they are printed
+    exactly as written at the top of that rebuilt email's text (only lines
+    the PDF would have printed in the email they come from). That is the
+    case when they hold a "Bcc:" line or a label written twice, when there
+    is not exactly one sender ("Unknown sender", several senders), when no
+    date could be found, when a To or Cc list may be incomplete, when the
+    sender has no name (an "On ... wrote:" line that could not be read),
+    when the date has no time zone of its own (the PDF shows an estimate),
+    or when the tool read a wrapped To or Cc line or a Subject line of the
+    header as the writer's own text. When the email they match is one you
+    added, they are not printed again: that email's own header rows are
+    its header. When the part's email is not in the PDF at all (see
+    "Kept"), they stay where they are.
+- **Left out on your choice:** a forwarded email whose rebuilt email you
+  unticked (while "Rebuild conversation from replies" is on) is left out
+  of the forward too: you chose not to have it in the PDF. A quoted part
+  inside it that the tool could not rebuild is left out with it. Only a
+  card you untick counts: a rebuilt email that is not in the PDF for
+  another reason (its card could not be shown, say) leaves its forwarded
+  text in the forward. The preview marks it "Not in the PDF: forwarded
+  email whose rebuilt email is unticked", and "Print full original text"
+  prints it.
 - **Kept:** the writer's own text, quotes pasted without a reply header
   (except the case above), forwarded emails that are not printed as
-  emails of their own (for example a rebuilt email you unticked, or with
-  "Rebuild conversation from replies" unticked: they stay inside the
-  forward), and answers typed between or below quoted lines. For an
+  emails of their own for another reason (a forwarded part the tool could
+  not rebuild at all, or all of them with "Rebuild conversation from
+  replies" unticked: they stay inside the forward), quoted emails whose
+  rebuilt email you unticked when they are not forwarded (they stay where
+  the plan puts them), and answers typed between or below quoted lines. For an
   Outlook-style quote (no "> " marks), the tool compares the quote with
   the quoted email: when that email is in the PDF and anything after the
   "From: / Sent:" lines (a signature aside) is not part of it or of the
@@ -623,12 +646,15 @@ by default the PDF shows what each writer actually wrote.
   answer typed inside or below an Outlook-style quote is printed twice: in
   the writer's email, with the quoted part around it, and inside the
   rebuilt email of the quoted sender (the tool cannot tell where that
-  quoted email ended). This is deliberate: when you add the first and the
-  last email of an Outlook-style conversation but not the ones in
-  between, the tool cannot prove that those middle emails are only
-  quotes, takes them for the last writer's own text and keeps them in the
-  last email, while their rebuilt emails print them too. Untick those
-  rebuilt emails, or add the middle emails, to print them once.
+  quoted email ended).
+- **Known limit (who wrote what):** when you add the first and the last
+  email of an Outlook-style conversation but not the ones in between, the
+  tool cannot check those middle emails, so it prints each once, as its
+  rebuilt email, and leaves it out of the last email. If the last writer
+  typed an answer inside such a middle email's quoted text, with nothing
+  around it the tool knows to be quoted, that answer is printed inside
+  the rebuilt email, under the quoted sender's header. Add the middle
+  emails, or check the preview (it shows every email whole).
 
 The preview marks each folded part "In the PDF" or "Not in the PDF" with
 the reason, using the same rules as the PDF. Each part the PDF leaves out
@@ -636,7 +662,13 @@ of an email or folds in it because it prints that part as an email of its
 own (see "No email twice" above) is marked "Not in this email in the PDF: printed as
 email #N" (an email you added, by its number in the list) or "printed as a
 rebuilt email (Email N in the PDF)" (a rebuilt email, by its heading in the
-PDF). These marks come from the same calculation the PDF makes, so they
+PDF); a forwarded email left out because you unticked its rebuilt email
+is marked "Not in the PDF: forwarded email whose rebuilt email is
+unticked". A quoted email's header lines and its text that get the same
+mark are shown as one part with one mark (folded only when both were folded). When the tool keeps a whole email because it could not tell
+its own text from the quote, the preview says so above it; if parts of
+it are printed as emails of their own, the note says that everything
+else is in the PDF. These marks come from the same calculation the PDF makes, so they
 follow, after a short moment, when you tick or untick an email or a
 rebuilt email, switch "Rebuild conversation from replies" on or off, or
 switch "Print full original text (quoted replies and signatures

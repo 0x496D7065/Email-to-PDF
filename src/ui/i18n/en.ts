@@ -339,6 +339,8 @@ export const en = {
     // Shown at the top of an email's text when its PDF plan keeps it whole.
     pdfNote: {
       'pdf-kept-all-empty': 'The whole email will be in the PDF: the tool could not tell its own text from the quote.',
+      // The same, when parts of it are printed as emails of their own (task 8.11, S1).
+      'pdf-kept-all-empty-elsewhere': 'The tool could not tell its own text from the quote: everything is in the PDF except the parts printed as emails of their own.',
       'pdf-fallback': 'The whole email will be in the PDF: the tool could not work out which parts to leave out.',
     } satisfies Record<PdfNoteCode, string>,
     // An email with control or broken characters (src/ui-model/message-notes.ts,
@@ -441,6 +443,11 @@ export const en = {
       // heading in the PDF (pdf.document.emailHeading), e.g.
       // "Not in this email in the PDF: printed as a rebuilt email (Email 3 in the PDF)".
       rebuilt: 'Not in this email in the PDF: printed as a rebuilt email (Email {number} in the PDF)',
+      // A forwarded part the PDF leaves out because the reader unticked its
+      // rebuilt email while "Rebuild conversation from replies" is on (task
+      // 8.13a): it is printed nowhere in the PDF ("Print full original text"
+      // prints it).
+      unticked: 'Not in the PDF: forwarded email whose rebuilt email is unticked',
     },
     // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
     messageFailed: 'The tool could not show what the PDF leaves out for this email.',

@@ -261,6 +261,7 @@ export const nl: Messages = {
     relatedOnlyMore: { one: 'Er is {count} ander bestand bij betrokken.', other: 'Er zijn {count} andere bestanden bij betrokken.' },
     pdfNote: {
       'pdf-kept-all-empty': 'De hele e-mail komt in de PDF: de tool kon de eigen tekst niet van het citaat onderscheiden.',
+      'pdf-kept-all-empty-elsewhere': 'De tool kon de eigen tekst niet van het citaat onderscheiden: alles staat in de PDF, behalve de delen die als aparte e-mails zijn afgedrukt.',
       'pdf-fallback': 'De hele e-mail komt in de PDF: de tool kon niet bepalen welke delen moeten worden weggelaten.',
     },
     codedCharacters: 'Deze e-mail bevat onzichtbare of beschadigde tekens. In de PDF kunnen die als codes staan, zoals [U+0000].',
@@ -309,10 +310,10 @@ export const nl: Messages = {
     },
     repeatedFrom: 'dezelfde handtekening als in e-mail {number}',
     repeatedFromMany: 'dezelfde handtekening als in e-mails {list}',
-    // NEEDS USER PROOFREADING (task 8.11): both texts below.
     printedAs: {
       email: 'Niet in deze e-mail in de PDF: afgedrukt als e-mail {number}',
       rebuilt: 'Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail {number} in de PDF)',
+      unticked: 'Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt',
     },
     messageFailed: 'De tool kon niet tonen wat de PDF van deze e-mail weglaat.',
     document: {

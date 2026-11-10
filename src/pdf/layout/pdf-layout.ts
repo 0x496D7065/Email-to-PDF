@@ -142,7 +142,8 @@ export function settlePageCount<T extends { readonly pages: number }>(
 /**
  * Lays out the whole document (see the top of this file). Throws an Error
  * only for an invalid config (validateLayoutConfig), a missing font, a page
- * footer wider than the text area, an index entry without its email, or
+ * footer wider than the text area, an index entry without its email, an
+ * email without its index entry, or
  * index page numbers that do not settle (settlePageCount).
  */
 export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, ParsedFont>>, options: LayoutOptions): PdfLayout {
@@ -161,6 +162,11 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
   const entries = doc.index.entries;
   for (const entry of entries) {
     if (!emailPages.has(entry.anchor)) throw new Error(`layout: the index entry ${entry.anchor} has no email`);
+  }
+  // And the other way (task 8.13): every email laid out, with its heading and header rows, has its own index entry.
+  const indexed = new Set(entries.map((entry) => entry.anchor));
+  for (const email of doc.emails) {
+    if (!indexed.has(email.anchor)) throw new Error(`layout: the email ${email.anchor} has no index entry`);
   }
   const laidIndex = entries.length > 0 ? layIndex(typesetter, config, emails.left, emails.width, doc.index) : null;
 
