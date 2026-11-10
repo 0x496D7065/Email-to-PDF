@@ -531,7 +531,11 @@ HTML bodies are turned into plain text with an inert parser (one that runs
 no scripts and loads nothing) and shown with `textContent`, never as HTML.
 The page builds elements only through `src/ui/dom.ts`, which sets text only
 through `textContent` and refuses event handler attributes and unsafe
-URLs. Attachments are never opened or processed, only listed. Each file is
+URLs. Attachments are never opened or processed, only listed, with one
+exception: an email attached inside an `.eml` email (inline or sent as an
+attachment) is read as an email, with the same inert parsers and the same
+limits as a file you add yourself. Every other attachment (PDF, Office
+documents, pictures, ...) is never opened, only listed. Each file is
 size-checked and read in a separate worker that is stopped after a time
 limit, so a broken file gives an error message, not a crash (see
 [Known limits](#known-limits) for the memory case).

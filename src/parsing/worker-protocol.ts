@@ -16,6 +16,7 @@
 
 import { parseWithDeferredHtml, type ConversionOutcome } from './deferred-html';
 import type { FileKind } from './file-type';
+import { FORWARDED_SEPARATOR } from './forwarded-block';
 import type { ParseResult } from './types';
 
 export interface ParseRequest {
@@ -68,8 +69,81 @@ export function isToWorker(data: unknown): data is ToWorker {
 export function isFromWorker(data: unknown): data is FromWorker {
   if (!isRecord(data)) return false;
   if (data.type === 'html') return Array.isArray(data.htmls) && data.htmls.every((h) => typeof h === 'string');
-  if (data.type === 'result') return isRecord(data.result) && typeof data.result.ok === 'boolean';
+  if (data.type === 'result') return isRecord(data.result) && typeof data.result.ok === 'boolean' && hasWellFormedAttached(data.result);
   return data.type === 'failed';
+}
+
+/**
+ * Checks the attached-email fields of a result (ParseResult.attached,
+ * source.attachedPath, AttachmentInfo.attachedIndex, see types.ts) strictly,
+ * so later steps can index with them without checking again:
+ * - a failed result has no `attached`; a successful one has a message with
+ *   an attachments list and a source, and its source has no attachedPath;
+ * - `attached`, when there, is a non-empty list; each entry's parent is -1
+ *   or an earlier entry, its path is its parent's path plus one number from
+ *   1, and its message's source.attachedPath is the same path;
+ * - its places name its ancestors in order, nearest first (parent, then the
+ *   parent's parent, ...), and each one is a range of that holder's
+ *   bodyText that starts with the forwarded separator line;
+ * - an attachedIndex is an index of `attached`: on the file's own email any
+ *   entry, on an attached email one of its descendants.
+ */
+export function hasWellFormedAttached(result: Record<string, unknown>): boolean {
+  if (result.ok !== true) return !('attached' in result);
+  const { message } = result;
+  if (!isRecord(message) || !isRecord(message.source) || 'attachedPath' in message.source) return false;
+  if (!('attached' in result)) return attachmentsPointInto(message.attachments, () => false);
+  const { attached } = result;
+  if (!Array.isArray(attached) || attached.length === 0) return false;
+
+  const entries: { parent: number; path: readonly number[]; body: string }[] = [];
+  const isAncestor = (ancestor: number, of: number): boolean => {
+    for (let at = entries[of]?.parent ?? -1; at !== -1; at = entries[at]?.parent ?? -1) if (at === ancestor) return true;
+    return false;
+  };
+  const bodyOf = (holder: number): unknown => (holder === -1 ? message.bodyText : entries[holder]?.body);
+  for (const [index, entry] of attached.entries()) {
+    if (!isRecord(entry) || !isRecord(entry.message) || !isRecord(entry.message.source)) return false;
+    const { parent, path, places } = entry;
+    const { bodyText, source } = entry.message;
+    if (!isInteger(parent) || parent < -1 || parent >= index || typeof bodyText !== 'string') return false;
+    const parentPath = parent === -1 ? [] : (entries[parent]?.path ?? []);
+    if (!isPath(path) || path.length !== parentPath.length + 1 || parentPath.some((n, i) => path[i] !== n)) return false;
+    if (!isPath(source.attachedPath) || source.attachedPath.length !== path.length) return false;
+    if (source.attachedPath.some((n, i) => path[i] !== n)) return false;
+    entries.push({ parent, path, body: bodyText });
+    if (!Array.isArray(places)) return false;
+    let holder: number | undefined = parent;
+    for (const place of places as unknown[]) {
+      if (!isRecord(place) || place.holder !== holder || holder === undefined) return false;
+      const body = bodyOf(holder);
+      const { start, end } = place;
+      if (typeof body !== 'string' || !isInteger(start) || !isInteger(end)) return false;
+      if (start < 0 || end < start || end > body.length || !body.startsWith(FORWARDED_SEPARATOR, start)) return false;
+      holder = holder === -1 ? undefined : (entries[holder]?.parent ?? undefined);
+    }
+  }
+  if (!attachmentsPointInto(message.attachments, (target) => target < attached.length)) return false;
+  return attached.every((entry, index) =>
+    attachmentsPointInto((entry as { message: Record<string, unknown> }).message.attachments, (target) => isAncestor(index, target)),
+  );
+}
+
+/** True if `attachments` is a list of records whose attachedIndex, where present, is an integer accepted by `allowed`. */
+function attachmentsPointInto(attachments: unknown, allowed: (target: number) => boolean): boolean {
+  if (!Array.isArray(attachments)) return false;
+  return attachments.every(
+    (a) => isRecord(a) && (!('attachedIndex' in a) || (isInteger(a.attachedIndex) && a.attachedIndex >= 0 && allowed(a.attachedIndex))),
+  );
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+/** A non-empty list of attachment numbers, each an integer from 1. */
+function isPath(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length > 0 && value.every((n) => isInteger(n) && n >= 1);
 }
 
 /**

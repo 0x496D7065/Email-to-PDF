@@ -423,12 +423,15 @@ describe('createEmlParser: attachments (metadata only)', () => {
   );
 
   it('lists every part with name, decoded size and type, and nothing else', async () => {
-    const message = await parseOk(data);
+    const result = await parse(data);
+    if (!result.ok) throw new Error(result.detail);
+    const { message } = result;
     expect(message.attachments).toEqual([
       // Inline image of the HTML body (multipart/related): listed too.
       { fileName: '', size: 5, mimeType: 'image/png' },
       { fileName: 'note.txt', size: SECRET.length, mimeType: 'text/plain' },
-      // A forwarded message sent AS an attachment stays an attachment.
+      // A forwarded message sent AS an attachment stays a listed attachment
+      // of this email (it is also read on its own, see below).
       { fileName: 'forwarded.eml', size: FORWARDED.length, mimeType: 'message/rfc822' },
       // A part without a file name gets ''.
       { fileName: '', size: 3, mimeType: 'application/octet-stream' },
@@ -436,12 +439,21 @@ describe('createEmlParser: attachments (metadata only)', () => {
     for (const attachment of message.attachments) {
       expect(Object.keys(attachment).sort()).toEqual(['fileName', 'mimeType', 'size']);
     }
-    // Neither the attachment text nor the forwarded message body leaks into the result.
-    const everything = JSON.stringify(message);
-    expect(everything).not.toContain(SECRET);
-    expect(everything).not.toContain('Forwarded body.');
+    // Neither the attachment text nor the forwarded message body leaks into this email.
+    expect(JSON.stringify(message)).not.toContain(SECRET);
+    expect(JSON.stringify(message)).not.toContain('Forwarded body.');
     // The HTML-only body went through htmlToText.
     expect(message.warnings).toEqual(['html-converted-body']);
+    // The attached email (user decision 2026-11-10) becomes an email of its
+    // own, printed nowhere (places []). The other attachment's text is never read.
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect(result.attached).toHaveLength(1);
+    const forwarded = result.attached?.[0];
+    expect(forwarded?.parent).toBe(-1);
+    expect(forwarded?.places).toEqual([]);
+    expect(forwarded?.path).toEqual([1]);
+    expect(forwarded?.message.subject).toBe('Forwarded');
+    expect(forwarded?.message.bodyText).toBe('Forwarded body.\n');
   });
 
   it('an inline forwarded message (no Content-Disposition) joins the body; its attachments are listed', async () => {
@@ -478,7 +490,8 @@ describe('createEmlParser: attachments (metadata only)', () => {
     );
     expect(message.bodyText).toContain('See the message below.');
     expect(message.bodyText).toContain('Inner body text.');
-    expect(message.attachments).toEqual([{ fileName: 'inner.txt', size: 3, mimeType: 'text/plain' }]);
+    // Marked as belonging to the attached email at index 0.
+    expect(message.attachments).toEqual([{ fileName: 'inner.txt', size: 3, mimeType: 'text/plain', attachedIndex: 0 }]);
   });
 });
 
@@ -621,8 +634,9 @@ describe('createEmlParser: inline forwarded messages', () => {
     expect(message.bodyText).not.toContain('Body of level 6.');
     expect(message.bodyText).not.toContain('Body of level 7.');
     expect(message.warnings).toEqual(['forwarded-message-not-expanded']);
-    // Level 6 (which holds level 7) is listed with its decoded size, so it stays recoverable.
-    expect(message.attachments).toEqual([{ fileName: '', size: level6.length, mimeType: 'message/rfc822' }]);
+    // Level 6 (which holds level 7) is listed with its decoded size, so it
+    // stays recoverable. It is an attachment of level 5 (attached email 4).
+    expect(message.attachments).toEqual([{ fileName: '', size: level6.length, mimeType: 'message/rfc822', attachedIndex: 4 }]);
   });
 
   it('a message whose only content is a forwarded message has no no-body warning', async () => {
@@ -797,7 +811,9 @@ describe('createEmlParser: inline forwarded messages', () => {
         'To: frontdesk@example.test',
       ].join('\n'),
     );
-    expect(message.attachments).toEqual([{ fileName: 'delivery-note.pdf', size: 21, mimeType: 'application/pdf' }]);
+    expect(message.attachments).toEqual([
+      { fileName: 'delivery-note.pdf', size: 21, mimeType: 'application/pdf', attachedIndex: 0 },
+    ]);
     expect(message.warnings).toEqual([]);
   });
 

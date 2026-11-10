@@ -42,6 +42,15 @@ export interface AttachmentInfo {
   /** Size in bytes, null if the format does not tell us. */
   readonly size: number | null;
   readonly mimeType: string;
+  /**
+   * .eml only. Present only on an attachment of an email attached inside
+   * this one whose block is printed in this email's body (an inline
+   * forwarded message): its attachments are listed in this email's list
+   * too, flat, and this is the index into the file's `attached` list (see
+   * ParseResult) of the attached email the attachment belongs to. Absent:
+   * the attachment is this email's own.
+   */
+  readonly attachedIndex?: number;
 }
 
 /** Things the parser was unsure about. Shown as warnings in the preview; never fatal. */
@@ -123,8 +132,51 @@ export interface NormalizedMessage {
     readonly fileName: string;
     readonly sha256: string;
     readonly kind: 'eml' | 'msg';
+    /**
+     * Only on an email attached inside the dropped file (see AttachedMessage):
+     * the same as its `path`. `fileName` and `sha256` stay the dropped
+     * file's. Absent on the file's own email.
+     */
+    readonly attachedPath?: readonly number[];
   };
   readonly warnings: readonly ParseWarning[];
+}
+
+/** Where an attached email's printed block sits in the body of one email holding it. */
+export interface AttachedPlace {
+  /** The email whose bodyText holds the block: -1 = the file's own email, else an index into `attached`. */
+  readonly holder: number;
+  /**
+   * `holder.bodyText.slice(start, end)` is the whole block: the forwarded
+   * separator line (FORWARDED_SEPARATOR, forwarded-block.ts), the header
+   * lines, then (if it has a body) a blank line and the body.
+   */
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * An email attached inside the dropped .eml file (a message/rfc822 part,
+ * inline or sent as an attachment, at any depth), read from its own headers
+ * and parts with the same parser and limits as a dropped file.
+ */
+export interface AttachedMessage {
+  readonly message: NormalizedMessage;
+  /** The email it is attached to: -1 = the file's own email, else an index into `attached` (always lower than its own). */
+  readonly parent: number;
+  /**
+   * Its printed block in the body of every email that prints it, nearest
+   * first: its parent, then the parent's parent while each one is itself
+   * printed inline in the next. [] when it was sent as an attachment (it is
+   * then only listed by name in its parent).
+   */
+  readonly places: readonly AttachedPlace[];
+  /**
+   * Its attachment numbers from the file's own email down: at each level,
+   * which message/rfc822 part of the email holding it this is, counted from
+   * 1 in file order (every message/rfc822 part counts, read or not).
+   */
+  readonly path: readonly number[];
 }
 
 /** Why a whole file could not be read. */
@@ -157,7 +209,16 @@ export type ParseErrorCode =
  * throws, so one bad file cannot stop the others from loading.
  */
 export type ParseResult =
-  | { readonly ok: true; readonly message: NormalizedMessage }
+  | {
+      readonly ok: true;
+      readonly message: NormalizedMessage;
+      /**
+       * .eml only: the emails attached inside this file, flat, depth first in
+       * file order (an email always comes before the ones attached inside
+       * it). No key when there are none.
+       */
+      readonly attached?: readonly AttachedMessage[];
+    }
   | {
       readonly ok: false;
       readonly fileName: string;

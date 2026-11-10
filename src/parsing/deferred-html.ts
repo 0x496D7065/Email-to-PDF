@@ -31,6 +31,9 @@
 // is never empty, so the page would have to redo those rules. Record and
 // replay needs none of that, and no marker can ever collide with email text.
 // The cost: a message whose body needs HTML conversion is parsed twice.
+// Since emails sent as attachments are read too (eml.ts, readDeferred), a
+// file whose only HTML sits inside such an email now takes this two-pass
+// path as well.
 
 import { findCfbDamage } from './cfb-check';
 import { createEmlParser } from './eml';

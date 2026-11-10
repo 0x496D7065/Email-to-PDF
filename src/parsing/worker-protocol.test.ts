@@ -58,7 +58,162 @@ const ON_BEHALF_EML = [
   'Sent for Alice: the desks arrive on Thursday.',
 ].join('\r\n');
 
+/**
+ * Emails attached inside: top --inline--> A (which holds C, sent as an
+ * attachment, HTML only) and B sent as an attachment, which holds D inline.
+ */
+const ATTACHED_EML = [
+  'X-Synthetic-Fixture: true',
+  'From: Alice Example <alice@example.test>',
+  'Subject: Two attached emails',
+  'Date: Fri, 06 Jun 2025 10:00:00 +0200',
+  'Message-ID: <proto-attached@example.test>',
+  'Content-Type: multipart/mixed; boundary="top"',
+  '',
+  '--top',
+  'Content-Type: text/plain',
+  '',
+  'See the two emails.',
+  '--top',
+  'Content-Type: message/rfc822',
+  '',
+  'From: carol@example.test',
+  'Subject: A',
+  'Content-Type: multipart/mixed; boundary="a"',
+  '',
+  '--a',
+  'Content-Type: text/plain',
+  '',
+  'A body.',
+  '--a',
+  'Content-Type: message/rfc822',
+  'Content-Disposition: attachment; filename="c.eml"',
+  '',
+  'From: erin@example.test',
+  'Subject: C',
+  'Content-Type: text/html',
+  '',
+  '<p>C body</p>',
+  '--a--',
+  '--top',
+  'Content-Type: message/rfc822',
+  'Content-Disposition: attachment; filename="b.eml"',
+  '',
+  'From: dave@example.test',
+  'Subject: B',
+  'Content-Type: multipart/mixed; boundary="b"',
+  '',
+  '--b',
+  'Content-Type: text/plain',
+  '',
+  'B body.',
+  '--b',
+  'Content-Type: message/rfc822',
+  '',
+  'From: frank@example.test',
+  'Subject: D',
+  '',
+  'D body.',
+  '--b--',
+  '--top--',
+  '',
+].join('\r\n');
+
 const stubConverter = (html: string): HtmlToTextResult => ({ text: html.replace(/<[^>]*>/g, ''), truncated: false });
+
+describe('isFromWorker: attached emails (strict)', () => {
+  async function parsed(): Promise<ParseResult> {
+    return createEmlParser({ htmlToText: stubConverter }).parse({ name: 'a.eml', bytes: encode(ATTACHED_EML) });
+  }
+
+  it('the real result is accepted, with the expected shape', async () => {
+    const result = await parsed();
+    expect(isFromWorker({ type: 'result', result })).toBe(true);
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.attached?.map((e) => [e.message.subject, e.parent, e.path, e.places.map((p) => p.holder)])).toEqual([
+      ['A', -1, [1], [-1]],
+      ['C', 0, [1, 1], []],
+      ['B', -1, [2], []],
+      ['D', 2, [2, 1], [2]],
+    ]);
+    // C is listed in A, and so in the top's flat list, marked as A's.
+    expect(result.message.attachments.map((a) => [a.fileName, a.attachedIndex])).toEqual([
+      ['c.eml', 0],
+      ['b.eml', undefined],
+    ]);
+  });
+
+  // A mutable, loosely typed copy of the result, for the mutations below.
+  interface LooseMessage {
+    bodyText: unknown;
+    attachments: unknown;
+    source: { attachedPath?: unknown };
+  }
+  interface LoosePlace {
+    holder: unknown;
+    start: number;
+    end: number;
+  }
+  interface LooseEntry {
+    parent: unknown;
+    path: unknown;
+    places: unknown;
+    message: LooseMessage;
+  }
+  interface LooseResult {
+    ok: boolean;
+    message?: LooseMessage;
+    attached?: unknown;
+  }
+  function at<T>(list: unknown, index: number): T {
+    const value = (list as T[])[index];
+    if (value === undefined) throw new Error(`nothing at ${String(index)}`);
+    return value;
+  }
+  const entry = (r: LooseResult, i: number): LooseEntry => at<LooseEntry>(r.attached, i);
+  const place = (r: LooseResult, i: number): LoosePlace => at<LoosePlace>(entry(r, i).places, 0);
+  const ownMessage = (r: LooseResult): LooseMessage => {
+    if (r.message === undefined) throw new Error('no message');
+    return r.message;
+  };
+  const pushAttachment = (m: LooseMessage, attachedIndex: number): void => {
+    (m.attachments as unknown[]).push({ fileName: '', size: 1, mimeType: 'x/y', attachedIndex });
+  };
+
+  it.each<[string, (r: LooseResult) => void]>([
+    ['attached on a failed result', (r) => ((r.ok = false), (r.attached = []))],
+    ['an empty attached list', (r) => (r.attached = [])],
+    ['attached not a list', (r) => (r.attached = {})],
+    ['an entry that is not an object', (r) => ((r.attached as unknown[])[1] = 7)],
+    ['a parent that is not earlier', (r) => (entry(r, 1).parent = 1)],
+    ['a parent below -1', (r) => (entry(r, 0).parent = -2)],
+    ['a parent that is not an integer', (r) => (entry(r, 1).parent = 0.5)],
+    ['a path that does not extend the parent path', (r) => (entry(r, 1).path = [2, 1])],
+    ['a path too long', (r) => (entry(r, 0).path = [1, 1])],
+    ['a path number 0', (r) => (entry(r, 0).path = [0])],
+    ['attachedPath missing', (r) => delete entry(r, 0).message.source.attachedPath],
+    ['attachedPath not the path', (r) => (entry(r, 0).message.source.attachedPath = [3])],
+    ['attachedPath on the file email', (r) => (ownMessage(r).source.attachedPath = [1])],
+    ['places not a list', (r) => (entry(r, 0).places = null)],
+    ['a place in a holder that is not the parent', (r) => (place(r, 3).holder = -1)],
+    ['more places than ancestors', (r) => (entry(r, 0).places as unknown[]).push({ ...place(r, 0) })],
+    ['a place past the end of the body', (r) => (place(r, 0).end = 1e6)],
+    ['a place ending before it starts', (r) => (place(r, 0).end = place(r, 0).start - 1)],
+    ['a place not at a forwarded separator', (r) => (place(r, 0).start += 1)],
+    ['a body that is not text', (r) => (entry(r, 2).message.bodyText = 1)],
+    ['an attachedIndex out of range', (r) => (at<{ attachedIndex: number }>(ownMessage(r).attachments, 0).attachedIndex = 4)],
+    ['a negative attachedIndex', (r) => (at<{ attachedIndex: number }>(ownMessage(r).attachments, 0).attachedIndex = -1)],
+    ['an attachedIndex that is not a descendant', (r) => pushAttachment(entry(r, 0).message, 2)],
+    ['an attachedIndex pointing to itself', (r) => pushAttachment(entry(r, 0).message, 0)],
+    ['an attachedIndex with no attached list', (r) => delete r.attached],
+    ['attachments not a list', (r) => (entry(r, 1).message.attachments = 'c.eml')],
+    ['a successful result without a message', (r) => delete r.message],
+  ])('rejects %s', async (_label, mutate) => {
+    const result = structuredClone(await parsed()) as unknown as LooseResult;
+    mutate(result);
+    expect(isFromWorker({ type: 'result', result })).toBe(false);
+  });
+});
 
 describe('isToWorker / isFromWorker', () => {
   it.each([
@@ -180,6 +335,8 @@ describe('round trip: runInWorker + createWorkerSide', () => {
     ['plain .eml', 'plain.eml', 'eml', () => encode(PLAIN_EML)],
     ['HTML-only .eml', 'html.eml', 'eml', () => encode(HTML_EML)],
     ['on-behalf .eml with Bcc', 'on-behalf.eml', 'eml', () => encode(ON_BEHALF_EML)],
+    // HTML only inside an email sent as an attachment: recorded and replayed too.
+    ['.eml with attached emails', 'attached.eml', 'eml', () => encode(ATTACHED_EML)],
     ...MSG_SPECS.map((spec) => [spec.id, `${spec.id}.msg`, 'msg', () => buildMsg(spec)] as const),
   ] as const)('%s gives exactly the result of a direct parse', async (_label, name, kind, make) => {
     const direct = await (kind === 'eml' ? createEmlParser({ htmlToText: stubConverter }) : createMsgParser({ htmlToText: stubConverter })).parse({
