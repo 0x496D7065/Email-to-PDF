@@ -114,12 +114,44 @@ describe('HTML injection APIs (README.md, rule R4)', () => {
   });
 });
 
+describe('global URL allowlist (the Ko-fi donation link)', () => {
+  const kofi = 'https://ko-fi.com/0x496d7065';
+
+  it('holds exactly the donation URL and nothing else', () => {
+    expect(URL_ALLOWLIST).toEqual([kofi]);
+  });
+
+  it('accepts exactly the donation URL in src/ and in every dist/ file, also with escaped slashes', () => {
+    const code = `l.setAttribute("href","${kofi}");`;
+    expect(findViolations(code, src)).toEqual([]);
+    expect(findViolations(code, { isDist: false, sourceFile: 'src/ui/dom.ts' })).toEqual([]);
+    for (const distFile of ['assets/index-abc123.js', 'index.html']) expect(findViolations(code, { isDist: true, distFile })).toEqual([]);
+    expect(findViolations(String.raw`var u="https:\/\/ko-fi.com\/0x496d7065";`, dist)).toEqual([]);
+  });
+
+  it('rejects every other Ko-fi address: another page, a longer path, a query, a fragment, http:, another host, other letter case', () => {
+    const others = [
+      'https://ko-fi.com/someone-else',
+      `${kofi}/shop`,
+      `${kofi}?ref=x`,
+      `${kofi}#x`,
+      'http://ko-fi.com/0x496d7065',
+      'https://storage.ko-fi.com/cdn/x.png',
+      'https://ko-fi.com/0X496D7065',
+    ];
+    for (const url of others) {
+      expect(findViolations(`"${url}"`, src).map((f) => f.match), url).toEqual([url]);
+      expect(findViolations(`"${url}"`, dist).map((f) => f.match), url).toEqual([url]);
+    }
+  });
+});
+
 describe('file-scoped URL allowlist (third-party notices)', () => {
   const apache = 'Apache License\n   http://www.apache.org/licenses/\n   http://www.apache.org/licenses/LICENSE-2.0\n';
   const notices = { isDist: true, distFile: 'THIRD_PARTY_NOTICES.txt' };
 
-  it('keeps the global allowlist empty', () => {
-    expect(URL_ALLOWLIST).toEqual([]);
+  it('keeps the global allowlist to the Ko-fi donation link only (see below)', () => {
+    expect(URL_ALLOWLIST).toHaveLength(1);
   });
 
   it('accepts the Apache license URLs inside dist/THIRD_PARTY_NOTICES.txt', () => {

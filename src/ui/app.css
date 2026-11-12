@@ -56,9 +56,54 @@ body {
   padding-right: 1rem;
 }
 
+/* A wrapping row: the language picker and the Ko-fi button share the top
+   line (picker on the left, button pushed to the right); everything after
+   them takes a full line of its own. On a narrow screen, when both do not
+   fit, the button wraps onto its own line, still on the right, under the
+   picker: no overlap, no sideways scroll, and the order on screen stays
+   the order in the page (src/ui/app.ts). */
 .site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: 1rem;
   padding-top: 2rem;
   padding-bottom: 0.5rem;
+}
+
+.site-header > * {
+  flex: 1 1 100%;
+}
+
+.site-header > .language {
+  flex: 0 1 auto;
+}
+
+/* The Ko-fi donation button (src/ui/dom.ts, donationLink): Ko-fi's own
+   image, 36 px high at the default text size (in rem, so it grows with the
+   reader's text size), its width from its shape. Its width and height
+   attributes give that shape before the file loads, so nothing moves.
+   The focus outline is the page's own (:focus-visible below), drawn around
+   the image's rounded corners. */
+.site-header > .donate {
+  flex: 0 0 auto;
+  margin: 0 0 0.75rem auto;
+}
+
+.donate {
+  display: block;
+  border-radius: 0.5rem;
+  line-height: 0;
+}
+
+.donate-image {
+  display: block;
+  width: auto;
+  height: 2.25rem;
+}
+
+.donate:hover .donate-image {
+  filter: brightness(1.08);
 }
 
 .app-name {

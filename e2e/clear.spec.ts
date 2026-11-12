@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
+import { tabSkipsLinks } from './support/keyboard.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
@@ -170,7 +171,7 @@ async function expectNothingLeftThePage(page: Page, loads = 1): Promise<void> {
   expect(withoutSelectConsole(browserName, problems, 2, loads)).toEqual([]);
 }
 
-test('"Clear everything" is there from the start, unavailable but focusable and explained', async ({ page }) => {
+test('"Clear everything" is there from the start, unavailable but focusable and explained', async ({ page, browserName }) => {
   await open(page);
   const clear = page.getByRole('button', { name: en.actions.clearEverything });
   await expect(clear).toBeVisible();
@@ -181,10 +182,15 @@ test('"Clear everything" is there from the start, unavailable but focusable and 
   await expect(page.locator('#clear-unavailable')).toHaveText(en.clear.unavailable);
   await expect(clear).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
   // ...yet reachable with Tab, right after the "choose" button, and pressing it does nothing.
-  // The language picker is the first stop, the privacy panel's summary the
-  // second, step 1's help the third.
+  // The language picker is the first stop, the Ko-fi button the second
+  // (skipped by Tab in WebKit, see e2e/support/keyboard.ts), then the
+  // privacy panel's summary and step 1's help.
   await page.keyboard.press('Tab');
   await expect(page.locator('#lang-en')).toBeFocused();
+  if (!tabSkipsLinks(browserName)) {
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#donate-link')).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');

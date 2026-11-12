@@ -4,7 +4,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeText } from '../../tests/support/fake-dom';
 import { HELP_CLIENTS, mountApp, type AppShell } from './app';
-import { t } from './i18n';
+import { DONATION_IMAGE, DONATION_URL } from './dom';
+import { setLocale, t } from './i18n';
+import { en } from './i18n/en';
+import { fr } from './i18n/fr';
 
 let doc: FakeDocument;
 let root: FakeElement;
@@ -217,7 +220,7 @@ describe('mountApp', () => {
       ['privacy.does.title', ['privacy.does.local', 'privacy.does.noUpload', 'privacy.does.noSaving', 'privacy.does.wiped', 'privacy.does.pdf']],
       ['privacy.never.title', ['privacy.never.upload', 'privacy.never.tracking', 'privacy.never.remote', 'privacy.never.attachments']],
       ['privacy.check.title', ['privacy.check.offline', 'privacy.check.network', 'privacy.check.source']],
-      ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
+      ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.donate', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
     ] as const;
 
     it('is a closed <details> in the header, after the promise, opened by its summary', () => {
@@ -225,8 +228,14 @@ describe('mountApp', () => {
       expect(panel.tagName).toBe('details');
       expect(panel.hasAttribute('open')).toBe(false);
       const header = root.children[0] as FakeElement;
-      // After the language picker (first in the header).
-      expect(header.children.map((c) => (c instanceof FakeElement ? c.getAttribute('class') : 'text'))).toEqual(['language', 'app-name', 'promise', 'privacy']);
+      // After the header's top row: the language picker (first) and the Ko-fi button.
+      expect(header.children.map((c) => (c instanceof FakeElement ? c.getAttribute('class') : 'text'))).toEqual([
+        'language',
+        'donate',
+        'app-name',
+        'promise',
+        'privacy',
+      ]);
       // The summary comes first, so it is the line shown while closed (and the panel's name).
       const summary = panel.children[0] as FakeElement;
       expect(summary.tagName).toBe('summary');
@@ -271,6 +280,10 @@ describe('mountApp', () => {
         'Content Security Policy',
         '[U+05D0]',
         'Latin, Greek and Cyrillic text shows normally',
+        'The Ko-fi button at the top of the page is the only link to another website',
+        'does nothing until you click it',
+        'opens Ko-fi in a new tab',
+        'sends nothing about your emails',
         'not legal advice',
       ]) {
         expect(text).toContain(phrase);
@@ -377,12 +390,61 @@ describe('mountApp', () => {
     expect(byId('download-button').getAttribute('aria-describedby')).toBe('download-note');
   });
 
-  it('has no external links and no inline styles or handlers', () => {
+  it('has no inline styles or handlers, and no link or image but the Ko-fi button', () => {
+    const donate = byId('donate-link');
+    const image = donate.children[0] as FakeElement;
     for (const element of doc.created) {
       for (const name of element.attributes.keys()) {
-        expect(name).not.toMatch(/^(on|style$|href$|src$)/);
+        expect(name).not.toMatch(/^(on|style$)/);
+        if (element === donate) expect(name, 'the Ko-fi link').not.toBe('src');
+        else if (element === image) expect(name, 'the Ko-fi image').not.toBe('href');
+        else expect(name, element.tagName).not.toMatch(/^(href|src)$/);
       }
     }
+    expect(all('a')).toEqual([donate]);
+    expect(all('img')).toEqual([image]);
+  });
+
+  describe('Ko-fi button', () => {
+    it('sits in the header right after the language picker: a plain link to the donation page, opening a new tab', () => {
+      const header = root.children[0] as FakeElement;
+      const donate = byId('donate-link');
+      expect(header.children[1]).toBe(donate);
+      expect(donate.tagName).toBe('a');
+      expect([...donate.attributes]).toEqual([
+        ['href', DONATION_URL],
+        ['id', 'donate-link'],
+        ['class', 'donate'],
+        ['target', '_blank'],
+        ['rel', 'noopener noreferrer'],
+      ]);
+    });
+
+    it('holds only the bundled image, with its own pixel size and the label as alt text (also its name)', () => {
+      const donate = byId('donate-link');
+      expect(donate.children).toHaveLength(1);
+      const image = donate.children[0] as FakeElement;
+      expect(image.tagName).toBe('img');
+      expect(image.getAttribute('src')).toBe(DONATION_IMAGE.src);
+      expect(image.getAttribute('width')).toBe('980');
+      expect(image.getAttribute('height')).toBe('198');
+      expect(image.getAttribute('alt')).toBe(t('donate.label'));
+      expect(image.getAttribute('alt')).toBe('Support me on Ko-fi (opens in a new tab)');
+      expect(donate.textContent).toBe('');
+    });
+
+    it('relabel writes the alt text again in the page language', () => {
+      const image = byId('donate-link').children[0] as FakeElement;
+      setLocale('fr');
+      try {
+        shell.relabel();
+        expect(image.getAttribute('alt')).toBe(fr.donate.label);
+      } finally {
+        setLocale('en');
+      }
+      shell.relabel();
+      expect(image.getAttribute('alt')).toBe(en.donate.label);
+    });
   });
 
   it('uses unique ids', () => {

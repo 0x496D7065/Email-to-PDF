@@ -4,13 +4,15 @@
 // playwright.config.ts).
 //
 // The panel is a native <details>/<summary>: closed at first, the first Tab
-// stop of the page, opened and closed with Enter or Space, with headings that
+// stop after the header's top row (the language picker and the Ko-fi
+// button), opened and closed with Enter or Space, with headings that
 // fit the page's levels. Opening it loads nothing and triggers no CSP
 // violation (e2e/support/watch.ts). No accessibility library is used (no new
 // dependency): names, focus, headings and contrast are checked explicitly.
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
+import { tabSkipsLinks } from './support/keyboard.ts';
 import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/watch.ts';
 
 declare global {
@@ -64,7 +66,7 @@ const PANEL_TEXTS = [
   en.disclaimer.text,
 ];
 
-test('the panel is the first Tab stop, opens and closes with Enter and Space, and reads well', async ({ page, browserName }) => {
+test('the panel is the first Tab stop after the header top row, opens and closes with Enter and Space, and reads well', async ({ page, browserName }) => {
   const loaded = await open(page);
   const panel = page.locator('details#privacy');
   const summary = panel.locator('summary');
@@ -76,9 +78,14 @@ test('the panel is the first Tab stop, opens and closes with Enter and Space, an
   await expect(body).toBeHidden();
   await expect(summary).toHaveAccessibleName(en.privacy.summary);
 
-  // The Tab stop right after the language picker, with a visible outline.
+  // The Tab stop right after the language picker and the Ko-fi button
+  // (skipped by Tab in WebKit, see e2e/support/keyboard.ts), with a visible outline.
   await page.keyboard.press('Tab');
   await expect(page.locator('#lang-en')).toBeFocused();
+  if (!tabSkipsLinks(browserName)) {
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#donate-link')).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(summary).toBeFocused();
   const outline = await summary.evaluate((e) => {
@@ -108,7 +115,8 @@ test('the panel is the first Tab stop, opens and closes with Enter and Space, an
   // The panel's headings are reachable by role, like the steps'.
   await expect(page.getByRole('heading', { level: 2, name: en.privacy.check.title })).toBeVisible();
 
-  // Readable: enough contrast, and no link (the repository link comes later).
+  // Readable: enough contrast, and no link (the repository link comes later;
+  // the Ko-fi button it mentions sits outside the panel).
   expect(await contrastFailures(page, '#privacy', 15)).toEqual([]);
   await expect(panel.locator('a')).toHaveCount(0);
 

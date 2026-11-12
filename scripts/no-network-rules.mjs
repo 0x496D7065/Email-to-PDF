@@ -17,10 +17,15 @@
  *   - the GitHub repository link,
  *   - license links in comments.
  * Nothing else: no CDN, font, analytics or API URL, ever.
- * Empty for now because none of those links exist yet. Example entry:
+ *
+ * The Ko-fi donation page is the one entry: exactly this URL (no other
+ * Ko-fi page, no http:, no longer path, no query), the href of the plain
+ * link built by donationLink in src/ui/dom.ts. The page never loads it: the
+ * browser only goes there, in a new tab, when the reader clicks the link.
+ * The repository link will be the next entry, at publish time, e.g.
  *   'https://github.com/OWNER/REPO',
  */
-export const URL_ALLOWLIST = [];
+export const URL_ALLOWLIST = ['https://ko-fi.com/0x496d7065'];
 
 /**
  * URLs allowed ONLY inside one specific file of dist/ (path relative to dist/).

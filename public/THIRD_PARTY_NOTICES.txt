@@ -8,6 +8,11 @@ as their licenses require.
 The package "iconv-lite" (a dependency of @kenjiuno/msgreader) is NOT
 shipped: it is replaced by a small file of this project.
 
+The Ko-fi button image (ko-fi/support_me_on_kofi_blue.png) is Ko-fi's
+official "Support me on Ko-fi" button, used unchanged to link to this
+project's donation page. The Ko-fi name, logo and button are trademarks
+of Ko-fi. The image is NOT covered by this project's MIT license.
+
 ================================================================================
 @kenjiuno/msgreader 1.28.0
 License: Apache-2.0

@@ -7,6 +7,7 @@
 // local preview server, so even a broken CSP could not reach the internet.
 import { expect, test, type BrowserContext, type Page, type Request } from '@playwright/test';
 import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
+import { DONATION_IMAGE, DONATION_URL } from '../src/ui/dom.ts';
 import { en } from '../src/ui/i18n/en.ts';
 
 /** What we keep from each `securitypolicyviolation` event. */
@@ -230,6 +231,8 @@ test('the meta CSP alone blocks fetch() and remote images', async ({ page, brows
 
   const response = await page.goto('/', { waitUntil: 'networkidle' });
   expect(response?.headers()['content-security-policy']).toBeUndefined();
+  // The bundled Ko-fi image loads under the meta CSP alone too (img-src 'self').
+  expect(await page.locator('#donate-link img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   const policy = cspForMeta();
   expect(withoutSelect(browserName, await violations(page), [policy])).toEqual([]);
 
@@ -246,4 +249,83 @@ test('the meta CSP alone blocks fetch() and remote images', async ({ page, brows
     );
 
   await expectImageBlockedByCsp(browserName);
+});
+
+// The Ko-fi donation button (src/ui/dom.ts, donationLink): the one link to
+// another website (README.md, rule R1). It must be a plain link that loads
+// nothing from Ko-fi, with Ko-fi's image served by this site.
+test('the Ko-fi button is a plain link with its image from this site, and Ko-fi is never contacted', async ({ page, browserName }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const link = page.locator('#donate-link');
+  await expect(link).toHaveAttribute('href', DONATION_URL);
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(link).toHaveAccessibleName(en.donate.label);
+  // The only link of the page; nothing else on it mentions Ko-fi's site, and no
+  // <link> could warm up a connection or fetch the page ahead of a click.
+  await expect(page.locator('a[href]')).toHaveCount(1);
+  await expect(page.locator('link[rel~="prefetch"], link[rel~="preconnect"], link[rel~="dns-prefetch"], link[rel~="prerender"]')).toHaveCount(0);
+  await expect(page.locator('script[type="speculationrules"], iframe, object, embed')).toHaveCount(0);
+  const host = new URL(DONATION_URL).host;
+  expect(await page.evaluate((h) => document.documentElement.outerHTML.split(h).length - 1, host)).toBe(1);
+
+  // The image: this site's bundled file, loaded (no broken image), shown
+  // about 36 px high with its own shape (980 x 198 pixels).
+  const image = link.locator('img');
+  const shown = await image.evaluate((img: HTMLImageElement) => ({
+    src: img.currentSrc,
+    loaded: img.complete,
+    natural: [img.naturalWidth, img.naturalHeight],
+    box: [img.getBoundingClientRect().width, img.getBoundingClientRect().height],
+  }));
+  expect(shown.src).toBe(`${origin}/${DONATION_IMAGE.src}`);
+  expect(shown.loaded).toBe(true);
+  expect(shown.natural).toEqual([980, 198]);
+  expect(shown.box[1]).toBeCloseTo(36, 0);
+  expect(Math.abs((shown.box[0] ?? 0) - (36 * 980) / 198)).toBeLessThan(1);
+  const served = requests.find((request) => request.url() === shown.src && request.frame() === page.mainFrame());
+  expect(served, 'the image request').toBeDefined();
+  const response = await served?.response();
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()['content-type']).toBe('image/png');
+
+  // Pointing at it and focusing it fetches nothing either (no prefetch on hover).
+  const before = requests.length;
+  await link.hover();
+  await link.focus();
+  await page.waitForTimeout(500);
+  expect(requests.slice(before).map((request) => request.url())).toEqual([]);
+  for (const request of requests) expect(new URL(request.url()).origin, request.url()).toBe(origin);
+  expect(websockets).toEqual([]);
+  expect(withoutSelect(browserName, await violations(page), [cspForHeader(), cspForMeta()])).toEqual([]);
+});
+
+// What a click does: a new tab goes to Ko-fi (here stopped by the safety net
+// before it leaves the computer), with no referrer; this tab stays where it
+// is, with the emails added still there.
+test('a click on the Ko-fi button opens a new tab, sends no referrer, and keeps this tab and its emails', async ({ page, context }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const url = page.url();
+  const fixture = decodeURIComponent(new URL('../tests/fixtures/eml/10-order-1-alice.eml', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
+  await page.locator('#file-input').setInputFiles(fixture);
+  const items = page.locator('#preview-list > li');
+  await expect(items).toHaveCount(1, { timeout: 60_000 });
+
+  const opened = context.waitForEvent('page');
+  await page.locator('#donate-link').click();
+  const tab = await opened;
+  expect(tab).not.toBe(page);
+  // The new tab's one request: the donation page, with no Referer header.
+  await expect.poll(() => requests.filter((request) => request.url() === DONATION_URL).length).toBe(1);
+  const visit = requests.find((request) => request.url() === DONATION_URL);
+  expect(visit?.frame().page()).toBe(tab);
+  expect(visit?.isNavigationRequest()).toBe(true);
+  expect(visit?.headers()['referer']).toBeUndefined();
+  await tab.close();
+
+  // This tab did not move, and nothing of the user's work was lost.
+  expect(page.url()).toBe(url);
+  await expect(items).toHaveCount(1);
+  // Every other request stayed on this site.
+  for (const request of requests.filter((r) => r.url() !== DONATION_URL)) expect(new URL(request.url()).origin, request.url()).toBe(origin);
 });

@@ -12,7 +12,8 @@
 //   relative path on the same site. Anything with a scheme (javascript:,
 //   data:, https:, ...) or starting with // is refused (README.md, rule R1).
 //   Only setBlobHref (below) may set a blob: URL, and only one this page
-//   made itself (the finished PDF, already in memory).
+//   made itself (the finished PDF, already in memory). Only donationLink
+//   (below) links to another website, and only to DONATION_URL.
 // - tags that can run code, load things or hold raw markup (script, iframe,
 //   style, template, ...): only the tags in SAFE_TAGS can be created.
 
@@ -127,6 +128,54 @@ export function isOwnBlobUrl(value: string, origin: string): boolean {
 export function setBlobHref(link: HTMLAnchorElement, url: string, origin: string): void {
   if (!isOwnBlobUrl(url, origin)) throw new Error('setBlobHref(): href may only hold a blob: URL made by this page');
   link.setAttribute('href', url);
+}
+
+/**
+ * The donation page: the one other website the page links to (README.md,
+ * rule R1), and the one https URL in the page's code (allowed by the build
+ * check as exactly this string, scripts/no-network-rules.mjs).
+ */
+export const DONATION_URL = 'https://ko-fi.com/0x496d7065';
+
+/**
+ * Ko-fi's official "Support me on Ko-fi" button image, shipped with the site
+ * (public/ko-fi/, copied as is into dist/ko-fi/). A relative path, so it is
+ * found under any base path, and same-site, so `img-src 'self'` allows it.
+ * width and height are the file's own pixel size: the browser knows the
+ * image's shape before it has loaded, so nothing moves when it appears (the
+ * shown size is set in app.css). Ko-fi's trademark, not under this project's
+ * MIT license (README.md, "License").
+ */
+export const DONATION_IMAGE = { src: 'ko-fi/support_me_on_kofi_blue.png', width: 980, height: 198 } as const;
+
+/**
+ * The donation link (src/ui/app.ts): a plain <a> around the bundled Ko-fi
+ * image, the other exception to the href rule above. Its href is always
+ * DONATION_URL: nothing here takes a URL from outside, and el() and
+ * setSafeAttribute keep refusing every https: URL. Nothing is loaded from
+ * Ko-fi: the browser only goes there when the reader clicks, then:
+ * - target="_blank": in a new tab, because everything the reader added
+ *   lives only in this tab's memory and leaving it would lose that work;
+ * - rel="noopener noreferrer": the new tab gets no handle on this page and
+ *   is not told which page the reader came from.
+ * The image's alt text (its words, set by the caller) names the link.
+ * Built with createElement like el(); <img> stays out of SAFE_TAGS, so this
+ * is the only image the page can ever make.
+ */
+export function donationLink(id: string): { readonly link: HTMLAnchorElement; readonly image: HTMLImageElement } {
+  const link = document.createElement('a');
+  link.setAttribute('href', DONATION_URL);
+  setSafeAttribute(link, 'id', id);
+  setSafeAttribute(link, 'class', 'donate');
+  setSafeAttribute(link, 'target', '_blank');
+  setSafeAttribute(link, 'rel', 'noopener noreferrer');
+  const image = document.createElement('img');
+  setSafeAttribute(image, 'class', 'donate-image');
+  setSafeAttribute(image, 'src', DONATION_IMAGE.src);
+  setSafeAttribute(image, 'width', String(DONATION_IMAGE.width));
+  setSafeAttribute(image, 'height', String(DONATION_IMAGE.height));
+  link.append(image);
+  return { link, image };
 }
 
 /**

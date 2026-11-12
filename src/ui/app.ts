@@ -26,12 +26,21 @@
 //   is not pressed by mistake (it asks no confirmation). Its note says what
 //   it does. src/ui/page.ts gives it its action.
 // - The privacy panel is a native <details>/<summary> in the header, closed
-//   by default: the summary is the first Tab stop of the page, and Enter or
+//   by default: the summary is the first Tab stop after the header's top
+//   row (the language picker and the Ko-fi button), and Enter or
 //   Space opens and closes it with no script of ours. Nothing traps the
 //   focus and nothing covers the steps (a dialog would need both handled).
 //   Its topics are h2 headings, right under the page's h1 and before the
 //   steps' h2 headings, so the heading levels never skip. It only shows text
 //   (README.md, rules R1 and R5): no link yet.
+// - The Ko-fi donation button (donationLink in src/ui/dom.ts): a plain link
+//   around Ko-fi's own button image, bundled with the site, that opens Ko-fi
+//   in a new tab. Nothing is loaded from Ko-fi until the reader clicks it
+//   (README.md, rule R1). It sits at the top right, in the language
+//   picker's row (app.css), and comes right after the picker in the page
+//   too, so the Tab order and screen readers follow what is seen: picker,
+//   Ko-fi button, then the title and the privacy panel. Its name is the
+//   image's alt text, which also says that it opens a new tab.
 // - The step 1 help ("How do I get my email files?") is the same kind of
 //   native <details>, closed by default, between step 1's intro and the drop
 //   zone: it is the Tab stop right before the "choose" button, and holds no
@@ -47,8 +56,8 @@
 //
 // - The language picker (src/ui/page.ts switches the language): a
 //   <fieldset> with a <legend> and one native radio per language, first in
-//   the header, so its place in the page, on screen and in the Tab order
-//   agree. Radios, not a <select>: WebKit reports every <select> as a CSP
+//   the header (at the top left), so its place in the page, on screen and
+//   in the Tab order agree. Radios, not a <select>: WebKit reports every <select> as a CSP
 //   style violation (see e2e/support/watch.ts), and the arrow keys move
 //   between radios with no script of ours. Each radio and its label carry
 //   their language's lang attribute, and the label shows the language's own
@@ -62,7 +71,7 @@
 //
 // Nothing here is stored anywhere (README.md, rule R5).
 
-import { el, setSafeAttribute } from './dom';
+import { donationLink, el, setSafeAttribute } from './dom';
 import { getLocale, languageName, SUPPORTED_LOCALES, t, type PlainMessageKey } from './i18n';
 import { createStaticLabels, type StaticLabels } from './labels';
 
@@ -159,7 +168,7 @@ const PRIVACY_TOPICS: readonly PrivacyTopic[] = [
   {
     id: 'privacy-notes',
     title: 'privacy.notes.title',
-    points: ['privacy.notes.trust', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text'],
+    points: ['privacy.notes.trust', 'privacy.notes.donate', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text'],
     as: 'paragraphs',
   },
 ];
@@ -269,10 +278,15 @@ export function mountApp(root: HTMLElement, options: AppOptions = {}): AppShell 
   const locales = options.locales ?? SUPPORTED_LOCALES;
   const picker = locales.length >= 2 ? languagePicker(labels, locales, (locale) => options.onLanguageChange?.(locale)) : null;
 
+  // The Ko-fi button (see the top of this file): named by its image's alt text.
+  const donate = donationLink('donate-link');
+  labels.attr(donate.image, 'alt', 'donate.label');
+
   const header = el('header', {
     attrs: { class: 'site-header' },
     children: [
       ...(picker === null ? [] : [picker.fieldset]),
+      donate.link,
       labels.text(el('h1', { attrs: { class: 'app-name' } }), 'app.name'),
       labels.text(el('p', { attrs: { class: 'promise' } }), 'app.promise'),
       privacyPanel(labels),

@@ -24,6 +24,7 @@ import { createServer } from 'vite';
 import { en } from '../src/ui/i18n/en.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
+import { tabSkipsLinks } from './support/keyboard.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
 
 declare global {
@@ -348,7 +349,7 @@ test('adding more files later re-reads the whole list; the same file added twice
   await expectNothingLeftThePage(page);
 });
 
-test('keyboard: Tab reaches the button right after the privacy panel and the step 1 help, and Enter or Space opens the file chooser', async ({ page }) => {
+test('keyboard: Tab reaches the button right after the privacy panel and the step 1 help, and Enter or Space opens the file chooser', async ({ page, browserName }) => {
   test.setTimeout(60_000);
   await open(page);
 
@@ -359,11 +360,16 @@ test('keyboard: Tab reaches the button right after the privacy panel and the ste
   page.on('filechooser', (chooser) => choosers.push(chooser));
   await page.evaluate(() => 0);
 
-  // The language picker comes first (its ticked radio), then the privacy
-  // panel's summary in the header (e2e/privacy.spec.ts), then step 1's help
-  // (e2e/help.spec.ts).
+  // The language picker comes first (its ticked radio), then the Ko-fi
+  // button (skipped by Tab in WebKit, see e2e/support/keyboard.ts) and the
+  // privacy panel's summary in the header (e2e/privacy.spec.ts), then step
+  // 1's help (e2e/help.spec.ts).
   await page.keyboard.press('Tab');
   await expect(page.locator('#lang-en')).toBeFocused();
+  if (!tabSkipsLinks(browserName)) {
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#donate-link')).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');

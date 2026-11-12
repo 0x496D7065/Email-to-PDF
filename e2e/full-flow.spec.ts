@@ -46,6 +46,7 @@ import { en } from '../src/ui/i18n/en.ts';
 import { FIXTURES, type FixtureExpectation } from '../tests/fixtures/manifest.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
+import { tabSkipsLinks } from './support/keyboard.ts';
 import {
   engineOf,
   isParseTimeReport,
@@ -479,7 +480,7 @@ async function focused(page: Page, key: string): Promise<Focus> {
   }, key);
 }
 
-test('keyboard only: every control is reached in order, shows its focus and works', async ({ page }) => {
+test('keyboard only: every control is reached in order, shows its focus and works', async ({ page, browserName }) => {
   test.setTimeout(120_000);
   await open(page);
   // Listen for the file chooser first (see e2e/add-files.spec.ts).
@@ -499,6 +500,20 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(english).toHaveAccessibleName('English');
   const languageFocus = await focused(page, 'language');
   expect(languageFocus.outlineStyle).not.toBe('none');
+
+  // --- The Ko-fi button is next, at the top right in the same row (WebKit's
+  // Tab skips links, see e2e/support/keyboard.ts). It is not pressed here: it
+  // would open Ko-fi in a new tab (e2e/no-network.spec.ts checks a click).
+  const linksSkipped = tabSkipsLinks(browserName);
+  const donate = page.locator('#donate-link');
+  await expect(donate).toHaveAccessibleName(en.donate.label);
+  const donateFocus: Focus[] = [];
+  if (!linksSkipped) {
+    await page.keyboard.press('Tab');
+    await expect(donate).toBeFocused();
+    donateFocus.push(await focused(page, 'donate'));
+    expect(donateFocus[0]?.outlineStyle).not.toBe('none');
+  }
 
   // --- The privacy panel's summary is next: Enter opens it, Space closes it.
   await page.keyboard.press('Tab');
@@ -551,7 +566,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(choose).toBeFocused();
 
   // --- Every control has a name; the headings do not skip a level. --------
-  // Links too: none today, but any added later must have a name and be a Tab stop.
+  // Links too: the Ko-fi button today; any added later must have a name and be a Tab stop.
   const controls = page.locator('a[href], button, select, input:not([type="hidden"]):not([hidden]), summary');
   const controlCount = await controls.count();
   expect(controlCount).toBeGreaterThan(10);
@@ -575,7 +590,7 @@ test('keyboard only: every control is reached in order, shows its focus and work
   await expect(items.locator('h3')).toHaveCount(5);
 
   // --- Tab through the whole page, operating each control on the way. -----
-  const walk: Focus[] = [languageFocus, privacyFocus, helpFocus, chooseFocus];
+  const walk: Focus[] = [languageFocus, ...donateFocus, privacyFocus, helpFocus, chooseFocus];
   const included = (n: number): string => `${String(n)} of 5 emails will be in the PDF.`;
   for (let i = 1; i < 200; i++) {
     await page.keyboard.press('Tab');
@@ -644,22 +659,29 @@ test('keyboard only: every control is reached in order, shows its focus and work
     }
   }
 
-  // The stops, in order: the language picker (its ticked radio), the privacy
-  // panel's summary, step 1's help, choose, clear, zone, folded-text toggle,
-  // "Print full original text", then per email its checkbox and its folded
-  // blocks, and the download button last.
+  // The stops, in order: the language picker (its ticked radio), the Ko-fi
+  // button (not in WebKit), the privacy panel's summary, step 1's help,
+  // choose, clear, zone, folded-text toggle, "Print full original text",
+  // then per email its checkbox and its folded blocks, and the download
+  // button last.
   const tags = walk.map((f) => f.tag);
-  expect(tags.slice(0, 8)).toEqual(['INPUT', 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
+  const links = donateFocus.length;
+  expect(tags.slice(0, 8 + links)).toEqual(['INPUT', ...donateFocus.map(() => 'A'), 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
   expect(walk[0]?.key).toBe('language');
-  expect(walk[2]?.key).toBe('help');
-  expect(walk[7]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
+  if (links > 0) expect(walk[1]?.key).toBe('donate');
+  expect(walk[2 + links]?.key).toBe('help');
+  expect(walk[7 + links]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
+  // The Ko-fi button is the only link (and a Tab stop where Tab stops on links).
+  expect(tags.filter((tag) => tag === 'A')).toHaveLength(linksSkipped ? 0 : 1);
+  await expect(page.locator('a[href]')).toHaveCount(1);
   expect(tags.at(-1)).toBe('BUTTON');
   expect(walk.filter((f) => f.tag === 'INPUT' && f.position >= 0).map((f) => f.position)).toEqual([0, 1, 2, 3, 4]);
   expect(walk.filter((f) => f.tag === 'SUMMARY').length).toBe(2 + (await page.locator('#preview-list summary').count()));
-  // Every control is a stop, except the unticked language radios (one Tab stop per radio group).
+  // Every control is a stop, except the unticked language radios (one Tab
+  // stop per radio group) and, in WebKit, the Ko-fi link.
   const languageRadios = await page.locator('#language input[type="radio"]').count();
   expect(languageRadios).toBe(3);
-  expect(walk.length).toBe(controlCount - (languageRadios - 1));
+  expect(walk.length).toBe(controlCount - (languageRadios - 1) - (linksSkipped ? 1 : 0));
   // Every stop shows a clear outline.
   for (const f of walk) {
     expect(f.outlineStyle, f.key).not.toBe('none');
@@ -683,6 +705,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     expect(key).toBe(walk[i]?.key);
   }
   await expect(english).toBeFocused();
+  if (!linksSkipped) {
+    await page.keyboard.press('Tab');
+    await expect(donate).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(privacy).toBeFocused();
 

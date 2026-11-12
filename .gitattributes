@@ -8,3 +8,6 @@ tests/fixtures/**/*.[eE][mM][lL] -text
 # unchanged too.
 src/fonts/*.woff binary
 src/fonts/LICENSE.txt -text
+# Official Ko-fi button image (public/ko-fi/): kept byte for byte. "binary" =
+# no line-ending conversion and no text diff.
+public/ko-fi/*.png binary

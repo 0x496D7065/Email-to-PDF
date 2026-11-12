@@ -189,6 +189,7 @@ test('English browser: the picker is the first Tab stop; the arrow keys switch t
   await expect(page.getByRole('button', { name: fr.actions.makePdf })).toHaveAccessibleDescription(fr.download.available);
   await expect(page.getByRole('button', { name: fr.actions.clearEverything })).toBeVisible();
   await expect(page.locator('#privacy-summary')).toHaveText(fr.privacy.summary);
+  await expect(page.locator('#donate-link')).toHaveAccessibleName(fr.donate.label);
   await expect(page.locator('#preview-list .pdf-label:visible').filter({ hasText: /^Pas dans le PDF\u00a0: / }).first()).toBeVisible();
   await expect(page.getByRole('main')).not.toContainText(en.steps.add.title);
 
@@ -273,7 +274,7 @@ test.describe('Dutch browser', () => {
     await page.keyboard.press('Tab');
     await expect(dutch).toBeFocused();
 
-    // The header (picker with three languages, privacy summary) fits a
+    // The header (picker with three languages, Ko-fi button, privacy summary) fits a
     // narrow phone screen and 200% zoom (640 CSS px wide) without sideways scrolling.
     for (const size of [
       { width: 320, height: 640 },
@@ -282,7 +283,7 @@ test.describe('Dutch browser', () => {
       await page.setViewportSize(size);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `${String(size.width)} px`).toBeLessThanOrEqual(0);
-      for (const id of ['#lang-en', '#lang-fr', '#lang-nl', '#privacy-summary']) {
+      for (const id of ['#lang-en', '#lang-fr', '#lang-nl', '#donate-link', '#privacy-summary']) {
         const box = await page.locator(id).boundingBox();
         expect(box, id).not.toBeNull();
         expect((box?.x ?? -1) >= 0 && (box?.x ?? 0) + (box?.width ?? 0) <= size.width, `${id} at ${String(size.width)} px`).toBe(true);

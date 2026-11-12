@@ -94,6 +94,14 @@ add the files inside.
 - **What the host still sees:** like any website, the site that serves the
   page sees that the page was loaded (and the browser's periodic check for
   a new version, below). It never sees your emails.
+- **One link to another website: the Ko-fi donation button.** The button
+  at the top right of the page is the only link to another site. It is a
+  normal link that does nothing until you click it: no Ko-fi script,
+  widget or frame, and its image is a file served by this site, so Ko-fi
+  is never contacted while you use the tool. A click opens Ko-fi in a new
+  tab (this tab, with your emails, stays as it is), without telling Ko-fi
+  which page you came from (`rel="noopener noreferrer"` and
+  `Referrer-Policy: no-referrer`), and sends nothing about your emails.
 
 **Trust ultimately depends on the code that is served.** If the site, its
 hosting, its domain or the project's account were ever taken over, a
@@ -107,7 +115,8 @@ by anyone, as described next.
    go to the Network tab, reload the page, then add emails and make a PDF.
    You will see:
    - the page's own files loading when it opens (the page, its script and
-     style in `assets/`, the PDF fonts script);
+     style in `assets/`, the PDF fonts script, the Ko-fi button image in
+     `ko-fi/`);
    - possibly the site's own files (the same ones, plus
      `THIRD_PARTY_NOTICES.txt`) fetched from the same site, in the
      background, by the service worker that keeps the offline copy, and a
@@ -119,7 +128,8 @@ by anyone, as described next.
      computer.
 
    Nothing else: no request to another site, and no request caused by
-   adding emails or making the PDF.
+   adding emails or making the PDF. (Clicking the Ko-fi button opens Ko-fi
+   in a new tab; that tab's requests are its own.)
 2. **Run it offline.** Open the page, then turn off your internet (or tick
    "Offline" in DevTools) and use the tool: everything still works. After
    one visit with the internet on, you can also reload or reopen the page
@@ -427,6 +437,8 @@ remote images, scripts, styles, fonts or frames. Everything is bundled and
 self-hosted; no CDN. Remote content inside emails is never loaded. The only
 outbound thing ever allowed is a plain link (donation or project
 repository, with `rel="noopener noreferrer"`) that you click yourself.
+Today that is the Ko-fi donation link (`https://ko-fi.com/0x496d7065`),
+which opens in a new tab; its button image is bundled with the site.
 
 One approved exception: the service worker fetches the site's own listed
 files (when it installs, and again if a stored copy is missing), and the
@@ -497,9 +509,10 @@ microphone, location, and so on). The single source of all of these is
   twice: as it is, and with its text escapes undone.
 - **URL allowlist** (`scripts/no-network-rules.mjs`): it may only ever hold
   the donation link, the repository link and license links. Today it holds
-  only the Apache License and SIL Open Font License links, each allowed in
-  `THIRD_PARTY_NOTICES.txt` only (and the SIL link in
-  `src/fonts/LICENSE.txt`), rejected anywhere else.
+  the Ko-fi donation link, allowed as exactly `https://ko-fi.com/0x496d7065`
+  (any other Ko-fi address fails), and the Apache License and SIL Open
+  Font License links, each allowed in `THIRD_PARTY_NOTICES.txt` only (and
+  the SIL link in `src/fonts/LICENSE.txt`), rejected anywhere else.
 - **One file exempt from two scans:** the service worker
   (`src/sw/service-worker.ts`, built as `dist/sw.js`) may call `fetch(`
   and use Cache Storage (`caches.`), to keep the site's own files. Every
@@ -734,7 +747,8 @@ page works as before; it just cannot be reopened offline.
 
 - **What it keeps:** only the site's own static files, in Cache Storage:
   the page (`/`), its scripts and styles (`assets/`, the PDF fonts script
-  included) and `THIRD_PARTY_NOTICES.txt`. The build makes the list from
+  included), the Ko-fi button image (`ko-fi/`) and
+  `THIRD_PARTY_NOTICES.txt`. The build makes the list from
   the files it writes (every file of `dist/` except `_headers`,
   `_redirects`, `_routes.json`, `*.map` and `sw.js`), and versions it with
   a content hash of those files, the worker's code and `_headers`. The same
@@ -820,3 +834,8 @@ MIT, copyright 0x496D7065. See `LICENSE`.
 The IBM Plex fonts are under the SIL Open Font License 1.1, copyright 2017
 IBM Corp., with Reserved Font Name "Plex" (`src/fonts/LICENSE.txt`). Other
 bundled libraries: see `public/THIRD_PARTY_NOTICES.txt`.
+
+The Ko-fi button image (`public/ko-fi/support_me_on_kofi_blue.png`) is
+Ko-fi's official "Support me on Ko-fi" button, used unchanged. The Ko-fi
+name, logo and button are trademarks of Ko-fi. The image is **not**
+covered by this project's MIT license.

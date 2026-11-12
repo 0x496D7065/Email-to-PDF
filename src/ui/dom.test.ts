@@ -2,7 +2,20 @@
 // Node with a recording fake DOM (tests/support/fake-dom.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeText } from '../../tests/support/fake-dom';
-import { attributeProblem, el, isOwnBlobUrl, isSafeUrl, SAFE_TAGS, setBlobHref, setSafeAttribute, type SafeTag } from './dom';
+import { URL_ALLOWLIST } from '../../scripts/no-network-rules.mjs';
+import {
+  attributeProblem,
+  DONATION_IMAGE,
+  DONATION_URL,
+  donationLink,
+  el,
+  isOwnBlobUrl,
+  isSafeUrl,
+  SAFE_TAGS,
+  setBlobHref,
+  setSafeAttribute,
+  type SafeTag,
+} from './dom';
 
 let doc: FakeDocument;
 
@@ -204,5 +217,41 @@ describe('isOwnBlobUrl / setBlobHref (step 3 download link only)', () => {
     expect(a.getAttribute('href')).toBe(OWN);
     expect(() => setSafeAttribute(link, 'href', OWN)).toThrow(/fragment or a relative/);
     expect(() => el('a', { attrs: { href: OWN } })).toThrow(/fragment or a relative/);
+  });
+});
+
+describe('donationLink (the Ko-fi button only)', () => {
+  it('builds a plain link to DONATION_URL, opening a new tab, around the bundled image', () => {
+    const { link, image } = donationLink('donate-link');
+    const a = fake(link);
+    const img = fake(image);
+    expect(doc.created.map((e) => e.tagName)).toEqual(['a', 'img']);
+    expect([...a.attributes]).toEqual([
+      ['href', DONATION_URL],
+      ['id', 'donate-link'],
+      ['class', 'donate'],
+      ['target', '_blank'],
+      ['rel', 'noopener noreferrer'],
+    ]);
+    expect(a.children).toEqual([img]);
+    // Its own pixel size (no layout shift); the alt text is set by the caller.
+    expect([...img.attributes]).toEqual([
+      ['class', 'donate-image'],
+      ['src', 'ko-fi/support_me_on_kofi_blue.png'],
+      ['width', '980'],
+      ['height', '198'],
+    ]);
+  });
+
+  it('points at the one URL of the build check allowlist, and the image at a same-site relative path', () => {
+    expect(URL_ALLOWLIST).toEqual([DONATION_URL]);
+    expect(isSafeUrl(DONATION_IMAGE.src)).toBe(true);
+    expect(DONATION_IMAGE.src.startsWith('/')).toBe(false);
+  });
+
+  it('is the only way to an https: link or an image: el() and setSafeAttribute still refuse both', () => {
+    expect(() => el('a', { attrs: { href: DONATION_URL } })).toThrow(/fragment or a relative/);
+    expect(() => setSafeAttribute(new FakeElement('a') as unknown as Element, 'href', DONATION_URL)).toThrow(/fragment or a relative/);
+    expect(() => el('img' as SafeTag)).toThrow(/not allowed/);
   });
 });

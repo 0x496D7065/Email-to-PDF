@@ -7,8 +7,10 @@
 // dependency: landmarks, names, keyboard order, focus outlines and colour
 // contrast are checked explicitly below (contrast: e2e/support/contrast.ts).
 import { expect, test, type Page } from '@playwright/test';
+import { DONATION_IMAGE, DONATION_URL } from '../src/ui/dom.ts';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
+import { tabSkipsLinks } from './support/keyboard.ts';
 import { withoutSelectConsole, withoutSelectReports } from './support/watch.ts';
 
 declare global {
@@ -112,25 +114,27 @@ test('gives every control an accessible name', async ({ page }) => {
   expect(controls).toBeGreaterThan(0);
 });
 
-test('reaches every interactive element with Tab, in page order, with a visible focus outline', async ({ page }) => {
+test('reaches every interactive element with Tab, in page order, with a visible focus outline', async ({ page, browserName }) => {
   await open(page);
 
-  const count = await page.evaluate(() => {
+  const count = await page.evaluate((skipLinks) => {
     const selector = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]';
     // A radio group is one Tab stop: its ticked radio (the language picker;
-    // the arrow keys move to the others).
+    // the arrow keys move to the others). WebKit's Tab skips links (the
+    // Ko-fi button), see e2e/support/keyboard.ts.
     window.__focusables = [...document.querySelectorAll(selector)].filter(
       (e) =>
         !(e as HTMLButtonElement).disabled &&
         e.getAttribute('tabindex') !== '-1' &&
         e.getClientRects().length > 0 &&
-        !(e instanceof HTMLInputElement && e.type === 'radio' && !e.checked),
+        !(e instanceof HTMLInputElement && e.type === 'radio' && !e.checked) &&
+        !(skipLinks && e instanceof HTMLAnchorElement),
     );
     // A positive tabindex would break the natural order: there must be none.
     return document.querySelectorAll('[tabindex]:not([tabindex="0"]):not([tabindex="-1"])').length === 0
       ? window.__focusables.length
       : -1;
-  });
+  }, tabSkipsLinks(browserName));
   expect(count).toBeGreaterThan(0);
 
   for (let i = 0; i < count; i++) {
@@ -162,18 +166,20 @@ test('fits a narrow phone screen without sideways scrolling', async ({ page }) =
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test('has no inline styles, no inline handlers and no links to other sites', async ({ page }) => {
+test('has no inline styles, no inline handlers and no links to other sites but the Ko-fi button', async ({ page }) => {
   await open(page);
   const found = await page.evaluate(() =>
     [...document.querySelectorAll('*')].flatMap((e) =>
       [...e.attributes]
         .filter((a) => a.name === 'style' || a.name.startsWith('on') || /^(href|src)$/.test(a.name))
-        .map((a) => `${e.tagName} ${a.name}`)
-        // The page's own script and stylesheet are the only allowed src/href.
-        .filter((s) => !/^(SCRIPT src|LINK href)$/.test(s)),
+        .map((a) => `${e.tagName}${e.id === '' ? '' : `#${e.id}`} ${a.name}=${a.value}`)
+        // The page's own scripts and stylesheet (in assets/) are allowed src/href.
+        .filter((s) => !/^(?:SCRIPT src|LINK href)=\/assets\/[\w-]+\.(?:js|css)$/.test(s)),
     ),
   );
-  expect(found).toEqual([]);
+  // Besides them, only the Ko-fi button (e2e/no-network.spec.ts checks it
+  // further): its link to the donation page and its bundled image.
+  expect(found).toEqual([`A#donate-link href=${DONATION_URL}`, `IMG src=${DONATION_IMAGE.src}`]);
 });
 
 test('loads without console errors, page errors or CSP violations', async ({ page, browserName }) => {

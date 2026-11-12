@@ -12,6 +12,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../src/ui/i18n/en.ts';
 import { contrastFailures } from './support/contrast.ts';
+import { tabSkipsLinks } from './support/keyboard.ts';
 import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/watch.ts';
 
 declare global {
@@ -77,9 +78,14 @@ test('the help sits by step 1, opens and closes with Enter and Space, and reads 
   });
   expect(above).toBe(true);
 
-  // The Tab stop after the language picker and the privacy panel's summary, with a visible outline.
+  // The Tab stop after the language picker, the Ko-fi button (skipped by Tab
+  // in WebKit, see e2e/support/keyboard.ts) and the privacy panel's summary, with a visible outline.
   await page.keyboard.press('Tab');
   await expect(page.locator('#lang-en')).toBeFocused();
+  if (!tabSkipsLinks(browserName)) {
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#donate-link')).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(page.locator('#privacy-summary')).toBeFocused();
   await page.keyboard.press('Tab');

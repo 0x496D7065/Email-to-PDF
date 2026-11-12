@@ -259,7 +259,11 @@ describe('mountAddFiles: elements', () => {
   });
 
   it('uses no inline styles, handlers or links, and unique ids', () => {
+    // The shell's Ko-fi button (src/ui/app.test.ts checks it) is the one link and image.
+    const donate = root.descendants().filter((e) => e.getAttribute('id') === 'donate-link' || e.getAttribute('class') === 'donate-image');
+    expect(donate.map((e) => e.tagName)).toEqual(['a', 'img']);
     for (const element of doc.created) {
+      if (donate.includes(element)) continue;
       for (const name of element.attributes.keys()) expect(name).not.toMatch(/^(on|style$|href$|src$)/);
     }
     const ids = root.descendants().flatMap((e) => e.getAttribute('id') ?? []);
