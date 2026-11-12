@@ -93,9 +93,6 @@ export const en = {
     notes: {
       title: 'Good to know',
       trust: 'Your trust depends on the code this site sends to your browser. That is why the code is open source and can be checked. Like any website, the site that hosts this page can see that the page was loaded, but never your emails.',
-      // The Ko-fi button (see donate above).
-      donate:
-        'The Ko-fi button at the top of the page is the only link to another website. It is a normal link that does nothing until you click it. Then it opens Ko-fi in a new tab, and it sends nothing about your emails.',
       console:
         'Your browser\'s developer tools may show red error lines that mention a "Content Security Policy". That is the browser refusing styles, scripts or links, for example ones found inside your emails: the protection working. Nothing from your emails was run or loaded.',
       scripts:

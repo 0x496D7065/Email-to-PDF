@@ -220,7 +220,7 @@ describe('mountApp', () => {
       ['privacy.does.title', ['privacy.does.local', 'privacy.does.noUpload', 'privacy.does.noSaving', 'privacy.does.wiped', 'privacy.does.pdf']],
       ['privacy.never.title', ['privacy.never.upload', 'privacy.never.tracking', 'privacy.never.remote', 'privacy.never.attachments']],
       ['privacy.check.title', ['privacy.check.offline', 'privacy.check.network', 'privacy.check.source']],
-      ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.donate', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
+      ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
     ] as const;
 
     it('is a closed <details> in the header, after the promise, opened by its summary', () => {
@@ -280,10 +280,6 @@ describe('mountApp', () => {
         'Content Security Policy',
         '[U+05D0]',
         'Latin, Greek and Cyrillic text shows normally',
-        'The Ko-fi button at the top of the page is the only link to another website',
-        'does nothing until you click it',
-        'opens Ko-fi in a new tab',
-        'sends nothing about your emails',
         'not legal advice',
       ]) {
         expect(text).toContain(phrase);

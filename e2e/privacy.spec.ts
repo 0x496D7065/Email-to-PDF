@@ -115,8 +115,7 @@ test('the panel is the first Tab stop after the header top row, opens and closes
   // The panel's headings are reachable by role, like the steps'.
   await expect(page.getByRole('heading', { level: 2, name: en.privacy.check.title })).toBeVisible();
 
-  // Readable: enough contrast, and no link (the repository link comes later;
-  // the Ko-fi button it mentions sits outside the panel).
+  // Readable: enough contrast, and no link (the repository link comes later).
   expect(await contrastFailures(page, '#privacy', 15)).toEqual([]);
   await expect(panel.locator('a')).toHaveCount(0);
 

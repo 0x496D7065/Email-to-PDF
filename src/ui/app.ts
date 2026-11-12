@@ -168,7 +168,7 @@ const PRIVACY_TOPICS: readonly PrivacyTopic[] = [
   {
     id: 'privacy-notes',
     title: 'privacy.notes.title',
-    points: ['privacy.notes.trust', 'privacy.notes.donate', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text'],
+    points: ['privacy.notes.trust', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text'],
     as: 'paragraphs',
   },
 ];

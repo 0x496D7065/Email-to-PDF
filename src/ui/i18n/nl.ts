@@ -28,7 +28,6 @@ export const nl: Messages = {
     promise: 'Alles blijft op uw computer.',
   },
 
-  // NEEDS USER PROOFREADING (task 8.16): the text below.
   donate: {
     label: 'Steun mij op Ko-fi (opent in een nieuw tabblad)',
   },
@@ -69,9 +68,6 @@ export const nl: Messages = {
       title: 'Goed om te weten',
       trust:
         'Uw vertrouwen hangt af van de code die deze site naar uw browser stuurt. Daarom is de code open source en kan iedereen hem controleren. Zoals bij elke website kan de site waarop deze pagina staat zien dat de pagina is geladen, maar nooit uw e-mails.',
-      // NEEDS USER PROOFREADING (task 8.16): the text below.
-      donate:
-        'De Ko-fi-knop bovenaan de pagina is de enige link naar een andere website. Het is een gewone link die niets doet tot u erop klikt. Dan opent hij Ko-fi in een nieuw tabblad, en hij stuurt niets over uw e-mails door.',
       console:
         'De ontwikkelaarstools van uw browser kunnen rode foutregels tonen waarin “Content Security Policy” staat. Dat is de browser die stijlen, scripts of links weigert, bijvoorbeeld die uit uw e-mails: de beveiliging werkt. Niets uit uw e-mails is uitgevoerd of geladen.',
       scripts:

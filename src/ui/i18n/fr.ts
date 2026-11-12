@@ -27,7 +27,6 @@ export const fr: Messages = {
     promise: 'Tout reste sur votre ordinateur.',
   },
 
-  // NEEDS USER PROOFREADING (task 8.16): the text below.
   donate: {
     label: 'Soutenez-moi sur Ko-fi (s’ouvre dans un nouvel onglet)',
   },
@@ -69,9 +68,6 @@ export const fr: Messages = {
       title: 'Bon à savoir',
       trust:
         'Votre confiance dépend du code que ce site envoie à votre navigateur. C’est pourquoi ce code est open source et peut être vérifié. Comme tout site web, le site qui héberge cette page peut voir que la page a été chargée, mais jamais vos e-mails.',
-      // NEEDS USER PROOFREADING (task 8.16): the text below.
-      donate:
-        'Le bouton Ko-fi en haut de la page est le seul lien vers un autre site web. C’est un lien ordinaire, qui ne fait rien tant que vous ne cliquez pas dessus. Il ouvre alors Ko-fi dans un nouvel onglet, et il n’envoie rien qui concerne vos e-mails.',
       console:
         'Les outils de développement de votre navigateur peuvent afficher des lignes d’erreur rouges qui mentionnent une «\u00A0Content Security Policy\u00A0». C’est le navigateur qui refuse des styles, des scripts ou des liens, par exemple ceux trouvés dans vos e-mails\u00A0: la protection fonctionne. Rien de ce que contiennent vos e-mails n’a été exécuté ni chargé.',
       scripts:
