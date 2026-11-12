@@ -35,6 +35,7 @@ export const PARSE_WARNINGS = [
   'html-body-unreadable',
   'html-body-truncated',
   'rtf-only-body',
+  'text-encoding-uncertain',
   'html-converted-body',
   'forwarded-message-not-expanded',
   'no-body',

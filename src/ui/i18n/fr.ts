@@ -357,6 +357,7 @@ export const fr: Messages = {
       'html-body-truncated': 'Cet e-mail est très long, son texte a donc été coupé ici. Le texte complet se trouve toujours dans le fichier d’origine.',
       'html-body-unreadable': 'Une partie de cet e-mail n’a pas pu être affichée (la version mise en forme n’a pas pu être lue).',
       'rtf-only-body': 'Le texte de cet e-mail est enregistré dans un format qui ne peut pas être affiché ici.',
+      'text-encoding-uncertain': 'Certaines lettres de cet e-mail peuvent être mal affichées (son jeu de caractères n’est pas certain). L’original reste dans le fichier.',
       'no-body': 'Cet e-mail n’a pas de texte.',
       'forwarded-message-not-expanded': 'Un e-mail transféré à l’intérieur de celui-ci est listé comme pièce jointe. Son texte n’est pas affiché.',
     },

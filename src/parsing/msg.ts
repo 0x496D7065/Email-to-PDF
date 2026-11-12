@@ -15,8 +15,18 @@
 // - Attachments are reduced to name, size and type. Their contents are never
 //   read (msgreader's getAttachment() is never called), and the result holds
 //   no reference to any content bytes.
+//   The one exception (a user decision, 2026-11-10, task 8.13b-2) is an
+//   Outlook item attached as an item (an e-mail forwarded "as attachment"):
+//   msgreader already reads its properties along with the file's own
+//   (`innerMsgContentFields`), and this adapter turns them into an
+//   AttachedMessage of its own (ParseResult.attached) with the same rules
+//   and limits as a dropped file (HTML only through the injected inert
+//   `htmlToText`), see readAttachedItems. Its text never joins the parent's
+//   bodyText. Every other attachment type (PDF, Office documents, images,
+//   ...) is never read, only listed.
 
 import MsgReaderImport, { type FieldsData } from '@kenjiuno/msgreader';
+import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
 import { encodingForCodepage } from './codepages';
 import { parseEmailDate } from './date';
 import { sha256Hex } from './hash';
@@ -26,6 +36,7 @@ import { parseIdList, parseSingleId } from './ids';
 import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
 import type {
+  AttachedMessage,
   AttachmentInfo,
   EmailAddress,
   EmailDate,
@@ -81,6 +92,41 @@ const OUTLOOK_ITEM_MIME_TYPE = 'application/vnd.ms-outlook';
  */
 const FALLBACK_ANSI_ENCODING = 'windows-1252';
 
+/**
+ * How many times the whole file may be read again, each time with another
+ * 8-bit text encoding, for attached Outlook items whose code page differs
+ * from the one the file was read with (see readAttachedItems). Each read
+ * costs a full parse of the file, so this bounds the work; real files rarely
+ * mix more than two code pages. An item that would need one more read is
+ * read with the encoding at hand and gets 'text-encoding-uncertain'.
+ *
+ * Memory: every read is kept until the file is done (the file's own read plus
+ * up to this many more, so at most 5 full msgreader results at once). That is
+ * acceptable because a dropped file is at most 50 MB (MAX_FILE_BYTES,
+ * parse-files.ts) and parsing runs in an isolated worker that is terminated
+ * at its time limit (PARSE_TIMEOUT_MS, worker-runner.ts).
+ */
+const MAX_ENCODING_READS = 4;
+
+/**
+ * How the file's properties were read, and how to read them again (see
+ * readFields and readAttachedItems).
+ */
+export interface FieldReads {
+  /**
+   * The 8-bit text encoding the fields were read with; null for msgreader's
+   * default (each byte becomes the character with the same number), used
+   * when the file's own email has no 8-bit strings.
+   */
+  readonly encoding: string | null;
+  /**
+   * Reads the whole file again with another 8-bit text encoding. Absent when
+   * that is not possible (unit tests that hand crafted msgreader output to
+   * resultFromFields).
+   */
+  readonly reread?: (encoding: string) => FieldsData;
+}
+
 /** Creates the .msg parser. `htmlToText` is injected, see MsgParserOptions. */
 export function createMsgParser(options: MsgParserOptions): EmailParser {
   return { parse: (file) => parseMsg(file, options) };
@@ -92,8 +138,8 @@ async function parseMsg(file: InputFile, options: MsgParserOptions): Promise<Par
   let sha256: string | null = null;
   try {
     sha256 = await sha256Hex(file.bytes);
-    const fields = readFields(file.bytes);
-    return resultFromFields(fields, file.name, sha256, options);
+    const { fields, reads } = readFields(file.bytes);
+    return resultFromFields(fields, file.name, sha256, options, reads);
   } catch (error) {
     // A TypeError or RangeError here comes from inside msgreader: a damaged
     // or cut-off file makes it look up a part of the file that is not there
@@ -106,18 +152,27 @@ async function parseMsg(file: InputFile, options: MsgParserOptions): Promise<Par
  * Turns msgreader's result into a ParseResult. Exported for unit tests, which
  * hand it crafted msgreader output (for example damaged, wrongly typed
  * properties). Never throws: any failure becomes a 'corrupt' result.
+ *
+ * The file's own email is built first, exactly as before attached items were
+ * read; then the attached Outlook items (readAttachedItems), which can never
+ * make the file fail. `reads` says how `fields` was read (default: with
+ * msgreader's default encoding, no second read possible).
  */
 export function resultFromFields(
   fields: FieldsData,
   fileName: string,
   sha256: string,
   options: MsgParserOptions,
+  reads: FieldReads = { encoding: null },
 ): ParseResult {
   const corrupt = (detail: string): ParseResult => ({ ok: false, error: 'corrupt', detail, fileName, sha256 });
   try {
     if (fields.error !== undefined) return corrupt(shortDetail(String(fields.error)));
     if (!looksLikeMessage(fields)) return corrupt('not an Outlook message: no message properties found');
-    return { ok: true, message: buildMessage(fields, fileName, sha256, options) };
+    const message = buildMessage(fields, { fileName, sha256, kind: 'msg' }, options);
+    const attached = readAttachedItems(fields, reads, { fileName, sha256 }, options);
+    // No `attached` key at all when the file holds no readable attached item.
+    return attached.length === 0 ? { ok: true, message } : { ok: true, message, attached };
   } catch (error) {
     return corrupt(errorDetail(error, 'unexpected value type'));
   }
@@ -135,26 +190,45 @@ export function resultFromFields(
  *
  * `includeRawProps` keeps every property, also the ones msgreader does not
  * name (In-Reply-To, References, the "sent representing" sender).
+ *
+ * Only the file's own email decides the encoding here. msgreader reads the
+ * attached Outlook items in the same pass, with the same encoding; one whose
+ * code page differs is handled later with `reads.reread` (see
+ * readAttachedItems).
  */
-function readFields(bytes: Uint8Array): FieldsData {
+function readFields(bytes: Uint8Array): { fields: FieldsData; reads: FieldReads } {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const reread = (encoding: string): FieldsData => {
+    const reader = new MsgReader(view);
+    reader.parserConfig = { includeRawProps: true, ansiEncoding: encoding };
+    return reader.getFileData();
+  };
   const first = new MsgReader(view);
   first.parserConfig = { includeRawProps: true };
   const fields = first.getFileData();
-  if (fields.error !== undefined || !hasAnsiStrings(fields)) return fields;
+  if (fields.error !== undefined || !hasAnsiStrings(fields)) return { fields, reads: { encoding: null, reread } };
 
-  // PidTagMessageCodepage is the code page of the 8-bit strings;
-  // PidTagInternetCodepage (the body's code page) is the next best hint.
-  const encoding =
-    encodingForCodepage(fields.messageCodepage) ??
-    encodingForCodepage(fields.internetCodepage) ??
-    FALLBACK_ANSI_ENCODING;
-  const second = new MsgReader(view);
-  second.parserConfig = { includeRawProps: true, ansiEncoding: encoding };
-  return second.getFileData();
+  const encoding = ansiEncodingOf(fields) ?? FALLBACK_ANSI_ENCODING;
+  return { fields: reread(encoding), reads: { encoding, reread } };
 }
 
-/** True if the message, a recipient or an attachment has an 8-bit string property. */
+/**
+ * The encoding named by a message's own code page properties, or null if it
+ * names none the browser can decode. PidTagMessageCodepage is the code page
+ * of the 8-bit strings; PidTagInternetCodepage (the body's code page) is the
+ * next best hint. Both are numbers, so they read the same whatever encoding
+ * the strings were read with.
+ */
+function ansiEncodingOf(fields: FieldsData): string | null {
+  return encodingForCodepage(fields.messageCodepage) ?? encodingForCodepage(fields.internetCodepage);
+}
+
+/**
+ * True if the message, a recipient or an attachment has an 8-bit string
+ * property. Not the properties of an attached Outlook item: msgreader keeps
+ * those apart (innerMsgContentFields), and each item is checked on its own
+ * (see readAttachedItems).
+ */
 function hasAnsiStrings(fields: FieldsData): boolean {
   const all = [fields, ...(fields.recipients ?? []), ...(fields.attachments ?? [])];
   return all.some((f) => (f.rawProps ?? []).some((p) => p.propertyTag?.endsWith('001e') === true));
@@ -176,13 +250,12 @@ function looksLikeMessage(fields: FieldsData): boolean {
   );
 }
 
-/** Copies what we need out of msgreader's result into a NormalizedMessage. */
-function buildMessage(
-  fields: FieldsData,
-  fileName: string,
-  sha256: string,
-  options: MsgParserOptions,
-): NormalizedMessage {
+/**
+ * Copies what we need out of msgreader's result into a NormalizedMessage:
+ * the file's own email, or an attached Outlook item's (see
+ * readAttachedItems), with the same rules.
+ */
+function buildMessage(fields: FieldsData, source: NormalizedMessage['source'], options: MsgParserOptions): NormalizedMessage {
   const headers = asString(fields.headers) ?? '';
   const messageId = parseSingleId(asString(fields.messageId) ?? headerValue(headers, 'message-id'));
   const date = readDate(fields, headers);
@@ -194,6 +267,9 @@ function buildMessage(
   if (messageId === null) warnings.push('missing-message-id');
   // Like the .eml adapter: an attached e-mail whose text is not part of
   // bodyText is flagged, so the preview can say that some text is missing.
+  // Still given now that the item is also read as an AttachedMessage of its
+  // own: its text is still not in THIS email's bodyText, and the output of
+  // the file's own email stays exactly what it was (task 8.13b-2).
   if (attachments.some((a) => a.innerMsgContent === true)) warnings.push('forwarded-message-not-expanded');
 
   return {
@@ -213,9 +289,331 @@ function buildMessage(
     subject: asString(fields.subject) ?? '',
     bodyText: body.text,
     attachments: attachments.map(attachmentInfo),
-    source: { fileName, sha256, kind: 'msg' },
+    source,
     warnings,
   };
+}
+
+/** One attached Outlook item that was read, while the file is still being read (see readAttachedItems). */
+interface ItemNode {
+  readonly message: NormalizedMessage;
+  /** Its own attached Outlook items, in attachment-list order. */
+  readonly children: ItemSlot[];
+}
+
+/** One attached Outlook item of an email: read (node) or not (null: too deep, over the budget, unreadable, or nothing to show). */
+interface ItemSlot {
+  /** Which attached Outlook item of its holder it is, from 1, in attachment-list order (see AttachedMessage.path). */
+  readonly number: number;
+  node: ItemNode | null;
+}
+
+/** An email whose attached Outlook items are still to be read (see readAttachedItems). */
+interface ItemHolder {
+  /** Its properties, as read by the read made with `readEncoding`. */
+  readonly fields: FieldsData;
+  /** Where it sits in msgreader's result: its index in `attachments` at each level, [] for the file's own email. */
+  readonly at: readonly number[];
+  /** The encoding the read that `fields` comes from used (see FieldReads.encoding). */
+  readonly readEncoding: string | null;
+  /**
+   * The encoding an item inside it that names no code page is read with:
+   * the nearest PidTagMessageCodepage (the code page of 8-bit strings) from
+   * this email up, else FALLBACK_ANSI_ENCODING. Never taken from
+   * PidTagInternetCodepage, which describes the body and is often UTF-8:
+   * UTF-8 turns 8-bit accented letters into U+FFFD, losing them.
+   */
+  readonly inheritedEncoding: string;
+  /** 0 for the file's own email, then one more per level. */
+  readonly depth: number;
+  /** Its AttachedMessage.path ([] for the file's own email). */
+  readonly path: readonly number[];
+  /** Where its items go. */
+  readonly slots: ItemSlot[];
+}
+
+/**
+ * Reads the Outlook items attached as items (an e-mail forwarded "as
+ * attachment", innerMsgContent) as emails of their own: ParseResult.attached,
+ * flat, depth first in attachment-list order. User decision 2026-11-10 (an
+ * exception to README.md rule R4): an attached e-mail is read with the same
+ * rules and limits as a dropped file; every other attachment type is never
+ * read, only listed.
+ *
+ * Method: msgreader already reads an attached item's properties in the same
+ * pass as the file's own (`innerMsgContentFields`, at any depth); they go
+ * through buildMessage, exactly like the file's own. No attachment content
+ * is extracted (getAttachment() is never called) and nothing is parsed
+ * again from bytes, except the whole file for an encoding, see below.
+ *
+ * The file's own email is not changed in any way: an item is still listed
+ * in its attachments (as before, with 'forwarded-message-not-expanded'), its
+ * text never joins the parent's bodyText, and so it has no places (`places`
+ * is always []) and no attachment line is marked with an attachedIndex.
+ *
+ * Only emails are read (isEmailItem: message class IPM.Note or IPM.Note.*;
+ * user decision 2026-11-12). Any other Outlook item (calendar item, contact,
+ * task, ...) or one with no message class stays listed only, and the items
+ * inside it are not reached. It does not use up the MAX_EXPANDED_FORWARDS
+ * budget (it is not read), but it keeps its number: `path` counts every
+ * Outlook item attachment of the holder, read or not, so [2] is always the
+ * holder's second Outlook item line.
+ *
+ * Limits, shared with the .eml adapter (attached-limits.ts):
+ * - MAX_FORWARD_DEPTH: items up to that many levels down are read; deeper
+ *   ones stay listed in the item holding them and get no AttachedMessage.
+ * - MAX_EXPANDED_FORWARDS: how many items are read per file, all levels
+ *   together, counted before an item is read (an unreadable one counts too).
+ *   Items are read level by level, in attachment-list order, like the .eml
+ *   adapter's emails sent as attachments (eml.ts, readDeferred).
+ * An item over a limit, unreadable (any error while reading it), not an
+ * Outlook message, or with nothing to show (no body, no subject, no sender,
+ * no recipient, no date and no attachment) gets no AttachedMessage: it stays
+ * listed in its holder, and the file still loads.
+ *
+ * 8-bit ("ANSI") text: msgreader reads the whole file, items included, with
+ * ONE encoding (the file's own email's, see readFields). Each item is
+ * checked on its own (hasAnsiStrings): one with 8-bit strings is read with
+ * its own PidTagMessageCodepage; without one, with its
+ * PidTagInternetCodepage if that is not a Unicode encoding (eightBitEncoding:
+ * UTF-8 would turn 8-bit accented letters into U+FFFD); else with the one it
+ * inherits (see ItemHolder.inheritedEncoding; windows-1252 at worst, which
+ * decodes every byte). This is stricter than the file's own email
+ * (ansiEncodingOf), which is left exactly as it was. When that differs from
+ * the encoding its properties were read with, the whole file is read again
+ * with that encoding (`reads.reread`, cached, at most MAX_ENCODING_READS
+ * times) and the item's properties are taken from that read, at the same
+ * place. The item gets 'text-encoding-uncertain' when its text may still be
+ * wrongly decoded: it has 8-bit strings but no usable PidTagMessageCodepage
+ * (the encoding is a guess), the read it needed was not possible, or its
+ * text comes from an HTML body stored as bytes while it names no usable code
+ * page at all (htmlFromBytesWithoutCodepage).
+ *
+ * Never throws: an unexpected error here leaves the file with no attached
+ * items (they all stay listed), never a failed file.
+ */
+function readAttachedItems(
+  top: FieldsData,
+  reads: FieldReads,
+  file: { readonly fileName: string; readonly sha256: string },
+  options: MsgParserOptions,
+): AttachedMessage[] {
+  try {
+    // Every read by encoding (null: it failed); the file's own read included.
+    const byEncoding = new Map<string, FieldsData | null>();
+    if (reads.encoding !== null) byEncoding.set(reads.encoding, top);
+    let extraReads = 0;
+    const fieldsWith = (encoding: string): FieldsData | null => {
+      const known = byEncoding.get(encoding);
+      if (known !== undefined) return known;
+      if (reads.reread === undefined || extraReads >= MAX_ENCODING_READS) return null;
+      extraReads++;
+      let fields: FieldsData | null = null;
+      try {
+        const again = reads.reread(encoding);
+        if (again.error === undefined) fields = again;
+      } catch {
+        // Not expected for bytes that were read once already: handled as "not possible".
+      }
+      byEncoding.set(encoding, fields);
+      return fields;
+    };
+
+    let remaining = MAX_EXPANDED_FORWARDS;
+    const roots: ItemSlot[] = [];
+    const queue: ItemHolder[] = [
+      {
+        fields: top,
+        at: [],
+        readEncoding: reads.encoding,
+        inheritedEncoding: encodingForCodepage(top.messageCodepage) ?? FALLBACK_ANSI_ENCODING,
+        depth: 0,
+        path: [],
+        slots: roots,
+      },
+    ];
+    // An index, not shift(): the queue grows while it is read.
+    for (let q = 0; q < queue.length; q++) {
+      const holder = queue[q];
+      if (holder === undefined) continue;
+      const list = holder.fields.attachments ?? [];
+      let number = 0;
+      for (let index = 0; index < list.length; index++) {
+        if (list[index]?.innerMsgContent !== true) continue;
+        // Numbered before anything else is checked: a skipped item (not an
+        // email, too deep, over the budget, unreadable) keeps its number, so
+        // `path` stays "the n-th Outlook item line of its holder".
+        const slot: ItemSlot = { number: ++number, node: null };
+        holder.slots.push(slot);
+        if (!isEmailItem(list[index])) continue;
+        if (holder.depth >= MAX_FORWARD_DEPTH || remaining <= 0) continue;
+        remaining--;
+        const item = readAttachedItem(holder, index, slot.number, fieldsWith, file, options);
+        if (item === null) continue;
+        const node: ItemNode = { message: item.message, children: [] };
+        slot.node = node;
+        queue.push({ ...item.holder, depth: holder.depth + 1, slots: node.children });
+      }
+    }
+    return flattenItems(roots);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Reads one attached Outlook item of `holder` (its attachment number
+ * `index`), see readAttachedItems. null if it cannot be read or has nothing
+ * to show; never throws.
+ */
+function readAttachedItem(
+  holder: ItemHolder,
+  index: number,
+  number: number,
+  fieldsWith: (encoding: string) => FieldsData | null,
+  file: { readonly fileName: string; readonly sha256: string },
+  options: MsgParserOptions,
+): { message: NormalizedMessage; holder: Omit<ItemHolder, 'depth' | 'slots'> } | null {
+  try {
+    const first: unknown = holder.fields.attachments?.[index]?.innerMsgContentFields;
+    if (!isFieldsData(first) || first.error !== undefined || !looksLikeMessage(first)) return null;
+    let fields = first;
+    const at = [...holder.at, index];
+    const path = [...holder.path, number];
+    const own = encodingForCodepage(fields.messageCodepage);
+    const ansiEncoding = own ?? eightBitEncoding(encodingForCodepage(fields.internetCodepage)) ?? holder.inheritedEncoding;
+    const inheritedEncoding = own ?? holder.inheritedEncoding;
+    let readEncoding = holder.readEncoding;
+    let uncertain = false;
+    if (hasAnsiStrings(fields)) {
+      // Only PidTagMessageCodepage names the code page of 8-bit strings:
+      // without it, any choice is a guess.
+      uncertain = own === null;
+      if (ansiEncoding !== readEncoding) {
+        const again = fieldsWith(ansiEncoding);
+        const found = again === null ? undefined : fieldsAt(again, at);
+        if (found === undefined) {
+          uncertain = true;
+        } else {
+          fields = found;
+          readEncoding = ansiEncoding;
+        }
+      }
+    }
+    const built = buildMessage(fields, { ...file, kind: 'msg', attachedPath: [...path] }, options);
+    if (hasNothingToShow(built)) return null;
+    // An HTML body stored as bytes is decoded with the item's code page
+    // (htmlBody). msgreader loses both code page properties of an item with
+    // no recipients (its fixed-size properties are read from the wrong
+    // offset), and htmlBody then assumes UTF-8: 8-bit accented letters would
+    // silently become U+FFFD. Flagged, so the preview says so.
+    if (htmlFromBytesWithoutCodepage(fields, built)) uncertain = true;
+    const message = uncertain ? { ...built, warnings: [...built.warnings, 'text-encoding-uncertain' as const] } : built;
+    return { message, holder: { fields, at, readEncoding, inheritedEncoding, path } };
+  } catch {
+    // A damaged property, a value of the wrong type, ...: the item stays listed.
+    return null;
+  }
+}
+
+/** The properties of the attached item at `at` (see ItemHolder.at) in another read of the same file, if it is there. */
+function fieldsAt(fields: FieldsData, at: readonly number[]): FieldsData | undefined {
+  let current: FieldsData | undefined = fields;
+  for (const index of at) {
+    const attachment: FieldsData | undefined = current?.attachments?.[index];
+    if (attachment?.innerMsgContent !== true) return undefined;
+    current = attachment.innerMsgContentFields;
+  }
+  return isFieldsData(current) ? current : undefined;
+}
+
+/**
+ * The encoding, if it can be the code page of 8-bit strings; null for a
+ * Unicode encoding (UTF-8, UTF-16). Used for PidTagInternetCodepage, the
+ * body's code page, which is often UTF-8 even when the 8-bit strings are in a
+ * Windows code page: reading them as UTF-8 turns accented letters into
+ * U+FFFD, losing them, while a Windows code page decodes every byte.
+ */
+function eightBitEncoding(encoding: string | null): string | null {
+  return encoding === null || encoding.startsWith('utf-') ? null : encoding;
+}
+
+/**
+ * True if the item's body text was converted from an HTML body stored as
+ * bytes (PidTagHtml) while it names no usable code page, so htmlBody had to
+ * assume UTF-8.
+ */
+function htmlFromBytesWithoutCodepage(fields: FieldsData, message: NormalizedMessage): boolean {
+  return (
+    message.warnings.includes('html-converted-body') &&
+    fields.bodyHtml === undefined &&
+    fields.html instanceof Uint8Array &&
+    encodingForCodepage(fields.internetCodepage) === null &&
+    encodingForCodepage(fields.messageCodepage) === null
+  );
+}
+
+/**
+ * True if an attached Outlook item is an email: its message class
+ * (PidTagMessageClass) is IPM.Note or IPM.Note.<anything> (signed, encrypted,
+ * ...), letter case ignored. User decision 2026-11-12 (task 8.13b-2): only
+ * emails are read as emails of their own; calendar items, contacts, tasks,
+ * notes, reports (REPORT.IPM.Note.*), ... stay listed only, and so do the
+ * items attached inside them. An item with no message class, or one that is
+ * not a string, is NOT read (the safe side): Outlook always writes one, so
+ * its absence means a damaged or unusual item, and it stays listed. Never
+ * throws.
+ */
+function isEmailItem(attachment: FieldsData | undefined): boolean {
+  try {
+    const inner: unknown = attachment?.innerMsgContentFields;
+    if (!isFieldsData(inner)) return false;
+    const messageClass = asString(inner.messageClass)?.toLowerCase();
+    return messageClass === 'ipm.note' || messageClass?.startsWith('ipm.note.') === true;
+  } catch {
+    return false;
+  }
+}
+
+function isFieldsData(value: unknown): value is FieldsData {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * True if an attached item holds nothing at all to show: no body, and no
+ * subject, sender, recipient, date or attachment. Like the .eml adapter's
+ * rule for an attached email with no body and no header lines (eml.ts,
+ * readAttachedEmail): no empty email is made of it.
+ */
+function hasNothingToShow(message: NormalizedMessage): boolean {
+  return (
+    message.warnings.includes('no-body') &&
+    message.subject === '' &&
+    message.from.length === 0 &&
+    message.sender === undefined &&
+    message.to.length === 0 &&
+    message.cc.length === 0 &&
+    message.bcc.length === 0 &&
+    message.date.utcMs === null &&
+    message.date.original === '' &&
+    message.attachments.length === 0
+  );
+}
+
+/** The tree of items that were read, as the flat ParseResult.attached list: depth first, attachment-list order. */
+function flattenItems(roots: readonly ItemSlot[]): AttachedMessage[] {
+  const attached: AttachedMessage[] = [];
+  const walk = (slots: readonly ItemSlot[], parent: number): void => {
+    for (const { node } of slots) {
+      if (node === null) continue;
+      const index = attached.length;
+      const path = [...(node.message.source.attachedPath ?? [])];
+      attached.push({ message: node.message, parent, places: [], path });
+      walk(node.children, index);
+    }
+  };
+  walk(roots, -1);
+  return attached;
 }
 
 /** A string property from msgreader's raw list, by its 4-hex-digit id (Unicode or 8-bit). */
@@ -518,9 +916,10 @@ function htmlBody(fields: FieldsData): string | undefined {
  *   attached Outlook item, else 'application/octet-stream'.
  *
  * An attached Outlook item (for example a message forwarded "as
- * attachment") is listed, not expanded: its own text and attachments are not
- * read here, so they are NOT in the message's bodyText. buildMessage flags
- * that with 'forwarded-message-not-expanded'.
+ * attachment") is listed, not expanded: its own text and attachments are
+ * NOT in the message's bodyText. buildMessage flags that with
+ * 'forwarded-message-not-expanded'. The item is read as an email of its own
+ * apart from this list (see readAttachedItems).
  */
 function attachmentInfo(attachment: FieldsData): AttachmentInfo {
   const isOutlookItem = attachment.innerMsgContent === true;

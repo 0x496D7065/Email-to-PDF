@@ -27,6 +27,7 @@
 //   only listed.
 
 import { addressParser, decodeWords, type Address, type Attachment, type Email, type PostalMimeOptions } from 'postal-mime';
+import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
 import { parseEmailDate } from './date';
 import { parseEmlTree, PostalMimeInternalsError, type EmlPart, type EmlTree } from './eml-tree';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
@@ -98,28 +99,25 @@ const POSTAL_MIME_OPTIONS: PostalMimeOptions = {
   attachmentEncoding: 'arraybuffer',
 };
 
-/**
- * How many levels of attached emails are read (inline ones expanded into
- * the body, ones sent as attachments read on their own), both kinds counted
- * together. Deeper inline ones are listed as attachments with a
- * 'forwarded-message-not-expanded' warning: their text stays in the
- * original file, nothing is lost silently. Deeper ones sent as attachments
- * stay listed, as they always were, and get no AttachedMessage.
- * Each attached email's bodyText also holds its inline descendants' blocks,
- * so text in memory grows by up to this factor (bounded).
- */
-const MAX_FORWARD_DEPTH = 5;
-
-/**
- * How many attached emails are read per file, all levels and both kinds
- * together. Each one is a full parse of its bytes, so this bounds the work a
- * hostile file can cause. Inline ones are read first, in file order, then
- * the ones sent as attachments (see readDeferred), so these never take the
- * place of a block printed in a body. Inline ones over the budget are listed
- * as attachments with a 'forwarded-message-not-expanded' warning; ones sent
- * as attachments stay listed and get no AttachedMessage.
- */
-const MAX_EXPANDED_FORWARDS = 200;
+// The limits on attached emails, MAX_FORWARD_DEPTH and MAX_EXPANDED_FORWARDS
+// (attached-limits.ts, shared with the .msg adapter), apply here like this:
+// - MAX_FORWARD_DEPTH: how many levels of attached emails are read (inline
+//   ones expanded into the body, ones sent as attachments read on their
+//   own), both kinds counted together. Deeper inline ones are listed as
+//   attachments with a 'forwarded-message-not-expanded' warning: their text
+//   stays in the original file, nothing is lost silently. Deeper ones sent
+//   as attachments stay listed, as they always were, and get no
+//   AttachedMessage. Each attached email's bodyText also holds its inline
+//   descendants' blocks, so text in memory grows by up to this factor
+//   (bounded).
+// - MAX_EXPANDED_FORWARDS: how many attached emails are read per file, all
+//   levels and both kinds together. Each one is a full parse of its bytes,
+//   so this bounds the work a hostile file can cause. Inline ones are read
+//   first, in file order, then the ones sent as attachments (see
+//   readDeferred), so these never take the place of a block printed in a
+//   body. Inline ones over the budget are listed as attachments with a
+//   'forwarded-message-not-expanded' warning; ones sent as attachments stay
+//   listed and get no AttachedMessage.
 
 /** Parses still allowed for the file being parsed (see MAX_EXPANDED_FORWARDS). */
 interface ForwardBudget {

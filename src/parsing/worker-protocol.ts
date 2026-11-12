@@ -86,7 +86,11 @@ export function isFromWorker(data: unknown): data is FromWorker {
  *   parent's parent, ...), and each one is a range of that holder's
  *   bodyText that starts with the forwarded separator line;
  * - an attachedIndex is an index of `attached`: on the file's own email any
- *   entry, on an attached email one of its descendants.
+ *   entry, on an attached email one of its descendants;
+ * - every entry's source has the file email's fileName, sha256 and kind;
+ * - in a .msg result (kind 'msg', task 8.13b-2) no entry has a place and no
+ *   attachment has an attachedIndex: an attached Outlook item is never
+ *   printed in another email's body.
  */
 export function hasWellFormedAttached(result: Record<string, unknown>): boolean {
   if (result.ok !== true) return !('attached' in result);
@@ -95,6 +99,8 @@ export function hasWellFormedAttached(result: Record<string, unknown>): boolean 
   if (!('attached' in result)) return attachmentsPointInto(message.attachments, () => false);
   const { attached } = result;
   if (!Array.isArray(attached) || attached.length === 0) return false;
+  const file = message.source;
+  const isMsg = file.kind === 'msg';
 
   const entries: { parent: number; path: readonly number[]; body: string }[] = [];
   const isAncestor = (ancestor: number, of: number): boolean => {
@@ -111,8 +117,9 @@ export function hasWellFormedAttached(result: Record<string, unknown>): boolean 
     if (!isPath(path) || path.length !== parentPath.length + 1 || parentPath.some((n, i) => path[i] !== n)) return false;
     if (!isPath(source.attachedPath) || source.attachedPath.length !== path.length) return false;
     if (source.attachedPath.some((n, i) => path[i] !== n)) return false;
+    if (source.fileName !== file.fileName || source.sha256 !== file.sha256 || source.kind !== file.kind) return false;
     entries.push({ parent, path, body: bodyText });
-    if (!Array.isArray(places)) return false;
+    if (!Array.isArray(places) || (isMsg && places.length !== 0)) return false;
     let holder: number | undefined = parent;
     for (const place of places as unknown[]) {
       if (!isRecord(place) || place.holder !== holder || holder === undefined) return false;
@@ -123,9 +130,9 @@ export function hasWellFormedAttached(result: Record<string, unknown>): boolean 
       holder = holder === -1 ? undefined : (entries[holder]?.parent ?? undefined);
     }
   }
-  if (!attachmentsPointInto(message.attachments, (target) => target < attached.length)) return false;
+  if (!attachmentsPointInto(message.attachments, (target) => !isMsg && target < attached.length)) return false;
   return attached.every((entry, index) =>
-    attachmentsPointInto((entry as { message: Record<string, unknown> }).message.attachments, (target) => isAncestor(index, target)),
+    attachmentsPointInto((entry as { message: Record<string, unknown> }).message.attachments, (target) => !isMsg && isAncestor(index, target)),
   );
 }
 

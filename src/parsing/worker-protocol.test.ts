@@ -7,7 +7,7 @@
 // is checked in Chromium by e2e/parse-files.spec.ts.
 
 import { describe, expect, it } from 'vitest';
-import { buildMsg } from '../../tests/fixtures/msg/builder';
+import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
 import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
 import { createEmlParser } from './eml';
 import { sha256Hex } from './hash';
@@ -147,7 +147,7 @@ describe('isFromWorker: attached emails (strict)', () => {
   interface LooseMessage {
     bodyText: unknown;
     attachments: unknown;
-    source: { attachedPath?: unknown };
+    source: { attachedPath?: unknown; fileName?: unknown; sha256?: unknown; kind?: unknown };
   }
   interface LoosePlace {
     holder: unknown;
@@ -208,8 +208,86 @@ describe('isFromWorker: attached emails (strict)', () => {
     ['an attachedIndex with no attached list', (r) => delete r.attached],
     ['attachments not a list', (r) => (entry(r, 1).message.attachments = 'c.eml')],
     ['a successful result without a message', (r) => delete r.message],
+    ['an entry with another file name', (r) => (entry(r, 1).message.source.fileName = 'other.eml')],
+    ['an entry with another hash', (r) => (entry(r, 1).message.source.sha256 = '0'.repeat(64))],
+    ['an entry of another kind', (r) => (entry(r, 1).message.source.kind = 'msg')],
   ])('rejects %s', async (_label, mutate) => {
     const result = structuredClone(await parsed()) as unknown as LooseResult;
+    mutate(result);
+    expect(isFromWorker({ type: 'result', result })).toBe(false);
+  });
+});
+
+/**
+ * A .msg file with attached Outlook items (task 8.13b-2): A (which holds
+ * A1, and a text file) and B, after an ordinary attachment.
+ */
+const ATTACHED_MSG_SPEC: MsgSpec = (() => {
+  const base: MsgSpec = {
+    id: 'proto-attached-msg',
+    description: 'attached Outlook items',
+    strings: 'unicode',
+    subject: 'Two attached items',
+    sender: { name: 'Alice Example', smtp: 'alice@example.test' },
+    recipients: [{ name: 'Bob Sample', smtp: 'bob@example.test', type: 'to' }],
+    bodyText: 'See the two emails.',
+    submitTime: '2025-06-06T08:00:00Z',
+    messageId: '<proto-attached-msg@example.test>',
+  };
+  const inner = (subject: string, extra: Partial<MsgSpec> = {}): MsgSpec => ({ ...base, subject, bodyText: `${subject} body.`, messageId: `<${subject}@example.test>`, ...extra });
+  return {
+    ...base,
+    attachments: [{ fileName: 'plan.txt', content: 'plan', mimeType: 'text/plain' }],
+    attachedItems: [
+      {
+        displayName: 'A',
+        message: inner('A', {
+          attachments: [{ fileName: 'notes.txt', content: 'notes' }],
+          attachedItems: [{ displayName: 'A1', message: inner('A1', { bodyText: undefined, bodyHtml: '<p>A1 body</p>' }) }],
+        }),
+      },
+      { displayName: 'B', message: inner('B') },
+    ],
+  };
+})();
+
+describe('isFromWorker: attached Outlook items in a .msg file (strict)', () => {
+  async function parsed(): Promise<ParseResult> {
+    return createMsgParser({ htmlToText: stubConverter }).parse({ name: 'a.msg', bytes: buildMsg(ATTACHED_MSG_SPEC) });
+  }
+
+  it('the real result is accepted, with the expected shape', async () => {
+    const result = await parsed();
+    expect(isFromWorker({ type: 'result', result })).toBe(true);
+    if (!result.ok) throw new Error(result.detail);
+    expect(result.attached?.map((e) => [e.message.subject, e.parent, e.path, e.places, e.message.source.kind])).toEqual([
+      ['A', -1, [1], [], 'msg'],
+      ['A1', 0, [1, 1], [], 'msg'],
+      ['B', -1, [2], [], 'msg'],
+    ]);
+  });
+
+  interface LooseMsgResult {
+    message: { attachments: Record<string, unknown>[]; source: Record<string, unknown> };
+    attached: { places: unknown[]; parent: unknown; message: { attachments: Record<string, unknown>[]; source: Record<string, unknown> } }[];
+  }
+  const entry = (r: LooseMsgResult, i: number): LooseMsgResult['attached'][number] => {
+    const value = r.attached[i];
+    if (value === undefined) throw new Error(`nothing at ${String(i)}`);
+    return value;
+  };
+
+  it.each<[string, (r: LooseMsgResult) => void]>([
+    // An attached Outlook item is never printed in a body, so it can have no place.
+    ['a place', (r) => entry(r, 0).places.push({ holder: -1, start: 0, end: 0 })],
+    ['an attachedIndex on the file email', (r) => r.message.attachments.push({ fileName: 'x', size: 1, mimeType: 'x/y', attachedIndex: 1 })],
+    ['an attachedIndex on an attached item, to its descendant', (r) => entry(r, 0).message.attachments.push({ fileName: 'x', size: 1, mimeType: 'x/y', attachedIndex: 1 })],
+    ['an entry of another kind', (r) => (entry(r, 2).message.source.kind = 'eml')],
+    ['an entry with another hash', (r) => (entry(r, 2).message.source.sha256 = '0'.repeat(64))],
+    ['an entry whose parent is not earlier', (r) => (entry(r, 1).parent = 2)],
+    ['an entry without its attachedPath', (r) => delete entry(r, 1).message.source.attachedPath],
+  ])('rejects %s', async (_label, mutate) => {
+    const result = structuredClone(await parsed()) as unknown as LooseMsgResult;
     mutate(result);
     expect(isFromWorker({ type: 'result', result })).toBe(false);
   });
@@ -337,6 +415,8 @@ describe('round trip: runInWorker + createWorkerSide', () => {
     ['on-behalf .eml with Bcc', 'on-behalf.eml', 'eml', () => encode(ON_BEHALF_EML)],
     // HTML only inside an email sent as an attachment: recorded and replayed too.
     ['.eml with attached emails', 'attached.eml', 'eml', () => encode(ATTACHED_EML)],
+    // HTML only inside an attached Outlook item: recorded and replayed too.
+    ['.msg with attached Outlook items', 'attached.msg', 'msg', () => buildMsg(ATTACHED_MSG_SPEC)],
     ...MSG_SPECS.map((spec) => [spec.id, `${spec.id}.msg`, 'msg', () => buildMsg(spec)] as const),
   ] as const)('%s gives exactly the result of a direct parse', async (_label, name, kind, make) => {
     const direct = await (kind === 'eml' ? createEmlParser({ htmlToText: stubConverter }) : createMsgParser({ htmlToText: stubConverter })).parse({

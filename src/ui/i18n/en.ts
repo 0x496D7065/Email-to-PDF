@@ -510,6 +510,7 @@ export const en = {
       'html-body-truncated': 'This email is very long, so its text was cut short here. The full text is still in the original file.',
       'html-body-unreadable': 'Part of this email could not be shown (the formatted version could not be read).',
       'rtf-only-body': 'The text of this email is saved in a format that cannot be shown here.',
+      'text-encoding-uncertain': 'Some letters in this email may be shown wrongly (its character set is not certain). The original is still in the file.',
       'no-body': 'This email has no text.',
       'forwarded-message-not-expanded': 'A forwarded email inside this one is listed as an attachment. Its text is not shown.',
     } satisfies Record<ParseWarning, string>,

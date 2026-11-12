@@ -358,6 +358,7 @@ export const nl: Messages = {
       'html-body-truncated': 'Deze e-mail is erg lang, dus de tekst is hier ingekort. De volledige tekst staat nog in het originele bestand.',
       'html-body-unreadable': 'Een deel van deze e-mail kon niet worden getoond (de opgemaakte versie kon niet worden gelezen).',
       'rtf-only-body': 'De tekst van deze e-mail is opgeslagen in een formaat dat hier niet kan worden getoond.',
+      'text-encoding-uncertain': 'Sommige letters in deze e-mail kunnen verkeerd worden getoond (de tekenset is niet zeker). Het origineel staat nog in het bestand.',
       'no-body': 'Deze e-mail heeft geen tekst.',
       'forwarded-message-not-expanded': 'Een doorgestuurde e-mail in deze e-mail staat in de lijst als bijlage. De tekst ervan wordt niet getoond.',
     },

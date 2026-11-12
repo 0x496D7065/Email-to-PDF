@@ -66,6 +66,8 @@ export interface MsgSpec {
    *   characters while browsers map them to symbols such as the euro sign.
    */
   readonly strings: 'unicode' | 'ansi-1252';
+  /** PR_MESSAGE_CLASS (0x001A). Default 'IPM.Note'; null leaves the property out. */
+  readonly messageClass?: string | null;
   readonly subject: string;
   /** The actual sender (PR_SENDER_*: who pressed Send). */
   readonly sender: MsgMailboxSpec;
@@ -96,10 +98,10 @@ export interface MsgSpec {
   readonly attachments?: readonly MsgAttachmentSpec[];
   /**
    * Outlook items attached as items (ATTACH_EMBEDDED_MSG), written after
-   * `attachments`: a display name on the attachment and a tiny inner message
-   * that has only a subject.
+   * `attachments`, each with a display name on the attachment. See
+   * MsgAttachedItemSpec for the inner message.
    */
-  readonly attachedItems?: readonly { readonly displayName: string; readonly subject: string }[];
+  readonly attachedItems?: readonly MsgAttachedItemSpec[];
   /**
    * ASCII RTF text, stored as PR_RTF_COMPRESSED (0x10090102) in its
    * "uncompressed" container form (compression type "MELA", see
@@ -123,6 +125,21 @@ export interface MsgSpec {
    */
   readonly extraBinaries?: readonly { readonly propId: number; readonly bytes: Uint8Array }[];
 }
+
+/**
+ * One attached Outlook item:
+ * - with `subject`: a tiny inner message that has only a message class and
+ *   that subject (its properties stream holds no fixed-size property);
+ * - with `message`: a full inner message written from that spec exactly like
+ *   a top-level one (its own string mode, recipients, attachments and
+ *   attached items, so items can nest), except that its properties stream
+ *   has the 24-byte header of an embedded message ([MS-OXMSG] 2.4.1,
+ *   "embedded message object storage").
+ *   The spec's `id` and `description` are not written.
+ */
+export type MsgAttachedItemSpec =
+  | { readonly displayName: string; readonly subject: string }
+  | { readonly displayName: string; readonly message: MsgSpec };
 
 // ---------------------------------------------------------------- encoding
 
@@ -212,7 +229,9 @@ interface FixedProp {
 function propertiesStream(headerSize: 8 | 24 | 32, props: readonly FixedProp[], counts?: { recipients: number; attachments: number }): Uint8Array {
   const out = new Uint8Array(headerSize + 16 * props.length);
   const view = new DataView(out.buffer);
-  if (headerSize === 32 && counts) {
+  // The 24-byte header of an embedded message has the same four counts at
+  // the same offsets ([MS-OXMSG] 2.4.1).
+  if (headerSize !== 8 && counts) {
     view.setUint32(8, counts.recipients, true); // next recipient id
     view.setUint32(12, counts.attachments, true); // next attachment id
     view.setUint32(16, counts.recipients, true); // recipient count
@@ -279,11 +298,20 @@ const CODEPAGE_1252 = 1252;
 
 /** Builds the bytes of one synthetic .msg file from its spec. */
 export function buildMsg(spec: MsgSpec): Uint8Array {
-  const mode = spec.strings;
   const root = newFolder();
+  writeMessage(root, spec, 32);
+  return burn(toEntries(root));
+}
+
+/**
+ * Writes one message into `root`: the file's own message (headerSize 32) or
+ * the inner message of an attached Outlook item (headerSize 24).
+ */
+function writeMessage(root: Folder, spec: MsgSpec, headerSize: 24 | 32): void {
+  const mode = spec.strings;
   const fixed: FixedProp[] = [];
 
-  putString(root, mode, 0x001a, 'IPM.Note'); // message class
+  if (spec.messageClass !== null) putString(root, mode, 0x001a, spec.messageClass ?? 'IPM.Note'); // message class
   putString(root, mode, 0x0037, spec.subject);
   putString(root, mode, 0x6800, SYNTHETIC_MARKER_VALUE); // synthetic marker (see top of file)
 
@@ -367,9 +395,13 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
     const folder = newFolder();
     putString(folder, mode, 0x3001, item.displayName); // PR_DISPLAY_NAME
     const inner = newFolder();
-    putString(inner, mode, 0x001a, 'IPM.Note');
-    putString(inner, mode, 0x0037, item.subject);
-    inner.streams.set('__properties_version1.0', propertiesStream(24, []));
+    if ('message' in item) {
+      writeMessage(inner, item.message, 24);
+    } else {
+      putString(inner, mode, 0x001a, 'IPM.Note');
+      putString(inner, mode, 0x0037, item.subject);
+      inner.streams.set('__properties_version1.0', propertiesStream(24, []));
+    }
     folder.folders.set('__substg1.0_3701000D', inner);
     folder.streams.set(
       '__properties_version1.0',
@@ -384,10 +416,8 @@ export function buildMsg(spec: MsgSpec): Uint8Array {
   const attachmentCount = attachments.length + items.length;
   root.streams.set(
     '__properties_version1.0',
-    propertiesStream(32, fixed, { recipients: spec.recipients.length, attachments: attachmentCount }),
+    propertiesStream(headerSize, fixed, { recipients: spec.recipients.length, attachments: attachmentCount }),
   );
-
-  return burn(toEntries(root));
 }
 
 /** The built bytes as the DataView/ArrayBuffer form msgreader's constructor accepts. */

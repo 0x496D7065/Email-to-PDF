@@ -80,7 +80,14 @@ export type ParseWarning =
   | 'no-body' // no body text found at all
   // A forwarded message whose text was not expanded (.eml: nested too deep or
   // unreadable; .msg: any attached Outlook item): listed as an attachment, not in bodyText.
-  | 'forwarded-message-not-expanded';
+  | 'forwarded-message-not-expanded'
+  // Some text may show wrong letters: it is stored as 8-bit ("ANSI") text
+  // whose character set (code page) could not be applied with certainty.
+  // Today only an attached Outlook item read from a .msg file gets it (see
+  // msg.ts, readAttachedItems): the item names no code page of its own, or
+  // the one it names could not be used. Nothing is dropped, every byte is
+  // still shown as some character.
+  | 'text-encoding-uncertain';
 
 /** One email in the normalized form. */
 export interface NormalizedMessage {
@@ -156,9 +163,12 @@ export interface AttachedPlace {
 }
 
 /**
- * An email attached inside the dropped .eml file (a message/rfc822 part,
- * inline or sent as an attachment, at any depth), read from its own headers
- * and parts with the same parser and limits as a dropped file.
+ * An email attached inside the dropped file, at any depth, read with the
+ * same parser and limits as a dropped file: in an .eml file a message/rfc822
+ * part (inline or sent as an attachment), read from its own headers and
+ * parts; in a .msg file an attached Outlook email (message class IPM.Note
+ * or IPM.Note.*; other Outlook items are only listed), read from its own
+ * properties (task 8.13b-2).
  */
 export interface AttachedMessage {
   readonly message: NormalizedMessage;
@@ -168,13 +178,17 @@ export interface AttachedMessage {
    * Its printed block in the body of every email that prints it, nearest
    * first: its parent, then the parent's parent while each one is itself
    * printed inline in the next. [] when it was sent as an attachment (it is
-   * then only listed by name in its parent).
+   * then only listed by name in its parent), and always [] in a .msg file:
+   * an attached Outlook item's text is never part of its parent's bodyText.
    */
   readonly places: readonly AttachedPlace[];
   /**
    * Its attachment numbers from the file's own email down: at each level,
-   * which message/rfc822 part of the email holding it this is, counted from
-   * 1 in file order (every message/rfc822 part counts, read or not).
+   * which attached email of the email holding it this is, counted from 1 in
+   * file order (.eml: every message/rfc822 part counts; .msg: every attached
+   * Outlook item counts, in the order of the holder's attachment list; read
+   * or not, an email or not, so a calendar item that is only listed still
+   * takes its number).
    */
   readonly path: readonly number[];
 }
@@ -213,9 +227,9 @@ export type ParseResult =
       readonly ok: true;
       readonly message: NormalizedMessage;
       /**
-       * .eml only: the emails attached inside this file, flat, depth first in
-       * file order (an email always comes before the ones attached inside
-       * it). No key when there are none.
+       * The emails attached inside this file (.eml and .msg), flat, depth
+       * first in file order (an email always comes before the ones attached
+       * inside it). No key when there are none.
        */
       readonly attached?: readonly AttachedMessage[];
     }
