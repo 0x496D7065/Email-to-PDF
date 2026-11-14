@@ -939,12 +939,17 @@ describe('PDF labels', () => {
     // A forwarded part of an unticked rebuilt email (task 8.13a, Q2): printed nowhere.
     const asUnticked = { ...asReal, printedAs: { kind: 'unticked' as const, id: 7 } };
     expect(pdfLabelText(asUnticked)).toBe('Not in the PDF: forwarded email whose rebuilt email is unticked');
+    // The printed block of an unticked attached email (task 8.13b-3, Q3): printed nowhere, named by its list number.
+    const asUntickedAttached = { ...asReal, printedAs: { kind: 'unticked-attached' as const, position: 3 } };
+    expect(pdfLabelText(asUntickedAttached)).toBe('Not in the PDF: email #4 (attached here) is unticked');
     setLocale('fr');
     try {
+      expect(pdfLabelText(asUntickedAttached)).toBe('Pas dans le PDF : l’e-mail #4 (joint ici) est décoché');
       expect(pdfLabelText(asReal)).toBe('Pas dans cet e-mail dans le PDF : imprimé comme e-mail #5');
       expect(pdfLabelText(asRebuilt)).toBe('Pas dans cet e-mail dans le PDF : imprimé comme e-mail reconstitué (E-mail 2 du PDF)');
       expect(pdfLabelText(asUnticked)).toBe('Pas dans le PDF : e-mail transféré dont l’e-mail reconstitué est décoché');
       setLocale('nl');
+      expect(pdfLabelText(asUntickedAttached)).toBe('Niet in de PDF: e-mail #4 (hier bijgevoegd) is niet aangevinkt');
       expect(pdfLabelText(asReal)).toBe('Niet in deze e-mail in de PDF: afgedrukt als e-mail #5');
       expect(pdfLabelText(asRebuilt)).toBe('Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail 2 in de PDF)');
       expect(pdfLabelText(asUnticked)).toBe('Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt');

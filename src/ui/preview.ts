@@ -283,7 +283,13 @@ export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly numbe
  * list number) or "... printed as a rebuilt email (Email 3 in the PDF)" (a
  * rebuilt email has no list number: its heading in the PDF); for a
  * forwarded part left out with its unticked rebuilt email (task 8.13a, Q2):
- * "Not in the PDF: forwarded email whose rebuilt email is unticked".
+ * "Not in the PDF: forwarded email whose rebuilt email is unticked"; for the
+ * printed block of an unticked attached email (task 8.13b-3, Q3): "Not in
+ * the PDF: email #4 (attached here) is unticked" (#4 may be the dropped
+ * file's copy it was merged into). The parts of the block of an attached
+ * email in the PDF that its own page prints read like a real file's:
+ * "... printed as email #4"; the parts its page does not print stay in
+ * this email, with their own label (review round 4 of task 8.13b-3).
  */
 export function pdfLabelText(label: PdfLabel): string {
   const printedAs = label.status === 'out' ? (label.printedAs ?? null) : null;
@@ -295,6 +301,8 @@ export function pdfLabelText(label: PdfLabel): string {
         return t('pdf.printedAs.rebuilt', { number: String(printedAs.number) });
       case 'unticked':
         return t('pdf.printedAs.unticked');
+      case 'unticked-attached':
+        return t('pdf.printedAs.untickedAttached', { number: messageNumberText(printedAs.position + 1) });
     }
   }
   const list = label.reasons.length === 0 ? ['text' as const] : label.reasons;

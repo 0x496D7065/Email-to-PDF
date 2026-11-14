@@ -93,8 +93,9 @@ export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fal
 /** One note of one email. */
 export type MessageNote =
   | { readonly kind: 'parse'; readonly code: ParseWarning }
-  // Placed after the dated emails, in file order (no usable date).
-  | { readonly kind: 'order'; readonly code: 'file-order' }
+  // No usable date: placed after the dated emails, in file order; or, an
+  // attached email, just before the email it is attached to (task 8.13b-3, Q7).
+  | { readonly kind: 'order'; readonly code: 'file-order' | 'before-parent' }
   | {
       readonly kind: 'dedupe';
       readonly code: DedupeWarningCode;
@@ -161,8 +162,8 @@ export function messageNotes(
   const parse = new Set<ParseWarning>(m.parserWarnings);
   for (const code of PARSE_WARNINGS) {
     if (parse.has(code)) notes.push({ kind: 'parse', code });
-    // The "placed at the end" note right after the date notes.
-    if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && m.order === 'file-order') notes.push({ kind: 'order', code: 'file-order' });
+    // The "placed at the end" (or "placed before the email it is attached to") note right after the date notes.
+    if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && (m.order === 'file-order' || m.order === 'before-parent')) notes.push({ kind: 'order', code: m.order });
   }
   for (const code of DEDUPE_WARNINGS) {
     for (const w of m.dedupeWarnings) {

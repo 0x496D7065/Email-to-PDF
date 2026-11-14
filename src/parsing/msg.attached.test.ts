@@ -96,11 +96,12 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
     });
   });
 
-  it('leaves the file\'s own email exactly as it was: listed item, warning, no text of the item', async () => {
+  it('leaves the file\'s own email as it was: listed item, no text of the item; no warning once the item is read (8.13b-3)', async () => {
     const result = await parseOk({ ...OUTER, attachedItems: [item(inner('A', { bodyText: 'INNER-BODY-MARKER' }))] });
     expect(result.message.bodyText).toBe('Outer body.');
     expect(result.message.attachments).toEqual([{ fileName: 'A.msg', size: null, mimeType: 'application/vnd.ms-outlook' }]);
-    expect(result.message.warnings).toEqual(['forwarded-message-not-expanded']);
+    expect(result.message.warnings).toEqual([]);
+    expect(entry(result, 0).name).toBe('A.msg');
     expect(result.message.source).toEqual({ fileName: 'attached-test.msg', sha256: expect.any(String) as unknown, kind: 'msg' });
     expect(JSON.stringify(result.message)).not.toContain('INNER-BODY-MARKER');
     expect(entry(result, 0).message.bodyText).toBe('INNER-BODY-MARKER');
@@ -134,8 +135,11 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
     }
     // A holder lists its own items (and only them), like the file's own email.
     expect(entry(result, 0).message.attachments.map((a) => a.fileName)).toEqual(['a.txt', 'A1.msg', 'A2.msg']);
-    expect(entry(result, 0).message.warnings).toEqual(['forwarded-message-not-expanded']);
+    // Every item of A was read as an email of its own: no "not expanded" warning (task 8.13b-3).
+    expect(entry(result, 0).message.warnings).toEqual([]);
     expect(entry(result, 1).message.warnings).toEqual([]);
+    expect(result.message.warnings).toEqual([]);
+    expect((result.attached ?? []).map((e) => e.name)).toEqual(['A.msg', 'A1.msg', 'A2.msg', 'B.msg', 'B1.msg', 'B11.msg']);
   });
 
   it(`reads ${String(MAX_FORWARD_DEPTH)} levels of items, no deeper; the deepest one stays listed`, async () => {
@@ -194,7 +198,8 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
     const result = await parseOk({ ...OUTER, attachedItems: [item(inner('A', { bodyText: undefined, bodyHtml: '<p>Inner</p>' }))] });
     expect(entry(result, 0).message.bodyText).toBe('[html 12]');
     expect(entry(result, 0).message.warnings).toEqual(['html-converted-body']);
-    expect(result.message.warnings).toEqual(['forwarded-message-not-expanded']);
+    // The item was read as an email of its own (task 8.13b-3).
+    expect(result.message.warnings).toEqual([]);
   });
 
   it('an item with no recipients loses its fixed-size properties (dates) in msgreader: flagged, not invented', async () => {
@@ -285,7 +290,8 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () => {
     expect(entry(result, 1).message.subject).toBe('A1');
     expect(entry(result, 1).message.bodyText).toBe('cafй');
     expect(entry(result, 1).message.warnings).toEqual(['text-encoding-uncertain']);
-    expect(entry(result, 0).message.warnings).toEqual(['forwarded-message-not-expanded']);
+    // Its one item was read as an email of its own: no "not expanded" warning (task 8.13b-3).
+    expect(entry(result, 0).message.warnings).toEqual([]);
   });
 
   it('a Unicode item inside an 8-bit one needs no code page and gets no warning', async () => {

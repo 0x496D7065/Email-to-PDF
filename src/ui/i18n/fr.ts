@@ -220,6 +220,7 @@ export const fr: Messages = {
     },
     order: {
       'file-order': 'Pas de date utilisable\u00A0: placé à la fin de la liste, dans l’ordre où les fichiers ont été ajoutés.',
+      'before-parent': 'Pas de date utilisable\u00A0: placé juste avant l’e-mail auquel il est joint.',
     },
     fold: {
       'quoted-overlap': 'Texte d’un e-mail précédent',
@@ -317,6 +318,7 @@ export const fr: Messages = {
       email: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail {number}',
       rebuilt: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail reconstitué (E-mail {number} du PDF)',
       unticked: 'Pas dans le PDF\u00A0: e-mail transféré dont l’e-mail reconstitué est décoché',
+      untickedAttached: 'Pas dans le PDF\u00A0: l’e-mail {number} (joint ici) est décoché',
     },
     messageFailed: 'L’outil n’a pas pu afficher ce que le PDF laisse de côté pour cet e-mail.',
     document: {
@@ -340,6 +342,7 @@ export const fr: Messages = {
       },
       emailHeading: 'E-mail {number}',
       file: 'Fichier',
+      attachedNoName: '(e-mail joint {number})',
       attachment: '({size}, {type})',
       attachmentNoType: '({size})',
       pageFooter: 'Page {page} sur {total}',
@@ -363,7 +366,8 @@ export const fr: Messages = {
       'rtf-only-body': 'Le texte de cet e-mail est enregistré dans un format qui ne peut pas être affiché ici.',
       'text-encoding-uncertain': 'Certaines lettres de cet e-mail peuvent être mal affichées (son jeu de caractères n’est pas certain). L’original reste dans le fichier.',
       'no-body': 'Cet e-mail n’a pas de texte.',
-      'forwarded-message-not-expanded': 'Un e-mail transféré à l’intérieur de celui-ci est listé comme pièce jointe. Son texte n’est pas affiché.',
+      'forwarded-message-not-expanded':
+        'Un e-mail ou un élément joint à celui-ci est seulement listé comme pièce jointe\u00A0: son texte n’est pas affiché. Il reste dans le fichier d’origine.',
     },
     dedupe: {
       'same-id-different-content': 'Un autre e-mail semble être le même message, mais son contenu est différent, les deux sont donc conservés.',

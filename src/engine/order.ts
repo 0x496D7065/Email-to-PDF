@@ -40,7 +40,12 @@ export interface Orderable {
 /** Why an entry is where it is. */
 export type OrderReason =
   | 'by-date' // placed by its date (utcMs)
-  | 'file-order'; // no usable date: placed after all dated messages, in input order
+  | 'file-order' // no usable date: placed after all dated messages, in input order
+  // No usable date, and attached inside another email: placed just before the
+  // email it is attached to (user decision 2026-11-10, Q7, task 8.13b-3). Set
+  // by the engine (src/engine/engine.ts, placeUndatedAttached), never by
+  // orderMessages.
+  | 'before-parent';
 
 /** One entry of the ordered list. */
 export interface OrderedEntry<T> {

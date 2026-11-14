@@ -16,7 +16,10 @@
 // Also left out (accepted): text the writer pasted at the very END of the
 // email, without a reply header, when it is the text of another sender's
 // email that is in the PDF too (rule 2, an overlap start): it is in the PDF
-// once already.
+// once already. The PDF model checks that afterwards (PRINTED SOMEWHERE in
+// src/pdf/model.ts, task 8.13b-3, review round 3): such text that the PDF
+// prints nowhere after all (a missing or wrong date can make two emails
+// each leave it out because of the other one) is printed where it is.
 // Known limit (accepted): an Outlook-style quote has no ">" markers, so where
 // it ends can only be checked against the quoted email itself. When that
 // email is not among the included emails, text typed inside or below such a

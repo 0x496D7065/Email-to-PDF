@@ -7,6 +7,7 @@ import {
   DATE_TOLERANCE_MS,
   dedupe,
   fromKey,
+  keepsHeaderData,
   MAX_RELATED,
   normalizeBody,
   subjectKey,
@@ -746,5 +747,46 @@ describe('dedupe: speed', () => {
       expect(k.warnings[0]!.related).toEqual(Array.from({ length: MAX_RELATED }, (_, i) => 2 * i + (k.index % 2 === 0 ? 1 : 0)));
     }
     expect(elapsed).toBeLessThan(2000);
+  });
+});
+
+describe('dedupe: a dropped file against attached copies (D2, task 8.13b-3 review round 4)', () => {
+  const PERSON: EmailAddress = { name: 'Dan Hidden', address: 'dan@example.test' };
+
+  it('the dropped file\'s copy is kept even when an attached copy (from firstAttached on) holds more header data', () => {
+    const dropped = make();
+    const attachedWithBcc = make({ bcc: [PERSON] });
+    const result = dedupe([dropped, attachedWithBcc], { firstAttached: 1 });
+    expect(result.kept).toHaveLength(1);
+    expect(result.kept[0]!.index).toBe(0);
+    expect(result.kept[0]!.duplicates.map((d) => d.index)).toEqual([1]);
+    expect(result.mergedCount).toBe(1);
+    // Without the option (every message a dropped file): the copy covering the other one, as before.
+    expect(dedupe([dropped, attachedWithBcc]).kept[0]!.index).toBe(1);
+    // The same with an attached copy that has a date the dropped one lacks.
+    const undated = make({ date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false } });
+    expect(dedupe([undated, make()], { firstAttached: 1 }).kept[0]!.index).toBe(0);
+  });
+
+  it('among several dropped copies, the one covering the other dropped ones; attached copies alone: the general rule', () => {
+    const plain = make();
+    const withCc = make({ cc: [CAROL] });
+    const attachedWithBcc = make({ cc: [CAROL], bcc: [PERSON] });
+    expect(dedupe([plain, withCc, attachedWithBcc], { firstAttached: 2 }).kept[0]!.index).toBe(1);
+    expect(dedupe([plain, withCc, attachedWithBcc], { firstAttached: 0 }).kept[0]!.index).toBe(2);
+  });
+
+  it('which messages are duplicates does not change', () => {
+    const list = [make(), make({ bcc: [PERSON] }), make({ cc: [CAROL] }), make({ messageId: 'other@example.test' })];
+    for (const firstAttached of [0, 1, 2, 3, 4]) expect(groupsOf(dedupe(list, { firstAttached }))).toEqual(groupsOf(dedupe(list)));
+  });
+
+  it('keepsHeaderData: true when the kept copy covers the other one with the same date', () => {
+    const base = make();
+    expect(keepsHeaderData(base, make())).toBe(true);
+    expect(keepsHeaderData(make({ bcc: [PERSON] }), base)).toBe(true);
+    expect(keepsHeaderData(base, make({ bcc: [PERSON] }))).toBe(false);
+    expect(keepsHeaderData(base, make({ date: at(60_000) }))).toBe(false);
+    expect(keepsHeaderData(make({ date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false } }), base)).toBe(false);
   });
 });

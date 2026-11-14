@@ -78,8 +78,10 @@ export type ParseWarning =
   | 'html-body-unreadable'
   | 'rtf-only-body' // .msg with only an RTF body
   | 'no-body' // no body text found at all
-  // A forwarded message whose text was not expanded (.eml: nested too deep or
-  // unreadable; .msg: any attached Outlook item): listed as an attachment, not in bodyText.
+  // A forwarded message whose text was not expanded (.eml: an inline one
+  // nested too deep, over the budget or unreadable; .msg: an attached Outlook
+  // item, unless every attached item of that email was read as an email of
+  // its own, task 8.13b-3): listed as an attachment, its text shown nowhere.
   | 'forwarded-message-not-expanded'
   // Some text may show wrong letters: it is stored as 8-bit ("ANSI") text
   // whose character set (code page) could not be applied with certainty.
@@ -191,6 +193,13 @@ export interface AttachedMessage {
    * takes its number).
    */
   readonly path: readonly number[];
+  /**
+   * The attachment's file name in the email holding it, as the parser reads
+   * it (.eml: the part's file name; .msg: the same name as its line in the
+   * holder's attachment list), '' when it has none. Shown in the PDF's File
+   * row of the attached email (task 8.13b-3), never used to open anything.
+   */
+  readonly name: string;
 }
 
 /** Why a whole file could not be read. */

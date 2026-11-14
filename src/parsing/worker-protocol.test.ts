@@ -158,6 +158,7 @@ describe('isFromWorker: attached emails (strict)', () => {
     parent: unknown;
     path: unknown;
     places: unknown;
+    name?: unknown;
     message: LooseMessage;
   }
   interface LooseResult {
@@ -186,6 +187,8 @@ describe('isFromWorker: attached emails (strict)', () => {
     ['attached not a list', (r) => (r.attached = {})],
     ['an entry that is not an object', (r) => ((r.attached as unknown[])[1] = 7)],
     ['a parent that is not earlier', (r) => (entry(r, 1).parent = 1)],
+    ['no name (task 8.13b-3)', (r) => delete entry(r, 1).name],
+    ['a name that is not a string', (r) => (entry(r, 0).name = 7)],
     ['a parent below -1', (r) => (entry(r, 0).parent = -2)],
     ['a parent that is not an integer', (r) => (entry(r, 1).parent = 0.5)],
     ['a path that does not extend the parent path', (r) => (entry(r, 1).path = [2, 1])],

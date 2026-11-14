@@ -20,6 +20,39 @@ describe('selectionKeys', () => {
   });
 });
 
+describe('selectionKeys: emails attached inside a file (task 8.13b-3)', () => {
+  /** An email attached inside file `sha256` at `path`. */
+  const attached = (sha256: string, path: number[]): EngineMessage =>
+    ({ message: { source: { fileName: `${sha256}.eml`, sha256, kind: 'eml', attachedPath: path } }, duplicates: [] }) as unknown as EngineMessage;
+
+  it('adds the place in the file to the file hash', () => {
+    expect(selectionKeys(attached('aa', [2, 1]))).toEqual(['aa/2.1']);
+  });
+
+  it('gives an attached email its own choice, independent of the email it is attached to (Q2)', () => {
+    const s = createSelection();
+    const parent = kept('aa');
+    const child = attached('aa', [1]);
+    const sibling = attached('aa', [2]);
+    s.setIncluded(child, false);
+    expect([s.isIncluded(parent), s.isIncluded(child), s.isIncluded(sibling)]).toEqual([true, false, true]);
+    s.setIncluded(parent, false);
+    s.setIncluded(child, true);
+    expect([s.isIncluded(parent), s.isIncluded(child)]).toEqual([false, true]);
+  });
+
+  it('a dropped copy kept with the attached one merged into it: one choice for both', () => {
+    const s = createSelection();
+    const merged = {
+      message: { source: { fileName: 'bb.eml', sha256: 'bb', kind: 'eml' } },
+      duplicates: [{ source: { fileName: 'aa.eml', sha256: 'aa', kind: 'eml', attachedPath: [1] }, index: 3, rule: 'message-id' }],
+    } as unknown as EngineMessage;
+    expect(selectionKeys(merged)).toEqual(['bb', 'aa/1']);
+    s.setIncluded(merged, false);
+    expect([s.isIncluded(attached('aa', [1])), s.isIncluded(kept('aa'))]).toEqual([false, true]);
+  });
+});
+
 describe('createSelection', () => {
   it('includes every email until it is left out, and again when ticked back', () => {
     const s = createSelection();

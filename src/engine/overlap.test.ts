@@ -18,6 +18,8 @@ interface Spec {
   readonly id?: string;
   readonly inReplyTo?: string;
   readonly references?: readonly string[];
+  /** OverlapInput.holds (the `index` values of the messages it holds); no key when absent. */
+  readonly holds?: readonly unknown[];
 }
 
 /** Builds inputs in chronological order; `index` is 10 * (position + 1) so it differs from the position. */
@@ -28,6 +30,7 @@ function inputs(specs: readonly Spec[]): OverlapInput[] {
     inReplyTo: s.inReplyTo ?? null,
     references: s.references ?? [],
     index: 10 * (k + 1),
+    ...(s.holds === undefined ? {} : { holds: s.holds as readonly number[] }),
   }));
 }
 
@@ -332,6 +335,74 @@ describe('detectQuotedOverlap: direction', () => {
     expect(a).toEqual([]);
     expect(b).toEqual([{ start: 0, end: ALICE_1.length, reason: 'quoted-overlap', related: 10 }]);
     expect(c!.map((f) => f.related)).toEqual([10]);
+  });
+
+  // Task 8.13b-3, review round 2 (M1): an email holding an attached email always quotes it.
+  const FWD = `Please see the email below.\n\n${ALICE_1}`;
+
+  it('folds the holder, never the email it holds, whatever the order says (holds wins over the clocks)', () => {
+    // The attached email (index 20) comes after its holder (index 10), say by a date with no zone.
+    const [holder, held] = detect([{ body: FWD, holds: [20] }, { body: ALICE_1 }]);
+    expect(held).toEqual([]);
+    expect(folded(FWD, holder!)).toBe(ALICE_1);
+    expect(holder!.map((f) => f.related)).toEqual([20]);
+    // Without the link, the later one is folded: the attached email's own text, as quoted from its holder.
+    const [plainHolder, plainHeld] = detect([{ body: FWD }, { body: ALICE_1 }]);
+    expect(plainHolder).toEqual([]);
+    expect(folded(ALICE_1, plainHeld!)).toBe(ALICE_1);
+  });
+
+  it('holds wins over the reference headers too, and over an identical copy kept by order', () => {
+    // The attached email claims to reply to its holder: still never folded as quoted from it.
+    const [held, holder] = detect([
+      { body: ALICE_1, id: 'a@example.test', inReplyTo: 'p@example.test' },
+      { body: FWD, id: 'p@example.test', holds: [10] },
+    ]);
+    expect(held).toEqual([]);
+    expect(holder!.map((f) => f.related)).toEqual([10]);
+    // Two identical bodies, the later one held by the earlier: the holder is the one folded.
+    const [first, second] = detect([{ body: ALICE_1, holds: [20] }, { body: ALICE_1 }]);
+    expect(second).toEqual([]);
+    expect(first).toEqual([{ start: 0, end: ALICE_1.length, reason: 'quoted-overlap', related: 20 }]);
+  });
+
+  // Task 8.13b-3, review round 3 (M2): a holder counts as referencing what the emails it holds reference.
+  it('a holder counts as referencing what its held emails reference: it, not the email they reply to, is folded', () => {
+    // The reply (index 10) quotes Ann's email; the forward (index 20) holds the reply; Ann's email (index 30)
+    // has no date, so it comes last. Ann's email and the forward share her text, and neither lists the other.
+    const REPLY = `Fine by me.\n\nOn Monday, Ann wrote:\n> ${ALICE_1}`;
+    const specs = (holds: boolean): Spec[] => [
+      { body: REPLY, id: 'b@example.test', inReplyTo: 'a@example.test' },
+      { body: `${FWD}\n\nFine by me.\n\nOn Monday, Ann wrote:\n> ${ALICE_1}`, id: 'c@example.test', ...(holds ? { holds: [10] } : {}) },
+      { body: ALICE_1, id: 'a@example.test' },
+    ];
+    const [, forward, ann] = detect(specs(true));
+    expect(ann).toEqual([]);
+    // The forward's copy is folded (as quoted from the reply, its longest match).
+    expect(folded(specs(true)[1]!.body, forward!)).toContain(ALICE_1);
+    // Without the holder link, the later one (Ann's email) is folded as quoted from the forward.
+    const [, , plainAnn] = detect(specs(false));
+    expect(plainAnn!.some((f) => f.related === 20)).toBe(true);
+    // At any depth: held through a middle forward, the same.
+    const deep = detect([
+      { body: REPLY, id: 'b@example.test', inReplyTo: 'a@example.test' },
+      { body: `${FWD}\n\n${REPLY}`, id: 'm@example.test', holds: [10] },
+      { body: `Passing it on.\n\n${FWD}\n\n${REPLY}`, id: 'c@example.test', holds: [20, 10] },
+      { body: ALICE_1, id: 'a@example.test' },
+    ]);
+    expect(deep[3]).toEqual([]);
+  });
+
+  it('both holding each other (not expected) or entries that are not numbers: the usual rules', () => {
+    const both = detect([{ body: FWD, holds: [20] }, { body: ALICE_1, holds: [10] }]);
+    expect(both[0]).toEqual([]);
+    expect(folded(ALICE_1, both[1]!)).toBe(ALICE_1);
+    const junk = detect([{ body: FWD, holds: ['20', null, Number.NaN] }, { body: ALICE_1 }]);
+    expect(junk[0]).toEqual([]);
+    expect(folded(ALICE_1, junk[1]!)).toBe(ALICE_1);
+    // A held index that is no message of the list changes nothing.
+    const stray = detect([{ body: FWD, holds: [999] }, { body: ALICE_1 }]);
+    expect(stray[0]).toEqual([]);
   });
 
   it('does not fold text repeated inside one message', () => {

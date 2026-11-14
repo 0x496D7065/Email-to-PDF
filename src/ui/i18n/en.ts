@@ -287,11 +287,14 @@ export const en = {
       sender: 'Sent by',
       none: 'Unknown sender',
     } satisfies Record<AuthorSource, string>,
-    // Why a message sits where it is. Only 'file-order' needs a note. It is
-    // shown after any note about the date, but carries its own reason: a
-    // date outside the years 1 to 9999 gets this note without a date note.
+    // Why a message sits where it is. Only the reasons other than 'by-date'
+    // need a note. It is shown after any note about the date, but carries
+    // its own reason: a date outside the years 1 to 9999 gets this note
+    // without a date note.
     order: {
       'file-order': 'No usable date: placed at the end of the list, in the order the files were added.',
+      // An email attached inside another one, with no usable date (task 8.13b-3, Q7).
+      'before-parent': 'No usable date: placed just before the email it is attached to.',
     } satisfies Record<Exclude<OrderReason, 'by-date'>, string>,
     // Label on a folded part of an email (README.md, rule R6).
     fold: {
@@ -457,6 +460,14 @@ export const en = {
       // 8.13a): it is printed nowhere in the PDF ("Print full original text"
       // prints it).
       unticked: 'Not in the PDF: forwarded email whose rebuilt email is unticked',
+      // An email attached inside this one (a forwarded email printed in its
+      // text) that the reader unticked: the PDF leaves its text out of this
+      // email too (task 8.13b-3, Q3), named by its list number as the
+      // preview writes it ({number} is preview.messageNumber, e.g. "#4"), so
+      // it reads "Not in the PDF: email #4 (attached here) is unticked". The number
+      // may be a dropped file's email the attached one was merged into, so
+      // the text does not call email #4 itself "attached".
+      untickedAttached: 'Not in the PDF: email {number} (attached here) is unticked',
     },
     // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
     messageFailed: 'The tool could not show what the PDF leaves out for this email.',
@@ -488,8 +499,13 @@ export const en = {
       },
       // One email.
       emailHeading: 'Email {number}',
-      // The file the email came from.
+      // The file the email came from. For an email attached inside a file
+      // (task 8.13b-3) the row names the file, then each attachment down to
+      // it: "parent.eml › forwarded.eml".
       file: 'File',
+      // In that row, an attachment without a name: its number among the
+      // emails attached at that level, e.g. "parent.eml › (attached email 2)".
+      attachedNoName: '(attached email {number})',
       // After an attachment's name (listed only, never opened), e.g. "(12 KB, application/pdf)".
       attachment: '({size}, {type})',
       attachmentNoType: '({size})',
@@ -521,7 +537,10 @@ export const en = {
       'rtf-only-body': 'The text of this email is saved in a format that cannot be shown here.',
       'text-encoding-uncertain': 'Some letters in this email may be shown wrongly (its character set is not certain). The original is still in the file.',
       'no-body': 'This email has no text.',
-      'forwarded-message-not-expanded': 'A forwarded email inside this one is listed as an attachment. Its text is not shown.',
+      // Only for an attached email or Outlook item that was NOT read as an
+      // email of its own (task 8.13b-3): the ones read are listed as emails.
+      'forwarded-message-not-expanded':
+        'An email or item attached to this one is only listed as an attachment: its text is not shown. It is still in the original file.',
     } satisfies Record<ParseWarning, string>,
     // Look-alike emails that were NOT merged, to be safe.
     dedupe: {

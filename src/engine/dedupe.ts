@@ -35,6 +35,16 @@
 //    and a date if the other has one (so a missing date never wins over a
 //    known one). (Typical case: the sender's own copy has a Bcc line the
 //    recipient's copy lacks; the Bcc copy is kept.)
+//    EXCEPTION, a dropped file against an attached copy (user decision
+//    2026-11-13, task 8.13b-3 review round 4, D2): when `firstAttached` is
+//    given, the messages from that position on are emails attached inside
+//    dropped files (src/engine/engine.ts). In a group holding both, the
+//    copy kept is always one of the dropped files' own emails (the one
+//    covering the other dropped copies), even when an attached copy holds
+//    strictly more header data (say a Bcc line or a date): those attached
+//    copies are merged into it all the same (keepsHeaderData tells the
+//    caller when that happened). Which messages are duplicates does not
+//    change, only which copy is kept.
 //
 // Anything less is not "provably identical", so both messages stay, and a
 // warning tells the preview why they were not merged.
@@ -300,6 +310,29 @@ function covers(a: Prepared, b: Prepared): boolean {
   return recipientsCover(a, b) && senderCovers(a, b) && threadingCovers(a, b) && dateCovers(a, b);
 }
 
+/**
+ * True if keeping `kept` instead of `other` loses no header data (rule 6:
+ * To, Cc, Bcc, sender, In-Reply-To, References, a date when `other` has
+ * one) AND both have the same date (the same instant, or both none). Used
+ * for a copy kept by the D2 exception above (task 8.13b-3, review round 4):
+ * when false, `other` held something the kept copy's header rows do not
+ * show.
+ */
+export function keepsHeaderData(kept: NormalizedMessage, other: NormalizedMessage): boolean {
+  return kept.date.utcMs === other.date.utcMs && covers(prepare(kept, 0), prepare(other, 1));
+}
+
+/** Options of `dedupe`. */
+export interface DedupeOptions {
+  /**
+   * Input position of the first email attached inside a dropped file: every
+   * message from there on is one (src/engine/engine.ts puts them after the
+   * files' own emails). Absent: none (every message is a dropped file's own
+   * email). See the D2 exception at the top of this file.
+   */
+  readonly firstAttached?: number;
+}
+
 /** Why neither copy covers the other (see the warning codes). */
 function whyNotCovered(a: Prepared, b: Prepared): DedupeWarningCode {
   if (!recipientsCover(a, b) && !recipientsCover(b, a)) return 'duplicate-recipients-differ';
@@ -514,8 +547,9 @@ function groupBucket(bucket: readonly Prepared[]): Group[] {
  * 'same-id-different-content' warning. Each warning lists at most
  * MAX_RELATED positions.
  */
-export function dedupe(messages: readonly NormalizedMessage[]): DedupeResult {
+export function dedupe(messages: readonly NormalizedMessage[], options: DedupeOptions = {}): DedupeResult {
   const prepared = messages.map(prepare);
+  const firstAttached = typeof options.firstAttached === 'number' ? options.firstAttached : messages.length;
 
   // Buckets, each listed in canonical order.
   const buckets = new Map<string, Prepared[]>();
@@ -527,7 +561,7 @@ export function dedupe(messages: readonly NormalizedMessage[]): DedupeResult {
   const sameId = sameIdDifferentContent(prepared);
   const reps = groups.map((group) => {
     const members = group.twins.flatMap((t) => t.members);
-    return { group, members, rep: pickRepresentative(members) };
+    return { group, members, rep: pickRepresentative(members, firstAttached) };
   });
   reps.sort((a, b) => a.rep.index - b.rep.index);
 
@@ -601,9 +635,13 @@ function sameIdDifferentContent(prepared: readonly Prepared[]): (bucketKey: stri
  * The copy to keep: the one that covers every other copy (largest recipient
  * sets; has the sender and threading data if any copy has them). Copies that
  * cover each other hold the same header data; then the earliest in input order wins.
+ * D2 (see the top of this file): when the group holds a dropped file's own
+ * email (input position below `firstAttached`) and an attached copy, the
+ * choice is made among the dropped files' emails only.
  */
-function pickRepresentative(group: readonly Prepared[]): Prepared {
-  const byIndex = [...group].sort((a, b) => a.index - b.index);
+function pickRepresentative(group: readonly Prepared[], firstAttached: number): Prepared {
+  const dropped = group.filter((p) => p.index < firstAttached);
+  const byIndex = [...(dropped.length > 0 ? dropped : group)].sort((a, b) => a.index - b.index);
   // In a valid group every pair is comparable, so one pass finds the top:
   // switch only to a copy that strictly covers the current best.
   let top = byIndex[0]!; // `!`: a group is never empty

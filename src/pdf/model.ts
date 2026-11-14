@@ -111,6 +111,65 @@
 // is only a quote; it labels it the writer's own text, so its whole place
 // stays in the quoting email while its rebuilt email prints it too (as
 // before task 8.10; the user unticks that rebuilt email or adds the file).
+// ATTACHED EMAILS (task 8.13b-3, user decisions 2026-11-10): an email
+// attached inside a dropped file is a real email of the engine's list
+// (src/engine/engine.ts, EngineAttached), so it gets its own slot, number,
+// index entry and page like any other (Q1, Q2: its own tick). Its File row
+// names the file and each attachment down to it ("parent.eml ›
+// forwarded.eml", fileRowLine, Q5). With "Print full original text" off,
+// the no-repeat rule above also covers it: its printed block in the body of
+// an email holding it (an inline forward in an .eml: EngineAttached.places)
+// is left out of that body as follows (attachedBlockParts).
+// - In the PDF (`printedAs` kind 'email'), ONLY THE PARTS ITS OWN PAGE
+//   PRINTS are left out (task 8.13b-3, review round 4, M1, user decision
+//   option a; blockClaims): its header lines, when its header rows show
+//   all of its header data (EngineAttached.keptShowsHeader), and the pieces
+//   of its text its page prints (its plan's kept ranges; a piece its page
+//   leaves out as printed by another email keeps that email as its label).
+//   Whatever its page leaves out (quoted history of an older email that is
+//   not in the PDF, say, with rebuilding off, nothing chosen or nothing
+//   rebuilt) stays in the holder's body, as the holder's plan says: printed
+//   twice rather than nowhere. The block's text is the attached email's
+//   body as the parser wrote it (or, for a merged copy, the same text as
+//   de-duplication compares bodies), found with mapOffsets; when it cannot
+//   be matched for certain, the whole block stays.
+// - Not in the PDF (the reader unticked it; kind 'unticked-attached', Q3):
+//   the whole block, like an unticked forward of task 8.13a, less what an
+//   attached email in the PDF inside it does not print itself.
+// A merged copy: the block follows the kept copy (printed as it, or left
+// out when it is unticked; Q8); a dropped file's copy is always the one
+// kept (D2), and when it lacks header data the attached copy has (a Bcc
+// line, a date), the block's header lines stay. A holder merged into
+// another copy: the engine moves the place to the kept copy (S1,
+// engine.ts settleAttached), so an unticked attached email is printed in
+// no copy of it. The block is exactly the attached email's text as the
+// parser wrote it, so no writer's answer can sit inside it: the B1 check
+// above does not apply to it. When the attached email could not be read,
+// there is no attached email and no block to cut. With "Print full
+// original text" on, every body is printed whole and every attached email
+// ALSO as its own email (Q4).
+// PRINTED SOMEWHERE (task 8.13b-3, review round 3, finding M2; collapse,
+// never delete): the plan leaves out text with no quote mark and no reply
+// header of its own when another email in the PDF holds it (output-plan.ts
+// rule 2, an overlap start: "that text is in the PDF anyway"), and the
+// no-repeat rule cuts blocks printed as other emails. Each decision is
+// right on its own, but they can point at each other: with a missing or
+// wrong date, email X's paragraph is folded as quoted from its reply Y,
+// while Y's page leaves its own "> " quote of it out as quoted history:
+// printed nowhere (in round 3 the same happened through the block of an
+// attached reply; since round 4 that block keeps what the reply's page
+// leaves out). So, after every other decision, each such piece the plan leaves
+// out (printedNowhere) is checked against the text the PDF really prints
+// (src/pdf/printed-check.ts: words only, whole sentences); one printed
+// nowhere is printed where it is after all (NoRepeat.restored; the piece
+// keeps the plan's reason, kept). Pieces are checked in PDF order and a
+// restored one counts as printed for the next ones, so a paragraph two
+// emails each leave out "because the other one has it" comes back once, in
+// the first. It may still print twice (accepted: never nowhere). The same
+// calculation gives the preview's labels (src/ui-model/printed-elsewhere.ts:
+// a restored piece is labelled "In the PDF"). Quoted history under a reply
+// header or behind ">" marks is not such a piece: it is left out by the
+// plan's own rule, whether or not its email is in the PDF, as before.
 // FULL ORIGINAL TEXT RULE ("Print full original text"; user decision
 // 2026-10-28, task 7.8b, kept as a safety net in task 7.8c): with
 // `policy.unfoldEverything` NO rebuilt email is in the PDF, whatever
@@ -118,7 +177,8 @@
 // included, so a rebuilt email would only print that text twice.
 //
 // Body: the plan's KEPT ranges, less the parts printed elsewhere (the
-// no-repeat rule above), joined in order (src/pdf/text.ts, joinKept):
+// no-repeat rule above), plus the pieces PRINTED SOMEWHERE restores,
+// joined in order (src/pdf/text.ts, joinKept):
 // nothing is written where a part is left out (README.md, rule R6, the
 // exception for the PDF), except a line break when two kept parts would
 // otherwise run together on one line. With `policy.unfoldEverything` the
@@ -173,16 +233,18 @@
 // transform makes new strings. Pure function, no DOM, no clock (the caller
 // passes `generatedAt`), README.md, rule R7.
 
-import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
+import { attachedAt, type EngineAttached, type EngineMessage, type EngineRebuilt, type EngineResult } from '../engine/engine';
 import type { MessagePlan, OutputPolicy, PlanRange } from '../engine/output-plan';
 import { headerLabelCounts } from '../engine/quoted-header';
 import type { ReconstructedMessage } from '../engine/reconstruct';
 import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../engine/rebuild-links';
+import { mapOffsets } from '../engine/same-text-offsets';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
 import { joinMailboxes } from '../ui-model/mailbox-list';
 import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../ui-model/rebuilt';
+import { printedText } from './printed-check';
 import type { PdfStrings } from './strings';
 import { bodyLines, inlineRuns, joinKeptLines, lineText, type PdfLine, type PdfRole } from './text';
 // Pure and backend-neutral (it only reads src/pdf/text.ts): the bookmark cut follows the same rule as the copy layer.
@@ -847,12 +909,18 @@ export function printedElsewhere(
  * or as a real email in the PDF (`position`: its list position), `number`
  * being its PDF number (1..n over every email in the PDF); or (kind
  * 'unticked', task 8.13a, Q2) it does not print it at all: a forwarded part
- * whose rebuilt email (entry `id`) the reader unticked (BuildPdfInput.unticked).
+ * whose rebuilt email (entry `id`) the reader unticked (BuildPdfInput.unticked);
+ * or (kind 'unticked-attached', task 8.13b-3, Q3) the printed block of an
+ * attached email whose kept copy (list position `position`) is not in the PDF.
+ * The printed block of an attached email that IS in the PDF is kind 'email'.
  */
 export type PrintedAs =
   | { readonly kind: 'rebuilt'; readonly id: number; readonly number: number }
   | { readonly kind: 'email'; readonly position: number; readonly number: number }
-  | { readonly kind: 'unticked'; readonly id: number };
+  | { readonly kind: 'unticked'; readonly id: number }
+  // The printed block of an attached email whose kept copy (list position
+  // `position`) the reader unticked: not printed anywhere (task 8.13b-3, Q3).
+  | { readonly kind: 'unticked-attached'; readonly position: number };
 
 /** A part [start, end) of one body that the PDF prints as the email `printedAs` (printedElsewhereParts). */
 export interface PrintedPart {
@@ -869,6 +937,8 @@ const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean => {
       return b.kind === 'email' && a.position === b.position;
     case 'unticked':
       return b.kind === 'unticked' && a.id === b.id;
+    case 'unticked-attached':
+      return b.kind === 'unticked-attached' && a.position === b.position;
   }
 };
 
@@ -992,6 +1062,197 @@ export function extraTail(body: string, place: ReconstructedMessage, printedText
   return offset < place.end ? offset : 'unsure';
 }
 
+/** `list` when it really is a list (data from a worker), else none. */
+function listOrNone<T>(list: readonly T[] | undefined): readonly T[] {
+  // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+  const isList: boolean = Array.isArray(list);
+  return isList && list !== undefined ? list : [];
+}
+
+/**
+ * What the page of the email at list position `own` (an attached email in
+ * the PDF, or the copy it was merged into) prints of its body, as pieces of
+ * that body with the email each piece is printed as (task 8.13b-3, review
+ * round 4, M1): its plan's KEPT ranges, printed as itself, except the parts
+ * the no-repeat rule found so far (`ownParts`) leave out of them, which keep
+ * the reason they are left out: printed as another email in the PDF (a
+ * rebuilt email, a real file, an attached email inside it), or left out on
+ * purpose (kind 'unticked': a forwarded part whose rebuilt email the reader
+ * unticked, Q2 of task 8.13a, left out of every email that prints it the
+ * same way). Whatever the plan leaves out (quoted history, folded
+ * signatures) is no piece: that page does not print it. A body printed
+ * whole (no plan, a plan that is not valid or failed; bodyTextOf) is one
+ * piece. Sorted, not overlapping.
+ */
+function pagePieces(body: string, plan: MessagePlan | undefined, self: PrintedAs, ownParts: readonly PrintedPart[]): PrintedPart[] {
+  if (!validRanges(plan, body.length) || plan.fallback) return body.length === 0 ? [] : [{ start: 0, end: body.length, printedAs: self }];
+  const sorted = disjointParts(ownParts);
+  const out: PrintedPart[] = [];
+  for (const r of plan.ranges) {
+    if (!r.keep) continue;
+    let from = r.start;
+    for (const part of sorted) {
+      if (part.end <= from || part.start >= r.end) continue;
+      if (part.start > from) out.push({ start: from, end: part.start, printedAs: self });
+      const end = Math.min(part.end, r.end);
+      out.push({ start: Math.max(part.start, from), end, printedAs: part.printedAs });
+      from = end;
+    }
+    if (from < r.end) out.push({ start: from, end: r.end, printedAs: self });
+  }
+  return out;
+}
+
+/** Where the text of an attached email's printed block starts in it: after the first blank line (none: a block of header lines only, its end). */
+function blockBodyStart(body: string, start: number, end: number): { readonly at: number; readonly hasBlank: boolean } {
+  const blank = /(?:\r\n|\r|\n)[ \t]*(?:\r\n|\r|\n)/u.exec(body.slice(start, end));
+  return blank === null ? { at: end, hasBlank: false } : { at: start + blank.index + blank[0].length, hasBlank: true };
+}
+
+/**
+ * The parts of attached email `a`'s printed block `holderBody[start, end)`
+ * that its own page prints, in the holder's offsets (task 8.13b-3, review
+ * round 4, M1, user decision option a): the no-repeat rule leaves out of the
+ * holder ONLY these; everything else of the block stays where the holder's
+ * plan prints it (printed twice rather than nowhere).
+ * - The forwarded separator and header lines (the block up to its first
+ *   blank line, src/parsing/types.ts AttachedPlace): printed as the email,
+ *   whose header rows show them, when those rows show all of its header
+ *   data (EngineAttached.keptShowsHeader: not so when a dropped file's copy
+ *   with less header data was kept, D2); otherwise they stay.
+ * - Its text (after that blank line): the pieces its page prints
+ *   (pagePieces of `pieces`, in the offsets of the kept copy's body
+ *   `ownBody`), found in the block with mapOffsets (the block's text is the
+ *   attached email's body as the parser wrote it; a kept copy merged with
+ *   it has the same body as de-duplication compares them).
+ * When the block's text cannot be matched to that body for certain, none
+ * (the whole block stays: when unsure, keep).
+ */
+function blockClaims(holderBody: string, start: number, end: number, ownBody: string, pieces: readonly PrintedPart[], self: PrintedAs, showsHeader: boolean): PrintedPart[] {
+  const { at, hasBlank } = blockBodyStart(holderBody, start, end);
+  const text = holderBody.slice(at, end);
+  if (!hasBlank && /\S/u.test(ownBody)) return [];
+  const out: PrintedPart[] = [];
+  if (pieces.length > 0) {
+    const mapped = mapOffsets(ownBody, text, pieces.flatMap((p) => [p.start, p.end]));
+    if (mapped === null) return [];
+    pieces.forEach((p, k) => {
+      const a = at + mapped[2 * k]!;
+      const b = at + mapped[2 * k + 1]!;
+      if (a < b) out.push({ start: a, end: b, printedAs: p.printedAs });
+    });
+  }
+  if (showsHeader && at > start) out.push({ start, end: at, printedAs: self });
+  return out;
+}
+
+/**
+ * The no-repeat rule for attached emails (see ATTACHED EMAILS at the top;
+ * task 8.13b-3, review rounds 2 to 4): adds to `found` the parts of the
+ * bodies in the PDF that are the printed blocks of attached emails.
+ * - An attached email in the PDF: only the parts of its block that its own
+ *   page prints (blockClaims), each printed as the email that prints it.
+ *   Emails attached deepest first, so the parts found inside an email's
+ *   own body (the blocks of the emails attached inside it) are known when
+ *   its own block is worked out.
+ * - One NOT in the PDF (unticked, Q3): its whole block, kind
+ *   'unticked-attached', less what an attached email in the PDF inside it
+ *   does not print (those parts stay: its text is never left out because
+ *   the email around it is unticked), less nothing for the emails attached
+ *   inside it that are unticked too.
+ * A place is used only in the very body it names (the holder's own copy, or
+ * the kept copy it was moved to, engine.ts settleAttached), in the PDF, with
+ * valid offsets, and not in the email's own body.
+ */
+function attachedBlockParts(
+  result: EngineResult,
+  pdfNumberByPosition: readonly (number | null)[],
+  plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
+  found: Map<number, PrintedPart[]>,
+): void {
+  const list = listOrNone(result.attached);
+  if (list.length === 0) return;
+  const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
+  const add = (holder: number, part: PrintedPart): void => {
+    let parts = found.get(holder);
+    if (parts === undefined) found.set(holder, (parts = []));
+    parts.push(part);
+  };
+  interface Block {
+    readonly holder: number;
+    readonly start: number;
+    readonly end: number;
+  }
+  const unticked: (Block & { readonly printedAs: PrintedAs })[] = [];
+  // The pieces of the blocks of emails in the PDF that their page does not print.
+  const leftIn: (Block & { readonly pieces: [number, number][] })[] = [];
+  // The parts of body `holder` left out with an unticked attached email (Q3): its block, less what an
+  // attached email in the PDF inside it does not print, less nothing for the unticked ones inside that one.
+  const untickedParts = (holder: number): PrintedPart[] => {
+    const keep: [number, number][] = [];
+    for (const b of leftIn) {
+      if (b.holder !== holder) continue;
+      // `inside` only matters when blockClaims returned nothing for this block (its text could not be
+      // matched: the whole block is in b.pieces). Otherwise its claims already hold the unticked blocks
+      // inside it (pagePieces gave them to its page with untickedParts), so b.pieces lacks them anyway.
+      const inside = unticked.filter((u) => u.holder === holder && b.start <= u.start && u.end <= b.end && u.end - u.start < b.end - b.start).map((u): [number, number] => [u.start, u.end]);
+      for (const [s, e] of b.pieces) for (const piece of without(s, e, inside)) keep.push(piece);
+    }
+    const out: PrintedPart[] = [];
+    for (const u of unticked) if (u.holder === holder) for (const [start, end] of without(u.start, u.end, keep)) out.push({ start, end, printedAs: u.printedAs });
+    return out;
+  };
+  // Deepest first (longest path): this assumes the blocks inside an email's own body belong to deeper
+  // attached entries. With D2/S1 the kept body may be a dropped file, whose own attached entries have
+  // depth 1. It still works: copies merge only when their bodies are equal (normalizeBody), so the kept
+  // body holds the same blocks, and S1 (engine.ts settleAttached) moves the places of the entries
+  // attached inside the merged copy to the kept body, where they keep their own (deeper) path.
+  const depth = (a: EngineAttached): number => listOrNone(a.path).length;
+  const order = list.map((a, k) => ({ a, k })).sort((x, y) => depth(y.a) - depth(x.a) || y.k - x.k);
+  for (const { a } of order) {
+    const own = result.positionByIndex[a.index];
+    if (typeof own !== 'number') continue;
+    const ownMessage = result.messages[own];
+    if (ownMessage === undefined) continue;
+    const ticked = inPdf(own);
+    const self: PrintedAs = ticked ? { kind: 'email', position: own, number: pdfNumberByPosition[own]! } : { kind: 'unticked-attached', position: own };
+    let pieces: PrintedPart[] | null = null;
+    for (const p of listOrNone(a.places)) {
+      const holder = result.positionByIndex[p.holderIndex];
+      if (!inPdf(holder) || holder === own) continue;
+      const m = result.messages[holder];
+      // The offsets are those of that very body (engine.ts, EngineAttachedPlace).
+      if (m === undefined || m.index !== p.holderIndex) continue;
+      const body = m.message.bodyText;
+      if (!Number.isInteger(p.start) || !Number.isInteger(p.end) || p.start < 0 || p.end <= p.start || p.end > body.length) continue;
+      if (!ticked) {
+        unticked.push({ holder, start: p.start, end: p.end, printedAs: self });
+        continue;
+      }
+      // Every email attached inside this one is deeper, so done: its parts in this body are final.
+      pieces ??= pagePieces(ownMessage.message.bodyText, plans?.get(own), self, [...(found.get(own) ?? []), ...untickedParts(own)]);
+      const claims = blockClaims(body, p.start, p.end, ownMessage.message.bodyText, pieces, self, a.keptShowsHeader === true);
+      for (const c of claims) add(holder, c);
+      leftIn.push({ holder, start: p.start, end: p.end, pieces: without(p.start, p.end, claims.map((c): [number, number] => [c.start, c.end])) });
+    }
+  }
+  for (const holder of new Set(unticked.map((u) => u.holder))) for (const part of untickedParts(holder)) add(holder, part);
+}
+
+/** [start, end) less every interval of `holes` (in any order, may overlap), as sorted pieces; none when nothing is left. */
+function without(start: number, end: number, holes: readonly (readonly [number, number])[]): [number, number][] {
+  const out: [number, number][] = [];
+  let from = start;
+  for (const [a, b] of [...holes].sort((x, y) => x[0] - y[0] || x[1] - y[1])) {
+    if (b <= from || a >= end) continue;
+    if (a > from) out.push([from, a]);
+    from = Math.max(from, b);
+    if (from >= end) break;
+  }
+  if (from < end) out.push([from, end]);
+  return out;
+}
+
 /** printedElsewhereParts, and the header lines moved to each rebuilt email (see noRepeat). */
 function noRepeatParts(
   result: EngineResult,
@@ -1071,6 +1332,7 @@ function noRepeatParts(
       else if (!shown && own !== null && entries.get(printedAs.id)?.copy.id === r.id) unshown.add(printedAs.id);
     }
   }
+  attachedBlockParts(result, pdfNumberByPosition, plans, found);
   const parts = new Map<number, readonly PrintedPart[]>();
   for (const [position, list] of found) parts.set(position, disjointParts(list));
   return { parts, moved: movedHeaders(result, entries, candidates, unshown, pdfNumberByPosition) };
@@ -1225,17 +1487,21 @@ export interface PdfRange extends PlanRange {
  * parts is split between them). null when the PDF prints the body whole
  * ("Print full original text", a plan missing, not valid or failed: see
  * bodyTextOf), or when nothing is left out this way: the plan's ranges are
- * then what the PDF prints.
+ * then what the PDF prints. `restored` (NoRepeat.restored, review round 3
+ * of task 8.13b-3): pieces the plan leaves out that the PDF prints after
+ * all, because their text is printed nowhere else; they come back kept
+ * (printedAs null), with the plan's reason.
  */
 export function pdfRanges(
   body: string,
   plan: MessagePlan | null | undefined,
   policy: Pick<OutputPolicy, 'unfoldEverything'>,
   parts: readonly PrintedPart[],
+  restored: BodyIntervals = NOWHERE,
 ): readonly PdfRange[] | null {
-  if (policy.unfoldEverything || parts.length === 0 || !validRanges(plan, body.length) || plan.fallback) return null;
+  if (policy.unfoldEverything || (parts.length === 0 && restored.length === 0) || !validRanges(plan, body.length) || plan.fallback) return null;
   const cut = cutPrintedElsewhere(body, plan.ranges, mergeParts(parts));
-  if (!cut.cut.includes(true)) return null;
+  if (!cut.cut.includes(true) && restored.length === 0) return null;
   const out: PdfRange[] = [];
   cut.ranges.forEach((r, k) => {
     if (cut.cut[k] !== true) {
@@ -1254,6 +1520,31 @@ export function pdfRanges(
     }
     if (from < r.end) out.push({ ...r, start: from, end: r.end, printedAs: null }); // not expected
   });
+  return withRestored(out, restored);
+}
+
+/**
+ * `ranges` (a cover of the body) with the pieces inside `restored` (sorted
+ * intervals) kept: a range is cut at their bounds and its pieces inside
+ * them get keep true (and no `printedAs`), whatever they were. The restored
+ * pieces are always pieces the plan leaves out (printedNowhere), never
+ * pieces the no-repeat rule cut.
+ */
+function withRestored<R extends PlanRange & { readonly printedAs?: PrintedAs | null }>(ranges: readonly R[], restored: BodyIntervals): R[] {
+  if (restored.length === 0) return [...ranges];
+  const out: R[] = [];
+  for (const r of ranges) {
+    let from = r.start;
+    for (const [a, b] of near(restored, r.start, r.end)) {
+      const start = Math.max(a, from);
+      const end = Math.min(b, r.end);
+      if (end <= start) continue;
+      if (start > from) out.push({ ...r, start: from, end: start });
+      out.push({ ...r, start, end, keep: true, ...('printedAs' in r ? { printedAs: null } : {}) });
+      from = end;
+    }
+    if (from < r.end) out.push({ ...r, start: from, end: r.end });
+  }
   return out;
 }
 
@@ -1275,6 +1566,134 @@ export interface NoRepeat {
    * line break. An entry with none is not in the map.
    */
   readonly moved: ReadonlyMap<number, readonly string[]>;
+  /**
+   * Per list position, the pieces of its body that its plan leaves out but
+   * the PDF prints after all, because their text is printed nowhere else
+   * (printedNowhere; PRINTED SOMEWHERE at the top of this file). Sorted
+   * intervals; a position with none is not in the map. Empty under "Print
+   * full original text".
+   */
+  readonly restored: ReadonlyMap<number, BodyIntervals>;
+}
+
+/**
+ * The PRINTED SOMEWHERE check (see the top of this file; task 8.13b-3,
+ * review round 3, finding M2): the pieces of the real emails in the PDF that
+ * their plan leaves out only because another email in the PDF holds the
+ * same text, and that are printed nowhere in the PDF. Candidates: in each
+ * email whose plan is used (valid, not a fallback), each part of a range
+ * the plan leaves out (not a signature) that lies in a folded segment whose
+ * ONLY reason is 'quoted-overlap', linked (`related`) to an email in the
+ * PDF: text with no quote mark and no reply header of its own, left out
+ * only because that other email holds it (output-plan.ts rule 2, an overlap
+ * start: "that text is in the PDF anyway"). Quoted history under a reply
+ * header or behind ">" marks is not a candidate: it is left out as the
+ * mail app's quoted history (rule 2), as before, whether or not its email
+ * is in the PDF. Touching parts are joined into one piece. Each piece, in PDF order, is
+ * checked against the text the PDF prints (src/pdf/printed-check.ts: every
+ * real email's printed ranges after the no-repeat cut, every rebuilt
+ * email's text with its moved header lines, and the pieces restored before
+ * it); one that is not found is restored, and its text then counts as
+ * printed for the pieces after it (so a text two emails each leave out
+ * "because the other one has it" is printed once, in the first). What is
+ * printed only grows, so a piece found stays found. Costs nothing when
+ * there is no candidate; else about linear in the text of the PDF (see
+ * printed-check.ts).
+ */
+function printedNowhere(
+  result: EngineResult,
+  order: PdfOrder,
+  plans: ReadonlyMap<number, MessagePlan | undefined>,
+  elsewhere: ReadonlyMap<number, BodyIntervals>,
+  moved: ReadonlyMap<number, readonly string[]>,
+): Map<number, BodyIntervals> {
+  const restored = new Map<number, BodyIntervals>();
+  const inPdf = (index: unknown): boolean => {
+    const p = typeof index === 'number' ? result.positionByIndex[index] : undefined;
+    return typeof p === 'number' && order.pdfNumberByPosition[p] != null;
+  };
+  const candidates: { readonly position: number; readonly start: number; readonly end: number }[] = [];
+  for (const slot of order.slots) {
+    if (slot.kind !== 'email') continue;
+    const m = result.messages[slot.position];
+    const plan = plans.get(slot.position);
+    if (m === undefined || !validRanges(plan, m.message.bodyText.length) || plan.fallback) continue;
+    // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+    const isList: boolean = Array.isArray(m.segments);
+    if (!isList) continue;
+    // Segments are a sorted cover of the body: these intervals are sorted and do not overlap (as `near` needs).
+    const linked = m.segments
+      .filter(
+        (s) =>
+          s.folded &&
+          Array.isArray(s.reasons) &&
+          s.reasons.length > 0 &&
+          s.reasons.every((reason) => reason === 'quoted-overlap') &&
+          Array.isArray(s.related) &&
+          s.related.some(inPdf),
+      )
+      .map((s): [number, number] => [s.start, s.end]);
+    if (linked.length === 0) continue;
+    let open: { start: number; end: number } | null = null;
+    const close = (): void => {
+      if (open !== null) candidates.push({ position: slot.position, start: open.start, end: open.end });
+      open = null;
+    };
+    for (const r of plan.ranges) {
+      if (r.keep || r.reason === 'signature' || r.reason === 'repeated-signature') continue;
+      for (const s of near(linked, r.start, r.end)) {
+        const start = Math.max(s[0], r.start);
+        const end = Math.min(s[1], r.end);
+        if (end <= start) continue;
+        if (open !== null && open.end === start) open.end = end;
+        else {
+          close();
+          open = { start, end };
+        }
+      }
+    }
+    close();
+  }
+  if (candidates.length === 0) return restored;
+
+  // The text the PDF prints, before anything is restored.
+  const printed = printedText();
+  for (const slot of order.slots) {
+    if (slot.kind === 'rebuilt') {
+      printed.add((moved.get(slot.entry.id) ?? []).join('') + slot.source.shown.rebuilt.rebuilt.reconstructedText);
+      continue;
+    }
+    const body = result.messages[slot.position]?.message.bodyText ?? '';
+    const plan = plans.get(slot.position);
+    if (!validRanges(plan, body.length) || plan.fallback) {
+      printed.add(body);
+      continue;
+    }
+    // Each run of kept ranges, as one piece of printed text.
+    let from = -1;
+    let to = -1;
+    for (const r of withoutPrintedElsewhere(body, plan.ranges, elsewhere.get(slot.position) ?? NOWHERE).ranges) {
+      if (!r.keep) continue;
+      if (r.start !== to) {
+        if (from >= 0) printed.add(body.slice(from, to));
+        from = r.start;
+      }
+      to = r.end;
+    }
+    if (from >= 0) printed.add(body.slice(from, to));
+  }
+
+  const found = new Map<number, [number, number][]>();
+  for (const c of candidates) {
+    const text = (result.messages[c.position]?.message.bodyText ?? '').slice(c.start, c.end);
+    if (printed.covers(text)) continue;
+    printed.add(text);
+    let list = found.get(c.position);
+    if (list === undefined) found.set(c.position, (list = []));
+    list.push([c.start, c.end]);
+  }
+  for (const [position, list] of found) restored.set(position, mergeParts(list.map(([start, end]) => ({ start, end }))));
+  return restored;
 }
 
 /**
@@ -1282,13 +1701,14 @@ export interface NoRepeat {
  * original text") and the no-repeat rule's parts, exactly as
  * buildPdfDocument works them out: it calls this, and so does the preview
  * (src/ui-model/printed-elsewhere.ts, task 8.11), so the labels say what
- * the PDF does.
+ * the PDF does. Then the PRINTED SOMEWHERE check (printedNowhere), on the
+ * same data, for both.
  */
 export function noRepeat(input: NoRepeatInput): NoRepeat {
   const { result, positions, plans } = input;
   const unfold = input.policy.unfoldEverything === true;
   const order = planPdfOrder(result, positions, unfold ? [] : (input.rebuilt ?? []));
-  if (unfold) return { order, parts: new Map(), elsewhere: new Map(), moved: new Map() };
+  if (unfold) return { order, parts: new Map(), elsewhere: new Map(), moved: new Map(), restored: new Map() };
   const planByPosition = new Map<number, MessagePlan | undefined>();
   for (const slot of order.slots) if (slot.kind === 'email') planByPosition.set(slot.position, plans[slot.plan]);
   // The rebuilt emails the reader really unticked, for the unticked forwarded parts (Q2; task 8.13a review
@@ -1298,21 +1718,23 @@ export function noRepeat(input: NoRepeatInput): NoRepeat {
   const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked);
   const elsewhere = new Map<number, BodyIntervals>();
   for (const [position, list] of parts) elsewhere.set(position, mergeParts(list));
-  return { order, parts, elsewhere, moved };
+  const restored = printedNowhere(result, order, planByPosition, elsewhere, moved);
+  return { order, parts, elsewhere, moved, restored };
 }
 
-/** pdfBodyText, and whether the no-repeat rule left something out. */
+/** pdfBodyText, and whether the no-repeat rule left something out. `restored`: see NoRepeat.restored. */
 function bodyTextOf(
   body: string,
   plan: MessagePlan | null | undefined,
   policy: Pick<OutputPolicy, 'unfoldEverything'>,
   elsewhere: BodyIntervals,
+  restored: BodyIntervals = NOWHERE,
 ): { readonly text: string; readonly planFallback: boolean; readonly notLineStarts: ReadonlySet<number>; readonly leftOutElsewhere: boolean } {
   if (policy.unfoldEverything) return { text: body, planFallback: false, notLineStarts: NO_JOINS, leftOutElsewhere: false };
   if (!validRanges(plan, body.length)) return { text: body, planFallback: true, notLineStarts: NO_JOINS, leftOutElsewhere: false };
   if (plan.fallback) return { text: body, planFallback: true, notLineStarts: NO_JOINS, leftOutElsewhere: false };
   const cut = withoutPrintedElsewhere(body, plan.ranges, elsewhere);
-  const joined = joinKeptLines(body, cut.ranges);
+  const joined = joinKeptLines(body, withRestored(cut.ranges, restored));
   return { text: joined.text, planFallback: false, notLineStarts: joined.notLineStarts, leftOutElsewhere: cut.leftOut };
 }
 
@@ -1408,6 +1830,26 @@ interface EmailParts {
   readonly people: ParticipantSource;
 }
 
+/** Between the levels of an attached email's File row: "parent.eml › forwarded.eml". */
+export const FILE_CHAIN_SEPARATOR = ' › ';
+
+/**
+ * One line of an email's File row for the copy at input position `index`
+ * (the kept copy or a merged one): its file name, or "(file without a name)";
+ * for an email attached inside a file (task 8.13b-3, Q5), the file name and
+ * then the attachment name at each level down to it (EngineAttached.names),
+ * joined by FILE_CHAIN_SEPARATOR, an attachment without a name shown as
+ * "(attached email N)" with its number at that level (EngineAttached.path:
+ * the n-th attached email of the email holding it).
+ */
+function fileRowLine(result: EngineResult, index: number, fileName: string, strings: PdfStrings, s: Sanitizer): PdfLine {
+  const file = fileName.trim() === '' ? null : fileName;
+  const attached = attachedAt(result, index);
+  if (attached === undefined) return file === null ? own(strings.noFileName, 'muted') : s.line(file, 'muted');
+  const levels = attached.names.map((name, k) => (name.trim() === '' ? strings.attachedNoName(attached.path[k] ?? k + 1) : name));
+  return s.line([file ?? strings.noFileName, ...levels].join(FILE_CHAIN_SEPARATOR), 'muted');
+}
+
 function buildEmail(
   m: EngineMessage,
   position: number,
@@ -1415,6 +1857,7 @@ function buildEmail(
   plan: MessagePlan | undefined,
   input: BuildPdfInput,
   elsewhere: BodyIntervals,
+  restored: BodyIntervals,
 ): EmailParts {
   const { strings, policy, timeZone } = input;
   const message = m.message;
@@ -1454,11 +1897,11 @@ function buildEmail(
 
   const hasSubject = message.subject.trim() !== '';
   fields.push({ label: strings.subjectLabel, value: [hasSubject ? s.line(message.subject, 'field-value') : own(strings.noSubject, 'muted')] });
-  const files = [message.source.fileName, ...m.duplicates.map((d) => d.source.fileName)];
-  fields.push({ label: strings.fileLabel, value: files.map((f) => (f.trim() === '' ? own(strings.noFileName, 'muted') : s.line(f, 'muted'))) });
+  const files = [{ index: m.index, fileName: message.source.fileName }, ...m.duplicates.map((d) => ({ index: d.index, fileName: d.source.fileName }))];
+  fields.push({ label: strings.fileLabel, value: files.map((f) => fileRowLine(input.result, f.index, f.fileName, strings, s)) });
 
   // Body.
-  const { text, planFallback, notLineStarts, leftOutElsewhere } = bodyTextOf(message.bodyText, plan, policy, elsewhere);
+  const { text, planFallback, notLineStarts, leftOutElsewhere } = bodyTextOf(message.bodyText, plan, policy, elsewhere, restored);
   const lines = bodyLines(text, { notLineStarts });
   s.count += lines.replaced;
   const keptAllBecauseEmpty = !policy.unfoldEverything && !planFallback && plan?.keptAllBecauseEmpty === true;
@@ -1695,6 +2138,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
     order: { slots, pdfNumberByPosition },
     elsewhere,
     moved,
+    restored,
   } = noRepeat({ result, positions, plans, policy: input.policy, rebuilt: input.rebuilt, rebuildingOff: input.rebuildingOff, unticked: input.unticked });
   const emails: PdfEmail[] = [];
   const entries: PdfIndexEntry[] = [];
@@ -1709,7 +2153,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument {
       parts = buildRebuiltEmail(slot.entry, slot.source, slot.number, input, moved.get(slot.entry.id) ?? []);
     } else {
       const m = result.messages[slot.position]!;
-      parts = buildEmail(m, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NOWHERE);
+      parts = buildEmail(m, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NOWHERE, restored.get(slot.position) ?? NOWHERE);
     }
     emails.push(parts.email);
     entries.push(parts.entry);

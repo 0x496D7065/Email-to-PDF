@@ -81,7 +81,8 @@ export function isFromWorker(data: unknown): data is FromWorker {
  *   an attachments list and a source, and its source has no attachedPath;
  * - `attached`, when there, is a non-empty list; each entry's parent is -1
  *   or an earlier entry, its path is its parent's path plus one number from
- *   1, and its message's source.attachedPath is the same path;
+ *   1, its message's source.attachedPath is the same path, and its name is
+ *   a string;
  * - its places name its ancestors in order, nearest first (parent, then the
  *   parent's parent, ...), and each one is a range of that holder's
  *   bodyText that starts with the forwarded separator line;
@@ -110,9 +111,9 @@ export function hasWellFormedAttached(result: Record<string, unknown>): boolean 
   const bodyOf = (holder: number): unknown => (holder === -1 ? message.bodyText : entries[holder]?.body);
   for (const [index, entry] of attached.entries()) {
     if (!isRecord(entry) || !isRecord(entry.message) || !isRecord(entry.message.source)) return false;
-    const { parent, path, places } = entry;
+    const { parent, path, places, name } = entry;
     const { bodyText, source } = entry.message;
-    if (!isInteger(parent) || parent < -1 || parent >= index || typeof bodyText !== 'string') return false;
+    if (!isInteger(parent) || parent < -1 || parent >= index || typeof bodyText !== 'string' || typeof name !== 'string') return false;
     const parentPath = parent === -1 ? [] : (entries[parent]?.path ?? []);
     if (!isPath(path) || path.length !== parentPath.length + 1 || parentPath.some((n, i) => path[i] !== n)) return false;
     if (!isPath(source.attachedPath) || source.attachedPath.length !== path.length) return false;

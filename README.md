@@ -42,6 +42,24 @@ page starts in your browser's first (preferred) language if it is one of
 these, otherwise in English. A switch at the top changes it. The choice is
 not saved.
 
+An email attached to one you add (a forwarded email, inline or as an
+attachment, or an Outlook email attached to an Outlook email) is read as an
+email of its own: it has its own place in the list, its own checkbox and
+its own page in the PDF, where its File row names both files, such as
+`parent.eml › forwarded.eml` ("(attached email 2)" when the attachment has
+no name: the second email attached at that level). If it has no date, it is
+placed just before the email it is attached to. A copy of an email you also
+added yourself is merged into your file's copy, and your file's copy is the
+one shown, even when the attached copy has more header details (such as a
+Bcc line or a date). Those details are then still printed in the
+"Forwarded message" header lines inside the email holding it (for a forward
+shown in that email's text), and they are always in your original files.
+An email attached as a file, or attached to an Outlook email, has no such
+lines, so its extra details are only in your original files. In
+particular, when your file's copy has no date and the attached copy has
+one, the email is shown as undated ("no date"), and it is placed by file
+order, after the dated emails, not by the attached copy's date.
+
 If you add only the last email of a conversation, the earlier emails quoted
 inside it are also shown as separate emails, clearly marked "Rebuilt" in
 the preview; in the PDF they are not marked (see
@@ -164,9 +182,11 @@ The tool never throws message text away on its own:
   program added under a reply header, a signature or notice a sender
   repeats (it is kept the first time), and any part of an email that the
   PDF already prints as an email of its own (such as the emails a forward
-  passes on), so no email is printed twice (an answer the writer typed
-  next to a quote always stays, so a few can repeat). A forwarded email
-  whose rebuilt email you unticked is left out too. A quoted part inside
+  passes on, or an email attached to it), so no email is printed twice (an
+  answer the writer typed next to a quote always stays, and so does what
+  an attached email's own page leaves out of its forwarded block, so some
+  text can repeat). A forwarded email whose rebuilt email you unticked is left out
+  too, and so is an attached email you unticked. A quoted part inside
   such a forwarded email that the tool could not rebuild is left out with
   it. Each folded part in the preview says
   "In the PDF" or "Not in the PDF" and why. The details, including the
@@ -384,8 +404,12 @@ list were not read, and those lines are part of the rebuilt text.
   broken characters are also shown as codes; step 2 notes it on each email
   that has them. The preview and your files are unchanged.
 - **Attachments are listed, not included:** name, size and type only. They
-  are never opened. A forwarded email attached to another one is listed
-  the same way; its text is not shown.
+  are never opened. The one exception is an email attached to another one,
+  read as an email of its own (see [What it does](#what-it-does)). An
+  attached email the tool cannot read (nested too deep, over the limit per
+  file, damaged) and an attached Outlook item that is not an email (a
+  calendar item, a contact) are only listed, like other attachments; for an
+  inline forward or an Outlook item, step 2 says that its text is not shown.
 - **File types:** `.eml` and `.msg` only. Mailbox files (`.mbox`, `.pst`,
   `.ost`) and Apple Mail's `.emlx` are not read.
 - **A single email does not give the whole conversation.** If you add only
@@ -549,7 +573,8 @@ exception: an email attached inside an `.eml` email (inline or sent as an
 attachment) or inside an Outlook `.msg` email (an attached Outlook email;
 other attached Outlook items such as calendar items or contacts are only
 listed) is read as an email, with the same inert parsers and the same limits
-as a file you add yourself. Every other attachment (PDF, Office
+as a file you add yourself, and is then shown and printed as an email of
+its own (see [What it does](#what-it-does)). Every other attachment (PDF, Office
 documents, pictures, ...) is never opened, only listed. Each file is
 size-checked and read in a separate worker that is stopped after a time
 limit, so a broken file gives an error message, not a crash (see
@@ -579,13 +604,45 @@ by default the PDF shows what each writer actually wrote.
   time). Also text pasted at the very end of an email, without "> " marks
   or a reply header, when it comes from another email that is in the PDF
   too.
+- **Checked to be printed:** text the tool leaves out of an email only
+  because another email in the PDF also holds it (text with no "> " marks
+  and no reply header) is then checked: it must really be printed
+  somewhere in the PDF. If it is not, it stays where it is, even if that
+  may print it twice. Text is compared by its words, so "> " marks, line
+  breaks and punctuation do not matter, and only whole sentences count as
+  found, never a few common words. This matters when dates are missing or
+  wrong: two emails could otherwise each leave a paragraph out because the
+  other one has it. Quoted history under a reply header or behind "> "
+  marks is not checked this way: it is left out as described above, as
+  before.
+- **Attached emails take only what their page prints:** from the block of
+  an attached email (see "No email twice" below), the email holding it
+  leaves out only what the attached email's own page prints: its header
+  lines (when that page's header rows show all of them) and the parts of
+  its text that page prints. Whatever that page leaves out, such as the
+  quoted history of an older email you did not add, stays in the block,
+  even if that prints it twice. When the tool cannot match the block to
+  the attached email's text for certain, the whole block stays.
 - **No email twice:** a part of an email that the PDF prints as an email
   of its own is left out of it: an earlier email rebuilt from it (see
   [Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text))
   that is in the PDF, or one the tool found to be an email you added that
   is in the PDF too. So a forward no longer prints the emails it passes on
   inside its own text when they also have their own pages; a forward with
-  nothing of its own then shows "(no text)". Who wrote what comes first:
+  nothing of its own then shows "(no text)". The same goes for an email
+  attached to it (an inline forward in an `.eml` file, which the file
+  prints inside the email's text): it is printed on its own page, so what
+  that page prints of its block (the "Forwarded message" line, its header
+  lines and its text) is left out of the email holding it (see "Attached
+  emails take only what their page prints" above). When that attached
+  email was merged with a copy you added, that copy's page counts. When
+  the email holding it was merged with another copy of itself, the block
+  is found again in the copy that is kept. An email always counts as
+  quoting the emails attached to it, whatever their dates say, and as
+  quoting whatever those emails reply to, so an attached email's own text,
+  or the text of an email it answers, is not folded away as a quote of the
+  email holding it (see also "Checked to be printed" above). Who wrote
+  what comes first:
   - An answer the writer typed inside or below the part of a quoted email,
     which the tool told apart from the quote around it (text it takes for
     the writer's own, or a signature the PDF keeps, next to quoted text it
@@ -628,7 +685,12 @@ by default the PDF shows what each writer actually wrote.
   another reason (its card could not be shown, say) leaves its forwarded
   text in the forward. The preview marks it "Not in the PDF: forwarded
   email whose rebuilt email is unticked", and "Print full original text"
-  prints it.
+  prints it. Likewise an attached email you untick is left out of the PDF
+  and out of the email it is attached to (and out of every copy of that
+  email): the preview marks its block "Not in the PDF: email #N (attached
+  here) is unticked" (#N can also be a file you added that holds the same
+  email). Only what an attached email inside it that you kept ticked does
+  not print itself stays.
 - **Kept:** the writer's own text, quotes pasted without a reply header
   (except the case above), forwarded emails that are not printed as
   emails of their own for another reason (a forwarded part the tool could
@@ -683,7 +745,8 @@ email #N" (an email you added, by its number in the list) or "printed as a
 rebuilt email (Email N in the PDF)" (a rebuilt email, by its heading in the
 PDF); a forwarded email left out because you unticked its rebuilt email
 is marked "Not in the PDF: forwarded email whose rebuilt email is
-unticked". A quoted email's header lines and its text that get the same
+unticked", and the block of an attached email you unticked "Not in the
+PDF: email #N (attached here) is unticked". A quoted email's header lines and its text that get the same
 mark are shown as one part with one mark (folded only when both were folded). When the tool keeps a whole email because it could not tell
 its own text from the quote, the preview says so above it; if parts of
 it are printed as emails of their own, the note says that everything

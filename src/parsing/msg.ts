@@ -169,8 +169,11 @@ export function resultFromFields(
   try {
     if (fields.error !== undefined) return corrupt(shortDetail(String(fields.error)));
     if (!looksLikeMessage(fields)) return corrupt('not an Outlook message: no message properties found');
-    const message = buildMessage(fields, { fileName, sha256, kind: 'msg' }, options);
-    const attached = readAttachedItems(fields, reads, { fileName, sha256 }, options);
+    const built = buildMessage(fields, { fileName, sha256, kind: 'msg' }, options);
+    const { attached, allRead } = readAttachedItems(fields, reads, { fileName, sha256 }, options);
+    // Every attached Outlook item was read as an email of its own: its text is
+    // shown there, so the "not expanded" warning no longer applies (task 8.13b-3).
+    const message = allRead ? withoutNotExpanded(built) : built;
     // No `attached` key at all when the file holds no readable attached item.
     return attached.length === 0 ? { ok: true, message } : { ok: true, message, attached };
   } catch (error) {
@@ -267,9 +270,9 @@ function buildMessage(fields: FieldsData, source: NormalizedMessage['source'], o
   if (messageId === null) warnings.push('missing-message-id');
   // Like the .eml adapter: an attached e-mail whose text is not part of
   // bodyText is flagged, so the preview can say that some text is missing.
-  // Still given now that the item is also read as an AttachedMessage of its
-  // own: its text is still not in THIS email's bodyText, and the output of
-  // the file's own email stays exactly what it was (task 8.13b-2).
+  // Removed again (withoutNotExpanded) when every attached Outlook item of
+  // this email was read as an email of its own: the PDF and the preview then
+  // show its text there (task 8.13b-3, see readAttachedItems).
   if (attachments.some((a) => a.innerMsgContent === true)) warnings.push('forwarded-message-not-expanded');
 
   return {
@@ -305,6 +308,8 @@ interface ItemNode {
 interface ItemSlot {
   /** Which attached Outlook item of its holder it is, from 1, in attachment-list order (see AttachedMessage.path). */
   readonly number: number;
+  /** Its line's file name in the holder's attachment list (attachmentInfo), '' when none (see AttachedMessage.name). */
+  readonly name: string;
   node: ItemNode | null;
 }
 
@@ -346,10 +351,10 @@ interface ItemHolder {
  * is extracted (getAttachment() is never called) and nothing is parsed
  * again from bytes, except the whole file for an encoding, see below.
  *
- * The file's own email is not changed in any way: an item is still listed
- * in its attachments (as before, with 'forwarded-message-not-expanded'), its
- * text never joins the parent's bodyText, and so it has no places (`places`
- * is always []) and no attachment line is marked with an attachedIndex.
+ * The file's own email is otherwise not changed: an item is still listed
+ * in its attachments, its text never joins the parent's bodyText, and so
+ * it has no places (`places` is always []) and no attachment line is marked
+ * with an attachedIndex. Its `name` is its line's file name.
  *
  * Only emails are read (isEmailItem: message class IPM.Note or IPM.Note.*;
  * user decision 2026-11-12). Any other Outlook item (calendar item, contact,
@@ -389,15 +394,22 @@ interface ItemHolder {
  * text comes from an HTML body stored as bytes while it names no usable code
  * page at all (htmlFromBytesWithoutCodepage).
  *
+ * 'forwarded-message-not-expanded' (task 8.13b-3): an email whose attached
+ * Outlook items were ALL read as emails of their own loses that warning
+ * (`allRead` for the file's own email, flattenItems for an item), since the
+ * preview and the PDF then show their text as those emails. An email with
+ * at least one item that was not read (not an email, over a limit,
+ * unreadable) keeps it, as before.
+ *
  * Never throws: an unexpected error here leaves the file with no attached
- * items (they all stay listed), never a failed file.
+ * items (they all stay listed, `allRead` false), never a failed file.
  */
 function readAttachedItems(
   top: FieldsData,
   reads: FieldReads,
   file: { readonly fileName: string; readonly sha256: string },
   options: MsgParserOptions,
-): AttachedMessage[] {
+): { attached: AttachedMessage[]; allRead: boolean } {
   try {
     // Every read by encoding (null: it failed); the file's own read included.
     const byEncoding = new Map<string, FieldsData | null>();
@@ -443,7 +455,7 @@ function readAttachedItems(
         // Numbered before anything else is checked: a skipped item (not an
         // email, too deep, over the budget, unreadable) keeps its number, so
         // `path` stays "the n-th Outlook item line of its holder".
-        const slot: ItemSlot = { number: ++number, node: null };
+        const slot: ItemSlot = { number: ++number, name: itemName(list[index]), node: null };
         holder.slots.push(slot);
         if (!isEmailItem(list[index])) continue;
         if (holder.depth >= MAX_FORWARD_DEPTH || remaining <= 0) continue;
@@ -455,10 +467,30 @@ function readAttachedItems(
         queue.push({ ...item.holder, depth: holder.depth + 1, slots: node.children });
       }
     }
-    return flattenItems(roots);
+    return { attached: flattenItems(roots), allRead: allSlotsRead(roots) };
   } catch {
-    return [];
+    return { attached: [], allRead: false };
   }
+}
+
+/** The file name of an attached Outlook item's line (attachmentInfo), '' when it cannot be read. */
+function itemName(attachment: FieldsData | undefined): string {
+  try {
+    return attachment === undefined ? '' : attachmentInfo(attachment).fileName;
+  } catch {
+    return '';
+  }
+}
+
+/** True when an email has attached Outlook items and every one of them was read as an email of its own. */
+function allSlotsRead(slots: readonly ItemSlot[]): boolean {
+  return slots.length > 0 && slots.every((s) => s.node !== null);
+}
+
+/** `message` without the 'forwarded-message-not-expanded' warning (a new object; the same one when it has none). */
+function withoutNotExpanded(message: NormalizedMessage): NormalizedMessage {
+  if (!message.warnings.includes('forwarded-message-not-expanded')) return message;
+  return { ...message, warnings: message.warnings.filter((w) => w !== 'forwarded-message-not-expanded') };
 }
 
 /**
@@ -604,11 +636,13 @@ function hasNothingToShow(message: NormalizedMessage): boolean {
 function flattenItems(roots: readonly ItemSlot[]): AttachedMessage[] {
   const attached: AttachedMessage[] = [];
   const walk = (slots: readonly ItemSlot[], parent: number): void => {
-    for (const { node } of slots) {
+    for (const { node, name } of slots) {
       if (node === null) continue;
       const index = attached.length;
       const path = [...(node.message.source.attachedPath ?? [])];
-      attached.push({ message: node.message, parent, places: [], path });
+      // Its own items all read: their text is shown as emails of their own (see withoutNotExpanded).
+      const message = allSlotsRead(node.children) ? withoutNotExpanded(node.message) : node.message;
+      attached.push({ message, parent, places: [], path, name });
       walk(node.children, index);
     }
   };

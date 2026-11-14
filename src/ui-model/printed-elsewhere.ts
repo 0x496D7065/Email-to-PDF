@@ -7,7 +7,10 @@
 // (src/ui/preview.ts, pdfLabelText) instead of the plan's own label. A
 // forwarded part whose rebuilt email the reader unticked (task 8.13a, Q2)
 // is left out too, labelled "Not in the PDF: forwarded email whose rebuilt
-// email is unticked".
+// email is unticked". A piece the plan leaves out that the PDF prints after
+// all because it is printed nowhere else (the PRINTED SOMEWHERE check of
+// src/pdf/model.ts, NoRepeat.restored; task 8.13b-3, review round 3) comes
+// back kept, so its label says "In the PDF".
 //
 // It decides nothing on its own: it calls the PDF model's own functions
 // (src/pdf/model.ts: noRepeat, which buildPdfDocument calls too, and
@@ -43,19 +46,21 @@ export interface PrintedElsewhereInput {
 /**
  * Per list position, the ranges of its body as the PDF prints them
  * (src/pdf/model.ts, pdfRanges): only the emails the no-repeat rule leaves
- * something out of; an email not in the map is printed as its plan says.
+ * something out of, or that get a piece back (NoRepeat.restored); an email
+ * not in the map is printed as its plan says.
  * Empty under "Print full original text" (every email is printed whole).
  */
 export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number, readonly PdfRange[]> {
   const out = new Map<number, readonly PdfRange[]>();
   if (input.policy.unfoldEverything) return out;
-  const { order, parts } = noRepeat(input);
+  const { order, parts, restored } = noRepeat(input);
   for (const slot of order.slots) {
     if (slot.kind !== 'email') continue;
     const list = parts.get(slot.position);
+    const back = restored.get(slot.position);
     const message = input.result.messages[slot.position]?.message;
-    if (list === undefined || message === undefined) continue;
-    const ranges = pdfRanges(message.bodyText, input.plans[slot.plan], input.policy, list);
+    if ((list === undefined && back === undefined) || message === undefined) continue;
+    const ranges = pdfRanges(message.bodyText, input.plans[slot.plan], input.policy, list ?? [], back);
     if (ranges !== null) out.set(slot.position, ranges);
   }
   return out;

@@ -63,6 +63,8 @@ export interface PdfStrings {
   readonly subjectLabel: string;
   readonly attachmentsLabel: string;
   readonly fileLabel: string;
+  /** In an attached email's File row (task 8.13b-3): an attachment without a name, by its number at that level, "(attached email 2)". */
+  attachedNoName(number: number): string;
   readonly noDate: string;
   readonly noSubject: string;
   readonly noText: string;
@@ -137,6 +139,7 @@ export function createPdfStrings(locale: string): PdfStrings {
     subjectLabel: t('preview.subject'),
     attachmentsLabel: t('preview.attachments'),
     fileLabel: t('pdf.document.file'),
+    attachedNoName: (number) => t('pdf.document.attachedNoName', { number: String(number) }),
     noDate: t('preview.noDate'),
     noSubject: t('preview.noSubject'),
     noText: t('preview.noText'),

@@ -49,10 +49,14 @@
 // overlap, the lines they share are linked to all of those messages.
 //
 // Direction (who may fold whose text): M's text is folded only because of an
-// ELIGIBLE message O (see `isEligible`). The reference headers win over the
+// ELIGIBLE message O (see `isEligible`). Holding wins over everything: an
+// email that holds another one (an attached email, `holds`) is the one
+// folded (task 8.13b-3, review round 2). Then the reference headers win over the
 // clocks: if exactly one of the two lists the other in In-Reply-To or
 // References, only that one (the reply) gets folded, whatever the dates say
-// (covers wrong clocks). Otherwise, only the later message of the two is
+// (covers wrong clocks). An email that holds others also lists what they
+// list (withHeldReferences, task 8.13b-3, review round 3): it prints them,
+// so it quotes what they quote. Otherwise, only the later message of the two is
 // folded. So M's text is never folded because a LATER message quoted M, and
 // of two copies of the same text, the earliest stays shown.
 //
@@ -126,6 +130,13 @@ export interface OverlapInput {
   readonly references: readonly string[];
   /** Stable message number, copied into `FoldRange.related`. */
   readonly index: number;
+  /**
+   * The `index` of every message this one HOLDS: emails attached inside it,
+   * at any depth (task 8.13b-3, review round 2). A holder always quotes the
+   * emails it holds, so this link wins over the reference headers and the
+   * clocks (see `isEligible`). Optional: none by default.
+   */
+  readonly holds?: readonly number[];
 }
 
 /** One word of a body: its comparison key and its offsets [start, end) in the original text. */
@@ -169,13 +180,59 @@ function points(refs: readonly Set<string>[], messages: readonly OverlapInput[],
   return typeof id === 'string' && id !== '' && (refs[m]?.has(id) ?? false);
 }
 
+/** The `holds` lists as sets (an entry that is not a number is ignored). */
+function heldIndices(message: OverlapInput): Set<number> {
+  const out = new Set<number>();
+  const list: unknown = message.holds;
+  if (Array.isArray(list)) for (const i of list as readonly unknown[]) if (typeof i === 'number') out.add(i);
+  return out;
+}
+
+/**
+ * The ids each message points at, for `isEligible` (task 8.13b-3, review
+ * round 3, finding M2): its own (In-Reply-To and References, `own`) plus
+ * those of every message it holds (`holds`, at any depth), as found in this
+ * list by `index`. A holder prints the emails it holds, so it quotes what
+ * they quote: when a reply attached inside C quotes A, C counts as
+ * referencing A, and C, not A, is folded where they share text (whatever
+ * the clocks say). Only the messages' own ids are added (not what a held
+ * message got from holding others: `holds` already lists every depth).
+ */
+function withHeldReferences(messages: readonly OverlapInput[], own: readonly Set<string>[], holds: readonly Set<number>[]): Set<string>[] {
+  const at = new Map<number, number>();
+  messages.forEach((m, k) => {
+    const index = m?.index;
+    if (typeof index === 'number' && !at.has(index)) at.set(index, k);
+  });
+  return own.map((ids, m) => {
+    const held = holds[m];
+    if (held === undefined || held.size === 0) return ids;
+    const out = new Set(ids);
+    for (const index of held) {
+      const k = at.get(index);
+      if (k === undefined || k === m) continue;
+      for (const id of own[k] ?? []) out.add(id);
+    }
+    return out;
+  });
+}
+
 /**
  * May message `m`'s text be folded because it matches message `o`?
- * If exactly one of them references the other, the referencing one (the
- * reply) is folded. If neither or both do, the later one (higher position).
- * For any two different messages exactly one direction is eligible.
+ * First, holding (task 8.13b-3, review round 2): if exactly one of them
+ * holds the other (an attached email, at any depth), the holder is folded:
+ * it quotes the email it holds, whatever the headers and the clocks say, so
+ * an attached email's own text is never folded as quoted from the email
+ * holding it. Then the reference headers: if exactly one of them references
+ * the other (a holder also through the emails it holds, withHeldReferences),
+ * the referencing one (the reply) is folded. If neither or both
+ * do, the later one (higher position). For any two different messages
+ * exactly one direction is eligible.
  */
-function isEligible(refs: readonly Set<string>[], messages: readonly OverlapInput[], m: number, o: number): boolean {
+function isEligible(refs: readonly Set<string>[], holds: readonly Set<number>[], messages: readonly OverlapInput[], m: number, o: number): boolean {
+  const mHoldsO = holds[m]?.has(messages[o]?.index ?? Number.NaN) ?? false;
+  const oHoldsM = holds[o]?.has(messages[m]?.index ?? Number.NaN) ?? false;
+  if (mHoldsO !== oHoldsM) return mHoldsO;
   const mToO = points(refs, messages, m, o);
   const oToM = points(refs, messages, o, m);
   if (mToO !== oToM) return mToO;
@@ -333,7 +390,12 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
   const list: readonly OverlapInput[] = Array.isArray(messages) ? messages : [];
   const bodies = list.map((m) => (typeof m?.bodyText === 'string' ? m.bodyText : ''));
   const words = bodies.map(tokenizeWords);
-  const refs = list.map((m) => (m ? referencedIds(m) : new Set<string>()));
+  const holds = list.map((m) => (m ? heldIndices(m) : new Set<number>()));
+  const refs = withHeldReferences(
+    list,
+    list.map((m) => (m ? referencedIds(m) : new Set<string>())),
+    holds,
+  );
 
   // All words of all messages in one array of numeric ids (one id per
   // distinct key), so comparing two words is comparing two numbers.
@@ -393,7 +455,7 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
       let bestWhole = false;
       for (const g of index.get(shingleHash(ids, i)) ?? []) {
         const o = owner[g] ?? -1;
-        if (o === m || o < 0 || !isEligible(refs, list, m, o)) continue;
+        if (o === m || o < 0 || !isEligible(refs, holds, list, m, o)) continue;
         const oStart = first[o] ?? 0;
         const oEnd = first[o + 1] ?? 0;
         // Longest run of equal words starting at i (in M) and g (in O).

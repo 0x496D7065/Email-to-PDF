@@ -506,7 +506,7 @@ describe('createMsgParser: attachments (metadata only, README.md rule R4)', () =
     expect(JSON.stringify(result)).not.toContain('ATTACHMENT-CONTENT-MARKER');
   });
 
-  it('lists an attached Outlook item without expanding it, and warns that its text is not included', async () => {
+  it('lists an attached Outlook item without expanding it into the body; read as an email of its own, no warning', async () => {
     const message = await parseOk(
       spec({ attachedItems: [{ displayName: 'Earlier order', subject: 'INNER-SUBJECT-MARKER' }] }),
     );
@@ -516,17 +516,19 @@ describe('createMsgParser: attachments (metadata only, README.md rule R4)', () =
     expect(message.bodyText).toBe('Hello.\nSecond line.');
     expect(message.subject).toBe('Test message');
     expect(JSON.stringify(message)).not.toContain('INNER-SUBJECT-MARKER');
-    // Same contract as the .eml adapter: listed as an attachment, not in bodyText.
-    expect(message.warnings).toEqual(['forwarded-message-not-expanded']);
+    // Task 8.13b-3: the item is read as an email of its own (msg.attached.test.ts), so its text is shown there.
+    expect(message.warnings).toEqual([]);
   });
 
-  it('warns only once for several attached Outlook items, and not for ordinary attachments', async () => {
+  it('warns only once for several attached Outlook items not read as emails, and not for ordinary attachments', async () => {
+    // A calendar item is only listed, never read (task 8.13b-2), so its text is shown nowhere.
+    const appointment = (subject: string): MsgSpec => spec({ subject, messageClass: 'IPM.Appointment' });
     const withItems = await parseOk(
       spec({
         attachments: [{ fileName: 'a.txt', content: 'x' }],
         attachedItems: [
-          { displayName: 'First', subject: 'one' },
-          { displayName: 'Second', subject: 'two' },
+          { displayName: 'First', message: appointment('one') },
+          { displayName: 'Second', message: appointment('two') },
         ],
       }),
     );

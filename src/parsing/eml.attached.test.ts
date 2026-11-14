@@ -407,3 +407,21 @@ describe('attached emails: limits (shared by both kinds)', () => {
     expect(result.message.warnings).toEqual([]);
   });
 });
+
+describe('attached emails: the attachment name (task 8.13b-3, the PDF File row)', () => {
+  it('is the part file name, or empty when it has none, at every level', async () => {
+    const named = crlf(
+      'Content-Type: message/rfc822; name="inline-name.eml"',
+      'Content-Disposition: inline; filename="inline-name.eml"',
+      '',
+      inner('a', 'A body.'),
+    );
+    const holder = crlf('From: h@example.test', 'Subject: Holder', mixed('h', plain('Holder.'), rfc822(inner('deep', 'Deep.'))));
+    const result = await parseOk(file(plain('Top.'), named, rfc822(holder, AS_FILE)));
+    expect(result.attached?.map((e) => [e.message.subject, e.path, e.name])).toEqual([
+      ['a', [1], 'inline-name.eml'],
+      ['Holder', [2], 'attached.eml'],
+      ['deep', [2, 1], ''],
+    ]);
+  });
+});

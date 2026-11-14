@@ -3,10 +3,16 @@
 //
 // Steps:
 // 1. Split the parse results into messages and failed files. A failed file
-//    is listed with its reason and never stops the others.
+//    is listed with its reason and never stops the others. Every email
+//    attached inside a dropped file (ParseResult.attached: inline forwards
+//    and emails sent as attachments in .eml, attached Outlook emails in
+//    .msg) becomes a message of its own (task 8.13b-3, option A, user
+//    decisions 2026-11-10; an approved exception to README.md rule R4), after
+//    the files' own emails: see ATTACHED EMAILS below.
 // 2. De-duplicate (dedupe.ts): only provably identical copies are merged,
 //    and every merged copy stays listed next to its kept message.
-// 3. Order chronologically (order.ts).
+// 3. Order chronologically (order.ts). An attached email with no usable
+//    date goes just before the email it is attached to (placeUndatedAttached).
 // 4. Run the fold detectors on the ordered kept messages:
 //    a. overlap (overlap.ts), the main quote detector, over the whole set;
 //    b. quote markers (quote-markers.ts) and reply headers (reply-header.ts,
@@ -27,10 +33,48 @@
 //    of its source body; the source body stays whole in `messages`.
 //
 // Indices: every `index` and `related` number in the result (EngineMessage.index,
-// MergedCopy.index, DedupeWarning.related, Segment.related) is a position in
-// the array given to `runEngine`, i.e. the order the files were dropped in.
-// `positionByIndex` turns such a number into a position in `messages`, so the
-// preview can resolve "quoted from message N" or "duplicate of ..." directly.
+// MergedCopy.index, DedupeWarning.related, Segment.related) is an INPUT
+// POSITION: for a file's own email, its position in the array given to
+// `runEngine`, i.e. the order the files were dropped in; for an attached
+// email, `results.length` plus its place among all attached emails (files in
+// drop order, each file's attached emails in ParseResult.attached order),
+// see EngineAttached. `positionByIndex` turns such a number into a position
+// in `messages`, so the preview can resolve "quoted from message N" or
+// "duplicate of ..." directly.
+//
+// ATTACHED EMAILS (task 8.13b-3): each one goes through every step above
+// exactly like a dropped file's email. Consequences:
+// - De-duplication: when an attached email and a dropped file's email are
+//   copies, the dropped file's copy is ALWAYS kept (Q8; D2, user decision
+//   2026-11-13, review round 4: even when the attached copy holds strictly
+//   more header data, say a Bcc line or a date; dedupe.ts, `firstAttached`),
+//   and the attached copy is listed as merged. EngineAttached.keptShowsHeader
+//   says when the kept copy's header rows lack something the attached copy
+//   had: the PDF then leaves that copy's block header lines where they are
+//   printed (an inline forward), so they are still printed there. A holder
+//   merged into another copy: its attached emails' places are moved to the
+//   kept copy (S1, settleAttached).
+// - Folding, rebuilding and linking see it as a real email: the overlap
+//   detector folds its text where another email quotes it (its own parent's
+//   printed block included). An email holding it (its parent, the parent's
+//   parent, ..., or the copies they were merged into) always counts as
+//   quoting it, whatever the dates and reference headers say (heldByKept,
+//   overlap.ts `holds`; task 8.13b-3, review round 2), so its own text is
+//   never folded as quoted from a holder; and a holder counts as
+//   referencing whatever the emails it holds reference (overlap.ts,
+//   withHeldReferences; review round 3), so the text of an email they
+//   reply to is folded in the holder rather than in that email. A rebuilt copy of it in another email can
+//   be linked to it ("the real file wins", rebuild-links.ts). The .eml
+//   adapter's own forwarded block is never rebuilt (reconstruct.ts stops
+//   there), so a parent never yields a rebuilt copy of its own inline
+//   forward.
+// - `attached` (EngineAttached) keeps where each one came from (its parent,
+//   its file, its attachment names for the PDF's File row) and its printed
+//   blocks in the bodies holding it (places), for the PDF's no-repeat rule
+//   (src/pdf/model.ts): the engine itself never cuts any body.
+// Attached entries that break ParseResult's contract (normally rejected by
+// the worker validator already) are skipped, with the ones attached inside
+// them: their text then simply stays where its parent prints it.
 //
 // Safety net (README.md, rule R6: collapse, never delete): the detectors are
 // tested, but the engine does not rely on them being bug-free. If a detector
@@ -67,11 +111,12 @@
 // messages in it are never modified (README.md, rule R7).
 
 import type { NormalizedMessage, ParseErrorCode, ParseResult, ParseWarning } from '../parsing/types';
-import { dedupe, type DedupeResult, type DedupeWarning, type MergedCopy } from './dedupe';
+import { dedupe, keepsHeaderData, type DedupeResult, type DedupeWarning, type MergedCopy } from './dedupe';
 import { orderMessages, type OrderReason } from './order';
 import { detectQuotedOverlap } from './overlap';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
+import { mapOffsets } from './same-text-offsets';
 import { buildSegments, checkSegments, reconstruct, type FoldRange, type FoldReason, type Segment } from './segments';
 import { detectSignatures, senderKeyOf } from './signature';
 import { linkRebuilt, type EngineRebuilt, type LinkSource, type TimelineEntry } from './rebuild-links';
@@ -117,7 +162,11 @@ export interface EngineMessage {
   readonly message: NormalizedMessage;
   /** Its position in the input of `runEngine`. */
   readonly index: number;
-  /** Placed by its date, or after all dated messages by file order (date missing or unusable). */
+  /**
+   * Placed by its date; or, date missing or unusable, after all dated
+   * messages by file order, or (an attached email) just before the email it
+   * is attached to ('before-parent').
+   */
   readonly order: OrderReason;
   /** Merged copies (see dedupe.ts), `index` = position in the input of `runEngine`. */
   readonly duplicates: readonly MergedCopy[];
@@ -145,13 +194,13 @@ export interface FailedFile {
 export interface EngineCounts {
   /** Every file given to the engine, read or failed (preview: "N files, M could not be read"). */
   readonly filesGiven: number;
-  /** Messages read successfully, duplicates included. */
+  /** Messages read successfully, duplicates and attached emails (task 8.13b-3) included. */
   readonly messagesFound: number;
   /** Copies merged into another message (messagesFound - messages.length). */
   readonly duplicatesMerged: number;
   /** Files that could not be read (listed in `failed`). */
   readonly filesFailed: number;
-  /** Kept messages placed by file order (no usable date). */
+  /** Kept messages with no usable date (placed by file order, or before their parent). */
   readonly undated: number;
   /** Kept messages with at least one folded segment. */
   readonly withFolds: number;
@@ -182,6 +231,61 @@ export interface EngineResult {
   readonly timeline: readonly TimelineEntry[];
   /** Problems while rebuilding, in `messages` order. Usually empty. */
   readonly reconstructionWarnings: readonly ReconstructionWarning[];
+  /**
+   * Every email attached inside a dropped file that the engine read as a
+   * message of its own (task 8.13b-3), by input position: entry k has
+   * index `counts.filesGiven + k`. No key at all when there are none, so
+   * the result for files without attached emails is what it always was.
+   */
+  readonly attached?: readonly EngineAttached[];
+}
+
+/** Where one attached email's printed block sits in the body of an email holding it (AttachedPlace, with input positions). */
+export interface EngineAttachedPlace {
+  /**
+   * Input position of the email whose bodyText holds the block: its parent,
+   * or the parent's parent, ...; or, when that one was merged into another
+   * copy (dedupe.ts), the kept copy, with the offsets found again in its
+   * body (task 8.13b-3, review round 4, S1: settleAttached). When they
+   * cannot be found for certain there, the place stays on the merged copy
+   * (then no kept message has this index, and the PDF leaves the kept
+   * body as its plan says).
+   */
+  readonly holderIndex: number;
+  /** `bodyText.slice(start, end)` of the message at `holderIndex` (that very message object) is the whole block. */
+  readonly start: number;
+  readonly end: number;
+}
+
+/** One email attached inside a dropped file (ParseResult.attached), as the engine numbers it. */
+export interface EngineAttached {
+  /** Its input position (see Indices at the top). */
+  readonly index: number;
+  /** Input position of the email it is attached to: its file's own email, or another attached email of that file. */
+  readonly parentIndex: number;
+  /** Input position of the dropped file it came from (that file's own email). */
+  readonly fileIndex: number;
+  /** AttachedMessage.path: its attachment number at each level, from the file's own email down. */
+  readonly path: readonly number[];
+  /** The attachment name at each level of `path` (AttachedMessage.name of it and of each attached email above it), '' when none. */
+  readonly names: readonly string[];
+  /** AttachedMessage.places that are valid ranges of their holder's body, nearest holder first; [] when its text is in no body. */
+  readonly places: readonly EngineAttachedPlace[];
+  /**
+   * Whether the header rows of the kept copy holding it show every header
+   * datum its own copy has: true when it is kept itself, or when the copy it
+   * was merged into keeps its header data with the same date (dedupe.ts,
+   * keepsHeaderData). False when a dropped file's copy was kept although
+   * this copy held more (a Bcc line, a date: D2, task 8.13b-3 review round
+   * 4); then its block's header lines stay printed in the emails holding it.
+   */
+  readonly keptShowsHeader: boolean;
+}
+
+/** The EngineAttached entry of input position `index`, or undefined (a file's own email, or no such entry). */
+export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, index: number): EngineAttached | undefined {
+  const entry = result.attached?.[index - result.counts.filesGiven];
+  return entry !== undefined && entry.index === index ? entry : undefined;
 }
 
 /**
@@ -485,6 +589,246 @@ function rebuildFrom(
   return out;
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/**
+ * The attached emails of every successful result (step 1), checked, with
+ * their input positions (from `results.length` on). An entry is skipped,
+ * with every entry attached inside it, when it breaks ParseResult's
+ * contract (not an object, no message with a text, a parent that is not an
+ * earlier entry kept here, a path that is not its parent's path plus one
+ * number); a place that is not a range of its holder's text, or whose holder
+ * is not the next email up, is dropped (its block then stays printed in that
+ * body). A result whose list cannot be read at all gives none. Never throws.
+ */
+function readAttached(results: readonly ParseResult[]): { readonly messages: NormalizedMessage[]; readonly entries: EngineAttached[] } {
+  const messages: NormalizedMessage[] = [];
+  const entries: EngineAttached[] = [];
+  const base = results.length;
+  results.forEach((r, fileIndex) => {
+    if (!r.ok || r.attached === undefined) return;
+    const fileMessages: NormalizedMessage[] = [];
+    const fileEntries: EngineAttached[] = [];
+    try {
+      const list: unknown = r.attached;
+      if (!Array.isArray(list)) return;
+      // Per entry of the file's list: its place in fileEntries (undefined when
+      // skipped), and its parent in the file's numbering (-1: the file's own email).
+      const kept: (number | undefined)[] = [];
+      const parents: number[] = [];
+      const entryOf = (k: number): EngineAttached | undefined => fileEntries[kept[k] ?? -1];
+      // The body text of entry `holder` of the file's list (-1: the file's own email); undefined when skipped.
+      const bodyOf = (holder: number): string | undefined => {
+        if (holder === -1) return r.message.bodyText;
+        const at = kept[holder];
+        return at === undefined ? undefined : fileMessages[at]?.bodyText;
+      };
+      (list as readonly unknown[]).forEach((raw, k) => {
+        kept.push(undefined);
+        parents.push(-1);
+        if (!isRecord(raw) || !isRecord(raw.message) || typeof raw.message.bodyText !== 'string') return;
+        const { parent, path, places, name } = raw;
+        if (!isInt(parent) || parent < -1 || parent >= k) return;
+        const parentEntry = parent === -1 ? null : entryOf(parent);
+        if (parentEntry === undefined) return; // its parent was skipped
+        const parentPath = parentEntry?.path ?? [];
+        if (!Array.isArray(path) || path.length !== parentPath.length + 1) return;
+        const ownPath = (path as readonly unknown[]).filter(isInt);
+        if (ownPath.length !== path.length || ownPath.some((n, i) => n < 1 || (i < parentPath.length && n !== parentPath[i]))) return;
+        const index = base + entries.length + fileEntries.length;
+        // Places: nearest holder first (its parent, then the parent's parent, ...); stop at the first one out of line.
+        const okPlaces: EngineAttachedPlace[] = [];
+        let holder = parent;
+        for (const p of Array.isArray(places) ? (places as readonly unknown[]) : []) {
+          if (!isRecord(p) || p.holder !== holder) break;
+          const holderEntry = holder === -1 ? null : entryOf(holder);
+          const body = bodyOf(holder);
+          const { start, end } = p;
+          if (holderEntry !== undefined && typeof body === 'string' && isInt(start) && isInt(end) && start >= 0 && start < end && end <= body.length) {
+            okPlaces.push({ holderIndex: holderEntry === null ? fileIndex : holderEntry.index, start, end });
+          }
+          if (holder === -1) break;
+          holder = parents[holder] ?? -1;
+        }
+        kept[k] = fileEntries.length;
+        parents[k] = parent;
+        fileMessages.push(raw.message as unknown as NormalizedMessage);
+        fileEntries.push({
+          index,
+          parentIndex: parentEntry === null ? fileIndex : parentEntry.index,
+          fileIndex,
+          path: ownPath,
+          names: [...(parentEntry?.names ?? []), typeof name === 'string' ? name : ''],
+          places: okPlaces,
+          // Known once de-duplication ran (settleAttached).
+          keptShowsHeader: true,
+        });
+      });
+    } catch {
+      return; // a list that cannot be read: none of this file's attached emails
+    }
+    for (const m of fileMessages) messages.push(m);
+    for (const e of fileEntries) entries.push(e);
+  });
+  return { messages, entries };
+}
+
+/**
+ * After de-duplication (task 8.13b-3, review round 4): the attached entries
+ * as the result gives them. `parsed[k]` is the message at input position
+ * `inputPosition[k]`; `keptIndexOf` gives the kept copy of an input position.
+ * - S1: a place whose holder was merged into another copy is moved to that
+ *   kept copy, its offsets found again in the kept body (mapOffsets: the two
+ *   bodies are equal as normalizeBody compares them), so the PDF's
+ *   no-repeat rule can still leave the block out there (an unticked
+ *   attached email is then never printed inside any copy of its holder).
+ *   When the offsets cannot be found for certain, the place stays as it was.
+ * - keptShowsHeader (D2): whether the kept copy holding it shows all of its
+ *   header data (dedupe.ts, keepsHeaderData).
+ * Never throws: an entry it cannot settle is given as it was, with
+ * keptShowsHeader false (its header lines then stay where they are printed).
+ */
+function settleAttached(
+  read: { readonly messages: readonly NormalizedMessage[]; readonly entries: readonly EngineAttached[] },
+  parsed: readonly NormalizedMessage[],
+  inputPosition: readonly number[],
+  keptIndexOf: (index: number) => number | undefined,
+): EngineAttached[] {
+  const messageAt = new Map<number, NormalizedMessage>();
+  inputPosition.forEach((index, k) => {
+    const m = parsed[k];
+    if (m !== undefined) messageAt.set(index, m);
+  });
+  return read.entries.map((e) => {
+    try {
+      const own = messageAt.get(e.index);
+      const keptIndex = keptIndexOf(e.index);
+      const kept = keptIndex === undefined ? undefined : messageAt.get(keptIndex);
+      const keptShowsHeader = keptIndex === e.index || (own !== undefined && kept !== undefined && keepsHeaderData(kept, own));
+      const places = e.places.map((p): EngineAttachedPlace => {
+        const holderKept = keptIndexOf(p.holderIndex);
+        if (holderKept === undefined || holderKept === p.holderIndex) return p;
+        const from = messageAt.get(p.holderIndex)?.bodyText;
+        const to = messageAt.get(holderKept)?.bodyText;
+        if (typeof from !== 'string' || typeof to !== 'string') return p;
+        const mapped = mapOffsets(from, to, [p.start, p.end]);
+        if (mapped === null) return p;
+        const [start, end] = mapped as [number, number];
+        return start < end ? { holderIndex: holderKept, start, end } : p;
+      });
+      return { ...e, places, keptShowsHeader };
+    } catch {
+      return { ...e, keptShowsHeader: false };
+    }
+  });
+}
+
+/**
+ * Step 3, Q7 (user decision 2026-11-10, task 8.13b-3): every attached email
+ * with no usable date (orderMessages put it at the end, 'file-order') moves
+ * to just before the kept email holding its parent (the parent itself, or
+ * the copy it was merged into), with order 'before-parent'; several before
+ * one email keep their input order, and one attached inside it comes before
+ * it in turn. Left at the end, as 'file-order': one whose parent is not
+ * there, or whose chain of parents leads back to itself through merged
+ * copies, or leads INTO such a cycle further up without coming back to
+ * itself (both not expected). Those are dropped from the moves only: they
+ * stay where orderMessages put them (at the end, in file order), with all
+ * their content, in the list exactly once. Every entry is kept exactly
+ * once.
+ */
+function placeUndatedAttached<T extends { readonly index: number }>(
+  ordered: readonly { readonly item: T; readonly order: OrderReason }[],
+  parentOf: (index: number) => number | undefined,
+  keptIndexOf: (index: number) => number | undefined,
+): { readonly item: T; readonly order: OrderReason }[] {
+  const at = new Map<number, number>();
+  ordered.forEach((e, i) => at.set(e.item.index, i));
+  // Entry -> the entry it goes before.
+  const before = new Map<number, number>();
+  ordered.forEach((e, i) => {
+    if (e.order !== 'file-order') return;
+    const parent = parentOf(e.item.index);
+    if (parent === undefined) return;
+    const kept = keptIndexOf(parent);
+    const j = kept === undefined ? undefined : at.get(kept);
+    if (j !== undefined && j !== i) before.set(i, j);
+  });
+  if (before.size === 0) return [...ordered];
+  // Cycles (not expected): an entry whose chain comes back to itself, or leads INTO such a cycle
+  // further on, is dropped from the map. It then stays where orderMessages put it (at the end,
+  // 'file-order') and, as a root of the walk below, is still listed exactly once there.
+  for (const i of [...before.keys()]) {
+    const seen = new Set<number>([i]);
+    let j = before.get(i);
+    while (j !== undefined && before.has(j) && !seen.has(j)) {
+      seen.add(j);
+      j = before.get(j);
+    }
+    if (j !== undefined && seen.has(j)) before.delete(i);
+  }
+  const children = new Map<number, number[]>();
+  for (const [i, j] of before) {
+    let list = children.get(j);
+    if (list === undefined) children.set(j, (list = []));
+    list.push(i);
+  }
+  for (const list of children.values()) list.sort((a, b) => a - b);
+  const out: { readonly item: T; readonly order: OrderReason }[] = [];
+  // Iterative: an entry's children first (each with its own children first), then the entry.
+  for (let root = 0; root < ordered.length; root++) {
+    if (before.has(root)) continue;
+    const stack: { i: number; next: number }[] = [{ i: root, next: 0 }];
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1]!;
+      const kids = children.get(top.i) ?? [];
+      if (top.next < kids.length) {
+        stack.push({ i: kids[top.next++]!, next: 0 });
+        continue;
+      }
+      stack.pop();
+      const e = ordered[top.i]!;
+      out.push(before.has(top.i) ? { item: e.item, order: 'before-parent' } : e);
+    }
+  }
+  return out;
+}
+
+/**
+ * Step 4a (task 8.13b-3, review round 2): per kept message (its input
+ * position), the input positions of the kept messages it HOLDS: for every
+ * attached email, the kept copy of each email above it (its parent, the
+ * parent's parent, ... up to its file's own email) holds the kept copy of
+ * it. Mapped through `keptIndexOf` (merged copies), so the copy an attached
+ * email was merged into, a dropped file say, is held too. A copy never holds
+ * itself. The walk up stops at an email it has seen (not expected: parents
+ * are always earlier entries). No entry for a message that holds none.
+ */
+function heldByKept(
+  entries: readonly EngineAttached[],
+  byIndex: ReadonlyMap<number, EngineAttached>,
+  keptIndexOf: (index: number) => number | undefined,
+): Map<number, Set<number>> {
+  const out = new Map<number, Set<number>>();
+  for (const e of entries) {
+    const held = keptIndexOf(e.index);
+    if (held === undefined) continue;
+    const seen = new Set<number>([e.index]);
+    let up: number | undefined = e.parentIndex;
+    while (up !== undefined && !seen.has(up)) {
+      seen.add(up);
+      const holder = keptIndexOf(up);
+      if (holder !== undefined && holder !== held) {
+        let set = out.get(holder);
+        if (set === undefined) out.set(holder, (set = new Set<number>()));
+        set.add(held);
+      }
+      up = byIndex.get(up)?.parentIndex;
+    }
+  }
+  return out;
+}
+
 /**
  * Runs the whole engine (see the steps at the top of this file).
  * `results`: one parse result per dropped file, in drop order.
@@ -503,13 +847,24 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
       failed.push({ index, fileName: r.fileName, sha256: r.sha256, error: r.error, detail: r.detail });
     }
   });
+  // The attached emails, after every file's own email (see ATTACHED EMAILS at the top).
+  const firstAttached = parsed.length;
+  const read = readAttached(results);
+  read.messages.forEach((m, k) => {
+    parsed.push(m);
+    inputPosition.push(read.entries[k]!.index);
+  });
+  const attachedByIndex = new Map<number, EngineAttached>();
+  for (const e of read.entries) attachedByIndex.set(e.index, e);
+  const inputCount = results.length + read.entries.length;
 
   // 2. De-duplicate (checked by isValidDedupe; the fallback merges nothing).
+  // A dropped file's copy always wins over an attached one (D2, dedupe.ts).
   parts.onStage?.('dedupe');
   let deduped: DedupeResult;
   let dedupeFailed = false;
   try {
-    deduped = (parts.dedupe ?? dedupe)(parsed);
+    deduped = (parts.dedupe ?? dedupe)(parsed, { firstAttached });
     if (!isValidDedupe(deduped, parsed)) throw new Error('invalid dedupe result');
   } catch {
     deduped = noDedupe(parsed);
@@ -529,28 +884,46 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
     dedupeWarnings: k.warnings.map((w) => ({ ...w, related: w.related.map(toInput) })),
   }));
 
-  // 3. Order.
+  // 3. Order (undated attached emails just before their parent, Q7).
   parts.onStage?.('order');
-  const work: Work[] = orderMessages(kept).map(({ item, order }) => ({
+  const keptOf = new Map<number, number>(); // input position -> input position of the kept message holding it
+  for (const k of kept) {
+    keptOf.set(k.index, k.index);
+    for (const d of k.duplicates) keptOf.set(d.index, k.index);
+  }
+  const attached = settleAttached(read, parsed, inputPosition, (index) => keptOf.get(index));
+  const ordered = placeUndatedAttached(
+    orderMessages(kept),
+    (index) => attachedByIndex.get(index)?.parentIndex,
+    (index) => keptOf.get(index),
+  );
+  const work: Work[] = ordered.map(({ item, order }) => ({
     ...item,
     order,
     folds: [],
     warnings: new Set<EngineWarningCode>(dedupeFailed ? ['dedupe-failed'] : []),
   }));
 
-  // 4a. Overlap, over the ordered set (it needs chronological order).
+  // 4a. Overlap, over the ordered set (it needs chronological order). A holder
+  // always quotes the emails it holds (heldByKept), so their text is never
+  // folded as quoted from it.
   parts.onStage?.('overlap');
+  const holds = heldByKept(attached, attachedByIndex, (index) => keptOf.get(index));
   addFolds(
     work,
     guarded(work, () =>
       parts.detectQuotedOverlap(
-        work.map((w) => ({
-          bodyText: w.message.bodyText,
-          messageId: w.message.messageId,
-          inReplyTo: w.message.inReplyTo,
-          references: w.message.references,
-          index: w.index,
-        })),
+        work.map((w) => {
+          const held = holds.get(w.index);
+          return {
+            bodyText: w.message.bodyText,
+            messageId: w.message.messageId,
+            inReplyTo: w.message.inReplyTo,
+            references: w.message.references,
+            index: w.index,
+            ...(held === undefined ? {} : { holds: [...held] }),
+          };
+        }),
       ),
     ),
   );
@@ -600,7 +973,7 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
     };
   });
 
-  const positionByIndex: (number | null)[] = results.map(() => null);
+  const positionByIndex: (number | null)[] = new Array<number | null>(inputCount).fill(null);
   messages.forEach((m, position) => {
     positionByIndex[m.index] = position;
     for (const d of m.duplicates) positionByIndex[d.index] = position;
@@ -638,13 +1011,15 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
       messagesFound: parsed.length,
       duplicatesMerged: deduped.mergedCount,
       filesFailed: failed.length,
-      undated: messages.filter((m) => m.order === 'file-order').length,
+      undated: messages.filter((m) => m.order !== 'by-date').length,
       withFolds: messages.filter((m) => m.segments.some((s) => s.folded)).length,
     },
     positionByIndex,
     reconstructed,
     timeline,
     reconstructionWarnings,
+    // No key when there are none: the result for files without attached emails is unchanged.
+    ...(attached.length === 0 ? {} : { attached }),
   };
 }
 

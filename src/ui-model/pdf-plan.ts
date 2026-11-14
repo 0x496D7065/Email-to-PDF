@@ -37,7 +37,9 @@
 //   two parts printed as two different emails). The same holds for a
 //   forwarded part the PDF leaves out because its rebuilt email is
 //   unticked (task 8.13a, Q2: `printedAs` kind 'unticked', printed
-//   nowhere in the PDF). Two ADJACENT blocks with the very same "printed
+//   nowhere in the PDF), and for the printed block of an attached email
+//   the reader unticked (task 8.13b-3, Q3: kind 'unticked-attached'; one
+//   in the PDF is kind 'email', like a real file). Two ADJACENT blocks with the very same "printed
 //   as" label (both left out, the same email and number, or the same
 //   unticked email) are then joined into one block with one label
 //   (mergeSamePrintedAs, task 8.13a review round 2): a forward's header
@@ -115,20 +117,25 @@ function printedAsKey(p: PrintedAs | null | undefined): string {
       return `e${String(p.position)}#${String(p.number)}`;
     case 'unticked':
       return `u${String(p.id)}`;
+    case 'unticked-attached':
+      return `a${String(p.position)}`;
   }
 }
 
 /**
  * Whether the PDF leaves text (not white space alone) of `body` out because
  * it prints it as an email of its own (a rebuilt email or a real file; not
- * an unticked forwarded part, which is printed nowhere): then the note of
+ * an unticked forwarded part or unticked attached email, which is printed
+ * nowhere): then the note of
  * an email kept whole says so (task 8.11, finding S1, done in task 8.13a;
  * src/ui-model/message-notes.ts, pdfPlanNote). `view` null or without
  * `pdfRanges`: false.
  */
 export function printedAsEmailOfItsOwn(view: Pick<PdfView, 'pdfRanges'> | null, body: string): boolean {
   // 'unticked' never meets keptAllBecauseEmpty anyway: keepsKind always keeps 'forwarded', so a plan with a forwarded part with text is never "kept whole because empty".
-  return (view?.pdfRanges ?? []).some((r) => r.printedAs != null && r.printedAs.kind !== 'unticked' && hasNonSpace(body, r.start, r.end));
+  return (view?.pdfRanges ?? []).some(
+    (r) => r.printedAs != null && r.printedAs.kind !== 'unticked' && r.printedAs.kind !== 'unticked-attached' && hasNonSpace(body, r.start, r.end),
+  );
 }
 
 /** A display block and its label (null: a shown block, fully in the PDF, or no plan). */

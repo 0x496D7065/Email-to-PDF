@@ -13,7 +13,8 @@ import { buildThread, instantOf, type ThreadMessage } from '../../tests/support/
 import { THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases';
 import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../engine/output-plan';
-import type { NormalizedMessage } from '../parsing/types';
+import { attachedResult } from '../../tests/support/attached-builder';
+import type { NormalizedMessage, ParseResult } from '../parsing/types';
 import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere, type PdfDocument, type PdfEmail } from '../pdf/model';
 import { createPdfStrings } from '../pdf/strings';
 import { bodyLines, lineText } from '../pdf/text';
@@ -55,6 +56,8 @@ const keyOf = (p: PrintedAs): string => {
       return `email #${String(p.position + 1)} = Email ${String(p.number)}`;
     case 'unticked':
       return `unticked rebuilt ${String(p.id)} (not in the PDF)`;
+    case 'unticked-attached':
+      return `unticked attached email #${String(p.position + 1)} (not in the PDF)`;
   }
 };
 
@@ -92,13 +95,17 @@ function setUp(c: ThreadCase, s: Scenario, policy: OutputPolicy = DEFAULT_OUTPUT
   const tag = c.id.replace(/[^a-z0-9]+/giu, '-');
   const last = c.messages!.length - 1;
   const result: EngineResult = runEngine(s.dropped(last).map((i) => ({ ok: true as const, message: realFile(c.messages!, i, tag) })));
-  const positions = result.messages.map((_, k) => k);
+  return prepare(result, result.messages.map((_, k) => k), s.rebuilt, policy);
+}
+
+/** The plans, PDF and preview views for the emails at `positions` of `result`, as the app makes them. */
+function prepare(result: EngineResult, positions: readonly number[], chooseRebuilt: (ids: readonly number[]) => number[], policy: OutputPolicy = DEFAULT_OUTPUT_POLICY) {
   const plans = planOutput(
     positions.map((p) => result.messages[p]!),
     policy,
   );
   const ids = rebuiltEntries(result).map((r) => r.id);
-  const rebuilt = s.rebuilt(ids);
+  const rebuilt = chooseRebuilt(ids);
   // Every rebuilt email not chosen is one the reader unticked (src/ui/review.ts, untickedRebuilt, with every card shown).
   const unticked = ids.filter((id) => !rebuilt.includes(id));
   const input = { result, positions, plans, policy, rebuilt, unticked };
@@ -141,74 +148,123 @@ function cutChars(body: string, plan: MessagePlan, ranges: readonly { start: num
   return out;
 }
 
+interface Counts {
+  labelledSomewhere: number;
+  rebuiltTargets: number;
+  realTargets: number;
+  untickedTargets: number;
+  /** Task 8.13b-3: an attached email's block, printed as that email (kind 'email') or left out with it ('unticked-attached'). */
+  attachedTargets: number;
+  untickedAttachedTargets: number;
+  sentencesLabelled: number;
+  sentencesKept: number;
+}
+const newCounts = (): Counts => ({ labelledSomewhere: 0, rebuiltTargets: 0, realTargets: 0, untickedTargets: 0, attachedTargets: 0, untickedAttachedTargets: 0, sentencesLabelled: 0, sentencesKept: 0 });
+
+/**
+ * The checks of this file for one prepared input (every email in `positions`
+ * is checked). `all`: the conversation's own sentences; `ownOf`: the index
+ * in `all` of the sentence of its own of the email at a list position (none
+ * for an email that is not a message of the conversation).
+ */
+function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: readonly string[], ownOf: (position: number) => number | undefined, counts: Counts): void {
+  const { result, positions, plans, input, doc, views } = prepared;
+  const { elsewhere } = noRepeat(input);
+  for (const [k, position] of positions.entries()) {
+    const body = result.messages[position]!.message.bodyText;
+    const plan = plans[k]!;
+    const email = doc.emails.find((e) => e.position === position)!;
+    // The PDF model's own body is the plan cut by the no-repeat parts (ties the parts to the real output).
+    const parts = elsewhere.get(position) ?? [];
+    const printed = pdfBodyText(body, plan, DEFAULT_OUTPUT_POLICY, parts);
+    expect(email.body.map(lineText), `${where} #${String(position + 1)} body`).toEqual(bodyLines(printed.text, { notLineStarts: printed.notLineStarts }).lines.map(lineText));
+    // 1. The characters labelled are exactly the characters the PDF leaves out by this rule.
+    const marks = labelled(body, result, position, views.get(position)!);
+    const cut = cutChars(body, plan, withoutPrintedElsewhere(body, plan.ranges, parts).ranges);
+    expect([...marks.keys()].sort((a, b) => a - b), `${where} #${String(position + 1)} labelled`).toEqual([...cut].sort((a, b) => a - b));
+    expect(email.flags.printedElsewhere).toBe(cut.size > 0);
+    counts.labelledSomewhere += marks.size > 0 ? 1 : 0;
+    // The printed blocks of attached emails in this body (task 8.13b-3).
+    const index = result.messages[position]!.index;
+    const blocks = (result.attached ?? []).flatMap((a) => a.places.filter((p) => p.holderIndex === index));
+    const inBlock = (i: number): boolean => blocks.some((p) => p.start <= i && i < p.end);
+    // 2. N names the email the PDF prints it as.
+    for (const target of new Map([...marks.values()].map((p) => [keyOf(p), p])).values()) {
+      if (target.kind === 'unticked') {
+        // Q2 (task 8.13a): a forwarded part of an unticked rebuilt email, printed nowhere.
+        counts.untickedTargets++;
+        expect(input.rebuilt, keyOf(target)).not.toContain(target.id);
+        expect(input.unticked, keyOf(target)).toContain(target.id);
+        expect(doc.emails.some((e) => e.rebuilt?.id === target.id), keyOf(target)).toBe(false);
+        continue;
+      }
+      if (target.kind === 'unticked-attached') {
+        // Q3 (task 8.13b-3): the block of an attached email whose kept copy is unticked: that copy is
+        // not in the PDF, and it is the kept copy of an email attached inside this one.
+        counts.untickedAttachedTargets++;
+        expect(positions, keyOf(target)).not.toContain(target.position);
+        expect(doc.pdfNumberByPosition[target.position] ?? null, keyOf(target)).toBeNull();
+        expect(
+          (result.attached ?? []).some((a) => result.positionByIndex[a.index] === target.position && a.places.some((p) => p.holderIndex === index)),
+          keyOf(target),
+        ).toBe(true);
+        continue;
+      }
+      const shown = doc.emails[target.number - 1]!;
+      expect(shown.number, keyOf(target)).toBe(target.number);
+      if (target.kind === 'rebuilt') {
+        counts.rebuiltTargets++;
+        expect(shown.rebuilt?.id, keyOf(target)).toBe(target.id);
+      } else {
+        counts.realTargets++;
+        expect(shown.position, keyOf(target)).toBe(target.position);
+        expect(doc.pdfNumberByPosition[target.position]).toBe(target.number);
+      }
+    }
+    // 3. Read on the emails' own sentences: one labelled is gone from this email and in the email named;
+    //    one kept by the plan and not labelled is still in this email.
+    const shownHere = squash(bodyOf(email));
+    const printedNowhere = (sentence: string): boolean => doc.emails.every((e) => !squash(bodyOf(e)).includes(sentence));
+    for (const [s, sentence] of all.entries()) {
+      const start = placeOf(body, sentence);
+      if (start < 0) continue;
+      const target = marks.get(start);
+      if (target !== undefined) {
+        counts.sentencesLabelled++;
+        expect(shownHere, `${where}: "${sentence}" labelled ${keyOf(target)}`).not.toContain(sentence);
+        if (target.kind === 'unticked') expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+        else if (target.kind === 'unticked-attached') {
+          // Q3: the unticked email's own text is nowhere in the PDF (a quote inside its block may be the
+          // own text of another email, printed there).
+          if (ownOf(target.position) === s) expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+        } else if (target.kind === 'email' && inBlock(start)) {
+          // An attached email's block holds its whole text, quotes included: its own text is printed in
+          // it, every other sentence wherever the email named prints its place.
+          counts.attachedTargets++;
+          const named = squash(bodyOf(doc.emails[target.number - 1]!));
+          const targetBody = result.messages[target.position]!.message.bodyText;
+          const at = placeOf(targetBody, sentence);
+          const targetPlan = plans[positions.indexOf(target.position)]!;
+          const targetRanges = withoutPrintedElsewhere(targetBody, targetPlan.ranges, elsewhere.get(target.position) ?? []).ranges;
+          const printedThere = at >= 0 && targetRanges.some((r) => r.keep && r.start <= at && at < r.end);
+          if (ownOf(target.position) === s || printedThere) expect(named, `${where}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+        } else expect(squash(bodyOf(doc.emails[target.number - 1]!)), `${where}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+      } else if (plan.ranges.some((r) => r.keep && r.start <= start && start < r.end)) {
+        counts.sentencesKept++;
+        expect(shownHere, `${where}: "${sentence}" kept`).toContain(sentence);
+      }
+    }
+  }
+}
+
 describe('"printed as email #N" labels say exactly what the PDF leaves out (task 8.11), every conversation of thread-cases.ts', () => {
-  let labelledSomewhere = 0;
-  let rebuiltTargets = 0;
-  let realTargets = 0;
-  let untickedTargets = 0;
-  let sentencesLabelled = 0;
-  let sentencesKept = 0;
+  const counts = newCounts();
 
   for (const c of THREAD_CASES) {
     describe(c.id, () => {
       for (const s of SCENARIOS) {
         it(s.name, () => {
-          const { result, positions, plans, input, doc, views } = setUp(c, s);
-          const { elsewhere } = noRepeat(input);
-          const all = sentences(c);
-          for (const [k, position] of positions.entries()) {
-            const body = result.messages[position]!.message.bodyText;
-            const plan = plans[k]!;
-            const email = doc.emails.find((e) => e.position === position)!;
-            // The PDF model's own body is the plan cut by the no-repeat parts (ties the parts to the real output).
-            const parts = elsewhere.get(position) ?? [];
-            const printed = pdfBodyText(body, plan, DEFAULT_OUTPUT_POLICY, parts);
-            expect(email.body.map(lineText), `${c.id} #${String(position + 1)} body`).toEqual(bodyLines(printed.text, { notLineStarts: printed.notLineStarts }).lines.map(lineText));
-            // 1. The characters labelled are exactly the characters the PDF leaves out by this rule.
-            const marks = labelled(body, result, position, views.get(position)!);
-            const cut = cutChars(body, plan, withoutPrintedElsewhere(body, plan.ranges, parts).ranges);
-            expect([...marks.keys()].sort((a, b) => a - b), `${c.id} #${String(position + 1)} labelled`).toEqual([...cut].sort((a, b) => a - b));
-            expect(email.flags.printedElsewhere).toBe(cut.size > 0);
-            labelledSomewhere += marks.size > 0 ? 1 : 0;
-            // 2. N names the email the PDF prints it as.
-            for (const target of new Map([...marks.values()].map((p) => [keyOf(p), p])).values()) {
-              if (target.kind === 'unticked') {
-                // Q2 (task 8.13a): a forwarded part of an unticked rebuilt email, printed nowhere.
-                untickedTargets++;
-                expect(input.rebuilt, keyOf(target)).not.toContain(target.id);
-                expect(input.unticked, keyOf(target)).toContain(target.id);
-                expect(doc.emails.some((e) => e.rebuilt?.id === target.id), keyOf(target)).toBe(false);
-                continue;
-              }
-              const shown = doc.emails[target.number - 1]!;
-              expect(shown.number, keyOf(target)).toBe(target.number);
-              if (target.kind === 'rebuilt') {
-                rebuiltTargets++;
-                expect(shown.rebuilt?.id, keyOf(target)).toBe(target.id);
-              } else {
-                realTargets++;
-                expect(shown.position, keyOf(target)).toBe(target.position);
-                expect(doc.pdfNumberByPosition[target.position]).toBe(target.number);
-              }
-            }
-            // 3. Read on the emails' own sentences: one labelled is gone from this email and in the email named;
-            //    one kept by the plan and not labelled is still in this email.
-            const shownHere = squash(bodyOf(email));
-            for (const sentence of all) {
-              const start = placeOf(body, sentence);
-              if (start < 0) continue;
-              const target = marks.get(start);
-              if (target !== undefined) {
-                sentencesLabelled++;
-                expect(shownHere, `${c.id}: "${sentence}" labelled ${keyOf(target)}`).not.toContain(sentence);
-                if (target.kind === 'unticked') expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence)), `${c.id}: "${sentence}" nowhere in the PDF`).toHaveLength(0);
-                else expect(squash(bodyOf(doc.emails[target.number - 1]!)), `${c.id}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
-              } else if (plan.ranges.some((r) => r.keep && r.start <= start && start < r.end)) {
-                sentencesKept++;
-                expect(shownHere, `${c.id}: "${sentence}" kept`).toContain(sentence);
-              }
-            }
-          }
+          checkLabels(c.id, setUp(c, s), sentences(c), () => undefined, counts);
         });
       }
 
@@ -226,12 +282,115 @@ describe('"printed as email #N" labels say exactly what the PDF leaves out (task
 
   it('the cases really exercise the labels, with both kinds of email named', () => {
     // At the time of writing: 64 emails with labels, 23 rebuilt and 74 real emails named, 97 sentences labelled, 683 kept.
-    expect(labelledSomewhere).toBeGreaterThan(50);
-    expect(rebuiltTargets).toBeGreaterThan(15);
-    expect(realTargets).toBeGreaterThan(50);
+    expect(counts.labelledSomewhere).toBeGreaterThan(50);
+    expect(counts.rebuiltTargets).toBeGreaterThan(15);
+    expect(counts.realTargets).toBeGreaterThan(50);
     // Task 8.13a, Q2: forwarded parts left out with their unticked rebuilt emails.
-    expect(untickedTargets).toBeGreaterThan(5);
-    expect(sentencesLabelled).toBeGreaterThan(80);
-    expect(sentencesKept).toBeGreaterThan(500);
+    expect(counts.untickedTargets).toBeGreaterThan(5);
+    expect(counts.sentencesLabelled).toBeGreaterThan(80);
+    expect(counts.sentencesKept).toBeGreaterThan(500);
+    // No attached email in these inputs (see the next block).
+    expect(counts.attachedTargets + counts.untickedAttachedTargets).toBe(0);
+  });
+});
+
+/**
+ * Task 8.13b-3 (review round 2): the same checks with an email attached
+ * inside a dropped file. Per conversation, a forwarder's file holds the last
+ * email inline (an inline forward: its printed block is in the forwarder's
+ * text) and the first email sent as a file (no block); the forwarder is dated
+ * a day after the last email, or (M1) a day before it, so the attached email
+ * comes after the email holding it. Scenarios: the forwarder's file alone, or
+ * with every email of the conversation also dropped as a file (the dropped
+ * copies are kept, the attached ones merged into them, Q8); every email
+ * ticked, the last email unticked (Q3: its block is left out of the
+ * forwarder too), or the forwarder unticked; every rebuilt email chosen, or
+ * none.
+ */
+describe('"printed as email #N" labels with an email attached inside a dropped file (task 8.13b-3)', () => {
+  const counts = newCounts();
+  const DAY = 86_400_000;
+
+  /** The forwarder's file, holding the last email inline and the first one as a file. */
+  function forwarderFile(c: ThreadCase, tag: string, before: boolean): ParseResult {
+    const messages = c.messages!;
+    const last = messages.length - 1;
+    const lastFile = realFile(messages, last, tag);
+    const utcMs = lastFile.date.utcMs! + (before ? -DAY : DAY);
+    const forwarder: NormalizedMessage = {
+      ...lastFile,
+      messageId: `${tag}-forwarder@example.test`,
+      inReplyTo: null,
+      references: [],
+      date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: 0, zoneKnown: true },
+      from: [{ name: 'Fiona Forward', address: 'fiona@example.test' }],
+      subject: `Fwd: ${lastFile.subject}`,
+      bodyText: 'Forwarder note: the whole conversation is below, the first email of it is attached as a file.\n',
+      source: { fileName: `${tag}-forwarder.eml`, sha256: 'f'.repeat(64), kind: 'eml' },
+    };
+    return attachedResult({
+      message: forwarder,
+      children: [
+        { node: { message: lastFile }, inline: true },
+        { node: { message: realFile(messages, 0, tag) }, inline: false, name: 'first.eml' },
+      ],
+    });
+  }
+
+  /** Which email is unticked: none, the kept copy of the last email, or the forwarder. */
+  const SELECTIONS: readonly { readonly name: string; readonly unticked: 'none' | 'last' | 'forwarder' }[] = [
+    { name: 'every email ticked', unticked: 'none' },
+    { name: 'the last email unticked', unticked: 'last' },
+    { name: 'the forwarder unticked', unticked: 'forwarder' },
+  ];
+
+  for (const c of THREAD_CASES) {
+    describe(c.id, () => {
+      const tag = c.id.replace(/[^a-z0-9]+/giu, '-');
+      const last = c.messages!.length - 1;
+      for (const before of [false, true]) {
+        for (const alsoDropped of [false, true]) {
+          for (const selection of SELECTIONS) {
+            for (const [chosen, choose] of [
+              ['every rebuilt email chosen', (ids: readonly number[]) => [...ids]],
+              ['no rebuilt email chosen', () => []],
+            ] as const) {
+              const name = `forwarder ${before ? 'before' : 'after'} the last email${alsoDropped ? ', every email also dropped' : ''}, ${selection.name}, ${chosen}`;
+              it(name, () => {
+                const files: ParseResult[] = [forwarderFile(c, tag, before), ...(alsoDropped ? c.messages!.map((_, i) => ({ ok: true as const, message: realFile(c.messages!, i, tag) })) : [])];
+                const result = runEngine(files);
+                expect(result.attached).toHaveLength(2);
+                const lastAt = result.messages.findIndex((m) => m.message.messageId === `${tag}-${String(last)}@example.test`);
+                const forwarderAt = result.messages.findIndex((m) => m.message.messageId === `${tag}-forwarder@example.test`);
+                expect(lastAt).toBeGreaterThanOrEqual(0);
+                expect(forwarderAt).toBeGreaterThanOrEqual(0);
+                const unticked = selection.unticked === 'last' ? lastAt : selection.unticked === 'forwarder' ? forwarderAt : -1;
+                const positions = result.messages.map((_, k) => k).filter((p) => p !== unticked);
+                const ownOf = (position: number): number | undefined => {
+                  const id = result.messages[position]?.message.messageId ?? '';
+                  const match = new RegExp(`^${tag}-(\\d+)@example\\.test$`, 'u').exec(id);
+                  return match === null ? undefined : Number(match[1]);
+                };
+                const prepared = prepare(result, positions, choose);
+                checkLabels(`${c.id} (${name})`, prepared, sentences(c), ownOf, counts);
+                // The last email's own text (M1): printed in the PDF exactly when its kept copy is ticked.
+                const own = sentences(c)[last]!;
+                const doc = prepared.doc;
+                const times = doc.emails.filter((e) => squash(bodyOf(e)).includes(own)).length;
+                if (positions.includes(lastAt)) expect(times, `${name}: the last email's own text`).toBeGreaterThan(0);
+                else expect(times, `${name}: the last email's own text`).toBe(0);
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+
+  it('the cases really exercise attached emails, printed as themselves and left out with them', () => {
+    console.log(`printed-elsewhere with attached emails: ${JSON.stringify(counts)}`);
+    expect(counts.attachedTargets).toBeGreaterThan(20);
+    expect(counts.untickedAttachedTargets).toBeGreaterThan(5);
+    expect(counts.sentencesLabelled).toBeGreaterThan(50);
   });
 });

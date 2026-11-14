@@ -16,9 +16,12 @@
 //   all of them;
 // - an email is included unless ANY of its keys was left out. So a merged
 //   email stays left out when a later run keeps another of its copies.
-// Today one file holds exactly one email, so the file hash identifies the
-// email. A format with several emails per file (.mbox, later) must add the
-// email's place in its file to the key.
+// A file's own email is keyed by the file hash alone. An email attached
+// inside a file (task 8.13b-3) is keyed by the file hash plus its place in
+// the file (source.attachedPath, "<hash>/2.1"), so it has its own choice,
+// independent of the email it is attached to (user decision 2026-11-10,
+// Q2). A format with several emails per file (.mbox, later) must add the
+// email's place in its file to the key too.
 // The same file added twice has the same hash: its two copies are merged
 // anyway (provably identical). If they ever both stay (de-duplication
 // failed), they share one choice, which is the safe reading.
@@ -26,10 +29,17 @@
 // Pure functions, no DOM (README.md, rule R7).
 
 import type { EngineMessage } from '../engine/engine';
+import type { NormalizedMessage } from '../parsing/types';
 
-/** The keys of one email: its file's SHA-256, then those of the copies merged into it (unique). */
+/** The key of one copy: its file's SHA-256, plus "/" and its place in the file for an attached email ("<hash>/2.1"). */
+export function sourceKey(source: NormalizedMessage['source']): string {
+  const path = source.attachedPath;
+  return Array.isArray(path) && path.length > 0 ? `${source.sha256}/${path.join('.')}` : source.sha256;
+}
+
+/** The keys of one email: its copy's key (sourceKey), then those of the copies merged into it (unique). */
 export function selectionKeys(m: EngineMessage): string[] {
-  const keys = [m.message.source.sha256, ...m.duplicates.map((d) => d.source.sha256)];
+  const keys = [sourceKey(m.message.source), ...m.duplicates.map((d) => sourceKey(d.source))];
   return [...new Set(keys)];
 }
 

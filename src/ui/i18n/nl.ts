@@ -220,6 +220,7 @@ export const nl: Messages = {
     },
     order: {
       'file-order': 'Geen bruikbare datum: achteraan in de lijst gezet, in de volgorde waarin de bestanden zijn toegevoegd.',
+      'before-parent': 'Geen bruikbare datum: vlak voor de e-mail gezet waarbij hij is gevoegd.',
     },
     fold: {
       'quoted-overlap': 'Tekst uit een eerdere e-mail',
@@ -318,6 +319,7 @@ export const nl: Messages = {
       email: 'Niet in deze e-mail in de PDF: afgedrukt als e-mail {number}',
       rebuilt: 'Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail {number} in de PDF)',
       unticked: 'Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt',
+      untickedAttached: 'Niet in de PDF: e-mail {number} (hier bijgevoegd) is niet aangevinkt',
     },
     messageFailed: 'De tool kon niet tonen wat de PDF van deze e-mail weglaat.',
     document: {
@@ -341,6 +343,7 @@ export const nl: Messages = {
       },
       emailHeading: 'E-mail {number}',
       file: 'Bestand',
+      attachedNoName: '(bijgevoegde e-mail {number})',
       attachment: '({size}, {type})',
       attachmentNoType: '({size})',
       pageFooter: 'Pagina {page} van {total}',
@@ -364,7 +367,8 @@ export const nl: Messages = {
       'rtf-only-body': 'De tekst van deze e-mail is opgeslagen in een formaat dat hier niet kan worden getoond.',
       'text-encoding-uncertain': 'Sommige letters in deze e-mail kunnen verkeerd worden getoond (de tekenset is niet zeker). Het origineel staat nog in het bestand.',
       'no-body': 'Deze e-mail heeft geen tekst.',
-      'forwarded-message-not-expanded': 'Een doorgestuurde e-mail in deze e-mail staat in de lijst als bijlage. De tekst ervan wordt niet getoond.',
+      'forwarded-message-not-expanded':
+        'Een e-mail of item die bij deze e-mail is gevoegd, staat alleen in de lijst als bijlage: de tekst ervan wordt niet getoond. Dit staat nog in het originele bestand.',
     },
     dedupe: {
       'same-id-different-content': 'Een andere e-mail lijkt hetzelfde bericht te zijn, maar de inhoud verschilt, dus beide worden bewaard.',

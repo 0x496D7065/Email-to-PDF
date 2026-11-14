@@ -165,6 +165,8 @@ interface AttachedNode {
 interface ChildSlot {
   /** Which message/rfc822 part of its parent it is, from 1, in file order (see AttachedMessage.path). */
   readonly number: number;
+  /** The part's file name, '' when it has none (see AttachedMessage.name). */
+  readonly name: string;
   /** null until read, and for good if it could not be read. */
   node: AttachedNode | null;
   /** Sent as an attachment and not read yet: its part and its parent's depth. */
@@ -311,6 +313,7 @@ function flattenAttached(
     readonly parent: number;
     readonly places: AttachedPlace[];
     readonly path: number[];
+    readonly name: string;
   }
   /** Where the body of the email whose children are walked sits, in each email that prints it. */
   interface Frame {
@@ -329,7 +332,7 @@ function flattenAttached(
       const { block } = node;
       const places =
         block === null ? [] : frames.map((f) => ({ holder: f.holder, start: f.offset + block.start, end: f.offset + block.end }));
-      entries.push({ node, parent, places, path: ownPath });
+      entries.push({ node, parent, places, path: ownPath, name: slot.name });
       const inner: Frame[] = [{ holder: index, offset: 0 }];
       if (block !== null) for (const f of frames) inner.push({ holder: f.holder, offset: f.offset + block.start + block.bodyStart });
       walk(node.content.children, index, inner, ownPath);
@@ -354,6 +357,7 @@ function flattenAttached(
       parent: entry.parent,
       places: entry.places,
       path: entry.path,
+      name: entry.name,
     }),
   );
   return { attached, resolve };
@@ -536,7 +540,7 @@ async function readContent(tree: EmlTree, context: ReadContext, depth: number): 
     if (!isInlineForwarded(attachment)) {
       // Sent as an attachment: listed exactly as before, read later.
       attachments.push({ info: attachmentInfo(attachment), owner: null });
-      const slot: ChildSlot = { number, node: null, pending: { attachment, depth } };
+      const slot: ChildSlot = { number, name: attachment.filename ?? '', node: null, pending: { attachment, depth } };
       children.push(slot);
       context.deferred.push(slot);
       return;
@@ -551,7 +555,7 @@ async function readContent(tree: EmlTree, context: ReadContext, depth: number): 
     }
     const node: AttachedNode = { head: inner.head, content: inner.content, block: null };
     segments.push({ text: inner.text, isBlock: true, node, bodyStart: inner.bodyStart });
-    children.push({ number, node, pending: null });
+    children.push({ number, name: attachment.filename ?? '', node, pending: null });
     // One by one: a spread into push overflows the stack for very long lists.
     // Its lines are listed here too, marked as belonging to it (or to an
     // email inside it).

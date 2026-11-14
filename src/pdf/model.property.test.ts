@@ -28,6 +28,10 @@
 //   not check any of it: a middle email of an Outlook chain), in the email
 //   that prints that place; also in unmarked Outlook chains with answers
 //   typed inside the quotes and random files and rebuilt emails in;
+// - the first three also with the same emails grouped into files with
+//   emails attached inside them (task 8.13b-3, review round 2): inline or
+//   as a file for the first two, only as a file for the third (the printed
+//   blocks of inline ones are checked in model.attached.property.test.ts);
 // - 2000 emails build in well under a second.
 // Synthetic data only: made-up names, *.test addresses. Every invisible or
 // special character is written as a \u escape.
@@ -38,7 +42,8 @@ import { buildThread, instantOf } from '../../tests/support/thread-builder';
 import { THREAD_CASES } from '../../tests/support/thread-cases';
 import { runEngine } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../engine/output-plan';
-import type { EmailAddress, NormalizedMessage } from '../parsing/types';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
+import { groupAsAttached, type AttachMode } from '../../tests/support/attached-builder';
 import { rebuiltEntries } from '../ui-model/rebuilt';
 import type { ReconstructedMessage } from '../engine/reconstruct';
 import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PdfDocument, type PdfEmail, type PrintedPart } from './model';
@@ -189,6 +194,23 @@ function randomMessage(random: () => number, k: number): NormalizedMessage {
   };
 }
 
+/**
+ * How the random emails of a seed are dropped (task 8.13b-3, review round 2):
+ * each as a file of its own (as before), or grouped into files with emails
+ * attached inside them (tests/support/attached-builder.ts) inline or as a
+ * file, or only as a file (no printed block in any body).
+ */
+type Grouping = 'files' | AttachMode;
+const GROUPINGS: readonly Grouping[] = ['files', 'random'];
+
+/** The parse results for `messages` under `grouping`; the grouping has its own random numbers, so the seed's emails stay the same. */
+function filesOf(messages: readonly NormalizedMessage[], seed: number, grouping: Grouping): ParseResult[] {
+  if (grouping === 'files') return messages.map((message) => ({ ok: true as const, message }));
+  return groupAsAttached(messages, makeRandom(seed + 50_000), { mode: grouping });
+}
+/** How many attached emails the property tests saw (they must really be there). */
+let attachedSeen = 0;
+
 const strings = createPdfStrings('en');
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
@@ -228,7 +250,7 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEm
         if (r.printedAs.kind === 'rebuilt') expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: header lines "${own.slice(0, 40)}" moved`).toContain(own);
       } else {
         expect(holdsQuotedText(body, plan.ranges, linesEnd, place!.end), `${where}: own text cut next to quoted text`).toBe(false);
-        if (r.printedAs.kind !== 'unticked') expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: own text "${own.slice(0, 40)}" in Email ${String(r.printedAs.number)}`).toContain(own);
+        if (r.printedAs.kind !== 'unticked' && r.printedAs.kind !== 'unticked-attached') expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: own text "${own.slice(0, 40)}" in Email ${String(r.printedAs.number)}`).toContain(own);
       }
       movedOwn++;
       checked++;
@@ -249,12 +271,13 @@ const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
   d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
 
 describe('PDF document model properties', () => {
-  it('with "include everything", every body is the full text after the display transforms only', () => {
+  it('with "include everything", every body is the full text after the display transforms only (also with attached emails)', () => {
     let quoted = 0;
-    for (let seed = 1; seed <= 40; seed++) {
+    for (const grouping of GROUPINGS) for (let seed = 1; seed <= 40; seed++) {
       const random = makeRandom(seed);
       const messages = Array.from({ length: 12 }, (_, k) => randomMessage(random, seed * 100 + k));
-      const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
+      const result = runEngine(filesOf(messages, seed, grouping));
+      attachedSeen += result.attached?.length ?? 0;
       const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
       const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
       // Plans made with the DEFAULT policy on purpose: "include everything" must not depend on them.
@@ -281,12 +304,13 @@ describe('PDF document model properties', () => {
     expect(quoted).toBeGreaterThan(100);
   });
 
-  it('with the default policy, every shown line is a piece of the full text, and numbers map back', () => {
+  it('with the default policy, every shown line is a piece of the full text, and numbers map back (also with attached emails)', () => {
     let withOmissions = 0;
-    for (let seed = 101; seed <= 140; seed++) {
+    for (const grouping of GROUPINGS) for (let seed = 101; seed <= 140; seed++) {
       const random = makeRandom(seed);
       const messages = Array.from({ length: 12 }, (_, k) => randomMessage(random, seed * 100 + k));
-      const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
+      const result = runEngine(filesOf(messages, seed, grouping));
+      attachedSeen += result.attached?.length ?? 0;
       const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
       const plans = planOutput(positions.map((p) => result.messages[p]!));
       withOmissions += plans.filter((p) => p.ranges.some((r) => !r.keep)).length;
@@ -309,7 +333,9 @@ describe('PDF document model properties', () => {
     let rebuiltShown = 0;
     let changed = 0;
     let ownTextChecked = 0;
-    for (let seed = 201; seed <= 240; seed++) {
+    // With attached emails, only sent as files: no printed block in any body, so every part left out
+    // is still one of a rebuilt email (blocks are checked in model.attached.property.test.ts).
+    for (const grouping of ['files', 'file'] as const) for (let seed = 201; seed <= 240; seed++) {
       const random = makeRandom(seed);
       const messages = Array.from({ length: 12 }, (_, k) => {
         const m = randomMessage(random, seed * 100 + k);
@@ -318,7 +344,8 @@ describe('PDF document model properties', () => {
         const history = `\n\nOn Tue, 4 Mar 2025 at 09:${String(10 + (k % 50))}, ${pick(random, ['Bob Sample <bob@furniture.example.test>', 'Carol Test <carol@sample.test>'])} wrote:\n> The desks arrive on Monday morning.\n${quoted}\n`;
         return random() < 0.7 ? { ...m, bodyText: m.bodyText + history } : m;
       });
-      const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
+      const result = runEngine(filesOf(messages, seed, grouping));
+      attachedSeen += result.attached?.length ?? 0;
       const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
       const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
       const included = positions.map((p) => result.messages[p]!);
@@ -484,6 +511,11 @@ describe('PDF document model properties', () => {
     expect(inPlaces).toBeGreaterThan(20);
     // Q3 (task 8.13a): some own-text pieces are middle emails the plan could not check, printed as their rebuilt emails.
     expect(movedOwn).toBeGreaterThan(5);
+  });
+
+  it('the tests above really ran with emails attached inside dropped files (task 8.13b-3)', () => {
+    console.log(`PDF model properties: ${String(attachedSeen)} attached emails seen`);
+    expect(attachedSeen).toBeGreaterThan(500);
   });
 
   it('builds 2000 emails in well under a second', () => {

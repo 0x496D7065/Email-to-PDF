@@ -102,6 +102,14 @@ describe('messageNotes', () => {
     ]);
   });
 
+  it('says an undated attached email is placed just before the email it is attached to (task 8.13b-3, Q7)', () => {
+    const m = engineMessage({ order: 'before-parent', parserWarnings: ['missing-date'] });
+    expect(messageNotes(m, 0, [0])).toEqual([
+      { kind: 'parse', code: 'missing-date' },
+      { kind: 'order', code: 'before-parent' },
+    ]);
+  });
+
   it('adds the problems while rebuilding earlier emails from the quote of THIS email, last, each once', () => {
     const m = engineMessage({ index: 3, engineWarnings: ['detector-failed'] });
     const warnings = [

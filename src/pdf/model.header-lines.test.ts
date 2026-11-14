@@ -194,6 +194,13 @@ function expectNoHeaderLines(made: Made, what: string): Stats {
         expect(doc.emails.some((e) => squash(bodyOf(e)).includes(text)), `${what}: an unticked forwarded part is nowhere in the PDF`).toBe(false);
         continue;
       }
+      if (r.printedAs.kind === 'unticked-attached') {
+        // Q3 (task 8.13b-3): the block of an attached email (or of the copy it was merged into) that is not in the PDF.
+        const untickedAt = r.printedAs.position;
+        expect(doc.pdfNumberByPosition[untickedAt] ?? null, what).toBeNull();
+        expect((result.attached ?? []).some((a) => result.positionByIndex[a.index] === untickedAt), what).toBe(true);
+        continue;
+      }
       const target = doc.emails[r.printedAs.number - 1]!;
       expect(target.number, what).toBe(r.printedAs.number);
       if (r.printedAs.kind === 'rebuilt') expect(target.rebuilt?.id, what).toBe(r.printedAs.id);
