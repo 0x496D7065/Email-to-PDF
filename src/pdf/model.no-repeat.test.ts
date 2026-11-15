@@ -21,6 +21,7 @@ import { THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases'
 import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy, type PlanRange } from '../engine/output-plan';
 import type { NormalizedMessage } from '../parsing/types';
+import { hasNoPrintableText } from '../ui-model/no-text';
 import { rebuiltEntries } from '../ui-model/rebuilt';
 import {
   buildPdfDocument,
@@ -413,6 +414,10 @@ describe('buildPdfDocument: no email twice (task 8.10)', () => {
     const forward = realOf(doc, 0);
     expect(forward.body).toEqual([]);
     expect(forward.notes.map(lineText)).toEqual([EN.noText]);
+    // Task 8.14, Q6: its body has text (printed elsewhere), so it is NOT left out like an email with no text.
+    expect(hasNoPrintableText(result.messages[0]!.message)).toBe(false);
+    expect(doc.pdfNumberByPosition[0]).toBe(forward.number);
+    expect(doc.emails).toHaveLength(3);
     for (const k of [0, 1]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
   });
 

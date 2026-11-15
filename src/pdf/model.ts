@@ -9,8 +9,9 @@
 // the time zone, the generation moment and the fixed texts, and returns a
 // PdfDocument:
 // - cover: title, date range, people, email count, generation date and time
-//   zone (as `blocks` for the renderer, and as data); no source files and no
-//   SHA-256 (user decision 2026-11-09, task 8.12);
+//   zone (as `blocks` for the renderer, and as data), of the emails in the
+//   PDF (an email left out for having no text does not count, task 8.14);
+//   no source files and no SHA-256 (user decision 2026-11-09, task 8.12);
 // - index: one entry per email (number, date, author, subject, attachment
 //   count and lines, anchor, bookmark title); the renderer resolves each
 //   anchor to a page number;
@@ -21,7 +22,8 @@
 // email they were read from are emails 1, 2 and 3. Headings, the index, the
 // bookmarks and the links ("email-N" anchors) all use these numbers. The
 // preview's "#N" is the list number (every real email, included or not), so
-// the two differ once an email is left out or a rebuilt email comes first:
+// the two differ once an email is left out (unticked, or with no text: see
+// NO-TEXT EMAILS below) or a rebuilt email comes first:
 // `pdfNumberByPosition` maps a list position to the PDF number of its real
 // email (null when not in the PDF).
 //
@@ -94,9 +96,11 @@
 // so nothing printed elsewhere is left out twice and nothing is lost: what
 // is left out is always printed as another email, and "Print full original
 // text", the preview and the original files still give every character. A
-// forward with no text of its own then shows the "(no text)" placeholder
-// (its forwarded emails are on their own pages). `flags.printedElsewhere`
-// (data only) tells when the rule left something out. Known repeats this
+// forward with no text of its own whose forwarded emails are all on their
+// own pages shows the "(no text)" placeholder (it is NOT left out like an
+// email with no text: its body has text, printed elsewhere; Q6 of task
+// 8.14). `flags.printedElsewhere` (data only) tells when the rule left
+// something out. Known repeats this
 // rule cannot remove (when unsure, the tool shows text twice rather than
 // lose it): a rebuilt email that rebuild-links.ts could not prove to be
 // the same as a real file (both are printed), a forwarded part that could
@@ -170,6 +174,30 @@
 // a restored piece is labelled "In the PDF"). Quoted history under a reply
 // header or behind ">" marks is not such a piece: it is left out by the
 // plan's own rule, whether or not its email is in the PDF, as before.
+// NO-TEXT EMAILS (task 8.14; user decisions 2026-11-09 and 2026-11-15, a
+// NARROW, deliberate exception to README.md, rule R6, and to brief section
+// 8.5): an email with no text (src/ui-model/no-text.ts, hasNoPrintableText:
+// its body is only white space, and no parser warning says its text could
+// not be read) is left out of the PDF entirely, attachments or not, in both
+// modes: no slot (planPdfOrder), so no number (the others are numbered
+// 1..n without a gap), no index entry, no bookmark, and it does not count on
+// the cover (count, date range, people; Q1). Nothing it holds is lost: it
+// holds only white space. Its pdfNumberByPosition is null, so the preview's
+// "Email N in the PDF" labels never name it. A rebuilt email whose rebuilt
+// text has no text is left out the same way (Q4,
+// rebuiltHasNoPrintableText): it gets no slot, so no place in a body prints
+// as it, and its quoted header lines are left to the plan of the email it
+// was read from. There they are quoted history, so the normal PDF folds them
+// out with the rest of the quote: they are printed only with
+// `policy.unfoldEverything` ("Print full original text"), and stay visible
+// in the preview and in the original file. An attached email the reader
+// TICKED that is left out this way keeps its printed block (its header
+// lines) in the email holding it (attachedBlockParts); one the reader
+// unticked is cut as before (Q3).
+// The "(no text)" placeholder stays for a text that could not be read (Q2:
+// the warnings of src/ui-model/no-text.ts) and for a body with text whose
+// every part is printed elsewhere (a forward whose forwarded emails are on
+// pages of their own, see the no-repeat rule; Q6).
 // FULL ORIGINAL TEXT RULE ("Print full original text"; user decision
 // 2026-10-28, task 7.8b, kept as a safety net in task 7.8c): with
 // `policy.unfoldEverything` NO rebuilt email is in the PDF, whatever
@@ -205,7 +233,8 @@
 // missing or inaccurate, or how the tool works; the app says all of that in
 // step 2 before the download (src/ui/review.ts, src/ui/preview.ts). The PDF
 // keeps only the placeholders of blank fields ("(no subject)", "(no date)",
-// "Unknown sender", "(no text)", "(attachment without a name)"), the page
+// "Unknown sender", "(no text)" (only where NO-TEXT EMAILS above keeps it),
+// "(attachment without a name)"), the page
 // footer, headings, labels, the index and the bookmarks. The data behind the
 // removed notes stays in the model (`flags`, `cover.undated`,
 // `zoneFallback`, `controlChars`), for tests and checks; the renderer never
@@ -244,6 +273,7 @@ import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
 import { FILE_CHAIN_SEPARATOR, fileChain } from '../ui-model/file-chain';
 import { joinMailboxes } from '../ui-model/mailbox-list';
+import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../ui-model/no-text';
 import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../ui-model/rebuilt';
 import { printedText } from './printed-check';
 import type { PdfStrings } from './strings';
@@ -287,7 +317,7 @@ export interface PdfCover {
   /** The data behind it. Texts here are as found (not sanitized); the blocks hold the display form. */
   readonly dateRange: { readonly first: string; readonly last: string } | null;
   readonly undated: number;
-  /** Every email in the PDF, rebuilt ones included (task 8.3). */
+  /** Every email in the PDF, rebuilt ones included (task 8.3); not those left out for having no text (task 8.14). */
   readonly emailCount: number;
   readonly generated: string;
   readonly participants: readonly PdfParticipant[];
@@ -367,7 +397,7 @@ export interface PdfEmail {
    * row: it has no file).
    */
   readonly fields: readonly PdfFieldRow[];
-  /** Lines above the text (role 'muted'): only the "(no text)" placeholder of an empty text (task 8.8: the PDF has no notes). */
+  /** Lines above the text (role 'muted'): only the "(no text)" placeholder of an empty text (task 8.8: the PDF has no notes; task 8.14: see NO-TEXT EMAILS at the top). */
   readonly notes: readonly PdfLine[];
   /** The text: one entry per line, [] for an empty line (see src/pdf/text.ts). */
   readonly body: readonly PdfLine[];
@@ -529,16 +559,19 @@ export interface PdfOrder {
 
 /**
  * What goes in the PDF, in which order (see the top of this file):
- * - the real emails: `positions` in the given order, each existing one once;
+ * - the real emails: `positions` in the given order, each existing one once,
+ *   less those with no text (task 8.14, hasNoPrintableText; see NO-TEXT
+ *   EMAILS at the top): they get no slot and no number;
  * - the rebuilt entries of `rebuiltIds` that exist, have their own
- *   timeline entry (link 'entry') and pass the follow-source rule
+ *   timeline entry (link 'entry'), have text (rebuiltHasNoPrintableText)
+ *   and pass the follow-source rule
  *   (rebuiltInPdf: at least one email they were read from is in the PDF),
  *   each once, at their place in the timeline: just before the first real
  *   email in the PDF that comes after them, else at the end. A timeline
  *   that is not valid (previewOrder falls back) gives no rebuilt email at
  *   all: their text is in their source emails anyway.
- * Then every slot is numbered 1..n in that order (task 8.3: rebuilt emails
- * are numbered like real ones). rebuiltInPdf is given the real emails'
+ * Then every slot is numbered 1..n in that order, without gaps (task 8.3:
+ * rebuilt emails are numbered like real ones). rebuiltInPdf is given the real emails'
  * rank among themselves (1..k); the real emails keep their order, so the
  * copy it picks (the source that comes first) is the same as with the PDF
  * numbers.
@@ -549,7 +582,10 @@ export function planPdfOrder(result: EngineResult, positions: readonly number[],
   const realRank: (number | null)[] = result.messages.map(() => null);
   const real: { readonly position: number; readonly plan: number }[] = [];
   positions.forEach((position, k) => {
-    if (result.messages[position] === undefined || realRank[position] !== null) return;
+    const m = result.messages[position];
+    if (m === undefined || realRank[position] !== null) return;
+    // An email with no text is left out of the PDF (task 8.14, see NO-TEXT EMAILS at the top).
+    if (hasNoPrintableText(m.message)) return;
     realRank[position] = real.length + 1;
     real.push({ position, plan: k });
   });
@@ -566,7 +602,7 @@ export function planPdfOrder(result: EngineResult, positions: readonly number[],
         return;
       }
       const entry = result.reconstructed[slot.id];
-      if (entry === undefined || !wanted.has(slot.id)) return;
+      if (entry === undefined || !wanted.has(slot.id) || rebuiltHasNoPrintableText(entry)) return;
       const source = rebuiltInPdf(entry, result, (p) => realRank[p] ?? null);
       if (source !== null) rebuilt.push({ slot: { kind: 'rebuilt', entry, source }, rank });
     });
@@ -1161,6 +1197,12 @@ function blockClaims(holderBody: string, start: number, end: number, ownBody: st
  *   does not print (those parts stay: its text is never left out because
  *   the email around it is unticked), less nothing for the emails attached
  *   inside it that are unticked too.
+ * - One NOT in the PDF only because it has no text (task 8.14, see NO-TEXT
+ *   EMAILS at the top; the reader ticked it, `readerTicked`): nothing of its
+ *   block is left out, so its header lines stay in the holder's body as the
+ *   holder's plan says. Without `readerTicked` (not known), such an email
+ *   keeps its block too (when unsure, keep). One the reader unticked is
+ *   left out as above.
  * A place is used only in the very body it names (the holder's own copy, or
  * the kept copy it was moved to, engine.ts settleAttached), in the PDF, with
  * valid offsets, and not in the email's own body.
@@ -1170,6 +1212,7 @@ function attachedBlockParts(
   pdfNumberByPosition: readonly (number | null)[],
   plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
   found: Map<number, PrintedPart[]>,
+  readerTicked: ReadonlySet<number> | undefined,
 ): void {
   const list = listOrNone(result.attached);
   if (list.length === 0) return;
@@ -1216,6 +1259,8 @@ function attachedBlockParts(
     const ownMessage = result.messages[own];
     if (ownMessage === undefined) continue;
     const ticked = inPdf(own);
+    // Left out for having no text, not by the reader (task 8.14): its block stays in every holder.
+    if (!ticked && hasNoPrintableText(ownMessage.message) && (readerTicked === undefined || readerTicked.has(own))) continue;
     const self: PrintedAs = ticked ? { kind: 'email', position: own, number: pdfNumberByPosition[own]! } : { kind: 'unticked-attached', position: own };
     let pieces: PrintedPart[] | null = null;
     for (const p of listOrNone(a.places)) {
@@ -1261,6 +1306,7 @@ function noRepeatParts(
   pdfNumberByPosition: readonly (number | null)[],
   plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
   unticked: ReadonlySet<number> | undefined,
+  readerTicked?: ReadonlySet<number>,
 ): { readonly parts: Map<number, readonly PrintedPart[]>; readonly moved: Map<number, readonly string[]> } {
   const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
   // Each entry in the PDF, with the copy whose header and text it prints (rebuiltInPdf), and its PDF number.
@@ -1333,7 +1379,7 @@ function noRepeatParts(
       else if (!shown && own !== null && entries.get(printedAs.id)?.copy.id === r.id) unshown.add(printedAs.id);
     }
   }
-  attachedBlockParts(result, pdfNumberByPosition, plans, found);
+  attachedBlockParts(result, pdfNumberByPosition, plans, found, readerTicked);
   const parts = new Map<number, readonly PrintedPart[]>();
   for (const [position, list] of found) parts.set(position, disjointParts(list));
   return { parts, moved: movedHeaders(result, entries, candidates, unshown, pdfNumberByPosition) };
@@ -1716,7 +1762,8 @@ export function noRepeat(input: NoRepeatInput): NoRepeat {
   // round 2: never inferred from what `rebuilt` lacks). The switch off: none is unticked. Chosen ones never are.
   const chosen = new Set(input.rebuilt ?? []);
   const unticked = input.rebuildingOff === true ? undefined : new Set((input.unticked ?? []).filter((id) => !chosen.has(id)));
-  const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked);
+  // The emails the reader ticked (task 8.14: an attached email left out only for having no text keeps its block).
+  const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked, new Set(positions));
   const elsewhere = new Map<number, BodyIntervals>();
   for (const [position, list] of parts) elsewhere.set(position, mergeParts(list));
   const restored = printedNowhere(result, order, planByPosition, elsewhere, moved);
@@ -1908,7 +1955,9 @@ function buildEmail(
 
   // The only line above the text: the "(no text)" placeholder of an empty
   // text. What the tool was unsure about is said in the app, never in the
-  // PDF (user rule, task 8.8).
+  // PDF (user rule, task 8.8). An email with no text at all never gets here
+  // (task 8.14, planPdfOrder): the placeholder is for a text that could not
+  // be read (Q2) or whose every part is printed elsewhere (Q6).
   const notes: PdfLine[] = lines.lines.length === 0 ? [own(strings.noText, 'muted')] : [];
   const w = message.warnings;
 
@@ -2084,6 +2133,8 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
 
   const lines = bodyLines(moved.join('') + m.reconstructedText);
   s.count += lines.replaced;
+  // Not expected since task 8.14 (an entry whose rebuilt text is empty gets no slot, planPdfOrder): only
+  // a copy shown in its place (rebuiltInPdf) could still be empty. Kept as the placeholder, never dropped.
   const notes: PdfLine[] = lines.lines.length === 0 ? [own(strings.noText, 'muted')] : [];
 
   const anchor = emailAnchor(number);

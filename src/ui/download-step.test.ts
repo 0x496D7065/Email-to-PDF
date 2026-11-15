@@ -243,6 +243,33 @@ describe('step 3: when the PDF can be made', () => {
     expect(isUnavailable()).toBe(false);
   });
 
+  it('says so when every ticked email has no text, and is available again once one with text is ticked (task 8.14)', async () => {
+    const messages = [{ ...make(), bodyText: '' }, { ...make(), bodyText: ' \n \n' }, make()];
+    const result = engineOf(messages);
+    choose(...messages.map((m) => m.source.fileName));
+    calls.at(-1)?.resolve({ ok: true, engine: result });
+    await settle();
+    runTasks();
+    expect(isUnavailable()).toBe(false);
+    const withText = result.messages.findIndex((m) => m.message.bodyText.trim() !== '');
+    const box = items()[withText]!.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
+    box.checked = false;
+    box.fire('change');
+    runTasks();
+    expect(isUnavailable()).toBe(true);
+    expect(note().textContent).toBe(t('download.unavailable.none-with-text'));
+    expect(note().textContent).toBe('None of the ticked emails has any text, so there is nothing to put in a PDF.');
+    button().click();
+    expect(runs).toEqual([]);
+    box.checked = true;
+    box.fire('change');
+    runTasks();
+    expect(isUnavailable()).toBe(false);
+    // The PDF step gets every ticked email; the PDF model leaves out those with no text itself.
+    button().click();
+    expect(lastRun().request.input.positions).toEqual([0, 1, 2]);
+  });
+
   it('waits for the list to be complete, even when the PDF plans are ready before it', async () => {
     // One email per chunk: the list takes several tasks, and the plans
     // (one slice for 6 emails) are ready while chunks are still waiting.
@@ -714,8 +741,8 @@ describe('step 3: "Clear everything" and leaving the page', () => {
 describe('noteText', () => {
   it('gives every reason a text of its own', () => {
     const idle = { kind: 'idle', changed: false } as const;
-    const texts = (['no-emails', 'busy', 'none-included', 'labels-failed'] as const).map((r) => noteText(idle, r));
-    expect(new Set(texts).size).toBe(4);
+    const texts = (['no-emails', 'busy', 'none-included', 'none-with-text', 'labels-failed'] as const).map((r) => noteText(idle, r));
+    expect(new Set(texts).size).toBe(5);
     expect(noteText(idle, 'labels-failed')).toBe(t('download.unavailable.labels-failed'));
     // A reason wins over "changed"; "changed" over "available".
     expect(noteText({ kind: 'idle', changed: true }, 'busy')).toBe(t('download.unavailable.busy'));

@@ -40,10 +40,11 @@ import { describe, expect, it } from 'vitest';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../tests/support/pdf-reference';
 import { buildThread, instantOf } from '../../tests/support/thread-builder';
 import { THREAD_CASES } from '../../tests/support/thread-cases';
-import { runEngine } from '../engine/engine';
+import { runEngine, type EngineResult } from '../engine/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../engine/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { groupAsAttached, type AttachMode } from '../../tests/support/attached-builder';
+import { hasNoPrintableText, pdfPositions } from '../ui-model/no-text';
 import { rebuiltEntries } from '../ui-model/rebuilt';
 import type { ReconstructedMessage } from '../engine/reconstruct';
 import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PdfDocument, type PdfEmail, type PrintedPart } from './model';
@@ -210,6 +211,28 @@ function filesOf(messages: readonly NormalizedMessage[], seed: number, grouping:
 }
 /** How many attached emails the property tests saw (they must really be there). */
 let attachedSeen = 0;
+/** How many ticked emails with no text the property tests saw left out (task 8.14; they must really be there). */
+let noTextSeen = 0;
+
+/**
+ * Task 8.14: the ticked emails not in the PDF (`positions` less `printed`)
+ * are exactly those with no text: their body is white space only (so no
+ * text is printed nowhere) and none has a PDF number; with none of them
+ * (`printed` equal to `positions`), the slots are the ticked emails, as
+ * before. Returns how many were left out.
+ */
+function expectOnlyNoTextLeftOut(result: EngineResult, positions: readonly number[], printed: readonly number[], doc: PdfDocument): number {
+  const left = positions.filter((p) => !printed.includes(p));
+  for (const p of left) {
+    const m = result.messages[p]!.message;
+    expect(m.bodyText, `position ${String(p)}`).not.toMatch(/\S/u);
+    expect(hasNoPrintableText(m)).toBe(true);
+    expect(doc.pdfNumberByPosition[p]).toBeNull();
+  }
+  for (const p of printed) expect(hasNoPrintableText(result.messages[p]!.message)).toBe(false);
+  if (left.length === 0) expect(realEmails(doc).map((x) => x.position)).toEqual([...positions]);
+  return left.length;
+}
 
 const strings = createPdfStrings('en');
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
@@ -286,7 +309,10 @@ describe('PDF document model properties', () => {
         DEFAULT_OUTPUT_POLICY,
       );
       const doc = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings });
-      expect(doc.emails).toHaveLength(positions.length);
+      // Task 8.14: only the emails with no text are left out (white space only: nothing printed nowhere).
+      const printed = pdfPositions(result, positions);
+      noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, doc);
+      expect(doc.emails).toHaveLength(printed.length);
       let codes = 0;
       for (const { e, position } of realEmails(doc)) {
         const m = result.messages[position]!;
@@ -315,8 +341,11 @@ describe('PDF document model properties', () => {
       const plans = planOutput(positions.map((p) => result.messages[p]!));
       withOmissions += plans.filter((p) => p.ranges.some((r) => !r.keep)).length;
       const doc = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: 0, strings });
-      positions.forEach((p, k) => expect(doc.pdfNumberByPosition[p]).toBe(k + 1));
-      expect(doc.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
+      // Task 8.14: the emails with no text are left out, the others numbered 1..k without a gap.
+      const printed = pdfPositions(result, positions);
+      noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, doc);
+      printed.forEach((p, k) => expect(doc.pdfNumberByPosition[p]).toBe(k + 1));
+      expect(doc.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(printed.length);
       for (const { e, position } of realEmails(doc)) {
         const full = referenceDisplayText(result.messages[position]!.message.bodyText);
         for (const line of e.body) {
@@ -516,6 +545,8 @@ describe('PDF document model properties', () => {
   it('the tests above really ran with emails attached inside dropped files (task 8.13b-3)', () => {
     console.log(`PDF model properties: ${String(attachedSeen)} attached emails seen`);
     expect(attachedSeen).toBeGreaterThan(500);
+    // Task 8.14: the random emails include some with no text (an empty random body), left out of the PDF.
+    expect(noTextSeen).toBeGreaterThan(0);
   });
 
   it('builds 2000 emails in well under a second', () => {

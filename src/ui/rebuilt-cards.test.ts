@@ -266,6 +266,37 @@ describe('rebuilt cards in the list', () => {
     expect(t('rebuilt.label')).not.toBe('Rebuilt');
   });
 
+  it('a rebuilt email with no text says it is not in the PDF, is not counted in, and has no slot (task 8.14, Q4)', () => {
+    const base = engineOf(LAST);
+    const id = rebuiltEntries(base)[1]!.id;
+    for (const text of ['', '\n  \n']) {
+      const result = withRebuilt(base, id, (r) => ({ ...r, rebuilt: { ...r.rebuilt, reconstructedText: text } }));
+      show(result);
+      const card = rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === String(id))!;
+      expect(one(card, 'body-empty').textContent).toBe('Not in the PDF: this email has no text.');
+      // White space only: still shown (nothing is dropped from the page).
+      expect(withClass(card, 'body-text').map((e) => e.textContent)).toEqual(text === '' ? [] : [text]);
+      // Its tick box stays (Q5); it is not counted in, and its "taken from" line is not shown.
+      expect(one(card, 'include-checkbox').checked).toBe(true);
+      expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF.');
+      const ids = rebuiltEntries(result).map((r) => r.id);
+      const slots = planPdfOrder(result, [0], ids).slots.flatMap((s) => (s.kind === 'rebuilt' ? [s.entry.id] : []));
+      expect(slots).toEqual(ids.filter((x) => x !== id));
+      for (const locale of ['fr', 'nl'] as const) {
+        setLocale(locale);
+        preview.relabel();
+        review.relabel();
+        expect(one(card, 'body-empty').textContent).toBe(t('preview.notInPdfNoText'));
+      }
+      setLocale('en');
+      preview.relabel();
+      review.relabel();
+    }
+    // Another card keeps its text and no note.
+    show(base);
+    for (const card of rebuiltItems()) expect(withClass(card, 'body-empty')).toEqual([]);
+  });
+
   it('give a stand-in with its label, a note and its text when a card cannot be built; the list is still complete', () => {
     const base = engineOf(LAST);
     const result = withRebuilt(base, 1, (r) => ({ ...r, sourceIndex: 99 }));

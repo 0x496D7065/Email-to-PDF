@@ -169,6 +169,8 @@ export const en = {
       'no-emails': 'Add your emails in step 1 first.',
       busy: 'Please wait: your emails are still being read and checked.',
       'none-included': 'Tick at least one email in step 2 to make a PDF.',
+      // Every ticked email has no text, so all are left out of the PDF (task 8.14).
+      'none-with-text': 'None of the ticked emails has any text, so there is nothing to put in a PDF.',
       'labels-failed': 'The PDF cannot be made: the tool could not work out what goes in it. To try again, reconnect to the internet, reload the page and add your files again.',
     } satisfies Record<PdfUnavailable, string>,
     available: 'Makes one PDF of the emails ticked in step 2, here on this computer.',
@@ -241,6 +243,9 @@ export const en = {
     noSubject: '(no subject)',
     noDate: '(no date)',
     noText: '(no text)',
+    // Instead of noText for an email the PDF leaves out because it has no
+    // text at all, attachments or not (task 8.14; src/ui-model/no-text.ts).
+    notInPdfNoText: 'Not in the PDF: this email has no text.',
     // An email whose item could not be built: its text is still shown under this note.
     itemFailed: 'Something went wrong while showing this email. Its text, if it has any, is shown below as it is.',
     // The toolbar above the list.
@@ -346,6 +351,10 @@ export const en = {
       one: '{included} of {count} email will be in the PDF.',
       other: '{included} of {count} emails will be in the PDF.',
     },
+    // After `included`, as a sentence of its own (counts.sentence), only when
+    // some ticked emails are left out because they have no text (task 8.14).
+    // {count} is how many. They are not in {included}.
+    noTextLeftOut: { one: '{count} left out because it has no text', other: '{count} left out because they have no text' },
     // Shown (and announced on each change) only when emails were rebuilt from quoted text. {count} is the total.
     rebuiltIncluded: {
       one: '{included} of {count} rebuilt email will be in the PDF.',

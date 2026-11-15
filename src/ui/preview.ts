@@ -57,6 +57,13 @@
 //   so unticking it does not move the emails below up, and ticking it back
 //   (same plan: nothing to redraw) does not move them down. An email built
 //   while left out simply has no labels.
+// - An email with no text (task 8.14, src/ui-model/no-text.ts: its body is
+//   empty or white space only, and its text was read) is never in the PDF,
+//   ticked or not: it gets no PDF labels and no PDF note, and its body says
+//   "Not in the PDF: this email has no text." instead of "(no text)" (under
+//   its blank text when it is white space only). Its tick box stays. The
+//   same for a rebuilt card whose rebuilt text has no text (Q4). An empty
+//   body whose text could not be read stays in the PDF and keeps "(no text)".
 // - An email the plan keeps whole (rules 4 and 5 of output-plan.ts) gets a
 //   short note above its text (src/ui-model/message-notes.ts, pdfPlanNote).
 // - Never silent: when one email's labels cannot be shown (a failed update,
@@ -137,6 +144,7 @@ import { fileChain } from '../ui-model/file-chain';
 import type { DisplayBlock } from '../ui-model/display-blocks';
 import { joinMailboxes, joinPlain } from '../ui-model/mailbox-list';
 import { pdfPlanNote, type PdfNoteCode } from '../ui-model/message-notes';
+import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../ui-model/no-text';
 import { pdfBlocks, printedAsEmailOfItsOwn, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../ui-model/pdf-plan';
 import { previewOrder, rebuiltCard, type PreviewSlot, type RebuiltCard, type RebuiltDate } from '../ui-model/rebuilt';
 import type { AppShell } from './app';
@@ -534,7 +542,7 @@ interface BodySlot {
   blocks: BuiltBlock[];
   /** What `note` says: a PDF note's code, 'failed' (pdf.messageFailed) or null (empty). */
   noteCode: PdfNoteCode | 'failed' | null;
-  /** The "(no text)" note of a body without blocks, else null. */
+  /** The "(no text)" note of a body without blocks, or "Not in the PDF: this email has no text." (task 8.14), else null. */
   empty: HTMLParagraphElement | null;
 }
 
@@ -568,8 +576,10 @@ interface RebuiltSlot {
   readonly also: HTMLParagraphElement | null;
   readonly meta: HTMLDListElement;
   readonly date: RebuiltDateSlot;
-  /** The "(no text)" note of an empty text, else null. */
+  /** The "(no text)" note of an empty text (or "Not in the PDF: this email has no text.", see `noText`), else null. */
   readonly empty: HTMLParagraphElement | null;
+  /** Its rebuilt text has no text, so the PDF leaves it out (task 8.14, src/ui-model/no-text.ts). */
+  readonly noText: boolean;
 }
 
 /** A rebuilt card's stand-in: its own words. */
@@ -591,6 +601,16 @@ const NOT_DRAWN = 'not drawn yet';
 /** Where the blocks are and which of them carry a label element: equal shapes can be updated in place. */
 function shapeOf(blocks: readonly PdfBlock[]): string {
   return blocks.map((b) => `${String(b.block.start)}:${String(b.block.end)}:${b.block.folded ? 'f' : b.label === null ? 's' : 'l'}`).join(',');
+}
+
+/**
+ * The note of a body: "Not in the PDF: this email has no text." for an email
+ * the PDF leaves out because it has no text (task 8.14,
+ * src/ui-model/no-text.ts), else "(no text)" (an empty body that stays in
+ * the PDF: its text could not be read).
+ */
+function emptyKey(noText: boolean): 'preview.notInPdfNoText' | 'preview.noText' {
+  return noText ? 'preview.notInPdfNoText' : 'preview.noText';
 }
 
 /** Sets a block's PDF label: its element's text and state (hidden without a label). */
@@ -943,7 +963,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       children.push(details);
       built.push({ start: block.start, end: block.end, details, summary, nodes: [details], label: mark, pdf: label, what: { element: what, block } });
     }
-    const empty = blocks.length === 0 ? el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }) : null;
+    // An email with no text (task 8.14): "Not in the PDF: this email has no text." instead of "(no text)",
+    // also under a body of white space only (its blank block stays: nothing is ever dropped from the page).
+    const noText = hasNoPrintableText(slot.m.message);
+    const empty = noText || blocks.length === 0 ? el('p', { attrs: { class: 'note body-empty' }, text: t(emptyKey(noText)) }) : null;
     if (empty !== null) children.push(empty);
     slot.body.replaceChildren(...children);
     slot.empty = empty;
@@ -956,7 +979,9 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
 
   /** Brings one body up to date with the plans in use: labels in place when the blocks stay the same, else redrawn. */
   function updateBody(slot: BodySlot): void {
-    const view = viewFor(slot.position);
+    // An email with no text is never in the PDF (task 8.14): no PDF labels and no PDF note, ticked or not;
+    // its body says so instead (drawBlocks).
+    const view = hasNoPrintableText(slot.m.message) ? null : viewFor(slot.position);
     // Left out of the PDF (unticked): what was drawn stays, its labels and
     // note hidden (see `data-pdf-out` at the top of this file).
     const out = view === null && pdfPlans !== null && slot.shape !== NOT_DRAWN;
@@ -1133,11 +1158,15 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     };
     applyRebuiltDate(date, zone);
     const meta = el('dl', { attrs: { class: 'message-meta' }, children: rebuiltMetaRows(card, date) });
-    // The rebuilt text, as text, never folded; "(no text)" if there is none.
-    const empty = card.text === '' ? el('p', { attrs: { class: 'note body-empty' }, text: t('preview.noText') }) : null;
+    // The rebuilt text, as text, never folded; "(no text)" if there is none. A rebuilt email with no text
+    // (task 8.14, Q4) says "Not in the PDF: this email has no text." instead, under its text when that is
+    // white space only (shown all the same: nothing is ever dropped from the page).
+    const noText = rebuiltHasNoPrintableText(r);
+    const empty = noText || card.text === '' ? el('p', { attrs: { class: 'note body-empty' }, text: t(emptyKey(noText)) }) : null;
+    const text = card.text === '' ? null : el('div', { attrs: { class: 'body-text' }, text: card.text });
     const body = el('div', {
       attrs: { class: 'message-body' },
-      children: [empty ?? el('div', { attrs: { class: 'body-text' }, text: card.text })],
+      children: [...(text === null ? [] : [text]), ...(empty === null ? [] : [empty])],
     });
     const item = el('li', {
       attrs: { class: 'message message-rebuilt', 'data-rebuilt-id': String(r.id) },
@@ -1145,7 +1174,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     });
     options.decorateRebuilt?.(item, r, result);
     // Recorded last: a card whose decoration threw is not in the page (safeRebuiltItemOf).
-    rebuiltSlots.set(r.id, { card, label, noSubject: hasSubject ? null : subject, note, also, meta, date, empty });
+    rebuiltSlots.set(r.id, { card, label, noSubject: hasSubject ? null : subject, note, also, meta, date, empty, noText });
     return item;
   }
 
@@ -1384,7 +1413,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
           // swallowed so one bad block never stops the rest of the page from being relabelled.
         }
       }
-      if (slot.empty !== null) slot.empty.textContent = t('preview.noText');
+      if (slot.empty !== null) slot.empty.textContent = t(emptyKey(hasNoPrintableText(slot.m.message)));
       writeNote(slot);
     }
     for (const [position, standIn] of standIns) {
@@ -1400,7 +1429,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         if (slot.also !== null) slot.also.textContent = rebuiltAlsoText(slot.card.alsoNumbers);
         slot.meta.replaceChildren(...rebuiltMetaRows(slot.card, slot.date));
         applyRebuiltDate(slot.date, zone);
-        if (slot.empty !== null) slot.empty.textContent = t('preview.noText');
+        if (slot.empty !== null) slot.empty.textContent = t(emptyKey(slot.noText));
       } catch {
         // Not expected (the same texts were made once): this card keeps its words as they were;
         // swallowed so one bad card never stops the rest of the page from being relabelled.

@@ -87,10 +87,16 @@ function input(): { results: ParseResult[] } {
     { ok: true, message: merged },
     { ok: false, fileName: UNREADABLE_FILE, sha256: UNREADABLE_SHA, error: 'corrupt', detail: 'synthetic' },
     { ok: true, message: copy },
-    // Undated, no subject, no sender, no text: every blank-field placeholder.
+    // Undated, no subject, no sender, no text: every blank-field placeholder. Its text could not be read
+    // (RTF only), so it stays in the PDF with "(no text)" (task 8.14 leaves out an email with no text at all).
     {
       ok: true,
-      message: make('', { from: [], bodyText: '', date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false }, warnings: ['missing-date', 'no-body'] }),
+      message: make('', {
+        from: [],
+        bodyText: '',
+        date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false },
+        warnings: ['missing-date', 'no-body', 'rtf-only-body'],
+      }),
     },
     { ok: true, message: make('Unreadable date', { date: { utcMs: null, original: DATE_WRITTEN, offsetMinutes: null, zoneKnown: false }, warnings: ['unparseable-date'] }) },
     { ok: true, message: make('Unknown zone', { date: { utcMs: BASE_MS, original: 'Thu, 10 Apr 2025 09:00:00', offsetMinutes: null, zoneKnown: false }, warnings: ['unknown-time-zone'] }) },

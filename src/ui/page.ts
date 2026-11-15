@@ -88,6 +88,7 @@ import type { EngineResult } from '../engine/engine';
 import { PDF_FONTS } from '../pdf/fonts';
 import type { ProcessResult } from '../pipeline/process-files';
 import type { PdfJobInput } from '../pipeline/pdf-protocol';
+import { pdfPositions } from '../ui-model/no-text';
 import { createBrowserPdfWorker, pdfTimeoutMs, runPdfInWorker } from '../pipeline/pdf-runner';
 import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files';
 import { applyDocumentLanguage, mountApp, type AppShell } from './app';
@@ -292,7 +293,9 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page {
     if (plansFailed) return 'labels-failed';
     const plans = pdfLabels.currentPlans();
     if (preview.isRendering() || plans === null || plans.result !== shown) return 'busy';
-    return plans.positions.length === 0 ? 'none-included' : null;
+    if (plans.positions.length === 0) return 'none-included';
+    // Every ticked email has no text: the PDF would hold none of them (task 8.14).
+    return pdfPositions(plans.result, plans.positions).length === 0 ? 'none-with-text' : null;
   }
 
   /**

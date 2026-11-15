@@ -895,3 +895,147 @@ test('"Print full original text": every email\'s whole text, in order', async ({
   expect(downloads).toHaveLength(1);
   await expectNothingLeftThePage(page);
 });
+
+// ---------------------------------------------------------------- emails with no text (task 8.14)
+//
+// Four synthetic .eml files made here (never saved as files): two with text,
+// one with an empty text part and an attachment, one whose text is only
+// white space. The two without text stay in the preview with the note "Not
+// in the PDF: this email has no text." and are left out of the PDF entirely
+// (no page, no index row, no bookmark, no number, not on the cover), in both
+// modes. With only those two ticked, "Make the PDF" is unavailable and says
+// why. Same watch as above: nothing leaves the page, no CSP violation.
+
+const crlf = (...lines: string[]): string => lines.join('\r\n');
+const NO_TEXT_HEAD = (n: number, subject: string, day: number): string[] => [
+  'From: Erin Sample <erin@example.test>',
+  'To: Finn Example <finn@example.test>',
+  `Subject: ${subject}`,
+  `Date: Thu, ${String(day)} Apr 2025 09:00:00 +0000`,
+  `Message-ID: <no-text-${String(n)}@example.test>`,
+  'MIME-Version: 1.0',
+];
+const EMPTY_SUBJECT = 'Nothing written here';
+const EMPTY_ATTACHMENT = 'floor-plan-sketch.pdf';
+const BLANK_SUBJECT = 'Only blank lines';
+const NO_TEXT_FILES: readonly { readonly name: string; readonly text: string }[] = [
+  { name: 'no-text-1.eml', text: crlf(...NO_TEXT_HEAD(1, 'Oak shelves', 10), 'Content-Type: text/plain; charset=utf-8', '', 'The oak shelves arrive on Friday morning.', '') },
+  {
+    name: 'no-text-2.eml',
+    text: crlf(
+      ...NO_TEXT_HEAD(2, EMPTY_SUBJECT, 11),
+      'Content-Type: multipart/mixed; boundary="b-no-text"',
+      '',
+      '--b-no-text',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      '',
+      '--b-no-text',
+      `Content-Type: application/pdf; name="${EMPTY_ATTACHMENT}"`,
+      `Content-Disposition: attachment; filename="${EMPTY_ATTACHMENT}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      'JVBERi0xLjQK',
+      '--b-no-text--',
+      '',
+    ),
+  },
+  { name: 'no-text-3.eml', text: crlf(...NO_TEXT_HEAD(3, BLANK_SUBJECT, 12), 'Content-Type: text/plain; charset=utf-8', '', '   ', '\t', '', '  ', '') },
+  { name: 'no-text-4.eml', text: crlf(...NO_TEXT_HEAD(4, 'Pine table', 13), 'Content-Type: text/plain; charset=utf-8', '', 'The pine table needs one more coat of oil.', '') },
+];
+
+/** Opens the page and drops the four files: the list is shown and its PDF labels are ready. */
+async function prepareNoText(page: Page): Promise<void> {
+  await page.clock.setFixedTime(FIXED_NOW);
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await expect(page.locator('#drop-zone')).toBeVisible();
+  loadedAt = watch.requests.length;
+  const transfer = await page.evaluateHandle((list) => {
+    const data = new DataTransfer();
+    for (const f of list) data.items.add(new File([f.text], f.name, { type: 'message/rfc822' }));
+    return data;
+  }, NO_TEXT_FILES);
+  await page.evaluate((data) => {
+    const zone = document.querySelector('#drop-zone');
+    if (zone === null) throw new Error('no drop zone');
+    for (const type of ['dragenter', 'dragover', 'drop']) zone.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }));
+  }, transfer);
+  const items = page.locator('#preview-list > li');
+  await expect(items).toHaveCount(4, { timeout: 60_000 });
+  await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/, { timeout: 60_000 });
+  await page.getByLabel(en.preview.zone).selectOption(ZONE);
+  // The two without text: still in the list, ticked, with the note.
+  for (const subject of [EMPTY_SUBJECT, BLANK_SUBJECT]) {
+    const item = items.filter({ has: page.locator('.message-subject', { hasText: subject }) });
+    await expect(item.locator('.body-empty')).toHaveText(en.preview.notInPdfNoText);
+    await expect(item.getByRole('checkbox', { name: en.actions.include })).toBeChecked();
+  }
+  await expect(items.filter({ has: page.locator('.message-subject', { hasText: EMPTY_SUBJECT }) })).toContainText(EMPTY_ATTACHMENT);
+  await expect(page.locator('#review-included')).toHaveText('2 of 4 emails will be in the PDF. 2 left out because they have no text.');
+  await expect(page.locator('#preview-list[data-pdf-labels="ready"]')).toHaveCount(1);
+  await expect(makeButton(page)).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });
+}
+
+/** The PDF holds the two emails with text only, numbered 1 and 2; nothing of the two without text. */
+async function expectNoTextLeftOut(bytes: Uint8Array): Promise<void> {
+  const doc = await readBack(bytes, 2);
+  const all = norm(doc.pages.flatMap((lines) => lines.map((l) => l.copied)).join('\n'));
+  for (const gone of [EMPTY_SUBJECT, BLANK_SUBJECT, EMPTY_ATTACHMENT, 'no-text-2.eml', 'no-text-3.eml']) expect(all, gone).not.toContain(gone);
+  expect(norm(doc.sections[0]!.copied)).toContain('The oak shelves arrive on Friday morning.');
+  expect(norm(doc.sections[1]!.copied)).toContain('The pine table needs one more coat of oil.');
+  expect(norm(doc.cover.map((l) => l.copied).join('\n'))).toContain(`${en.pdf.document.emails} ${fill(en.pdf.document.emailCount.other, { count: 2 })}`);
+  const titles = doc.outline.items.map((i) => i.title);
+  expect(titles).toHaveLength(4);
+  expect(titles[2]!.startsWith('1. ')).toBe(true);
+  expect(titles[3]!.startsWith('2. ')).toBe(true);
+  for (const gone of [EMPTY_SUBJECT, BLANK_SUBJECT]) expect(titles.some((t) => t.includes(gone))).toBe(false);
+}
+
+test('emails with no text: in the preview with a note, left out of the PDF (task 8.14)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await prepareNoText(page);
+  await expectNoTextLeftOut(await makePdf(page));
+  expect(downloads).toHaveLength(1);
+  await expectNothingLeftThePage(page);
+});
+
+test('emails with no text: left out with "Print full original text" too (task 8.14)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await prepareNoText(page);
+  await page.getByLabel(en.pdf.everything).check();
+  await expect(page.locator('#preview-list[data-pdf-labels="ready"]')).toHaveCount(1);
+  await expect(makeButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
+  await expectNoTextLeftOut(await makePdf(page));
+  expect(downloads).toHaveLength(1);
+  await expectNothingLeftThePage(page);
+});
+
+test('emails with no text: only those ticked, no PDF can be made and the page says why (task 8.14)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await prepareNoText(page);
+  const items = page.locator('#preview-list > li');
+  for (const subject of ['Oak shelves', 'Pine table']) {
+    await items
+      .filter({ has: page.locator('.message-subject', { hasText: subject }) })
+      .getByRole('checkbox', { name: en.actions.include })
+      .uncheck();
+  }
+  await expect(page.locator('#review-included')).toHaveText('0 of 4 emails will be in the PDF. 2 left out because they have no text.');
+  await expect(makeButton(page)).toHaveAttribute('aria-disabled', 'true', { timeout: 60_000 });
+  await expect(page.locator('#download-note')).toHaveText(en.download.unavailable['none-with-text']);
+  // Pressed anyway (aria-disabled keeps it focusable): nothing happens. `force`: Playwright itself waits for an enabled button.
+  await makeButton(page).click({ force: true });
+  await page.waitForTimeout(500);
+  expect(downloads).toHaveLength(0);
+  await expect(page.locator('#download-note')).toHaveText(en.download.unavailable['none-with-text']);
+  // Nothing left the page after its own files but the workers' own blob: URLs, no WebSocket, no CSP violation.
+  const ownBlob = new RegExp(`^blob:${escapeRegExp(origin)}/[0-9a-f-]+$`);
+  const workerUrls = new Set(watch.workers.map((w) => w.url()));
+  for (const url of workerUrls) expect(url).toMatch(ownBlob);
+  expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
+  expect(watch.websockets).toEqual([]);
+  const browserName = engineOf(page.context());
+  expect(untoleratedReports(browserName, withoutSelectReports(browserName, await page.evaluate(() => window.__contentViolations)))).toEqual([]);
+  expect(workerCspReports(watch)).toEqual([]);
+  expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+});

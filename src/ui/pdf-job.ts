@@ -33,9 +33,11 @@ export type PdfError = Exclude<PdfFailure, 'cancelled'>;
  * Why a PDF cannot be made now (src/ui/page.ts works it out):
  * 'no-emails' (nothing shown in step 2), 'busy' (files being read, the list
  * being built or the PDF plans being worked out), 'none-included' (every
- * email unticked), 'labels-failed' (the plans could not be worked out).
+ * email unticked), 'none-with-text' (every ticked email has no text, so the
+ * PDF would leave them all out, task 8.14, src/ui-model/no-text.ts),
+ * 'labels-failed' (the plans could not be worked out).
  */
-export type PdfUnavailable = 'no-emails' | 'busy' | 'none-included' | 'labels-failed';
+export type PdfUnavailable = 'no-emails' | 'busy' | 'none-included' | 'none-with-text' | 'labels-failed';
 
 export type PdfJobState =
   /** No PDF. `changed`: a PDF was being made or was ready, and a choice changed since (it was dropped). */

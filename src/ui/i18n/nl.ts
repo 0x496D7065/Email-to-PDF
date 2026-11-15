@@ -129,6 +129,7 @@ export const nl: Messages = {
       'no-emails': 'Voeg eerst uw e-mails toe in stap 1.',
       busy: 'Even geduld: uw e-mails worden nog gelezen en gecontroleerd.',
       'none-included': 'Vink in stap 2 minstens één e-mail aan om een PDF te maken.',
+      'none-with-text': 'Geen van de aangevinkte e-mails heeft tekst, dus er is niets om in een PDF te zetten.',
       'labels-failed':
         'De PDF kan niet worden gemaakt: de tool kon niet bepalen wat erin moet. Wilt u het opnieuw proberen? Maak dan weer verbinding met internet, laad de pagina opnieuw en voeg uw bestanden nog eens toe.',
     },
@@ -170,7 +171,6 @@ export const nl: Messages = {
     files: { one: '{count} bestand toegevoegd.', other: '{count} bestanden toegevoegd.' },
     failed: { one: '{count} kon niet worden gelezen.', other: '{count} konden niet worden gelezen.' },
     messages: { one: '{count} e-mail gevonden.', other: '{count} e-mails gevonden.' },
-    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
     messagesAttached: { one: '{count} e-mail gevonden ({attached}).', other: '{count} e-mails gevonden ({attached}).' },
     merged: { one: '{count} identieke kopie samengevoegd.', other: '{count} identieke kopieën samengevoegd.' },
     failedTitle: 'Bestanden die niet konden worden gelezen',
@@ -189,6 +189,7 @@ export const nl: Messages = {
     noSubject: '(geen onderwerp)',
     noDate: '(geen datum)',
     noText: '(geen tekst)',
+    notInPdfNoText: 'Niet in de PDF: deze e-mail heeft geen tekst.',
     itemFailed: 'Er ging iets mis bij het tonen van deze e-mail. De tekst ervan, als die er is, staat hieronder zoals hij is.',
     zone: 'Datums tonen in deze tijdzone',
     zoneThisComputer: '{zone} (deze computer)',
@@ -200,7 +201,6 @@ export const nl: Messages = {
     dateAsWritten: 'Zoals geschreven in de e-mail: {text}',
     mailbox: '{name} <{address}>',
     alsoIn: 'Ook in',
-    // NEEDS USER PROOFREADING (task 8.13b-4): the four texts below.
     attachedTo: 'Bijgevoegd bij',
     attachedToOne: 'e-mail {list}',
     attachedToMany: 'e-mails {list}',
@@ -246,7 +246,6 @@ export const nl: Messages = {
     filesWithFailed: '{files}, waarvan {failed}',
     seeFailed: 'Zie stap 1 voor de reden.',
     messagesFound: { one: '{count} e-mail gevonden', other: '{count} e-mails gevonden' },
-    // NEEDS USER PROOFREADING (task 8.13b-4): the two texts below.
     messagesFoundAttached: '{found} ({attached})',
     attachedFound: { one: '{count} bijgevoegd bij een andere e-mail', other: '{count} bijgevoegd bij andere e-mails' },
     duplicatesMerged: { one: '{count} identieke kopie samengevoegd', other: '{count} identieke kopieën samengevoegd' },
@@ -257,6 +256,7 @@ export const nl: Messages = {
       one: 'In de PDF: {included} van {count} e-mail.',
       other: 'In de PDF: {included} van {count} e-mails.',
     },
+    noTextLeftOut: { one: '{count} weggelaten omdat er geen tekst in staat', other: '{count} weggelaten omdat er geen tekst in staat' },
     rebuiltIncluded: {
       one: 'In de PDF: {included} van {count} gereconstrueerde e-mail.',
       other: 'In de PDF: {included} van {count} gereconstrueerde e-mails.',
@@ -397,7 +397,6 @@ export const nl: Messages = {
       'reconstruct-failed': 'De eerdere e-mails die in deze e-mail worden geciteerd, konden niet als afzonderlijke e-mails worden gereconstrueerd. De geciteerde tekst staat nog volledig in deze e-mail.',
       'reconstruct-limit': 'Niet alle eerdere e-mails die in deze e-mail worden geciteerd, konden worden gereconstrueerd (te veel, of de e-mail is te lang). De geciteerde tekst staat nog volledig in deze e-mail.',
     },
-    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
     attached: {
       'attached-unread':
         'Een e-mail die als bestand bij deze e-mail is gevoegd, is niet gelezen, dus de tekst ervan wordt niet getoond. Hij staat bij de bijlagen en staat nog in het originele bestand.',

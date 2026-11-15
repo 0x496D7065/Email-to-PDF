@@ -504,8 +504,8 @@ describe('body', () => {
     expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
   });
 
-  it('says "(no text)" for an empty body', () => {
-    const { doc } = build([ok(make({ bodyText: '', warnings: ['no-body'] }))]);
+  it('says "(no text)" for an empty body whose text could not be read (task 8.14: one with no text at all is left out)', () => {
+    const { doc } = build([ok(make({ bodyText: '', warnings: ['no-body', 'rtf-only-body'] }))]);
     expect(doc.emails[0]!.body).toEqual([]);
     expect(doc.emails[0]!.notes.map(text)).toEqual(['(no text)']);
   });

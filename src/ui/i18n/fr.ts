@@ -129,6 +129,7 @@ export const fr: Messages = {
       'no-emails': 'Ajoutez d’abord vos e-mails à l’étape 1.',
       busy: 'Veuillez patienter\u00A0: vos e-mails sont encore en cours de lecture et de vérification.',
       'none-included': 'Cochez au moins un e-mail à l’étape 2 pour créer un PDF.',
+      'none-with-text': 'Aucun des e-mails cochés n’a de texte\u{00A0}: il n’y a rien à mettre dans un PDF.',
       'labels-failed':
         'Le PDF ne peut pas être créé\u00A0: l’outil n’a pas pu déterminer ce qu’il doit contenir. Pour réessayer, reconnectez-vous à internet, rechargez la page et ajoutez de nouveau vos fichiers.',
     },
@@ -170,7 +171,6 @@ export const fr: Messages = {
     files: { one: '{count} fichier ajouté.', other: '{count} fichiers ajoutés.' },
     failed: { one: '{count} n’a pas pu être lu.', other: '{count} n’ont pas pu être lus.' },
     messages: { one: '{count} e-mail trouvé.', other: '{count} e-mails trouvés.' },
-    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
     messagesAttached: { one: '{count} e-mail trouvé ({attached}).', other: '{count} e-mails trouvés ({attached}).' },
     merged: { one: '{count} copie identique fusionnée.', other: '{count} copies identiques fusionnées.' },
     failedTitle: 'Fichiers qui n’ont pas pu être lus',
@@ -189,6 +189,7 @@ export const fr: Messages = {
     noSubject: '(sans objet)',
     noDate: '(sans date)',
     noText: '(aucun texte)',
+    notInPdfNoText: 'Pas dans le PDF\u{00A0}: cet e-mail n’a pas de texte.',
     itemFailed: 'Un problème est survenu pendant l’affichage de cet e-mail. Son texte, s’il en a un, est affiché ci-dessous tel quel.',
     zone: 'Afficher les dates dans ce fuseau horaire',
     zoneThisComputer: '{zone} (cet ordinateur)',
@@ -200,7 +201,6 @@ export const fr: Messages = {
     dateAsWritten: 'Date telle qu’écrite dans l’e-mail\u00A0: {text}',
     mailbox: '{name} <{address}>',
     alsoIn: 'Également dans',
-    // NEEDS USER PROOFREADING (task 8.13b-4): the four texts below.
     attachedTo: 'Joint à',
     attachedToOne: 'l’e-mail {list}',
     attachedToMany: 'les e-mails {list}',
@@ -245,7 +245,6 @@ export const fr: Messages = {
     filesWithFailed: '{files}, dont {failed}',
     seeFailed: 'Voir pourquoi à l’étape 1.',
     messagesFound: { one: '{count} e-mail trouvé', other: '{count} e-mails trouvés' },
-    // NEEDS USER PROOFREADING (task 8.13b-4): the two texts below.
     messagesFoundAttached: '{found} ({attached})',
     attachedFound: { one: '{count} joint à un autre e-mail', other: '{count} joints à d’autres e-mails' },
     duplicatesMerged: { one: '{count} copie identique fusionnée', other: '{count} copies identiques fusionnées' },
@@ -256,6 +255,7 @@ export const fr: Messages = {
       one: 'E-mail dans le PDF\u00A0: {included} sur {count}.',
       other: 'E-mails dans le PDF\u00A0: {included} sur {count}.',
     },
+    noTextLeftOut: { one: '{count} exclu car sans texte', other: '{count} exclus car sans texte' },
     rebuiltIncluded: {
       one: 'E-mail reconstitué dans le PDF\u00A0: {included} sur {count}.',
       other: 'E-mails reconstitués dans le PDF\u00A0: {included} sur {count}.',
@@ -396,7 +396,6 @@ export const fr: Messages = {
       'reconstruct-failed': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas pu être reconstitués séparément. Tout le texte cité reste dans cet e-mail.',
       'reconstruct-limit': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas tous pu être reconstitués (trop nombreux, ou e-mail trop long). Tout le texte cité reste dans cet e-mail.',
     },
-    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
     attached: {
       'attached-unread':
         'Un e-mail joint à celui-ci en tant que fichier n’a pas été lu, son texte n’est donc pas affiché. Il figure dans les pièces jointes et reste dans le fichier d’origine.',

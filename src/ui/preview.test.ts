@@ -401,7 +401,8 @@ describe('mountPreview', () => {
     expect(label(item, 'author')).toBe(t('preview.from'));
     expect(meta(item, 'author')).toBe(t('preview.author.none'));
     expect(withClass(item, 'body-text')).toEqual([]);
-    expect(one(item, 'body-empty').textContent).toBe(t('preview.noText'));
+    // Task 8.14: an email with no text at all is left out of the PDF, and says so instead of "(no text)".
+    expect(one(item, 'body-empty').textContent).toBe(t('preview.notInPdfNoText'));
   });
 
   it('lists attachments as text only: no link, no image, no file access', () => {
@@ -1182,6 +1183,57 @@ describe('PDF labels', () => {
     runAll();
     expect(labelsOf(reply!)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
     expect(one(reply!, 'pdf-note').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('an email with no text says it is not in the PDF, with no PDF label or note, ticked or not (task 8.14)', () => {
+    const spaces = ' \t\n \n﻿\n';
+    const result = engineOf([
+      make({ subject: 'Has text', date: dateAt('2025-03-03T08:00:00Z') }),
+      make({ subject: 'Empty', bodyText: '', date: dateAt('2025-03-03T09:00:00Z'), attachments: [{ fileName: 'plan.pdf', size: 10, mimeType: 'application/pdf' }] }),
+      make({ subject: 'Spaces', bodyText: spaces, date: dateAt('2025-03-03T10:00:00Z') }),
+      make({ subject: 'Unreadable', bodyText: '', warnings: ['rtf-only-body'], date: dateAt('2025-03-03T11:00:00Z') }),
+    ]);
+    preview.show(result);
+    runAll();
+    for (const positions of [[0, 1, 2, 3], [0, 3]]) {
+      preview.setPdfPlans(plansFor(result, positions));
+      runAll();
+      expect(state()).toBe('ready');
+      const [text, empty, spaced, unreadable] = items();
+      expect(withClass(text!, 'body-empty')).toEqual([]);
+      for (const item of [empty!, spaced!]) {
+        expect(one(item, 'body-empty').textContent).toBe('Not in the PDF: this email has no text.');
+        expect(labelsOf(item).every((s) => s === '')).toBe(true);
+        expect(one(item, 'pdf-note').hasAttribute('hidden')).toBe(true);
+      }
+      // White space only: its blank text stays in the page, the note after it.
+      expect(renderedBody(spaced!)).toBe(spaces);
+      expect(renderedBody(empty!)).toBe('');
+      // A text that could not be read stays in the PDF: "(no text)" as before.
+      expect(one(unreadable!, 'body-empty').textContent).toBe(t('preview.noText'));
+    }
+    // Even a plan that fell back (whose note says the whole email is printed) gives it no PDF note: it is not printed.
+    const base = plansFor(result, [0, 1, 2, 3]);
+    const views = new Map(base.views);
+    for (const p of [1, 2, 3]) views.set(p, { ...views.get(p)!, plan: { ...views.get(p)!.plan, fallback: true } });
+    preview.setPdfPlans({ result, views });
+    runAll();
+    const [, emptyItem, spacedItem, unreadableItem] = items();
+    for (const item of [emptyItem!, spacedItem!]) expect(one(item, 'pdf-note').hasAttribute('hidden')).toBe(true);
+    expect(one(unreadableItem!, 'pdf-note').hasAttribute('hidden')).toBe(false);
+    const noted = (): string[] => items().flatMap((i) => withClass(i, 'body-empty').map((e) => e.textContent));
+    try {
+      setLocale('fr');
+      preview.relabel();
+      expect(noted()).toEqual(['Pas dans le PDF\u{00A0}: cet e-mail n’a pas de texte.', 'Pas dans le PDF\u{00A0}: cet e-mail n’a pas de texte.', '(aucun texte)']);
+      setLocale('nl');
+      preview.relabel();
+      expect(noted()).toEqual(['Niet in de PDF: deze e-mail heeft geen tekst.', 'Niet in de PDF: deze e-mail heeft geen tekst.', '(geen tekst)']);
+    } finally {
+      setLocale('en');
+      preview.relabel();
+    }
+    expect(noted()).toEqual(['Not in the PDF: this email has no text.', 'Not in the PDF: this email has no text.', '(no text)']);
   });
 
   it('a stand-in of an email in the PDF says its labels cannot be shown; not when it is left out', () => {

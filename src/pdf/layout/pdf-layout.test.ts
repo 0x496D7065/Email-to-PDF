@@ -374,7 +374,10 @@ describe('layoutPdf: pagination', () => {
   it('handles an email with no body text, notes, attachments and an empty cover-less document', () => {
     const doc = build([
       make({
+        // A text that could not be read (RTF only): an empty body that stays in the PDF with "(no text)"
+        // (task 8.14 leaves out an email with no text at all).
         bodyText: '',
+        warnings: ['rtf-only-body'],
         attachments: [
           { fileName: 'plan.pdf', size: 12_345, mimeType: 'application/pdf' },
           { fileName: '', size: null, mimeType: '' },

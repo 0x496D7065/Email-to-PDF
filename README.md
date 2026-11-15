@@ -188,7 +188,9 @@ The tool never throws message text away on its own:
   text can repeat). A forwarded email whose rebuilt email you unticked is left out
   too, and so is an attached email you unticked. A quoted part inside
   such a forwarded email that the tool could not rebuild is left out with
-  it. Each folded part in the preview says
+  it. An email with no text at all (only empty lines or spaces) is left
+  out of the PDF completely, even with attachments: the preview keeps it
+  and says "Not in the PDF: this email has no text." Each folded part in the preview says
   "In the PDF" or "Not in the PDF" and why. The details, including the
   known edge cases, are under [R6](#r6-collapse-never-delete).
 - **"Print full original text (quoted replies and signatures
@@ -232,7 +234,10 @@ The tool never throws message text away on its own:
   "Rebuild conversation from replies"). The PDF keeps only the
   placeholders for blank fields ("(no subject)", "(no date)", "Unknown
   sender", "(no text)"), its headings, labels, index, bookmarks and page
-  numbers.
+  numbers. "(no text)" is only for an email whose text could not be read
+  (or whose whole text is printed as emails of their own, see R6): an
+  email that simply has no text is not in the PDF at all (see
+  [R6](#r6-collapse-never-delete)).
   After the cover information come the index (number, date, sender,
   subject, attachments, page) and the emails, with page numbers and PDF
   bookmarks. Every email
@@ -247,8 +252,8 @@ The tool never throws message text away on its own:
   each email (Date, From, To, Subject and so on) stays at the left margin,
   and every line of its text is indented by the same single step, one tab
   (the width of 4 spaces of the text's font), quoted or not, whatever the
-  quote level, wrapped lines too; so is "(no text)" for an email with no
-  text. The attachment list stays at the margin
+  quote level, wrapped lines too; so is "(no text)" for an email whose
+  text could not be read. The attachment list stays at the margin
   with the header. Rebuilt emails look
   exactly like the others. The rest of each line is printed exactly as
   written (a ">" inside a line, as in "a > b", stays). Any line that starts
@@ -600,7 +605,9 @@ is never rewritten. Only provably identical duplicates are merged
 (`src/engine/dedupe.ts`), and the page says how many were merged.
 
 One deliberate exception, in the PDF only (`src/engine/output-plan.ts`):
-by default the PDF shows what each writer actually wrote.
+by default the PDF shows what each writer actually wrote. A second,
+narrow one, also in the PDF only: an email with no text is not in the PDF
+at all (see "Emails with no text" below).
 
 - **Left out:** the quoted history the mail program adds under a reply
   header ("On ... wrote:", or an Outlook-style "From: / Sent: / To:"
@@ -633,7 +640,9 @@ by default the PDF shows what each writer actually wrote.
   that is in the PDF, or one the tool found to be an email you added that
   is in the PDF too. So a forward no longer prints the emails it passes on
   inside its own text when they also have their own pages; a forward with
-  nothing of its own then shows "(no text)". The same goes for an email
+  nothing of its own then shows "(no text)" (it is not left out like an
+  email with no text, see "Emails with no text" below: its text is there,
+  printed on those pages). The same goes for an email
   attached to it (an inline forward in an `.eml` file, which the file
   prints inside the email's text): it is printed on its own page, so what
   that page prints of its block (the "Forwarded message" line, its header
@@ -695,6 +704,36 @@ by default the PDF shows what each writer actually wrote.
   here) is unticked" (#N can also be a file you added that holds the same
   email). Only what an attached email inside it that you kept ticked does
   not print itself stays.
+- **Emails with no text:** an email whose text is empty or only white
+  space (spaces, tabs, empty lines, non-breaking spaces) is left out of
+  the PDF entirely, even when it has attachments, with or without "Print
+  full original text" (`src/ui-model/no-text.ts`). This is a second,
+  narrow exception: such an email has nothing to print, so it gets no
+  page, no index line, no bookmark and no number (the other emails are
+  numbered without a gap), and it does not count on the cover (the number
+  of emails, the dates and the people). Nothing written is lost: it holds
+  no text, and the preview keeps it, with its tick box, its attachment
+  list and the note "Not in the PDF: this email has no text." The count in
+  step 2 counts only the emails the PDF will hold and says how many ticked
+  emails are left out for this reason. When every ticked email has no
+  text, "Make the PDF" is unavailable and says why. Anything else counts
+  as text and keeps the email: a lone ">" quote mark, an invisible
+  zero-width space, or a control character (shown as a code such as
+  "[U+000B]"). An email whose text could not be read (an HTML part that
+  could not be converted, an `.msg` file with only RTF text, a forwarded
+  email that was not opened) is not left out: it shows "(no text)", since
+  its text may still be in the original file. An `.eml` email with no
+  text that holds an email attached as a file that could not be read is
+  left out too: that unread file is then not named in the PDF, but the
+  preview shows the note about it and the file is still in the original
+  email. A rebuilt email that is only a quoted header with nothing under
+  it is left out the same way. Its header lines stay in the email quoting
+  it as quoted history, so in the normal PDF they are folded out with the
+  rest of the quote; they appear only when "Print full original text" is
+  ticked, and stay visible in the preview and the original file. An
+  attached email with no text that you keep ticked leaves its "Forwarded
+  message" lines in the email holding it; one you untick is left out of
+  it as above.
 - **Kept:** the writer's own text, quotes pasted without a reply header
   (except the case above), forwarded emails that are not printed as
   emails of their own for another reason (a forwarded part the tool could

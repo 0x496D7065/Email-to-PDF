@@ -4,7 +4,11 @@
 //   found (and, task 8.13b-4, how many of them were attached inside other
 //   emails) and identical copies merged, "N of M emails will be in the PDF"
 //   and how many emails have notes. The numbers are the engine's own counts;
-//   nothing is counted again here;
+//   nothing is counted again here. "N of M" counts only the ticked emails
+//   the PDF prints: an email with no text is left out of the PDF (task 8.14,
+//   Q3, src/ui-model/no-text.ts), and when some ticked ones are, a sentence
+//   of its own says how many ("1 left out because it has no text."). A
+//   rebuilt email with no text is not counted in the rebuilt line either (Q4);
 // - on each email (through the preview's `decorate` hook), an "Include in
 //   the PDF" checkbox and the email's notes (src/ui-model/message-notes.ts;
 //   the note about an email sent as an attachment that could not be read
@@ -99,6 +103,7 @@ import type { EngineCounts, EngineMessage, EngineRebuilt, EngineResult, Reconstr
 import type { ProcessResult } from '../pipeline/process-files';
 import { attachedCount, attachedLinks, type UnreadAttachedCode } from '../ui-model/attached-links';
 import { messageNotes, type MessageNote } from '../ui-model/message-notes';
+import { pdfPositions, rebuiltHasNoPrintableText } from '../ui-model/no-text';
 import { createRebuiltSelection, rebuiltEntries, rebuiltInPdf } from '../ui-model/rebuilt';
 import { createSelection } from '../ui-model/selection';
 import { el, setSafeAttribute } from './dom';
@@ -166,6 +171,27 @@ export function messagesText(counts: EngineCounts, rebuilt = 0, attached = 0): s
   if (counts.duplicatesMerged > 0) parts.push(t('counts.duplicatesMerged', { count: counts.duplicatesMerged }));
   if (rebuilt > 0) parts.push(t('counts.rebuiltFound', { count: rebuilt }));
   return t('counts.sentence', { text: joinList(parts) });
+}
+
+/**
+ * "3 of 5 emails will be in the PDF." for the ticked list positions
+ * `ticked`, counting only the emails the PDF prints (task 8.14, Q3:
+ * src/ui-model/no-text.ts, pdfPositions); when some ticked emails are left
+ * out because they have no text, followed by a sentence of its own:
+ * "3 of 5 emails will be in the PDF. 1 left out because it has no text."
+ * If that cannot be worked out (a broken entry), every ticked email is
+ * counted, as before.
+ */
+export function includedText(result: EngineResult, ticked: readonly number[]): string {
+  let printed = ticked.length;
+  try {
+    printed = pdfPositions(result, ticked).length;
+  } catch {
+    // Counted as before: never a wrong "left out".
+  }
+  const line = t('counts.included', { included: printed, count: result.messages.length });
+  const leftOut = ticked.length - printed;
+  return leftOut > 0 ? `${line} ${t('counts.sentence', { text: t('counts.noTextLeftOut', { count: leftOut }) })}` : line;
 }
 
 /** The notes of one email, or none if they cannot be worked out (a broken entry: never stops the page). */
@@ -409,7 +435,7 @@ export function createReview(options: ReviewOptions = {}): Review {
   }
 
   function showIncludedLine(): void {
-    includedLine.textContent = current === null ? '' : t('counts.included', { included: positions().length, count: current.messages.length });
+    includedLine.textContent = current === null ? '' : includedText(current, positions());
   }
 
   /** Shows or hides the switch (shown only when switchNeeded). */
@@ -550,7 +576,9 @@ export function createReview(options: ReviewOptions = {}): Review {
   function showRebuiltLine(): void {
     const on = rebuiltOn();
     const shown = current !== null && rebuiltList.length > 0 && on;
-    rebuiltLine.textContent = shown ? t('counts.rebuiltIncluded', { included: rebuiltIncluded().length, count: rebuiltList.length }) : '';
+    // A rebuilt email with no text is left out of the PDF (task 8.14, Q4): not counted as in it.
+    const printedRebuilt = shown ? rebuiltIncluded().filter((r) => !rebuiltHasNoPrintableText(r)).length : 0;
+    rebuiltLine.textContent = shown ? t('counts.rebuiltIncluded', { included: printedRebuilt, count: rebuiltList.length }) : '';
     setSafeAttribute(rebuiltLine, 'hidden', !shown);
     if (current === null) return;
     messagesLine.textContent = messagesText(current.counts, shown ? rebuiltList.length : 0, attachedCount(current));
@@ -593,7 +621,10 @@ export function createReview(options: ReviewOptions = {}): Review {
     // In the PDF, but taken from a copy in another email (its own is left
     // out): the card's "Taken from #N" names the left-out email, so say which
     // email the PDF uses (task 7.7 review).
-    const pdfSource = inPdf ? pdfSourceNumber(entry.rebuilt, included) : null;
+    // Not said for a rebuilt email left out because it has no text (task 8.14, Q4): the PDF takes it from nowhere.
+    // Defensive only: a rebuilt email with copies in other emails always has words, so today this check never
+    // changes the result; it keeps the note right if that ever stops being true.
+    const pdfSource = inPdf && !rebuiltHasNoPrintableText(entry.rebuilt) ? pdfSourceNumber(entry.rebuilt, included) : null;
     setSafeAttribute(entry.pdfSourceNote, 'hidden', pdfSource === null);
     entry.pdfSourceNote.textContent = pdfSource === null ? '' : t('rebuilt.pdfSource', { number: messageNumberText(pdfSource) });
     // Switch off or full text: the card leaves the list (its text stays in its source email's card).

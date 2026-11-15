@@ -12,7 +12,7 @@ import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS, type MessageNote } fr
 import { SAFE_TAGS } from './dom';
 import { setLocale, t } from './i18n';
 import { headingId, mountPreview, type Preview, type PreviewOptions } from './preview';
-import { createReview, filesText, messagesText, noteText, relatedText, type Review, type ReviewOptions } from './review';
+import { createReview, filesText, includedText, messagesText, noteText, relatedText, type Review, type ReviewOptions } from './review';
 
 // ------------------------------------------------------------------ factory
 
@@ -147,6 +147,35 @@ describe('texts', () => {
     setLocale('nl');
     try {
       expect(messagesText(counts, 0, 2)).toBe('5 e-mails gevonden (2 bijgevoegd bij andere e-mails).');
+    } finally {
+      setLocale('en');
+    }
+  });
+
+  it('counts only the ticked emails the PDF prints, and says how many are left out for having no text (task 8.14, Q3)', () => {
+    const result = engineOf([make(), make({ bodyText: '' }), make(), make({ bodyText: ' \n ' }), make({ bodyText: '', warnings: ['rtf-only-body'] })]);
+    const empty = result.messages.flatMap((m, k) => (m.message.bodyText.trim() === '' && m.message.warnings.length === 0 ? [k] : []));
+    expect(empty).toHaveLength(2);
+    const all = result.messages.map((_, k) => k);
+    const withText = all.filter((k) => !empty.includes(k));
+    expect(includedText(result, withText)).toBe('3 of 5 emails will be in the PDF.');
+    expect(includedText(result, [...withText, empty[0]!].sort())).toBe('3 of 5 emails will be in the PDF. 1 left out because it has no text.');
+    expect(includedText(result, all)).toBe('3 of 5 emails will be in the PDF. 2 left out because they have no text.');
+    expect(includedText(result, empty)).toBe('0 of 5 emails will be in the PDF. 2 left out because they have no text.');
+    expect(includedText(result, [])).toBe('0 of 5 emails will be in the PDF.');
+    setLocale('fr');
+    try {
+      expect(includedText(result, withText)).toBe('E-mails dans le PDF\u{00A0}: 3 sur 5.');
+      expect(includedText(result, [...withText, empty[0]!].sort())).toBe('E-mails dans le PDF\u{00A0}: 3 sur 5. 1 exclu car sans texte.');
+      expect(includedText(result, all)).toBe('E-mails dans le PDF\u{00A0}: 3 sur 5. 2 exclus car sans texte.');
+    } finally {
+      setLocale('en');
+    }
+    setLocale('nl');
+    try {
+      expect(includedText(result, withText)).toBe('In de PDF: 3 van 5 e-mails.');
+      expect(includedText(result, [...withText, empty[0]!].sort())).toBe('In de PDF: 3 van 5 e-mails. 1 weggelaten omdat er geen tekst in staat.');
+      expect(includedText(result, all)).toBe('In de PDF: 3 van 5 e-mails. 2 weggelaten omdat er geen tekst in staat.');
     } finally {
       setLocale('en');
     }
@@ -296,6 +325,27 @@ describe('include checkboxes', () => {
     expect(review.includedPositions()).toEqual([0, 1, 2]);
     expect(second.getAttribute('data-included')).toBe('true');
     expect(mark.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('an email with no text keeps its tick box; the line counts it out and says why, following its tick (task 8.14)', () => {
+    const result = engineOf([make({ subject: 'One' }), make({ subject: 'Empty', bodyText: '' }), make({ subject: 'Three' })]);
+    show(result);
+    const empty = items()[1]!;
+    expect(checkbox(empty).checked).toBe(true);
+    expect(includedLine()).toBe('2 of 3 emails will be in the PDF. 1 left out because it has no text.');
+    // The PDF step still gets the reader's ticks: the PDF model leaves it out itself.
+    expect(review.includedPositions()).toEqual([0, 1, 2]);
+    toggle(empty, false);
+    expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
+    toggle(empty, true);
+    setLocale('fr');
+    try {
+      review.relabel();
+      expect(includedLine()).toBe('E-mails dans le PDF\u{00A0}: 2 sur 3. 1 exclu car sans texte.');
+    } finally {
+      setLocale('en');
+      review.relabel();
+    }
   });
 
   it('gives onChange the new line to announce after each tick or untick (the page has one live region, the status line)', () => {
