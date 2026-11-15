@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
 import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { attachedResult } from '../../tests/support/attached-builder';
 import { runEngine, type EngineMessage, type EngineResult } from '../engine/engine';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../parsing/types';
 import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS, type MessageNote } from '../ui-model/message-notes';
@@ -128,6 +129,29 @@ describe('texts', () => {
     expect(filesText({ ...counts, filesGiven: 12, filesFailed: 3 })).toBe('12 files, 3 could not be read.');
   });
 
+  it('says how many emails found were attached inside other emails, only when there are some (task 8.13b-4, P4)', () => {
+    const counts = { filesGiven: 3, filesFailed: 0, messagesFound: 5, duplicatesMerged: 0, undated: 0, withFolds: 0 };
+    expect(messagesText(counts, 0, 0)).toBe('5 emails found.');
+    expect(messagesText(counts, 0, 1)).toBe('5 emails found (1 attached inside another email).');
+    expect(messagesText(counts, 0, 2)).toBe('5 emails found (2 attached inside other emails).');
+    expect(messagesText({ ...counts, duplicatesMerged: 1 }, 3, 2)).toBe(
+      '5 emails found (2 attached inside other emails), 1 identical copy merged, 3 earlier emails rebuilt from quoted text.',
+    );
+    setLocale('fr');
+    try {
+      expect(messagesText(counts, 0, 2)).toBe('5 e-mails trouvés (2 joints à d’autres e-mails).');
+      expect(messagesText(counts, 0, 1)).toBe('5 e-mails trouvés (1 joint à un autre e-mail).');
+    } finally {
+      setLocale('en');
+    }
+    setLocale('nl');
+    try {
+      expect(messagesText(counts, 0, 2)).toBe('5 e-mails gevonden (2 bijgevoegd bij andere e-mails).');
+    } finally {
+      setLocale('en');
+    }
+  });
+
   it('writes the files line in French with "dont": the failed files are among the given ones', () => {
     const counts = { filesGiven: 12, filesFailed: 1, messagesFound: 11, duplicatesMerged: 2, undated: 0, withFolds: 0 };
     setLocale('fr');
@@ -147,6 +171,8 @@ describe('texts', () => {
       ...DEDUPE_WARNINGS.map((code): MessageNote => ({ kind: 'dedupe', code, related: [], more: 0 })),
       ...ENGINE_WARNINGS.map((code): MessageNote => ({ kind: 'engine', code })),
       { kind: 'chars', code: 'coded-characters' },
+      { kind: 'attached', code: 'attached-unread' },
+      { kind: 'attached', code: 'attached-unread-inside' },
     ];
     const texts = notes.map(noteText);
     for (const [k, text] of texts.entries()) {
@@ -517,6 +543,58 @@ describe('include checkboxes', () => {
     toggle(items()[2]!, false);
     expect(review.includedPositions()).toEqual([1]);
     expect(includedLine()).toBe('1 of 3 emails will be in the PDF.');
+  });
+});
+
+describe('emails attached inside other emails (task 8.13b-4)', () => {
+  const RFC822_FILE = { fileName: 'broken.eml', size: 2, mimeType: 'message/rfc822' };
+
+  it('explains the attached emails in the counts, in the page language', () => {
+    const bob = make({ subject: 'Bob' });
+    const carol = make({ subject: 'Carol' });
+    show(runEngine([attachedResult({ message: carol, children: [{ node: { message: bob }, inline: false, name: 'bob.eml' }] }), ok(make({ subject: 'Dan' }))]));
+    expect(byId('review-messages').textContent).toBe('3 emails found (1 attached inside another email).');
+    setLocale('fr');
+    try {
+      review.relabel();
+      expect(byId('review-messages').textContent).toBe('3 e-mails trouvés (1 joint à un autre e-mail).');
+    } finally {
+      setLocale('en');
+      review.relabel();
+    }
+    show(engineOf([make(), make()]));
+    expect(byId('review-messages').textContent).toBe('2 emails found.');
+  });
+
+  it('notes an email sent as a file that could not be read on its holder and on the emails printing it inline', () => {
+    const bob = make({ subject: 'Bob', attachments: [RFC822_FILE] });
+    const carol = make({ subject: 'Carol' });
+    show(runEngine([attachedResult({ message: carol, children: [{ node: { message: bob }, inline: true }] }), ok(make({ subject: 'Plain' }))]));
+    const card = (subject: string): FakeElement => items()[subjects().indexOf(subject)]!;
+    expect(notesOf(card('Bob'))).toEqual([t('warnings.attached.attached-unread')]);
+    expect(notesOf(card('Carol'))).toEqual([t('warnings.attached.attached-unread-inside')]);
+    expect(notesOf(card('Plain'))).toEqual([]);
+    expect(withClass(card('Bob'), 'message-note')[0]?.getAttribute('data-code')).toBe('attached-unread');
+    expect(byId('review-notes').textContent).toBe(t('counts.withNotes', { count: 2 }));
+    setLocale('nl');
+    try {
+      review.relabel();
+      expect(notesOf(card('Bob'))).toEqual([t('warnings.attached.attached-unread')]);
+      expect(notesOf(card('Bob'))[0]).toContain('is niet gelezen');
+    } finally {
+      setLocale('en');
+    }
+  });
+
+  it('forgets the notes with "Clear everything" and with a new result', () => {
+    show(engineOf([make({ subject: 'Holder', attachments: [RFC822_FILE] })]));
+    expect(notesOf(items()[0]!)).toEqual([t('warnings.attached.attached-unread')]);
+    review.reset();
+    preview.reset();
+    expect(byId('review-notes').hasAttribute('hidden')).toBe(true);
+    show(engineOf([make({ subject: 'Other' })]));
+    expect(notesOf(items()[0]!)).toEqual([]);
+    expect(byId('review-notes').hasAttribute('hidden')).toBe(true);
   });
 });
 

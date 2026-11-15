@@ -109,6 +109,15 @@
 // or "Print full original text" is ticked (`rebuiltShown`), EVERY rebuilt card in the list is hidden, a stand-in the
 // review could not decorate too (`refreshRebuilt` after each change).
 //
+// Emails attached inside other emails (task 8.13b-4; src/ui-model/attached-links.ts):
+// the card of an attached email has an "Attached to: email #N" row and the
+// card holding it an "Attached emails: #4, #6" row, the list numbers as
+// plain text (never links). They are worked out once per result (show()),
+// forgotten by clear(), and written again by relabel() with the details
+// list. "Also in" names each merged copy by the same chain as the PDF's
+// File row ("parent.eml › forwarded.eml", src/ui-model/file-chain.ts).
+// None of it is in the PDF.
+//
 // Not here: the counts, the include/exclude checkboxes and the notes
 // (src/ui/review.ts). They reach the page through three options: `header`
 // (nodes above the toolbar), `decorate` (adds to each email's item) and
@@ -116,12 +125,15 @@
 // to the toolbar (the "Print full original text" checkbox of
 // src/ui/pdf-labels.ts).
 
+import type { MergedCopy } from '../engine/dedupe';
 import type { EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
 import type { PlanReason } from '../engine/output-plan';
 import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, isValidTimeZone, listTimeZones } from '../engine/time-format';
 import type { AttachmentInfo, EmailAddress, EmailDate } from '../parsing/types';
 import type { ProcessResult } from '../pipeline/process-files';
+import { attachedLinks, type AttachedLinks } from '../ui-model/attached-links';
 import { displayAuthor } from '../ui-model/display-author';
+import { fileChain } from '../ui-model/file-chain';
 import type { DisplayBlock } from '../ui-model/display-blocks';
 import { joinMailboxes, joinPlain } from '../ui-model/mailbox-list';
 import { pdfPlanNote, type PdfNoteCode } from '../ui-model/message-notes';
@@ -534,6 +546,8 @@ interface ItemSlot {
   readonly noSubject: HTMLSpanElement | null;
   readonly meta: HTMLDListElement;
   readonly date: DateSlot;
+  /** Its attached-email links (list numbers), for its details list. */
+  readonly links: ItemLinks;
 }
 
 /** A rebuilt card's date element, rewritten when the zone changes. */
@@ -605,12 +619,34 @@ function row(name: string, label: string, value: readonly (Node | string)[]): No
   return [el('dt', { attrs: { class: `meta-${name}` }, text: label }), el('dd', { attrs: { class: `meta-${name}` }, children: value })];
 }
 
+/** "email #2" or "emails #2, #5": the value of an "Attached to" row; '' if none. */
+export function attachedToText(numbers: readonly number[]): string {
+  if (numbers.length === 0) return '';
+  const list = joinList(numbers.map(messageNumberText));
+  return numbers.length === 1 ? t('preview.attachedToOne', { list }) : t('preview.attachedToMany', { list });
+}
+
+/** "#4, #6": the value of an "Attached emails" row; '' if none. */
+export function attachedEmailsText(numbers: readonly number[]): string {
+  return numbers.length === 0 ? '' : joinList(numbers.map(messageNumberText));
+}
+
+/** The file chain of one merged copy for the "Also in" row (the PDF File row's own text, src/ui-model/file-chain.ts). */
+export function alsoInText(result: Pick<EngineResult, 'attached' | 'counts'>, copy: MergedCopy): string {
+  return fileChain(result, copy.index, copy.source.fileName, {
+    noFileName: t('added.noName'),
+    attachedNoName: (number) => t('pdf.document.attachedNoName', { number: String(number) }),
+  }).text;
+}
+
 /**
  * The rows of an email's details list, in the page language: date (with
  * the given date elements, which are kept across a language change), shown
- * author, recipients, attachments and the files it was also found in.
+ * author, recipients, attachments, the emails attached to it and the ones
+ * it is attached to (`links`, task 8.13b-4; plain list numbers), and the
+ * files it was also found in (each copy's chain, as in the PDF's File row).
  */
-function metaRows(m: EngineMessage, date: DateSlot): Node[] {
+function metaRows(m: EngineMessage, date: DateSlot, result: EngineResult | null, links: ItemLinks): Node[] {
   const message = m.message;
   const author = displayAuthor(message);
   const meta: Node[] = [
@@ -631,12 +667,25 @@ function metaRows(m: EngineMessage, date: DateSlot): Node[] {
     const items = message.attachments.map((a) => el('li', { attrs: { class: 'attachment' }, text: attachmentText(a) }));
     meta.push(...row('attachments', t('preview.attachments'), [el('ul', { attrs: { class: 'attachment-list' }, children: items })]));
   }
+  if (links.attachedEmails.length > 0) meta.push(...row('attached-emails', t('preview.attachedEmails'), [attachedEmailsText(links.attachedEmails)]));
+  if (links.attachedTo.length > 0) meta.push(...row('attached-to', t('preview.attachedTo'), [attachedToText(links.attachedTo)]));
   if (m.duplicates.length > 0) {
-    const names = m.duplicates.map((d) => (d.source.fileName === '' ? t('added.noName') : d.source.fileName));
+    // Without a result (not expected) the chain cannot be worked out: the file names alone, as before.
+    const names = m.duplicates.map((d) =>
+      result === null ? (d.source.fileName.trim() === '' ? t('added.noName') : d.source.fileName) : alsoInText(result, d),
+    );
     meta.push(...row('also-in', t('preview.alsoIn'), [joinPlain(names)]));
   }
   return meta;
 }
+
+/** The attached-email links of one email (see src/ui-model/attached-links.ts). */
+interface ItemLinks {
+  readonly attachedTo: readonly number[];
+  readonly attachedEmails: readonly number[];
+}
+
+const NO_LINKS: ItemLinks = { attachedTo: [], attachedEmails: [] };
 
 /** One rebuilt card's date element texts in `zone`. */
 function applyRebuiltDate(slot: RebuiltDateSlot, zone: string): void {
@@ -696,6 +745,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   let generation = 0;
   // The result shown (null when the list is empty).
   let currentResult: EngineResult | null = null;
+  // The attached-email links of the result shown (task 8.13b-4), worked out once per result; null: none.
+  let currentLinks: AttachedLinks | null = null;
   // The bodies built so far, by list position.
   let bodies = new Map<number, BodySlot>();
   // The items built so far (not stand-ins), by list position.
@@ -785,6 +836,12 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     const extra = texts.senderLocal ?? texts.asWritten;
     slot.senderNote.textContent = extra ?? '';
     setSafeAttribute(slot.senderNote, 'hidden', extra === null);
+  }
+
+  /** The attached-email links of the email at `position` in the result shown. */
+  function linksOf(position: number): ItemLinks {
+    if (currentLinks === null) return NO_LINKS;
+    return { attachedTo: currentLinks.attachedTo[position] ?? [], attachedEmails: currentLinks.attachedEmails[position] ?? [] };
   }
 
   /** The PDF view of one email under the plans in use; null: no labels (not in the PDF, or no plans). */
@@ -973,7 +1030,8 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     applyDate(slot);
     slots.push(slot);
 
-    const meta = el('dl', { attrs: { class: 'message-meta' }, children: metaRows(m, slot) });
+    const links = linksOf(position);
+    const meta = el('dl', { attrs: { class: 'message-meta' }, children: metaRows(m, slot, result, links) });
     const body = bodyOf(m, position, result.positionByIndex);
     const item = el('li', {
       attrs: { class: 'message', 'data-position': String(position) },
@@ -981,7 +1039,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     });
     options.decorate?.(item, m, position, result);
     // Recorded last: an item whose decoration threw is not in the page (safeItemOf).
-    itemSlots.set(position, { m, number, noSubject: hasSubject ? null : subject, meta, date: slot });
+    itemSlots.set(position, { m, number, noSubject: hasSubject ? null : subject, meta, date: slot, links });
     return item;
   }
 
@@ -1166,6 +1224,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     rebuiltStandIns = new Map();
     rebuiltCards = [];
     currentResult = null;
+    currentLinks = null;
     pdfPlans = null;
     setPdfState('off');
     list.replaceChildren();
@@ -1232,6 +1291,11 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
   function show(result: EngineResult): void {
     clear();
     currentResult = result;
+    try {
+      currentLinks = attachedLinks(result);
+    } catch {
+      currentLinks = null; // not expected: no attached rows rather than wrong ones
+    }
     setPdfState(pdfState); // the status line takes its place now, before any tick
     const myGeneration = generation;
     const messages = result.messages;
@@ -1303,7 +1367,7 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
       item.number.textContent = messageNumberText(position + 1);
       if (item.noSubject !== null) item.noSubject.textContent = t('preview.noSubject');
       try {
-        item.meta.replaceChildren(...metaRows(item.m, item.date));
+        item.meta.replaceChildren(...metaRows(item.m, item.date, currentResult, item.links));
       } catch {
         // Not expected (the same rows were built once): this email keeps its details as they were;
         // swallowed so one bad email never stops the rest of the page from being relabelled.

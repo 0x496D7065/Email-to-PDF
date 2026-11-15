@@ -170,6 +170,8 @@ export const nl: Messages = {
     files: { one: '{count} bestand toegevoegd.', other: '{count} bestanden toegevoegd.' },
     failed: { one: '{count} kon niet worden gelezen.', other: '{count} konden niet worden gelezen.' },
     messages: { one: '{count} e-mail gevonden.', other: '{count} e-mails gevonden.' },
+    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
+    messagesAttached: { one: '{count} e-mail gevonden ({attached}).', other: '{count} e-mails gevonden ({attached}).' },
     merged: { one: '{count} identieke kopie samengevoegd.', other: '{count} identieke kopieën samengevoegd.' },
     failedTitle: 'Bestanden die niet konden worden gelezen',
     details: 'Technische details',
@@ -198,6 +200,11 @@ export const nl: Messages = {
     dateAsWritten: 'Zoals geschreven in de e-mail: {text}',
     mailbox: '{name} <{address}>',
     alsoIn: 'Ook in',
+    // NEEDS USER PROOFREADING (task 8.13b-4): the four texts below.
+    attachedTo: 'Bijgevoegd bij',
+    attachedToOne: 'e-mail {list}',
+    attachedToMany: 'e-mails {list}',
+    attachedEmails: 'Bijgevoegde e-mails',
     attachment: '{name} ({size}, {type})',
     attachmentNoType: '{name} ({size})',
     noAttachmentName: '(bijlage zonder naam)',
@@ -239,6 +246,9 @@ export const nl: Messages = {
     filesWithFailed: '{files}, waarvan {failed}',
     seeFailed: 'Zie stap 1 voor de reden.',
     messagesFound: { one: '{count} e-mail gevonden', other: '{count} e-mails gevonden' },
+    // NEEDS USER PROOFREADING (task 8.13b-4): the two texts below.
+    messagesFoundAttached: '{found} ({attached})',
+    attachedFound: { one: '{count} bijgevoegd bij een andere e-mail', other: '{count} bijgevoegd bij andere e-mails' },
     duplicatesMerged: { one: '{count} identieke kopie samengevoegd', other: '{count} identieke kopieën samengevoegd' },
     rebuiltFound: { one: '{count} eerdere e-mail gereconstrueerd uit geciteerde tekst', other: '{count} eerdere e-mails gereconstrueerd uit geciteerde tekst' },
     // The form follows {count} (the total), as in English, so no verb that
@@ -386,6 +396,13 @@ export const nl: Messages = {
     rebuild: {
       'reconstruct-failed': 'De eerdere e-mails die in deze e-mail worden geciteerd, konden niet als afzonderlijke e-mails worden gereconstrueerd. De geciteerde tekst staat nog volledig in deze e-mail.',
       'reconstruct-limit': 'Niet alle eerdere e-mails die in deze e-mail worden geciteerd, konden worden gereconstrueerd (te veel, of de e-mail is te lang). De geciteerde tekst staat nog volledig in deze e-mail.',
+    },
+    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
+    attached: {
+      'attached-unread':
+        'Een e-mail die als bestand bij deze e-mail is gevoegd, is niet gelezen, dus de tekst ervan wordt niet getoond. Hij staat bij de bijlagen en staat nog in het originele bestand.',
+      'attached-unread-inside':
+        'Een e-mail in deze e-mail heeft een als bestand bijgevoegde e-mail die niet is gelezen, dus de tekst ervan wordt niet getoond. Hij staat bij de bijlagen en staat nog in het originele bestand.',
     },
   },
 

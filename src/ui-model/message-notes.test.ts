@@ -186,3 +186,23 @@ describe('codedCharacters (task 8.8: the PDF shows them as codes without a note,
     expect(t('review.codedCharacters')).toBe('This email contains hidden or damaged characters. In the PDF they may appear as codes such as [U+0000].');
   });
 });
+
+describe('the unread-attached note (task 8.13b-4, P3)', () => {
+  it('is shown right after the parser notes, before the look-alike and character notes; none by default', () => {
+    expect(messageNotes(engineMessage(), 0, [0], [], null)).toEqual([]);
+    const m = engineMessage({ message: make({ bodyText: 'a\u{0}b' }), parserWarnings: ['missing-date', 'missing-message-id'] });
+    expect(messageNotes(m, 0, [0], [], 'attached-unread')).toEqual([
+      { kind: 'parse', code: 'missing-date' },
+      { kind: 'parse', code: 'missing-message-id' },
+      { kind: 'attached', code: 'attached-unread' },
+      { kind: 'chars', code: 'coded-characters' },
+    ]);
+    expect(messageNotes(engineMessage(), 0, [0], [], 'attached-unread-inside')).toEqual([{ kind: 'attached', code: 'attached-unread-inside' }]);
+  });
+
+  it('has calm words for both places', () => {
+    expect(t('warnings.attached.attached-unread')).toMatch(/^An email attached to this one as a file was not read/);
+    expect(t('warnings.attached.attached-unread-inside')).toMatch(/^An email inside this one has an email attached as a file that was not read/);
+    for (const code of ['attached-unread', 'attached-unread-inside'] as const) expect(t(`warnings.attached.${code}`)).toContain('still in the original file');
+  });
+});

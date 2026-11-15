@@ -233,7 +233,7 @@
 // transform makes new strings. Pure function, no DOM, no clock (the caller
 // passes `generatedAt`), README.md, rule R7.
 
-import { attachedAt, type EngineAttached, type EngineMessage, type EngineRebuilt, type EngineResult } from '../engine/engine';
+import type { EngineAttached, EngineMessage, EngineRebuilt, EngineResult } from '../engine/engine';
 import type { MessagePlan, OutputPolicy, PlanRange } from '../engine/output-plan';
 import { headerLabelCounts } from '../engine/quoted-header';
 import type { ReconstructedMessage } from '../engine/reconstruct';
@@ -242,6 +242,7 @@ import { mapOffsets } from '../engine/same-text-offsets';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../engine/time-format';
 import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 import { displayAuthor } from '../ui-model/display-author';
+import { FILE_CHAIN_SEPARATOR, fileChain } from '../ui-model/file-chain';
 import { joinMailboxes } from '../ui-model/mailbox-list';
 import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../ui-model/rebuilt';
 import { printedText } from './printed-check';
@@ -1830,8 +1831,8 @@ interface EmailParts {
   readonly people: ParticipantSource;
 }
 
-/** Between the levels of an attached email's File row: "parent.eml › forwarded.eml". */
-export const FILE_CHAIN_SEPARATOR = ' › ';
+/** Between the levels of an attached email's File row (src/ui-model/file-chain.ts). */
+export { FILE_CHAIN_SEPARATOR };
 
 /**
  * One line of an email's File row for the copy at input position `index`
@@ -1840,14 +1841,13 @@ export const FILE_CHAIN_SEPARATOR = ' › ';
  * then the attachment name at each level down to it (EngineAttached.names),
  * joined by FILE_CHAIN_SEPARATOR, an attachment without a name shown as
  * "(attached email N)" with its number at that level (EngineAttached.path:
- * the n-th attached email of the email holding it).
+ * the n-th attached email of the email holding it). The text comes from
+ * src/ui-model/file-chain.ts, shared with the preview's "Also in" row (task
+ * 8.13b-4, P2), so the two never disagree.
  */
 function fileRowLine(result: EngineResult, index: number, fileName: string, strings: PdfStrings, s: Sanitizer): PdfLine {
-  const file = fileName.trim() === '' ? null : fileName;
-  const attached = attachedAt(result, index);
-  if (attached === undefined) return file === null ? own(strings.noFileName, 'muted') : s.line(file, 'muted');
-  const levels = attached.names.map((name, k) => (name.trim() === '' ? strings.attachedNoName(attached.path[k] ?? k + 1) : name));
-  return s.line([file ?? strings.noFileName, ...levels].join(FILE_CHAIN_SEPARATOR), 'muted');
+  const chain = fileChain(result, index, fileName, strings);
+  return chain.ownWords ? own(chain.text, 'muted') : s.line(chain.text, 'muted');
 }
 
 function buildEmail(

@@ -33,13 +33,21 @@ function fileItem(file: FileLike, isDirectory = false): DataTransferItemLike {
 }
 
 /** An engine result with the given counts and failed files (no real messages needed here). */
-function engineResult(given: number, found: number, merged: number, failed: { fileName: string; error: ParseErrorCode; detail: string }[]): ProcessResult {
+function engineResult(
+  given: number,
+  found: number,
+  merged: number,
+  failed: { fileName: string; error: ParseErrorCode; detail: string }[],
+  attached = 0,
+): ProcessResult {
   const kept = found - merged;
   const engine = {
     messages: Array.from({ length: kept }, () => ({})),
     failed: failed.map((f, i) => ({ ...f, index: i, sha256: null })),
     counts: { filesGiven: given, messagesFound: found, duplicatesMerged: merged, filesFailed: failed.length, undated: 0, withFolds: 0 },
     positionByIndex: [],
+    // Only the number of entries matters to the counts (task 8.13b-4, P4).
+    ...(attached === 0 ? {} : { attached: Array.from({ length: attached }, () => ({})) }),
   } as unknown as EngineResult;
   return { ok: true, engine };
 }
@@ -186,6 +194,7 @@ describe('summarize and summaryText', () => {
       filesAdded: 12,
       filesFailed: 1,
       messagesFound: 10,
+      attachedFound: 0,
       duplicatesMerged: 1,
       failed: [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'not an email file' }],
       batchError: null,
@@ -198,6 +207,14 @@ describe('summarize and summaryText', () => {
     expect(summaryText(summarize(engineResult(3, 0, 0, [])))).toBe('3 files added. 0 emails found.');
   });
 
+  it('says how many emails were attached inside other emails, only when there are some (task 8.13b-4, P4)', () => {
+    const one = summarize(engineResult(1, 2, 0, [], 1));
+    expect(one.attachedFound).toBe(1);
+    expect(summaryText(one)).toBe('1 file added. 2 emails found (1 attached inside another email).');
+    expect(summaryText(summarize(engineResult(3, 5, 1, [], 2)))).toBe('3 files added. 5 emails found (2 attached inside other emails). 1 identical copy merged.');
+    expect(summaryText(summarize(engineResult(3, 3, 0, [], 0)))).toBe('3 files added. 3 emails found.');
+  });
+
   it('counts what was read when the whole batch failed', () => {
     const parsed: ParseResult[] = [
       { ok: false, fileName: 'big.eml', sha256: null, error: 'too-large', detail: 'too big' },
@@ -208,10 +225,25 @@ describe('summarize and summaryText', () => {
       filesAdded: 2,
       filesFailed: 1,
       messagesFound: 1,
+      attachedFound: 0,
       duplicatesMerged: 0,
       failed: [{ fileName: 'big.eml', error: 'too-large', detail: 'too big' }],
       batchError: 'engine-timeout',
     });
+  });
+
+  it('counts the emails attached inside the files read when the whole batch failed (task 8.13b-4, Q7)', () => {
+    const attached = (n: number): never => Array.from({ length: n }, () => ({})) as never;
+    const parsed: ParseResult[] = [
+      { ok: true, message: {} as never, attached: attached(2) },
+      { ok: false, fileName: 'big.eml', sha256: null, error: 'too-large', detail: 'too big' },
+      { ok: true, message: {} as never },
+      { ok: true, message: {} as never, attached: attached(1) },
+    ];
+    const summary = summarize({ ok: false, error: 'engine-failed', detail: 'broken', parsed });
+    // 3 files read + 3 attached emails, as the engine counts them (EngineCounts.messagesFound).
+    expect(summary).toMatchObject({ filesAdded: 4, filesFailed: 1, messagesFound: 6, attachedFound: 3, duplicatesMerged: 0 });
+    expect(summaryText(summary)).toBe('4 files added. 1 could not be read. 6 emails found (3 attached inside other emails).');
   });
 });
 

@@ -52,6 +52,7 @@
 import type { FailedFile } from '../engine/engine';
 import { processFiles, UNEXPECTED_BATCH_DETAIL, type ProcessOptions, type ProcessProgress, type ProcessResult } from '../pipeline/process-files';
 import type { FileLike } from '../pipeline/read-files';
+import { attachedCount } from '../ui-model/attached-links';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
 import { t } from './i18n';
@@ -173,7 +174,10 @@ interface FailedItem {
 export interface BatchSummary {
   readonly filesAdded: number;
   readonly filesFailed: number;
+  /** Every email found, the ones attached inside other emails included. */
   readonly messagesFound: number;
+  /** How many of `messagesFound` were attached inside other emails (task 8.13b-4, P4). */
+  readonly attachedFound: number;
   readonly duplicatesMerged: number;
   readonly failed: readonly FailedEntry[];
   /** Set when the whole batch has no result (ok: false). */
@@ -188,28 +192,41 @@ export function summarize(result: ProcessResult): BatchSummary {
       filesAdded: counts.filesGiven,
       filesFailed: counts.filesFailed,
       messagesFound: counts.messagesFound,
+      attachedFound: attachedCount(result.engine),
       duplicatesMerged: counts.duplicatesMerged,
       failed: failed.map((f) => ({ fileName: f.fileName, error: f.error, detail: f.detail })),
       batchError: null,
     };
   }
-  // No engine result: count what was read. Duplicates are unknown (not merged).
+  // No engine result: count what was read, the emails attached inside the
+  // files read included (as the engine counts them, task 8.13b-4, Q7).
+  // Duplicates are unknown (not merged).
   const failed = result.parsed.flatMap((p) => (p.ok ? [] : [{ fileName: p.fileName, error: p.error, detail: p.detail }]));
+  const attachedFound = result.parsed.reduce((n, p) => n + (p.ok && Array.isArray(p.attached) ? p.attached.length : 0), 0);
   return {
     filesAdded: result.parsed.length,
     filesFailed: failed.length,
-    messagesFound: result.parsed.length - failed.length,
+    messagesFound: result.parsed.length - failed.length + attachedFound,
+    attachedFound,
     duplicatesMerged: 0,
     failed,
     batchError: result.error,
   };
 }
 
-/** "12 files added. 2 could not be read. 9 emails found. 1 identical copy merged." */
+/**
+ * "12 files added. 2 could not be read. 9 emails found. 1 identical copy
+ * merged." With emails attached inside other emails: "9 emails found (2
+ * attached inside other emails)." (task 8.13b-4, P4).
+ */
 export function summaryText(summary: BatchSummary): string {
   const parts = [t('added.files', { count: summary.filesAdded })];
   if (summary.filesFailed > 0) parts.push(t('added.failed', { count: summary.filesFailed }));
-  parts.push(t('added.messages', { count: summary.messagesFound }));
+  parts.push(
+    summary.attachedFound > 0
+      ? t('added.messagesAttached', { count: summary.messagesFound, attached: t('counts.attachedFound', { count: summary.attachedFound }) })
+      : t('added.messages', { count: summary.messagesFound }),
+  );
   if (summary.duplicatesMerged > 0) parts.push(t('added.merged', { count: summary.duplicatesMerged }));
   return parts.join(' ');
 }
@@ -409,6 +426,7 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
       filesAdded: summary.filesAdded,
       filesFailed: summary.filesFailed,
       messagesFound: summary.messagesFound,
+      attachedFound: summary.attachedFound,
       duplicatesMerged: summary.duplicatesMerged,
       batchError: summary.batchError,
     };

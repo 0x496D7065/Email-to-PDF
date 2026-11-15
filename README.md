@@ -224,7 +224,11 @@ The tool never throws message text away on its own:
   PDF then names just UTC), characters the PDF shows as codes such as
   "[U+0000]", an email the PDF prints whole because the tool could not tell
   what to leave out, text that could not be shown in full, identical
-  copies merged (the "Also in" line), and what rebuilt emails are (under
+  copies merged (the "Also in" line, which names the same file and
+  attachment chain as the PDF's "File" row), which email an attached email
+  belongs to (the "Attached to" and "Attached emails" lines, and how many
+  of the emails found were attached inside other emails), an email sent as
+  an attachment that could not be read, and what rebuilt emails are (under
   "Rebuild conversation from replies"). The PDF keeps only the
   placeholders for blank fields ("(no subject)", "(no date)", "Unknown
   sender", "(no text)"), its headings, labels, index, bookmarks and page

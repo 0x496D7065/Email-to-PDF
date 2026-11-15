@@ -25,6 +25,7 @@ import type { PlanReason } from '../../engine/output-plan';
 import type { FoldReason } from '../../engine/segments';
 import type { ParseErrorCode, ParseWarning } from '../../parsing/types';
 import type { ProcessErrorCode } from '../../pipeline/process-files';
+import type { UnreadAttachedCode } from '../../ui-model/attached-links';
 import type { AuthorSource } from '../../ui-model/display-author';
 import type { PdfNoteCode } from '../../ui-model/message-notes';
 import type { PdfStatus } from '../../ui-model/pdf-plan';
@@ -219,6 +220,10 @@ export const en = {
     files: { one: '{count} file added.', other: '{count} files added.' },
     failed: { one: '{count} could not be read.', other: '{count} could not be read.' },
     messages: { one: '{count} email found.', other: '{count} emails found.' },
+    // Instead of `messages` when some of the emails found were attached
+    // inside other emails (task 8.13b-4, P4): {attached} is
+    // counts.attachedFound, e.g. "5 emails found (2 attached inside other emails)."
+    messagesAttached: { one: '{count} email found ({attached}).', other: '{count} emails found ({attached}).' },
     merged: { one: '{count} identical copy merged.', other: '{count} identical copies merged.' },
     failedTitle: 'Files that could not be read',
     details: 'Technical details',
@@ -258,7 +263,18 @@ export const en = {
     // One mailbox with both parts, e.g. "Alice Example <alice@example.test>".
     mailbox: '{name} <{address}>',
     // Files this email was also found in (identical copies merged into it).
+    // For a copy attached inside a file, the same chain as the PDF's File
+    // row: "parent.eml › forwarded.eml" (pdf.document.attachedNoName for an
+    // attachment without a name).
     alsoIn: 'Also in',
+    // On an email attached inside other emails (task 8.13b-4, P1): the
+    // row's label, then "email #2" or "emails #2, #5" (their numbers in
+    // the list, plain text). {list} is the numbers joined as a list.
+    attachedTo: 'Attached to',
+    attachedToOne: 'email {list}',
+    attachedToMany: 'emails {list}',
+    // On the email holding them: the numbers of the emails attached to it, e.g. "#4, #6".
+    attachedEmails: 'Attached emails',
     // One attachment: listed only, never opened.
     attachment: '{name} ({size}, {type})',
     attachmentNoType: '{name} ({size})',
@@ -316,6 +332,12 @@ export const en = {
     // Points to the list of failed files (with the reasons) in step 1.
     seeFailed: 'See why in step 1.',
     messagesFound: { one: '{count} email found', other: '{count} emails found' },
+    // When some of them were attached inside other emails (task 8.13b-4,
+    // P4): {found} is messagesFound, {attached} is attachedFound, e.g.
+    // "5 emails found (2 attached inside other emails)". Only when there is
+    // at least one. attachedFound is used in step 1 too (added.messagesAttached).
+    messagesFoundAttached: '{found} ({attached})',
+    attachedFound: { one: '{count} attached inside another email', other: '{count} attached inside other emails' },
     duplicatesMerged: { one: '{count} identical copy merged', other: '{count} identical copies merged' },
     // Earlier emails rebuilt from the quoted text of the emails added (task 7.6), a part of the line above.
     rebuiltFound: { one: '{count} earlier email rebuilt from quoted text', other: '{count} earlier emails rebuilt from quoted text' },
@@ -562,6 +584,18 @@ export const en = {
       'reconstruct-failed': 'The earlier emails quoted in this email could not be rebuilt as separate emails. The quoted text is all still in this email.',
       'reconstruct-limit': 'Not every earlier email quoted in this email could be rebuilt (too many, or the email is too long). The quoted text is all still in this email.',
     } satisfies Record<ReconstructionWarningCode, string>,
+    // An .eml email sent as an attachment (not printed inline) that was not
+    // read as an email of its own, because it could not be read or because
+    // the depth/count limits skipped it (src/parsing/attached-limits.ts)
+    // (task 8.13b-4, P3): on the email it
+    // is attached to, and on every email that shows that one inside it
+    // (src/ui-model/attached-links.ts). It stays listed as an attachment.
+    attached: {
+      'attached-unread':
+        'An email attached to this one as a file was not read, so its text is not shown. It is listed under Attachments and is still in the original file.',
+      'attached-unread-inside':
+        'An email inside this one has an email attached as a file that was not read, so its text is not shown. It is listed under Attachments and is still in the original file.',
+    } satisfies Record<UnreadAttachedCode, string>,
   },
 
   errors: {

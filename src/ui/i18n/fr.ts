@@ -170,6 +170,8 @@ export const fr: Messages = {
     files: { one: '{count} fichier ajouté.', other: '{count} fichiers ajoutés.' },
     failed: { one: '{count} n’a pas pu être lu.', other: '{count} n’ont pas pu être lus.' },
     messages: { one: '{count} e-mail trouvé.', other: '{count} e-mails trouvés.' },
+    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
+    messagesAttached: { one: '{count} e-mail trouvé ({attached}).', other: '{count} e-mails trouvés ({attached}).' },
     merged: { one: '{count} copie identique fusionnée.', other: '{count} copies identiques fusionnées.' },
     failedTitle: 'Fichiers qui n’ont pas pu être lus',
     details: 'Détails techniques',
@@ -198,6 +200,11 @@ export const fr: Messages = {
     dateAsWritten: 'Date telle qu’écrite dans l’e-mail\u00A0: {text}',
     mailbox: '{name} <{address}>',
     alsoIn: 'Également dans',
+    // NEEDS USER PROOFREADING (task 8.13b-4): the four texts below.
+    attachedTo: 'Joint à',
+    attachedToOne: 'l’e-mail {list}',
+    attachedToMany: 'les e-mails {list}',
+    attachedEmails: 'E-mails joints',
     attachment: '{name} ({size}, {type})',
     attachmentNoType: '{name} ({size})',
     noAttachmentName: '(pièce jointe sans nom)',
@@ -238,6 +245,9 @@ export const fr: Messages = {
     filesWithFailed: '{files}, dont {failed}',
     seeFailed: 'Voir pourquoi à l’étape 1.',
     messagesFound: { one: '{count} e-mail trouvé', other: '{count} e-mails trouvés' },
+    // NEEDS USER PROOFREADING (task 8.13b-4): the two texts below.
+    messagesFoundAttached: '{found} ({attached})',
+    attachedFound: { one: '{count} joint à un autre e-mail', other: '{count} joints à d’autres e-mails' },
     duplicatesMerged: { one: '{count} copie identique fusionnée', other: '{count} copies identiques fusionnées' },
     rebuiltFound: { one: '{count} e-mail antérieur reconstitué à partir du texte cité', other: '{count} e-mails antérieurs reconstitués à partir du texte cité' },
     // The form follows {count} (the total), as in English, so the verb must
@@ -385,6 +395,13 @@ export const fr: Messages = {
     rebuild: {
       'reconstruct-failed': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas pu être reconstitués séparément. Tout le texte cité reste dans cet e-mail.',
       'reconstruct-limit': 'Les e-mails antérieurs cités dans cet e-mail n’ont pas tous pu être reconstitués (trop nombreux, ou e-mail trop long). Tout le texte cité reste dans cet e-mail.',
+    },
+    // NEEDS USER PROOFREADING (task 8.13b-4): the text below.
+    attached: {
+      'attached-unread':
+        'Un e-mail joint à celui-ci en tant que fichier n’a pas été lu, son texte n’est donc pas affiché. Il figure dans les pièces jointes et reste dans le fichier d’origine.',
+      'attached-unread-inside':
+        'Un e-mail contenu dans celui-ci a un e-mail joint en tant que fichier qui n’a pas été lu, son texte n’est donc pas affiché. Il figure dans les pièces jointes et reste dans le fichier d’origine.',
     },
   },
 

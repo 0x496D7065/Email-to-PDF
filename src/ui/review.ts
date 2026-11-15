@@ -1,11 +1,14 @@
 // Step 2, around the list of emails (src/ui/preview.ts):
 // - at the top, the counts: files given and how many could not be read
 //   (pointing to step 1, which already lists them with the reasons), emails
-//   found and identical copies merged, "N of M emails will be in the PDF"
+//   found (and, task 8.13b-4, how many of them were attached inside other
+//   emails) and identical copies merged, "N of M emails will be in the PDF"
 //   and how many emails have notes. The numbers are the engine's own counts;
 //   nothing is counted again here;
 // - on each email (through the preview's `decorate` hook), an "Include in
-//   the PDF" checkbox and the email's notes (src/ui-model/message-notes.ts).
+//   the PDF" checkbox and the email's notes (src/ui-model/message-notes.ts;
+//   the note about an email sent as an attachment that could not be read
+//   is worked out over the whole result, src/ui-model/attached-links.ts).
 //   The PDF has no notes (user rule, task 8.8): what the tool was unsure
 //   about is said here and in the preview only, before the download.
 //
@@ -94,6 +97,7 @@
 
 import type { EngineCounts, EngineMessage, EngineRebuilt, EngineResult, ReconstructionWarning } from '../engine/engine';
 import type { ProcessResult } from '../pipeline/process-files';
+import { attachedCount, attachedLinks, type UnreadAttachedCode } from '../ui-model/attached-links';
 import { messageNotes, type MessageNote } from '../ui-model/message-notes';
 import { createRebuiltSelection, rebuiltEntries, rebuiltInPdf } from '../ui-model/rebuilt';
 import { createSelection } from '../ui-model/selection';
@@ -130,6 +134,8 @@ export function noteText(note: MessageNote): string {
       return t(`warnings.rebuild.${note.code}`);
     case 'chars':
       return t('review.codedCharacters');
+    case 'attached':
+      return t(`warnings.attached.${note.code}`);
     case 'dedupe': {
       const label = t(`warnings.dedupe.${note.code}`);
       const related = relatedText(note.related, note.more);
@@ -148,9 +154,15 @@ export function filesText(counts: EngineCounts): string {
   return t('counts.sentence', { text: t('counts.filesWithFailed', { files, failed }) });
 }
 
-/** "9 emails found, 2 identical copies merged, 3 earlier emails rebuilt from quoted text." `rebuilt`: rebuilt cards. */
-export function messagesText(counts: EngineCounts, rebuilt = 0): string {
-  const parts = [t('counts.messagesFound', { count: counts.messagesFound })];
+/**
+ * "9 emails found, 2 identical copies merged, 3 earlier emails rebuilt from
+ * quoted text." `rebuilt`: rebuilt cards. `attached`: how many of the emails
+ * found were attached inside other emails (task 8.13b-4, P4): "9 emails
+ * found (2 attached inside other emails), ...", said only when there is one.
+ */
+export function messagesText(counts: EngineCounts, rebuilt = 0, attached = 0): string {
+  const found = t('counts.messagesFound', { count: counts.messagesFound });
+  const parts = [attached > 0 ? t('counts.messagesFoundAttached', { found, attached: t('counts.attachedFound', { count: attached }) }) : found];
   if (counts.duplicatesMerged > 0) parts.push(t('counts.duplicatesMerged', { count: counts.duplicatesMerged }));
   if (rebuilt > 0) parts.push(t('counts.rebuiltFound', { count: rebuilt }));
   return t('counts.sentence', { text: joinList(parts) });
@@ -162,9 +174,25 @@ export function safeNotes(
   position: number,
   positionByIndex: readonly (number | null)[],
   rebuildWarnings: readonly ReconstructionWarning[] = [],
+  unreadAttached: UnreadAttachedCode | null = null,
 ): MessageNote[] {
   try {
-    return messageNotes(m, position, positionByIndex, rebuildWarnings);
+    return messageNotes(m, position, positionByIndex, rebuildWarnings, unreadAttached);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The unread-attached note of every email of a result, by list position
+ * (src/ui-model/attached-links.ts); all null if it cannot be worked out (a
+ * broken entry: never stops the page). The links are worked out again here on
+ * purpose (preview show() also works them out), for simplicity: no shared
+ * state between the two steps.
+ */
+export function safeUnreadAttached(result: EngineResult): readonly (UnreadAttachedCode | null)[] {
+  try {
+    return attachedLinks(result).unread;
   } catch {
     return [];
   }
@@ -307,6 +335,8 @@ export function createReview(options: ReviewOptions = {}): Review {
   // True if an email of the result shown has a "could not be rebuilt" note
   // (the switch is then shown even without rebuilt emails, see switchNeeded).
   let hasRebuildNote = false;
+  // The unread-attached note of each email of the result shown, by list position (task 8.13b-4, P3).
+  let unreadAttached: readonly (UnreadAttachedCode | null)[] = [];
   const labels = createStaticLabels();
   // Rebuilt emails: the choices, the cards decorated (by id) and the cards of the result shown.
   const rebuiltSelection = createRebuiltSelection();
@@ -523,7 +553,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     rebuiltLine.textContent = shown ? t('counts.rebuiltIncluded', { included: rebuiltIncluded().length, count: rebuiltList.length }) : '';
     setSafeAttribute(rebuiltLine, 'hidden', !shown);
     if (current === null) return;
-    messagesLine.textContent = messagesText(current.counts, shown ? rebuiltList.length : 0);
+    messagesLine.textContent = messagesText(current.counts, shown ? rebuiltList.length : 0, attachedCount(current));
     const notes = on ? withNotes : withNotesNoRebuild;
     notesLine.textContent = notes > 0 ? t('counts.withNotes', { count: notes }) : '';
     setSafeAttribute(notesLine, 'hidden', notes === 0);
@@ -604,6 +634,7 @@ export function createReview(options: ReviewOptions = {}): Review {
     withNotes = 0;
     withNotesNoRebuild = 0;
     hasRebuildNote = false;
+    unreadAttached = [];
     // Defensive only: each run gives a new result object, so an old
     // renderedResult could never match a later `current` anyway.
     renderedResult = null;
@@ -630,8 +661,9 @@ export function createReview(options: ReviewOptions = {}): Review {
     withNotes = 0;
     withNotesNoRebuild = 0;
     hasRebuildNote = false;
+    unreadAttached = safeUnreadAttached(result);
     result.messages.forEach((m, position) => {
-      const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings);
+      const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings, unreadAttached[position] ?? null);
       if (notes.length > 0) withNotes++;
       if (notes.some((note) => !isRebuildNote(note))) withNotesNoRebuild++;
       if (notes.some(isRebuildNote)) hasRebuildNote = true;
@@ -667,7 +699,9 @@ export function createReview(options: ReviewOptions = {}): Review {
         children: [checkbox, label, excludedNote],
       }),
     ];
-    const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings).map((note) => ({
+    // decorate() showed `result` first, so unreadAttached is its own.
+    const unread = result === current ? (unreadAttached[position] ?? null) : null;
+    const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings, unread).map((note) => ({
       element: el('li', { attrs: { class: 'message-note', 'data-code': note.code } }),
       note,
     }));

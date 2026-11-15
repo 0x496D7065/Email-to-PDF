@@ -17,6 +17,7 @@ import type { EngineMessage, EngineWarningCode, ReconstructionWarning, Reconstru
 import type { MessagePlan } from '../engine/output-plan';
 import { isDisplayableMs } from '../engine/time-format';
 import type { ParseWarning } from '../parsing/types';
+import type { UnreadAttachedCode } from './attached-links';
 // Pure, no DOM: the PDF's own rule for which characters become a code.
 import { codedCharacterCount } from '../pdf/text';
 
@@ -112,7 +113,9 @@ export type MessageNote =
   // Some of its characters will show in the PDF as codes such as "[U+0000]" (task 8.8: said here, not in the PDF).
   | { readonly kind: 'chars'; readonly code: 'coded-characters' }
   // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
-  | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode };
+  | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode }
+  // An email sent as an attachment, in it or in an email inside it, could not be read (task 8.13b-4, P3; src/ui-model/attached-links.ts).
+  | { readonly kind: 'attached'; readonly code: UnreadAttachedCode };
 
 /**
  * The list numbers (1-based) of the emails a warning points to: input
@@ -151,12 +154,16 @@ export function codedCharacters(m: EngineMessage): number {
  * The notes of the email at `position` (0-based) in the list, in the order
  * shown. [] if none. `rebuildWarnings`: the result's reconstructionWarnings
  * (only those of this email, by its input position, are used).
+ * `unreadAttached`: this email's unread-attached note, worked out over the
+ * whole result (src/ui-model/attached-links.ts), shown right after the
+ * parser's notes (the "only listed as an attachment" one among them).
  */
 export function messageNotes(
   m: EngineMessage,
   position: number,
   positionByIndex: readonly (number | null)[],
   rebuildWarnings: readonly ReconstructionWarning[] = [],
+  unreadAttached: UnreadAttachedCode | null = null,
 ): MessageNote[] {
   const notes: MessageNote[] = [];
   const parse = new Set<ParseWarning>(m.parserWarnings);
@@ -165,6 +172,7 @@ export function messageNotes(
     // The "placed at the end" (or "placed before the email it is attached to") note right after the date notes.
     if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && (m.order === 'file-order' || m.order === 'before-parent')) notes.push({ kind: 'order', code: m.order });
   }
+  if (unreadAttached !== null) notes.push({ kind: 'attached', code: unreadAttached });
   for (const code of DEDUPE_WARNINGS) {
     for (const w of m.dedupeWarnings) {
       if (w.code !== code) continue;
