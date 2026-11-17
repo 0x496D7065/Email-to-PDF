@@ -41,7 +41,8 @@ const inflate = (data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> =>
 const tagValue = (tag: string): number =>
     ((tag.charCodeAt(0) << 24) | (tag.charCodeAt(1) << 16) | (tag.charCodeAt(2) << 8) | tag.charCodeAt(3)) >>> 0;
 
-interface WoffEntryView {
+interface WoffEntryView
+{
     tag: string;
     offset: number;
     compLength: number;
@@ -66,7 +67,8 @@ function woffDirectory(woff: Uint8Array): WoffEntryView[]
     });
 }
 
-interface SyntheticTable {
+interface SyntheticTable
+{
     tag: string;
     data: Uint8Array;
     compress: boolean;
@@ -250,7 +252,8 @@ describe('unwrapWoff on synthetic files', () =>
 });
 
 /** A damaged-file case: the valid synthetic file, changed by `damage`. */
-interface DamageCase {
+interface DamageCase
+{
     name: string;
     damage: (woff: Uint8Array<ArrayBuffer>, view: DataView) => Uint8Array | Promise<Uint8Array>;
     error: RegExp;

@@ -64,7 +64,8 @@ export type { PrintedAs } from '../pdf/model';
 export type PdfStatus = 'in' | 'out' | 'partly';
 
 /** What the preview says about one block. */
-export interface PdfLabel {
+export interface PdfLabel
+{
     readonly status: PdfStatus;
     /** The plan's reasons for the block's text, in order, unique. */
     readonly reasons: readonly PlanReason[];
@@ -82,7 +83,8 @@ export interface PdfLabel {
 }
 
 /** One email's plan, as the preview needs it. */
-export interface PdfView {
+export interface PdfView
+{
     readonly plan: MessagePlan;
     /** Start of a 'repeated-signature' range -> the list number (1-based) of the email where that signature is kept. */
     readonly signatureFrom: ReadonlyMap<number, number>;
@@ -147,7 +149,8 @@ export function printedAsEmailOfItsOwn(view: Pick<PdfView, 'pdfRanges'> | null, 
 }
 
 /** A display block and its label (null: a shown block, fully in the PDF, or no plan). */
-export interface PdfBlock {
+export interface PdfBlock
+{
     readonly block: DisplayBlock;
     readonly label: PdfLabel | null;
 }
@@ -306,7 +309,8 @@ export function mergeSamePrintedAs(blocks: readonly PdfBlock[]): PdfBlock[]
 }
 
 /** One included email, for signatureSources. */
-export interface PlannedEmail {
+export interface PlannedEmail
+{
     readonly message: NormalizedMessage;
     /** Its position (0-based) in the preview list. */
     readonly position: number;

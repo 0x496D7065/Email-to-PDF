@@ -69,7 +69,8 @@ export function quotingSentence(name: string): string
     return `Own words of ${name}: the ${words.join(' ')} were checked again this week.`;
 }
 
-export interface QuotingCase {
+export interface QuotingCase
+{
     /** The emails, in the order they were written (each one quotes only earlier ones). */
     readonly messages: readonly NormalizedMessage[];
     /** sentences[k]: the own sentence of messages[k]. */

@@ -59,7 +59,8 @@ const MsgReader: MsgReaderClass =
         : (MsgReaderImport as unknown as { readonly default: MsgReaderClass }).default;
 
 /** What the .msg adapter needs from outside. */
-export interface MsgParserOptions {
+export interface MsgParserOptions
+{
     /**
      * Converts an HTML body to plain text. Called only when the message has no
      * plain-text body but has an HTML one. It must be inert: no rendering, no
@@ -112,7 +113,8 @@ const MAX_ENCODING_READS = 4;
  * How the file's properties were read, and how to read them again (see
  * readFields and readAttachedItems).
  */
-export interface FieldReads {
+export interface FieldReads
+{
     /**
      * The 8-bit text encoding the fields were read with; null for msgreader's
      * default (each byte becomes the character with the same number), used
@@ -328,14 +330,16 @@ function buildMessage(fields: FieldsData, source: NormalizedMessage['source'], o
 }
 
 /** One attached Outlook item that was read, while the file is still being read (see readAttachedItems). */
-interface ItemNode {
+interface ItemNode
+{
     readonly message: NormalizedMessage;
     /** Its own attached Outlook items, in attachment-list order. */
     readonly children: ItemSlot[];
 }
 
 /** One attached Outlook item of an email: read (node) or not (null: too deep, over the budget, unreadable, or nothing to show). */
-interface ItemSlot {
+interface ItemSlot
+{
     /** Which attached Outlook item of its holder it is, from 1, in attachment-list order (see AttachedMessage.path). */
     readonly number: number;
     /** Its line's file name in the holder's attachment list (attachmentInfo), '' when none (see AttachedMessage.name). */
@@ -344,7 +348,8 @@ interface ItemSlot {
 }
 
 /** An email whose attached Outlook items are still to be read (see readAttachedItems). */
-interface ItemHolder {
+interface ItemHolder
+{
     /** Its properties, as read by the read made with `readEncoding`. */
     readonly fields: FieldsData;
     /** Where it sits in msgreader's result: its index in `attachments` at each level, [] for the file's own email. */
@@ -886,7 +891,8 @@ function propertyTime(text: string | undefined): EmailDate | null
 }
 
 /** The author(s) and, when it is someone else, the actual sender (see NormalizedMessage.sender). */
-interface Senders {
+interface Senders
+{
     readonly from: EmailAddress[];
     readonly sender: EmailAddress | undefined;
 }
@@ -1017,7 +1023,8 @@ function smtpAddress(email: string | undefined, addressType: string | undefined,
 }
 
 /** Body text and body warnings. */
-interface MessageBody {
+interface MessageBody
+{
     readonly text: string;
     readonly warnings: ParseWarning[];
 }

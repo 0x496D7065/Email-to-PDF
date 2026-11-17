@@ -17,7 +17,8 @@ import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } fro
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __helpViolations: string[];
     }
 }

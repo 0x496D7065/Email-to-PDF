@@ -22,7 +22,8 @@
 // Non-ASCII letters are written as \u escapes so this file stays ASCII:
 // \u00e0 = a grave, \u00e9 = e acute, \u00fb = u circumflex.
 
-export interface DateLanguage {
+export interface DateLanguage
+{
     /** Language code, for readers and tests only. */
     readonly code: string;
     /** Twelve entries, January first: every way the month is written. */

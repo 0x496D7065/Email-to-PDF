@@ -14,7 +14,8 @@ import { createMsgParser } from './msg';
 import type { EmailParser } from './types';
 
 /** The parsers the page uses, one per supported file type. */
-export interface BrowserParsers {
+export interface BrowserParsers
+{
     readonly eml: EmailParser;
     readonly msg: EmailParser;
 }

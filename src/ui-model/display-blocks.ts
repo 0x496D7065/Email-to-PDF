@@ -41,7 +41,8 @@ import { checkSegments, FOLD_REASONS, type FoldReason, type Segment } from '../e
 export const MAX_ABSORBED_WHITESPACE = 8;
 
 /** One block for the preview / PDF. The text is always present, even when folded. */
-export interface DisplayBlock {
+export interface DisplayBlock
+{
     /** Offsets in the body: [start, end). Also a stable key (e.g. for expand toggles). */
     readonly start: number;
     readonly end: number;
@@ -62,7 +63,8 @@ export interface DisplayBlock {
 }
 
 /** A segment, or a part of one cut at a break. */
-interface Part {
+interface Part
+{
     readonly start: number;
     readonly end: number;
     readonly folded: boolean;
@@ -104,7 +106,8 @@ function cutAtBreaks(segments: readonly Segment[], breaks: readonly number[]): P
     return parts;
 }
 
-interface Group {
+interface Group
+{
     start: number;
     end: number;
     folded: boolean;

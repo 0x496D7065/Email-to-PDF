@@ -286,7 +286,8 @@ export type { PdfLine, PdfRole, PdfRun } from './text';
 // ---------------------------------------------------------------- the shape
 
 /** A header row: a label and its value, one or more lines. */
-export interface PdfFieldRow {
+export interface PdfFieldRow
+{
     readonly label: string;
     readonly value: readonly PdfLine[];
 }
@@ -306,12 +307,14 @@ export type PdfBlock =
     | { readonly kind: 'list'; readonly items: readonly (readonly PdfLine[])[] };
 
 /** A distinct person of the included emails (From, Sender, To, Cc). */
-export interface PdfParticipant {
+export interface PdfParticipant
+{
     readonly name: string;
     readonly address: string;
 }
 
-export interface PdfCover {
+export interface PdfCover
+{
     /** What the cover shows, in order. */
     readonly blocks: readonly PdfBlock[];
     /** The data behind it. Texts here are as found (not sanitized); the blocks hold the display form. */
@@ -324,7 +327,8 @@ export interface PdfCover {
 }
 
 /** One line of the index. The renderer adds the page of `anchor`. */
-export interface PdfIndexEntry {
+export interface PdfIndexEntry
+{
     /** The email's PDF number (1..n over every email in the PDF, rebuilt ones included). */
     readonly number: number;
     /** True for an email rebuilt from quoted text (data only: the PDF never shows it, task 8.3). */
@@ -340,14 +344,16 @@ export interface PdfIndexEntry {
     readonly bookmark: string;
 }
 
-export interface PdfIndex {
+export interface PdfIndex
+{
     readonly heading: string;
     readonly columns: PdfStrings['columns'];
     readonly entries: readonly PdfIndexEntry[];
 }
 
 /** Facts about one email the renderer may want (all false / 0 usually). */
-export interface PdfEmailFlags {
+export interface PdfEmailFlags
+{
     /** No usable date: shown with the "no date" text. */
     readonly undated: boolean;
     /** The sender's time zone is not known (the time may be off by hours). */
@@ -365,7 +371,8 @@ export interface PdfEmailFlags {
 }
 
 /** Where a rebuilt email in the PDF comes from (data only: the PDF never shows it, task 8.3). */
-export interface PdfRebuiltInfo {
+export interface PdfRebuiltInfo
+{
     /** The entry's id in `result.reconstructed` (link 'entry'). */
     readonly id: number;
     /** The id of the copy shown: the entry, or a copy read from an email in the PDF (rebuiltInPdf). */
@@ -380,7 +387,8 @@ export interface PdfRebuiltInfo {
     readonly movedHeaders: number;
 }
 
-export interface PdfEmail {
+export interface PdfEmail
+{
     /** 1..n over every email in the PDF, in PDF order, rebuilt ones included (task 8.3). */
     readonly number: number;
     /** For links from the index (resolved by the renderer): emailAnchor(number). */
@@ -406,7 +414,8 @@ export interface PdfEmail {
     readonly flags: PdfEmailFlags;
 }
 
-export interface PdfDocument {
+export interface PdfDocument
+{
     readonly title: string;
     /** Suggested file name (pdfFileName). */
     readonly fileName: string;
@@ -424,7 +433,8 @@ export interface PdfDocument {
     readonly controlChars: number;
 }
 
-export interface BuildPdfInput {
+export interface BuildPdfInput
+{
     readonly result: EngineResult;
     /** List positions of the included emails, in list order (src/ui/review.ts, includedPositions). */
     readonly positions: readonly number[];
@@ -572,7 +582,8 @@ export type PdfSlot =
         readonly source: RebuiltInPdf;
     };
 
-export interface PdfOrder {
+export interface PdfOrder
+{
     readonly slots: readonly PdfSlot[];
     /** For each list position: the PDF number of its real email, or null when it is not in the PDF. */
     readonly pdfNumberByPosition: readonly (number | null)[];
@@ -1102,7 +1113,8 @@ export type PrintedAs =
     | { readonly kind: 'unticked-attached'; readonly position: number };
 
 /** A part [start, end) of one body that the PDF prints as the email `printedAs` (printedElsewhereParts). */
-export interface PrintedPart {
+export interface PrintedPart
+{
     readonly start: number;
     readonly end: number;
     readonly printedAs: PrintedAs;
@@ -1208,7 +1220,8 @@ export function printedElsewhereParts(
 }
 
 /** A block of quoted header lines a place leaves behind for its rebuilt email (task 8.13a, Q4). */
-interface MoveCandidate {
+interface MoveCandidate
+{
     readonly entry: number;
     /** The id of the place (its EngineRebuilt). */
     readonly copy: number;
@@ -1457,7 +1470,8 @@ function attachedBlockParts(
         }
         parts.push(part);
     };
-    interface Block {
+    interface Block
+    {
         readonly holder: number;
         readonly start: number;
         readonly end: number;
@@ -1850,7 +1864,8 @@ function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, out: Cut
 }
 
 /** Ranges, and for each one whether the no-repeat rule left it out (same order). */
-interface CutRanges {
+interface CutRanges
+{
     readonly ranges: PlanRange[];
     readonly cut: boolean[];
 }
@@ -1927,7 +1942,8 @@ export function withoutPrintedElsewhere(
 }
 
 /** A range of a body as the PDF prints it: a plan range, or a piece of one the no-repeat rule left out (`printedAs`: where the PDF prints it). */
-export interface PdfRange extends PlanRange {
+export interface PdfRange extends PlanRange
+{
     /** Set only on a piece the no-repeat rule left out (then `keep` is false): the email the PDF prints it as. */
     readonly printedAs: PrintedAs | null;
 }
@@ -2040,7 +2056,8 @@ function withRestored<R extends PlanRange & { readonly printedAs?: PrintedAs | n
 export type NoRepeatInput = Pick<BuildPdfInput, 'result' | 'positions' | 'plans' | 'policy' | 'rebuilt' | 'rebuildingOff' | 'unticked'>;
 
 /** The emails in the PDF and the parts of their bodies printed elsewhere (noRepeat). */
-export interface NoRepeat {
+export interface NoRepeat
+{
     readonly order: PdfOrder;
     /** Per list position, the parts left out and where they are printed (printedElsewhereParts); empty under "Print full original text". */
     readonly parts: ReadonlyMap<number, readonly PrintedPart[]>;
@@ -2327,7 +2344,8 @@ export function pdfBodyText(
 }
 
 /** Sanitizes one-line texts (src/pdf/text.ts, inlineRuns) and adds up the characters replaced by a code. */
-interface Sanitizer {
+interface Sanitizer
+{
     count: number;
     line(text: string, role: PdfRole): PdfLine;
 }
@@ -2409,12 +2427,14 @@ export function participantsOf(messages: readonly ParticipantSource[], locale: s
 // ---------------------------------------------------------------- one email
 
 /** A date as the cover's date range uses it: a moment to compare, and its text. */
-interface CoverDate {
+interface CoverDate
+{
     readonly ms: number;
     readonly text: string;
 }
 
-interface EmailParts {
+interface EmailParts
+{
     readonly email: PdfEmail;
     readonly entry: PdfIndexEntry;
     /** null: no usable date (counted as undated on the cover). */
@@ -2584,7 +2604,8 @@ function buildEmail(
 // ---------------------------------------------------------------- one rebuilt email
 
 /** A rebuilt email's date: the header's value lines, the index's short form, the bookmark's day and the cover's date. */
-interface RebuiltDateParts {
+interface RebuiltDateParts
+{
     readonly lines: readonly PdfLine[];
     readonly index: PdfLine;
     readonly day: string;

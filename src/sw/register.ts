@@ -14,7 +14,8 @@ export const SERVICE_WORKER_URL = '/sw.js';
 export const SERVICE_WORKER_SCOPE = '/';
 
 /** The part of `navigator` used here. */
-export interface ServiceWorkerHost {
+export interface ServiceWorkerHost
+{
     readonly serviceWorker?: {
         register(url: string, options?: { scope?: string; updateViaCache?: 'imports' | 'all' | 'none' }): Promise<unknown>;
     };
@@ -43,7 +44,8 @@ export function registerServiceWorker(host: ServiceWorkerHost | undefined): void
 }
 
 /** The part of `window` used here. */
-export interface LoadTarget {
+export interface LoadTarget
+{
     readonly document: { readonly readyState: string };
     addEventListener(type: 'load', listener: () => void, options: { once: true }): void;
 }

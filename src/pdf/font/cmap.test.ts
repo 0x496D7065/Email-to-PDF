@@ -31,7 +31,8 @@ class Writer
     }
 }
 
-interface Segment {
+interface Segment
+{
     start: number;
     end: number;
     delta: number;

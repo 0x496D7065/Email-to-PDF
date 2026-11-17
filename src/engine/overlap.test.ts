@@ -13,7 +13,8 @@ import {
 } from './overlap';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 
-interface Spec {
+interface Spec
+{
     readonly body: string;
     readonly id?: string;
     readonly inReplyTo?: string;

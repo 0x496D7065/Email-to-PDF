@@ -170,13 +170,13 @@ if (!existsSync(join(dist, 'sw.js')))
 {
     errors.push('dist/sw.js: file is missing (README.md, "How the privacy model works")');
 }
-// Its version must be the one computed from what dist/ really holds: the
-// listed files, the service worker's code and dist/_headers (the same
-// manifestVersion the build uses, scripts/sw-version.mjs). A build that
-// left a file or the real headers out of the version fails here, because
-// returning visitors would then keep an old copy.
 else
 {
+    // Its version must be the one computed from what dist/ really holds: the
+    // listed files, the service worker's code and dist/_headers (the same
+    // manifestVersion the build uses, scripts/sw-version.mjs). A build that
+    // left a file or the real headers out of the version fails here, because
+    // returning visitors would then keep an old copy.
     try
     {
         const swJs = readFileSync(join(dist, 'sw.js'), 'utf8');

@@ -13,13 +13,15 @@ import { FORWARDED_SEPARATOR } from '../../src/parsing/forwarded-block';
 import type { AttachedMessage, AttachedPlace, NormalizedMessage, ParseResult } from '../../src/parsing/types';
 
 /** One email of the tree, with the emails attached inside it. */
-export interface AttachedNode {
+export interface AttachedNode
+{
     /** Its own text is `message.bodyText`; the blocks of its inline children are added after it. */
     readonly message: NormalizedMessage;
     readonly children?: readonly AttachedChild[];
 }
 
-export interface AttachedChild {
+export interface AttachedChild
+{
     readonly node: AttachedNode;
     /** true: printed inside the parent's text (an inline forward); false: only sent as a file (no place). */
     readonly inline: boolean;
@@ -27,7 +29,8 @@ export interface AttachedChild {
     readonly name?: string;
 }
 
-interface Rendered {
+interface Rendered
+{
     readonly node: AttachedNode;
     /** The final bodyText (own text, then the inline children's blocks). */
     readonly body: string;
@@ -146,7 +149,8 @@ export function groupAsAttached(
     { mode = 'random', attachShare = 0.5, maxDepth = 3 }: { readonly mode?: AttachMode; readonly attachShare?: number; readonly maxDepth?: number } = {},
 ): Extract<ParseResult, { ok: true }>[]
 {
-    interface Draft {
+    interface Draft
+    {
         readonly message: NormalizedMessage;
         readonly depth: number;
         readonly children: AttachedChild[];

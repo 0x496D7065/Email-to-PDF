@@ -23,7 +23,8 @@ import { PDF_FONT_NAMES, parsePdfFonts } from '../pdf/parse-fonts';
 import { isSupportedLocale } from '../ui/i18n';
 
 /** What one PDF is made of: the input of generatePdf without the fonts. */
-export interface PdfJobInput {
+export interface PdfJobInput
+{
     readonly result: EngineResult;
     /** List positions of the included emails, in list order. */
     readonly positions: readonly number[];
@@ -63,7 +64,8 @@ export interface PdfJobInput {
 /** The WOFF bytes of the four PDF fonts. */
 export type PdfFontBytes = Readonly<Record<PdfFontName, Uint8Array>>;
 
-export interface MakePdfRequest {
+export interface MakePdfRequest
+{
     readonly type: 'make';
     readonly input: PdfJobInput;
     readonly fonts: PdfFontBytes;
@@ -72,7 +74,8 @@ export interface MakePdfRequest {
 /** Page -> PDF worker. */
 export type ToPdfWorker = MakePdfRequest;
 
-export interface PdfDoneMessage {
+export interface PdfDoneMessage
+{
     readonly type: 'done';
     readonly bytes: Uint8Array;
     readonly fileName: string;
@@ -80,7 +83,8 @@ export interface PdfDoneMessage {
 }
 
 /** Making the PDF threw (a bug or a limit reached, not the user's fault); no details are sent. */
-export interface PdfFailedMessage {
+export interface PdfFailedMessage
+{
     readonly type: 'failed';
 }
 

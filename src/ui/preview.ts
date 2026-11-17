@@ -238,7 +238,8 @@ export function attachmentText(a: AttachmentInfo): string
 }
 
 /** The date texts of one email in `zone`. */
-export interface DateTexts {
+export interface DateTexts
+{
     /** "2025-03-03 09:15:00 UTC+01:00", or the "no date" text. */
     readonly main: string;
     /** The moment for <time datetime>, null without a date. */
@@ -398,7 +399,8 @@ export function rebuiltHeadingId(id: number): string
 }
 
 /** The date texts of a rebuilt email in `zone`. */
-export interface RebuiltDateTexts {
+export interface RebuiltDateTexts
+{
     /** "about 2025-03-03 09:15 UTC+01:00", "2025-03-03", or a "no date" / "could not be read" text. */
     readonly main: string;
     /** For <time datetime>: the moment, or the day; null without a readable date. */
@@ -475,7 +477,8 @@ export function zoneLabel(zone: string, browserZone: string): string
 // ---------------------------------------------------------------------------
 // The step 2 interface.
 
-export interface PreviewOptions {
+export interface PreviewOptions
+{
     /** Emails per chunk. Default DEFAULT_CHUNK_SIZE. */
     readonly chunkSize?: number;
     /** Runs a task later (default: setTimeout 0). Returns a handle for `cancel`. */
@@ -526,7 +529,8 @@ export interface PreviewOptions {
 }
 
 /** The PDF plans of a result, for the labels (see the top of this file). */
-export interface PreviewPdfPlans {
+export interface PreviewPdfPlans
+{
     /** The result they were made for: plans for another result are ignored. */
     readonly result: EngineResult;
     /** List position -> its plan. An email that is not in the map is not in the PDF (no labels). */
@@ -540,7 +544,8 @@ export interface PreviewPdfPlans {
  */
 export type PdfLabelState = 'off' | 'updating' | 'ready' | 'failed';
 
-export interface Preview {
+export interface Preview
+{
     /** Shows the emails of a result (replacing what was shown). */
     show(result: EngineResult): void;
     /** Shows a step 1 result: its emails, or nothing after a batch error. */
@@ -572,7 +577,8 @@ export interface Preview {
 }
 
 /** One block of a shown body, as built (to update its label in place). */
-interface BuiltBlock {
+interface BuiltBlock
+{
     readonly start: number;
     readonly end: number;
     readonly details: HTMLDetailsElement | null;
@@ -593,13 +599,15 @@ interface BuiltBlock {
  * (null: in the body, but in no known block), and whether the focused
  * element could be seen in the window.
  */
-interface FocusSpot {
+interface FocusSpot
+{
     readonly range: { readonly start: number; readonly end: number } | null;
     readonly wasVisible: boolean;
 }
 
 /** One email's body in the page, redrawn when its PDF plan changes. */
-interface BodySlot {
+interface BodySlot
+{
     readonly m: EngineMessage;
     readonly position: number;
     readonly positionByIndex: readonly (number | null)[];
@@ -617,7 +625,8 @@ interface BodySlot {
 }
 
 /** One email's item in the page (not a stand-in): what relabel() writes again. */
-interface ItemSlot {
+interface ItemSlot
+{
     readonly m: EngineMessage;
     readonly number: HTMLSpanElement;
     /** The "(no subject)" placeholder, or null when the email has a subject (shown as it is). */
@@ -629,14 +638,16 @@ interface ItemSlot {
 }
 
 /** A rebuilt card's date element, rewritten when the zone changes. */
-interface RebuiltDateSlot {
+interface RebuiltDateSlot
+{
     readonly time: HTMLTimeElement;
     readonly asWritten: HTMLSpanElement;
     readonly date: RebuiltDate;
 }
 
 /** One rebuilt card in the page (not a stand-in): what relabel() and a zone change write again. */
-interface RebuiltSlot {
+interface RebuiltSlot
+{
     readonly card: RebuiltCard;
     readonly label: HTMLSpanElement;
     /** The "(subject not in the quote)" placeholder, or null when the quote has a subject. */
@@ -653,13 +664,15 @@ interface RebuiltSlot {
 }
 
 /** A rebuilt card's stand-in: its own words. */
-interface RebuiltStandIn {
+interface RebuiltStandIn
+{
     readonly label: HTMLSpanElement;
     readonly failedNote: HTMLParagraphElement;
 }
 
 /** A stand-in's own notes (see fallbackItemOf). */
-interface StandIn {
+interface StandIn
+{
     readonly number: HTMLSpanElement;
     readonly failedNote: HTMLParagraphElement;
     readonly pdfNote: HTMLParagraphElement;
@@ -705,7 +718,8 @@ function applyLabel(element: HTMLElement, label: PdfLabel | null): void
 }
 
 /** One email's date element, rewritten when the zone changes. */
-interface DateSlot {
+interface DateSlot
+{
     readonly time: HTMLTimeElement;
     readonly senderNote: HTMLSpanElement;
     readonly date: EmailDate;
@@ -797,7 +811,8 @@ function metaRows(m: EngineMessage, date: DateSlot, result: EngineResult | null,
 }
 
 /** The attached-email links of one email (see src/ui-model/attached-links.ts). */
-interface ItemLinks {
+interface ItemLinks
+{
     readonly attachedTo: readonly number[];
     readonly attachedEmails: readonly number[];
 }

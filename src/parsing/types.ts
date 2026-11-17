@@ -9,13 +9,15 @@
 // recoverable (README.md, rule R6: collapse, never delete).
 
 /** One mailbox, e.g. `"Alice Example" <alice@example.test>`. Either part may be empty. */
-export interface EmailAddress {
+export interface EmailAddress
+{
     readonly name: string;
     readonly address: string;
 }
 
 /** A Date header, kept in three forms. */
-export interface EmailDate {
+export interface EmailDate
+{
     /** The true moment in time, in milliseconds since 1970-01-01 UTC (for sorting). null if missing/unparseable. */
     readonly utcMs: number | null;
     /**
@@ -37,7 +39,8 @@ export interface EmailDate {
 }
 
 /** Attachment metadata only. Attachment contents are never opened or kept (README.md, rule R4). */
-export interface AttachmentInfo {
+export interface AttachmentInfo
+{
     readonly fileName: string;
     /** Size in bytes, null if the format does not tell us. */
     readonly size: number | null;
@@ -92,7 +95,8 @@ export type ParseWarning =
     | 'text-encoding-uncertain';
 
 /** One email in the normalized form. */
-export interface NormalizedMessage {
+export interface NormalizedMessage
+{
     /**
      * Message-ID header, without the surrounding < >, trimmed.
      * `messageId`, `inReplyTo` and every `references` entry use this same form,
@@ -152,7 +156,8 @@ export interface NormalizedMessage {
 }
 
 /** Where an attached email's printed block sits in the body of one email holding it. */
-export interface AttachedPlace {
+export interface AttachedPlace
+{
     /** The email whose bodyText holds the block: -1 = the file's own email, else an index into `attached`. */
     readonly holder: number;
     /**
@@ -172,7 +177,8 @@ export interface AttachedPlace {
  * or IPM.Note.*; other Outlook items are only listed), read from its own
  * properties (task 8.13b-2).
  */
-export interface AttachedMessage {
+export interface AttachedMessage
+{
     readonly message: NormalizedMessage;
     /** The email it is attached to: -1 = the file's own email, else an index into `attached` (always lower than its own). */
     readonly parent: number;
@@ -253,7 +259,8 @@ export type ParseResult =
     };
 
 /** One dropped file, already read into memory. */
-export interface InputFile {
+export interface InputFile
+{
     readonly name: string;
     readonly bytes: Uint8Array;
 }
@@ -263,6 +270,7 @@ export interface InputFile {
  * .eml and .msg adapters both implement this, so a library can be swapped
  * without touching the rest of the tool.
  */
-export interface EmailParser {
+export interface EmailParser
+{
     parse(file: InputFile): Promise<ParseResult>;
 }

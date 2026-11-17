@@ -69,7 +69,8 @@ export function testLanguageName(locale: string): string
 }
 
 /** The shape of src/ui/i18n/catalog.ts. */
-interface Catalog {
+interface Catalog
+{
     readonly CATALOG: Readonly<Record<string, Messages>>;
     readonly LANGUAGE_NAMES: Readonly<Record<string, string>>;
 }

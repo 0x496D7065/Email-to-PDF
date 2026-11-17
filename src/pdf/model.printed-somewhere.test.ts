@@ -30,7 +30,8 @@ const mixed = (b: string, ...parts: string[]): string =>
 const plain = (text: string): string => crlf('Content-Type: text/plain; charset=utf-8', '', text);
 const rfc822 = (message: string): string => crlf('Content-Type: message/rfc822', '', message);
 
-interface Head {
+interface Head
+{
     readonly name: string;
     readonly date: string | null;
     readonly inReplyTo?: string;

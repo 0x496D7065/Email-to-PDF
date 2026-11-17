@@ -51,7 +51,8 @@ import type {
 } from './types';
 
 /** What the .eml adapter needs from outside. */
-export interface EmlParserOptions {
+export interface EmlParserOptions
+{
     /**
      * Converts an HTML body part to plain text. Called once for every HTML part
      * whose text goes into the body: an HTML part in multipart/mixed (or
@@ -123,12 +124,14 @@ const POSTAL_MIME_OPTIONS: PostalMimeOptions = {
 //   listed and get no AttachedMessage.
 
 /** Parses still allowed for the file being parsed (see MAX_EXPANDED_FORWARDS). */
-interface ForwardBudget {
+interface ForwardBudget
+{
     remaining: number;
 }
 
 /** What every level of one file's parse shares. */
-interface ReadContext {
+interface ReadContext
+{
     readonly options: EmlParserOptions;
     readonly budget: ForwardBudget;
     /**
@@ -142,7 +145,8 @@ interface ReadContext {
  * The header fields of one email (the file's own or an attached one) and
  * the warnings they cause, ready to be put into a NormalizedMessage.
  */
-interface MessageHead {
+interface MessageHead
+{
     readonly fields: Pick<
         NormalizedMessage,
         'messageId' | 'inReplyTo' | 'references' | 'date' | 'from' | 'sender' | 'to' | 'cc' | 'bcc' | 'subject'
@@ -152,7 +156,8 @@ interface MessageHead {
 }
 
 /** One attached email that was read, while the file is still being parsed (indexes are given at the end, see flattenAttached). */
-interface AttachedNode {
+interface AttachedNode
+{
     readonly head: MessageHead;
     readonly content: MessageContent;
     /**
@@ -165,7 +170,8 @@ interface AttachedNode {
 }
 
 /** One message/rfc822 part of an email that was (or will be) read as an attached email. */
-interface ChildSlot {
+interface ChildSlot
+{
     /** Which message/rfc822 part of its parent it is, from 1, in file order (see AttachedMessage.path). */
     readonly number: number;
     /** The part's file name, '' when it has none (see AttachedMessage.name). */
@@ -181,7 +187,8 @@ interface ChildSlot {
  * attached email it belongs to, null if it is the listing email's own; it
  * becomes AttachmentInfo.attachedIndex at the end.
  */
-interface PendingAttachment {
+interface PendingAttachment
+{
     readonly info: AttachmentInfo;
     readonly owner: AttachedNode | null;
 }
@@ -328,7 +335,8 @@ function flattenAttached(
     sha256: string,
 ): { attached: AttachedMessage[]; resolve: (attachments: readonly PendingAttachment[]) => AttachmentInfo[] }
 {
-    interface Entry {
+    interface Entry
+    {
         readonly node: AttachedNode;
         readonly parent: number;
         readonly places: AttachedPlace[];
@@ -336,7 +344,8 @@ function flattenAttached(
         readonly name: string;
     }
     /** Where the body of the email whose children are walked sits, in each email that prints it. */
-    interface Frame {
+    interface Frame
+    {
         readonly holder: number;
         readonly offset: number;
     }
@@ -466,7 +475,8 @@ function mailboxes(list: readonly Address[] | undefined): EmailAddress[]
 }
 
 /** Body text, attachments and body warnings of one message, its inline forwarded messages included. */
-interface MessageContent {
+interface MessageContent
+{
     readonly text: string;
     readonly attachments: PendingAttachment[];
     readonly warnings: ParseWarning[];

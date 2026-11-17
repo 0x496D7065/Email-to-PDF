@@ -40,7 +40,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __languageViolations: string[];
     }
 }

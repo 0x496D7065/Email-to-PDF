@@ -44,7 +44,8 @@ const REPORT_TYPES: ReadonlySet<string> = new Set(['message/delivery-status', 'm
 /** The unread-attached note of one email (see the top of this file). */
 export type UnreadAttachedCode = 'attached-unread' | 'attached-unread-inside';
 
-export interface AttachedLinks {
+export interface AttachedLinks
+{
     /** By list position: the list numbers (1-based) of the emails it is attached to, ascending, unique; [] if none. */
     readonly attachedTo: readonly (readonly number[])[];
     /** By list position: the list numbers of the emails attached to it, ascending, unique; [] if none. */

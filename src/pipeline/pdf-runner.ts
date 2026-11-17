@@ -48,7 +48,8 @@ export type PdfOutcome =
 /** Starts a PDF worker and connects its events. May throw (then the outcome is 'not-started'). */
 export type PdfWorkerFactory = (events: WorkerEvents) => WorkerHandle<ToPdfWorker>;
 
-export interface PdfRunOptions {
+export interface PdfRunOptions
+{
     readonly createWorker: PdfWorkerFactory;
     readonly timeoutMs: number;
     /** Stops the run: the worker is terminated at once ('cancelled'). Already aborted: no worker is started. */

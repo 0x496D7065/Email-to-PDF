@@ -1,7 +1,8 @@
 // Type declarations for font-rules.mjs, so TypeScript tests can import that
 // plain-JS module under strict type checking. Keep in sync with it.
 
-export interface FontFile {
+export interface FontFile
+{
     /** Path relative to the project root, e.g. 'src/fonts/IBMPlexSans-Regular.woff'. */
     file: string;
     /** SHA-256 of the official, unmodified file, lowercase hex. */
@@ -18,7 +19,8 @@ export const FONT_CHUNK_MAX_OTHER_TEXT: number;
 
 export function sha256Hex(bytes: Uint8Array): string;
 
-export interface NumberArray {
+export interface NumberArray
+{
     /** 1-based line of the first number. */
     line: number;
     /** Offsets of the run in the text. */
@@ -29,7 +31,8 @@ export interface NumberArray {
 
 export function findNumberArrays(text: string, minLength?: number): NumberArray[];
 
-export interface TextFile {
+export interface TextFile
+{
     /** Path relative to dist/, forward slashes. */
     path: string;
     text: string;

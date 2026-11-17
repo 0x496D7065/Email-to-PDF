@@ -83,7 +83,8 @@ function files(styles: readonly QuoteStyle[], mode: 'multi' | 'single'): Normali
     });
 }
 
-interface ReadLine {
+interface ReadLine
+{
     readonly text: string;
     readonly x: number;
 }

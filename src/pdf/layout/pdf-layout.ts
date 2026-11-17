@@ -81,7 +81,8 @@ export const COVER_DESTINATION = 'cover';
 /** Default bound on the front layouts (see the top of this file). */
 export const MAX_FRONT_PASSES = 4;
 
-export interface LayoutOptions {
+export interface LayoutOptions
+{
     readonly strings: LayoutStrings;
     /** The look (default DEFAULT_LAYOUT_CONFIG). */
     readonly config?: LayoutConfig;
@@ -92,7 +93,8 @@ export interface LayoutOptions {
 }
 
 /** The result: plain data (structured-clone safe). */
-export interface PdfLayout {
+export interface PdfLayout
+{
     readonly document: LaidOutDocument;
     /** Email anchor -> 0-based page index of its heading. */
     readonly anchorPages: ReadonlyMap<string, number>;

@@ -150,7 +150,8 @@ export const END_PART = 0.5;
 export const MAX_TRAILING_LINES = 3;
 
 /** What the detector needs from each message. */
-export interface SignatureInput {
+export interface SignatureInput
+{
     readonly bodyText: string;
     /** Lower-cased sender address (see `senderKeyOf`); '' when unknown. */
     readonly senderKey: string;
@@ -184,7 +185,8 @@ export function minRepeat(senderMessages: number): number
 }
 
 /** One message, prepared: its own lines and the normalized text of each. */
-interface Prepared {
+interface Prepared
+{
     readonly body: string;
     readonly senderKey: string;
     readonly ownTextEnd: number;
@@ -351,7 +353,8 @@ function pairsOf(p: Prepared): Set<string>
 }
 
 /** A chain of repeated pairs: entries [from, to] of `nonBlank` (both included). */
-interface Block {
+interface Block
+{
     readonly from: number;
     readonly to: number;
 }

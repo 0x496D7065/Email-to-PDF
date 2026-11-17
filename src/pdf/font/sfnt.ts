@@ -14,7 +14,8 @@ import {
     TRUETYPE_FLAVOR,
 } from './binary';
 
-export interface SfntTable {
+export interface SfntTable
+{
     /** The tag as text, e.g. "head", "cvt " (with its trailing space). */
     readonly tag: string;
     readonly offset: number;
@@ -23,7 +24,8 @@ export interface SfntTable {
     readonly checksum: number;
 }
 
-export interface SfntDirectory {
+export interface SfntDirectory
+{
     /** The sfnt version: always 0x00010000 (TrueType outlines) here. */
     readonly flavor: number;
     /** The tables by tag, in directory order. */

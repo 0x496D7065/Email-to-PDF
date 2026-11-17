@@ -47,7 +47,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __downloadViolations: string[];
     }
 }

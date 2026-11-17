@@ -7,7 +7,8 @@
 // O(log n) and can never loop on damaged data.
 import { BinaryReader, fail } from './binary';
 
-export interface Cmap {
+export interface Cmap
+{
     readonly format: 4 | 12;
     readonly platformId: number;
     readonly encodingId: number;

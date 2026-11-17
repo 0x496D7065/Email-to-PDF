@@ -48,7 +48,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __offlineViolations: string[];
     }
 }

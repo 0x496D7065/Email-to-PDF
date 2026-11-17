@@ -15,7 +15,8 @@
 import { setSafeAttribute } from './dom';
 import { t, type MessageArgs, type MessageKey } from './i18n';
 
-interface LabelRecord {
+interface LabelRecord
+{
     readonly element: Element;
     /** null: the element's text; else the attribute's name. */
     readonly attribute: string | null;
@@ -24,7 +25,8 @@ interface LabelRecord {
 }
 
 /** A module's fixed words: set once, written again by relabel(). */
-export interface StaticLabels {
+export interface StaticLabels
+{
     /** Sets `element`'s text to t(key, params) now and on each relabel(). Returns the element. */
     text<E extends Element, K extends MessageKey>(element: E, key: K, ...args: MessageArgs<K>): E;
     /** Sets the attribute `name` of `element` to t(key, params) now and on each relabel(). Returns the element. */

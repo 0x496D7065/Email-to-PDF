@@ -44,7 +44,8 @@ export class PostalMimeInternalsError extends Error
 }
 
 /** postal-mime's result plus its parts tree. */
-export interface EmlTree {
+export interface EmlTree
+{
     readonly email: Email;
     readonly root: EmlPart;
 }
@@ -134,7 +135,8 @@ export function readPartsTree(parser: unknown, email: Email): EmlPart
 }
 
 /** The fields of one internal MimeNode that this module reads, checked. */
-interface CheckedNode {
+interface CheckedNode
+{
     readonly childNodes: readonly unknown[];
     /** Subtype ('mixed', 'alternative', ...) for a multipart node, else false. */
     readonly multipart: string | false;

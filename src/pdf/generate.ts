@@ -20,7 +20,8 @@ import { OwnPdfWriter, type PdfBackend } from './writer';
 /** The four parsed PDF fonts (loadPdfFonts). */
 export type PdfFonts = Readonly<Record<PdfFontName, ParsedFont>>;
 
-export interface GeneratePdfInput {
+export interface GeneratePdfInput
+{
     readonly result: EngineResult;
     /** List positions of the included emails, in list order (src/ui/pdf-labels.ts, PdfPlans). */
     readonly positions: readonly number[];
@@ -48,7 +49,8 @@ export interface GeneratePdfInput {
     readonly backend?: PdfBackend;
 }
 
-export interface GeneratedPdf {
+export interface GeneratedPdf
+{
     readonly bytes: Uint8Array;
     /** "correspondence-YYYY-MM-DD.pdf" in English: the generation date in the chosen zone, the name in the PDF's language. */
     readonly fileName: string;

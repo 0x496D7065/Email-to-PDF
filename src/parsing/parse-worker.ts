@@ -26,7 +26,8 @@ import { createWorkerSide, type FromWorker } from './worker-protocol';
  * TypeScript setup has the page's types (DOM), not the worker's, so the
  * global is described by hand instead of mixing both type libraries.
  */
-interface WorkerScope {
+interface WorkerScope
+{
     onmessage: ((event: MessageEvent<unknown>) => void) | null;
     postMessage(message: FromWorker): void;
 }

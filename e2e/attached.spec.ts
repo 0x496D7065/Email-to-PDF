@@ -20,7 +20,8 @@ import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, worker
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __attachedViolations: string[];
     }
 }

@@ -28,7 +28,8 @@ import type { MessagePlan, OutputPolicy } from '../engine/output-plan';
 import { noRepeat, pdfRanges, type PdfRange } from '../pdf/model';
 
 /** The PDF step's input, as src/ui/page.ts (pdfInput) gives it. */
-export interface PrintedElsewhereInput {
+export interface PrintedElsewhereInput
+{
     readonly result: EngineResult;
     /** List positions of the included emails, in list order. */
     readonly positions: readonly number[];

@@ -84,7 +84,8 @@ const HTML_ONLY_MSG: MsgSpec = {
     messageId: '<deferred-msg@example.test>',
 };
 
-interface Case {
+interface Case
+{
     readonly label: string;
     readonly kind: FileKind;
     readonly file: InputFile;

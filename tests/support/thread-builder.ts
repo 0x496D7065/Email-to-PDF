@@ -34,19 +34,22 @@
 // \u00fb = u circumflex.
 
 /** A person as a client knows them. */
-export interface Person {
+export interface Person
+{
     readonly name: string;
     readonly address: string;
 }
 
 /** A fixed UTC offset with the zone it stands for (offset correct for the dates used). */
-export interface Zone {
+export interface Zone
+{
     readonly name: string;
     readonly offsetMinutes: number;
 }
 
 /** A wall-clock time, month 1-12. */
-export interface WallTime {
+export interface WallTime
+{
     readonly year: number;
     readonly month: number;
     readonly day: number;
@@ -124,7 +127,8 @@ export function isForwardStyle(style: QuoteStyle): boolean
     return style.includes('forward');
 }
 
-export interface QuoteOptions {
+export interface QuoteOptions
+{
     readonly style: QuoteStyle;
     /**
      * How header BLOCKS write a person: 'angle' "Name <address>" (default),
@@ -140,7 +144,8 @@ export interface QuoteOptions {
     readonly wrapAt?: number;
 }
 
-export interface ThreadMessage {
+export interface ThreadMessage
+{
     readonly from: Person;
     readonly to: readonly Person[];
     readonly cc?: readonly Person[];
@@ -155,7 +160,8 @@ export interface ThreadMessage {
 }
 
 /** The header fields of a quoted message, exactly as written in the body (wrapped lines joined by one space). */
-export interface ExpectedFields {
+export interface ExpectedFields
+{
     readonly from: string;
     readonly date: string;
     /** Header blocks only (not attributions). */
@@ -165,7 +171,8 @@ export interface ExpectedFields {
 }
 
 /** Ground truth for one earlier message of the built body. */
-export interface ExpectedHeader {
+export interface ExpectedHeader
+{
     /** Position of the message in the conversation (0 = oldest). */
     readonly index: number;
     /** 1 = quoted by the last message, 2 = quoted inside that quote, ... */
@@ -197,7 +204,8 @@ export interface ExpectedHeader {
     readonly shownIn: Zone;
 }
 
-export interface BuiltThread {
+export interface BuiltThread
+{
     /** Body of the last message, "\n" line breaks, ends with one "\n". */
     readonly body: string;
     /** Subject of the last message (findReplyHeaders uses it to spot a forward). */
@@ -239,7 +247,8 @@ export function wallTimeOf(instant: number, zone: Zone): WallTime
 }
 
 /** The parts of an instant as seen in a zone. */
-interface Shown {
+interface Shown
+{
     readonly year: number;
     readonly month: number; // 0-11
     readonly day: number;
@@ -329,7 +338,8 @@ export function formatQuotedDate(format: DateFormat, instant: number, zone: Zone
 // ---------------------------------------------------------------------------
 // Header lines per style
 
-interface Line {
+interface Line
+{
     readonly text: string;
     /** Number of ">" markers added by quoting. */
     readonly depth: number;
@@ -376,7 +386,8 @@ function person(p: Person, how: PeopleStyle): string
     return `${p.name} <${p.address}>`;
 }
 
-interface BlockSpec {
+interface BlockSpec
+{
     /** Intro line(s) above the labels ('' = a blank line). */
     readonly intro: readonly string[];
     readonly date: DateFormat;

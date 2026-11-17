@@ -50,7 +50,8 @@ export const FOLD_REASONS: readonly FoldReason[] = [
 ];
 
 /** What a detector produces: fold code units [start, end) of the body. */
-export interface FoldRange {
+export interface FoldRange
+{
     readonly start: number;
     readonly end: number;
     readonly reason: FoldReason;
@@ -59,7 +60,8 @@ export interface FoldRange {
 }
 
 /** One piece of the body: code units [start, end), shown or folded. */
-export interface Segment {
+export interface Segment
+{
     readonly start: number;
     readonly end: number;
     /** True exactly when `reasons` is not empty. */
@@ -71,14 +73,16 @@ export interface Segment {
 }
 
 /** One line of a text: [start, end) includes the line break, [start, contentEnd) excludes it. */
-export interface LineRange {
+export interface LineRange
+{
     readonly start: number;
     readonly contentEnd: number;
     readonly end: number;
 }
 
 /** One block for the preview / PDF. The text is always present, even when folded. */
-export interface ViewBlock {
+export interface ViewBlock
+{
     /** Offsets of the block in the body: [start, end). Also a stable key (e.g. for expand toggles). */
     readonly start: number;
     readonly end: number;
@@ -110,7 +114,8 @@ export function splitsSurrogatePair(text: string, i: number): boolean
 }
 
 /** A fold after cleaning: integer offsets with 0 <= start < end <= length. */
-interface CleanFold {
+interface CleanFold
+{
     readonly start: number;
     readonly end: number;
     readonly reason: FoldReason;

@@ -46,7 +46,8 @@ export type PdfJobState =
     | { readonly kind: 'ready'; readonly url: string; readonly fileName: string; readonly pageCount: number }
     | { readonly kind: 'error'; readonly error: PdfError };
 
-export interface PdfJobOptions {
+export interface PdfJobOptions
+{
     /** Makes the PDF (the browser: runPdfInWorker). Should never reject; a rejection counts as 'tool-error'. */
     readonly run: (request: MakePdfRequest, signal: AbortSignal) => Promise<PdfOutcome>;
     /** Puts the bytes in a Blob and returns its blob: URL (the browser: URL.createObjectURL). */
@@ -57,7 +58,8 @@ export interface PdfJobOptions {
     readonly onChange: (state: PdfJobState) => void;
 }
 
-export interface PdfJob {
+export interface PdfJob
+{
     state(): PdfJobState;
     /** Starts a new job (stopping any job running and dropping any PDF ready). */
     start(request: MakePdfRequest): void;

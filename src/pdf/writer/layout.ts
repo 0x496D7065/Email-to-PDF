@@ -21,7 +21,8 @@ import type { PdfFontName } from '../fonts';
 export type LaidOutColor = { readonly gray: number } | { readonly rgb: readonly [number, number, number] };
 
 /** A rectangle: top-left corner and size, in points (y downward). */
-export interface LaidOutRect {
+export interface LaidOutRect
+{
     readonly x: number;
     readonly y: number;
     readonly width: number;
@@ -47,7 +48,8 @@ export interface LaidOutRect {
  *
  * Both are passed through copyLayerText (copy-text.ts) by the backend.
  */
-export interface LaidOutTextRun {
+export interface LaidOutTextRun
+{
     readonly font: PdfFontName;
     /** Font size in points. */
     readonly size: number;
@@ -63,12 +65,14 @@ export interface LaidOutTextRun {
 }
 
 /** A filled rectangle (grey bars, backgrounds). */
-export interface LaidOutFill extends LaidOutRect {
+export interface LaidOutFill extends LaidOutRect
+{
     readonly color: LaidOutColor;
 }
 
 /** A straight line (rules). */
-export interface LaidOutLine {
+export interface LaidOutLine
+{
     readonly x1: number;
     readonly y1: number;
     readonly x2: number;
@@ -79,7 +83,8 @@ export interface LaidOutLine {
 }
 
 /** A clickable area that jumps to a named destination (internal only: no URLs). */
-export interface LaidOutLink {
+export interface LaidOutLink
+{
     readonly rect: LaidOutRect;
     readonly destination: string;
 }
@@ -88,7 +93,8 @@ export interface LaidOutLink {
  * One page. The backend paints fills first, then lines, then text, so text
  * is always on top of grey bars.
  */
-export interface LaidOutPage {
+export interface LaidOutPage
+{
     readonly fills: readonly LaidOutFill[];
     readonly lines: readonly LaidOutLine[];
     readonly text: readonly LaidOutTextRun[];
@@ -100,7 +106,8 @@ export interface LaidOutPage {
  * `y` (points from the top of the page) on page `page` (0-based index).
  * Names are made by our code, never from email data: only A-Z a-z 0-9 . _ -
  */
-export interface LaidOutDestination {
+export interface LaidOutDestination
+{
     readonly name: string;
     readonly page: number;
     readonly y: number;
@@ -112,7 +119,8 @@ export interface LaidOutDestination {
  * normalized by the caller, as inlineRuns in src/pdf/text.ts does):
  * copyLayerText turns any left into U+FFFD.
  */
-export interface LaidOutOutlineItem {
+export interface LaidOutOutlineItem
+{
     readonly title: string;
     readonly destination: string;
     readonly children: readonly LaidOutOutlineItem[];
@@ -124,13 +132,15 @@ export interface LaidOutOutlineItem {
  * Document information: the title and the producing tool's name. Nothing
  * else on purpose (no dates, no author, no keywords).
  */
-export interface LaidOutInfo {
+export interface LaidOutInfo
+{
     readonly title: string;
     readonly producer: string;
 }
 
 /** The whole laid-out document: the input of a PdfBackend. */
-export interface LaidOutDocument {
+export interface LaidOutDocument
+{
     /** Size of every page, in points. */
     readonly pageSize: { readonly width: number; readonly height: number };
     readonly pages: readonly LaidOutPage[];
@@ -147,6 +157,7 @@ export type PdfFontSet = Readonly<Partial<Record<PdfFontName, ParsedFont>>>;
  * (The method is `render`, not `write`: the lint rules ban any `.write`
  * property, a backstop against document.write, README.md, rule R4.)
  */
-export interface PdfBackend {
+export interface PdfBackend
+{
     render(doc: LaidOutDocument, fonts: PdfFontSet): Promise<Uint8Array>;
 }

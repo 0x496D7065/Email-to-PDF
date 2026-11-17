@@ -19,7 +19,8 @@ import { attachedAt, type EngineResult } from '../engine/engine';
 export const FILE_CHAIN_SEPARATOR = ' › ';
 
 /** The tool's own words in a chain, in the language shown. */
-export interface FileChainWords {
+export interface FileChainWords
+{
     /** For a file without a name: "(file without a name)". */
     readonly noFileName: string;
     /** For an attachment without a name, by its number at that level: "(attached email 2)". */
@@ -27,7 +28,8 @@ export interface FileChainWords {
 }
 
 /** One copy's chain. */
-export interface FileChain {
+export interface FileChain
+{
     readonly text: string;
     /**
      * True when `text` is only the tool's own words (a file's own email, the

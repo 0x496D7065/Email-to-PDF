@@ -7,7 +7,8 @@ import type { LayoutConfig } from './config';
 import type { LaidLine, Typesetter } from './typesetter';
 
 /** A page while it is being filled. */
-export interface PageInProgress {
+export interface PageInProgress
+{
     readonly fills: LaidOutFill[];
     readonly lines: LaidOutLine[];
     readonly text: LaidOutTextRun[];

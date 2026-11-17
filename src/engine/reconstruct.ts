@@ -102,7 +102,8 @@ export const MAX_QUOTE_DEPTH = 100;
 export const RECONSTRUCTED_FORM_NOTE = 'quote-marks-removed' as const;
 
 /** One earlier message rebuilt from quoted text. NOT a real message: it has no source file and no hash. */
-export interface ReconstructedMessage {
+export interface ReconstructedMessage
+{
     /** Offset of the header's first line in the source body (quote marks included). */
     readonly start: number;
     /** End of the header's own lines, line break included (readQuotedHeader). [start, headerEnd) is the raw header text. */
@@ -134,7 +135,8 @@ export interface ReconstructedMessage {
     readonly quoteMarksRemoved: boolean;
 }
 
-export interface ReconstructOptions {
+export interface ReconstructOptions
+{
     /** The source message's subject (spots a forward). */
     readonly subject?: string;
     /** UTC offset (minutes) of the source message's Date header; null when unknown. */
@@ -142,7 +144,8 @@ export interface ReconstructOptions {
 }
 
 /** One line of the body. */
-interface QLine {
+interface QLine
+{
     readonly start: number;
     readonly contentEnd: number;
     readonly end: number;

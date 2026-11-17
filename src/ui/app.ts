@@ -76,7 +76,8 @@ import { getLocale, languageName, SUPPORTED_LOCALES, t, type PlainMessageKey } f
 import { createStaticLabels, type StaticLabels } from './labels';
 
 /** What later tasks use to fill the page. */
-export interface AppShell {
+export interface AppShell
+{
     /** Step 1 container: the file picker goes here. */
     readonly addArea: HTMLDivElement;
     /** Step 2 container: the preview goes here. Hidden until setCheckReady(true). */
@@ -99,7 +100,8 @@ export interface AppShell {
     relabel(): void;
 }
 
-export interface AppOptions {
+export interface AppOptions
+{
     /** The reader picked another language in the picker (src/ui/page.ts). */
     readonly onLanguageChange?: (locale: string) => void;
     /** The languages offered (default: SUPPORTED_LOCALES). The picker is built only for two or more. */
@@ -139,7 +141,8 @@ function stepSection(labels: StaticLabels, id: string, number: number, title: Pl
 }
 
 /** One topic of the privacy panel: an h2 heading and its points, in this order. */
-interface PrivacyTopic {
+interface PrivacyTopic
+{
     readonly id: string;
     readonly title: PlainMessageKey;
     readonly points: readonly PlainMessageKey[];

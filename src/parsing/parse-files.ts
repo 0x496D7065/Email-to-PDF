@@ -71,7 +71,8 @@ const UNEXPECTED_DETAIL = 'could not be read (unexpected error)';
 export type JobRunner = (job: WorkerJob) => Promise<ParseResult>;
 
 /** The limits, injectable so tests do not need 500 MB of data. */
-export interface Limits {
+export interface Limits
+{
     readonly maxFileBytes: number;
     readonly maxBatchBytes: number;
 }

@@ -33,7 +33,8 @@ import { CATALOG, LANGUAGE_NAMES } from './catalog';
 import type { en } from './en';
 
 /** The two plural forms we use. English, French and Dutch need only these two. */
-export interface PluralForms {
+export interface PluralForms
+{
     readonly one: string;
     readonly other: string;
 }
@@ -108,7 +109,8 @@ export function languageName(locale: string): string
 }
 
 /** The text, number, list and plural rules of one language. */
-export interface Translator {
+export interface Translator
+{
     /** Its code, also the BCP 47 tag for <html lang> and Intl. */
     readonly locale: string;
     /** The text for `key`, placeholders filled in. Put the result into the page with textContent only. */

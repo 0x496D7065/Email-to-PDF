@@ -65,7 +65,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         /** "directive blockedURI parse|live" of each CSP violation in the page. */
         __e2eViolations: string[];
         /** Keeps a test worker alive for the positive controls. */
@@ -328,7 +329,8 @@ async function expectNoNetworkAndPageAlive(page: Page): Promise<void>
 }
 
 /** What the tests compare of each result (plain data, no message text beyond what is checked). */
-interface Summary {
+interface Summary
+{
     readonly fileName: string;
     readonly ok: boolean;
     readonly error?: string;

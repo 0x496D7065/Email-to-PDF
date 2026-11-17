@@ -47,7 +47,8 @@ export const SOFT_HYPHEN_ITEM = 4;
 export const PLACEHOLDER = 8;
 
 /** A style with its font metrics and its line box (see typesetter.ts). */
-export interface ResolvedStyle {
+export interface ResolvedStyle
+{
     readonly style: TextStyle;
     readonly metrics: FontMetrics;
     /** From the top of the line box to the baseline, in points. */
@@ -121,7 +122,8 @@ function isBreakAfter(codePoint: number): boolean
 }
 
 /** A run to shape: its text and the index of its style. */
-export interface StyledText {
+export interface StyledText
+{
     readonly style: number;
     readonly text: string;
 }
@@ -136,7 +138,8 @@ export class Shaper
         /** The style of placeholders ('code'). */
         private readonly codeStyle: number,
     )
-    {}
+    {
+    }
 
     /** Shapes the runs of one line into items. */
     shape(runs: readonly StyledText[]): ShapedText

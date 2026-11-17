@@ -198,7 +198,8 @@ export function isForwardSubject(subject: unknown): boolean
 }
 
 /** What one line is, for this detector. */
-interface LineInfo {
+interface LineInfo
+{
     readonly range: LineRange;
     /** First non-space character is ">". */
     readonly marked: boolean;
@@ -249,7 +250,8 @@ export function clean(text: string, from: number, to: number): string
  *   the fold also covers (empty for a forward, a lone separator, or an
  *   attribution with no ">" block after it).
  */
-export interface FoundHeader {
+export interface FoundHeader
+{
     readonly start: number;
     readonly end: number;
     readonly headEnd: number;

@@ -7,7 +7,8 @@ import { parseAllFixtures } from '../../tests/fixtures/parse-all';
 import { detectQuoteMarkers } from './quote-markers';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 
-interface Measured {
+interface Measured
+{
     readonly file: string;
     readonly body: string;
     readonly folds: readonly FoldRange[];

@@ -36,7 +36,8 @@ const ROLES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-val
 const HYPHEN = 0x2d;
 
 /** One wrapped line, ready to be drawn. */
-export interface LaidLine {
+export interface LaidLine
+{
     readonly text: ShapedText;
     readonly start: number;
     readonly end: number;

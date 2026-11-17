@@ -179,7 +179,8 @@ export function rebuiltSelectionKeys(r: EngineRebuilt, result: Pick<EngineResult
 }
 
 /** The rebuilt messages' include choices (memory only). */
-export interface RebuiltSelection {
+export interface RebuiltSelection
+{
     /** The switch: false leaves every rebuilt message out of the PDF (and out of the preview list). */
     includeAll(): boolean;
     setIncludeAll(included: boolean): void;
@@ -238,7 +239,8 @@ export function includedRebuilt(result: EngineResult, selection: RebuiltSelectio
 }
 
 /** One place the text of a rebuilt entry was read: the entry itself or one of its copies, and the list position of the email quoting it. */
-export interface RebuiltSource {
+export interface RebuiltSource
+{
     readonly rebuilt: EngineRebuilt;
     readonly position: number;
 }
@@ -276,7 +278,8 @@ export function rebuiltSources(r: EngineRebuilt, result: Pick<EngineResult, 'pos
 }
 
 /** Where a rebuilt entry in the PDF was taken from (rebuiltInPdf). */
-export interface RebuiltInPdf {
+export interface RebuiltInPdf
+{
     /** The copy shown: the entry's own when its email is in the PDF, else the copy from the first such email. */
     readonly shown: RebuiltSource;
     /** The number (as given by `numberOf`) of the email `shown` was taken from. The PDF never prints it (task 8.3). */
@@ -290,7 +293,8 @@ export interface RebuiltInPdf {
 }
 
 /** Options of rebuiltInPdf. */
-export interface RebuiltInPdfOptions {
+export interface RebuiltInPdfOptions
+{
     /** "Print full original text" is ticked (OutputPolicy.unfoldEverything): no rebuilt entry is in the PDF (see the top). */
     readonly unfoldEverything?: boolean;
 }
@@ -390,7 +394,8 @@ export function rebuiltDate(r: Pick<EngineRebuilt, 'rebuilt'>): RebuiltDate
 const blank = (m: EmailAddress): boolean => m.name.trim() === '' && m.address.trim() === '';
 
 /** What a rebuilt card shows (no DOM; the words come from the strings module). */
-export interface RebuiltCard {
+export interface RebuiltCard
+{
     readonly id: number;
     /** null: the quoted header has no subject (an "On ... wrote:" line never has one). */
     readonly subject: string | null;

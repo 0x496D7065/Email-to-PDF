@@ -509,7 +509,8 @@ function randomFolds(rand: () => number, length: number): FoldRange[]
  * code unit at a time, from the documented rules: ignore NaN, round outwards,
  * clamp, widen past a split surrogate pair, ignore what is left empty.
  */
-interface Expected {
+interface Expected
+{
     readonly reasons: Set<FoldReason>[];
     readonly related: Set<number>[];
     /** How many folds had a boundary moved out of an emoji (to prove the generator hits that case). */

@@ -241,7 +241,8 @@ export function attributeProblem(name: string, value: string): string | null
 /** Attribute values: a string, or true (present, empty) / false (left out), e.g. { disabled: true }. */
 export type AttributeValue = string | boolean;
 
-export interface ElementOptions {
+export interface ElementOptions
+{
     readonly attrs?: Readonly<Record<string, AttributeValue>>;
     /** Set with textContent: always shown as text, never read as HTML. */
     readonly text?: string;

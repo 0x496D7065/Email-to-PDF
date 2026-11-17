@@ -23,13 +23,15 @@ export class FakeText
 {
     readonly nodeType = 3;
     constructor(readonly data: string)
-    {}
+    {
+    }
 }
 
 export type FakeNode = FakeElement | FakeText;
 
 /** A test event: any plain object; `fire` adds `type`, `target` and preventDefault(). */
-export interface FakeEvent {
+export interface FakeEvent
+{
     type: string;
     target: unknown;
     defaultPrevented: boolean;

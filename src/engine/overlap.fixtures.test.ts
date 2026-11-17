@@ -10,7 +10,8 @@ import { orderMessages } from './order';
 import { detectQuotedOverlap } from './overlap';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 
-interface Measured {
+interface Measured
+{
     readonly file: string;
     readonly body: string;
     readonly folds: readonly FoldRange[];

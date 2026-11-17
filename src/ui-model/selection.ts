@@ -46,7 +46,8 @@ export function selectionKeys(m: EngineMessage): string[]
 }
 
 /** The include/exclude choices (memory only). */
-export interface Selection {
+export interface Selection
+{
     /** True unless the reader left this email out. */
     isIncluded(m: EngineMessage): boolean;
     /** Records the reader's choice for this email. */

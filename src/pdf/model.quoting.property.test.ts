@@ -91,7 +91,8 @@ function filesOf(c: QuotingCase, dropped: Dropped, random: () => number, missing
     return files;
 }
 
-interface Tally {
+interface Tally
+{
     cases: number;
     ticked: number;
     lost: number;

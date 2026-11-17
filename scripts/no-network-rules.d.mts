@@ -1,7 +1,8 @@
 // Type declarations for no-network-rules.mjs, so the TypeScript test file can
 // import that plain-JS module under strict type checking. Keep in sync with it.
 
-export interface Finding {
+export interface Finding
+{
     /** 1-based line number. */
     line: number;
     /** The exact text that matched. */
@@ -30,7 +31,8 @@ export function isRuleExempt(rule: { id?: string }, isDist: boolean, distFile: s
 /** Unescapes \/ and trims trailing punctuation, before the allowlist comparison. */
 export function normalizeUrl(raw: string): string;
 
-export interface ScanOptions {
+export interface ScanOptions
+{
     isDist: boolean;
     /** dist/ files only: path relative to dist/. */
     distFile?: string;

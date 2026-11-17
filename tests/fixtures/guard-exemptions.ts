@@ -15,7 +15,8 @@
 // stale.
 
 /** One exemption: `text` is ignored by the guard, but only inside `file` (a path from the repository root). */
-export interface GuardExemption {
+export interface GuardExemption
+{
     readonly file: string;
     readonly text: string;
     readonly reason: string;

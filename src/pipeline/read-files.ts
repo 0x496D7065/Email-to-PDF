@@ -21,7 +21,8 @@ import { BATCH_TOO_LARGE_DETAIL, FILE_TOO_LARGE_DETAIL, MAX_BATCH_BYTES, MAX_FIL
 import type { InputFile, ParseResult } from '../parsing/types';
 
 /** The part of a browser File used here (a real File fits; tests use fakes). */
-export interface FileLike {
+export interface FileLike
+{
     readonly name: string;
     readonly size: number;
     arrayBuffer(): Promise<ArrayBuffer>;

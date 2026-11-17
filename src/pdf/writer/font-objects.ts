@@ -26,7 +26,8 @@ export class FontUsage
         readonly font: ParsedFont,
         readonly resourceName: string,
     )
-    {}
+    {
+    }
 
     /** Records a glyph and, if it has none yet, the copy-layer text it stands for. */
     use(glyph: number, text: string): void

@@ -99,7 +99,8 @@ import type { PdfUnavailable } from './pdf-job';
 import { mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, type Review } from './review';
 
-export interface PageOptions {
+export interface PageOptions
+{
     /** Passed to step 1 (unit tests: a fake process function and a fake window). */
     readonly addFiles?: Pick<AddFilesOptions, 'process' | 'listenerTarget'>;
     /** Passed to step 2 (unit tests: fixed zones, chunk scheduling). */
@@ -114,7 +115,8 @@ export interface PageOptions {
     readonly download?: Partial<Pick<DownloadStepOptions, 'run' | 'createUrl' | 'revokeUrl' | 'origin' | 'now' | 'fonts' | 'listenerTarget'>>;
 }
 
-export interface Page {
+export interface Page
+{
     readonly shell: AppShell;
     readonly addFiles: AddFiles;
     readonly preview: Preview;

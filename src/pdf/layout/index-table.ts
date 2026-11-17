@@ -34,13 +34,15 @@ import type { LaidLine, Typesetter } from './typesetter';
 /** The destination of the index heading (the "Index" bookmark). Never an email anchor ("email-N"). */
 export const INDEX_DESTINATION = 'index';
 
-interface Column {
+interface Column
+{
     readonly x: number;
     readonly width: number;
 }
 
 /** Where each column is, for a text area starting at `left`, `width` wide. */
-export interface IndexColumns {
+export interface IndexColumns
+{
     readonly number: Column;
     readonly date: Column;
     readonly from: Column;
@@ -62,14 +64,16 @@ export function indexColumns(config: LayoutConfig, left: number, width: number):
 }
 
 /** A cell: its column, its wrapped lines, and its alignment. */
-interface LaidCell {
+interface LaidCell
+{
     readonly column: Column;
     readonly lines: readonly LaidLine[];
     readonly right: boolean;
 }
 
 /** One line under a row (the attachments label, or a line of an attachment), with its bullet on an item's first line. */
-interface LaidExtra {
+interface LaidExtra
+{
     readonly line: LaidLine;
     readonly x: number;
     readonly bullet: { readonly line: LaidLine; readonly x: number } | null;
@@ -77,7 +81,8 @@ interface LaidExtra {
     readonly keepWithNext: boolean;
 }
 
-export interface LaidIndexRow {
+export interface LaidIndexRow
+{
     readonly anchor: string;
     /** Number, date, from, subject. */
     readonly cells: readonly LaidCell[];
@@ -88,7 +93,8 @@ export interface LaidIndexRow {
     readonly height: number;
 }
 
-export interface LaidIndex {
+export interface LaidIndex
+{
     readonly heading: readonly LaidLine[];
     /** The column titles (the page title included). */
     readonly header: readonly LaidCell[];

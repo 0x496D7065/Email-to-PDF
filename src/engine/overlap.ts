@@ -123,7 +123,8 @@ export const SHORT_MESSAGE_MIN_WORDS = 4;
 export const MAX_POSTINGS = 64;
 
 /** What the detector needs from each message. Array position = chronological position. */
-export interface OverlapInput {
+export interface OverlapInput
+{
     readonly bodyText: string;
     readonly messageId: string | null;
     readonly inReplyTo: string | null;
@@ -140,7 +141,8 @@ export interface OverlapInput {
 }
 
 /** One word of a body: its comparison key and its offsets [start, end) in the original text. */
-export interface Word {
+export interface Word
+{
     readonly key: string;
     readonly start: number;
     readonly end: number;
@@ -298,7 +300,8 @@ function shingleHash(ids: Int32Array, at: number): number
 }
 
 /** A candidate match in message M: its words first..last (both included, positions in M's word list). */
-interface Run {
+interface Run
+{
     readonly first: number;
     readonly last: number;
     /** `index` of the message the words were found in. */

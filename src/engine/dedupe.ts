@@ -86,7 +86,8 @@ export type DedupeWarningCode =
     | 'possible-duplicate-not-merged';
 
 /** One engine warning, with the other messages it is about. */
-export interface DedupeWarning {
+export interface DedupeWarning
+{
     readonly code: DedupeWarningCode;
     /**
      * Input positions of the other messages involved, ascending, without
@@ -101,7 +102,8 @@ export interface DedupeWarning {
 }
 
 /** One copy that was merged into a kept message. */
-export interface MergedCopy {
+export interface MergedCopy
+{
     /** The copy's file name, SHA-256 and format, for the PDF cover page. */
     readonly source: NormalizedMessage['source'];
     /** Position of the copy in the input array. */
@@ -111,7 +113,8 @@ export interface MergedCopy {
 }
 
 /** One message that stays in the output. */
-export interface KeptMessage {
+export interface KeptMessage
+{
     /** The representative copy, unchanged (same object as in the input). */
     readonly message: NormalizedMessage;
     /** Position of `message` in the input array. */
@@ -125,7 +128,8 @@ export interface KeptMessage {
     readonly warnings: readonly DedupeWarning[];
 }
 
-export interface DedupeResult {
+export interface DedupeResult
+{
     /** Kept messages, in the input order of their representative. */
     readonly kept: readonly KeptMessage[];
     /** How many copies were merged in total (the sum of every `duplicates` length). */
@@ -227,7 +231,8 @@ function mailboxKey(m: { readonly name: string; readonly address: string }): str
 }
 
 /** Everything about one input message that the comparison needs, computed once. */
-interface Prepared {
+interface Prepared
+{
     readonly message: NormalizedMessage;
     readonly index: number;
     /**
@@ -351,7 +356,8 @@ export function keepsHeaderData(kept: NormalizedMessage, other: NormalizedMessag
 }
 
 /** Options of `dedupe`. */
-export interface DedupeOptions {
+export interface DedupeOptions
+{
     /**
      * Input position of the first email attached inside a dropped file: every
      * message from there on is one (src/engine/engine.ts puts them after the
@@ -464,7 +470,8 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, item: V): void
  * millions. Copies with neither a Message-ID nor an author and date are
  * never duplicates, so each one is its own `Twins`.
  */
-interface Twins {
+interface Twins
+{
     /** The first member in canonical order; stands for all members in comparisons. */
     readonly first: Prepared;
     /** All members, in canonical order. */
@@ -472,7 +479,8 @@ interface Twins {
 }
 
 /** A warning in the making: the true count and the lowest MAX_RELATED positions. */
-interface Related {
+interface Related
+{
     readonly total: number;
     readonly first: readonly number[];
 }
@@ -498,7 +506,8 @@ function lowest(lists: readonly (readonly number[])[]): number[]
 }
 
 /** One group of duplicates, with the warnings found inside its bucket. */
-interface Group {
+interface Group
+{
     readonly twins: readonly Twins[];
     readonly related: ReadonlyMap<DedupeWarningCode, Related>;
 }

@@ -19,7 +19,8 @@ import { type Cmap, parseCmap } from './cmap';
 import { readSfntDirectory, tableBytes } from './sfnt';
 import { unwrapWoff } from './woff';
 
-export interface LineMetrics {
+export interface LineMetrics
+{
     /** Distance above the baseline (positive). */
     readonly ascender: number;
     /** Distance below the baseline (negative, as stored). */
@@ -27,7 +28,8 @@ export interface LineMetrics {
     readonly lineGap: number;
 }
 
-export interface ParsedFont {
+export interface ParsedFont
+{
     /** The sfnt bytes the font was read from, to embed as FontFile2 (not copied). */
     readonly sfnt: Uint8Array;
     /** name ID 6, reduced to characters that are safe in a PDF name (see postScriptNameFor). */

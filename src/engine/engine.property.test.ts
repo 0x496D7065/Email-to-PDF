@@ -43,7 +43,8 @@ function makeRandom(seed: number): () => number
     };
 }
 
-interface Person {
+interface Person
+{
     readonly mailbox: EmailAddress;
     readonly signature: string;
 }
@@ -126,7 +127,8 @@ function quoteBlock(style: QuoteStyle, previous: string, author: Person, subject
     }
 }
 
-interface Batch {
+interface Batch
+{
     readonly results: ParseResult[];
     /** Pairs [original, copy] of input positions that are exact copies and must be merged. */
     readonly copies: [number, number][];
@@ -134,7 +136,8 @@ interface Batch {
     readonly conflicts: [number, number][];
 }
 
-interface BatchOptions {
+interface BatchOptions
+{
     readonly threads: number;
     readonly maxMessages: number;
     readonly maxQuoteChars: number;

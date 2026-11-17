@@ -61,13 +61,15 @@ export type ProcessResult =
  * (filesDone goes from 0 to filesTotal), then 'organizing' once while the
  * engine runs.
  */
-export interface ProcessProgress {
+export interface ProcessProgress
+{
     readonly stage: 'reading' | 'organizing';
     readonly filesDone: number;
     readonly filesTotal: number;
 }
 
-export interface ProcessOptions {
+export interface ProcessOptions
+{
     /** Called as the batch advances. An error thrown by it is ignored. Never called once `signal` is aborted. */
     readonly onProgress?: (progress: ProcessProgress) => void;
     /**
@@ -81,7 +83,8 @@ export interface ProcessOptions {
 }
 
 /** The replaceable steps (unit and browser tests pass fakes or misbehaving workers). */
-export interface ProcessSteps {
+export interface ProcessSteps
+{
     readonly parse: (files: readonly InputFile[], signal?: AbortSignal) => Promise<ParseResult[]>;
     readonly organize: (results: readonly ParseResult[], signal?: AbortSignal) => Promise<EngineOutcome>;
     readonly limits: Limits;

@@ -12,7 +12,8 @@ import { type PdfRole, TAB_WIDTH } from '../text';
 import type { LaidOutColor } from '../writer/layout';
 
 /** How one kind of text looks. */
-export interface TextStyle {
+export interface TextStyle
+{
     readonly font: PdfFontName;
     /** Font size in points. */
     readonly size: number;
@@ -21,7 +22,8 @@ export interface TextStyle {
     readonly lineHeight: number;
 }
 
-export interface LayoutConfig {
+export interface LayoutConfig
+{
     /** Page size in points (A4 by default). */
     readonly page: { readonly width: number; readonly height: number };
     /** Text area margins. The footer sits inside the bottom margin. */

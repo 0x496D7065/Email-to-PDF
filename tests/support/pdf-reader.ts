@@ -11,13 +11,15 @@
 export class PdfName
 {
     constructor(readonly value: string)
-    {}
+    {
+    }
 }
 
 export class PdfRef
 {
     constructor(readonly num: number)
-    {}
+    {
+    }
 }
 
 export class PdfString
@@ -26,7 +28,8 @@ export class PdfString
         readonly bytes: Uint8Array,
         readonly hex: boolean,
     )
-    {}
+    {
+    }
 
     /** The text: UTF-16BE when it starts with the FEFF byte order mark, else Latin-1. */
     get text(): string
@@ -52,7 +55,8 @@ export class PdfString
 export class PdfOp
 {
     constructor(readonly op: string)
-    {}
+    {
+    }
 }
 
 export type PdfValue = number | boolean | null | PdfName | PdfRef | PdfString | PdfValue[] | PdfDict | PdfStream;
@@ -60,7 +64,8 @@ export type PdfValue = number | boolean | null | PdfName | PdfRef | PdfString | 
 export class PdfDict
 {
     constructor(readonly entries: Map<string, PdfValue>)
-    {}
+    {
+    }
     get(key: string): PdfValue | undefined
     {
         return this.entries.get(key);
@@ -81,7 +86,8 @@ export class PdfStream
         readonly dict: PdfDict,
         readonly raw: Uint8Array,
     )
-    {}
+    {
+    }
 }
 
 const WHITE = ' \t\r\n\f\0';
@@ -673,7 +679,8 @@ export function parseToUnicode(cmap: string): Map<number, string>
 }
 
 /** One drawn text run, as read back from a content stream. */
-export interface DrawnRun {
+export interface DrawnRun
+{
     readonly font: string;
     readonly size: number;
     readonly x: number;
@@ -683,7 +690,8 @@ export interface DrawnRun {
     readonly fill: number[];
 }
 
-export interface ContentSummary {
+export interface ContentSummary
+{
     readonly runs: DrawnRun[];
     readonly ops: { op: string; operands: PdfValue[] }[];
 }
@@ -810,7 +818,8 @@ export function readContent(content: string): ContentSummary
 }
 
 /** The bookmark tree, checked for consistent /First /Last /Next /Prev /Parent links. */
-export interface ReadOutline {
+export interface ReadOutline
+{
     title: string;
     dest: string;
     count: number | undefined;
@@ -900,7 +909,8 @@ export function readDests(pdf: ParsedPdf): Map<string, { page: number; top: numb
  * copying or searching (the /ActualText of its span when there is one, else
  * `shown`). Coordinates are PDF ones (y up).
  */
-export interface PageRun {
+export interface PageRun
+{
     readonly font: string;
     readonly size: number;
     readonly x: number;
@@ -1028,7 +1038,8 @@ export async function readPageRuns(pdf: ParsedPdf): Promise<PageRun[][]>
  * visible gap separates two runs (two columns of a table, a label and its
  * value), one space is put between them, as a text extractor does.
  */
-export interface TextLine {
+export interface TextLine
+{
     readonly y: number;
     readonly runs: readonly PageRun[];
     readonly shown: string;
@@ -1081,7 +1092,8 @@ export function textLines(runs: readonly PageRun[], tolerance = 0.01): TextLine[
 }
 
 /** A link annotation: its page, its rectangle [x1, y1, x2, y2] (PDF coordinates) and its named destination. */
-export interface ReadLink {
+export interface ReadLink
+{
     readonly page: number;
     readonly rect: readonly [number, number, number, number];
     readonly dest: string;

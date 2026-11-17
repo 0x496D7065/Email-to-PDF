@@ -24,7 +24,8 @@
 // (a "curly" apostrophe).
 
 /** The header label words of one language, by role. */
-export interface HeaderLabels {
+export interface HeaderLabels
+{
     /** The sender line. A header block must START with one of these. */
     readonly from: readonly string[];
     /** The date line ("Sent" in Outlook, "Date" in Apple Mail and Gmail forwards). */
@@ -40,7 +41,8 @@ export interface HeaderLabels {
     readonly subject: readonly string[];
 }
 
-export interface ReplyLanguage {
+export interface ReplyLanguage
+{
     /** Language code, for readers and tests only. */
     readonly code: string;
     /**

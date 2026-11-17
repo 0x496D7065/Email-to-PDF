@@ -31,7 +31,8 @@ const MAX_PAGE_SIDE = 14_400;
 /** Fixed order and resource names of the fonts, so the output never depends on use order. */
 const FONT_ORDER: readonly PdfFontName[] = ['sans-regular', 'sans-bold', 'sans-italic', 'mono-regular'];
 
-export interface OwnPdfWriterOptions {
+export interface OwnPdfWriterOptions
+{
     /** Largest output, in bytes (default MAX_OUTPUT_BYTES, 256 MiB). */
     readonly maxBytes?: number;
     /** Most pages (default MAX_PAGES). */
@@ -42,7 +43,8 @@ export interface OwnPdfWriterOptions {
 export class OwnPdfWriter implements PdfBackend
 {
     constructor(private readonly options: OwnPdfWriterOptions = {})
-    {}
+    {
+    }
 
     /** Rejects only with a PdfWriteError: any other failure (a malformed shape the checks missed) is wrapped. */
     async render(doc: LaidOutDocument, fonts: PdfFontSet): Promise<Uint8Array>
@@ -145,7 +147,8 @@ function collectFonts(doc: LaidOutDocument, fonts: PdfFontSet): Map<PdfFontName,
     return usages;
 }
 
-interface OutlineNode {
+interface OutlineNode
+{
     readonly item: LaidOutOutlineItem;
     readonly number: number;
     readonly children: OutlineNode[];

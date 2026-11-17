@@ -19,14 +19,16 @@ import type { FileKind } from './file-type';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
 import type { ParseResult } from './types';
 
-export interface ParseRequest {
+export interface ParseRequest
+{
     readonly type: 'parse';
     readonly name: string;
     readonly kind: FileKind;
     readonly bytes: Uint8Array;
 }
 
-export interface ConversionsReply {
+export interface ConversionsReply
+{
     readonly type: 'conversions';
     readonly outcomes: readonly ConversionOutcome[];
 }
@@ -34,18 +36,21 @@ export interface ConversionsReply {
 /** Page -> worker. */
 export type ToWorker = ParseRequest | ConversionsReply;
 
-export interface HtmlRequest {
+export interface HtmlRequest
+{
     readonly type: 'html';
     readonly htmls: readonly string[];
 }
 
-export interface ResultMessage {
+export interface ResultMessage
+{
     readonly type: 'result';
     readonly result: ParseResult;
 }
 
 /** The worker hit an error it could not turn into a result (a bug, not a bad file). */
-export interface FailedMessage {
+export interface FailedMessage
+{
     readonly type: 'failed';
 }
 

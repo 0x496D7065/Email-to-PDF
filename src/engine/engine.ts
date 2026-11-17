@@ -137,7 +137,8 @@ export type { EngineRebuilt, RealMatch, RebuiltLink, RebuiltPlacement, TimelineE
  */
 export type ReconstructionWarningCode = 'reconstruct-failed' | 'reconstruct-limit';
 
-export interface ReconstructionWarning {
+export interface ReconstructionWarning
+{
     /** Input position of the kept message (EngineMessage.index). */
     readonly index: number;
     readonly code: ReconstructionWarningCode;
@@ -157,7 +158,8 @@ export type EngineWarningCode =
     | 'dedupe-failed';
 
 /** One kept message, ready for the preview. */
-export interface EngineMessage {
+export interface EngineMessage
+{
     /** The kept copy, unchanged (same object as in the input). */
     readonly message: NormalizedMessage;
     /** Its position in the input of `runEngine`. */
@@ -181,7 +183,8 @@ export interface EngineMessage {
 }
 
 /** A file that could not be read. */
-export interface FailedFile {
+export interface FailedFile
+{
     /** Its position in the input of `runEngine`. */
     readonly index: number;
     readonly fileName: string;
@@ -191,7 +194,8 @@ export interface FailedFile {
 }
 
 /** The numbers the preview shows. */
-export interface EngineCounts {
+export interface EngineCounts
+{
     /** Every file given to the engine, read or failed (preview: "N files, M could not be read"). */
     readonly filesGiven: number;
     /** Messages read successfully, duplicates and attached emails (task 8.13b-3) included. */
@@ -207,7 +211,8 @@ export interface EngineCounts {
 }
 
 /** The whole engine output: plain, structured-clone-safe data. */
-export interface EngineResult {
+export interface EngineResult
+{
     /** Kept messages, in chronological order. */
     readonly messages: readonly EngineMessage[];
     /** Failed files, in input order. */
@@ -241,7 +246,8 @@ export interface EngineResult {
 }
 
 /** Where one attached email's printed block sits in the body of an email holding it (AttachedPlace, with input positions). */
-export interface EngineAttachedPlace {
+export interface EngineAttachedPlace
+{
     /**
      * Input position of the email whose bodyText holds the block: its parent,
      * or the parent's parent, ...; or, when that one was merged into another
@@ -258,7 +264,8 @@ export interface EngineAttachedPlace {
 }
 
 /** One email attached inside a dropped file (ParseResult.attached), as the engine numbers it. */
-export interface EngineAttached {
+export interface EngineAttached
+{
     /** Its input position (see Indices at the top). */
     readonly index: number;
     /** Input position of the email it is attached to: its file's own email, or another attached email of that file. */
@@ -294,7 +301,8 @@ export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, in
  * DEFAULT_PARTS. Tests swap in a broken part to prove the safety net works,
  * and use `onStage` to time each stage (the engine itself reads no clock).
  */
-export interface EngineParts {
+export interface EngineParts
+{
     readonly detectQuotedOverlap: typeof detectQuotedOverlap;
     readonly detectQuoteMarkers: typeof detectQuoteMarkers;
     readonly detectReplyHeaders: typeof detectReplyHeaders;
@@ -356,7 +364,8 @@ export function primaryReason(reasons: readonly FoldReason[]): FoldReason | null
 const LABEL_PRECEDENCE: readonly FoldReason[] = ['signature', 'reply-header', 'quote-marker', 'quoted-overlap'];
 
 /** A kept message while the pipeline runs. */
-interface Work {
+interface Work
+{
     readonly message: NormalizedMessage;
     readonly index: number;
     readonly order: OrderReason;

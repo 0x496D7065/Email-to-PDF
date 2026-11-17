@@ -78,7 +78,8 @@ export const MAX_QUOTED_DATE_LENGTH = 200;
  */
 export type QuotedDateBasis = 'rfc-zone' | 'written-zone' | 'source-offset' | 'none';
 
-export interface QuotedDate {
+export interface QuotedDate
+{
     /** The date text as given. */
     readonly text: string;
     /** The wall-clock time as written, as if it were UTC (milliseconds); null = unreadable. */
@@ -189,7 +190,8 @@ function readable(
 // ---------------------------------------------------------------------------
 // Cleaning and tokens
 
-interface Stripped {
+interface Stripped
+{
     /** The text without its comments. */
     readonly text: string;
     /** The text of the comments, each "(" and ")" turned into a space. */
@@ -342,7 +344,8 @@ function suffixFits(day: number, suffix: string | undefined): boolean
     return suffix === 'th';
 }
 
-interface Ymd {
+interface Ymd
+{
     readonly year: number;
     readonly month: number; // 1-12
     readonly day: number;
@@ -401,7 +404,8 @@ function dateMs(ymd: Ymd): number | null
 
 const weekdayOf = (ms: number): number => new Date(ms).getUTCDay();
 
-interface Clock {
+interface Clock
+{
     readonly hour: number; // as written
     readonly minute: number;
     readonly second: number;
@@ -454,7 +458,8 @@ function clockMs(clock: Clock): number | null
 // ---------------------------------------------------------------------------
 // The localized reader
 
-interface Reading {
+interface Reading
+{
     readonly wallMs: number;
     readonly precision: 'minute' | 'day';
     readonly zone: WrittenZone;
@@ -721,10 +726,10 @@ export function parseQuotedDate(text: string, sourceOffsetMinutes: number | null
         {
             zone = 'utc-unknown';
         }
-        // A one-letter zone other than "Z" may be what is left of a cut AM/PM
-        // ("2:02 (P)M" -> "2:02 M"): unreadable, never a guess (file comment).
         else if (SINGLE_LETTER.test(whole.zone ?? ''))
         {
+            // A one-letter zone other than "Z" may be what is left of a cut AM/PM
+            // ("2:02 (P)M" -> "2:02 M"): unreadable, never a guess (file comment).
             return unreadable(text);
         }
         if (zone !== undefined)

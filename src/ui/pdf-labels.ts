@@ -65,7 +65,8 @@ export const DEBOUNCE_MS = 150;
 export const SLICE_MS = 12;
 
 /** The PDF plans of the included emails, as the PDF step needs them. */
-export interface PdfPlans {
+export interface PdfPlans
+{
     readonly result: EngineResult;
     readonly policy: OutputPolicy;
     /** List positions of the included emails, in list order (a position without an email is not in it). */
@@ -74,7 +75,8 @@ export interface PdfPlans {
     readonly plans: readonly MessagePlan[];
 }
 
-export interface PdfLabelsOptions {
+export interface PdfLabelsOptions
+{
     /** The included emails' list positions, in list order (src/ui/review.ts). */
     readonly includedPositions: () => readonly number[];
     /** Hands the plans to the preview (null: hide the labels). */
@@ -108,7 +110,8 @@ export interface PdfLabelsOptions {
     readonly untickedRebuilt?: () => readonly number[];
 }
 
-export interface PdfLabels {
+export interface PdfLabels
+{
     /** The checkbox field and its note, for the preview's toolbar. */
     readonly element: HTMLDivElement;
     /** A new result is shown (null: none). */
@@ -128,7 +131,8 @@ export interface PdfLabels {
 }
 
 /** The input of one planning: everything the plans depend on. */
-interface Inputs {
+interface Inputs
+{
     readonly result: EngineResult;
     readonly policy: OutputPolicy;
     readonly positions: readonly number[];

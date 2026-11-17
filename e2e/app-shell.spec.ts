@@ -15,7 +15,8 @@ import { withoutSelectConsole, withoutSelectReports } from './support/watch.ts';
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __shellViolations: string[];
         __focusables: Element[];
     }

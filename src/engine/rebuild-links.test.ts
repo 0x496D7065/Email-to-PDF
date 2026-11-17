@@ -66,7 +66,8 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
     };
 }
 
-interface RbOptions {
+interface RbOptions
+{
     readonly from?: readonly EmailAddress[];
     /** Estimated moment; null = unreadable date. */
     readonly est?: number | null;

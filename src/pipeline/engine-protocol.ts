@@ -16,7 +16,8 @@
 import { runEngine, type EngineResult } from '../engine/engine';
 import type { ParseResult } from '../parsing/types';
 
-export interface EngineRequest {
+export interface EngineRequest
+{
     readonly type: 'run';
     readonly results: readonly ParseResult[];
 }
@@ -24,13 +25,15 @@ export interface EngineRequest {
 /** Page -> engine worker. */
 export type ToEngineWorker = EngineRequest;
 
-export interface EngineResultMessage {
+export interface EngineResultMessage
+{
     readonly type: 'result';
     readonly result: EngineResult;
 }
 
 /** The engine threw (a bug, not a bad file); no details are sent. */
-export interface EngineFailedMessage {
+export interface EngineFailedMessage
+{
     readonly type: 'failed';
 }
 

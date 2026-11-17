@@ -47,7 +47,8 @@ export function realFile(messages: readonly ThreadMessage[], i: number, tag: str
 }
 
 /** What one engine run says about one conversation. */
-export interface Outcome {
+export interface Outcome
+{
     /** Conversation index of each timeline entry, in timeline order (-1: a rebuilt entry at no true header). */
     readonly order: readonly number[];
     readonly rebuiltEntries: number;

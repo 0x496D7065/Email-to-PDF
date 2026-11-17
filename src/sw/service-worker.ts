@@ -34,14 +34,17 @@ import { cacheNameFor, isOldCacheOfOurs, parseManifest, precachedPathFor } from 
  * TypeScript setup has the page's types (DOM), not the worker's, so they
  * are described by hand (as in src/parsing/parse-worker.ts).
  */
-interface ExtendableEvent extends Event {
+interface ExtendableEvent extends Event
+{
     waitUntil(promise: Promise<unknown>): void;
 }
-interface FetchEvent extends ExtendableEvent {
+interface FetchEvent extends ExtendableEvent
+{
     readonly request: Request;
     respondWith(response: Promise<Response>): void;
 }
-interface ServiceWorkerScope {
+interface ServiceWorkerScope
+{
     readonly location: { readonly origin: string };
     readonly clients: { claim(): Promise<void> };
     skipWaiting(): Promise<void>;

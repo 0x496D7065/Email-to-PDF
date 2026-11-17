@@ -11,7 +11,8 @@ import { DONATION_IMAGE, DONATION_URL } from '../src/ui/dom.ts';
 import { en } from '../src/ui/i18n/en.ts';
 
 /** What we keep from each `securitypolicyviolation` event. */
-interface Violation {
+interface Violation
+{
     directive: string;
     blockedURI: string;
     /** The policy that was violated: tells the header CSP and the meta CSP apart. */
@@ -22,7 +23,8 @@ interface Violation {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __cspViolations: Violation[];
         /** Set by the inline script of tryForbiddenThings if it ever ran: must stay unset. */
         __cspInlineRan?: boolean;

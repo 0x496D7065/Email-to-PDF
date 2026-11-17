@@ -222,7 +222,8 @@ const DAY_MS = 24 * 60 * 60_000;
 export const MAX_CANDIDATES = 64;
 
 /** One kept real message, in EngineResult.messages order. */
-export interface LinkSource {
+export interface LinkSource
+{
     /** Input position (EngineMessage.index). */
     readonly index: number;
     readonly message: NormalizedMessage;
@@ -242,7 +243,8 @@ export interface LinkSource {
 export type DateAgreement = 'exact' | 'strong' | 'zone' | 'strict';
 
 /** Why a link to a real message was made. */
-export interface RealMatch {
+export interface RealMatch
+{
     /** Share of the rebuilt text's words in the words compared with the real message's own text (file comment, 1c). */
     readonly coverage: number;
     /** Share of the real message's own text's words in the words compared. */
@@ -263,7 +265,8 @@ export interface RealMatch {
 export type RebuiltLink = 'real' | 'same-as' | 'entry';
 
 /** One message rebuilt from quoted text, with its links. Plain data. */
-export interface EngineRebuilt {
+export interface EngineRebuilt
+{
     /** Its position in EngineResult.reconstructed. */
     readonly id: number;
     /** Input position of the email whose body quotes it (offsets in `rebuilt` are into that body). */
@@ -296,7 +299,8 @@ export type TimelineEntry =
     /** A rebuilt message: `id` in EngineResult.reconstructed (always link 'entry'). */
     | { readonly kind: 'rebuilt'; readonly id: number; readonly placement: RebuiltPlacement };
 
-export interface RebuildLinks {
+export interface RebuildLinks
+{
     readonly reconstructed: EngineRebuilt[];
     readonly timeline: TimelineEntry[];
 }
@@ -304,7 +308,8 @@ export interface RebuildLinks {
 // ---------------------------------------------------------------- text
 
 /** The words of a text, with its shingle sets and joined form built on demand. */
-export interface Words {
+export interface Words
+{
     readonly tokens: readonly string[];
     readonly sets: Map<number, ReadonlySet<string>>;
 }
@@ -585,7 +590,8 @@ export function signatureStart(text: string, senderWords: ReadonlySet<string>): 
 }
 
 /** A text as compared (file comment, 1c): all its words, and the words before its signature block when it ends with one. */
-export interface Compared {
+export interface Compared
+{
     readonly full: Words;
     readonly core: Words | null;
 }
@@ -664,7 +670,8 @@ export function digitsOf(w: Words): string
 }
 
 /** Shares needed (each way) and whether MIN_SHINGLES applies, per date level (file comment, 1c and 2). */
-interface TextRule {
+interface TextRule
+{
     readonly forward: number;
     readonly reverse: number;
     readonly minEvidence: boolean;
@@ -839,7 +846,8 @@ export function realDateAgreement(
 }
 
 /** One copy's date, for copyDateAgreement. */
-export interface CopyDate {
+export interface CopyDate
+{
     readonly precision: QuotedDate['precision'];
     readonly approximate: boolean;
     /** The zone offset its estimate assumed (minutes): the source's for basis 'source-offset', else 0. */
@@ -919,7 +927,8 @@ export function copyDateAgreement(a: CopyDate, b: CopyDate, diffMs: number): Dat
 
 // ---------------------------------------------------------------- linking
 
-interface Item {
+interface Item
+{
     readonly id: number;
     /** Source position in the sources list. */
     readonly pos: number;

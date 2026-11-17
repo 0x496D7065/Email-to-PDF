@@ -25,7 +25,8 @@ import { createPdfWorkerSide, type FromPdfWorker } from './pdf-protocol';
  * hand: the project's TypeScript setup has the page's types, not the
  * worker's; same approach as src/pipeline/engine-worker.ts).
  */
-interface WorkerScope {
+interface WorkerScope
+{
     onmessage: ((event: MessageEvent<unknown>) => void) | null;
     postMessage(message: FromPdfWorker, transfer: Transferable[]): void;
 }

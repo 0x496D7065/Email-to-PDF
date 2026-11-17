@@ -150,24 +150,28 @@ describe('isFromWorker: attached emails (strict)', () =>
     });
 
     // A mutable, loosely typed copy of the result, for the mutations below.
-    interface LooseMessage {
+    interface LooseMessage
+    {
         bodyText: unknown;
         attachments: unknown;
         source: { attachedPath?: unknown; fileName?: unknown; sha256?: unknown; kind?: unknown };
     }
-    interface LoosePlace {
+    interface LoosePlace
+    {
         holder: unknown;
         start: number;
         end: number;
     }
-    interface LooseEntry {
+    interface LooseEntry
+    {
         parent: unknown;
         path: unknown;
         places: unknown;
         name?: unknown;
         message: LooseMessage;
     }
-    interface LooseResult {
+    interface LooseResult
+    {
         ok: boolean;
         message?: LooseMessage;
         attached?: unknown;
@@ -293,7 +297,8 @@ describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
         ]);
     });
 
-    interface LooseMsgResult {
+    interface LooseMsgResult
+    {
         message: { attachments: Record<string, unknown>[]; source: Record<string, unknown> };
         attached: { places: unknown[]; parent: unknown; message: { attachments: Record<string, unknown>[]; source: Record<string, unknown> } }[];
     }

@@ -39,7 +39,8 @@ import { el, setBlobHref, setSafeAttribute } from './dom';
 import { t } from './i18n';
 import { createPdfJob, type PdfJob, type PdfJobState, type PdfUnavailable } from './pdf-job';
 
-export interface DownloadStepOptions {
+export interface DownloadStepOptions
+{
     /** Why a PDF cannot be made now, or null when it can. */
     readonly unavailable: () => PdfUnavailable | null;
     /** What goes in the PDF, with `generatedAt` as its time; null if nothing can be made. */
@@ -60,7 +61,8 @@ export interface DownloadStepOptions {
     readonly listenerTarget?: ListenerTarget;
 }
 
-export interface DownloadStep {
+export interface DownloadStep
+{
     /** Shows whether the button is available now (call after anything `unavailable` depends on changed). */
     refresh(): void;
     /**

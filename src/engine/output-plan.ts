@@ -189,7 +189,8 @@ import { checkSegments, lineRanges, type FoldReason, type Segment } from './segm
 import { senderKeyOf, signatureBlockKey } from './signature';
 
 /** What the PDF leaves out. */
-export interface OutputPolicy {
+export interface OutputPolicy
+{
     /** Quoted history the mail app added below a reply (rule 2). */
     readonly appQuotedHistory: 'omit' | 'keep';
     /** 'none' leaves out every signature fold (outside forwarded parts). */
@@ -220,7 +221,8 @@ export const DEFAULT_OUTPUT_POLICY: OutputPolicy = Object.freeze({
 export type PlanReason = 'text' | 'writer-quote' | 'forwarded' | 'app-quoted-history' | 'signature' | 'repeated-signature';
 
 /** Code units [start, end) of the body, kept or left out. */
-export interface PlanRange {
+export interface PlanRange
+{
     readonly start: number;
     readonly end: number;
     readonly keep: boolean;
@@ -228,7 +230,8 @@ export interface PlanRange {
 }
 
 /** The plan of one email. */
-export interface MessagePlan {
+export interface MessagePlan
+{
     /** Contiguous cover of [0, bodyText.length); neighbours with the same keep and reason are merged. [] for an empty body. */
     readonly ranges: readonly PlanRange[];
     /** Where the app quoted history starts (rule 2), whatever the policy; null when there is none. */
@@ -246,7 +249,8 @@ export interface MessagePlan {
 }
 
 /** What the plan needs per email (an EngineMessage fits). */
-export interface PlanInput {
+export interface PlanInput
+{
     readonly message: NormalizedMessage;
     readonly segments: readonly Segment[];
     /**
@@ -258,7 +262,8 @@ export interface PlanInput {
 }
 
 /** What rule 2 needs to know about the other emails. */
-export interface QuoteContext {
+export interface QuoteContext
+{
     /** Whether the email at input position `index` is included (in the PDF). */
     readonly isIncluded: (index: number) => boolean;
     /** Whether the INCLUDED email at input position `index` has this email's sender (both known). */
@@ -331,7 +336,8 @@ export function forwardBoundary(
 // ------------------------------------------------------------------ pieces
 
 /** A piece of the body: a segment, split at ownEnd and at every header's start and headEnd. */
-export interface Piece {
+export interface Piece
+{
     readonly start: number;
     readonly end: number;
     readonly folded: boolean;
@@ -455,7 +461,8 @@ export function wordLines(text: string): string[]
 }
 
 /** Rule 2b: where a word line occurs: an email (input position) and the line's place among that email's word lines. */
-export interface LinePlace {
+export interface LinePlace
+{
     readonly email: number;
     readonly pos: number;
 }
@@ -756,14 +763,16 @@ export function keepsKind(policy: OutputPolicy, reason: Exclude<PlanReason, 'sig
 // ------------------------------------------------------------ classifying
 
 /** A piece with its kind, before the signature decision. */
-interface Classified {
+interface Classified
+{
     readonly start: number;
     readonly end: number;
     readonly kind: 'text' | 'writer-quote' | 'forwarded' | 'app-quoted-history' | 'signature';
 }
 
 /** One email, classified (no policy; other emails only through `ctx`). */
-export interface ClassifiedMessage {
+export interface ClassifiedMessage
+{
     readonly pieces: readonly Classified[];
     readonly tailStart: number | null;
 }

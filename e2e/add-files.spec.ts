@@ -29,7 +29,8 @@ import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, worker
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __addViolations: string[];
         /** Every text the status line showed, and whether the progress bar was ever shown. */
         __addSeen: { statuses: string[]; progressShown: boolean };

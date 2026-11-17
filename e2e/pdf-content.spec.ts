@@ -89,7 +89,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __contentViolations: string[];
     }
 }
@@ -118,7 +119,8 @@ test.use({ timezoneId: BROWSER_ZONE });
 const FIXED_NOW = Date.UTC(2025, 5, 1, 20, 0, 0);
 
 /** One dropped file and what this test expects of it. */
-interface Source {
+interface Source
+{
     readonly id: string;
     readonly name: string;
     readonly type: string;
@@ -324,14 +326,16 @@ const attachmentText = (a: ExpectedAttachment): string =>
 // ---------------------------------------------------------------- reading the PDF back
 
 /** One email's part of the PDF: from its heading to the next heading (footers left out). */
-interface Section {
+interface Section
+{
     readonly lines: readonly TextLine[];
     /** Copied text, lines joined with LF. */
     readonly copied: string;
     readonly headingPage: number;
 }
 
-interface ReadBack {
+interface ReadBack
+{
     readonly pageCount: number;
     /** The cover's lines: everything above the index heading (task 8.12: the index may start on the cover's page). */
     readonly cover: readonly TextLine[];

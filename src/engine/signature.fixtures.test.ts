@@ -17,7 +17,8 @@ import { detectReplyHeaders } from './reply-header';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 import { detectSignatures, senderKeyOf } from './signature';
 
-interface Measured {
+interface Measured
+{
     readonly file: string;
     readonly sender: string;
     readonly body: string;

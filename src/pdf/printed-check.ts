@@ -57,7 +57,8 @@
 import { MAX_POSTINGS, MIN_RUN_WORDS, SHINGLE_WORDS, tokenizeWords } from '../engine/overlap';
 
 /** The text the PDF prints, built piece by piece, and the check against it. */
-export interface PrintedText {
+export interface PrintedText
+{
     /** Adds one piece of printed text (a run of words never goes on from one piece into the next). */
     add(text: string): void;
     /** Whether every word of `text` is inside a long enough run of printed words (see the top of this file). */

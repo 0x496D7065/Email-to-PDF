@@ -11,7 +11,8 @@
 // - any other name: throws an uncaught error (like a parser crash), which
 //   the page sees as the worker's 'error' event.
 
-interface WorkerScope {
+interface WorkerScope
+{
     onmessage: ((event: MessageEvent<unknown>) => void) | null;
 }
 

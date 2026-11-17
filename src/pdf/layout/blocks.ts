@@ -9,7 +9,8 @@ import type { PageBuilder } from './page-builder';
 import type { LaidLine } from './typesetter';
 
 /** A table row, wrapped: its label lines and its value lines. */
-export interface LaidRow {
+export interface LaidRow
+{
     readonly label: readonly LaidLine[];
     readonly value: readonly LaidLine[];
     /** Height when not broken across pages (row gap included). */
@@ -70,7 +71,8 @@ export function placeRow(b: PageBuilder, row: LaidRow): void
 }
 
 /** A list item, wrapped (each of its lines wrapped on its own). */
-export interface LaidItem {
+export interface LaidItem
+{
     readonly bullet: LaidLine;
     readonly lines: readonly LaidLine[];
     readonly height: number;

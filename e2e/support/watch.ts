@@ -36,7 +36,8 @@
 import { expect, type BrowserContext, type Page, type Request, type Worker } from '@playwright/test';
 
 /** What watchWorkers records about the workers of a page. */
-export interface WorkerWatch {
+export interface WorkerWatch
+{
     /** Every worker the page started, and those that ended. */
     readonly workers: Worker[];
     readonly closedWorkers: Worker[];
@@ -52,7 +53,8 @@ export interface WorkerWatch {
     readonly unwrappedWorkers: string[];
 }
 
-export interface Watch extends WorkerWatch {
+export interface Watch extends WorkerWatch
+{
     /** URL of every request of the context, in order (WebKit's in-memory blob reads left out, see isWebKitBlobRead). */
     readonly requests: string[];
     readonly websockets: string[];
@@ -108,7 +110,8 @@ const WORKER_PRELUDE = `(() => {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __e2eWorkerStarted: (url: string, name: string, wrapped: boolean) => Promise<void>;
         __e2eWorkerReport: (line: string) => Promise<void>;
     }

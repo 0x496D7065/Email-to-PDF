@@ -70,13 +70,15 @@ export function isDetached(bytes: Uint8Array): boolean
  * page sends: parse requests here, engine requests for the engine worker
  * (src/pipeline/engine-runner.ts), which reuses connectWorker below.
  */
-export interface WorkerHandle<M = ToWorker> {
+export interface WorkerHandle<M = ToWorker>
+{
     send(message: M, transfer: Transferable[]): void;
     terminate(): void;
 }
 
 /** What the worker reports back to the page. */
-export interface WorkerEvents {
+export interface WorkerEvents
+{
     /** A message from the worker (still unchecked). */
     message(data: unknown): void;
     /** An 'error' or 'messageerror' event. */
@@ -87,7 +89,8 @@ export interface WorkerEvents {
 export type WorkerFactory = (events: WorkerEvents) => WorkerHandle;
 
 /** One file, checked and hashed by the dispatcher (parse-files.ts), ready for a worker. */
-export interface WorkerJob {
+export interface WorkerJob
+{
     readonly name: string;
     readonly kind: FileKind;
     /** MOVED to the worker: after the call this array is empty (detached), unless it was a view into a larger buffer. */
@@ -96,7 +99,8 @@ export interface WorkerJob {
     readonly sha256: string;
 }
 
-export interface RunOptions {
+export interface RunOptions
+{
     readonly createWorker: WorkerFactory;
     /** The real converter, run on the page (htmlToTextWithDomParser in the browser). */
     readonly htmlToText: (html: string) => HtmlToTextResult;

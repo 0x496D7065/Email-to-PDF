@@ -65,7 +65,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         /** "directive blockedURI parse|live" of each CSP violation (separate from no-network.spec.ts's list). */
         __e2eViolations: string[];
         /** Pushed to by code in the hostile HTML: must stay empty. */

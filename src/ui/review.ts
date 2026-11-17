@@ -256,7 +256,8 @@ export function safeUnreadAttached(result: EngineResult): readonly (UnreadAttach
 // ---------------------------------------------------------------------------
 // The interface.
 
-export interface Review {
+export interface Review
+{
     /** The counts box, for the preview's `header`. */
     readonly element: HTMLDivElement;
     /** The preview's `decorate` hook: adds the include checkbox and the notes to an email's item. */
@@ -313,7 +314,8 @@ export interface Review {
 }
 
 /** What build() added to an item (see Entry). */
-interface Parts {
+interface Parts
+{
     readonly checkbox: HTMLInputElement;
     readonly excludedNote: HTMLSpanElement;
     /** The checkbox's visible label. */
@@ -324,13 +326,15 @@ interface Parts {
 }
 
 /** One decorated item. */
-interface Entry extends Parts {
+interface Entry extends Parts
+{
     readonly item: HTMLLIElement;
     readonly message: EngineMessage;
 }
 
 /** What buildRebuilt() added to a rebuilt card. */
-interface RebuiltParts {
+interface RebuiltParts
+{
     readonly checkbox: HTMLInputElement;
     readonly excludedNote: HTMLSpanElement;
     readonly label: HTMLLabelElement;
@@ -339,12 +343,14 @@ interface RebuiltParts {
 }
 
 /** One decorated rebuilt card. */
-interface RebuiltEntry extends RebuiltParts {
+interface RebuiltEntry extends RebuiltParts
+{
     readonly item: HTMLLIElement;
     readonly rebuilt: EngineRebuilt;
 }
 
-export interface ReviewOptions {
+export interface ReviewOptions
+{
     /**
      * Called after each tick or untick, once the choice is recorded, with the
      * new "N of M emails will be in the PDF" line to announce, so screen

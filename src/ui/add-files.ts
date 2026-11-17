@@ -62,12 +62,14 @@ import { createStaticLabels } from './labels';
 export const ACCEPTED_TYPES = '.eml,.msg';
 
 /** Where page-wide listeners go (`window` in the page, a fake in unit tests). */
-export interface ListenerTarget {
+export interface ListenerTarget
+{
     addEventListener(type: string, listener: (event: Event) => void): void;
     removeEventListener(type: string, listener: (event: Event) => void): void;
 }
 
-export interface AddFilesOptions {
+export interface AddFilesOptions
+{
     /** Called with each finished result (not for results made stale by more files or by reset()). */
     readonly onResult: (result: ProcessResult) => void;
     /** Replaceable for unit tests. Default: the real pipeline (processFiles). */
@@ -78,7 +80,8 @@ export interface AddFilesOptions {
     readonly onFilesChange?: () => void;
 }
 
-export interface AddFiles {
+export interface AddFiles
+{
     /**
      * Forgets every file and puts step 1 back as it was at the start (for
      * "Clear everything"). A run still going is cancelled: its workers are
@@ -101,7 +104,8 @@ export interface AddFiles {
 // Pure helpers (unit tested without a DOM).
 
 /** The parts of a DataTransfer item used here. */
-export interface DataTransferItemLike {
+export interface DataTransferItemLike
+{
     readonly kind: string;
     getAsFile(): FileLike | null;
     /** Chromium, Firefox and Safari have it; it tells a folder from a file. */
@@ -109,7 +113,8 @@ export interface DataTransferItemLike {
 }
 
 /** The parts of a DataTransfer used here. */
-export interface DataTransferLike {
+export interface DataTransferLike
+{
     readonly types?: ArrayLike<string>;
     readonly items?: ArrayLike<DataTransferItemLike>;
     readonly files?: ArrayLike<FileLike>;
@@ -167,14 +172,16 @@ export function filesFromDrop(data: DataTransferLike | null | undefined): { file
 }
 
 /** One file that could not be read, as listed in step 1. */
-export interface FailedEntry {
+export interface FailedEntry
+{
     readonly fileName: string;
     readonly error: FailedFile['error'];
     readonly detail: string;
 }
 
 /** A failed file's item in the page: what its reason line is rewritten from (see relabel). */
-interface FailedItem {
+interface FailedItem
+{
     readonly reason: HTMLParagraphElement;
     /** The <strong> with the file name, or with the "no name" text when `unnamed`. */
     readonly name: HTMLElement;
@@ -185,7 +192,8 @@ interface FailedItem {
 }
 
 /** What step 1 shows after a batch. */
-export interface BatchSummary {
+export interface BatchSummary
+{
     readonly filesAdded: number;
     readonly filesFailed: number;
     /** Every email found, the ones attached inside other emails included. */

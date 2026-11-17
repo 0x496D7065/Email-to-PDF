@@ -8,6 +8,10 @@ import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
+import bodyBraceStyle from './scripts/lint-rules/body-brace-style.mjs';
+
+// The project's own lint rules (scripts/lint-rules/), used as 'local/<name>'.
+const localPlugin = { rules: { 'body-brace-style': bodyBraceStyle } };
 
 // APIs that can send data over the network or store data in the browser.
 const network = 'Network APIs are forbidden in the tool page (README.md, rule R1).';
@@ -103,10 +107,15 @@ export default defineConfig(
     // avoid escaping a quote (as the code already did).
     // curly: every if/else/for/while/do body is a braced block, even a single
     // statement, so the Allman layout above applies to it too.
+    // local/body-brace-style (scripts/lint-rules/): Allman braces for
+    // interface and enum bodies too (brace-style skips them), and an empty
+    // body (code block, empty switch, interface, enum) never written `{}` on
+    // one line.
     {
-        plugins: { '@stylistic': stylistic },
+        plugins: { '@stylistic': stylistic, local: localPlugin },
         rules: {
             curly: ['error', 'all'],
+            'local/body-brace-style': 'error',
             '@stylistic/indent': ['error', 4, { SwitchCase: 1 }],
             '@stylistic/brace-style': ['error', 'allman', { allowSingleLine: false }],
             '@stylistic/semi': ['error', 'always'],

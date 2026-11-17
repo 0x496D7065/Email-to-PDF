@@ -119,7 +119,8 @@ export const TAB_WIDTH = 4;
 export type PdfRole = 'title' | 'heading' | 'field-label' | 'field-value' | 'body' | 'muted' | 'code';
 
 /** A run of text with one role. `text` never contains a line break and is never empty. */
-export interface PdfRun {
+export interface PdfRun
+{
     readonly role: PdfRole;
     readonly text: string;
 }
@@ -219,7 +220,8 @@ export function expandTabs(text: string): string
 }
 
 /** Runs and how many characters were replaced by a code. */
-export interface SanitizedRuns {
+export interface SanitizedRuns
+{
     readonly runs: PdfRun[];
     readonly replaced: number;
 }
@@ -296,7 +298,8 @@ export function lineText(line: PdfLine): string
 }
 
 /** Body lines and how many characters were replaced by a code. */
-export interface BodyLines {
+export interface BodyLines
+{
     readonly lines: PdfLine[];
     readonly replaced: number;
 }
@@ -305,7 +308,8 @@ export interface BodyLines {
 export const MAX_BLANK_LINES = 2;
 
 /** Options of bodyLines. */
-export interface BodyLinesOptions {
+export interface BodyLinesOptions
+{
     /**
      * Offsets in the text where a line starts that did NOT start a line in the
      * original body (a kept part that began inside a line, joinKeptLines): no
@@ -442,14 +446,16 @@ export function bodyLines(text: string, options: BodyLinesOptions = {}): BodyLin
 }
 
 /** A plan range, as far as joining needs it. */
-export interface KeptRange {
+export interface KeptRange
+{
     readonly start: number;
     readonly end: number;
     readonly keep: boolean;
 }
 
 /** The kept parts joined (joinKeptLines). */
-export interface JoinedKept {
+export interface JoinedKept
+{
     readonly text: string;
     /**
      * Offsets in `text` where a kept part begins that began INSIDE a line of

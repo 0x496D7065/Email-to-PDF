@@ -29,7 +29,8 @@ const CAROL: EmailAddress = { name: 'Carol Test', address: 'carol@sample.test' }
 const BASE_MS = Date.parse('2025-03-03T09:00:00Z');
 let serial = 0;
 
-interface MailSpec {
+interface MailSpec
+{
     readonly from: EmailAddress;
     readonly body: string;
     readonly subject?: string;

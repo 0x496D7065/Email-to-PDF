@@ -77,7 +77,8 @@ function sentences(c: ThreadCase): string[]
     return c.messages!.map((m) => squash(m.text.split('\n\n')[1]!));
 }
 
-interface Scenario {
+interface Scenario
+{
     readonly name: string;
     /** Conversation indices dropped as files. */
     readonly dropped: (last: number) => number[];
@@ -184,7 +185,8 @@ function cutChars(body: string, plan: MessagePlan, ranges: readonly { start: num
     return out;
 }
 
-interface Counts {
+interface Counts
+{
     labelledSomewhere: number;
     rebuiltTargets: number;
     realTargets: number;

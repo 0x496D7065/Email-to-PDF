@@ -28,19 +28,22 @@
 
 import type { ParseWarning } from '../../src/parsing/types';
 
-export interface ExpectedAddress {
+export interface ExpectedAddress
+{
     readonly name: string;
     readonly address: string;
 }
 
-export interface ExpectedAttachment {
+export interface ExpectedAttachment
+{
     readonly fileName: string;
     readonly mimeType: string;
     /** Decoded size in bytes. */
     readonly size: number;
 }
 
-export interface FixtureExpectation {
+export interface FixtureExpectation
+{
     /** .eml: path below tests/fixtures/ (e.g. "eml/01-plain-english.eml"). .msg: the builder spec id. */
     readonly id: string;
     readonly kind: 'eml' | 'msg';

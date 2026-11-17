@@ -29,7 +29,8 @@ const WOFF_ENTRY = 20;
 const SFNT_HEADER = 12;
 const SFNT_ENTRY = 16;
 
-interface WoffEntry {
+interface WoffEntry
+{
     readonly tag: number;
     readonly offset: number;
     readonly compLength: number;

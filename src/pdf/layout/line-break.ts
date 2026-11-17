@@ -19,7 +19,8 @@ import { BREAK_AFTER, type ShapedText, SOFT_HYPHEN_ITEM, SPACE } from './shape';
 export const SHY_NONE = -1;
 
 /** One line: items [start, end). */
-export interface LineRange {
+export interface LineRange
+{
     readonly start: number;
     readonly end: number;
     /** The soft hyphen item where the line breaks (a hyphen is drawn after it), or SHY_NONE. */

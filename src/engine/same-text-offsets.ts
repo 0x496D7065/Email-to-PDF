@@ -11,7 +11,8 @@
 // Pure: no DOM, nothing stored (README.md, rule R7).
 
 /** One line of a text: where it starts, where its content ends (before the line end), and where the next one starts. */
-interface Line {
+interface Line
+{
     readonly start: number;
     readonly contentEnd: number;
     readonly next: number;

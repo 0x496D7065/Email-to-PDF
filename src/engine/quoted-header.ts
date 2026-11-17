@@ -144,7 +144,8 @@ import {
 } from './reply-header';
 
 /** The fields a quoted email's header holds (see the file comment). */
-export interface QuotedHeaderFields {
+export interface QuotedHeaderFields
+{
     readonly from: readonly EmailAddress[];
     readonly to: readonly EmailAddress[];
     readonly cc: readonly EmailAddress[];
@@ -222,7 +223,8 @@ const ELIDED_PARTICLE = /^d['\u2019]\p{Lu}/u;
 const ADDRESS_SPLIT = /[\s<>()[\]{},;:"]+/u;
 
 /** One line of the body, as this reader sees it. */
-interface Line {
+interface Line
+{
     readonly start: number;
     readonly contentEnd: number;
     readonly end: number;
@@ -560,7 +562,8 @@ export function parseMailboxList(value: string): EmailAddress[]
  * the next line may complete;
  * 'closed' = it ends with a complete mailbox and no separator.
  */
-interface ListState {
+interface ListState
+{
     readonly kind: 'sep' | 'part' | 'closed';
     readonly tail: string;
 }

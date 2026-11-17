@@ -36,7 +36,8 @@ import { reconstructQuotedMessages } from './reconstruct';
 import { findReplyHeaders } from './reply-header';
 
 /** What a boundary detector reports for one header. */
-interface Boundary {
+interface Boundary
+{
     readonly start: number;
     readonly headEnd: number;
     readonly kind: 'reply' | 'forward';
@@ -47,7 +48,8 @@ interface Boundary {
 }
 type Detect = (body: string, subject: string) => readonly Boundary[];
 
-interface Tally {
+interface Tally
+{
     truths: number;
     found: number;
     matched: number;
@@ -67,7 +69,8 @@ interface Tally {
 
 const empty = (): Tally => ({ truths: 0, found: 0, matched: 0, kindOk: 0, headEndOk: 0, fieldsOk: 0, headerEndOk: 0, extra: 0, structureOk: 0, textOk: 0 });
 
-interface Measurement {
+interface Measurement
+{
     readonly byGroup: ReadonlyMap<string, Tally>;
     readonly byStyle: ReadonlyMap<QuoteStyle, Tally>;
     /** Missed true headers, "case id: generation style". */

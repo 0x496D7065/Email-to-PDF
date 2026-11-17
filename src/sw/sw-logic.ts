@@ -14,7 +14,8 @@
 export const CACHE_PREFIX = 'email-to-pdf-offline-';
 
 /** The precache list built into sw.js: a version and the paths it stores. */
-export interface PrecacheManifest {
+export interface PrecacheManifest
+{
     /** Content hash of the listed files (and of the service worker's own code). */
     readonly version: string;
     /** URL paths, e.g. "/" (the page), "/assets/index-abc123.js". */
@@ -90,7 +91,8 @@ export function parseManifest(json: string): PrecacheManifest
 }
 
 /** What the request filter looks at: the request's method and full URL. */
-export interface RequestLike {
+export interface RequestLike
+{
     readonly method: string;
     readonly url: string;
 }

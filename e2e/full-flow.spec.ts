@@ -62,7 +62,8 @@ import {
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __flowViolations: string[];
     }
 }
@@ -89,14 +90,16 @@ const HTML_ONLY_SHOWS = [...HTML_ONLY.bodyContains, 'Carol'];
 const HTML_ONLY_NEVER = [...(HTML_ONLY.bodyExcludes ?? []), 'RAN', 'invalid', '<'];
 
 /** One file to drop: its name, type and bytes (plain numbers: they cross into the page as JSON). */
-interface DropFile {
+interface DropFile
+{
     readonly name: string;
     readonly type: string;
     readonly bytes: number[];
 }
 
 /** One fixture, as the test expects it in the list. */
-interface Expected {
+interface Expected
+{
     readonly id: string;
     readonly fileName: string;
     readonly utcMs: number | null;
@@ -538,7 +541,8 @@ test('the whole journey: drop every fixture, check the list, change the choices,
 });
 
 /** What the test learns about the focused element. */
-interface Focus {
+interface Focus
+{
     readonly key: string;
     readonly tag: string;
     readonly step: string;

@@ -65,7 +65,8 @@
  * The few node properties the converter reads. A browser DOM Node (and a
  * Document) fits this shape as it is; tests build plain objects.
  */
-export interface HtmlNode {
+export interface HtmlNode
+{
     /** 1 element, 3 text, 4 CDATA, 8 comment, 9 document, 10 doctype, 11 fragment. */
     readonly nodeType: number;
     /** Tag name for an element (any case), '#text' etc. otherwise. */
@@ -77,7 +78,8 @@ export interface HtmlNode {
     getAttribute?(name: string): string | null;
 }
 
-export interface HtmlToTextLimits {
+export interface HtmlToTextLimits
+{
     /** Element nesting depth walked with full layout; deeper text is flattened. */
     readonly maxDepth: number;
     /** Longest output, in characters, before the text is cut with a note. */
@@ -178,7 +180,8 @@ const ORDERED_LISTS: ReadonlySet<string> = new Set(['ol']);
 const LISTS: ReadonlySet<string> = new Set(['ul', 'ol', 'menu', 'dir']);
 
 /** The converted text, and whether it was cut at maxOutputLength. */
-export interface HtmlToTextResult {
+export interface HtmlToTextResult
+{
     /** Plain text; when cut, it ends with the truncationNote line. */
     readonly text: string;
     /** True if the text was cut at maxOutputLength (the note is then in `text` too). */
@@ -206,7 +209,8 @@ export function htmlTreeToText(root: HtmlNode, limits: HtmlToTextLimits = DEFAUL
 }
 
 /** One finished output line, before the quote prefix and trimming are applied. */
-interface Line {
+interface Line
+{
     readonly text: string;
     /** Blockquote level: the number of "> " prefixes. */
     readonly quote: number;
@@ -247,7 +251,8 @@ class TextWriter
     private length = 0;
 
     constructor(private readonly maxLength: number)
-    {}
+    {
+    }
 
     /** Number of text pieces written so far (only ever grows). */
     pieces = 0;
@@ -444,7 +449,8 @@ class TextWriter
 }
 
 /** Numbering state of one open list. */
-interface ListState {
+interface ListState
+{
     readonly ordered: boolean;
     next: number;
 }
@@ -464,7 +470,8 @@ class Walker
         private readonly writer: TextWriter,
         private readonly maxDepth: number,
     )
-    {}
+    {
+    }
 
     /** Walks the children of `node`, which sits at element depth `depth`. */
     walkChildren(node: HtmlNode, depth: number): void

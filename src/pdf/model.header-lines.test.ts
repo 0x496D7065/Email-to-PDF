@@ -88,7 +88,8 @@ const squash = (s: string): string =>
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 const rowsOf = (e: PdfEmail): string => e.fields.map((f) => `${f.label} ${f.value.map(lineText).join(' ')}`).join('\n');
 
-interface Made {
+interface Made
+{
     readonly result: EngineResult;
     readonly positions: readonly number[];
     readonly plans: readonly MessagePlan[];
@@ -140,7 +141,8 @@ function printedOf(made: Made, k: number): { readonly kept: Uint8Array; readonly
     return { kept, ranges };
 }
 
-interface Stats {
+interface Stats
+{
     /** Headers shown that the engine could not rebuild (no place). */
     exempt: number;
     /** Headers of a place whose email is not in the PDF (not an unticked forward): kept inline. */

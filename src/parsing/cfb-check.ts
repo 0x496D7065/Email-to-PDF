@@ -49,7 +49,8 @@ const HEADER_DIFAT_ENTRIES = 109;
 
 /** Why the check stopped. Caught inside findCfbDamage, never thrown out of it. */
 class Damage extends Error
-{}
+{
+}
 
 /**
  * Checks the Compound File structure of `bytes` (which must start with the

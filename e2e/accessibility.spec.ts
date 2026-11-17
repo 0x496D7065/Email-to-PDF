@@ -41,7 +41,8 @@ import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, worker
 
 declare global
 {
-    interface Window {
+    interface Window
+    {
         __a11yViolations: string[];
         /** Every text the status line showed, in order. */
         __a11yStatuses: string[];
@@ -231,7 +232,8 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 const CONTROLS = 'a[href], button, select, input:not([type="hidden"]):not([hidden]), summary';
 
 /** What the test learns about one visible control. */
-interface Control {
+interface Control
+{
     readonly what: string;
     readonly width: number;
     readonly height: number;

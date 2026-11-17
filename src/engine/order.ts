@@ -31,7 +31,8 @@
 import { isDisplayableMs } from './time-format';
 
 /** The smallest shape `orderMessages` needs: a date and an input position. */
-export interface Orderable {
+export interface Orderable
+{
     readonly message: { readonly date: { readonly utcMs: number | null } };
     /** Position in the original input (for KeptMessage: the representative's position). */
     readonly index: number;
@@ -48,7 +49,8 @@ export type OrderReason =
     | 'before-parent';
 
 /** One entry of the ordered list. */
-export interface OrderedEntry<T> {
+export interface OrderedEntry<T>
+{
     /** The input entry, unchanged (same object). */
     readonly item: T;
     readonly order: OrderReason;

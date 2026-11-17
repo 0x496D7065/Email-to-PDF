@@ -15,7 +15,8 @@
 
 import { translator } from '../ui/i18n';
 
-export interface PdfStrings {
+export interface PdfStrings
+{
     /** BCP 47 tag of the language, for sorting names. */
     readonly locale: string;
     readonly title: string;

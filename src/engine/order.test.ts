@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { orderMessages, type Orderable } from './order';
 import { MAX_DISPLAYABLE_MS, MIN_DISPLAYABLE_MS } from './time-format';
 
-interface Item extends Orderable {
+interface Item extends Orderable
+{
     readonly label: string;
 }
 

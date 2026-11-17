@@ -57,7 +57,8 @@ const rfc822 = (message: string, asFile: boolean, name: string): string =>
     crlf('Content-Type: message/rfc822', ...(asFile ? [`Content-Disposition: attachment; filename="${name}.eml"`] : []), '', message);
 
 /** One email of a case. */
-interface Spec {
+interface Spec
+{
     readonly name: string;
     /** The Date header's value, or null for none. */
     readonly date: string | null;
@@ -120,7 +121,8 @@ function randomDate(random: () => number): string | null
     return 'sometime last week'; // unreadable
 }
 
-interface Case {
+interface Case
+{
     readonly files: string[];
     readonly all: Spec[];
 }
@@ -178,7 +180,8 @@ async function parseAll(files: readonly string[]): Promise<ParseResult[]>
     return Promise.all(files.map((text, k) => eml.parse({ name: `f${String(k)}.eml`, bytes: new TextEncoder().encode(text) })));
 }
 
-interface Tally {
+interface Tally
+{
     checked: number;
     twice: number;
     unticked: number;

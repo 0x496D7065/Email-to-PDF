@@ -17,7 +17,8 @@ export type AuthorSource =
     // Neither: the preview shows an "unknown sender" marker.
     | 'none';
 
-export interface DisplayAuthor {
+export interface DisplayAuthor
+{
     readonly source: AuthorSource;
     /** The mailboxes to show: non-empty for 'from' and 'sender', [] for 'none'. */
     readonly mailboxes: readonly EmailAddress[];

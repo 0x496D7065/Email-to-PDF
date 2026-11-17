@@ -68,7 +68,8 @@ let created: string[];
 let revoked: string[];
 
 /** What a test may change in the page it mounts (see mount). */
-interface MountOptions {
+interface MountOptions
+{
     /** The preview's chunk size (default 1000: the whole list in one task). */
     readonly chunkSize?: number;
     /** The PDF labels' clock (default: performance.now). */

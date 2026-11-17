@@ -23,7 +23,8 @@ import { TypeEnum } from '@kenjiuno/msgreader/lib/Reader';
 export const SYNTHETIC_MARKER_PROP_ID = '6800';
 export const SYNTHETIC_MARKER_VALUE = 'X-Synthetic-Fixture: true';
 
-export interface MsgMailboxSpec {
+export interface MsgMailboxSpec
+{
     readonly name: string;
     /** SMTP address. Always a *.test / *.invalid domain. */
     readonly smtp: string;
@@ -41,11 +42,13 @@ export interface MsgMailboxSpec {
     readonly smtpFallback?: boolean;
 }
 
-export interface MsgRecipientSpec extends MsgMailboxSpec {
+export interface MsgRecipientSpec extends MsgMailboxSpec
+{
     readonly type: 'to' | 'cc' | 'bcc';
 }
 
-export interface MsgAttachmentSpec {
+export interface MsgAttachmentSpec
+{
     readonly fileName: string;
     /** PR_ATTACH_MIME_TAG (0x370E). Omit to leave the property out. */
     readonly mimeType?: string;
@@ -53,7 +56,8 @@ export interface MsgAttachmentSpec {
     readonly content: string;
 }
 
-export interface MsgSpec {
+export interface MsgSpec
+{
     /** Stable id, used as the fixture id in manifest.ts and as "<id>.msg" file name. */
     readonly id: string;
     readonly description: string;
@@ -232,7 +236,8 @@ function int32(value: number): Uint8Array
 }
 
 /** A fixed-size property for a __properties_version1.0 stream. */
-interface FixedProp {
+interface FixedProp
+{
     readonly tag: number;
     readonly value: Uint8Array;
 }
@@ -269,7 +274,8 @@ function propertiesStream(headerSize: 8 | 24 | 32, props: readonly FixedProp[], 
 // ---------------------------------------------------------------- folders
 
 /** One folder of the compound file: named streams and sub-folders. */
-interface Folder {
+interface Folder
+{
     readonly streams: Map<string, Uint8Array>;
     readonly folders: Map<string, Folder>;
 }

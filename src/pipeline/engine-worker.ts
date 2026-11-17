@@ -27,7 +27,8 @@ import { createEngineWorkerSide, type FromEngineWorker } from './engine-protocol
  * hand: the project's TypeScript setup has the page's types, not the
  * worker's; same approach as src/parsing/parse-worker.ts).
  */
-interface WorkerScope {
+interface WorkerScope
+{
     onmessage: ((event: MessageEvent<unknown>) => void) | null;
     postMessage(message: FromEngineWorker): void;
 }

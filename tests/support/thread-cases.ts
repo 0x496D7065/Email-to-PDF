@@ -84,7 +84,8 @@ const DEFAULT_START = Date.UTC(2025, 2, 3, 8, 15);
 /** Time between two messages of a chain: 5 h 07 min (the same UTC step for every sender, whatever their zone). */
 const STEP = (5 * 60 + 7) * 60_000;
 
-export interface ChainOptions {
+export interface ChainOptions
+{
     /** Senders in turn (default Alice and Bob). */
     readonly people?: readonly Person[];
     /** Zones in turn (default a rotation of neutral zones). */
@@ -135,7 +136,8 @@ export function chain(styles: readonly QuoteStyle[], options: ChainOptions = {})
 }
 
 /** One positive case: a built conversation and the group it is measured in. */
-export interface ThreadCase {
+export interface ThreadCase
+{
     readonly id: string;
     /** Measurement group (one row of the table). */
     readonly group: string;
@@ -286,7 +288,8 @@ export const REFUSAL_COST_CASES: readonly ThreadCase[] = makeRefusalCostCases();
  *   refuse to cut into messages (interleaved answers, bottom-posting). Folding
  *   the real header is fine; `realHeaders` lists where those headers start.
  */
-export interface NegativeCase {
+export interface NegativeCase
+{
     readonly id: string;
     readonly expect: 'no-header' | 'refuse';
     readonly body: string;

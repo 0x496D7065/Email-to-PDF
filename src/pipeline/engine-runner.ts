@@ -47,7 +47,8 @@ export type EngineOutcome =
 /** Starts an engine worker and connects its events. May throw (then the batch fails, nothing else). */
 export type EngineWorkerFactory = (events: WorkerEvents) => WorkerHandle<ToEngineWorker>;
 
-export interface EngineRunOptions {
+export interface EngineRunOptions
+{
     readonly createWorker: EngineWorkerFactory;
     readonly timeoutMs: number;
     /**
