@@ -39,19 +39,31 @@ const msgFixtures = FIXTURES.filter((f) => f.kind === 'msg');
 async function parseMsgFixture(id: string): Promise<NormalizedMessage>
 {
     const spec = MSG_SPECS.find((s) => s.id === id);
-    if (spec === undefined) throw new Error(`missing spec for ${id}`);
+    if (spec === undefined)
+    {
+        throw new Error(`missing spec for ${id}`);
+    }
     const result = await msgParser.parse({ name: `${id}.msg`, bytes: buildMsg(spec) });
-    if (!result.ok) throw new Error(`${id} failed to parse: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`${id} failed to parse: ${result.detail}`);
+    }
     return result.message;
 }
 
 async function parseEmlFixture(id: string): Promise<NormalizedMessage>
 {
     const raw = emlFiles[`../../tests/fixtures/${id}`];
-    if (raw === undefined) throw new Error(`missing file for ${id}`);
+    if (raw === undefined)
+    {
+        throw new Error(`missing file for ${id}`);
+    }
     // Fixtures are 7-bit ASCII (checked by the privacy guard), so this gives the exact file bytes.
     const result = await emlParser.parse({ name: id, bytes: new TextEncoder().encode(raw) });
-    if (!result.ok) throw new Error(`${id} failed to parse: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`${id} failed to parse: ${result.detail}`);
+    }
     return result.message;
 }
 
@@ -75,7 +87,10 @@ describe('.msg adapter matches the manifest', () =>
         // offsetMinutes not asserted unless the manifest gives it.
         expect(message.date.utcMs).toBe(expected.date.utcMs);
         expect(message.date.zoneKnown).toBe(expected.date.zoneKnown);
-        if (expected.date.offsetMinutes !== undefined) expect(message.date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        if (expected.date.offsetMinutes !== undefined)
+        {
+            expect(message.date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        }
 
         expect(message.from).toEqual(expected.from);
         expect(message.to).toEqual(expected.to);
@@ -103,8 +118,14 @@ describe('.msg adapter matches the manifest', () =>
             expect(html).toContain('Plan your route');
             return;
         }
-        for (const snippet of expected.bodyContains) expect(message.bodyText).toContain(snippet);
-        for (const snippet of expected.bodyExcludes ?? []) expect(message.bodyText).not.toContain(snippet);
+        for (const snippet of expected.bodyContains)
+        {
+            expect(message.bodyText).toContain(snippet);
+        }
+        for (const snippet of expected.bodyExcludes ?? [])
+        {
+            expect(message.bodyText).not.toContain(snippet);
+        }
         // Outlook stores CRLF; the adapter gives LF line ends like the .eml adapter.
         expect(message.bodyText).not.toContain('\r');
     });

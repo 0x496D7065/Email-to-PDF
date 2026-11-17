@@ -209,7 +209,10 @@ describe('createPdfLabels', () =>
     it('works in short slices, so a big batch never blocks the page', () =>
     {
         const messages: NormalizedMessage[] = [];
-        for (let k = 0; k < 60; k++) messages.push(make(k % 2 === 0 ? ALICE : BOB, `Note ${String(k)} about the benches.\n${SIGNATURE}`));
+        for (let k = 0; k < 60; k++)
+        {
+            messages.push(make(k % 2 === 0 ? ALICE : BOB, `Note ${String(k)} about the benches.\n${SIGNATURE}`));
+        }
         const result = engineOf(messages);
         included = result.messages.map((_, p) => p);
         labels.show(result);
@@ -307,7 +310,10 @@ describe('createPdfLabels', () =>
         expect(last()).toBeNull();
         expect(labels.getPdfPolicy()).toEqual({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true });
         runAll();
-        for (const v of last()?.views.values() ?? []) expect(v.plan.ranges.every((r) => r.keep)).toBe(true);
+        for (const v of last()?.views.values() ?? [])
+        {
+            expect(v.plan.ranges.every((r) => r.keep)).toBe(true);
+        }
         expect(labels.currentPlans()?.policy.unfoldEverything).toBe(true);
     });
 

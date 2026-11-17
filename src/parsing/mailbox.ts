@@ -17,7 +17,10 @@ import type { EmailAddress } from './types';
  */
 export function senderIfDifferent(sender: EmailAddress | undefined, from: readonly EmailAddress[]): EmailAddress | undefined
 {
-    if (sender === undefined || (sender.name === '' && sender.address === '')) return undefined;
+    if (sender === undefined || (sender.name === '' && sender.address === ''))
+    {
+        return undefined;
+    }
     if (sender.address !== '')
     {
         const address = sender.address.toLowerCase();

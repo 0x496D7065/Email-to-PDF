@@ -89,7 +89,10 @@ export function noteText(state: PdfJobState, unavailable: PdfUnavailable | null)
         case 'error':
             return t(`download.error.${state.error}`);
         case 'idle':
-            if (unavailable !== null) return t(`download.unavailable.${unavailable}`);
+            if (unavailable !== null)
+            {
+                return t(`download.unavailable.${unavailable}`);
+            }
             return state.changed ? t('download.changed') : t('download.available');
     }
 }
@@ -113,8 +116,14 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
         onChange: (state) =>
         {
             render();
-            if (state.kind === 'making') shell.setStatus(t('download.making'));
-            else if (state.kind === 'error') shell.setStatus(noteText(state, null));
+            if (state.kind === 'making')
+            {
+                shell.setStatus(t('download.making'));
+            }
+            else if (state.kind === 'error')
+            {
+                shell.setStatus(noteText(state, null));
+            }
             else if (state.kind === 'ready')
             {
                 shell.setStatus(noteText(state, null));
@@ -190,7 +199,10 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
     button.addEventListener('click', () =>
     {
         // aria-disabled: still focusable, but does nothing.
-        if (job.isMaking() || safeUnavailable() !== null) return;
+        if (job.isMaking() || safeUnavailable() !== null)
+        {
+            return;
+        }
         let input: PdfJobInput | null;
         try
         {
@@ -200,7 +212,10 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
         {
             input = null;
         }
-        if (input === null) return;
+        if (input === null)
+        {
+            return;
+        }
         job.start({ type: 'make', input, fonts: options.fonts });
     });
 
@@ -224,7 +239,10 @@ export function mountDownloadStep(shell: Pick<AppShell, 'downloadButton' | 'down
                 news = null;
             }
             // No PDF was dropped: the news alone.
-            if (!dropAnnounced && text !== undefined) shell.setStatus(text);
+            if (!dropAnnounced && text !== undefined)
+            {
+                shell.setStatus(text);
+            }
             render();
         },
         reset: () => job.reset(),

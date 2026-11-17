@@ -21,16 +21,25 @@ function fakeWorker(options: { createThrows?: boolean; sendThrows?: boolean; ter
     const sent: { message: ToPdfWorker; transfer: Transferable[] }[] = [];
     const terminate = vi.fn(() =>
     {
-        if (options.terminateThrows === true) throw new Error('terminate failed');
+        if (options.terminateThrows === true)
+        {
+            throw new Error('terminate failed');
+        }
     });
     const factory: PdfWorkerFactory = (e) =>
     {
-        if (options.createThrows === true) throw new Error('SecurityError');
+        if (options.createThrows === true)
+        {
+            throw new Error('SecurityError');
+        }
         events = e;
         return {
             send: (message, transfer) =>
             {
-                if (options.sendThrows === true) throw new Error('DataCloneError');
+                if (options.sendThrows === true)
+                {
+                    throw new Error('DataCloneError');
+                }
                 sent.push({ message, transfer });
             },
             terminate,
@@ -38,7 +47,10 @@ function fakeWorker(options: { createThrows?: boolean; sendThrows?: boolean; ter
     };
     const worker = (): WorkerEvents =>
     {
-        if (events === undefined) throw new Error('worker not started');
+        if (events === undefined)
+        {
+            throw new Error('worker not started');
+        }
         return events;
     };
     return { factory, sent, terminate, worker };

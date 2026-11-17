@@ -46,7 +46,10 @@ function setup(overrides: Partial<PdfJobOptions> = {})
     const last = () =>
     {
         const run = runs.at(-1);
-        if (run === undefined) throw new Error('no run');
+        if (run === undefined)
+        {
+            throw new Error('no run');
+        }
         return run;
     };
     return { job, runs, created, revoked, states, last };

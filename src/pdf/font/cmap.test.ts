@@ -47,18 +47,36 @@ function format4(segments: Segment[], { lengthDelta = 0, segCountX2 }: { lengthD
     const glyphIdArray: number[] = [];
     const rangeOffsets = all.map((segment, i) =>
     {
-        if (segment.glyphs === undefined) return 0;
+        if (segment.glyphs === undefined)
+        {
+            return 0;
+        }
         const offset = 2 * (segCount - i) + 2 * glyphIdArray.length;
         glyphIdArray.push(...segment.glyphs);
         return offset;
     });
     const body = new Writer();
-    for (const s of all) body.u16(s.end);
+    for (const s of all)
+    {
+        body.u16(s.end);
+    }
     body.u16(0); // reservedPad
-    for (const s of all) body.u16(s.start);
-    for (const s of all) body.u16(s.delta & 0xffff);
-    for (const offset of rangeOffsets) body.u16(offset);
-    for (const glyph of glyphIdArray) body.u16(glyph);
+    for (const s of all)
+    {
+        body.u16(s.start);
+    }
+    for (const s of all)
+    {
+        body.u16(s.delta & 0xffff);
+    }
+    for (const offset of rangeOffsets)
+    {
+        body.u16(offset);
+    }
+    for (const glyph of glyphIdArray)
+    {
+        body.u16(glyph);
+    }
     const length = 14 + body.length;
     return new Writer()
         .u16(4)
@@ -76,7 +94,10 @@ function format4(segments: Segment[], { lengthDelta = 0, segCountX2 }: { lengthD
 function format12(groups: [number, number, number][], numGroups = groups.length): Uint8Array
 {
     const w = new Writer().u16(12).u16(0).u32(16 + 12 * groups.length).u32(0).u32(numGroups);
-    for (const [start, end, glyph] of groups) w.u32(start).u32(end).u32(glyph);
+    for (const [start, end, glyph] of groups)
+    {
+        w.u32(start).u32(end).u32(glyph);
+    }
     return w.done();
 }
 
@@ -90,7 +111,10 @@ function cmap(subtables: { platformId: number; encodingId: number; data: Uint8Ar
         w.u16(s.platformId).u16(s.encodingId).u32(offset);
         offset += s.data.length;
     }
-    for (const s of subtables) w.raw(s.data);
+    for (const s of subtables)
+    {
+        w.raw(s.data);
+    }
     return w.done();
 }
 
@@ -176,7 +200,10 @@ describe('parseCmap format 12', () =>
         expect(parsed.lookup(0x7e)).toBe(95);
         expect(parsed.lookup(0xe9)).toBe(120);
         expect(parsed.lookup(0x1f601)).toBe(251);
-        for (const codePoint of [0, 0x1f, 0x7f, 0xe8, 0xea, 0x1f5ff, 0x1f603, 0x10ffff]) expect(parsed.lookup(codePoint)).toBe(0);
+        for (const codePoint of [0, 0x1f, 0x7f, 0xe8, 0xea, 0x1f5ff, 0x1f603, 0x10ffff])
+        {
+            expect(parsed.lookup(codePoint)).toBe(0);
+        }
     });
 
     it('treats a glyph id at or above numGlyphs as missing', () =>

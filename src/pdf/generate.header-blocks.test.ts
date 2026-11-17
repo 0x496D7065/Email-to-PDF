@@ -137,7 +137,10 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
     for (const [name, dest] of dests)
     {
         const m = /^email-(\d+)$/u.exec(name);
-        if (m !== null) emails.set(Number(m[1]), dest.page);
+        if (m !== null)
+        {
+            emails.set(Number(m[1]), dest.page);
+        }
     }
     expect(emails.size, what).toBeGreaterThan(0);
     const firstEmailPage = Math.min(...emails.values());
@@ -147,13 +150,19 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
     for (const link of links)
     {
         const m = /^email-(\d+)$/u.exec(link.dest);
-        if (m === null) continue;
+        if (m === null)
+        {
+            continue;
+        }
         expect(link.page, `${what}: index link on a front page`).toBeLessThan(firstEmailPage);
         const [, y1, , y2] = link.rect;
         const lines = textLines(pages[link.page]!).filter((l) => l.y > y1 && l.y < y2);
         const shown = /\s(\d+)$/u.exec(lines[0]?.shown ?? '');
         expect(shown, `${what}: the index line of email ${m[1]!} shows a page`).not.toBeNull();
-        if (!indexed.has(Number(m[1]))) indexed.set(Number(m[1]), Number(shown![1]) - 1);
+        if (!indexed.has(Number(m[1])))
+        {
+            indexed.set(Number(m[1]), Number(shown![1]) - 1);
+        }
     }
     expect(indexed, `${what}: every email has an index line with its page, and every index line an email`).toEqual(emails);
 
@@ -179,7 +188,10 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
         const bodyTop = Math.max(-Infinity, ...runs.filter((r) => isBody(r, regularNames)).map((r) => r.y));
         for (const r of boldRuns)
         {
-            if (r === h || r.shown === STRINGS.attachmentsLabel) continue;
+            if (r === h || r.shown === STRINGS.attachmentsLabel)
+            {
+                continue;
+            }
             // A header label: on the page of its email's heading, above the email's text.
             expect(near(r.size, CONFIG.roles['field-label'].size) && h !== undefined && r.y > bodyTop, `${what}: page ${String(p + 1)}: bold "${r.shown}" is a header label above the text of an email that starts on this page`).toBe(true);
         }
@@ -221,7 +233,10 @@ describe('every header block of the PDF is at the top of a page and has its inde
         {
             const mode = policy.unfoldEverything ? 'full' : 'folded';
             await expectHeaderBlocksAtPageTops(await makePdf(fixtures, policy), `all fixtures, ${mode}`);
-            for (const f of fixtures) await expectHeaderBlocksAtPageTops(await makePdf([f], policy), `${f.source.fileName}, ${mode}`);
+            for (const f of fixtures)
+            {
+                await expectHeaderBlocksAtPageTops(await makePdf([f], policy), `${f.source.fileName}, ${mode}`);
+            }
         }
     });
 });
@@ -242,7 +257,10 @@ async function linesHolding(pdf: ParsedPdf, text: string): Promise<{ page: numbe
     {
         for (const line of textLines(runs))
         {
-            if (line.shown.includes(text)) out.push({ page: p, x: line.runs[0]!.x, fonts: line.runs.map((r) => names[p]!.get(r.font) ?? r.font), shown: line.shown });
+            if (line.shown.includes(text))
+            {
+                out.push({ page: p, x: line.runs[0]!.x, fonts: line.runs.map((r) => names[p]!.get(r.font) ?? r.font), shown: line.shown });
+            }
         }
     }
     return out;
@@ -305,7 +323,10 @@ describe('header lines inside an email text are plain body text, never a header 
             '',
         );
         const parsed = await createEmlParser({ htmlToText: () => ({ text: '', truncated: false }) }).parse({ name: 'fwd.eml', bytes: new TextEncoder().encode(eml) });
-        if (!parsed.ok) throw new Error(parsed.detail);
+        if (!parsed.ok)
+        {
+            throw new Error(parsed.detail);
+        }
         for (const policy of [DEFAULT_OUTPUT_POLICY, FULL])
         {
             const pdf = await makePdf([parsed.message], policy);
@@ -339,7 +360,10 @@ describe('header lines inside an email text are plain body text, never a header 
         const lines = ['From: Bob Sample', 'Subject: RE: Office desks and chairs', 'Thank you for your message.'];
         const unticked = await makePdf([realFile(ms, ms.length - 1, 'off')], DEFAULT_OUTPUT_POLICY, () => []);
         expect((await expectHeaderBlocksAtPageTops(unticked, 'forward, rebuilt emails unticked')).size).toBe(1);
-        for (const text of lines) expect(await linesHolding(unticked, text), `unticked: "${text}" left out`).toEqual([]);
+        for (const text of lines)
+        {
+            expect(await linesHolding(unticked, text), `unticked: "${text}" left out`).toEqual([]);
+        }
         const off = await makePdf([realFile(ms, ms.length - 1, 'off')], DEFAULT_OUTPUT_POLICY, () => [], true);
         expect((await expectHeaderBlocksAtPageTops(off, 'forward, switch off')).size).toBe(1);
         await expectPlainBodyLines(off, lines, 'forward, switch off');

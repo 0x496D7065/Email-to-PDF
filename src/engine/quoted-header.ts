@@ -178,7 +178,10 @@ const LIST_ROLES: ReadonlySet<Role> = new Set<Role>(['from', 'to', 'cc', 'bcc'])
 const ATTRIBUTIONS = LANGUAGES.flatMap((lang) =>
 {
     const parts = REPLY_LANGUAGES.find((l) => l.code === lang.code)?.attribution.parts;
-    if (parts === undefined) return [];
+    if (parts === undefined)
+    {
+        return [];
+    }
     return [{ opener: lang.opener, endings: lang.endings, tail: new RegExp(parts.tail.source, 'iu'), verbs: parts.verbs ?? [] }];
 });
 
@@ -236,20 +239,38 @@ const isSpace = (ch: string): boolean => /\s/u.test(ch);
 /** The line starting at `pos`, or null at the end of the text or when it is longer than `maxLength`. */
 function lineAt(text: string, pos: number, maxLength: number): Line | null
 {
-    if (pos >= text.length) return null;
+    if (pos >= text.length)
+    {
+        return null;
+    }
     let i = pos;
     const limit = Math.min(text.length, pos + maxLength);
-    while (i < limit && text.charCodeAt(i) !== 0x0a && text.charCodeAt(i) !== 0x0d) i++;
-    if (i === limit && limit < text.length && text.charCodeAt(i) !== 0x0a && text.charCodeAt(i) !== 0x0d) return null;
+    while (i < limit && text.charCodeAt(i) !== 0x0a && text.charCodeAt(i) !== 0x0d)
+    {
+        i++;
+    }
+    if (i === limit && limit < text.length && text.charCodeAt(i) !== 0x0a && text.charCodeAt(i) !== 0x0d)
+    {
+        return null;
+    }
     const contentEnd = i;
     let end = i;
-    if (end < text.length) end += text.charCodeAt(end) === 0x0d && text.charCodeAt(end + 1) === 0x0a ? 2 : 1;
+    if (end < text.length)
+    {
+        end += text.charCodeAt(end) === 0x0d && text.charCodeAt(end + 1) === 0x0a ? 2 : 1;
+    }
     let k = pos;
-    while (k < contentEnd && isSpace(text.charAt(k))) k++;
+    while (k < contentEnd && isSpace(text.charAt(k)))
+    {
+        k++;
+    }
     let depth = 0;
     while (k < contentEnd && (text.charAt(k) === '>' || isSpace(text.charAt(k))))
     {
-        if (text.charAt(k) === '>') depth++;
+        if (text.charAt(k) === '>')
+        {
+            depth++;
+        }
         k++;
     }
     return { start: pos, contentEnd, end, depth, textStart: k, gap: k === contentEnd };
@@ -258,14 +279,23 @@ function lineAt(text: string, pos: number, maxLength: number): Line | null
 /** The label of a line: its role and cleaned value; null when the line has no label. */
 function labelOf(text: string, line: Line): { role: Role; value: string } | null
 {
-    if (line.gap) return null;
+    if (line.gap)
+    {
+        return null;
+    }
     // The role is decided on the same head findReplyHeaders reads.
     const head = clean(text, line.textStart, Math.min(line.contentEnd, line.textStart + LABEL_HEAD_LENGTH));
     const match = LABEL_PATTERN.exec(head);
     const word = match?.[1];
-    if (match === null || word === undefined) return null;
+    if (match === null || word === undefined)
+    {
+        return null;
+    }
     const role = LABEL_ROLE_OF.get(labelKey(word));
-    if (role === undefined) return null;
+    if (role === undefined)
+    {
+        return null;
+    }
     const full = clean(text, line.textStart, line.contentEnd);
     // "*From:* Bob": the star after the colon is not part of the value.
     const value = full.slice(match[0].length).replace(/^\*+/u, '').trim();
@@ -275,7 +305,10 @@ function labelOf(text: string, line: Line): { role: Role; value: string } | null
 /** Whether a line is an intro line (separator, forward marker, row of underscores). */
 function isIntro(text: string, line: Line): boolean
 {
-    if (line.contentEnd - line.textStart > 480) return false;
+    if (line.contentEnd - line.textStart > 480)
+    {
+        return false;
+    }
     const cleaned = clean(text, line.textStart, line.contentEnd);
     return OUTLOOK_RULE.test(cleaned) || SEPARATORS.some((re) => re.test(cleaned)) || FORWARD_MARKERS.some((re) => re.test(cleaned));
 }
@@ -287,9 +320,18 @@ function isIntro(text: string, line: Line): boolean
 function cleanName(raw: string): string
 {
     let name = raw.trim();
-    if (name.length >= 2 && name.startsWith('"') && name.endsWith('"')) name = name.slice(1, -1).replace(/\\(.)/gu, '$1').trim();
-    else if (name.length >= 2 && name.startsWith("'") && name.endsWith("'")) name = name.slice(1, -1).trim();
-    if (ENCODED_WORD.test(name) || NOT_A_NAME.test(name) || name.length > MAX_NAME_LENGTH) return '';
+    if (name.length >= 2 && name.startsWith('"') && name.endsWith('"'))
+    {
+        name = name.slice(1, -1).replace(/\\(.)/gu, '$1').trim();
+    }
+    else if (name.length >= 2 && name.startsWith("'") && name.endsWith("'"))
+    {
+        name = name.slice(1, -1).trim();
+    }
+    if (ENCODED_WORD.test(name) || NOT_A_NAME.test(name) || name.length > MAX_NAME_LENGTH)
+    {
+        return '';
+    }
     return name;
 }
 
@@ -299,10 +341,16 @@ function plainAddress(raw: string, mailto: 'allowed' | 'required' | 'refused'): 
     let s = raw.trim();
     if (s.slice(0, 7).toLowerCase() === 'mailto:')
     {
-        if (mailto === 'refused') return null;
+        if (mailto === 'refused')
+        {
+            return null;
+        }
         s = s.slice(7).trim();
     }
-    else if (mailto === 'required') return null;
+    else if (mailto === 'required')
+    {
+        return null;
+    }
     return BARE_ADDRESS.test(s) ? s : null;
 }
 
@@ -318,10 +366,16 @@ function trailingAddress(s: string): { start: number; address: string } | null
         // Outlook plain text: "Bob <bob@x.test<mailto:bob@x.test>>". Kept only when both agree.
         const inner = s.lastIndexOf('<');
         const outer = inner > 0 ? s.lastIndexOf('<', inner - 1) : -1;
-        if (outer < 0) return null;
+        if (outer < 0)
+        {
+            return null;
+        }
         const shown = plainAddress(s.slice(outer + 1, inner), 'refused');
         const link = plainAddress(s.slice(inner + 1, -2), 'required');
-        if (shown === null || link === null || shown.toLowerCase() !== link.toLowerCase()) return null;
+        if (shown === null || link === null || shown.toLowerCase() !== link.toLowerCase())
+        {
+            return null;
+        }
         return { start: outer, address: shown };
     }
     if (s.endsWith('>'))
@@ -343,7 +397,10 @@ function trailingAddress(s: string): { start: number; address: string } | null
 function mailboxAddress(item: string): { start: number; address: string } | null
 {
     const at = trailingAddress(item);
-    if (at !== null) return at;
+    if (at !== null)
+    {
+        return at;
+    }
     const unquoted = item.replace(/^'(.*)'$/u, '$1');
     return BARE_ADDRESS.test(unquoted) ? { start: item.length, address: unquoted } : null;
 }
@@ -357,7 +414,10 @@ function mailboxAddress(item: string): { start: number; address: string } | null
 function parseMailbox(raw: string): EmailAddress | null
 {
     const item = raw.trim();
-    if (item === '') return null;
+    if (item === '')
+    {
+        return null;
+    }
     const at = mailboxAddress(item);
     if (at === null)
     {
@@ -365,7 +425,10 @@ function parseMailbox(raw: string): EmailAddress | null
         return name === '' ? null : { name, address: '' };
     }
     const before = item.slice(0, at.start);
-    if (!onlyAddress(before, at.address)) return null;
+    if (!onlyAddress(before, at.address))
+    {
+        return null;
+    }
     return { name: cleanName(before), address: at.address };
 }
 
@@ -385,7 +448,10 @@ function splitList(value: string): { items: string[]; open: boolean }
     let paren = 0;
     const flush = (): void =>
     {
-        if (pending.trim() !== '') items.push(pending);
+        if (pending.trim() !== '')
+        {
+            items.push(pending);
+        }
         pending = '';
     };
     for (let i = 0; i <= value.length; i++)
@@ -401,10 +467,16 @@ function splitList(value: string): { items: string[]; open: boolean }
             const addressed = mailboxAddress(piece.trim()) !== null;
             const ends = ch === ';' || i === value.length || addressed;
             // A bare address is a mailbox of its own: what is pending before it is another one.
-            if (pending !== '' && addressed && !/[>\]]$/u.test(piece.trim())) flush();
+            if (pending !== '' && addressed && !/[>\]]$/u.test(piece.trim()))
+            {
+                flush();
+            }
             pending = pending.trim() === '' ? piece : `${pending},${piece}`;
             piece = '';
-            if (ends) flush();
+            if (ends)
+            {
+                flush();
+            }
             continue;
         }
         piece += ch;
@@ -413,17 +485,44 @@ function splitList(value: string): { items: string[]; open: boolean }
             if (ch === '\\')
             {
                 i++;
-                if (i < value.length) piece += value.charAt(i);
+                if (i < value.length)
+                {
+                    piece += value.charAt(i);
+                }
             }
-            else if (ch === '"') quoted = false;
+            else if (ch === '"')
+            {
+                quoted = false;
+            }
         }
-        else if (ch === '"') quoted = true;
-        else if (ch === '<') angle++;
-        else if (ch === '>' && angle > 0) angle--;
-        else if (ch === '[') square++;
-        else if (ch === ']' && square > 0) square--;
-        else if (ch === '(') paren++;
-        else if (ch === ')' && paren > 0) paren--;
+        else if (ch === '"')
+        {
+            quoted = true;
+        }
+        else if (ch === '<')
+        {
+            angle++;
+        }
+        else if (ch === '>' && angle > 0)
+        {
+            angle--;
+        }
+        else if (ch === '[')
+        {
+            square++;
+        }
+        else if (ch === ']' && square > 0)
+        {
+            square--;
+        }
+        else if (ch === '(')
+        {
+            paren++;
+        }
+        else if (ch === ')' && paren > 0)
+        {
+            paren--;
+        }
     }
     return { items, open: quoted || angle > 0 || square > 0 || paren > 0 };
 }
@@ -434,13 +533,22 @@ function splitList(value: string): { items: string[]; open: boolean }
  */
 export function parseMailboxList(value: string): EmailAddress[]
 {
-    if (typeof (value as unknown) !== 'string' || value.length > MAX_VALUE_LENGTH) return [];
+    if (typeof (value as unknown) !== 'string' || value.length > MAX_VALUE_LENGTH)
+    {
+        return [];
+    }
     const out: EmailAddress[] = [];
     for (const item of splitList(value).items)
     {
         const box = parseMailbox(item);
-        if (box !== null) out.push(box);
-        if (out.length > MAX_MAILBOXES) return [];
+        if (box !== null)
+        {
+            out.push(box);
+        }
+        if (out.length > MAX_MAILBOXES)
+        {
+            return [];
+        }
     }
     return out;
 }
@@ -462,16 +570,28 @@ function addressedState(text: string): ListState | null
 {
     const { items, open } = splitList(text);
     const last = items[items.length - 1];
-    if (last === undefined) return null;
+    if (last === undefined)
+    {
+        return null;
+    }
     for (let k = 0; k < items.length - 1; k++)
     {
-        if ((parseMailbox(items[k] ?? '')?.address ?? '') === '') return null;
+        if ((parseMailbox(items[k] ?? '')?.address ?? '') === '')
+        {
+            return null;
+        }
     }
     const ends = text.trimEnd();
     const separated = !open && (ends.endsWith(';') || ends.endsWith(','));
-    if ((parseMailbox(last)?.address ?? '') !== '') return { kind: separated ? 'sep' : 'closed', tail: '' };
+    if ((parseMailbox(last)?.address ?? '') !== '')
+    {
+        return { kind: separated ? 'sep' : 'closed', tail: '' };
+    }
     // The start of a mailbox ("Heidi", "Sample,", "\"Doe,"): no address part yet, and no ";" after it.
-    if (/[<>@[\]]/u.test(last) || last.length > MAX_NAME_LENGTH || (!open && ends.endsWith(';'))) return null;
+    if (/[<>@[\]]/u.test(last) || last.length > MAX_NAME_LENGTH || (!open && ends.endsWith(';')))
+    {
+        return null;
+    }
     return { kind: 'part', tail: last.trim() };
 }
 
@@ -483,10 +603,16 @@ function addressedState(text: string): ListState | null
 function isWrappedMailbox(item: string): boolean
 {
     const box = parseMailbox(item);
-    if (box === null || box.address === '' || box.name === '') return false;
+    if (box === null || box.address === '' || box.name === '')
+    {
+        return false;
+    }
     const words = box.name.split(' ');
     const first = (words[0] ?? '').replace(/[.,]$/u, '').toLowerCase();
-    if (GREETING_WORDS.has(first)) return false;
+    if (GREETING_WORDS.has(first))
+    {
+        return false;
+    }
     return words.length <= MAX_NAME_WORDS && !words.some((w) => LOWERCASE_START.test(w));
 }
 
@@ -509,7 +635,10 @@ function lastAddress(core: string): { start: number; address: string } | null
 function addressAtEnd(s: string): { start: number; address: string } | null
 {
     const written = trailingAddress(s);
-    if (written !== null) return written;
+    if (written !== null)
+    {
+        return written;
+    }
     const space = s.lastIndexOf(' ');
     const token = s.slice(space + 1);
     return BARE_ADDRESS.test(token) ? { start: space + 1, address: token } : null;
@@ -518,18 +647,36 @@ function addressAtEnd(s: string): { start: number; address: string } | null
 /** Whether every address written in `core` is `address` (case-insensitive); with no address, whether none is written. */
 function onlyAddress(core: string, address: string | null): boolean
 {
-    if (!core.includes('@')) return true;
-    if (address === null) return false;
+    if (!core.includes('@'))
+    {
+        return true;
+    }
+    if (address === null)
+    {
+        return false;
+    }
     const want = address.toLowerCase();
     for (const word of core.split(ADDRESS_SPLIT))
     {
-        if (!word.includes('@')) continue;
+        if (!word.includes('@'))
+        {
+            continue;
+        }
         // "'bob@x.test'": quotes around a word are not part of it.
         let from = 0;
         let to = word.length;
-        while (from < to && word.charAt(from) === "'") from++;
-        while (to > from && word.charAt(to - 1) === "'") to--;
-        if (word.slice(from, to).toLowerCase() !== want) return false;
+        while (from < to && word.charAt(from) === "'")
+        {
+            from++;
+        }
+        while (to > from && word.charAt(to - 1) === "'")
+        {
+            to--;
+        }
+        if (word.slice(from, to).toLowerCase() !== want)
+        {
+            return false;
+        }
     }
     return true;
 }
@@ -542,9 +689,18 @@ function lastCommaOutsideQuotes(text: string): number
     for (let i = 0; i < text.length; i++)
     {
         const ch = text.charAt(i);
-        if (ch === '\\' && quoted) i++;
-        else if (ch === '"') quoted = !quoted;
-        else if (ch === ',' && !quoted) last = i;
+        if (ch === '\\' && quoted)
+        {
+            i++;
+        }
+        else if (ch === '"')
+        {
+            quoted = !quoted;
+        }
+        else if (ch === ',' && !quoted)
+        {
+            last = i;
+        }
     }
     return quoted ? -1 : last;
 }
@@ -554,7 +710,10 @@ function lastTimeEnd(text: string): number
 {
     let end = -1;
     TIME.lastIndex = 0;
-    for (let m = TIME.exec(text); m !== null; m = TIME.exec(text)) end = m.index + m[0].length;
+    for (let m = TIME.exec(text); m !== null; m = TIME.exec(text))
+    {
+        end = m.index + m[0].length;
+    }
     return end;
 }
 
@@ -580,9 +739,15 @@ function attributionName(raw: string): string
 export function isPlainName(name: string, addressed: boolean): boolean
 {
     const words = name.split(' ');
-    if (!addressed && words.length > MAX_NAME_WORDS) return false;
+    if (!addressed && words.length > MAX_NAME_WORDS)
+    {
+        return false;
+    }
     // "I wrote:", "Je ... a ecrit :", "Ik ...": the writer, not a name; "&" or "/": two people.
-    if (PRONOUNS.has(name.toLowerCase()) || /[&/]/u.test(name)) return false;
+    if (PRONOUNS.has(name.toLowerCase()) || /[&/]/u.test(name))
+    {
+        return false;
+    }
     return words.every(
         (w, i) =>
             !LOWERCASE_START.test(w) ||
@@ -611,7 +776,10 @@ function splitDateName(before: string, verbs: readonly string[]): { date: string
                 length = verb.length;
             }
         }
-        if (at < 0) return null;
+        if (at < 0)
+        {
+            return null;
+        }
         // `padded` has one extra space in front: index k in padded is k - 1 in before.
         date = before.slice(0, Math.max(0, at - 1)).trim();
         name = before.slice(at + length).trim();
@@ -622,11 +790,17 @@ function splitDateName(before: string, verbs: readonly string[]): { date: string
         const after = comma < 0 ? before : before.slice(comma + 1);
         const timeEnd = /\d/u.test(after) ? lastTimeEnd(after) : -1;
         const cut = timeEnd >= 0 ? comma + 1 + timeEnd : comma;
-        if (cut < 0) return null;
+        if (cut < 0)
+        {
+            return null;
+        }
         date = before.slice(0, cut).replace(/,\s*$/u, '').trim();
         name = before.slice(timeEnd >= 0 ? cut : cut + 1).trim();
     }
-    if (date === '' || !DATE_END.test(date) || /\d/u.test(name)) return null;
+    if (date === '' || !DATE_END.test(date) || /\d/u.test(name))
+    {
+        return null;
+    }
     return { date, name: attributionName(name) };
 }
 
@@ -634,28 +808,46 @@ function splitDateName(before: string, verbs: readonly string[]): { date: string
 function readAttribution(text: string): { from: EmailAddress[]; dateText: string | null }
 {
     const none = { from: [], dateText: null };
-    if (text.length > ATTRIBUTION_MAX_LENGTH) return none;
+    if (text.length > ATTRIBUTION_MAX_LENGTH)
+    {
+        return none;
+    }
     for (const lang of ATTRIBUTIONS)
     {
-        if (!lang.endings.some((re) => re.test(text))) continue;
+        if (!lang.endings.some((re) => re.test(text)))
+        {
+            continue;
+        }
         const tail = lang.tail.exec(text);
-        if (tail === null) continue;
+        if (tail === null)
+        {
+            continue;
+        }
         const opener = lang.opener.exec(text);
         const core = text.slice(opener === null ? 0 : opener[0].length, tail.index).trim();
         const address = lastAddress(core);
         // Two addresses (two people, or a name holding another address): who wrote is not clear.
-        if (!onlyAddress(core, address?.address ?? null)) return none;
+        if (!onlyAddress(core, address?.address ?? null))
+        {
+            return none;
+        }
         const before = (address === null ? core : core.slice(0, address.start)).trim();
         if (opener === null)
         {
             // "Bob Sample <bob@x.test> wrote:": no date. The name only when nothing else can be in it.
-            if (address === null) return none;
+            if (address === null)
+            {
+                return none;
+            }
             const plain = /[\d,]/u.test(before) ? '' : attributionName(before);
             const name = isPlainName(plain, true) ? plain : '';
             return { from: [{ name, address: address.address }], dateText: null };
         }
         const split = splitDateName(before, lang.verbs);
-        if (split === null) return address === null ? none : { from: [{ name: '', address: address.address }], dateText: null };
+        if (split === null)
+        {
+            return address === null ? none : { from: [{ name: '', address: address.address }], dateText: null };
+        }
         // A clause can sit where the name is ("Bob forwarded what Carol wrote:",
         // "schreef Bob dat hij later komt:", "my colleague Bob <bob@x> wrote:").
         // Only a name-shaped name is kept; an address is kept either way.
@@ -678,11 +870,17 @@ export function readQuotedHeader(bodyText: string, header: Pick<FoundHeader, 'st
 {
     const given = header as Partial<FoundHeader> | null | undefined; // odd input: may be anything
     const headEnd = typeof given?.headEnd === 'number' && Number.isFinite(given.headEnd) ? given.headEnd : 0;
-    if (typeof (bodyText as unknown) !== 'string') return { from: [], to: [], cc: [], subject: null, dateText: null, headerEnd: headEnd, incomplete: [] };
+    if (typeof (bodyText as unknown) !== 'string')
+    {
+        return { from: [], to: [], cc: [], subject: null, dateText: null, headerEnd: headEnd, incomplete: [] };
+    }
     // Odd input: the header end given may lie outside the text.
     const empty: QuotedHeaderFields = { from: [], to: [], cc: [], subject: null, dateText: null, headerEnd: Math.min(Math.max(headEnd, 0), bodyText.length), incomplete: [] };
     const start = given?.start;
-    if (typeof start !== 'number' || !Number.isInteger(start) || !Number.isInteger(headEnd) || start < 0 || start >= headEnd || headEnd > bodyText.length) return empty;
+    if (typeof start !== 'number' || !Number.isInteger(start) || !Number.isInteger(headEnd) || start < 0 || start >= headEnd || headEnd > bodyText.length)
+    {
+        return empty;
+    }
     try
     {
         return readHeader(bodyText, start, headEnd) ?? empty;
@@ -715,9 +913,15 @@ export function headerLabelCounts(bodyText: string, start: number, headerEnd: nu
         for (let pos = start; pos < headerEnd; )
         {
             const line = lineAt(bodyText, pos, headerEnd - pos);
-            if (line === null) break;
+            if (line === null)
+            {
+                break;
+            }
             const label = labelOf(bodyText, line);
-            if (label !== null) counts.set(label.role, (counts.get(label.role) ?? 0) + 1);
+            if (label !== null)
+            {
+                counts.set(label.role, (counts.get(label.role) ?? 0) + 1);
+            }
             pos = line.end;
         }
     }
@@ -735,7 +939,10 @@ function readHeader(text: string, start: number, headEnd: number): QuotedHeaderF
     for (let pos = start; pos < headEnd; )
     {
         const line = lineAt(text, pos, headEnd - pos);
-        if (line === null) break;
+        if (line === null)
+        {
+            break;
+        }
         own.push(line);
         pos = line.end;
     }
@@ -743,7 +950,10 @@ function readHeader(text: string, start: number, headEnd: number): QuotedHeaderF
     if (firstFrom < 0)
     {
         const words = own.filter((line) => !line.gap);
-        if (words.length === 0 || words.length > 2) return null;
+        if (words.length === 0 || words.length > 2)
+        {
+            return null;
+        }
         const joined = words.map((line) => clean(text, line.textStart, line.contentEnd)).join(' ');
         const { from, dateText } = readAttribution(joined);
         return { from, to: [], cc: [], subject: null, dateText, headerEnd: headEnd, incomplete: [] };
@@ -761,10 +971,16 @@ function readBlock(text: string, first: Line, headEnd: number): QuotedHeaderFiel
     for (let line: Line | null = first; line !== null; )
     {
         const label = line.depth === depth ? labelOf(text, line) : null;
-        if (label === null) break;
+        if (label === null)
+        {
+            break;
+        }
         // After the end findReplyHeaders gave (reached only through a wrapped
         // list or another such label): a role not read yet, never From (rule 1).
-        if (line.start >= headEnd && (label.role === 'from' || seen.has(label.role))) break;
+        if (line.start >= headEnd && (label.role === 'from' || seen.has(label.role)))
+        {
+            break;
+        }
         const fresh = !seen.has(label.role);
         seen.add(label.role);
         let value = label.value;
@@ -779,9 +995,15 @@ function readBlock(text: string, first: Line, headEnd: number): QuotedHeaderFiel
             }
         }
         // The first value of each role wins; Bcc is read past, never reported.
-        if (fresh && label.role !== 'bcc') values.set(label.role, value);
+        if (fresh && label.role !== 'bcc')
+        {
+            values.set(label.role, value);
+        }
         // A To / Cc list that may go on where it was not read (rule 1, INCOMPLETE LISTS).
-        if (fresh && (label.role === 'to' || label.role === 'cc') && mayGoOn(text, lastEnd, depth, value)) incomplete.push(label.role);
+        if (fresh && (label.role === 'to' || label.role === 'cc') && mayGoOn(text, lastEnd, depth, value))
+        {
+            incomplete.push(label.role);
+        }
         line = lineAt(text, lastEnd, lastEnd < headEnd ? headEnd - lastEnd : MAX_LINE_LENGTH);
     }
     const list = (r: Role): EmailAddress[] =>
@@ -802,7 +1024,10 @@ function readBlock(text: string, first: Line, headEnd: number): QuotedHeaderFiel
     // (Legal)"): flagged, so the list does not look empty (rule 3).
     for (const r of ['to', 'cc'] as const)
     {
-        if (!incomplete.includes(r) && /[\p{L}\p{N}@]/u.test(values.get(r) ?? '') && list(r).length === 0) incomplete.push(r);
+        if (!incomplete.includes(r) && /[\p{L}\p{N}@]/u.test(values.get(r) ?? '') && list(r).length === 0)
+        {
+            incomplete.push(r);
+        }
     }
     const subject = values.get('subject');
     const date = values.get('sent');
@@ -827,11 +1052,20 @@ function readBlock(text: string, first: Line, headEnd: number): QuotedHeaderFiel
  */
 function mayGoOn(text: string, pos: number, depth: number, value: string): boolean
 {
-    if (pos >= text.length) return /[;,]$/u.test(value);
+    if (pos >= text.length)
+    {
+        return /[;,]$/u.test(value);
+    }
     const next = lineAt(text, pos, MAX_LINE_LENGTH);
-    if (next === null) return true; // an over-long line of text
+    if (next === null)
+    {
+        return true; // an over-long line of text
+    }
     const sameDepthText = !next.gap && next.depth === depth;
-    if (sameDepthText && labelOf(text, next) !== null) return false;
+    if (sameDepthText && labelOf(text, next) !== null)
+    {
+        return false;
+    }
     return /[;,]$/u.test(value) || (sameDepthText && !isIntro(text, next));
 }
 
@@ -845,9 +1079,15 @@ function wrappedLines(text: string, pos: number, depth: number, value: string, s
 {
     const none = { parts: [], end: pos };
     // A names-only list never continues: a body line cannot be told apart from a name.
-    if (!value.includes('@')) return none;
+    if (!value.includes('@'))
+    {
+        return none;
+    }
     let state = addressedState(value);
-    if (state === null) return none;
+    if (state === null)
+    {
+        return none;
+    }
     // Index of the first mailbox that comes (at least partly) from a wrapped line.
     const ownItems = splitList(value).items.length;
     const firstWrapped = state.kind === 'part' ? ownItems - 1 : ownItems;
@@ -858,20 +1098,32 @@ function wrappedLines(text: string, pos: number, depth: number, value: string, s
     for (;;)
     {
         const line = lineAt(text, end, MAX_LINE_LENGTH);
-        if (line === null || line.gap || line.depth !== depth || isIntro(text, line)) break;
+        if (line === null || line.gap || line.depth !== depth || isIntro(text, line))
+        {
+            break;
+        }
         const label = labelOf(text, line);
         if (label !== null)
         {
             endLabel = label.role;
             break;
         }
-        if (state.kind === 'closed' || parts.length >= MAX_CONTINUATION_LINES) break;
+        if (state.kind === 'closed' || parts.length >= MAX_CONTINUATION_LINES)
+        {
+            break;
+        }
         const cleaned = clean(text, line.textStart, line.contentEnd);
         length += cleaned.length + 1;
-        if (length > MAX_VALUE_LENGTH) break;
+        if (length > MAX_VALUE_LENGTH)
+        {
+            break;
+        }
         // Only the mailbox cut short (at most MAX_NAME_LENGTH characters) is read again with the line.
         const next = addressedState(state.tail === '' ? cleaned : `${state.tail} ${cleaned}`);
-        if (next === null) break;
+        if (next === null)
+        {
+            break;
+        }
         parts.push(cleaned);
         end = line.end;
         state = next;
@@ -879,12 +1131,21 @@ function wrappedLines(text: string, pos: number, depth: number, value: string, s
     // Taken only right before the label of a role not read yet (not From), with
     // the last mailbox complete and every wrapped mailbox shaped like one.
     const beforeLabel = endLabel !== null && endLabel !== 'from' && !seen.has(endLabel);
-    if (parts.length === 0 || !beforeLabel || state.kind === 'part') return none;
+    if (parts.length === 0 || !beforeLabel || state.kind === 'part')
+    {
+        return none;
+    }
     const items = splitList([value, ...parts].join(' ')).items;
-    if (items.length <= firstWrapped) return none;
+    if (items.length <= firstWrapped)
+    {
+        return none;
+    }
     for (let k = firstWrapped; k < items.length; k++)
     {
-        if (!isWrappedMailbox(items[k] ?? '')) return none;
+        if (!isWrappedMailbox(items[k] ?? ''))
+        {
+            return none;
+        }
     }
     return { parts, end };
 }

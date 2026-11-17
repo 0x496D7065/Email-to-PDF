@@ -48,7 +48,10 @@ function foldedTexts(body: string, subject?: string): string[]
 const fromHere = (body: string, snippet: string): string =>
 {
     const at = body.indexOf(snippet);
-    if (at < 0) throw new Error(`snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`snippet not found: ${snippet}`);
+    }
     return body.slice(at);
 };
 
@@ -585,7 +588,10 @@ describe('detectReplyHeaders: the .eml adapter\'s own forwarded block', () =>
     async function bodyOf(subject: string, innerBody: string): Promise<string>
     {
         const result = await parser.parse({ name: 'forward.eml', bytes: eml(subject, innerBody) });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         return result.message.bodyText;
     }
 

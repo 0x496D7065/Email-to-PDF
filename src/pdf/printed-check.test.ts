@@ -93,9 +93,18 @@ describe('printedText: speed', () =>
         const p = printedText();
         const sentences = Array.from({ length: 4000 }, (_, k) => `Sentence ${String(k)} of the record: the desks, chairs and tables of room ${String(k % 97)} were counted on day ${String(k % 31)} again.`);
         const start = performance.now();
-        for (let k = 0; k < 4000; k += 2) p.add(`${sentences[k]!}\n${sentences[k + 1]!}\n`.repeat(10));
+        for (let k = 0; k < 4000; k += 2)
+        {
+            p.add(`${sentences[k]!}\n${sentences[k + 1]!}\n`.repeat(10));
+        }
         let found = 0;
-        for (let k = 0; k + 3 < 4000; k += 2) if (p.covers(`> ${sentences[k]!}\n> ${sentences[k + 1]!}\n> ${sentences[k + 2]!}`)) found++;
+        for (let k = 0; k + 3 < 4000; k += 2)
+        {
+            if (p.covers(`> ${sentences[k]!}\n> ${sentences[k + 1]!}\n> ${sentences[k + 2]!}`))
+            {
+                found++;
+            }
+        }
         const ms = performance.now() - start;
         console.log(`printedText: ${String(found)} of 1999 quotes found in ${ms.toFixed(1)} ms`);
         // Two of three sentences in a row are printed in one piece, the third in the next piece: found.
@@ -106,9 +115,15 @@ describe('printedText: speed', () =>
     it('highly repeated text (every shingle far over MAX_POSTINGS) stays fast', () =>
     {
         const p = printedText();
-        for (let k = 0; k < 2000; k++) p.add('the desks arrive on monday morning please confirm the address\n'.repeat(20));
+        for (let k = 0; k < 2000; k++)
+        {
+            p.add('the desks arrive on monday morning please confirm the address\n'.repeat(20));
+        }
         const start = performance.now();
-        for (let k = 0; k < 200; k++) p.covers('the desks arrive on monday morning please confirm the address '.repeat(50));
+        for (let k = 0; k < 200; k++)
+        {
+            p.covers('the desks arrive on monday morning please confirm the address '.repeat(50));
+        }
         const ms = performance.now() - start;
         console.log(`printedText: 200 checks of 500 repeated words in ${ms.toFixed(1)} ms`);
         expect(ms).toBeLessThan(1500);

@@ -97,7 +97,10 @@ function measure(detect: Detect, cases: readonly ThreadCase[] = THREAD_CASES): M
     const tally = <K>(map: Map<K, Tally>, key: K): Tally =>
     {
         let t = map.get(key);
-        if (t === undefined) map.set(key, (t = empty()));
+        if (t === undefined)
+        {
+            map.set(key, (t = empty()));
+        }
         return t;
     };
     for (const c of cases)
@@ -113,24 +116,57 @@ function measure(detect: Detect, cases: readonly ThreadCase[] = THREAD_CASES): M
             const hit = found.find((f) => f.start === h.start);
             const read = hit === undefined ? undefined : (hit.fields ?? readQuotedHeader(c.thread.body, hit));
             const rebuilt = hit?.rebuilt;
-            if (rebuilt !== undefined) rebuilds = true;
+            if (rebuilt !== undefined)
+            {
+                rebuilds = true;
+            }
             const textOk = rebuilt !== undefined && rebuilt.text.trim() === h.ownText;
             const diffs = read === undefined ? [] : fieldDiffs(h, read);
             for (const t of [g, s])
             {
                 t.truths++;
-                if (hit === undefined) continue;
+                if (hit === undefined)
+                {
+                    continue;
+                }
                 t.matched++;
-                if (hit.kind === h.kind) t.kindOk++;
-                if (hit.headEnd === h.headEnd) t.headEndOk++;
-                if (diffs.length === 0) t.fieldsOk++;
-                if (read?.headerEnd === h.headEnd) t.headerEndOk++;
-                if (rebuilt !== undefined && rebuilt.generation === h.generation && rebuilt.depth === h.textDepth) t.structureOk++;
-                if (textOk) t.textOk++;
+                if (hit.kind === h.kind)
+                {
+                    t.kindOk++;
+                }
+                if (hit.headEnd === h.headEnd)
+                {
+                    t.headEndOk++;
+                }
+                if (diffs.length === 0)
+                {
+                    t.fieldsOk++;
+                }
+                if (read?.headerEnd === h.headEnd)
+                {
+                    t.headerEndOk++;
+                }
+                if (rebuilt !== undefined && rebuilt.generation === h.generation && rebuilt.depth === h.textDepth)
+                {
+                    t.structureOk++;
+                }
+                if (textOk)
+                {
+                    t.textOk++;
+                }
             }
-            if (rebuilt !== undefined && !textOk) textMisses.push(`${c.id}: generation ${h.generation} (${h.style})`);
-            if (hit === undefined) misses.push(`${c.id}: generation ${h.generation} (${h.style})`);
-            else if (diffs.length > 0) fieldMisses.push(`${c.id}: generation ${h.generation} (${h.style}): ${diffs.join('; ')}`);
+            if (rebuilt !== undefined && !textOk)
+            {
+                textMisses.push(`${c.id}: generation ${h.generation} (${h.style})`);
+            }
+            if (hit === undefined)
+            {
+                misses.push(`${c.id}: generation ${h.generation} (${h.style})`);
+            }
+            else if (diffs.length > 0)
+            {
+                fieldMisses.push(`${c.id}: generation ${h.generation} (${h.style}): ${diffs.join('; ')}`);
+            }
         }
     }
     const falseSplits = new Map<string, number>();
@@ -254,29 +290,47 @@ describe('thread reconstruction: measurement of the current boundary detector', 
             expect(t.fieldsOk / t.matched, `${group} fields`).toBeGreaterThanOrEqual(BASELINE.fields[group] ?? 1);
             expect(t.headerEndOk / t.matched, `${group} header end once read`).toBeGreaterThanOrEqual(BASELINE.headerEnd[group] ?? 1);
         }
-        for (const [style, t] of m.byStyle) expect(t.fieldsOk / t.matched, `${style} fields`).toBeGreaterThanOrEqual(BASELINE.fieldsByStyle[style] ?? 1);
+        for (const [style, t] of m.byStyle)
+        {
+            expect(t.fieldsOk / t.matched, `${style} fields`).toBeGreaterThanOrEqual(BASELINE.fieldsByStyle[style] ?? 1);
+        }
     });
 
     it('keeps the baseline extra boundaries per group (boundaries at no true header)', () =>
     {
-        for (const [group, t] of m.byGroup) expect(t.extra, `${group} extra`).toBeLessThanOrEqual(BASELINE.extra[group] ?? 0);
+        for (const [group, t] of m.byGroup)
+        {
+            expect(t.extra, `${group} extra`).toBeLessThanOrEqual(BASELINE.extra[group] ?? 0);
+        }
     });
 
     it('keeps the baseline false splits on negative bodies', () =>
     {
-        for (const [id, n] of m.falseSplits) expect(n, id).toBeLessThanOrEqual(BASELINE.falseSplits[id] ?? 0);
-        for (const id of Object.keys(BASELINE.falseSplits)) expect(m.falseSplits.has(id), id).toBe(true);
+        for (const [id, n] of m.falseSplits)
+        {
+            expect(n, id).toBeLessThanOrEqual(BASELINE.falseSplits[id] ?? 0);
+        }
+        for (const id of Object.keys(BASELINE.falseSplits))
+        {
+            expect(m.falseSplits.has(id), id).toBe(true);
+        }
     });
 
     it('finds the real header of the refuse negatives (folding it is fine)', () =>
     {
-        for (const [id, n] of m.refuseFound) expect(n, id).toBe(1);
+        for (const [id, n] of m.refuseFound)
+        {
+            expect(n, id).toBe(1);
+        }
     });
 
     it('finds no other boundary in the refuse negatives (today: none)', () =>
     {
         expect(m.refuseExtra.size).toBeGreaterThan(0);
-        for (const [id, n] of m.refuseExtra) expect(n, id).toBe(0);
+        for (const [id, n] of m.refuseExtra)
+        {
+            expect(n, id).toBe(0);
+        }
     });
 });
 
@@ -294,7 +348,10 @@ ${table(m)}`);
 
     it('boundary recall >= 90% for every supported style', () =>
     {
-        for (const [style, t] of m.byStyle) expect(t.matched / t.truths, style).toBeGreaterThanOrEqual(0.9);
+        for (const [style, t] of m.byStyle)
+        {
+            expect(t.matched / t.truths, style).toBeGreaterThanOrEqual(0.9);
+        }
     });
 
     // Precision and extra follow from "false splits 0" (design 7.0): a
@@ -310,36 +367,57 @@ ${table(m)}`);
 
     it('no boundary in the refuse negatives other than (at most) the real header', () =>
     {
-        for (const [id, n] of m.refuseExtra) expect(n, id).toBe(0);
+        for (const [id, n] of m.refuseExtra)
+        {
+            expect(n, id).toBe(0);
+        }
     });
 
     it('no false splits on negative bodies', () =>
     {
-        for (const [id, n] of m.falseSplits) expect(n, id).toBe(0);
+        for (const [id, n] of m.falseSplits)
+        {
+            expect(n, id).toBe(0);
+        }
     });
 
     it('refuses the "refuse" negatives (interleaved answers, bottom-posting): no rebuilt message', () =>
     {
         expect(m.refuseFound.size).toBeGreaterThan(0);
-        for (const [id, n] of m.refuseFound) expect(n, id).toBe(0);
+        for (const [id, n] of m.refuseFound)
+        {
+            expect(n, id).toBe(0);
+        }
     });
 
     it('every rebuilt true header has the right generation and body depth', () =>
     {
-        for (const [group, t] of m.byGroup) expect(t.structureOk, group).toBe(t.matched);
+        for (const [group, t] of m.byGroup)
+        {
+            expect(t.structureOk, group).toBe(t.matched);
+        }
     });
 
     it('keeps the field accuracy of readQuotedHeader (same baseline as the boundary finder)', () =>
     {
-        for (const [group, t] of m.byGroup) expect(t.fieldsOk / t.matched, `${group} fields`).toBeGreaterThanOrEqual(BASELINE.fields[group] ?? 1);
-        for (const [style, t] of m.byStyle) expect(t.fieldsOk / t.matched, `${style} fields`).toBeGreaterThanOrEqual(BASELINE.fieldsByStyle[style] ?? 1);
+        for (const [group, t] of m.byGroup)
+        {
+            expect(t.fieldsOk / t.matched, `${group} fields`).toBeGreaterThanOrEqual(BASELINE.fields[group] ?? 1);
+        }
+        for (const [style, t] of m.byStyle)
+        {
+            expect(t.fieldsOk / t.matched, `${style} fields`).toBeGreaterThanOrEqual(BASELINE.fieldsByStyle[style] ?? 1);
+        }
     });
 
     // A ratchet like BASELINE: groups not listed must stay at 1 (100%).
     const TEXT_BASELINE: Readonly<Record<string, number>> = { 'outlook-wrapped': 5 / 7 };
     it('rebuilt text equals the own text (trimmed), except where a header is read short', () =>
     {
-        for (const [group, t] of m.byGroup) expect(t.textOk / t.matched, `${group} text`).toBeGreaterThanOrEqual(TEXT_BASELINE[group] ?? 1);
+        for (const [group, t] of m.byGroup)
+        {
+            expect(t.textOk / t.matched, `${group} text`).toBeGreaterThanOrEqual(TEXT_BASELINE[group] ?? 1);
+        }
     });
 });
 

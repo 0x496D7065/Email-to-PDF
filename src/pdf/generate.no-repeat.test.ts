@@ -75,7 +75,10 @@ function sentences(c: ThreadCase): string[]
     return c.messages!.map((m) =>
     {
         const sentence = m.text.split('\n\n')[1];
-        if (sentence === undefined) throw new Error(`${c.id}: no sentence`);
+        if (sentence === undefined)
+        {
+            throw new Error(`${c.id}: no sentence`);
+        }
         return squash(sentence);
     });
 }
@@ -104,7 +107,10 @@ async function emailTexts(c: ThreadCase, dropped: readonly number[], options: { 
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown).join(' '));
     const dests = readDests(pdf);
     const starts: number[] = [];
-    for (let n = 1; dests.has(`email-${String(n)}`); n++) starts.push(dests.get(`email-${String(n)}`)!.page);
+    for (let n = 1; dests.has(`email-${String(n)}`); n++)
+    {
+        starts.push(dests.get(`email-${String(n)}`)!.page);
+    }
     const texts = starts.map((page, k) => squash(pages.slice(page, starts[k + 1] ?? pages.length).join(' ')));
     return { texts, result };
 }
@@ -119,7 +125,10 @@ function counts(texts: readonly string[], all: readonly string[]): { emails: num
         for (const t of texts)
         {
             const n = t.split(s).length - 1;
-            if (n > 0) emails++;
+            if (n > 0)
+            {
+                emails++;
+            }
             times += n;
         }
         return { emails, times };
@@ -136,7 +145,10 @@ const last = (c: ThreadCase): number => c.messages!.length - 1;
  */
 function outlookAllTheWay(c: ThreadCase, k: number): boolean
 {
-    if (k === 0 || k === last(c)) return false;
+    if (k === 0 || k === last(c))
+    {
+        return false;
+    }
     return c.messages!.slice(k + 1).every((m) => m.quote?.style.startsWith('outlook') === true);
 }
 
@@ -200,7 +212,10 @@ describe('no email twice in the PDF (task 8.10), every conversation of thread-ca
                 expect(texts).toHaveLength(1 + chosen.size);
                 const now = counts(texts, all);
                 // Never twice.
-                for (const [k, n] of now.entries()) expect(n.times, `sentence ${String(k)}`).toBeLessThanOrEqual(1);
+                for (const [k, n] of now.entries())
+                {
+                    expect(n.times, `sentence ${String(k)}`).toBeLessThanOrEqual(1);
+                }
                 // A chosen one is in the PDF once, as its own email; an unticked one exactly as with the switch
                 // off, unless it is a forwarded part of the last email (Q2, task 8.13a): then it is nowhere.
                 const plan = planOutput(result.messages, DEFAULT_OUTPUT_POLICY)[0]!;
@@ -209,13 +224,19 @@ describe('no email twice in the PDF (task 8.10), every conversation of thread-ca
                 for (const [id, k] of conversationOf)
                 {
                     const forwarded = forwardedAt !== null && result.reconstructed[id]!.rebuilt.start >= forwardedAt;
-                    if (chosen.has(id)) expect(now[k], `chosen ${String(k)}`).toEqual({ emails: 1, times: 1 });
+                    if (chosen.has(id))
+                    {
+                        expect(now[k], `chosen ${String(k)}`).toEqual({ emails: 1, times: 1 });
+                    }
                     else if (forwarded)
                     {
                         untickedForwards++;
                         expect(now[k], `unticked forwarded ${String(k)}`).toEqual({ emails: 0, times: 0 });
                     }
-                    else expect(now[k], `unticked ${String(k)}`).toEqual(off[k]);
+                    else
+                    {
+                        expect(now[k], `unticked ${String(k)}`).toEqual(off[k]);
+                    }
                 }
                 expect(now[last(c)]).toEqual({ emails: 1, times: 1 });
             });
@@ -259,7 +280,10 @@ describe('no email twice in the PDF (task 8.10), every conversation of thread-ca
                     return r !== undefined && holdsOwnText(body, plan.ranges, headerLinesEnd(body, r.rebuilt), r.rebuilt.end) && !holdsQuotedText(body, plan.ranges, headerLinesEnd(body, r.rebuilt), r.rebuilt.end);
                 };
                 const pinned = PINNED_REPEATS.get(c.id);
-                if (pinned !== undefined) expect(sentences(c).flatMap((_, k) => (k !== 0 && k !== last(c) && keptAsOwn(k) ? [k] : []))).toEqual(pinned);
+                if (pinned !== undefined)
+                {
+                    expect(sentences(c).flatMap((_, k) => (k !== 0 && k !== last(c) && keptAsOwn(k) ? [k] : []))).toEqual(pinned);
+                }
             });
         });
     }

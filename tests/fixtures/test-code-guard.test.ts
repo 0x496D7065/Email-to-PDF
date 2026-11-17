@@ -87,7 +87,10 @@ describe('guard exemptions', () =>
     {
         const [first] = GUARD_EXEMPTIONS;
         expect(first).toBeDefined();
-        if (first === undefined) return;
+        if (first === undefined)
+        {
+            return;
+        }
         expect(exemptionsFor(first.file)).toContain(first.text);
         expect(exemptionsFor('src/ui/app.test.ts')).toEqual([]);
         expect(exemptionsFor(EXEMPTIONS_FILE)).toEqual(GUARD_EXEMPTIONS.map((e) => e.text));
@@ -152,7 +155,10 @@ describe('test code guard rules (self-test)', () =>
             join('\\/', '', 'c', 'Users', 'someone'),
             `cd ${join('/', '', 'D', 'home', 'someone', 'proj')}`,
         ];
-        for (const sample of planted) expect(findPersonalPaths(sample), sample).not.toEqual([]);
+        for (const sample of planted)
+        {
+            expect(findPersonalPaths(sample), sample).not.toEqual([]);
+        }
     });
 
     it('accepts generic placeholders and paths that are not home folders', () =>
@@ -172,7 +178,10 @@ describe('test code guard rules (self-test)', () =>
             '/c/Users/user/x',
             '~/proj',
         ];
-        for (const sample of clean) expect(findPersonalPaths(sample), sample).toEqual([]);
+        for (const sample of clean)
+        {
+            expect(findPersonalPaths(sample), sample).toEqual([]);
+        }
     });
 
     it('accepts the allowed time zones in any case and spelling, and names that are not zones', () =>
@@ -183,7 +192,10 @@ describe('test code guard rules (self-test)', () =>
             expect(findUnlistedTimeZones(zone.toLowerCase().replace('/', '\\/')), zone).toEqual([]);
         }
         const clean = ["'UTC'", 'Date (America/New York)', 'ASIA_TOKYO', 'Asia%2FTokyo', 'Asian food, Indiana/x, Mars/Olympus_Mons, Pacific Standard Time'];
-        for (const sample of clean) expect(findUnlistedTimeZones(sample), sample).toEqual([]);
+        for (const sample of clean)
+        {
+            expect(findUnlistedTimeZones(sample), sample).toEqual([]);
+        }
     });
 
     it('flags any other time zone in any case and spelling', () =>
@@ -206,7 +218,10 @@ describe('test code guard rules (self-test)', () =>
             join('/', 'America', 'New_York', 'X'),
             `${join('/', 'America', 'New')} Jersey`,
         ];
-        for (const sample of planted) expect(findUnlistedTimeZones(sample), sample).not.toEqual([]);
+        for (const sample of planted)
+        {
+            expect(findUnlistedTimeZones(sample), sample).not.toEqual([]);
+        }
     });
 
     it('combines all rules in findPrivacyProblems', () =>

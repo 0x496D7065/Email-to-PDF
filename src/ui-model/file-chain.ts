@@ -46,7 +46,10 @@ export function fileChain(result: Pick<EngineResult, 'attached' | 'counts'>, ind
 {
     const file = fileName.trim() === '' ? null : fileName;
     const attached = attachedAt(result, index);
-    if (attached === undefined) return file === null ? { text: words.noFileName, ownWords: true } : { text: file, ownWords: false };
+    if (attached === undefined)
+    {
+        return file === null ? { text: words.noFileName, ownWords: true } : { text: file, ownWords: false };
+    }
     const levels = attached.names.map((name, k) => (name.trim() === '' ? words.attachedNoName(attached.path[k] ?? k + 1) : name));
     return { text: [file ?? words.noFileName, ...levels].join(FILE_CHAIN_SEPARATOR), ownWords: false };
 }

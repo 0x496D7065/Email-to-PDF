@@ -59,7 +59,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -94,7 +97,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
@@ -126,7 +132,10 @@ test('unticking an email leaves it in the list, dimmed, with its text; the count
     const items = await openWithFiles(page);
     const boxes = page.getByRole('checkbox', { name: en.actions.include });
     await expect(boxes).toHaveCount(6);
-    for (const box of await boxes.all()) await expect(box).toBeChecked();
+    for (const box of await boxes.all())
+    {
+        await expect(box).toBeChecked();
+    }
 
     const second = items.nth(1);
     const box = second.getByRole('checkbox', { name: en.actions.include });

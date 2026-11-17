@@ -56,24 +56,57 @@ export async function unwrapWoff(woff: Uint8Array): Promise<Uint8Array<ArrayBuff
 
 async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
 {
-    if (!(woff instanceof Uint8Array)) fail('WOFF: input is not a Uint8Array');
-    if (woff.length < WOFF_HEADER) fail(`WOFF: file is truncated (${woff.length} bytes, the header alone is ${WOFF_HEADER})`);
-    if (woff.length > MAX_FONT_BYTES) fail(`WOFF: file is larger than ${MAX_FONT_BYTES} bytes`);
+    if (!(woff instanceof Uint8Array))
+    {
+        fail('WOFF: input is not a Uint8Array');
+    }
+    if (woff.length < WOFF_HEADER)
+    {
+        fail(`WOFF: file is truncated (${woff.length} bytes, the header alone is ${WOFF_HEADER})`);
+    }
+    if (woff.length > MAX_FONT_BYTES)
+    {
+        fail(`WOFF: file is larger than ${MAX_FONT_BYTES} bytes`);
+    }
     const r = new BinaryReader(woff, 'WOFF');
 
     const signature = r.u32(0);
-    if (signature !== WOFF_SIGNATURE) fail(`WOFF: wrong signature "${tagName(signature)}" (expected "wOFF")`);
+    if (signature !== WOFF_SIGNATURE)
+    {
+        fail(`WOFF: wrong signature "${tagName(signature)}" (expected "wOFF")`);
+    }
     const flavor = r.u32(4);
-    if (flavor === OTTO_FLAVOR) fail('WOFF: font has CFF outlines (flavor "OTTO"); only TrueType outlines are supported');
-    if (flavor !== TRUETYPE_FLAVOR) fail(`WOFF: unsupported flavor 0x${flavor.toString(16).padStart(8, '0')} (expected TrueType 0x00010000)`);
+    if (flavor === OTTO_FLAVOR)
+    {
+        fail('WOFF: font has CFF outlines (flavor "OTTO"); only TrueType outlines are supported');
+    }
+    if (flavor !== TRUETYPE_FLAVOR)
+    {
+        fail(`WOFF: unsupported flavor 0x${flavor.toString(16).padStart(8, '0')} (expected TrueType 0x00010000)`);
+    }
     const length = r.u32(8);
-    if (length !== woff.length) fail(`WOFF: header says ${length} bytes but the file has ${woff.length} (truncated or padded)`);
+    if (length !== woff.length)
+    {
+        fail(`WOFF: header says ${length} bytes but the file has ${woff.length} (truncated or padded)`);
+    }
     const numTables = r.u16(12);
-    if (numTables === 0) fail('WOFF: font has no tables');
-    if (numTables > MAX_TABLES) fail(`WOFF: too many tables (${numTables}, at most ${MAX_TABLES})`);
-    if (r.u16(14) !== 0) fail('WOFF: reserved header field is not 0');
+    if (numTables === 0)
+    {
+        fail('WOFF: font has no tables');
+    }
+    if (numTables > MAX_TABLES)
+    {
+        fail(`WOFF: too many tables (${numTables}, at most ${MAX_TABLES})`);
+    }
+    if (r.u16(14) !== 0)
+    {
+        fail('WOFF: reserved header field is not 0');
+    }
     const totalSfntSize = r.u32(16);
-    if (totalSfntSize > MAX_FONT_BYTES) fail(`WOFF: decompressed font would be larger than ${MAX_FONT_BYTES} bytes`);
+    if (totalSfntSize > MAX_FONT_BYTES)
+    {
+        fail(`WOFF: decompressed font would be larger than ${MAX_FONT_BYTES} bytes`);
+    }
 
     const directoryEnd = WOFF_HEADER + numTables * WOFF_ENTRY;
     r.need(WOFF_HEADER, numTables * WOFF_ENTRY, 'table directory');
@@ -87,10 +120,16 @@ async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
         const size = r.u32(lengthAt);
         if (size === 0)
         {
-            if (offset !== 0) fail(`WOFF: ${what} block has an offset but no length`);
+            if (offset !== 0)
+            {
+                fail(`WOFF: ${what} block has an offset but no length`);
+            }
             return;
         }
-        if (offset < directoryEnd) fail(`WOFF: ${what} block starts inside the header or directory`);
+        if (offset < directoryEnd)
+        {
+            fail(`WOFF: ${what} block starts inside the header or directory`);
+        }
         r.need(offset, size, `${what} block`);
         regions.push({ start: offset, end: offset + size, what: `${what} block` });
     };
@@ -111,12 +150,27 @@ async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
             origChecksum: r.u32(at + 16),
         };
         const name = `table "${tagName(entry.tag)}"`;
-        if (tags.has(entry.tag)) fail(`WOFF: ${name} appears twice`);
+        if (tags.has(entry.tag))
+        {
+            fail(`WOFF: ${name} appears twice`);
+        }
         tags.add(entry.tag);
-        if (entry.origLength > MAX_FONT_BYTES) fail(`WOFF: ${name} declares ${entry.origLength} bytes (more than ${MAX_FONT_BYTES})`);
-        if (entry.compLength > entry.origLength) fail(`WOFF: ${name} is longer compressed than uncompressed`);
-        if (entry.offset < directoryEnd) fail(`WOFF: ${name} starts inside the header or directory`);
-        if (entry.offset % 4 !== 0) fail(`WOFF: ${name} does not start on a 4-byte boundary`);
+        if (entry.origLength > MAX_FONT_BYTES)
+        {
+            fail(`WOFF: ${name} declares ${entry.origLength} bytes (more than ${MAX_FONT_BYTES})`);
+        }
+        if (entry.compLength > entry.origLength)
+        {
+            fail(`WOFF: ${name} is longer compressed than uncompressed`);
+        }
+        if (entry.offset < directoryEnd)
+        {
+            fail(`WOFF: ${name} starts inside the header or directory`);
+        }
+        if (entry.offset % 4 !== 0)
+        {
+            fail(`WOFF: ${name} does not start on a 4-byte boundary`);
+        }
         r.need(entry.offset, entry.compLength, name);
         regions.push({ start: entry.offset, end: entry.offset + entry.compLength, what: name });
         sfntSize += pad4(entry.origLength);
@@ -127,9 +181,15 @@ async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
     {
         const before = regions[i - 1]!;
         const region = regions[i]!;
-        if (region.start < before.end) fail(`WOFF: ${before.what} and ${region.what} overlap`);
+        if (region.start < before.end)
+        {
+            fail(`WOFF: ${before.what} and ${region.what} overlap`);
+        }
     }
-    if (sfntSize !== totalSfntSize) fail(`WOFF: header says the font is ${totalSfntSize} bytes but its tables add up to ${sfntSize}`);
+    if (sfntSize !== totalSfntSize)
+    {
+        fail(`WOFF: header says the font is ${totalSfntSize} bytes but its tables add up to ${sfntSize}`);
+    }
 
     // Write the sfnt: offset table, directory sorted by tag, tables in file order.
     const sfnt = new Uint8Array(totalSfntSize);
@@ -137,7 +197,10 @@ async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
     out.setUint32(0, flavor);
     out.setUint16(4, numTables);
     let entrySelector = 0;
-    while (2 << entrySelector <= numTables) entrySelector++; // numTables <= MAX_TABLES: a few steps
+    while (2 << entrySelector <= numTables)
+    {
+        entrySelector++; // numTables <= MAX_TABLES: a few steps
+    }
     const searchRange = (1 << entrySelector) * SFNT_ENTRY;
     out.setUint16(6, searchRange);
     out.setUint16(8, entrySelector);
@@ -158,7 +221,10 @@ async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
             await inflateInto(data, entry.origLength, sfnt, position, tagName(entry.tag));
         }
         const checksum = directoryChecksum(entry.tag, sfnt, position, entry.origLength);
-        if (checksum !== entry.origChecksum) fail(`WOFF: table "${tagName(entry.tag)}" checksum does not match (damaged data)`);
+        if (checksum !== entry.origChecksum)
+        {
+            fail(`WOFF: table "${tagName(entry.tag)}" checksum does not match (damaged data)`);
+        }
         position += pad4(entry.origLength);
     }
 
@@ -204,11 +270,17 @@ async function inflateInto(data: Uint8Array, expected: number, target: Uint8Arra
             }
             if (chunk.done)
             {
-                if (written !== expected) fail(`WOFF: ${what} decompressed to ${written} bytes, expected ${expected}`);
+                if (written !== expected)
+                {
+                    fail(`WOFF: ${what} decompressed to ${written} bytes, expected ${expected}`);
+                }
                 return;
             }
             const bytes = chunk.value;
-            if (written + bytes.length > expected) fail(`WOFF: ${what} decompresses to more than the declared ${expected} bytes`);
+            if (written + bytes.length > expected)
+            {
+                fail(`WOFF: ${what} decompresses to more than the declared ${expected} bytes`);
+            }
             target.set(bytes, position + written);
             written += bytes.length;
         }

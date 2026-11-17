@@ -119,7 +119,10 @@ test('loads with zero requests outside its own origin', async ({ page }) =>
 
     const urls = requests.map((request) => request.url());
     expect(urls.length).toBeGreaterThan(0);
-    for (const url of urls) expect(new URL(url).origin, url).toBe(origin);
+    for (const url of urls)
+    {
+        expect(new URL(url).origin, url).toBe(origin);
+    }
 
     const talking = requests.filter((request) => FORBIDDEN_TYPES.includes(request.resourceType()));
     expect(talking.map((request) => `${request.resourceType()} ${request.url()}`)).toEqual([]);
@@ -210,8 +213,14 @@ async function expectImageBlockedByCsp(browserName: string): Promise<void>
         requests
             .filter((request) => new URL(request.url()).origin !== origin)
             .map((request) => `${request.url()} ${request.failure()?.errorText ?? 'not failed'}`);
-    if (browserName === 'chromium') await expect.poll(outside).toEqual(['https://example.invalid/p.png csp']);
-    else expect(outside()).toEqual([]);
+    if (browserName === 'chromium')
+    {
+        await expect.poll(outside).toEqual(['https://example.invalid/p.png csp']);
+    }
+    else
+    {
+        expect(outside()).toEqual([]);
+    }
 }
 
 // Positive control: proves the CSP is really enforced, by deliberately doing
@@ -321,7 +330,10 @@ test('the Ko-fi button is a plain link with its image from this site, and Ko-fi 
     await link.focus();
     await page.waitForTimeout(500);
     expect(requests.slice(before).map((request) => request.url())).toEqual([]);
-    for (const request of requests) expect(new URL(request.url()).origin, request.url()).toBe(origin);
+    for (const request of requests)
+    {
+        expect(new URL(request.url()).origin, request.url()).toBe(origin);
+    }
     expect(websockets).toEqual([]);
     expect(withoutSelect(browserName, await violations(page), [cspForHeader(), cspForMeta()])).toEqual([]);
 });
@@ -354,5 +366,8 @@ test('a click on the Ko-fi button opens a new tab, sends no referrer, and keeps 
     expect(page.url()).toBe(url);
     await expect(items).toHaveCount(1);
     // Every other request stayed on this site.
-    for (const request of requests.filter((r) => r.url() !== DONATION_URL)) expect(new URL(request.url()).origin, request.url()).toBe(origin);
+    for (const request of requests.filter((r) => r.url() !== DONATION_URL))
+    {
+        expect(new URL(request.url()).origin, request.url()).toBe(origin);
+    }
 });

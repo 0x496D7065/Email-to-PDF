@@ -67,11 +67,23 @@ function isSpace(ch: string): boolean
 function classify(text: string, line: LineRange): LineKind
 {
     let i = line.start;
-    while (i < line.contentEnd && isSpace(text.charAt(i))) i++;
-    if (i === line.contentEnd) return 'blank';
-    if (text.charAt(i) !== '>') return 'other';
+    while (i < line.contentEnd && isSpace(text.charAt(i)))
+    {
+        i++;
+    }
+    if (i === line.contentEnd)
+    {
+        return 'blank';
+    }
+    if (text.charAt(i) !== '>')
+    {
+        return 'other';
+    }
     // Skip the markers and the spaces between them ("> > ", ">>", ">\t>").
-    while (i < line.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i)))) i++;
+    while (i < line.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i))))
+    {
+        i++;
+    }
     return i === line.contentEnd ? 'marked-bare' : 'marked-text';
 }
 
@@ -82,7 +94,10 @@ function classify(text: string, line: LineRange): LineKind
  */
 export function detectQuoteMarkers(bodyText: string): FoldRange[]
 {
-    if (typeof (bodyText as unknown) !== 'string') return [];
+    if (typeof (bodyText as unknown) !== 'string')
+    {
+        return [];
+    }
     const lines = lineRanges(bodyText);
     const kinds = lines.map((line) => classify(bodyText, line));
     const folds: FoldRange[] = [];
@@ -106,7 +121,10 @@ export function detectQuoteMarkers(bodyText: string): FoldRange[]
             const kind = kinds[j];
             if (kind === 'marked-text' || kind === 'marked-bare')
             {
-                if (kind === 'marked-text') withText++;
+                if (kind === 'marked-text')
+                {
+                    withText++;
+                }
                 last = j;
             }
             else if (kind !== 'blank')

@@ -21,7 +21,10 @@ export class FontMetrics
     constructor(readonly font: ParsedFont)
     {
         this.advances = new Float64Array(font.numGlyphs);
-        for (let g = 0; g < font.numGlyphs; g++) this.advances[g] = font.advance(g) / font.unitsPerEm;
+        for (let g = 0; g < font.numGlyphs; g++)
+        {
+            this.advances[g] = font.advance(g) / font.unitsPerEm;
+        }
         this.ascent = font.hhea.ascender / font.unitsPerEm;
         this.descent = font.hhea.descender / font.unitsPerEm;
     }

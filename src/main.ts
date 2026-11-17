@@ -17,7 +17,10 @@ import { mountPage } from './ui/page';
 setLocale(pickLocale(navigator.languages.length > 0 ? navigator.languages : [navigator.language]));
 
 const root = document.getElementById('app');
-if (root) mountPage(root);
+if (root)
+{
+    mountPage(root);
+}
 
 // The PDF fonts are imported here, by the page entry, so their chunk
 // (assets/pdf-fonts-[hash].js) is loaded together with the page and the
@@ -31,4 +34,7 @@ document.documentElement.dataset.pdfFonts = pdfFontsReady() ? 'ready' : 'missing
 // be reopened while offline after one visit online. Built site only:
 // `npm run dev` has no service worker (import.meta.env.PROD is false there,
 // and this line is left out of the dev code). It never touches your emails.
-if (import.meta.env.PROD) registerWhenLoaded(window, navigator);
+if (import.meta.env.PROD)
+{
+    registerWhenLoaded(window, navigator);
+}

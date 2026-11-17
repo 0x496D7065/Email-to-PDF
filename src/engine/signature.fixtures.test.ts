@@ -29,11 +29,23 @@ interface Measured {
 function state(m: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
 {
     const at = m.body.indexOf(snippet);
-    if (at < 0) throw new Error(`${m.file}: snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`${m.file}: snippet not found: ${snippet}`);
+    }
     const covered = (i: number): boolean => m.folds.some((f) => f.start <= i && i < f.end);
     let foldedCount = 0;
-    for (let i = at; i < at + snippet.length; i++) if (covered(i)) foldedCount++;
-    if (foldedCount === 0) return 'shown';
+    for (let i = at; i < at + snippet.length; i++)
+    {
+        if (covered(i))
+        {
+            foldedCount++;
+        }
+    }
+    if (foldedCount === 0)
+    {
+        return 'shown';
+    }
     return foldedCount === snippet.length ? 'folded' : 'mixed';
 }
 
@@ -57,7 +69,10 @@ describe('signature detection over the parsed fixtures', () =>
             const segments = buildSegments(body, folds);
             expect(checkSegments(body, segments)).toEqual([]);
             expect(reconstruct(body, segments)).toBe(body);
-            for (const f of folds) expect(f.reason).toBe('signature');
+            for (const f of folds)
+            {
+                expect(f.reason).toBe('signature');
+            }
             const foldedChars = segments.filter((s) => s.folded).reduce((n, s) => n + s.end - s.start, 0);
             const file = message.source.fileName;
             all.set(file, { file, sender: inputs[i]?.senderKey ?? '', body, folds, foldedChars });
@@ -65,7 +80,10 @@ describe('signature detection over the parsed fixtures', () =>
         const get = (file: string): Measured =>
         {
             const m = all.get(file);
-            if (m === undefined) throw new Error(`no result for ${file}`);
+            if (m === undefined)
+            {
+                throw new Error(`no result for ${file}`);
+            }
             return m;
         };
 
@@ -84,10 +102,16 @@ describe('signature detection over the parsed fixtures', () =>
         {
             const at = m.body.indexOf('Met vriendelijke groeten,');
             const ownEnd = inputs[messages.findIndex((x) => x.source.fileName === m.file)]?.ownTextEnd ?? 0;
-            if (at < 0 || at > ownEnd) continue;
+            if (at < 0 || at > ownEnd)
+            {
+                continue;
+            }
             expect(state(m, 'Met vriendelijke groeten,\nBob Sample'), m.file).toBe('folded');
             const disclaimer = 'DISCLAIMER: This e-mail and any attachments are confidential';
-            if (m.body.includes(disclaimer)) expect(state(m, disclaimer), m.file).toBe('folded');
+            if (m.body.includes(disclaimer))
+            {
+                expect(state(m, disclaimer), m.file).toBe('folded');
+            }
             bobFolded++;
         }
         expect(bobFolded).toBeGreaterThanOrEqual(3);
@@ -103,7 +127,10 @@ describe('signature detection over the parsed fixtures', () =>
         for (const m of all.values())
         {
             const firstLine = m.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
-            if (firstLine === undefined) continue;
+            if (firstLine === undefined)
+            {
+                continue;
+            }
             expect(state(m, firstLine), `${m.file}: first line`).toBe('shown');
         }
     });

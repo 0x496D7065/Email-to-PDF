@@ -53,7 +53,10 @@ describe('createEmlParser: a header of very many joinable base64 encoded words',
         const elapsed = Date.now() - started;
 
         expect(result.ok).toBe(true);
-        if (!result.ok) return;
+        if (!result.ok)
+        {
+            return;
+        }
         expect(result.message.subject).toBe(decoded);
         expect(result.message.bodyText).toBe('Body text.\n');
         expect(elapsed).toBeLessThan(1000);

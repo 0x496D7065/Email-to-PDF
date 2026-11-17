@@ -18,11 +18,23 @@ interface Measured {
 function state(m: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
 {
     const at = m.body.indexOf(snippet);
-    if (at < 0) throw new Error(`${m.file}: snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`${m.file}: snippet not found: ${snippet}`);
+    }
     const covered = (i: number): boolean => m.folds.some((f) => f.start <= i && i < f.end);
     let foldedCount = 0;
-    for (let i = at; i < at + snippet.length; i++) if (covered(i)) foldedCount++;
-    if (foldedCount === 0) return 'shown';
+    for (let i = at; i < at + snippet.length; i++)
+    {
+        if (covered(i))
+        {
+            foldedCount++;
+        }
+    }
+    if (foldedCount === 0)
+    {
+        return 'shown';
+    }
     return foldedCount === snippet.length ? 'folded' : 'mixed';
 }
 
@@ -46,7 +58,10 @@ describe('quote-marker detection over the parsed fixtures', () =>
         const get = (file: string): Measured =>
         {
             const m = all.get(file);
-            if (m === undefined) throw new Error(`no result for ${file}`);
+            if (m === undefined)
+            {
+                throw new Error(`no result for ${file}`);
+            }
             return m;
         };
 
@@ -74,14 +89,20 @@ describe('quote-marker detection over the parsed fixtures', () =>
         for (const m of all.values())
         {
             const firstLine = m.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
-            if (firstLine === undefined) continue; // no text at all: nothing to fold
+            if (firstLine === undefined)
+            {
+                continue; // no text at all: nothing to fold
+            }
             expect(state(m, firstLine), `${m.file}: first line`).toBe('shown');
         }
 
         // Messages without any ">" line get no fold.
         for (const m of all.values())
         {
-            if (!/^\s*>/m.test(m.body)) expect(m.folds, m.file).toEqual([]);
+            if (!/^\s*>/m.test(m.body))
+            {
+                expect(m.folds, m.file).toEqual([]);
+            }
         }
     });
 });

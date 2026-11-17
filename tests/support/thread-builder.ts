@@ -341,13 +341,19 @@ interface Line {
 /** One label line, wrapped at spaces when longer than `wrapAt`. */
 function wrapLine(text: string, wrapAt: number | undefined): string[]
 {
-    if (wrapAt === undefined) return [text];
+    if (wrapAt === undefined)
+    {
+        return [text];
+    }
     const out: string[] = [];
     let rest = text;
     while (rest.length > wrapAt)
     {
         const cut = rest.lastIndexOf(' ', wrapAt);
-        if (cut <= 0) break;
+        if (cut <= 0)
+        {
+            break;
+        }
         out.push(rest.slice(0, cut));
         rest = rest.slice(cut + 1);
     }
@@ -359,8 +365,14 @@ type PeopleStyle = NonNullable<QuoteOptions['people']>;
 
 function person(p: Person, how: PeopleStyle): string
 {
-    if (how === 'name') return p.name;
-    if (how === 'mailto') return `${p.name} [mailto:${p.address}]`;
+    if (how === 'name')
+    {
+        return p.name;
+    }
+    if (how === 'mailto')
+    {
+        return `${p.name} [mailto:${p.address}]`;
+    }
     return `${p.name} <${p.address}>`;
 }
 
@@ -433,7 +445,10 @@ const ATTRIBUTIONS: Partial<Record<QuoteStyle, { readonly date: DateFormat; read
 /** How a style places the old body: below an unquoted block, below an attribution with ">", or with the attribution inside ">". */
 function layoutOf(style: QuoteStyle): 'block' | 'attribution' | 'apple'
 {
-    if (BLOCKS[style] !== undefined) return 'block';
+    if (BLOCKS[style] !== undefined)
+    {
+        return 'block';
+    }
     return style.startsWith('apple-') ? 'apple' : 'attribution';
 }
 
@@ -456,7 +471,10 @@ function headerFor(quoted: ThreadMessage, options: QuoteOptions, zone: Zone): { 
         for (const [role, label] of block.labels)
         {
             const value = values[role];
-            if (value !== undefined) lines.push(...wrapLine(`${label}${value}`, options.wrapAt));
+            if (value !== undefined)
+            {
+                lines.push(...wrapLine(`${label}${value}`, options.wrapAt));
+            }
         }
         const fields: ExpectedFields = {
             from: values.from ?? '',
@@ -468,7 +486,10 @@ function headerFor(quoted: ThreadMessage, options: QuoteOptions, zone: Zone): { 
         return { lines, fields };
     }
     const attribution = ATTRIBUTIONS[options.style];
-    if (attribution === undefined) throw new Error(`unknown style ${options.style}`);
+    if (attribution === undefined)
+    {
+        throw new Error(`unknown style ${options.style}`);
+    }
     const date = formatQuotedDate(attribution.date, instant, zone);
     const { text, from } = attribution.line(date, quoted.from);
     return { lines: wrapLine(text, options.wrapAt), fields: { from, date } };
@@ -486,9 +507,18 @@ function quoteLines(lines: readonly Line[], style: QuoteStyle): Line[]
     return lines.map((line) =>
     {
         let text: string;
-        if (line.text === '') text = '>';
-        else if (!apple && line.text.startsWith('>')) text = `>${line.text}`;
-        else text = `> ${line.text}`;
+        if (line.text === '')
+        {
+            text = '>';
+        }
+        else if (!apple && line.text.startsWith('>'))
+        {
+            text = `>${line.text}`;
+        }
+        else
+        {
+            text = `> ${line.text}`;
+        }
         return { ...line, text, depth: line.depth + 1 };
     });
 }
@@ -498,7 +528,10 @@ const ownLines = (text: string, owner: number): Line[] => text.split('\n').map((
 /** Removes `depth` quote levels ("> " or ">") from each line of `rendered`. */
 export function unquote(rendered: string, depth: number): string
 {
-    if (depth === 0) return rendered;
+    if (depth === 0)
+    {
+        return rendered;
+    }
     const prefix = new RegExp(`^(?:> ?){${depth}}`);
     return rendered
         .split('\n')
@@ -510,10 +543,16 @@ export function unquote(rendered: string, depth: number): string
 export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
 {
     const last = messages[messages.length - 1];
-    if (last === undefined) throw new Error('empty conversation');
+    if (last === undefined)
+    {
+        throw new Error('empty conversation');
+    }
     for (const m of messages)
     {
-        if (m.text.split('\n').some((line) => line.startsWith('>') || line.startsWith(' '))) throw new Error(`own text must not start a line with ">" or a space: ${m.text}`);
+        if (m.text.split('\n').some((line) => line.startsWith('>') || line.startsWith(' ')))
+        {
+            throw new Error(`own text must not start a line with ">" or a space: ${m.text}`);
+        }
     }
     let lines: Line[] = ownLines(messages[0]?.text ?? '', 0);
     const fieldsOf = new Map<number, ExpectedFields>();
@@ -521,17 +560,32 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
     {
         const msg = messages[i];
         const prev = messages[i - 1];
-        if (msg === undefined || prev === undefined) throw new Error('unreachable');
-        if (msg.quote === undefined) throw new Error(`message ${i} has no quote style`);
+        if (msg === undefined || prev === undefined)
+        {
+            throw new Error('unreachable');
+        }
+        if (msg.quote === undefined)
+        {
+            throw new Error(`message ${i} has no quote style`);
+        }
         const style = msg.quote.style;
         const { lines: head, fields } = headerFor(prev, msg.quote, msg.zone);
         fieldsOf.set(i - 1, fields);
         const header: Line[] = head.map((text) => ({ text, depth: 0, owner: i - 1, part: 'header' }));
         const gap: Line = { text: '', depth: 0, owner: i, part: 'gap' };
         const layout = layoutOf(style);
-        if (layout === 'block') lines = [...ownLines(msg.text, i), gap, ...header, { ...gap, owner: i - 1 }, ...lines];
-        else if (layout === 'attribution') lines = [...ownLines(msg.text, i), gap, ...header, ...quoteLines(lines, style)];
-        else lines = [...ownLines(msg.text, i), gap, ...quoteLines([...header, { ...gap, owner: i - 1 }, ...lines], style)];
+        if (layout === 'block')
+        {
+            lines = [...ownLines(msg.text, i), gap, ...header, { ...gap, owner: i - 1 }, ...lines];
+        }
+        else if (layout === 'attribution')
+        {
+            lines = [...ownLines(msg.text, i), gap, ...header, ...quoteLines(lines, style)];
+        }
+        else
+        {
+            lines = [...ownLines(msg.text, i), gap, ...quoteLines([...header, { ...gap, owner: i - 1 }, ...lines], style)];
+        }
     }
 
     const starts: number[] = [];
@@ -550,14 +604,20 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
         const msg = messages[j];
         const quoting = messages[j + 1];
         const fields = fieldsOf.get(j);
-        if (msg === undefined || quoting?.quote === undefined || fields === undefined) throw new Error('unreachable');
+        if (msg === undefined || quoting?.quote === undefined || fields === undefined)
+        {
+            throw new Error('unreachable');
+        }
         const headIdx = lines.flatMap((l, k) => (l.owner === j && l.part === 'header' ? [k] : []));
         const ownIdx = lines.flatMap((l, k) => (l.owner === j && l.part === 'own' ? [k] : []));
         const h0 = headIdx[0];
         const h1 = headIdx[headIdx.length - 1];
         const o0 = ownIdx[0];
         const o1 = ownIdx[ownIdx.length - 1];
-        if (h0 === undefined || h1 === undefined || o0 === undefined || o1 === undefined) throw new Error(`message ${j}: no header or no text`);
+        if (h0 === undefined || h1 === undefined || o0 === undefined || o1 === undefined)
+        {
+            throw new Error(`message ${j}: no header or no text`);
+        }
         headers.push({
             index: j,
             generation: messages.length - 1 - j,

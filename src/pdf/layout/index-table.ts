@@ -101,7 +101,10 @@ function bandsOf(cells: readonly LaidCell[], minFirst: number): number[]
 {
     const count = Math.max(1, ...cells.map((c) => c.lines.length));
     const bands: number[] = [];
-    for (let k = 0; k < count; k++) bands.push(Math.max(k === 0 ? minFirst : 0, ...cells.map((c) => c.lines[k]?.height ?? 0)));
+    for (let k = 0; k < count; k++)
+    {
+        bands.push(Math.max(k === 0 ? minFirst : 0, ...cells.map((c) => c.lines[k]?.height ?? 0)));
+    }
     return bands;
 }
 
@@ -177,7 +180,10 @@ function emitCell(b: PageBuilder, c: LaidCell, line: LaidLine, top: number): voi
 function placeHeader(b: PageBuilder, laid: LaidIndex): void
 {
     const top = b.y;
-    for (const c of laid.header) c.lines.forEach((line, k) => emitCell(b, c, line, top + linesHeight(c.lines.slice(0, k))));
+    for (const c of laid.header)
+    {
+        c.lines.forEach((line, k) => emitCell(b, c, line, top + linesHeight(c.lines.slice(0, k))));
+    }
     b.y += laid.headerHeight;
     const gap = b.config.index.headerGap;
     b.rule(b.y + gap / 2);
@@ -211,12 +217,18 @@ export function placeIndex(b: PageBuilder, laid: LaidIndex, pageOf: (anchor: str
         let segmentTop = b.y;
         const link = (): void =>
         {
-            if (b.y > segmentTop) b.page.links.push({ rect: { x: b.left, y: segmentTop, width: b.width, height: b.y - segmentTop }, destination: row.anchor });
+            if (b.y > segmentTop)
+            {
+                b.page.links.push({ rect: { x: b.left, y: segmentTop, width: b.width, height: b.y - segmentTop }, destination: row.anchor });
+            }
         };
         /** A new index page (column titles first) unless `height` fits below the cursor. */
         const ensure = (height: number): void =>
         {
-            if (b.fits(height)) return;
+            if (b.fits(height))
+            {
+                return;
+            }
             link();
             b.newPage();
             placeHeader(b, laid);
@@ -233,16 +245,25 @@ export function placeIndex(b: PageBuilder, laid: LaidIndex, pageOf: (anchor: str
             for (const c of row.cells)
             {
                 const line = c.lines[k];
-                if (line !== undefined) emitCell(b, c, line, b.y);
+                if (line !== undefined)
+                {
+                    emitCell(b, c, line, b.y);
+                }
             }
-            if (k === 0) ts.emit(page, b.left + b.width - page.width, b.y, b.page.text); // right-aligned in the page column
+            if (k === 0)
+            {
+                ts.emit(page, b.left + b.width - page.width, b.y, b.page.text); // right-aligned in the page column
+            }
             b.y += height;
         });
         row.extras.forEach((extra, k) =>
         {
             const next = row.extras[k + 1];
             ensure(extra.line.height + (extra.keepWithNext && next !== undefined ? next.line.height : 0));
-            if (extra.bullet !== null) ts.emit(extra.bullet.line, extra.bullet.x, b.y + extra.line.above - extra.bullet.line.above, b.page.text);
+            if (extra.bullet !== null)
+            {
+                ts.emit(extra.bullet.line, extra.bullet.x, b.y + extra.line.above - extra.bullet.line.above, b.page.text);
+            }
             ts.emit(extra.line, extra.x, b.y, b.page.text);
             b.y += extra.line.height;
         });

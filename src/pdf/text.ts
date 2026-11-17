@@ -239,18 +239,33 @@ export function sanitizeRuns(text: string, role: PdfRole): SanitizedRuns
     SPECIAL.lastIndex = 0;
     for (let m = SPECIAL.exec(expanded); m !== null; m = SPECIAL.exec(expanded))
     {
-        if (m.groups?.['flag'] !== undefined) continue; // a valid flag: kept as text
-        if (m.index > from) runs.push({ role, text: expanded.slice(from, m.index) });
+        if (m.groups?.['flag'] !== undefined)
+        {
+            continue; // a valid flag: kept as text
+        }
+        if (m.index > from)
+        {
+            runs.push({ role, text: expanded.slice(from, m.index) });
+        }
         const marker = controlMarker(m[0].codePointAt(0)!);
         const last = runs[runs.length - 1];
         // Join a code to the codes just before it. `m.index === from` only matters when the caller's own `role` is
         // 'code': then the text pushed just above is also a 'code' run, and it must stay apart from the markers.
-        if (last !== undefined && last.role === 'code' && m.index === from) runs[runs.length - 1] = { role: 'code', text: last.text + marker };
-        else runs.push({ role: 'code', text: marker });
+        if (last !== undefined && last.role === 'code' && m.index === from)
+        {
+            runs[runs.length - 1] = { role: 'code', text: last.text + marker };
+        }
+        else
+        {
+            runs.push({ role: 'code', text: marker });
+        }
         replaced++;
         from = m.index + m[0].length;
     }
-    if (from < expanded.length) runs.push({ role, text: expanded.slice(from) });
+    if (from < expanded.length)
+    {
+        runs.push({ role, text: expanded.slice(from) });
+    }
     return { runs, replaced };
 }
 
@@ -328,7 +343,10 @@ const VS_SUPPLEMENT_LAST = 0xe01ef;
  */
 function beforeMark(code: number): boolean
 {
-    if (code === 0x0b || code === 0x0c) return false;
+    if (code === 0x0b || code === 0x0c)
+    {
+        return false;
+    }
     return code === SOFT_HYPHEN || isDrawnAsNothing(code) || /\s/u.test(String.fromCharCode(code));
 }
 
@@ -346,20 +364,32 @@ export function quotePrefixLength(line: string): number
     for (let k = 0; k < line.length; k++)
     {
         const code = line.charCodeAt(k);
-        if (code === 0x3e) length = k + 1;
+        if (code === 0x3e)
+        {
+            length = k + 1;
+        }
         else if (code >= 0xd800 && code <= 0xdbff)
         {
             // A high surrogate: only a whole variation selector of the supplement may be in a prefix.
             const codePoint = line.codePointAt(k)!;
-            if (codePoint < VS_SUPPLEMENT_FIRST || codePoint > VS_SUPPLEMENT_LAST) break;
+            if (codePoint < VS_SUPPLEMENT_FIRST || codePoint > VS_SUPPLEMENT_LAST)
+            {
+                break;
+            }
             k++; // its low surrogate
         }
-        else if (!beforeMark(code)) break;
+        else if (!beforeMark(code))
+        {
+            break;
+        }
     }
     if (length > 0)
     {
         const after = line.charCodeAt(length);
-        if (after === 0x20 || after === 0xa0) length++;
+        if (after === 0x20 || after === 0xa0)
+        {
+            length++;
+        }
     }
     return length;
 }
@@ -387,10 +417,16 @@ export function bodyLines(text: string, options: BodyLinesOptions = {}): BodyLin
         const blank = s.replaced === 0 && /^\s*$/u.test(rest);
         if (blank && prefix === 0)
         {
-            if (lines.length > 0) blanks++; // leading blank lines are dropped
+            if (lines.length > 0)
+            {
+                blanks++; // leading blank lines are dropped
+            }
             return;
         }
-        for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--) lines.push([]);
+        for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--)
+        {
+            lines.push([]);
+        }
         blanks = 0;
         lines.push(blank ? [] : s.runs);
     };
@@ -441,14 +477,20 @@ export function joinKeptLines(body: string, ranges: readonly KeptRange[]): Joine
     let endsLine = false; // the last kept piece ends with a line break
     for (const r of ranges)
     {
-        if (!r.keep || r.end <= r.start) continue;
+        if (!r.keep || r.end <= r.start)
+        {
+            continue;
+        }
         const piece = body.slice(r.start, r.end);
         if (parts.length > 0 && r.start !== lastEnd && !endsLine && !isLineBreak(piece.charCodeAt(0)))
         {
             parts.push('\n');
             length++;
         }
-        if (r.start > 0 && !isLineBreak(body.charCodeAt(r.start - 1))) notLineStarts.add(length);
+        if (r.start > 0 && !isLineBreak(body.charCodeAt(r.start - 1)))
+        {
+            notLineStarts.add(length);
+        }
         parts.push(piece);
         length += piece.length;
         endsLine = isLineBreak(piece.charCodeAt(piece.length - 1));

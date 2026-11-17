@@ -139,9 +139,18 @@ function labelled(body: string, result: EngineResult, position: number, view: Pd
     for (const { block, label } of pdfBlocks(body, result.messages[position]!.segments, view))
     {
         const printedAs = label?.printedAs ?? null;
-        if (printedAs === null) continue;
+        if (printedAs === null)
+        {
+            continue;
+        }
         expect(label!.status).toBe('out');
-        for (let i = block.start; i < block.end; i++) if (/\S/u.test(body[i]!)) out.set(i, printedAs);
+        for (let i = block.start; i < block.end; i++)
+        {
+            if (/\S/u.test(body[i]!))
+            {
+                out.set(i, printedAs);
+            }
+        }
     }
     return out;
 }
@@ -150,12 +159,27 @@ function labelled(body: string, result: EngineResult, position: number, view: Pd
 function cutChars(body: string, plan: MessagePlan, ranges: readonly { start: number; end: number; keep: boolean }[]): Set<number>
 {
     const keptByPlan = new Uint8Array(body.length);
-    for (const r of plan.ranges) if (r.keep) keptByPlan.fill(1, r.start, r.end);
+    for (const r of plan.ranges)
+    {
+        if (r.keep)
+        {
+            keptByPlan.fill(1, r.start, r.end);
+        }
+    }
     const out = new Set<number>();
     for (const r of ranges)
     {
-        if (r.keep) continue;
-        for (let i = r.start; i < r.end; i++) if (keptByPlan[i] === 1 && /\S/u.test(body[i]!)) out.add(i);
+        if (r.keep)
+        {
+            continue;
+        }
+        for (let i = r.start; i < r.end; i++)
+        {
+            if (keptByPlan[i] === 1 && /\S/u.test(body[i]!))
+            {
+                out.add(i);
+            }
+        }
     }
     return out;
 }
@@ -248,18 +272,27 @@ function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: r
         for (const [s, sentence] of all.entries())
         {
             const start = placeOf(body, sentence);
-            if (start < 0) continue;
+            if (start < 0)
+            {
+                continue;
+            }
             const target = marks.get(start);
             if (target !== undefined)
             {
                 counts.sentencesLabelled++;
                 expect(shownHere, `${where}: "${sentence}" labelled ${keyOf(target)}`).not.toContain(sentence);
-                if (target.kind === 'unticked') expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+                if (target.kind === 'unticked')
+                {
+                    expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+                }
                 else if (target.kind === 'unticked-attached')
                 {
                     // Q3: the unticked email's own text is nowhere in the PDF (a quote inside its block may be the
                     // own text of another email, printed there).
-                    if (ownOf(target.position) === s) expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+                    if (ownOf(target.position) === s)
+                    {
+                        expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+                    }
                 }
                 else if (target.kind === 'email' && inBlock(start))
                 {
@@ -272,9 +305,15 @@ function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: r
                     const targetPlan = plans[positions.indexOf(target.position)]!;
                     const targetRanges = withoutPrintedElsewhere(targetBody, targetPlan.ranges, elsewhere.get(target.position) ?? []).ranges;
                     const printedThere = at >= 0 && targetRanges.some((r) => r.keep && r.start <= at && at < r.end);
-                    if (ownOf(target.position) === s || printedThere) expect(named, `${where}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+                    if (ownOf(target.position) === s || printedThere)
+                    {
+                        expect(named, `${where}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+                    }
                 }
-                else expect(squash(bodyOf(doc.emails[target.number - 1]!)), `${where}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+                else
+                {
+                    expect(squash(bodyOf(doc.emails[target.number - 1]!)), `${where}: "${sentence}" in ${keyOf(target)}`).toContain(sentence);
+                }
             }
             else if (plan.ranges.some((r) => r.keep && r.start <= start && start < r.end))
             {
@@ -423,8 +462,14 @@ describe('"printed as email #N" labels with an email attached inside a dropped f
                                 const own = sentences(c)[last]!;
                                 const doc = prepared.doc;
                                 const times = doc.emails.filter((e) => squash(bodyOf(e)).includes(own)).length;
-                                if (positions.includes(lastAt)) expect(times, `${name}: the last email's own text`).toBeGreaterThan(0);
-                                else expect(times, `${name}: the last email's own text`).toBe(0);
+                                if (positions.includes(lastAt))
+                                {
+                                    expect(times, `${name}: the last email's own text`).toBeGreaterThan(0);
+                                }
+                                else
+                                {
+                                    expect(times, `${name}: the last email's own text`).toBe(0);
+                                }
                             });
                         }
                     }

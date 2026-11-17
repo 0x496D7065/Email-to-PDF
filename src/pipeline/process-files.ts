@@ -118,7 +118,10 @@ export async function processFilesWith(files: readonly FileLike[], steps: Proces
         const report = (stage: ProcessProgress['stage'], filesDone: number): void =>
         {
             // Defensive: the callers below already return once cancelled.
-            if (cancelled()) return;
+            if (cancelled())
+            {
+                return;
+            }
             try
             {
                 options.onProgress?.({ stage, filesDone, filesTotal: total });
@@ -128,25 +131,40 @@ export async function processFilesWith(files: readonly FileLike[], steps: Proces
                 // A broken progress display must not stop the batch.
             }
         };
-        if (cancelled()) return cancelledResult();
+        if (cancelled())
+        {
+            return cancelledResult();
+        }
         report('reading', 0);
         const read = createFileReader(steps.limits);
         for (const file of files)
         {
             const result = await readAndParse(file, read, steps, signal);
-            if (cancelled()) return cancelledResult();
+            if (cancelled())
+            {
+                return cancelledResult();
+            }
             parsed.push(result);
             report('reading', parsed.length);
         }
         report('organizing', total);
         const outcome = await steps.organize(parsed, signal);
-        if (cancelled()) return cancelledResult();
-        if (outcome.ok) return { ok: true, engine: outcome.result };
+        if (cancelled())
+        {
+            return cancelledResult();
+        }
+        if (outcome.ok)
+        {
+            return { ok: true, engine: outcome.result };
+        }
         return { ok: false, error: outcome.error, detail: outcome.detail, parsed };
     }
     catch
     {
-        if (cancelled()) return cancelledResult();
+        if (cancelled())
+        {
+            return cancelledResult();
+        }
         return { ok: false, error: 'unexpected', detail: UNEXPECTED_BATCH_DETAIL, parsed };
     }
 }
@@ -164,13 +182,22 @@ async function readAndParse(
     {
         name = typeof file.name === 'string' ? file.name : '';
         const outcome = await read(file);
-        if (!outcome.ok) return outcome.result;
+        if (!outcome.ok)
+        {
+            return outcome.result;
+        }
         // Cancelled while the browser was reading: the bytes are dropped unparsed.
-        if (signal?.aborted === true) return { ok: false, fileName: name, sha256: null, error: 'tool-error', detail: CANCELLED_BATCH_DETAIL };
+        if (signal?.aborted === true)
+        {
+            return { ok: false, fileName: name, sha256: null, error: 'tool-error', detail: CANCELLED_BATCH_DETAIL };
+        }
         // One file per call: its bytes go to a worker and are freed here before
         // the next file is read.
         const [result] = await steps.parse([outcome.input], signal);
-        if (result === undefined) throw new Error('no result');
+        if (result === undefined)
+        {
+            throw new Error('no result');
+        }
         return result;
     }
     catch

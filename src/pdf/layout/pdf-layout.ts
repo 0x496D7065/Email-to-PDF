@@ -115,7 +115,10 @@ export function bodyIndentWidth(typesetter: Typesetter, config: LayoutConfig): n
 {
     const width = config.bodyIndentSpaces * typesetter.spaceWidth('body');
     const textWidth = config.page.width - config.margin.left - config.margin.right;
-    if (!(width <= textWidth / 2)) throw new Error('layout: invalid config: bodyIndentSpaces makes the body indent wider than half the text area width');
+    if (!(width <= textWidth / 2))
+    {
+        throw new Error('layout: invalid config: bodyIndentSpaces makes the body indent wider than half the text area width');
+    }
     return width;
 }
 
@@ -131,12 +134,18 @@ export function settlePageCount<T extends { readonly pages: number }>(
     firstGuess = 1,
 ): { readonly front: T; readonly passes: number }
 {
-    if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error('layout: maxPasses must be a whole number >= 1');
+    if (!Number.isInteger(maxPasses) || maxPasses < 1)
+    {
+        throw new Error('layout: maxPasses must be a whole number >= 1');
+    }
     let guess = firstGuess;
     for (let pass = 1; pass <= maxPasses; pass++)
     {
         const front = layFront(guess);
-        if (front.pages === guess) return { front, passes: pass };
+        if (front.pages === guess)
+        {
+            return { front, passes: pass };
+        }
         guess = front.pages;
     }
     throw new Error(`layout: the index page numbers did not settle after ${String(maxPasses)} passes`);
@@ -160,19 +169,28 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
     // The emails, once, on pages of their own (page numbers relative to the first email page).
     const emails = new PageBuilder(config, typesetter);
     const emailPages = new Map<string, number>();
-    for (const [k, email] of doc.emails.entries()) placeEmail(emails, email, k === 0, bodyIndent, emailPages);
+    for (const [k, email] of doc.emails.entries())
+    {
+        placeEmail(emails, email, k === 0, bodyIndent, emailPages);
+    }
     const emailPageList = doc.emails.length > 0 ? emails.pages : [];
 
     const entries = doc.index.entries;
     for (const entry of entries)
     {
-        if (!emailPages.has(entry.anchor)) throw new Error(`layout: the index entry ${entry.anchor} has no email`);
+        if (!emailPages.has(entry.anchor))
+        {
+            throw new Error(`layout: the index entry ${entry.anchor} has no email`);
+        }
     }
     // And the other way (task 8.13): every email laid out, with its heading and header rows, has its own index entry.
     const indexed = new Set(entries.map((entry) => entry.anchor));
     for (const email of doc.emails)
     {
-        if (!indexed.has(email.anchor)) throw new Error(`layout: the email ${email.anchor} has no index entry`);
+        if (!indexed.has(email.anchor))
+        {
+            throw new Error(`layout: the email ${email.anchor} has no index entry`);
+        }
     }
     const laidIndex = entries.length > 0 ? layIndex(typesetter, config, emails.left, emails.width, doc.index) : null;
 
@@ -185,8 +203,14 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
         const before = typesetter.placeholders;
         const b = new PageBuilder(config, typesetter);
         b.destination(COVER_DESTINATION, 0);
-        for (const block of doc.cover.blocks) placeBlock(b, block);
-        if (laidIndex !== null) placeIndex(b, laidIndex, (anchor) => guess + emailPages.get(anchor)! + 1);
+        for (const block of doc.cover.blocks)
+        {
+            placeBlock(b, block);
+        }
+        if (laidIndex !== null)
+        {
+            placeIndex(b, laidIndex, (anchor) => guess + emailPages.get(anchor)! + 1);
+        }
         last = typesetter.placeholders - before;
         return { builder: b, pages: b.pages.length };
     }, options.maxPasses ?? MAX_FRONT_PASSES);
@@ -194,12 +218,21 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
     const frontPages = front.pages;
     const allPages = [...front.builder.pages, ...emailPageList];
     const anchorPages = new Map<string, number>();
-    for (const [anchor, page] of emailPages) anchorPages.set(anchor, frontPages + page);
+    for (const [anchor, page] of emailPages)
+    {
+        anchorPages.set(anchor, frontPages + page);
+    }
     const destinations = [...front.builder.destinations, ...emails.destinations.map((d) => ({ ...d, page: frontPages + d.page }))];
 
     const outline: LaidOutOutlineItem[] = [{ title: options.strings.coverBookmark, destination: COVER_DESTINATION, children: [] }];
-    if (laidIndex !== null) outline.push({ title: doc.index.heading, destination: INDEX_DESTINATION, children: [] });
-    for (const entry of entries) outline.push({ title: entry.bookmark, destination: entry.anchor, children: [] });
+    if (laidIndex !== null)
+    {
+        outline.push({ title: doc.index.heading, destination: INDEX_DESTINATION, children: [] });
+    }
+    for (const entry of entries)
+    {
+        outline.push({ title: entry.bookmark, destination: entry.anchor, children: [] });
+    }
 
     const pages = addFooters(front.builder, allPages, options.strings);
     return {
@@ -241,7 +274,10 @@ function placeBlock(b: PageBuilder, block: PdfBlock): void
             return;
         }
         case 'fields':
-            for (const row of block.rows) placeRow(b, layRow(b, row));
+            for (const row of block.rows)
+            {
+                placeRow(b, layRow(b, row));
+            }
             b.space(spacing.betweenBlocks);
             return;
         case 'paragraph':
@@ -251,7 +287,10 @@ function placeBlock(b: PageBuilder, block: PdfBlock): void
         case 'list':
             for (const [k, item] of block.items.entries())
             {
-                if (k > 0) b.space(b.config.list.itemGap);
+                if (k > 0)
+                {
+                    b.space(b.config.list.itemGap);
+                }
                 placeItem(b, layItem(b, item));
             }
             b.space(spacing.betweenBlocks);
@@ -281,14 +320,23 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent:
         spacing.afterFields +
         (notes.length > 0 ? linesHeight(notes) + spacing.afterNotes : 0) +
         linesHeight(body.slice(0, b.config.keepBodyLines));
-    if (keep > b.contentHeight) keep = headingHeight + (rows[0]?.height ?? 0);
+    if (keep > b.contentHeight)
+    {
+        keep = headingHeight + (rows[0]?.height ?? 0);
+    }
 
     // After this, the keep block fits below the cursor (or the page is empty).
     // `first` is only a safeguard: the first email starts on a fresh PageBuilder, so `!b.atTop` is already false for it.
     if (!b.atTop)
     {
-        if (b.config.newPagePerEmail && !first) b.newPage();
-        else if (!b.fits(spacing.betweenEmails + keep)) b.newPage();
+        if (b.config.newPagePerEmail && !first)
+        {
+            b.newPage();
+        }
+        else if (!b.fits(spacing.betweenEmails + keep))
+        {
+            b.newPage();
+        }
         else
         {
             b.rule(b.y + spacing.betweenEmails / 2);
@@ -300,14 +348,20 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent:
     anchorPages.set(email.anchor, b.pageIndex);
     b.placeAll(heading);
     b.space(spacing.afterHeading);
-    for (const row of rows) placeRow(b, row);
+    for (const row of rows)
+    {
+        placeRow(b, row);
+    }
     b.space(spacing.afterFields);
     if (notes.length > 0)
     {
         b.placeAll(notes, bodyX);
         b.space(spacing.afterNotes);
     }
-    for (const laid of body) b.place(laid, bodyX);
+    for (const laid of body)
+    {
+        b.place(laid, bodyX);
+    }
 
     if (email.attachments !== null)
     {
@@ -316,7 +370,10 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent:
         const items = email.attachments.items.map((item) => layItem(b, [item]));
         b.ensure(linesHeight(label) + (items[0]?.lines[0]?.height ?? 0));
         b.placeAll(label);
-        for (const item of items) placeItem(b, item);
+        for (const item of items)
+        {
+            placeItem(b, item);
+        }
     }
 }
 
@@ -332,7 +389,10 @@ function addFooters(b: PageBuilder, all: readonly PageInProgress[], strings: Lay
     return all.map((p, index) =>
     {
         const lines = ts.wrap([{ role: 'muted', text: strings.pageFooter(index + 1, total) }], b.width, 'muted', ts.footerStyle);
-        if (lines.length !== 1) throw new Error('layout: the page footer is wider than the text area');
+        if (lines.length !== 1)
+        {
+            throw new Error('layout: the page footer is wider than the text area');
+        }
         const line = lines[0]!;
         const x = footer.align === 'right' ? b.left + b.width - line.width : b.left + (b.width - line.width) / 2;
         ts.emit(line, x, page.height - footer.baselineFromBottom - line.above, p.text);

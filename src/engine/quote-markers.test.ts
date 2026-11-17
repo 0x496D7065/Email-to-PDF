@@ -21,7 +21,10 @@ function detect(body: string): FoldRange[]
     // Sorted, not overlapping.
     folds.forEach((f, k) =>
     {
-        if (k > 0) expect(f.start).toBeGreaterThanOrEqual(folds[k - 1]?.end ?? 0);
+        if (k > 0)
+        {
+            expect(f.start).toBeGreaterThanOrEqual(folds[k - 1]?.end ?? 0);
+        }
     });
     return folds;
 }

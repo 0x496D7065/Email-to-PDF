@@ -57,9 +57,15 @@ const CODEPAGE_ENCODINGS: ReadonlyMap<number, string> = new Map([
  */
 export function encodingForCodepage(codepage: unknown): string | null
 {
-    if (typeof codepage !== 'number') return null;
+    if (typeof codepage !== 'number')
+    {
+        return null;
+    }
     const label = CODEPAGE_ENCODINGS.get(codepage);
-    if (label === undefined) return null;
+    if (label === undefined)
+    {
+        return null;
+    }
     try
     {
         new TextDecoder(label);
@@ -67,7 +73,10 @@ export function encodingForCodepage(codepage: unknown): string | null
     }
     catch (error)
     {
-        if (error instanceof RangeError) return null;
+        if (error instanceof RangeError)
+        {
+            return null;
+        }
         throw error;
     }
 }

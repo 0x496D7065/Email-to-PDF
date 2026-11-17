@@ -53,17 +53,29 @@ export interface PrintedElsewhereInput {
 export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number, readonly PdfRange[]>
 {
     const out = new Map<number, readonly PdfRange[]>();
-    if (input.policy.unfoldEverything) return out;
+    if (input.policy.unfoldEverything)
+    {
+        return out;
+    }
     const { order, parts, restored } = noRepeat(input);
     for (const slot of order.slots)
     {
-        if (slot.kind !== 'email') continue;
+        if (slot.kind !== 'email')
+        {
+            continue;
+        }
         const list = parts.get(slot.position);
         const back = restored.get(slot.position);
         const message = input.result.messages[slot.position]?.message;
-        if ((list === undefined && back === undefined) || message === undefined) continue;
+        if ((list === undefined && back === undefined) || message === undefined)
+        {
+            continue;
+        }
         const ranges = pdfRanges(message.bodyText, input.plans[slot.plan], input.policy, list ?? [], back);
-        if (ranges !== null) out.set(slot.position, ranges);
+        if (ranges !== null)
+        {
+            out.set(slot.position, ranges);
+        }
     }
     return out;
 }

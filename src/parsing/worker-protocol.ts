@@ -60,7 +60,10 @@ function isRecord(value: unknown): value is Record<string, unknown>
 /** True if `data` is a well-formed page -> worker message. */
 export function isToWorker(data: unknown): data is ToWorker
 {
-    if (!isRecord(data)) return false;
+    if (!isRecord(data))
+    {
+        return false;
+    }
     if (data.type === 'parse')
     {
         return typeof data.name === 'string' && (data.kind === 'eml' || data.kind === 'msg') && data.bytes instanceof Uint8Array;
@@ -71,9 +74,18 @@ export function isToWorker(data: unknown): data is ToWorker
 /** True if `data` is a well-formed worker -> page message. */
 export function isFromWorker(data: unknown): data is FromWorker
 {
-    if (!isRecord(data)) return false;
-    if (data.type === 'html') return Array.isArray(data.htmls) && data.htmls.every((h) => typeof h === 'string');
-    if (data.type === 'result') return isRecord(data.result) && typeof data.result.ok === 'boolean' && hasWellFormedAttached(data.result);
+    if (!isRecord(data))
+    {
+        return false;
+    }
+    if (data.type === 'html')
+    {
+        return Array.isArray(data.htmls) && data.htmls.every((h) => typeof h === 'string');
+    }
+    if (data.type === 'result')
+    {
+        return isRecord(data.result) && typeof data.result.ok === 'boolean' && hasWellFormedAttached(data.result);
+    }
     return data.type === 'failed';
 }
 
@@ -99,47 +111,98 @@ export function isFromWorker(data: unknown): data is FromWorker
  */
 export function hasWellFormedAttached(result: Record<string, unknown>): boolean
 {
-    if (result.ok !== true) return !('attached' in result);
+    if (result.ok !== true)
+    {
+        return !('attached' in result);
+    }
     const { message } = result;
-    if (!isRecord(message) || !isRecord(message.source) || 'attachedPath' in message.source) return false;
-    if (!('attached' in result)) return attachmentsPointInto(message.attachments, () => false);
+    if (!isRecord(message) || !isRecord(message.source) || 'attachedPath' in message.source)
+    {
+        return false;
+    }
+    if (!('attached' in result))
+    {
+        return attachmentsPointInto(message.attachments, () => false);
+    }
     const { attached } = result;
-    if (!Array.isArray(attached) || attached.length === 0) return false;
+    if (!Array.isArray(attached) || attached.length === 0)
+    {
+        return false;
+    }
     const file = message.source;
     const isMsg = file.kind === 'msg';
 
     const entries: { parent: number; path: readonly number[]; body: string }[] = [];
     const isAncestor = (ancestor: number, of: number): boolean =>
     {
-        for (let at = entries[of]?.parent ?? -1; at !== -1; at = entries[at]?.parent ?? -1) if (at === ancestor) return true;
+        for (let at = entries[of]?.parent ?? -1; at !== -1; at = entries[at]?.parent ?? -1)
+        {
+            if (at === ancestor)
+            {
+                return true;
+            }
+        }
         return false;
     };
     const bodyOf = (holder: number): unknown => (holder === -1 ? message.bodyText : entries[holder]?.body);
     for (const [index, entry] of attached.entries())
     {
-        if (!isRecord(entry) || !isRecord(entry.message) || !isRecord(entry.message.source)) return false;
+        if (!isRecord(entry) || !isRecord(entry.message) || !isRecord(entry.message.source))
+        {
+            return false;
+        }
         const { parent, path, places, name } = entry;
         const { bodyText, source } = entry.message;
-        if (!isInteger(parent) || parent < -1 || parent >= index || typeof bodyText !== 'string' || typeof name !== 'string') return false;
+        if (!isInteger(parent) || parent < -1 || parent >= index || typeof bodyText !== 'string' || typeof name !== 'string')
+        {
+            return false;
+        }
         const parentPath = parent === -1 ? [] : (entries[parent]?.path ?? []);
-        if (!isPath(path) || path.length !== parentPath.length + 1 || parentPath.some((n, i) => path[i] !== n)) return false;
-        if (!isPath(source.attachedPath) || source.attachedPath.length !== path.length) return false;
-        if (source.attachedPath.some((n, i) => path[i] !== n)) return false;
-        if (source.fileName !== file.fileName || source.sha256 !== file.sha256 || source.kind !== file.kind) return false;
+        if (!isPath(path) || path.length !== parentPath.length + 1 || parentPath.some((n, i) => path[i] !== n))
+        {
+            return false;
+        }
+        if (!isPath(source.attachedPath) || source.attachedPath.length !== path.length)
+        {
+            return false;
+        }
+        if (source.attachedPath.some((n, i) => path[i] !== n))
+        {
+            return false;
+        }
+        if (source.fileName !== file.fileName || source.sha256 !== file.sha256 || source.kind !== file.kind)
+        {
+            return false;
+        }
         entries.push({ parent, path, body: bodyText });
-        if (!Array.isArray(places) || (isMsg && places.length !== 0)) return false;
+        if (!Array.isArray(places) || (isMsg && places.length !== 0))
+        {
+            return false;
+        }
         let holder: number | undefined = parent;
         for (const place of places as unknown[])
         {
-            if (!isRecord(place) || place.holder !== holder || holder === undefined) return false;
+            if (!isRecord(place) || place.holder !== holder || holder === undefined)
+            {
+                return false;
+            }
             const body = bodyOf(holder);
             const { start, end } = place;
-            if (typeof body !== 'string' || !isInteger(start) || !isInteger(end)) return false;
-            if (start < 0 || end < start || end > body.length || !body.startsWith(FORWARDED_SEPARATOR, start)) return false;
+            if (typeof body !== 'string' || !isInteger(start) || !isInteger(end))
+            {
+                return false;
+            }
+            if (start < 0 || end < start || end > body.length || !body.startsWith(FORWARDED_SEPARATOR, start))
+            {
+                return false;
+            }
             holder = holder === -1 ? undefined : (entries[holder]?.parent ?? undefined);
         }
     }
-    if (!attachmentsPointInto(message.attachments, (target) => !isMsg && target < attached.length)) return false;
+    if (!attachmentsPointInto(message.attachments, (target) => !isMsg && target < attached.length))
+    {
+        return false;
+    }
     return attached.every((entry, index) =>
         attachmentsPointInto((entry as { message: Record<string, unknown> }).message.attachments, (target) => !isMsg && isAncestor(index, target)),
     );
@@ -148,7 +211,10 @@ export function hasWellFormedAttached(result: Record<string, unknown>): boolean
 /** True if `attachments` is a list of records whose attachedIndex, where present, is an integer accepted by `allowed`. */
 function attachmentsPointInto(attachments: unknown, allowed: (target: number) => boolean): boolean
 {
-    if (!Array.isArray(attachments)) return false;
+    if (!Array.isArray(attachments))
+    {
+        return false;
+    }
     return attachments.every(
         (a) => isRecord(a) && (!('attachedIndex' in a) || (isInteger(a.attachedIndex) && a.attachedIndex >= 0 && allowed(a.attachedIndex))),
     );
@@ -199,7 +265,10 @@ export function createWorkerSide(post: (message: FromWorker) => void): (data: un
 
     return (data) =>
     {
-        if (!isToWorker(data)) return;
+        if (!isToWorker(data))
+        {
+            return;
+        }
         if (data.type === 'conversions')
         {
             const resolve = waiting;
@@ -208,7 +277,10 @@ export function createWorkerSide(post: (message: FromWorker) => void): (data: un
             return;
         }
         // One file per worker: a second request is ignored.
-        if (started) return;
+        if (started)
+        {
+            return;
+        }
         started = true;
         void run(data);
     };

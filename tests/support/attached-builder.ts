@@ -44,8 +44,14 @@ function blockHeader(m: NormalizedMessage): string
 {
     const from = m.from.map((a) => (a.name === '' ? a.address : `${a.name} <${a.address}>`)).join(', ');
     const lines = [FORWARDED_SEPARATOR, ...(from === '' ? [] : [`From: ${from}`])];
-    if (m.date.original !== '') lines.push(`Date: ${m.date.original}`);
-    if (m.subject !== '') lines.push(`Subject: ${m.subject}`);
+    if (m.date.original !== '')
+    {
+        lines.push(`Date: ${m.date.original}`);
+    }
+    if (m.subject !== '')
+    {
+        lines.push(`Subject: ${m.subject}`);
+    }
     return lines.join('\n');
 }
 
@@ -96,7 +102,10 @@ export function attachedResult(root: AttachedNode): Extract<ParseResult, { ok: t
                 places.push({ holder: self, start, end });
                 for (const up of ups)
                 {
-                    if (up.offset === null) break;
+                    if (up.offset === null)
+                    {
+                        break;
+                    }
                     start += up.offset;
                     end += up.offset;
                     places.push({ holder: up.holder, start, end });

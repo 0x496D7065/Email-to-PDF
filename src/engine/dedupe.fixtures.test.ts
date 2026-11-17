@@ -26,7 +26,10 @@ describe('dedupe over the parsed fixtures', () =>
         expect(result.mergedCount).toBe(FIXTURES.length - expected.size);
 
         // No fixture triggers an engine warning.
-        for (const k of result.kept) expect(k.warnings).toEqual([]);
+        for (const k of result.kept)
+        {
+            expect(k.warnings).toEqual([]);
+        }
 
         // Every merged copy has the representative's normalized body.
         for (const k of result.kept)

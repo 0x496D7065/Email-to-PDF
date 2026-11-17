@@ -85,7 +85,10 @@ export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, con
         return { text: '', truncated: false };
     };
     const first = await parserFor(kind, recording).parse(file);
-    if (recorded.length === 0) return first;
+    if (recorded.length === 0)
+    {
+        return first;
+    }
 
     // Pass 3 runs even if pass 1 failed: a converter failure on the page must
     // win over a later problem in the file, exactly as with a direct converter.
@@ -104,7 +107,10 @@ export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, con
         next++;
         // The adapter turns this into its 'html-body-unreadable' warning, exactly
         // as it does when a direct converter throws.
-        if (!outcome.ok) throw new Error(outcome.reason);
+        if (!outcome.ok)
+        {
+            throw new Error(outcome.reason);
+        }
         return { text: outcome.text, truncated: outcome.truncated };
     };
     const result = await parserFor(kind, replaying).parse(file);

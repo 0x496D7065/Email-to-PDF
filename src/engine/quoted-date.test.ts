@@ -588,7 +588,10 @@ describe('parseQuotedDate: robustness', () =>
         const started = performance.now();
         for (let round = 0; round < 20; round++)
         {
-            for (const text of inputs) expectUnreadable(parseQuotedDate(text, 0));
+            for (const text of inputs)
+            {
+                expectUnreadable(parseQuotedDate(text, 0));
+            }
         }
         // Very generous bound (slow CI, parallel workers): the real guarantee is
         // MAX_QUOTED_DATE_LENGTH, which caps every regular expression's input at

@@ -54,7 +54,10 @@ async function parse(data: Uint8Array, name = 'test.eml'): Promise<ParseResult>
 async function parseOk(data: Uint8Array): Promise<NormalizedMessage>
 {
     const result = await parse(data);
-    if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    }
     return result.message;
 }
 
@@ -298,7 +301,10 @@ describe('createEmlParser: body', () =>
         const html = '<p>Hello <script>window.SCRIPT_RAN = 1</script></p>';
         const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n', html, '\r\n');
         const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: data });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(htmlToText).toHaveBeenCalledTimes(1);
         expect(htmlToText.mock.calls[0]).toEqual([`${html}\n`]);
         expect(result.message.bodyText).toBe('converted text');
@@ -310,7 +316,10 @@ describe('createEmlParser: body', () =>
         const htmlToText = (): HtmlToTextResult => ({ text: 'start\n\n[Text cut here: ...]', truncated: true });
         const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>long</p>\r\n');
         const result = await createEmlParser({ htmlToText }).parse({ name: 'cut.eml', bytes: data });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('start\n\n[Text cut here: ...]');
         expect(result.message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
     });
@@ -369,7 +378,10 @@ describe('createEmlParser: line ends in bodyText are LF only (only CR is changed
         const htmlToText = (): HtmlToTextResult => ({ text: 'a\rb\r\nc', truncated: false });
         const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>x</p>\r\n');
         const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: data });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('a\nb\nc');
     });
 
@@ -413,7 +425,10 @@ describe('createEmlParser: line ends in bodyText are LF only (only CR is changed
     {
         const data = plainBody('one\rtwo\r\n');
         const result = await parse(data);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.source.sha256).toBe(await sha256Hex(data));
     });
 });
@@ -463,7 +478,10 @@ describe('createEmlParser: attachments (metadata only)', () =>
     it('lists every part with name, decoded size and type, and nothing else', async () =>
     {
         const result = await parse(data);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         const { message } = result;
         expect(message.attachments).toEqual([
             // Inline image of the HTML body (multipart/related): listed too.
@@ -609,7 +627,10 @@ describe('createEmlParser: inline forwarded messages', () =>
             name: 'fw.eml',
             bytes: withParts('Outer text.', rfc822Part(inner)),
         });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(htmlToText).toHaveBeenCalledTimes(1);
         expect(htmlToText.mock.calls[0]?.[0]).toContain(innerHtml);
         expect(result.message.bodyText).toContain('Outer text.');
@@ -627,7 +648,10 @@ describe('createEmlParser: inline forwarded messages', () =>
             name: 'fw-cut.eml',
             bytes: withParts('Outer text.', rfc822Part(inner)),
         });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toContain('cut inner text');
         expect(result.message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
     });
@@ -640,7 +664,10 @@ describe('createEmlParser: inline forwarded messages', () =>
             `Date: Mon, 2 Jun 2025 ${String(level).padStart(2, '0')}:00:00 +0000`,
             `Subject: Level ${level}`,
         ];
-        if (level === levels) return crlf(...head, '', `Body of level ${level}.`);
+        if (level === levels)
+        {
+            return crlf(...head, '', `Body of level ${level}.`);
+        }
         const b = `l${level}`;
         return crlf(
             ...head,
@@ -679,7 +706,10 @@ describe('createEmlParser: inline forwarded messages', () =>
     {
         const level6 = chain(6, 7);
         const message = await parseOk(withParts('Outer text.', rfc822Part(chain(1, 7))));
-        for (let level = 1; level <= 5; level++) expect(message.bodyText).toContain(`Body of level ${level}.`);
+        for (let level = 1; level <= 5; level++)
+        {
+            expect(message.bodyText).toContain(`Body of level ${level}.`);
+        }
         expect(message.bodyText).not.toContain('Body of level 6.');
         expect(message.bodyText).not.toContain('Body of level 7.');
         expect(message.warnings).toEqual(['forwarded-message-not-expanded']);
@@ -747,7 +777,10 @@ describe('createEmlParser: inline forwarded messages', () =>
         {
             const spy = vi.mocked(decodeWords);
             const real = spy.getMockImplementation();
-            if (real === undefined) throw new Error('decodeWords spy has no implementation');
+            if (real === undefined)
+            {
+                throw new Error('decodeWords spy has no implementation');
+            }
             spy.mockImplementation((value) =>
                 value === ENCODED_SUBJECT ? `line1${lineBreak}From: spoof@example.test` : real(value),
             );
@@ -830,7 +863,10 @@ describe('createEmlParser: inline forwarded messages', () =>
         }
         const inner = `From: carol@example.test\r\nSubject: Too deep\r\n${deep}`;
         const result = await parse(withParts('Outer text.', rfc822Part(inner)));
-        if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        }
         expect(result.message.bodyText).toContain('Outer text.');
         expect(result.message.bodyText).not.toContain('---------- Forwarded message ----------');
         expect(result.message.attachments).toEqual([{ fileName: '', size: inner.length, mimeType: 'message/rfc822' }]);
@@ -937,7 +973,10 @@ describe('createEmlParser: body built from the MIME parts tree', () =>
     async function parseWith(data: Uint8Array, htmlToText: (html: string) => HtmlToTextResult): Promise<NormalizedMessage>
     {
         const result = await createEmlParser({ htmlToText }).parse({ name: 'tree.eml', bytes: data });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         return result.message;
     }
 
@@ -1662,7 +1701,10 @@ describe('createEmlParser: malformed input never throws', () =>
     async function readWith(p: EmailParser, data: Uint8Array): Promise<NormalizedMessage>
     {
         const result = await p.parse({ name: 'h.eml', bytes: data });
-        if (!result.ok) throw new Error(`unexpected failure: ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`unexpected failure: ${result.detail}`);
+        }
         return result.message;
     }
 
@@ -1700,7 +1742,10 @@ describe('createEmlParser: malformed input never throws', () =>
         const flaky = createEmlParser({
             htmlToText: (html) =>
             {
-                if (++calls === 2) throw new Error('second part failed');
+                if (++calls === 2)
+                {
+                    throw new Error('second part failed');
+                }
                 return { text: `[stub] ${html.length}`, truncated: false };
             },
         });

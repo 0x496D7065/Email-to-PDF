@@ -138,7 +138,10 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
     {
         for (let c = 0; c < 0x20; c++)
         {
-            if (c === 9) continue;
+            if (c === 9)
+            {
+                continue;
+            }
             const s = sanitizeRuns(`a${String.fromCharCode(c)}b`, 'body');
             expect(s.replaced, String(c)).toBe(1);
             expect(s.runs, String(c)).toEqual([
@@ -196,7 +199,10 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
     it('replaces the noncharacters of every plane, one code per code point', () =>
     {
         expect(sanitizeRuns('\u{FFFE}\u{FFFF}', 'body')).toEqual({ runs: [{ role: 'code', text: '[U+FFFE][U+FFFF]' }], replaced: 2 });
-        for (let c = 0xfdd0; c <= 0xfdef; c++) expect(sanitizeRuns(cp(c), 'body').replaced, c.toString(16)).toBe(1);
+        for (let c = 0xfdd0; c <= 0xfdef; c++)
+        {
+            expect(sanitizeRuns(cp(c), 'body').replaced, c.toString(16)).toBe(1);
+        }
         expect(sanitizeRuns('\u{FDCF}\u{FDF0}', 'body').replaced).toBe(0);
         for (let plane = 1; plane <= 16; plane++)
         {
@@ -350,7 +356,10 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
         const input = 'a\nb\rc\u0000\u{2028}d\u{2029}';
         const s = sanitizeRuns(input, 'body');
         expect(input).toBe(`a\nb\rc${cp(0)}${cp(0x2028)}d${cp(0x2029)}`);
-        for (const r of s.runs) expect(r.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
+        for (const r of s.runs)
+        {
+            expect(r.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
+        }
         expect(s.replaced).toBe(5);
         expect(sanitizeRuns('\u{2029}', 'body').runs).toEqual([{ role: 'code', text: '[U+2029]' }]);
     });
@@ -360,7 +369,10 @@ describe('the list of characters drawn as nothing (group 2)', () =>
 {
     it('is sorted, not overlapping, and holds exactly the agreed characters', () =>
     {
-        for (let k = 1; k < DRAWN_AS_NOTHING.length; k++) expect(DRAWN_AS_NOTHING[k]![0]).toBeGreaterThan(DRAWN_AS_NOTHING[k - 1]![1]);
+        for (let k = 1; k < DRAWN_AS_NOTHING.length; k++)
+        {
+            expect(DRAWN_AS_NOTHING[k]![0]).toBeGreaterThan(DRAWN_AS_NOTHING[k - 1]![1]);
+        }
         expect(DRAWN_AS_NOTHING).toEqual([
             [0x034f, 0x034f],
             [0x061c, 0x061c],
@@ -372,7 +384,10 @@ describe('the list of characters drawn as nothing (group 2)', () =>
             [0xe0100, 0xe01ef],
         ]);
         // The tags of the kept flags (and the cancel tag) are drawn as nothing.
-        for (const c of [0xe0020, 0xe0062, 0xe0067, 0xe007e, 0xe007f]) expect(isDrawnAsNothing(c), c.toString(16)).toBe(true);
+        for (const c of [0xe0020, 0xe0062, 0xe0067, 0xe007e, 0xe007f])
+        {
+            expect(isDrawnAsNothing(c), c.toString(16)).toBe(true);
+        }
         expect(ZERO_WIDTH_SPACE).toBe(0x200b);
         expect(isDrawnAsNothing(ZERO_WIDTH_SPACE)).toBe(true);
         for (const c of [0x20, 0xad, 0x200a, 0x2010, 0x2028, 0x202a, 0x205f, 0x2065, 0xfdff, 0xfe10, 0xfefe, 0xe001f, 0xe0080, 0xe00ff, 0xe01f0, 0x1f3f4])
@@ -648,14 +663,20 @@ describe('bodyLines: quote marks removed (transform g, tasks 8.1 and 8.6)', () =
         {
             let line = '';
             const n = Math.floor(next() * 8);
-            for (let k = 0; k < n; k++) line += parts[Math.floor(next() * parts.length)]!;
+            for (let k = 0; k < n; k++)
+            {
+                line += parts[Math.floor(next() * parts.length)]!;
+            }
             const where = JSON.stringify(line);
             const length = quotePrefixLength(line);
             const prefix = line.slice(0, length);
             // (With the u flag, a lone half of U+E0100 does not match \u{E0100}: the prefix never cuts a pair in two.
             // U+E0100 is outside the character class: a variation selector there would read as joined to the one before.)
             expect(prefix, where).toMatch(/^(?:[> \t\u{00A0}\u{FEFF}\u{200B}\u{200E}\u{00AD}]|\u{E0100})*$/u);
-            if (length > 0) expect(prefix, where).toContain('>');
+            if (length > 0)
+            {
+                expect(prefix, where).toContain('>');
+            }
             // What is left never starts with a quote mark (after whitespace other than VT / FF, or invisible characters).
             expect(line.slice(length), where).not.toMatch(/^(?:[ \t\u{00A0}\u{FEFF}\u{200B}\u{200E}\u{00AD}]|\u{E0100})*>/u);
         }

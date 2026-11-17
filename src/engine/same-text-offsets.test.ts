@@ -85,14 +85,23 @@ describe('mapOffsets', () =>
             const to = write(random() < 0.5);
             expect(normalizeBody(from)).toBe(normalizeBody(to));
             const starts = [0];
-            for (let k = 0; k < from.length; k++) if (from[k] === '\n' || (from[k] === '\r' && from[k + 1] !== '\n')) starts.push(k + 1);
+            for (let k = 0; k < from.length; k++)
+            {
+                if (from[k] === '\n' || (from[k] === '\r' && from[k + 1] !== '\n'))
+                {
+                    starts.push(k + 1);
+                }
+            }
             const mapped = mapOffsets(from, to, starts);
             expect(mapped).not.toBeNull();
             // Each line with text keeps its text after the mapped offset.
             starts.forEach((s, k) =>
             {
                 const text = from.slice(s).split(/\r\n|\r|\n/u)[0]!.replace(/[ \t]+$/u, '');
-                if (text === '') return;
+                if (text === '')
+                {
+                    return;
+                }
                 expect(to.slice(mapped![k]).normalize('NFC').startsWith(text.normalize('NFC')), `round ${String(round)} line ${String(k)}`).toBe(true);
             });
         }

@@ -40,8 +40,14 @@ function contentLines(text: string, lines: readonly Line[]): [number, number]
 {
     let a = 0;
     let b = lines.length;
-    while (a < b && lineKey(text, lines[a]!) === '') a++;
-    while (b > a && lineKey(text, lines[b - 1]!) === '') b--;
+    while (a < b && lineKey(text, lines[a]!) === '')
+    {
+        a++;
+    }
+    while (b > a && lineKey(text, lines[b - 1]!) === '')
+    {
+        b--;
+    }
     return a === b ? [lines.length, lines.length] : [a, b];
 }
 
@@ -53,8 +59,14 @@ function lineAt(lines: readonly Line[], at: number): number
     while (lo < hi)
     {
         const mid = (lo + hi + 1) >> 1;
-        if (lines[mid]!.start <= at) lo = mid;
-        else hi = mid - 1;
+        if (lines[mid]!.start <= at)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid - 1;
+        }
     }
     return lo;
 }
@@ -76,14 +88,29 @@ function lineAt(lines: readonly Line[], at: number): number
  */
 export function mapOffsets(from: string, to: string, offsets: readonly number[]): number[] | null
 {
-    if (offsets.some((o) => !Number.isInteger(o) || o < 0 || o > from.length)) return null;
-    if (from === to) return [...offsets];
+    if (offsets.some((o) => !Number.isInteger(o) || o < 0 || o > from.length))
+    {
+        return null;
+    }
+    if (from === to)
+    {
+        return [...offsets];
+    }
     const a = linesOf(from);
     const b = linesOf(to);
     const [a0, a1] = contentLines(from, a);
     const [b0, b1] = contentLines(to, b);
-    if (a1 - a0 !== b1 - b0) return null;
-    for (let k = 0; a0 + k < a1; k++) if (lineKey(from, a[a0 + k]!) !== lineKey(to, b[b0 + k]!)) return null;
+    if (a1 - a0 !== b1 - b0)
+    {
+        return null;
+    }
+    for (let k = 0; a0 + k < a1; k++)
+    {
+        if (lineKey(from, a[a0 + k]!) !== lineKey(to, b[b0 + k]!))
+        {
+            return null;
+        }
+    }
     const out: number[] = [];
     for (const o of offsets)
     {
@@ -114,10 +141,22 @@ export function mapOffsets(from: string, to: string, offsets: readonly number[])
         const column = o - la.start;
         const fromLine = from.slice(la.start, la.contentEnd);
         const toLine = to.slice(lb.start, lb.contentEnd);
-        if (column === 0) out.push(lb.start);
-        else if (o >= la.contentEnd) out.push(lb.contentEnd);
-        else if (fromLine.slice(0, column) === toLine.slice(0, column)) out.push(lb.start + column);
-        else return null;
+        if (column === 0)
+        {
+            out.push(lb.start);
+        }
+        else if (o >= la.contentEnd)
+        {
+            out.push(lb.contentEnd);
+        }
+        else if (fromLine.slice(0, column) === toLine.slice(0, column))
+        {
+            out.push(lb.start + column);
+        }
+        else
+        {
+            return null;
+        }
     }
     return out;
 }

@@ -23,7 +23,10 @@ function securityHeaders(): Plugin
         transformIndexHtml(html)
         {
             const charset = '<meta charset="UTF-8" />';
-            if (!html.includes(charset)) throw new Error(`index.html must contain ${charset}`);
+            if (!html.includes(charset))
+            {
+                throw new Error(`index.html must contain ${charset}`);
+            }
             const tags =
                 `
     <meta http-equiv="Content-Security-Policy" content="${cspForMeta()}" />` +
@@ -59,7 +62,10 @@ function previewHeaders(): Plugin
                 const url = (req as unknown as { url?: string }).url ?? '/';
                 const response = res as unknown as { setHeader(name: string, value: string): void };
                 const pathname = url.split(/[?#]/, 1)[0] ?? '/';
-                for (const [name, value] of Object.entries(securityHeadersFor(pathname))) response.setHeader(name, value);
+                for (const [name, value] of Object.entries(securityHeadersFor(pathname)))
+                {
+                    response.setHeader(name, value);
+                }
                 next();
             });
         },
@@ -96,16 +102,25 @@ function offlineCopy(): Plugin
         },
         buildStart()
         {
-            if (site) this.emitFile({ type: 'chunk', id: swEntry, fileName: SW_FILE_NAME });
+            if (site)
+            {
+                this.emitFile({ type: 'chunk', id: swEntry, fileName: SW_FILE_NAME });
+            }
         },
         // 'post': after every other plugin has written its files (index.html, _headers).
         generateBundle: {
             order: 'post',
             async handler(_options, bundle)
             {
-                if (!site) return;
+                if (!site)
+                {
+                    return;
+                }
                 const sw = bundle[SW_FILE_NAME];
-                if (sw?.type !== 'chunk') throw new Error(`offline-copy: ${SW_FILE_NAME} was not built`);
+                if (sw?.type !== 'chunk')
+                {
+                    throw new Error(`offline-copy: ${SW_FILE_NAME} was not built`);
+                }
                 // A classic script: nothing imported from or shared with the page's code.
                 if (sw.imports.length > 0 || sw.dynamicImports.length > 0 || sw.exports.length > 0)
                 {
@@ -114,7 +129,10 @@ function offlineCopy(): Plugin
                 const files = new Map<string, Uint8Array>();
                 for (const [fileName, output] of Object.entries(bundle))
                 {
-                    if (fileName === SW_FILE_NAME) continue;
+                    if (fileName === SW_FILE_NAME)
+                    {
+                        continue;
+                    }
                     const content = output.type === 'chunk' ? output.code : output.source;
                     files.set(fileName, typeof content === 'string' ? new TextEncoder().encode(content) : content);
                 }
@@ -126,12 +144,24 @@ function offlineCopy(): Plugin
                         for (const entry of await this.fs.readdir(dir, { withFileTypes: true }))
                         {
                             const path = `${dir}/${entry.name}`;
-                            if (entry.isDirectory()) await walk(path, `${prefix}${entry.name}/`);
-                            else if (files.has(`${prefix}${entry.name}`)) throw new Error(`offline-copy: ${prefix}${entry.name} is both built and in public/`);
-                            else files.set(`${prefix}${entry.name}`, await this.fs.readFile(path));
+                            if (entry.isDirectory())
+                            {
+                                await walk(path, `${prefix}${entry.name}/`);
+                            }
+                            else if (files.has(`${prefix}${entry.name}`))
+                            {
+                                throw new Error(`offline-copy: ${prefix}${entry.name} is both built and in public/`);
+                            }
+                            else
+                            {
+                                files.set(`${prefix}${entry.name}`, await this.fs.readFile(path));
+                            }
                         }
                     };
-                    if (await this.fs.stat(publicDir).then(() => true, () => false)) await walk(publicDir, '');
+                    if (await this.fs.stat(publicDir).then(() => true, () => false))
+                    {
+                        await walk(publicDir, '');
+                    }
                 }
                 const paths = precachePaths([...files.keys()], base);
                 const pathOf = (fileName: string): string => (fileName === 'index.html' ? base : `${base}${fileName}`);
@@ -139,7 +169,10 @@ function offlineCopy(): Plugin
                 // _headers is not stored, but the copy of "/" keeps the headers it
                 // was served with: a header change must change the version too.
                 const headersFile = files.get('_headers');
-                if (headersFile === undefined) throw new Error('offline-copy: _headers was not built');
+                if (headersFile === undefined)
+                {
+                    throw new Error('offline-copy: _headers was not built');
+                }
                 // The build check computes this version again from dist/ and fails
                 // if sw.js holds another one (scripts/check-no-network.mjs).
                 const version = manifestVersion(
@@ -174,7 +207,10 @@ function bytesImport(): Plugin
         enforce: 'pre',
         async load(id)
         {
-            if (!id.endsWith(BYTES_SUFFIX)) return null;
+            if (!id.endsWith(BYTES_SUFFIX))
+            {
+                return null;
+            }
             const file = id.slice(0, -BYTES_SUFFIX.length);
             if (!isBytesImportAllowed(file, fontsDir))
             {

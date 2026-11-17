@@ -157,8 +157,14 @@ interface QLine {
 /** Whitespace as \s sees it (nbsp and BOM included), with a fast path for the common ones. */
 function isSpace(code: number): boolean
 {
-    if (code === 0x20 || code === 0x09) return true;
-    if (code < 0x80 && code !== 0x0b && code !== 0x0c) return false;
+    if (code === 0x20 || code === 0x09)
+    {
+        return true;
+    }
+    if (code < 0x80 && code !== 0x0b && code !== 0x0c)
+    {
+        return false;
+    }
     return /\s/u.test(String.fromCharCode(code));
 }
 
@@ -169,8 +175,14 @@ function classify(text: string, start: number, contentEnd: number, end: number):
     while (k < contentEnd)
     {
         const code = text.charCodeAt(k);
-        if (code === 0x3e) depth++;
-        else if (!isSpace(code)) break;
+        if (code === 0x3e)
+        {
+            depth++;
+        }
+        else if (!isSpace(code))
+        {
+            break;
+        }
         k++;
     }
     return { start, contentEnd, end, depth, gap: k === contentEnd, textStart: k };
@@ -182,7 +194,10 @@ function classify(text: string, start: number, contentEnd: number, end: number):
  */
 export function removeQuoteMarks(text: string, from: number, to: number, depth: number): string
 {
-    if (depth <= 0) return text.slice(from, to);
+    if (depth <= 0)
+    {
+        return text.slice(from, to);
+    }
     const parts: string[] = [];
     for (const range of lineRanges(text.slice(from, to)))
     {
@@ -193,12 +208,21 @@ export function removeQuoteMarks(text: string, from: number, to: number, depth: 
         while (removed < depth)
         {
             let j = i;
-            while (j < contentEnd && text.charCodeAt(j) !== 0x3e && isSpace(text.charCodeAt(j))) j++;
-            if (j >= contentEnd || text.charCodeAt(j) !== 0x3e) break;
+            while (j < contentEnd && text.charCodeAt(j) !== 0x3e && isSpace(text.charCodeAt(j)))
+            {
+                j++;
+            }
+            if (j >= contentEnd || text.charCodeAt(j) !== 0x3e)
+            {
+                break;
+            }
             i = j + 1;
             removed++;
         }
-        if (removed > 0 && i < contentEnd && text.charCodeAt(i) === 0x20) i++;
+        if (removed > 0 && i < contentEnd && text.charCodeAt(i) === 0x20)
+        {
+            i++;
+        }
         parts.push(text.slice(i, from + range.end));
     }
     return parts.join('');
@@ -213,9 +237,18 @@ function lineIndexAt(lines: readonly QLine[], offset: number): number
     {
         const mid = (lo + hi) >> 1;
         const line = lines[mid] as QLine;
-        if (line.start === offset) return mid;
-        if (line.start < offset) lo = mid + 1;
-        else hi = mid - 1;
+        if (line.start === offset)
+        {
+            return mid;
+        }
+        if (line.start < offset)
+        {
+            lo = mid + 1;
+        }
+        else
+        {
+            hi = mid - 1;
+        }
     }
     return -1;
 }
@@ -223,7 +256,10 @@ function lineIndexAt(lines: readonly QLine[], offset: number): number
 /** Whether the line starts with a From label (as reply-header.ts reads labels). */
 function isFromLabel(text: string, line: QLine): boolean
 {
-    if (line.gap) return false;
+    if (line.gap)
+    {
+        return false;
+    }
     const head = clean(text, line.textStart, Math.min(line.contentEnd, line.textStart + LABEL_HEAD_LENGTH));
     const word = LABEL_PATTERN.exec(head)?.[1];
     return word !== undefined && LABEL_ROLE_OF.get(labelKey(word)) === 'from';
@@ -235,7 +271,10 @@ function isFromLabel(text: string, line: QLine): boolean
  */
 export function reconstructQuotedMessages(bodyText: string, options: ReconstructOptions): ReconstructedMessage[]
 {
-    if (typeof (bodyText as unknown) !== 'string' || bodyText.length > MAX_SOURCE_LENGTH) return [];
+    if (typeof (bodyText as unknown) !== 'string' || bodyText.length > MAX_SOURCE_LENGTH)
+    {
+        return [];
+    }
     const offset = typeof options?.sourceOffsetMinutes === 'number' ? options.sourceOffsetMinutes : null;
     const subject = typeof options?.subject === 'string' ? options.subject : undefined;
     try
@@ -261,7 +300,10 @@ function rebuild(text: string, subject: string | undefined, sourceOffset: number
     for (let k = 0; k < headers.length && kept.length < MAX_RECONSTRUCTED; k++)
     {
         const h = headers[k];
-        if (h === undefined) break;
+        if (h === undefined)
+        {
+            break;
+        }
         const segEnd = Math.min(headers[k + 1]?.start ?? limit, limit);
         const message = candidate(text, lines, h, segEnd, parentDepth, sourceOffset, kept.length + 1);
         if (message === null)
@@ -289,9 +331,15 @@ function candidate(
     const fields = readQuotedHeader(text, h);
     const headerEnd = fields.headerEnd;
     // R2: the fields end inside the message's part.
-    if (headerEnd <= h.start || headerEnd > segEnd) return null;
+    if (headerEnd <= h.start || headerEnd > segEnd)
+    {
+        return null;
+    }
     const first = lineIndexAt(lines, h.start);
-    if (first < 0) return null;
+    if (first < 0)
+    {
+        return null;
+    }
 
     // R2: header lines at one depth; block or attribution.
     let headerDepth = -1;
@@ -301,16 +349,28 @@ function candidate(
     for (; k < lines.length && (lines[k] as QLine).start < headerEnd; k++)
     {
         const line = lines[k] as QLine;
-        if (line.gap) continue;
+        if (line.gap)
+        {
+            continue;
+        }
         if (headerDepth < 0)
         {
             headerDepth = line.depth;
             introFirst = !isFromLabel(text, line);
         }
-        else if (line.depth !== headerDepth) return null;
-        if (!block && isFromLabel(text, line)) block = true;
+        else if (line.depth !== headerDepth)
+        {
+            return null;
+        }
+        if (!block && isFromLabel(text, line))
+        {
+            block = true;
+        }
     }
-    if (headerDepth < 0) return null;
+    if (headerDepth < 0)
+    {
+        return null;
+    }
     const bodyFirst = k; // first line of [headerEnd, segEnd)
 
     // Body depth (step 3) and R3.
@@ -318,7 +378,10 @@ function candidate(
     if (block)
     {
         depth = headerDepth;
-        if (headerDepth !== parentDepth && headerDepth !== parentDepth + 1) return null;
+        if (headerDepth !== parentDepth && headerDepth !== parentDepth + 1)
+        {
+            return null;
+        }
     }
     else
     {
@@ -331,19 +394,31 @@ function candidate(
                 break;
             }
         }
-        if (firstText < 0) return null;
+        if (firstText < 0)
+        {
+            return null;
+        }
         depth = (lines[firstText] as QLine).depth;
         const gmail = headerDepth === parentDepth && depth === parentDepth + 1;
         const apple = headerDepth === parentDepth + 1 && depth === headerDepth;
-        if (!gmail && !apple) return null;
+        if (!gmail && !apple)
+        {
+            return null;
+        }
     }
-    if (depth > MAX_QUOTE_DEPTH) return null;
+    if (depth > MAX_QUOTE_DEPTH)
+    {
+        return null;
+    }
 
     // R4: no text line of the part less deep than the body.
     for (let j = bodyFirst; j < lines.length && (lines[j] as QLine).start < segEnd; j++)
     {
         const line = lines[j] as QLine;
-        if (!line.gap && line.depth < depth) return null;
+        if (!line.gap && line.depth < depth)
+        {
+            return null;
+        }
     }
 
     // R1: evidence.
@@ -354,7 +429,10 @@ function candidate(
     // Without a readable date, a sender is evidence only with an address or a name-shaped name.
     const senderStrong = sender !== undefined && (sender.address !== '' || (sender.name !== '' && isPlainName(sender.name, false)));
     const evidence = block && !introFirst ? dateOk && senderOk : dateOk || senderStrong;
-    if (!evidence) return null;
+    if (!evidence)
+    {
+        return null;
+    }
 
     return {
         start: h.start,

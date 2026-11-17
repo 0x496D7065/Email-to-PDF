@@ -130,7 +130,10 @@ const localizedFormatters = new Map<string, Intl.DateTimeFormat>();
 /** Stores a formatter, first emptying the cache if it is full, so odd inputs (every casing of a zone name) cannot grow it without limit. */
 function remember(cache: Map<string, Intl.DateTimeFormat>, key: string, formatter: Intl.DateTimeFormat): void
 {
-    if (cache.size >= MAX_CACHED_FORMATTERS) cache.clear();
+    if (cache.size >= MAX_CACHED_FORMATTERS)
+    {
+        cache.clear();
+    }
     cache.set(key, formatter);
 }
 
@@ -246,7 +249,10 @@ export function browserTimeZone(): string
  */
 export function isValidTimeZone(zone: unknown): zone is string
 {
-    if (typeof zone !== 'string' || zone === '') return false;
+    if (typeof zone !== 'string' || zone === '')
+    {
+        return false;
+    }
     try
     {
         numericFormatter(zone);
@@ -284,7 +290,10 @@ export function listTimeZones(): string[]
             zones = [];
         }
     }
-    if (zones.length === 0) zones = FALLBACK_ZONE_LIST.filter((zone) => isValidTimeZone(zone));
+    if (zones.length === 0)
+    {
+        zones = FALLBACK_ZONE_LIST.filter((zone) => isValidTimeZone(zone));
+    }
     const all = new Set([...zones, FALLBACK_ZONE, browserTimeZone()]);
     return [...all].sort();
 }
@@ -296,7 +305,10 @@ export function listTimeZones(): string[]
  */
 export function formatInZone(utcMs: number | null, zone: string, locale: string = DEFAULT_LOCALE): ZonedDateTime
 {
-    if (!isDisplayableMs(utcMs)) return { kind: 'no-date' };
+    if (!isDisplayableMs(utcMs))
+    {
+        return { kind: 'no-date' };
+    }
     // Intl and Date cut sub-millisecond fractions toward zero; round down first so -0.5 is 23:59:59.
     utcMs = Math.floor(utcMs);
 
@@ -307,7 +319,10 @@ export function formatInZone(utcMs: number | null, zone: string, locale: string 
     const fields: Record<string, number> = {};
     for (const part of formatter.formatToParts(utcMs))
     {
-        if (part.type !== 'literal') fields[part.type] = Number(part.value);
+        if (part.type !== 'literal')
+        {
+            fields[part.type] = Number(part.value);
+        }
     }
     const year = fields.year ?? 0;
     const month = fields.month ?? 1;
@@ -325,7 +340,10 @@ export function formatInZone(utcMs: number | null, zone: string, locale: string 
     wallClock.setUTCHours(hour, minute, second, 0);
     const offsetMinutes = (wallClock.getTime() - Math.floor(utcMs / 1000) * 1000) / 60_000;
     // Last guard: should the engine return odd parts, never print "UTC+NaN".
-    if (!Number.isFinite(offsetMinutes)) return { kind: 'no-date' };
+    if (!Number.isFinite(offsetMinutes))
+    {
+        return { kind: 'no-date' };
+    }
 
     return {
         kind: 'date',
@@ -348,18 +366,27 @@ export function formatInZone(utcMs: number | null, zone: string, locale: string 
  */
 export function formatSenderLocal(date: EmailDate): SenderLocalTime
 {
-    if (!isDisplayableMs(date.utcMs)) return { kind: 'no-date' };
+    if (!isDisplayableMs(date.utcMs))
+    {
+        return { kind: 'no-date' };
+    }
     // Date cuts sub-millisecond fractions toward zero; round down first so -0.5 is 23:59:59.
     const utcMs = Math.floor(date.utcMs);
     const offset = date.offsetMinutes;
-    if (!date.zoneKnown || offset === null || !Number.isFinite(offset)) return { kind: 'zone-unknown' };
+    if (!date.zoneKnown || offset === null || !Number.isFinite(offset))
+    {
+        return { kind: 'zone-unknown' };
+    }
 
     // The Date getters below cut to whole seconds, rounding down (also before 1970).
     const shifted = new Date(utcMs + offset * 60_000);
     // A header offset can reach +/-99:59, more than the one-day margin: if the
     // sender's clock falls outside years 1-9999 we cannot show it reliably.
     const year = shifted.getUTCFullYear();
-    if (!Number.isFinite(year) || year < 1 || year > 9999) return { kind: 'zone-unknown' };
+    if (!Number.isFinite(year) || year < 1 || year > 9999)
+    {
+        return { kind: 'zone-unknown' };
+    }
     const text = wallClockText(
         year,
         shifted.getUTCMonth() + 1,

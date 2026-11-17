@@ -31,7 +31,10 @@ beforeAll(async () =>
 const fixture = (name: string): NormalizedMessage =>
 {
     const m = fixtures.get(`eml/${name}`);
-    if (m === undefined) throw new Error(`no fixture ${name}`);
+    if (m === undefined)
+    {
+        throw new Error(`no fixture ${name}`);
+    }
     return m;
 };
 const engineOf = (...names: string[]): EngineResult => runEngine(names.map((n) => ({ ok: true as const, message: fixture(n) })));
@@ -73,10 +76,16 @@ describe('previewOrder and rebuiltEntries', () =>
         const entries = rebuiltEntries(result);
         const sameAs = result.reconstructed.filter((r) => r.link === 'same-as');
         expect(sameAs.length).toBeGreaterThan(0);
-        for (const copy of sameAs) expect(entries.map((e) => e.id)).not.toContain(copy.id);
+        for (const copy of sameAs)
+        {
+            expect(entries.map((e) => e.id)).not.toContain(copy.id);
+        }
         const shared = entries.filter((e) => e.alsoQuotedIn.length > 0);
         expect(shared.length).toBeGreaterThan(0);
-        for (const e of shared) expect(alsoNumbers(e, result)).toHaveLength(1);
+        for (const e of shared)
+        {
+            expect(alsoNumbers(e, result)).toHaveLength(1);
+        }
     });
 
     it('fall back to the real emails alone, in list order, when the timeline is broken (never an email missing)', () =>
@@ -99,7 +108,10 @@ describe('source and "also in" numbers', () =>
     {
         const result = engineOf('70-no-date.eml', '13-order-4-bob-outlook-nl.eml');
         const position = result.messages.findIndex((m) => m.message.source.fileName.endsWith('13-order-4-bob-outlook-nl.eml'));
-        for (const r of rebuiltEntries(result)) expect(sourceNumber(r, result)).toBe(position + 1);
+        for (const r of rebuiltEntries(result))
+        {
+            expect(sourceNumber(r, result)).toBe(position + 1);
+        }
     });
 
     it('never list the source itself or unknown positions as "also in"', () =>
@@ -156,7 +168,10 @@ describe('the include choices', () =>
         // Its keys cover every copy (the entry and the copy quoted in the other email).
         const keys = rebuiltSelectionKeys(bobAfter[0] as EngineRebuilt, after);
         expect(keys.length).toBe(1 + (bobAfter[0] as EngineRebuilt).copies.length);
-        for (const key of keys) expect(key).toMatch(/^[0-9a-f]{64}@\d+$/);
+        for (const key of keys)
+        {
+            expect(key).toMatch(/^[0-9a-f]{64}@\d+$/);
+        }
         // The others stay included.
         expect(includedRebuilt(after, selection).every((r) => r !== bobAfter[0])).toBe(true);
         expect(includedRebuilt(after, selection).length).toBe(rebuiltEntries(after).length - 1);

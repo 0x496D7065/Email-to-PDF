@@ -36,7 +36,10 @@ export const CMAP_PREFERENCE: readonly (readonly [number, number])[] = [
 export function parseCmap(table: Uint8Array, numGlyphs: number): Cmap
 {
     const r = new BinaryReader(table, 'cmap');
-    if (r.u16(0) !== 0) fail('cmap: unknown table version');
+    if (r.u16(0) !== 0)
+    {
+        fail('cmap: unknown table version');
+    }
     const count = r.u16(2);
     r.need(4, count * 8, 'encoding records');
     const records: { platformId: number; encodingId: number; offset: number }[] = [];
@@ -49,10 +52,19 @@ export function parseCmap(table: Uint8Array, numGlyphs: number): Cmap
     {
         for (const record of records)
         {
-            if (record.platformId !== platformId || record.encodingId !== encodingId) continue;
+            if (record.platformId !== platformId || record.encodingId !== encodingId)
+            {
+                continue;
+            }
             const format = r.u16(record.offset);
-            if (format === 4) return { format, platformId, encodingId, lookup: format4(r, record.offset, numGlyphs) };
-            if (format === 12) return { format, platformId, encodingId, lookup: format12(r, record.offset, numGlyphs) };
+            if (format === 4)
+            {
+                return { format, platformId, encodingId, lookup: format4(r, record.offset, numGlyphs) };
+            }
+            if (format === 12)
+            {
+                return { format, platformId, encodingId, lookup: format12(r, record.offset, numGlyphs) };
+            }
         }
     }
     fail('cmap: no Unicode subtable of format 4 or 12');
@@ -70,7 +82,10 @@ function format4(r: BinaryReader, start: number, numGlyphs: number): (codePoint:
     const length = r.u16(start + 2);
     const sub = new BinaryReader(r.slice(start, length, 'format 4 subtable'), 'cmap format 4');
     const segCountX2 = sub.u16(6);
-    if (segCountX2 === 0 || segCountX2 % 2 !== 0) fail('cmap format 4: bad segment count');
+    if (segCountX2 === 0 || segCountX2 % 2 !== 0)
+    {
+        fail('cmap format 4: bad segment count');
+    }
     const segCount = segCountX2 / 2;
     const endAt = 14;
     const startAt = endAt + segCountX2 + 2; // + reservedPad
@@ -82,30 +97,51 @@ function format4(r: BinaryReader, start: number, numGlyphs: number): (codePoint:
     {
         const end = sub.u16(endAt + 2 * i);
         const first = sub.u16(startAt + 2 * i);
-        if (first > end || first <= previousEnd) fail('cmap format 4: segments are not sorted or overlap');
+        if (first > end || first <= previousEnd)
+        {
+            fail('cmap format 4: segments are not sorted or overlap');
+        }
         previousEnd = end;
     }
     return (codePoint) =>
     {
-        if (codePoint > 0xffff) return 0;
+        if (codePoint > 0xffff)
+        {
+            return 0;
+        }
         // First segment whose end >= codePoint.
         let low = 0;
         let high = segCount - 1;
         while (low < high)
         {
             const middle = (low + high) >>> 1;
-            if (sub.u16(endAt + 2 * middle) < codePoint) low = middle + 1;
-            else high = middle;
+            if (sub.u16(endAt + 2 * middle) < codePoint)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
         }
         const end = sub.u16(endAt + 2 * low);
         const first = sub.u16(startAt + 2 * low);
-        if (codePoint > end || codePoint < first) return 0;
+        if (codePoint > end || codePoint < first)
+        {
+            return 0;
+        }
         const delta = sub.u16(deltaAt + 2 * low);
         const rangeOffset = sub.u16(rangeAt + 2 * low);
-        if (rangeOffset === 0) return validGlyph((codePoint + delta) & 0xffff, numGlyphs);
+        if (rangeOffset === 0)
+        {
+            return validGlyph((codePoint + delta) & 0xffff, numGlyphs);
+        }
         // idRangeOffset counts bytes from its own position into glyphIdArray.
         const at = rangeAt + 2 * low + rangeOffset + 2 * (codePoint - first);
-        if (at + 2 > sub.length) return 0;
+        if (at + 2 > sub.length)
+        {
+            return 0;
+        }
         const glyph = sub.u16(at);
         return glyph === 0 ? 0 : validGlyph((glyph + delta) & 0xffff, numGlyphs);
     };
@@ -118,7 +154,10 @@ function format12(r: BinaryReader, start: number, numGlyphs: number): (codePoint
     const length = r.u32(start + 4);
     const sub = new BinaryReader(r.slice(start, length, 'format 12 subtable'), 'cmap format 12');
     const numGroups = sub.u32(12);
-    if (numGroups === 0) fail('cmap format 12: no groups');
+    if (numGroups === 0)
+    {
+        fail('cmap format 12: no groups');
+    }
     sub.need(16, numGroups * 12, 'format 12 groups');
     let previousEnd = -1;
     for (let i = 0; i < numGroups; i++)
@@ -126,7 +165,10 @@ function format12(r: BinaryReader, start: number, numGlyphs: number): (codePoint
         const at = 16 + 12 * i;
         const first = sub.u32(at);
         const end = sub.u32(at + 4);
-        if (first > end || end > 0x10ffff || first <= previousEnd) fail('cmap format 12: groups are not sorted, overlap or pass U+10FFFF');
+        if (first > end || end > 0x10ffff || first <= previousEnd)
+        {
+            fail('cmap format 12: groups are not sorted, overlap or pass U+10FFFF');
+        }
         previousEnd = end;
     }
     return (codePoint) =>
@@ -136,12 +178,21 @@ function format12(r: BinaryReader, start: number, numGlyphs: number): (codePoint
         while (low < high)
         {
             const middle = (low + high) >>> 1;
-            if (sub.u32(16 + 12 * middle + 4) < codePoint) low = middle + 1;
-            else high = middle;
+            if (sub.u32(16 + 12 * middle + 4) < codePoint)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
         }
         const at = 16 + 12 * low;
         const first = sub.u32(at);
-        if (codePoint < first || codePoint > sub.u32(at + 4)) return 0;
+        if (codePoint < first || codePoint > sub.u32(at + 4))
+        {
+            return 0;
+        }
         return validGlyph(sub.u32(at + 8) + (codePoint - first), numGlyphs);
     };
 }

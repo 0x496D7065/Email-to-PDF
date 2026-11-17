@@ -61,7 +61,10 @@ export class PdfFile
         for (let n = 1; n < count; n++)
         {
             const offset = this.offsets[n];
-            if (offset === undefined) fail(`internal: object ${n} was reserved but never written`);
+            if (offset === undefined)
+            {
+                fail(`internal: object ${n} was reserved but never written`);
+            }
             lines.push(`${String(offset).padStart(10, '0')} 00000 n \n`);
         }
         const xrefAt = this.size;
@@ -84,15 +87,24 @@ export class PdfFile
         this.chunks.length = 0; // the chunks are in `result` now: let them go
         const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', result.subarray(0, bodyLength)));
         let id = '';
-        for (const byte of digest.subarray(0, 16)) id += byte.toString(16).toUpperCase().padStart(2, '0');
+        for (const byte of digest.subarray(0, 16))
+        {
+            id += byte.toString(16).toUpperCase().padStart(2, '0');
+        }
         result.set(trailer(id), bodyLength);
         return result;
     }
 
     private begin(n: number): void
     {
-        if (!Number.isInteger(n) || n < 1 || n >= this.offsets.length) fail(`internal: object ${n} was never reserved`);
-        if (this.offsets[n] !== undefined) fail(`internal: object ${n} written twice`);
+        if (!Number.isInteger(n) || n < 1 || n >= this.offsets.length)
+        {
+            fail(`internal: object ${n} was never reserved`);
+        }
+        if (this.offsets[n] !== undefined)
+        {
+            fail(`internal: object ${n} written twice`);
+        }
         this.offsets[n] = this.size;
     }
 

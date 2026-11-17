@@ -13,7 +13,10 @@ function fakeFile(name: string, size: number, content?: ArrayBuffer | (() => Pro
 {
     const arrayBuffer = vi.fn((): Promise<ArrayBuffer> =>
     {
-        if (typeof content === 'function') return content();
+        if (typeof content === 'function')
+        {
+            return content();
+        }
         return Promise.resolve(content ?? new Uint8Array(size).fill(7).buffer);
     });
     const file: FileLike = { name, size, arrayBuffer };
@@ -77,7 +80,10 @@ describe('createFileReader', () =>
             result: { ok: false, fileName: 'moved.eml', sha256: null, error: 'unreadable', detail: UNREADABLE_DETAIL },
         });
         // Its 10 bytes were given back: two more 10-byte files and a 5-byte one fit.
-        for (const name of ['x.eml', 'y.eml']) expect((await read(fakeFile(name, 10).file)).ok).toBe(true);
+        for (const name of ['x.eml', 'y.eml'])
+        {
+            expect((await read(fakeFile(name, 10).file)).ok).toBe(true);
+        }
         expect((await read(fakeFile('z.eml', 5).file)).ok).toBe(true);
     });
 

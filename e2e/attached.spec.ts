@@ -78,7 +78,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('download', (download) => downloads.push(download));

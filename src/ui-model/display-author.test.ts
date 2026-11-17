@@ -60,8 +60,14 @@ describe('displayAuthor', () =>
         {
             const shown = displayAuthor(m);
             const file = m.source.fileName;
-            if (m.from.length > 0) expect(shown.source, file).toBe('from');
-            else expect(shown.source, file).toBe(m.sender === undefined ? 'none' : 'sender');
+            if (m.from.length > 0)
+            {
+                expect(shown.source, file).toBe('from');
+            }
+            else
+            {
+                expect(shown.source, file).toBe(m.sender === undefined ? 'none' : 'sender');
+            }
         }
         const missing = (await parseAllFixtures()).find((m) => m.source.fileName === 'eml/75-missing-from-to-subject.eml');
         expect(missing && displayAuthor(missing).source).toBe('none');

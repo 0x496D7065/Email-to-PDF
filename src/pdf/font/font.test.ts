@@ -34,7 +34,10 @@ let readMs = 0;
 beforeAll(async () =>
 {
     const started = performance.now();
-    for (const name of names) fonts[name] = await readWoffFont(PDF_FONTS[name]);
+    for (const name of names)
+    {
+        fonts[name] = await readWoffFont(PDF_FONTS[name]);
+    }
     readMs = performance.now() - started;
 });
 
@@ -80,7 +83,10 @@ describe('readWoffFont on the bundled Plex fonts', () =>
     it.each(names)('%s: has glyphs for ASCII and the Latin samples, none for an emoji', (name) =>
     {
         const font = fonts[name];
-        for (const codePoint of [...ASCII, ...LATIN]) expect(font.glyphFor(codePoint), `U+${codePoint.toString(16)}`).toBeGreaterThan(0);
+        for (const codePoint of [...ASCII, ...LATIN])
+        {
+            expect(font.glyphFor(codePoint), `U+${codePoint.toString(16)}`).toBeGreaterThan(0);
+        }
         expect(font.glyphFor(EMOJI)).toBe(0);
         expect(font.hasGlyph(EMOJI)).toBe(false);
         expect(font.hasGlyph(0x41)).toBe(true);
@@ -90,7 +96,10 @@ describe('readWoffFont on the bundled Plex fonts', () =>
     it.each(names)('%s: invalid code points and surrogates give glyph 0', (name) =>
     {
         const font = fonts[name];
-        for (const codePoint of [-1, 0.5, Number.NaN, 0x110000, 0xd83d, 0xdc00]) expect(font.glyphFor(codePoint)).toBe(0);
+        for (const codePoint of [-1, 0.5, Number.NaN, 0x110000, 0xd83d, 0xdc00])
+        {
+            expect(font.glyphFor(codePoint)).toBe(0);
+        }
     });
 
     it('mono: every ASCII character has the same advance; sans: "W" is wider than "i"', () =>
@@ -126,7 +135,10 @@ describe('readWoffFont on the bundled Plex fonts', () =>
         const font = fonts['sans-regular'];
         expect(font.advance(0)).toBeGreaterThan(0);
         expect(font.advance(font.numGlyphs - 1)).toBeGreaterThanOrEqual(0);
-        for (const id of [-1, font.numGlyphs, 1.5, Number.NaN]) expect(() => font.advance(id)).toThrow(RangeError);
+        for (const id of [-1, font.numGlyphs, 1.5, Number.NaN])
+        {
+            expect(() => font.advance(id)).toThrow(RangeError);
+        }
     });
 
     it('the parsed font is frozen and keeps the sfnt bytes for embedding', async () =>
@@ -166,7 +178,10 @@ describe('parseFont on damaged fonts', () =>
         const directory = readSfntDirectory(copy);
         const table = directory.tables.get(tag)!;
         const at = 12 + 16 * [...directory.tables.keys()].indexOf(tag);
-        for (let i = 0; i < 4; i++) copy[at + i] = to.charCodeAt(i);
+        for (let i = 0; i < 4; i++)
+        {
+            copy[at + i] = to.charCodeAt(i);
+        }
         const view = new DataView(copy.buffer);
         view.setUint32(at + 4, directoryChecksum(view.getUint32(at), copy, table.offset, table.length));
         return copy;
@@ -181,7 +196,10 @@ describe('parseFont on damaged fonts', () =>
         const copy = sfnt.slice();
         const directory = readSfntDirectory(copy);
         const table = directory.tables.get(tag)!;
-        if (data.length > table.length) throw new Error(`test table for ${tag} is too long`);
+        if (data.length > table.length)
+        {
+            throw new Error(`test table for ${tag} is too long`);
+        }
         copy.fill(0, table.offset, table.offset + table.length);
         copy.set(data, table.offset);
         const at = 12 + 16 * [...directory.tables.keys()].indexOf(tag);
@@ -318,7 +336,10 @@ describe('parseFont on damaged fonts', () =>
         const font = parseFont(sfnt);
         const one = parseFont(patched('hhea', (v) => v.setUint16(34, 1)));
         expect(one.numGlyphs).toBe(font.numGlyphs);
-        for (const id of [0, 1, 2, Math.floor(font.numGlyphs / 2), font.numGlyphs - 1]) expect(one.advance(id)).toBe(font.advance(0));
+        for (const id of [0, 1, 2, Math.floor(font.numGlyphs / 2), font.numGlyphs - 1])
+        {
+            expect(one.advance(id)).toBe(font.advance(0));
+        }
         const half = Math.floor(font.numGlyphs / 2);
         const cut = parseFont(patched('hhea', (v) => v.setUint16(34, half)));
         expect(cut.advance(half - 1)).toBe(font.advance(half - 1));
@@ -335,14 +356,23 @@ describe('parseFont on damaged fonts', () =>
                 for (let i = 0; i < v.getUint16(2); i++)
                 {
                     const at = 6 + 12 * i;
-                    if (v.getUint16(at + 6) !== 6) continue;
+                    if (v.getUint16(at + 6) !== 6)
+                    {
+                        continue;
+                    }
                     const start = storage + v.getUint16(at + 10);
                     const text = 'A(B/C#D%';
                     const wide = v.getUint16(at) !== 1;
                     for (let j = 0; j < text.length; j++)
                     {
-                        if (wide) v.setUint16(start + 2 * j, text.charCodeAt(j));
-                        else bytes[start + j] = text.charCodeAt(j);
+                        if (wide)
+                        {
+                            v.setUint16(start + 2 * j, text.charCodeAt(j));
+                        }
+                        else
+                        {
+                            bytes[start + j] = text.charCodeAt(j);
+                        }
                     }
                 }
             }),
@@ -355,7 +385,10 @@ describe('parseFont on damaged fonts', () =>
     it('fails every damaged case quickly (no hang)', () =>
     {
         const started = performance.now();
-        for (let cut = 0; cut < sfnt.length; cut += 997) expect(() => parseFont(sfnt.subarray(0, cut))).toThrow(FontError);
+        for (let cut = 0; cut < sfnt.length; cut += 997)
+        {
+            expect(() => parseFont(sfnt.subarray(0, cut))).toThrow(FontError);
+        }
         expect(performance.now() - started).toBeLessThan(2000);
     });
 });

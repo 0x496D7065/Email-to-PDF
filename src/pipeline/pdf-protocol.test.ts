@@ -180,7 +180,10 @@ describe('createPdfWorkerSide', () =>
         await handle(structuredClone(REQUEST));
         const message = posted[0]?.message;
         expect(message?.type).toBe('done');
-        if (message?.type !== 'done') return;
+        if (message?.type !== 'done')
+        {
+            return;
+        }
         expect(isFromPdfWorker(message)).toBe(true);
         expect(message.pageCount).toBe(readPdf(message.bytes).pages().length);
     });
@@ -200,7 +203,10 @@ describe('createPdfWorkerSide', () =>
             (message) =>
             {
                 calls++;
-                if (calls === 1) throw new Error('DataCloneError');
+                if (calls === 1)
+                {
+                    throw new Error('DataCloneError');
+                }
                 posted.push(message);
             },
             () => Promise.resolve(FAKE),

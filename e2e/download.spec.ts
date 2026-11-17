@@ -127,7 +127,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -179,7 +182,10 @@ async function bytesOf(download: Download): Promise<Uint8Array>
 function pagesInStatus(text: string): number
 {
     const match = /, (\d+) pages?\./.exec(text);
-    if (match === null) throw new Error(`no page count in ${text}`);
+    if (match === null)
+    {
+        throw new Error(`no page count in ${text}`);
+    }
     return Number(match[1]);
 }
 
@@ -192,7 +198,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const ownBlob = new RegExp(`^blob:${origin}/[0-9a-f-]+$`);
-    for (const url of watch.requests.slice(loadedAt)) expect(url).toMatch(ownBlob);
+    for (const url of watch.requests.slice(loadedAt))
+    {
+        expect(url).toMatch(ownBlob);
+    }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = engineOf(page.context());
@@ -366,7 +375,10 @@ test('a big batch: the page stays responsive while the PDF is made', async ({ pa
         w.__long = [];
         new PerformanceObserver((list) =>
         {
-            for (const entry of list.getEntries()) w.__long.push(entry.duration);
+            for (const entry of list.getEntries())
+            {
+                w.__long.push(entry.duration);
+            }
         }).observe({ type: 'longtask' });
         w.__beat = { last: performance.now(), maxGap: 0, timer: 0 };
         w.__beat.timer = window.setInterval(() =>

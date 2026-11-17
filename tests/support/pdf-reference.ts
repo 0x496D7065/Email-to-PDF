@@ -21,12 +21,30 @@ function isLow(c: number): boolean
 /** Group 1 of the contract in src/pdf/text.ts, for one whole code point (tags handled by the caller). */
 function isCoded(cp: number): boolean
 {
-    if (cp < 0x20) return true; // tab and line breaks never get here
-    if (cp >= 0x7f && cp <= 0x9f) return true;
-    if ((cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069)) return true;
-    if (cp >= 0xfff9 && cp <= 0xfffb) return true;
-    if (cp >= 0xfdd0 && cp <= 0xfdef) return true;
-    if ((cp & 0xfffe) === 0xfffe) return true; // U+nFFFE and U+nFFFF in every plane
+    if (cp < 0x20)
+    {
+        return true; // tab and line breaks never get here
+    }
+    if (cp >= 0x7f && cp <= 0x9f)
+    {
+        return true;
+    }
+    if ((cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069))
+    {
+        return true;
+    }
+    if (cp >= 0xfff9 && cp <= 0xfffb)
+    {
+        return true;
+    }
+    if (cp >= 0xfdd0 && cp <= 0xfdef)
+    {
+        return true;
+    }
+    if ((cp & 0xfffe) === 0xfffe)
+    {
+        return true; // U+nFFFE and U+nFFFF in every plane
+    }
     return false;
 }
 
@@ -106,9 +124,18 @@ function displayLine(line: string): { text: string; codes: number }
  */
 function inPrefix(c: number): boolean
 {
-    if (c === 0x0b || c === 0x0c) return false;
-    if (c === 0xad || c === 0x34f || c === 0x61c || (c >= 0x200b && c <= 0x200f) || (c >= 0x2060 && c <= 0x2064) || (c >= 0xfe00 && c <= 0xfe0f)) return true;
-    if (c >= 0xe0100 && c <= 0xe01ef) return true;
+    if (c === 0x0b || c === 0x0c)
+    {
+        return false;
+    }
+    if (c === 0xad || c === 0x34f || c === 0x61c || (c >= 0x200b && c <= 0x200f) || (c >= 0x2060 && c <= 0x2064) || (c >= 0xfe00 && c <= 0xfe0f))
+    {
+        return true;
+    }
+    if (c >= 0xe0100 && c <= 0xe01ef)
+    {
+        return true;
+    }
     return c <= 0xffff && /\s/u.test(String.fromCharCode(c));
 }
 
@@ -124,11 +151,17 @@ function splitQuote(line: string): { quoted: boolean; rest: string }
     let ok = 0; // line[0, ok) holds only ">" and inPrefix characters
     for (const ch of line)
     {
-        if (ch !== '>' && !inPrefix(ch.codePointAt(0)!)) break;
+        if (ch !== '>' && !inPrefix(ch.codePointAt(0)!))
+        {
+            break;
+        }
         ok += ch.length;
     }
     const end = ok === 0 ? 0 : line.lastIndexOf('>', ok - 1) + 1;
-    if (end === 0) return { quoted: false, rest: line };
+    if (end === 0)
+    {
+        return { quoted: false, rest: line };
+    }
     const rest = line.slice(end);
     return { quoted: true, rest: rest.startsWith(' ') || rest.startsWith('\u{00A0}') ? rest.slice(1) : rest };
 }
@@ -158,8 +191,14 @@ export function referenceDisplayLines(body: string, options: { quotes?: boolean 
     const blank = (l: { text: string; codes: number; quoted: boolean }): boolean => !l.quoted && l.codes === 0 && l.text.trim() === '';
     let from = 0;
     let to = lines.length;
-    while (from < to && blank(lines[from]!)) from++;
-    while (to > from && blank(lines[to - 1]!)) to--;
+    while (from < to && blank(lines[from]!))
+    {
+        from++;
+    }
+    while (to > from && blank(lines[to - 1]!))
+    {
+        to--;
+    }
     const out: string[] = [];
     let run = 0;
     for (const l of lines.slice(from, to))
@@ -167,7 +206,10 @@ export function referenceDisplayLines(body: string, options: { quotes?: boolean 
         if (blank(l))
         {
             run++;
-            if (run <= 2) out.push('');
+            if (run <= 2)
+            {
+                out.push('');
+            }
         }
         else
         {
@@ -196,7 +238,10 @@ export function referenceDisplayText(body: string, options: { quotes?: boolean }
 export function quotePrefixProblems(body: string, shown: readonly string[]): string[]
 {
     const kept = referenceDisplayLines(body, { quotes: false });
-    if (kept.length !== shown.length) return [`${String(shown.length)} lines shown, ${String(kept.length)} with the marks kept`];
+    if (kept.length !== shown.length)
+    {
+        return [`${String(shown.length)} lines shown, ${String(kept.length)} with the marks kept`];
+    }
     const problems: string[] = [];
     kept.forEach((k, i) =>
     {
@@ -207,8 +252,14 @@ export function quotePrefixProblems(body: string, shown: readonly string[]): str
             return;
         }
         const head = k.slice(0, k.length - line.length);
-        if (![...head].every((ch) => ch === '>' || inPrefix(ch.codePointAt(0)!))) problems.push(`line ${String(i)}: removed ${JSON.stringify(head)}, not a quote prefix`);
-        else if (head !== '' && !head.includes('>')) problems.push(`line ${String(i)}: removed ${JSON.stringify(head)} without a quote mark`);
+        if (![...head].every((ch) => ch === '>' || inPrefix(ch.codePointAt(0)!)))
+        {
+            problems.push(`line ${String(i)}: removed ${JSON.stringify(head)}, not a quote prefix`);
+        }
+        else if (head !== '' && !head.includes('>'))
+        {
+            problems.push(`line ${String(i)}: removed ${JSON.stringify(head)} without a quote mark`);
+        }
     });
     return problems;
 }

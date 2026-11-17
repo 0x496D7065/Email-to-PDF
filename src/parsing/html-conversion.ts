@@ -45,14 +45,20 @@ export function convertHtmlBody(htmlToText: (html: string) => HtmlToTextResult, 
     {
         throw new HtmlConversionError(error instanceof Error ? error.message : String(error));
     }
-    if (!isResult(result)) throw new HtmlConversionError('the converter returned no text');
+    if (!isResult(result))
+    {
+        throw new HtmlConversionError('the converter returned no text');
+    }
     // A new object: nothing else the converter may have attached is kept.
     return { text: result.text, truncated: result.truncated };
 }
 
 function isResult(value: unknown): value is HtmlToTextResult
 {
-    if (typeof value !== 'object' || value === null) return false;
+    if (typeof value !== 'object' || value === null)
+    {
+        return false;
+    }
     const candidate = value as { text?: unknown; truncated?: unknown };
     return typeof candidate.text === 'string' && typeof candidate.truncated === 'boolean';
 }

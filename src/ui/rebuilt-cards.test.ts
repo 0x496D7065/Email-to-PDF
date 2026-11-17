@@ -25,7 +25,10 @@ beforeAll(async () =>
 const fixture = (name: string): NormalizedMessage =>
 {
     const m = fixtures.get(`eml/${name}`);
-    if (m === undefined) throw new Error(`no fixture ${name}`);
+    if (m === undefined)
+    {
+        throw new Error(`no fixture ${name}`);
+    }
     return m;
 };
 const engineOf = (...names: string[]): EngineResult => runEngine(names.map((n) => ({ ok: true as const, message: fixture(n) })));
@@ -115,13 +118,19 @@ const withClass = (root: FakeElement, name: string): FakeElement[] => root.desce
 const one = (root: FakeElement, name: string): FakeElement =>
 {
     const found = withClass(root, name);
-    if (found.length !== 1) throw new Error(`expected one .${name}, found ${String(found.length)}`);
+    if (found.length !== 1)
+    {
+        throw new Error(`expected one .${name}, found ${String(found.length)}`);
+    }
     return found[0] as FakeElement;
 };
 function byId(id: string): FakeElement
 {
     const found = area.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 const items = (): FakeElement[] => byId('preview-list').children.filter((c): c is FakeElement => c instanceof FakeElement);
@@ -134,7 +143,10 @@ const metaRows = (item: FakeElement): string[] =>
     const dl = one(item, 'message-meta');
     const cells = dl.children.filter((c): c is FakeElement => c instanceof FakeElement);
     const rows: string[] = [];
-    for (let i = 0; i + 1 < cells.length; i += 2) rows.push(`${(cells[i] as FakeElement).textContent}: ${(cells[i + 1] as FakeElement).textContent}`);
+    for (let i = 0; i + 1 < cells.length; i += 2)
+    {
+        rows.push(`${(cells[i] as FakeElement).textContent}: ${(cells[i + 1] as FakeElement).textContent}`);
+    }
     return rows;
 };
 const tick = (box: FakeElement, on: boolean): void =>
@@ -221,7 +233,10 @@ describe('rebuilt cards in the list', () =>
         show(result);
         const also = rebuiltItems().flatMap((c) => withClass(c, 'rebuilt-also').map((p) => p.textContent));
         expect(also.length).toBeGreaterThan(0);
-        for (const text of also) expect(text).toMatch(/^Same quoted text also in email #[12]\.$/);
+        for (const text of also)
+        {
+            expect(text).toMatch(/^Same quoted text also in email #[12]\.$/);
+        }
         expect(rebuiltAlsoText([2, 5])).toBe('Same quoted text also in emails #2, #5.');
         expect(rebuiltAlsoText([])).toBe('');
     });
@@ -323,7 +338,10 @@ describe('rebuilt cards in the list', () =>
         }
         // Another card keeps its text and no note.
         show(base);
-        for (const card of rebuiltItems()) expect(withClass(card, 'body-empty')).toEqual([]);
+        for (const card of rebuiltItems())
+        {
+            expect(withClass(card, 'body-empty')).toEqual([]);
+        }
     });
 
     it('give a stand-in with its label, a note and its text when a card cannot be built; the list is still complete', () =>
@@ -512,7 +530,10 @@ describe('the switch, the checkboxes and the counts', () =>
         const line = one(card, 'rebuilt-pdf-source');
         // Both emails ticked: the PDF takes it from its own email, the one its card names; no line.
         expect(isHidden(line)).toBe(true);
-        for (const c of rebuiltItems()) expect(isHidden(one(c, 'rebuilt-pdf-source'))).toBe(true);
+        for (const c of rebuiltItems())
+        {
+            expect(isHidden(one(c, 'rebuilt-pdf-source'))).toBe(true);
+        }
         // Its own email unticked: still in the PDF, taken from the other email; the card says which.
         tick(boxOf(own), false);
         expect(card.getAttribute('data-included')).toBe('true');
@@ -606,7 +627,10 @@ describe('the switch, the checkboxes and the counts', () =>
         expect(isHidden(byId('rebuilt-switch'))).toBe(false);
         // Every card leaves the list, exactly as with the switch off; none is dimmed and left in instead.
         expect(rebuiltItems().every(isHidden)).toBe(true);
-        for (const card of rebuiltItems()) expect(card.getAttribute('data-included')).toBe('false');
+        for (const card of rebuiltItems())
+        {
+            expect(card.getAttribute('data-included')).toBe('false');
+        }
         // The real emails are not touched; their cards (with every character of their text) stay.
         expect(realItems().some(isHidden)).toBe(false);
         expect(review.includedPositions()).toEqual(beforePositions);
@@ -733,7 +757,10 @@ describe('the switch, the checkboxes and the counts', () =>
         mount({
             decorateRebuilt: (item, r, res) =>
             {
-                if (broken && r.id === 0) throw new Error('boom');
+                if (broken && r.id === 0)
+                {
+                    throw new Error('boom');
+                }
                 review.decorateRebuilt(item, r, res);
             },
         });
@@ -811,7 +838,10 @@ describe('problems while rebuilding', () =>
     {
         const base = engineOf('10-order-1-alice.eml');
         const m = base.messages[0];
-        if (m === undefined) throw new Error('no message');
+        if (m === undefined)
+        {
+            throw new Error('no message');
+        }
         show({ ...base, reconstructionWarnings: [{ index: m.index, code: 'reconstruct-limit' }] });
         const notes = withClass(realItems()[0] as FakeElement, 'message-note').map((n) => n.textContent);
         expect(notes).toEqual([t('warnings.rebuild.reconstruct-limit')]);
@@ -824,7 +854,10 @@ describe('problems while rebuilding', () =>
     {
         const base = engineOf(LAST);
         const m = base.messages[0];
-        if (m === undefined) throw new Error('no message');
+        if (m === undefined)
+        {
+            throw new Error('no message');
+        }
         const messages = parseNote ? [{ ...m, parserWarnings: [...m.parserWarnings, 'html-body-truncated' as const] }] : base.messages;
         return { ...base, messages, reconstructionWarnings: [{ index: m.index, code }] };
     };
@@ -900,7 +933,10 @@ describe('problems while rebuilding', () =>
     {
         const base = engineOf('10-order-1-alice.eml');
         const m = base.messages[0];
-        if (m === undefined) throw new Error('no message');
+        if (m === undefined)
+        {
+            throw new Error('no message');
+        }
         return { ...base, reconstructionWarnings: [{ index: m.index, code: 'reconstruct-failed' }] };
     };
 

@@ -149,7 +149,10 @@ afterEach(() =>
 function byId(id: string): FakeElement
 {
     const found = root.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 const hasClass = (e: FakeElement, name: string): boolean => (e.getAttribute('class') ?? '').split(' ').includes(name);
@@ -160,7 +163,10 @@ const link = () => byId('download-link');
 const status = () => byId('status').textContent;
 const runTasks = (): void =>
 {
-    while (tasks.length > 0) tasks.shift()?.task();
+    while (tasks.length > 0)
+    {
+        tasks.shift()?.task();
+    }
 };
 
 function choose(...names: string[]): void
@@ -185,7 +191,10 @@ async function addAndShow(count = 3): Promise<EngineResult>
 function lastRun()
 {
     const run = runs.at(-1);
-    if (run === undefined) throw new Error('no PDF run');
+    if (run === undefined)
+    {
+        throw new Error('no PDF run');
+    }
     return run;
 }
 
@@ -196,7 +205,10 @@ async function makeReady(pageCount = 5): Promise<string>
     lastRun().resolve({ ok: true, bytes: new Uint8Array([37, 80, 68, 70, 45]), fileName: 'correspondence-2025-06-01.pdf', pageCount });
     await settle();
     const url = created.at(-1);
-    if (url === undefined) throw new Error('no URL');
+    if (url === undefined)
+    {
+        throw new Error('no URL');
+    }
     return url;
 }
 
@@ -307,7 +319,10 @@ describe('step 3: when the PDF can be made', () =>
         {
             expect(steps).toBeLessThan(100);
             const plans = page.pdfLabels.currentPlans();
-            if (plans !== null && plans.result === result) stepsWithPlansWhileRendering++;
+            if (plans !== null && plans.result === result)
+            {
+                stepsWithPlansWhileRendering++;
+            }
             expect(isUnavailable()).toBe(true);
             expect(note().textContent).toBe(t('download.unavailable.busy'));
             button().click();

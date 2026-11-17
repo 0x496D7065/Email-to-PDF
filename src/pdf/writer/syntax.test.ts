@@ -31,7 +31,10 @@ describe('num', () =>
 
     it('never writes exponent notation', () =>
     {
-        for (let e = -30; e <= 6; e++) expect(num(10 ** e)).not.toMatch(/e/i);
+        for (let e = -30; e <= 6; e++)
+        {
+            expect(num(10 ** e)).not.toMatch(/e/i);
+        }
     });
 });
 
@@ -163,7 +166,10 @@ function decodeHex(hex: string): string
 {
     expect(hex).toMatch(/^<FEFF([0-9A-F]{4})*>$/);
     let text = '';
-    for (let i = 5; i < hex.length - 1; i += 4) text += String.fromCharCode(parseInt(hex.slice(i, i + 4), 16));
+    for (let i = 5; i < hex.length - 1; i += 4)
+    {
+        text += String.fromCharCode(parseInt(hex.slice(i, i + 4), 16));
+    }
     return text;
 }
 

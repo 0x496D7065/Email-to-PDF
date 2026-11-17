@@ -68,7 +68,10 @@ function engine(...mails: NormalizedMessage[]): EngineMessage[]
 function byBody(messages: readonly EngineMessage[], snippet: string): EngineMessage
 {
     const m = messages.find((x) => x.message.bodyText.includes(snippet));
-    if (m === undefined) throw new Error(`no message with ${snippet}`);
+    if (m === undefined)
+    {
+        throw new Error(`no message with ${snippet}`);
+    }
     return m;
 }
 
@@ -86,7 +89,10 @@ function omitted(m: PlanInput, plan: MessagePlan): string
 function reasonsAt(m: PlanInput, plan: MessagePlan, snippet: string): PlanReason[]
 {
     const at = m.message.bodyText.indexOf(snippet);
-    if (at < 0) throw new Error(`snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`snippet not found: ${snippet}`);
+    }
     return [...new Set(plan.ranges.filter((r) => r.start < at + snippet.length && r.end > at).map((r) => r.reason))];
 }
 
@@ -730,7 +736,10 @@ describe('planOutput: rule 2b, review round 3', () =>
         // The closing is folded as a quote of Bob's OWN first email (input position 0).
         const closingAt = body.lastIndexOf(closing.slice(0, 12));
         const closingSegment = reply.segments.find((s) => s.start <= closingAt + 20 && closingAt + 20 < s.end)!;
-        if (linkedToOwnMail) expect(closingSegment.related).toEqual([0]);
+        if (linkedToOwnMail)
+        {
+            expect(closingSegment.related).toEqual([0]);
+        }
         expect(kept(reply, p)).toBe(body);
         expect(p.tailStart).toBeNull();
         expect(p.keptAllBecauseEmpty).toBe(false);
@@ -810,7 +819,10 @@ describe('planOutput: rule 2b, review round 3', () =>
     function over(body: string, snippet: string, reason: FoldRange['reason'], related?: number): FoldRange
     {
         const start = body.indexOf(snippet);
-        if (start < 0) throw new Error(`snippet not found: ${snippet}`);
+        if (start < 0)
+        {
+            throw new Error(`snippet not found: ${snippet}`);
+        }
         return related === undefined ? { start, end: start + snippet.length, reason } : { start, end: start + snippet.length, reason, related };
     }
     /** Bob's reply `body` at input position 9 (the detector's reply-header folds plus `extra`), planned after `others`. */

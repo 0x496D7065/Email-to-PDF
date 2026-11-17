@@ -67,7 +67,10 @@ async function made(policy: OutputPolicy): Promise<{ texts: string[]; cover: str
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown).join(' '));
     const dests = readDests(pdf);
     const starts: number[] = [];
-    for (let n = 1; dests.has(`email-${String(n)}`); n++) starts.push(dests.get(`email-${String(n)}`)!.page);
+    for (let n = 1; dests.has(`email-${String(n)}`); n++)
+    {
+        starts.push(dests.get(`email-${String(n)}`)!.page);
+    }
     return { texts: starts.map((page, k) => squash(pages.slice(page, starts[k + 1] ?? pages.length).join(' '))), cover: squash(pages.slice(0, starts[0]).join(' ')) };
 }
 
@@ -75,7 +78,10 @@ describe('generatePdf: an attached email', () =>
 {
     it('the File row separator has a glyph in every text font (never a missing-glyph box)', () =>
     {
-        for (const name of ['sans-regular', 'sans-bold', 'sans-italic'] as const) expect(fonts[name].glyphFor(0x203a), name).not.toBe(0);
+        for (const name of ['sans-regular', 'sans-bold', 'sans-italic'] as const)
+        {
+            expect(fonts[name].glyphFor(0x203a), name).not.toBe(0);
+        }
     });
 
     it('folded: two emails, the forward printed once on its own page, its File row "file › attachment"', async () =>

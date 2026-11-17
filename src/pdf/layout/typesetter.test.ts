@@ -13,7 +13,10 @@ import { type LaidLine, Typesetter } from './typesetter';
 const fonts = {} as Record<PdfFontName, ParsedFont>;
 beforeAll(async () =>
 {
-    for (const name of Object.keys(PDF_FONTS) as PdfFontName[]) fonts[name] = await readWoffFont(PDF_FONTS[name]);
+    for (const name of Object.keys(PDF_FONTS) as PdfFontName[])
+    {
+        fonts[name] = await readWoffFont(PDF_FONTS[name]);
+    }
 });
 
 const BODY = DEFAULT_LAYOUT_CONFIG.roles.body;
@@ -65,9 +68,15 @@ function extent(runs: readonly LaidOutTextRun[]): number
         for (const [i, glyph] of run.glyphs.entries())
         {
             x += (font.advance(glyph) * run.size) / font.unitsPerEm;
-            if (run.glyphText[i] !== ' ') lastInk = x;
+            if (run.glyphText[i] !== ' ')
+            {
+                lastInk = x;
+            }
         }
-        if (run.glyphText.some((t) => t !== ' ')) right = Math.max(right, lastInk);
+        if (run.glyphText.some((t) => t !== ' '))
+        {
+            right = Math.max(right, lastInk);
+        }
     }
     return right;
 }
@@ -233,9 +242,15 @@ describe('line breaking', () =>
         const { copies, lines } = wrap(body(word), 100);
         expect(copies.join('')).toBe(word);
         expect(lines.length).toBeGreaterThan(5);
-        for (const line of lines) expect(line.width).toBeLessThanOrEqual(100 + 1e-6);
+        for (const line of lines)
+        {
+            expect(line.width).toBeLessThanOrEqual(100 + 1e-6);
+        }
         // Greedy: every line but the last is full (one more "x" would not fit).
-        for (const line of lines.slice(0, -1)) expect(line.width + bodyWidth('x')).toBeGreaterThan(100);
+        for (const line of lines.slice(0, -1))
+        {
+            expect(line.width + bodyWidth('x')).toBeGreaterThan(100);
+        }
     });
 
     it('keeps the spaces after an item wider than the line on its line, not at the start of the next', () =>
@@ -278,7 +293,10 @@ describe('line breaking', () =>
         // Every line holds whole clusters.
         const boundaries = new Set<number>([0]);
         let at = 0;
-        for (const g of graphemes(text)) boundaries.add((at += g.length));
+        for (const g of graphemes(text))
+        {
+            boundaries.add((at += g.length));
+        }
         at = 0;
         for (const copy of copies)
         {
@@ -299,15 +317,27 @@ describe('line breaking', () =>
         for (let round = 0; round < 60; round++)
         {
             const parts: string[] = [];
-            for (let k = 0; k < 30; k++) parts.push(words[random(words.length)]!, ' '.repeat(1 + random(3)));
+            for (let k = 0; k < 30; k++)
+            {
+                parts.push(words[random(words.length)]!, ' '.repeat(1 + random(3)));
+            }
             const width = 40 + random(400);
             const { lines, runs } = wrap(body(parts.join('')), width);
             for (const [i, line] of lines.entries())
             {
                 // Only a line holding a single item wider than the column may be wider (here: the "[U+1F600]" code at 40 pt).
                 let inked = 0;
-                for (let k = line.start; k < line.end; k++) if (line.text.width[k]! > 0 && (line.text.kind[k]! & SPACE) === 0) inked++;
-                if (inked > 1) expect(line.width).toBeLessThanOrEqual(width + 1e-6);
+                for (let k = line.start; k < line.end; k++)
+                {
+                    if (line.text.width[k]! > 0 && (line.text.kind[k]! & SPACE) === 0)
+                    {
+                        inked++;
+                    }
+                }
+                if (inked > 1)
+                {
+                    expect(line.width).toBeLessThanOrEqual(width + 1e-6);
+                }
                 // The reported width is what is drawn (trailing spaces not counted).
                 expect(extent(runs[i]!)).toBeCloseTo(line.width, 4);
             }

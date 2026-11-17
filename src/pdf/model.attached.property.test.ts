@@ -71,7 +71,10 @@ const WORDS = ['north', 'warehouse', 'shelf', 'label', 'oak', 'desk', 'invoice',
 function sentenceOf(name: string): string
 {
     let h = 0;
-    for (const c of name) h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+    for (const c of name)
+    {
+        h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+    }
     const words = Array.from({ length: 10 }, (_, k) => WORDS[(h >>> (k * 3)) % WORDS.length]!);
     return `Own words of ${name}: the ${words.join(' ')} were checked again this week.`;
 }
@@ -88,7 +91,10 @@ function emlOf(s: Spec): string
         ...(s.inReplyTo === null ? [] : [`In-Reply-To: <${s.inReplyTo}@example.test>`]),
         'MIME-Version: 1.0',
     ];
-    if (s.children.length === 0) return crlf(...head, 'Content-Type: text/plain; charset=utf-8', '', sentenceOf(s.name));
+    if (s.children.length === 0)
+    {
+        return crlf(...head, 'Content-Type: text/plain; charset=utf-8', '', sentenceOf(s.name));
+    }
     return crlf(...head, mixed(`b-${s.name}`, plain(sentenceOf(s.name)), ...s.children.map((c) => rfc822(emlOf(c.spec), c.asFile, c.spec.name))));
 }
 
@@ -99,9 +105,18 @@ function randomDate(random: () => number): string | null
     const mm = String(Math.floor(random() * 60)).padStart(2, '0');
     const day = 1 + Math.floor(random() * 3);
     const when = `${['Sun', 'Mon', 'Tue'][day - 1]!}, ${String(day)} Jun 2025 ${hh}:${mm}:00`;
-    if (kind < 0.45) return `${when} +0200`;
-    if (kind < 0.65) return when; // no zone
-    if (kind < 0.85) return null;
+    if (kind < 0.45)
+    {
+        return `${when} +0200`;
+    }
+    if (kind < 0.65)
+    {
+        return when; // no zone
+    }
+    if (kind < 0.85)
+    {
+        return null;
+    }
     return 'sometime last week'; // unreadable
 }
 
@@ -118,16 +133,34 @@ function randomCase(random: () => number, id: number): Case
         const s: Spec = { name: `c${String(id)}e${String(all.length)}`, date: randomDate(random), inReplyTo: null, children: [] };
         all.push(s);
         const kids = depth >= 3 ? 0 : Math.floor(random() * (depth === 0 ? 3 : 2.4));
-        for (let k = 0; k < kids; k++) s.children.push({ spec: make(depth + 1), asFile: random() < 0.3 });
+        for (let k = 0; k < kids; k++)
+        {
+            s.children.push({ spec: make(depth + 1), asFile: random() < 0.3 });
+        }
         return s;
     };
     const roots = Array.from({ length: 1 + Math.floor(random() * 2.5) }, () => make(0));
     // Random In-Reply-To links, to any email of the case (an attached one too, either way round).
-    for (const s of all) if (random() < 0.4) (s as { inReplyTo: string | null }).inReplyTo = all[Math.floor(random() * all.length)]!.name;
+    for (const s of all)
+    {
+        if (random() < 0.4)
+        {
+            (s as { inReplyTo: string | null }).inReplyTo = all[Math.floor(random() * all.length)]!.name;
+        }
+    }
     const files: string[] = roots.map(emlOf);
     // Copies: attached emails also dropped on their own, a whole file twice.
-    for (const s of all) if (!roots.includes(s) && random() < 0.25) files.push(emlOf(s));
-    if (random() < 0.1) files.push(files[0]!);
+    for (const s of all)
+    {
+        if (!roots.includes(s) && random() < 0.25)
+        {
+            files.push(emlOf(s));
+        }
+    }
+    if (random() < 0.1)
+    {
+        files.push(files[0]!);
+    }
     // Random file order.
     for (let k = files.length - 1; k > 0; k--)
     {
@@ -175,14 +208,26 @@ function check(out: EngineResult, random: () => number, where: string, tally: Ta
         if (ticked.has(position))
         {
             tally.checked++;
-            if (m.message.source.attachedPath !== undefined || m.duplicates.some((d) => d.source.attachedPath !== undefined)) tally.attachedChecked++;
-            if (times === 0) tally.failures.push(`${where}: ${name} (ticked) printed nowhere`);
-            if (times > 1) tally.twice++;
+            if (m.message.source.attachedPath !== undefined || m.duplicates.some((d) => d.source.attachedPath !== undefined))
+            {
+                tally.attachedChecked++;
+            }
+            if (times === 0)
+            {
+                tally.failures.push(`${where}: ${name} (ticked) printed nowhere`);
+            }
+            if (times > 1)
+            {
+                tally.twice++;
+            }
         }
         else
         {
             tally.unticked++;
-            if (times !== 0) tally.failures.push(`${where}: ${name} (unticked) printed ${String(times)} times`);
+            if (times !== 0)
+            {
+                tally.failures.push(`${where}: ${name} (unticked) printed ${String(times)} times`);
+            }
         }
     });
 }
@@ -204,7 +249,10 @@ describe('collapse, never delete, with attached emails: random cases (task 8.13b
             const random = makeRandom(seed);
             const c = randomCase(random, seed);
             const out = runEngine(await parseAll(c.files));
-            if ((out.attached?.length ?? 0) > 0) withAttached++;
+            if ((out.attached?.length ?? 0) > 0)
+            {
+                withAttached++;
+            }
             check(out, random, `seed ${String(seed)}`, tally);
         }
         console.log(`attached random cases: 1000 cases (${String(withAttached)} with attached emails), ${String(tally.checked)} ticked emails checked (${String(tally.attachedChecked)} attached), ${String(tally.unticked)} unticked, printed twice: ${String(tally.twice)}`);

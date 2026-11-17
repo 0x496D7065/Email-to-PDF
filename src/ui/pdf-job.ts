@@ -110,7 +110,10 @@ export function createPdfJob(options: PdfJobOptions): PdfJob
 
     function finish(id: number, outcome: PdfOutcome): void
     {
-        if (id !== jobId) return; // stopped or replaced meanwhile: dropped
+        if (id !== jobId)
+        {
+            return; // stopped or replaced meanwhile: dropped
+        }
         controller = null;
         if (!outcome.ok)
         {
@@ -159,7 +162,10 @@ export function createPdfJob(options: PdfJobOptions): PdfJob
         {
             const had = state.kind === 'making' || state.kind === 'ready';
             stop();
-            if (state.kind !== 'idle' || had) set({ kind: 'idle', changed: had });
+            if (state.kind !== 'idle' || had)
+            {
+                set({ kind: 'idle', changed: had });
+            }
         },
         reset()
         {

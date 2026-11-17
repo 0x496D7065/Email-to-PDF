@@ -139,7 +139,10 @@ export function filesFromDrop(data: DataTransferLike | null | undefined): { file
     for (const item of items)
     {
         // 'string' items are links or text: never taken.
-        if (item.kind !== 'file') continue;
+        if (item.kind !== 'file')
+        {
+            continue;
+        }
         let isFolder = false;
         try
         {
@@ -155,7 +158,10 @@ export function filesFromDrop(data: DataTransferLike | null | undefined): { file
             continue;
         }
         const file = item.getAsFile();
-        if (file !== null) files.push(file);
+        if (file !== null)
+        {
+            files.push(file);
+        }
     }
     return { files, folders };
 }
@@ -232,13 +238,19 @@ export function summarize(result: ProcessResult): BatchSummary
 export function summaryText(summary: BatchSummary): string
 {
     const parts = [t('added.files', { count: summary.filesAdded })];
-    if (summary.filesFailed > 0) parts.push(t('added.failed', { count: summary.filesFailed }));
+    if (summary.filesFailed > 0)
+    {
+        parts.push(t('added.failed', { count: summary.filesFailed }));
+    }
     parts.push(
         summary.attachedFound > 0
             ? t('added.messagesAttached', { count: summary.messagesFound, attached: t('counts.attachedFound', { count: summary.attachedFound }) })
             : t('added.messages', { count: summary.messagesFound }),
     );
-    if (summary.duplicatesMerged > 0) parts.push(t('added.merged', { count: summary.duplicatesMerged }));
+    if (summary.duplicatesMerged > 0)
+    {
+        parts.push(t('added.merged', { count: summary.duplicatesMerged }));
+    }
     return parts.join(' ');
 }
 
@@ -254,7 +266,10 @@ export function readingStatusText(total: number): string
 /** The progress line: which file is being read, then "putting in order". */
 export function progressText(progress: ProcessProgress): string
 {
-    if (progress.stage === 'organizing') return t('drop.organizing');
+    if (progress.stage === 'organizing')
+    {
+        return t('drop.organizing');
+    }
     // processFiles reports files DONE; the user wants to know which one is
     // being read now, so "Reading file 1 of 3" while the first one is read.
     const current = Math.min(progress.filesDone + 1, progress.filesTotal);
@@ -409,7 +424,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     /** The reason line of a failed file: its name (or the "no name" text) and why it failed. */
     function writeReason(item: FailedItem): void
     {
-        if (item.unnamed) item.name.textContent = t('added.noName');
+        if (item.unnamed)
+        {
+            item.name.textContent = t('added.noName');
+        }
         // The <strong> is kept (it holds the file name); only the words change.
         item.reason.replaceChildren(item.name, ' ', t(`errors.file.${item.error}`));
         item.summary.textContent = t('added.details');
@@ -501,7 +519,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
                 result = await processBatch(batch, {
                     onProgress: (progress) =>
                     {
-                        if (myGeneration === generation) showProgress(progress);
+                        if (myGeneration === generation)
+                        {
+                            showProgress(progress);
+                        }
                     },
                     signal: myController.signal,
                 });
@@ -510,7 +531,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
             {
                 result = unexpectedResult();
             }
-            if (myGeneration !== generation) return; // reset() was pressed meanwhile
+            if (myGeneration !== generation)
+            {
+                return; // reset() was pressed meanwhile
+            }
         } while (pending.length > 0);
         controller = null;
         setBusy(false);
@@ -520,7 +544,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
 
     function add(newFiles: readonly FileLike[]): void
     {
-        if (newFiles.length === 0) return;
+        if (newFiles.length === 0)
+        {
+            return;
+        }
         pending = [...pending, ...newFiles];
         if (busy)
         {
@@ -541,7 +568,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
     // --- Choose button ------------------------------------------------------
     button.addEventListener('click', () =>
     {
-        if (busy) return; // aria-disabled: does nothing, but stays focusable
+        if (busy)
+        {
+            return; // aria-disabled: does nothing, but stays focusable
+        }
         input.click();
     });
     input.addEventListener('change', () =>
@@ -563,13 +593,19 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
         event.preventDefault();
         const drag = event as DragEvent;
         const over = insideZone(drag.target) && carriesFiles(drag.dataTransfer);
-        if (over && drag.dataTransfer) drag.dataTransfer.dropEffect = 'copy';
+        if (over && drag.dataTransfer)
+        {
+            drag.dataTransfer.dropEffect = 'copy';
+        }
         setDragOver(over);
     };
     const onDragLeave = (event: Event): void =>
     {
         // relatedTarget is null when the pointer leaves the page (or the drag is cancelled).
-        if ((event as DragEvent).relatedTarget === null) setDragOver(false);
+        if ((event as DragEvent).relatedTarget === null)
+        {
+            setDragOver(false);
+        }
     };
     const onDrop = (event: Event): void =>
     {
@@ -578,15 +614,24 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
         const drag = event as DragEvent;
         if (!insideZone(drag.target))
         {
-            if (carriesFiles(drag.dataTransfer)) shell.setStatus(t('drop.outside'));
+            if (carriesFiles(drag.dataTransfer))
+            {
+                shell.setStatus(t('drop.outside'));
+            }
             return;
         }
         const { files: dropped, folders } = filesFromDrop(drag.dataTransfer);
         const folderText = folders > 0 ? t('drop.folders', { count: folders }) : '';
         foldersLeftOut = folders;
         showNotice();
-        if (dropped.length > 0) add(dropped);
-        else shell.setStatus(folderText === '' ? t('drop.nothing') : folderText);
+        if (dropped.length > 0)
+        {
+            add(dropped);
+        }
+        else
+        {
+            shell.setStatus(folderText === '' ? t('drop.nothing') : folderText);
+        }
     };
 
     const listeners: [string, (event: Event) => void][] = [
@@ -595,7 +640,10 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
         ['dragleave', onDragLeave],
         ['drop', onDrop],
     ];
-    for (const [type, listener] of listeners) target.addEventListener(type, listener);
+    for (const [type, listener] of listeners)
+    {
+        target.addEventListener(type, listener);
+    }
 
     return {
         reset()
@@ -637,13 +685,25 @@ export function mountAddFiles(shell: AppShell, options: AddFilesOptions): AddFil
         {
             labels.relabel();
             showNotice();
-            if (lastProgress !== null) progressLabel.textContent = progressText(lastProgress);
-            if (lastSummary !== null) writeSummary(lastSummary);
-            for (const item of failedItems) writeReason(item);
+            if (lastProgress !== null)
+            {
+                progressLabel.textContent = progressText(lastProgress);
+            }
+            if (lastSummary !== null)
+            {
+                writeSummary(lastSummary);
+            }
+            for (const item of failedItems)
+            {
+                writeReason(item);
+            }
         },
         destroy()
         {
-            for (const [type, listener] of listeners) target.removeEventListener(type, listener);
+            for (const [type, listener] of listeners)
+            {
+                target.removeEventListener(type, listener);
+            }
         },
     };
 }

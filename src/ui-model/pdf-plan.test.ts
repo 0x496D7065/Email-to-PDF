@@ -362,17 +362,35 @@ function expectLabelsTrue(m: EngineMessage, p: MessagePlan, blocks: readonly Pdf
 {
     const body = m.message.bodyText;
     const keep = new Array<boolean>(body.length).fill(true);
-    for (const r of p.ranges) for (let i = r.start; i < r.end; i++) keep[i] = r.keep;
+    for (const r of p.ranges)
+    {
+        for (let i = r.start; i < r.end; i++)
+        {
+            keep[i] = r.keep;
+        }
+    }
     for (const { block, label } of blocks)
     {
         const where = `${m.message.source.fileName} [${String(block.start)}, ${String(block.end)})`;
-        if (block.folded) expect(label, where).not.toBeNull();
+        if (block.folded)
+        {
+            expect(label, where).not.toBeNull();
+        }
         expect(label?.status, where).not.toBe('partly');
         for (let i = block.start; i < block.end; i++)
         {
-            if (!/\S/.test(body[i] ?? '')) continue;
-            if (label === null) expect(keep[i], `${where} at ${String(i)}: shown, no label, but left out`).toBe(true);
-            else expect(keep[i], `${where} at ${String(i)}`).toBe(label.status === 'in');
+            if (!/\S/.test(body[i] ?? ''))
+            {
+                continue;
+            }
+            if (label === null)
+            {
+                expect(keep[i], `${where} at ${String(i)}: shown, no label, but left out`).toBe(true);
+            }
+            else
+            {
+                expect(keep[i], `${where} at ${String(i)}`).toBe(label.status === 'in');
+            }
         }
     }
 }
@@ -398,9 +416,18 @@ describe('every fixture, through the real engine and plan', () =>
                 expectLabelsTrue(m, p, blocks);
                 // Shown text is never left out (output-plan.ts, rule 4): no shown block carries a label.
                 expect(blocks.filter((b) => !b.block.folded && b.label !== null)).toEqual([]);
-                if (policy.unfoldEverything) expect(blocks.every((b) => b.label === null || b.label.status === 'in')).toBe(true);
+                if (policy.unfoldEverything)
+                {
+                    expect(blocks.every((b) => b.label === null || b.label.status === 'in')).toBe(true);
+                }
                 cut += blocks.length - displayBlocks(m.message.bodyText, m.segments, { unfoldAll: false }).length;
-                for (const b of blocks) if (b.label?.reasons.includes('repeated-signature') === true && b.label.signaturesFrom.length > 0) repeatedWithSource++;
+                for (const b of blocks)
+                {
+                    if (b.label?.reasons.includes('repeated-signature') === true && b.label.signaturesFrom.length > 0)
+                    {
+                        repeatedWithSource++;
+                    }
+                }
             });
             if (!policy.unfoldEverything)
             {

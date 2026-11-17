@@ -65,7 +65,10 @@ describe('createEmlParser: errors while parsing an attached email (inline, or se
         const result = await parser.parse({ name: 'f.eml', bytes: DATA });
         expect(vi.mocked(parseEmlTree)).toHaveBeenCalledTimes(2);
         expect(result.ok).toBe(false);
-        if (result.ok) return;
+        if (result.ok)
+        {
+            return;
+        }
         expect(result.error).toBe('corrupt');
         expect(result.detail).toMatch(/^postal-mime internals changed/);
         expect(result.detail).toContain('simulated change');
@@ -83,7 +86,10 @@ describe('createEmlParser: errors while parsing an attached email (inline, or se
         );
         const result = await parser.parse({ name: 'f.eml', bytes: asAttachment });
         expect(vi.mocked(parseEmlTree)).toHaveBeenCalledTimes(2);
-        if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        }
         expect(result.message.bodyText).toBe('Outer text.');
         expect(result.message.warnings).toEqual([]);
         expect(result.message.attachments).toHaveLength(1);
@@ -135,7 +141,10 @@ describe('createEmlParser: errors while parsing an attached email (inline, or se
         );
         const result = await parser.parse({ name: 'f.eml', bytes: nested });
         expect(vi.mocked(parseEmlTree)).toHaveBeenCalledTimes(3);
-        if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        }
         expect(result.message.bodyText).toBe('Outer text.');
         expect(result.message.warnings).toEqual([]);
         expect(result.message.attachments).toHaveLength(1);
@@ -152,7 +161,10 @@ describe('createEmlParser: errors while parsing an attached email (inline, or se
         );
         const result = await parser.parse({ name: 'f.eml', bytes: asAttachment });
         expect(vi.mocked(parseEmlTree)).toHaveBeenCalledTimes(2);
-        if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        }
         expect(result.message.bodyText).toBe('Outer text.');
         expect(result.message.warnings).toEqual([]);
         expect(result.message.attachments).toHaveLength(1);
@@ -164,7 +176,10 @@ describe('createEmlParser: errors while parsing an attached email (inline, or se
         failSecondCall(new Error('broken inner message'));
         const result = await parser.parse({ name: 'f.eml', bytes: DATA });
         expect(vi.mocked(parseEmlTree)).toHaveBeenCalledTimes(2);
-        if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+        }
         expect(result.message.bodyText).toBe('Outer text.');
         expect(result.message.warnings).toEqual(['forwarded-message-not-expanded']);
         expect(result.message.attachments).toHaveLength(1);

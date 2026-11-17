@@ -99,7 +99,10 @@ const withClass = (root: FakeElement, name: string): FakeElement[] => root.desce
 function byId(id: string): FakeElement
 {
     const found = area.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 const items = (): FakeElement[] => byId('preview-list').children.filter((c): c is FakeElement => c instanceof FakeElement);
@@ -107,7 +110,10 @@ const checkboxes = (item: FakeElement): FakeElement[] => withClass(item, 'includ
 const checkbox = (item: FakeElement): FakeElement =>
 {
     const found = checkboxes(item);
-    if (found.length !== 1) throw new Error(`expected one checkbox, found ${String(found.length)}`);
+    if (found.length !== 1)
+    {
+        throw new Error(`expected one checkbox, found ${String(found.length)}`);
+    }
     return found[0]!;
 };
 function toggle(item: FakeElement, on: boolean): void
@@ -492,14 +498,20 @@ describe('include checkboxes', () =>
             decorate: (item, m, position, result) =>
             {
                 review.decorate(item, m, position, result);
-                if (m.message.subject === 'Broken' && !hasClass(item as unknown as FakeElement, 'message-failed')) throw new Error('synthetic decorate failure');
+                if (m.message.subject === 'Broken' && !hasClass(item as unknown as FakeElement, 'message-failed'))
+                {
+                    throw new Error('synthetic decorate failure');
+                }
             },
         });
         const result = engineOf([make({ subject: 'Fine' }), make({ subject: 'Broken' }), make({ subject: 'Fine too' })]);
         show(result);
         const standIn = items()[1]!;
         expect(hasClass(standIn, 'message-failed')).toBe(true);
-        for (const item of items()) expect(checkboxes(item)).toHaveLength(1);
+        for (const item of items())
+        {
+            expect(checkboxes(item)).toHaveLength(1);
+        }
         expect(renderedBody(standIn)).toBe(result.messages[1]!.message.bodyText);
         // The stand-in's checkbox is the live one (the failed item's is not in the page).
         toggle(standIn, false);
@@ -516,7 +528,10 @@ describe('include checkboxes', () =>
         mount({
             decorate: (item, m, position, result) =>
             {
-                if (failing && m.message.subject === 'Broken') throw new Error('synthetic decorate failure');
+                if (failing && m.message.subject === 'Broken')
+                {
+                    throw new Error('synthetic decorate failure');
+                }
                 review.decorate(item, m, position, result);
             },
         });
@@ -548,13 +563,19 @@ describe('include checkboxes', () =>
         mount({ chunkSize: 1, schedule: (task) => queue.push(task), cancel: () => undefined });
         const messages = [make(), make(), make()];
         show(engineOf(messages));
-        while (queue.length > 0) queue.shift()!();
+        while (queue.length > 0)
+        {
+            queue.shift()!();
+        }
         toggle(items()[2]!, false);
         show(engineOf(messages));
         expect(items()).toHaveLength(1);
         expect(review.includedPositions()).toEqual([0, 1]);
         expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
-        while (queue.length > 0) queue.shift()!();
+        while (queue.length > 0)
+        {
+            queue.shift()!();
+        }
         expect(items().map((i) => checkbox(i).checked)).toEqual([true, true, false]);
         expect(review.includedPositions()).toEqual([0, 1]);
         expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
@@ -571,7 +592,10 @@ describe('include checkboxes', () =>
         // A new, shorter list where C is #1: the old items are gone from the page.
         show(engineOf([c, make({ subject: 'D' })]));
         expect(subjects()).toEqual(['C', 'D']);
-        for (const old of oldItems) expect(items()).not.toContain(old);
+        for (const old of oldItems)
+        {
+            expect(items()).not.toContain(old);
+        }
         toggle(items()[0]!, false);
         // The old item #3 (also C) is not touched: only the page's items are.
         expect(oldItems.map((i) => i.getAttribute('data-included'))).toEqual(['true', 'true', 'true']);
@@ -654,7 +678,10 @@ describe('include checkboxes', () =>
         expect(items()).toHaveLength(1);
         expect(includedLine()).toBe('3 of 3 emails will be in the PDF.');
         toggle(items()[0]!, false);
-        while (queue.length > 0) queue.shift()!();
+        while (queue.length > 0)
+        {
+            queue.shift()!();
+        }
         expect(items().map((i) => checkbox(i).checked)).toEqual([false, true, true]);
         toggle(items()[2]!, false);
         expect(review.includedPositions()).toEqual([1]);
@@ -845,7 +872,10 @@ describe('safety', () =>
         toggle(item, false);
         expect(review.includedPositions()).toEqual([]);
         // Only allowed tags were ever created; nothing from the strings became an element.
-        for (const created of doc.created) expect(SAFE_TAGS as readonly string[]).toContain(created.tagName);
+        for (const created of doc.created)
+        {
+            expect(SAFE_TAGS as readonly string[]).toContain(created.tagName);
+        }
         expect(doc.created.some((e) => e.tagName === 'img' || e.tagName === 'script')).toBe(false);
     });
 

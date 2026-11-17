@@ -40,7 +40,10 @@ export function breakLines(text: ShapedText, maxWidth: number, hyphenWidth: (ite
     const n = text.length;
     const { kind, width } = text;
     const lines: LineRange[] = [];
-    if (n === 0) return [{ start: 0, end: 0, hyphenAt: SHY_NONE, width: 0 }];
+    if (n === 0)
+    {
+        return [{ start: 0, end: 0, hyphenAt: SHY_NONE, width: 0 }];
+    }
     const limit = maxWidth + EPSILON;
     let start = 0;
     while (start < n)
@@ -110,11 +113,17 @@ export function breakLines(text: ShapedText, maxWidth: number, hyphenWidth: (ite
             }
             break;
         }
-        if (endWidth < 0) endWidth = visible; // the rest fits
+        if (endWidth < 0)
+        {
+            endWidth = visible; // the rest fits
+        }
         // Spaces after the break stay on this line (never at the start of the next one).
         // Needed after a single item wider than the line ("[U+1F600] next" in a
         // narrow column); a break after spaces already ends at a non-space.
-        while (end < n && (kind[end]! & SPACE) !== 0) end++;
+        while (end < n && (kind[end]! & SPACE) !== 0)
+        {
+            end++;
+        }
         lines.push({ start, end, hyphenAt, width: endWidth });
         start = end;
     }

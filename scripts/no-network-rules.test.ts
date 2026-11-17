@@ -141,7 +141,10 @@ describe('global URL allowlist (the Ko-fi donation link)', () =>
         const code = `l.setAttribute("href","${kofi}");`;
         expect(findViolations(code, src)).toEqual([]);
         expect(findViolations(code, { isDist: false, sourceFile: 'src/ui/dom.ts' })).toEqual([]);
-        for (const distFile of ['assets/index-abc123.js', 'index.html']) expect(findViolations(code, { isDist: true, distFile })).toEqual([]);
+        for (const distFile of ['assets/index-abc123.js', 'index.html'])
+        {
+            expect(findViolations(code, { isDist: true, distFile })).toEqual([]);
+        }
         expect(findViolations(String.raw`var u="https:\/\/ko-fi.com\/0x496d7065";`, dist)).toEqual([]);
     });
 

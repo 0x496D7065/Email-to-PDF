@@ -68,10 +68,19 @@ export function manifestVersion(files, swCode, headersFile)
 export function readBuiltManifest(swJs)
 {
     const found = swJs.match(BUILT_LITERAL) ?? [];
-    if (found.length !== 1) throw new Error(`sw.js must hold the precache list exactly once (found ${String(found.length)})`);
+    if (found.length !== 1)
+    {
+        throw new Error(`sw.js must hold the precache list exactly once (found ${String(found.length)})`);
+    }
     const value = JSON.parse(JSON.parse(found[0]));
     const { version, paths } = value;
-    if (typeof version !== 'string' || !/^[0-9a-f]+$/.test(version)) throw new Error('sw.js: the precache list has a bad version');
-    if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string')) throw new Error('sw.js: the precache list has bad paths');
+    if (typeof version !== 'string' || !/^[0-9a-f]+$/.test(version))
+    {
+        throw new Error('sw.js: the precache list has a bad version');
+    }
+    if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string'))
+    {
+        throw new Error('sw.js: the precache list has bad paths');
+    }
     return { version, paths };
 }

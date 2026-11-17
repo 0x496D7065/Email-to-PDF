@@ -100,10 +100,19 @@ export function createPdfStrings(locale: string): PdfStrings
     const { t } = translator(locale);
     const size = (bytes: number | null): string =>
     {
-        if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return t('preview.size.unknown');
-        if (bytes < 1024) return t('preview.size.bytes', { count: bytes });
+        if (bytes === null || !Number.isFinite(bytes) || bytes < 0)
+        {
+            return t('preview.size.unknown');
+        }
+        if (bytes < 1024)
+        {
+            return t('preview.size.bytes', { count: bytes });
+        }
         const kb = bytes / 1024;
-        if (kb < 1024) return t('preview.size.kb', { size: roundSize(kb) });
+        if (kb < 1024)
+        {
+            return t('preview.size.kb', { size: roundSize(kb) });
+        }
         return t('preview.size.mb', { size: roundSize(kb / 1024) });
     };
     return {

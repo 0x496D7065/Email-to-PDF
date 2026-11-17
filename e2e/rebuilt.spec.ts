@@ -58,7 +58,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -91,7 +94,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
@@ -154,7 +160,10 @@ test('the switch leaves every rebuilt email out, with the keyboard, and brings t
     await page.keyboard.press('Space');
     await expect(all).not.toBeChecked();
     await expect(page.locator('#preview-list > li.message-rebuilt')).toHaveCount(3);
-    for (const card of await page.locator('#preview-list > li.message-rebuilt').all()) await expect(card).toBeHidden();
+    for (const card of await page.locator('#preview-list > li.message-rebuilt').all())
+    {
+        await expect(card).toBeHidden();
+    }
     await expect(items.filter({ visible: true })).toHaveCount(1);
     // Off: the counts do not mention rebuilt emails at all.
     await expect(page.locator('#review-rebuilt')).toBeHidden();

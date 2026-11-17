@@ -79,7 +79,10 @@ export async function parseEmlTree(bytes: Uint8Array | ArrayBuffer, options: Pos
  */
 export function readPartsTree(parser: unknown, email: Email): EmlPart
 {
-    if (!isObject(parser) || !('root' in parser)) throw new PostalMimeInternalsError('parser.root is missing');
+    if (!isObject(parser) || !('root' in parser))
+    {
+        throw new PostalMimeInternalsError('parser.root is missing');
+    }
     let next = 0;
     const takeAttachment = (mimeType: string): Attachment =>
     {
@@ -101,7 +104,10 @@ export function readPartsTree(parser: unknown, email: Email): EmlPart
             for (const child of node.childNodes)
             {
                 const part = read(child);
-                if (part !== null) children.push(part);
+                if (part !== null)
+                {
+                    children.push(part);
+                }
             }
             return { kind: 'multipart', subtype: node.multipart, children };
         }
@@ -110,7 +116,10 @@ export function readPartsTree(parser: unknown, email: Email): EmlPart
             return { kind: 'text', type: node.mimeType === 'text/html' ? 'html' : 'plain', text: node.getText() };
         }
         // postal-mime skips a leaf without content; it never lists it.
-        if (node.content === null) return null;
+        if (node.content === null)
+        {
+            return null;
+        }
         return { kind: 'attachment', attachment: takeAttachment(node.mimeType) };
     };
 
@@ -139,9 +148,15 @@ interface CheckedNode {
 
 function checkNode(raw: unknown): CheckedNode
 {
-    if (!isObject(raw)) throw new PostalMimeInternalsError('a MIME node is not an object');
+    if (!isObject(raw))
+    {
+        throw new PostalMimeInternalsError('a MIME node is not an object');
+    }
     const { childNodes, contentType, contentDisposition, content, getTextContent } = raw as Record<string, unknown>;
-    if (!Array.isArray(childNodes)) throw new PostalMimeInternalsError('node.childNodes is not an array');
+    if (!Array.isArray(childNodes))
+    {
+        throw new PostalMimeInternalsError('node.childNodes is not an array');
+    }
     const mimeType = parsedValue(contentType, 'contentType');
     const disposition = parsedValue(contentDisposition, 'contentDisposition');
     const multipart = (contentType as Record<string, unknown>).multipart;
@@ -154,11 +169,17 @@ function checkNode(raw: unknown): CheckedNode
     {
         throw new PostalMimeInternalsError('node.content is not an ArrayBuffer or null');
     }
-    if (typeof getTextContent !== 'function') throw new PostalMimeInternalsError('node.getTextContent is not a function');
+    if (typeof getTextContent !== 'function')
+    {
+        throw new PostalMimeInternalsError('node.getTextContent is not a function');
+    }
     const getText = (): string =>
     {
         const text: unknown = getTextContent.call(raw);
-        if (typeof text !== 'string') throw new PostalMimeInternalsError('node.getTextContent() did not return a string');
+        if (typeof text !== 'string')
+        {
+            throw new PostalMimeInternalsError('node.getTextContent() did not return a string');
+        }
         return text;
     };
     return { childNodes, multipart, mimeType, disposition, content: content as ArrayBuffer | null, getText };
@@ -169,7 +190,10 @@ function parsedValue(header: unknown, name: string): string
 {
     const parsed = isObject(header) ? (header as Record<string, unknown>).parsed : undefined;
     const value = isObject(parsed) ? (parsed as Record<string, unknown>).value : undefined;
-    if (typeof value !== 'string') throw new PostalMimeInternalsError(`node.${name}.parsed.value is not a string`);
+    if (typeof value !== 'string')
+    {
+        throw new PostalMimeInternalsError(`node.${name}.parsed.value is not a string`);
+    }
     return value;
 }
 

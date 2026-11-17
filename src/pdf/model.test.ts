@@ -279,9 +279,15 @@ function coverRow(doc: PdfDocument, label: string): readonly PdfLine[]
 {
     for (const b of doc.cover.blocks)
     {
-        if (b.kind !== 'fields') continue;
+        if (b.kind !== 'fields')
+        {
+            continue;
+        }
         const row = b.rows.find((r) => r.label === label);
-        if (row !== undefined) return row.value;
+        if (row !== undefined)
+        {
+            return row.value;
+        }
     }
     throw new Error(`no cover row ${label}`);
 }
@@ -399,7 +405,10 @@ describe('cover', () =>
         expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
         // No file name and no hash on the cover, read or not.
         const coverText = JSON.stringify(doc.cover.blocks);
-        for (const name of [original.source.fileName, 'copy-of-it.msg', other.source.fileName, 'broken.eml', 'huge.eml']) expect(coverText, name).not.toContain(name);
+        for (const name of [original.source.fileName, 'copy-of-it.msg', other.source.fileName, 'broken.eml', 'huge.eml'])
+        {
+            expect(coverText, name).not.toContain(name);
+        }
         expect(coverText).not.toMatch(/[0-9a-f]{64}/);
         // Collapse, never delete: each email header still names its files, the merged copy included.
         expect(field(doc.emails[0]!, 'File')!.map(text)).toEqual([original.source.fileName, 'copy-of-it.msg']);
@@ -633,7 +642,10 @@ describe('purity', () =>
         if (typeof value === 'object' && value !== null && !Object.isFrozen(value))
         {
             Object.freeze(value);
-            for (const v of Object.values(value)) deepFreeze(v);
+            for (const v of Object.values(value))
+            {
+                deepFreeze(v);
+            }
         }
         return value;
     }

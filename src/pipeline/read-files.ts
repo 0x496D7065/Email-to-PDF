@@ -57,9 +57,18 @@ export function createFileReader(limits: Limits = DEFAULT_LIMITS): (file: FileLi
             result: { ok: false, fileName: name, sha256: null, error, detail },
         });
         const size: unknown = file.size;
-        if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return failed('unreadable', UNREADABLE_DETAIL);
-        if (size > limits.maxFileBytes) return failed('too-large', FILE_TOO_LARGE_DETAIL);
-        if (acceptedBytes + size > limits.maxBatchBytes) return failed('too-large', BATCH_TOO_LARGE_DETAIL);
+        if (typeof size !== 'number' || !Number.isFinite(size) || size < 0)
+        {
+            return failed('unreadable', UNREADABLE_DETAIL);
+        }
+        if (size > limits.maxFileBytes)
+        {
+            return failed('too-large', FILE_TOO_LARGE_DETAIL);
+        }
+        if (acceptedBytes + size > limits.maxBatchBytes)
+        {
+            return failed('too-large', BATCH_TOO_LARGE_DETAIL);
+        }
 
         // Reserved before waiting, so the total is right even if calls overlap.
         acceptedBytes += size;

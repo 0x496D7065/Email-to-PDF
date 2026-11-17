@@ -15,7 +15,10 @@ const BRACKETED_ID = /<([^<>]*)>/g;
  */
 export function parseIdList(value: string | null | undefined): string[]
 {
-    if (value === null || value === undefined) return [];
+    if (value === null || value === undefined)
+    {
+        return [];
+    }
     const bracketed = [...value.matchAll(BRACKETED_ID)].map((match) => (match[1] ?? '').trim());
     const ids = bracketed.length > 0 ? bracketed : value.split(/\s+/);
     return ids.filter((id) => id !== '');

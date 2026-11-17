@@ -56,7 +56,10 @@ const TUE = 'Tue, 3 Jun 2025 14:00:00 +0200';
 async function parseEml(name: string, text: string): Promise<ParseResult>
 {
     const r = await eml.parse({ name, bytes: new TextEncoder().encode(text) });
-    if (!r.ok) throw new Error(r.detail);
+    if (!r.ok)
+    {
+        throw new Error(r.detail);
+    }
     return r;
 }
 
@@ -289,7 +292,10 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
         const at = cyBody.indexOf(OLD);
         const list = ranges.get(cy)!;
         expect(list.some((r) => r.keep && r.printedAs === null && r.start <= at && at < r.end)).toBe(true);
-        for (const r of list.filter((x) => x.printedAs !== null)) expect(cyBody.slice(r.start, r.end)).not.toContain(OLD);
+        for (const r of list.filter((x) => x.printedAs !== null))
+        {
+            expect(cyBody.slice(r.start, r.end)).not.toContain(OLD);
+        }
         // Ben's own answer is cut from Cy, labelled "printed as" Ben.
         const fine = cyBody.indexOf(FINE);
         expect(list.some((r) => r.printedAs?.kind === 'email' && r.printedAs.position === positionOf(out, 'ben subject') && r.start <= fine && fine < r.end)).toBe(true);
@@ -363,7 +369,10 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
         expect(at).toBeGreaterThan(0);
         const list = ranges.get(cy)!;
         expect(list.some((r) => r.keep && r.printedAs === null && r.start <= at && at < r.end)).toBe(true);
-        for (const r of list.filter((x) => x.printedAs !== null)) expect(cyBody.slice(r.start, r.end)).not.toContain(OLD);
+        for (const r of list.filter((x) => x.printedAs !== null))
+        {
+            expect(cyBody.slice(r.start, r.end)).not.toContain(OLD);
+        }
         // Bea's own text is labelled as left out with her (unticked attached email).
         const bea0 = cyBody.indexOf(BEA);
         expect(list.some((r) => r.printedAs?.kind === 'unticked-attached' && r.printedAs.position === positionOf(out, 'bea subject') && r.start <= bea0 && bea0 < r.end)).toBe(true);
@@ -376,7 +385,10 @@ describe('PDF model: copies of the email holding an attached email, and copies o
     {
         const text = holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY)));
         const withList = await parseEml('one.eml', text);
-        if (!withList.ok) throw new Error('not read');
+        if (!withList.ok)
+        {
+            throw new Error('not read');
+        }
         // The same email, its attached list not read, LF line ends and trailing spaces, and a Bcc line: this copy is kept.
         const body = withList.message.bodyText.replace(/\r\n/gu, '\n').replace(/\n/gu, '  \n');
         const noList: ParseResult = { ok: true, message: { ...withList.message, bodyText: body, bcc: [{ name: '', address: 'archive@example.test' }], source: { ...withList.message.source, fileName: 'two.eml', sha256: '0'.repeat(64) } } };
@@ -438,7 +450,10 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         }
         // Folded: every email's own text is still printed exactly once.
         const folded = docOf(out);
-        for (const text of [OWN, A_BODY, B_BODY, 'A copy also dropped on its own.']) expect(printedIn(folded, text), text).toBe(1);
+        for (const text of [OWN, A_BODY, B_BODY, 'A copy also dropped on its own.'])
+        {
+            expect(printedIn(folded, text), text).toBe(1);
+        }
     });
 
     // Review round 2 of task 8.13b-3 (M1): an attached email dated after the email holding it, or an
@@ -452,7 +467,10 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         const out = runEngine([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))]);
         expect(out.messages.map((m) => m.message.subject)).toEqual(['carol subject', 'alice subject', 'bob subject']);
         const d = docOf(out);
-        for (const text of [OWN, UNIQUE_A, B_BODY]) expect(printedIn(d, text), text).toBe(1);
+        for (const text of [OWN, UNIQUE_A, B_BODY])
+        {
+            expect(printedIn(d, text), text).toBe(1);
+        }
         expect(squash(bodyOf(emailOf(d, out, 'bob subject')!))).toContain(squash(UNIQUE_A));
     });
 
@@ -465,7 +483,10 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         const kept = out.messages.find((m) => m.message.subject === 'bob subject')!;
         expect(kept.message.source.fileName).toBe('a.eml');
         const d = docOf(out);
-        for (const text of [OWN, UNIQUE_A, B_BODY]) expect(printedIn(d, text), text).toBe(1);
+        for (const text of [OWN, UNIQUE_A, B_BODY])
+        {
+            expect(printedIn(d, text), text).toBe(1);
+        }
     });
 
     it('safety net: if the engine ever folded an attached email\'s text as quoted from its holder, that text stays in the holder (never nowhere)', async () =>
@@ -489,9 +510,15 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         const asCarol = { kind: 'email', position: positionOf(out, 'carol subject'), number: emailOf(d, out, 'carol subject')!.number };
         expect(cut.map((r) => r.printedAs)).toContainEqual(asCarol);
         expect(cut.every((r) => [asBob, asCarol].some((x) => JSON.stringify(x) === JSON.stringify(r.printedAs)))).toBe(true);
-        for (const r of cut) expect(squash(aliceBody.slice(r.start, r.end))).not.toContain(squash(UNIQUE_A));
+        for (const r of cut)
+        {
+            expect(squash(aliceBody.slice(r.start, r.end))).not.toContain(squash(UNIQUE_A));
+        }
         expect(printedIn(d, UNIQUE_A)).toBe(1);
-        for (const text of [OWN, B_BODY]) expect(printedIn(d, text), text).toBe(1);
+        for (const text of [OWN, B_BODY])
+        {
+            expect(printedIn(d, text), text).toBe(1);
+        }
         // Bob unticked (Q3): his block is left out of Alice's email too (no safety net needed: nothing is promised).
         const without = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'alice subject'), positionOf(out, 'carol subject')]);
         expect(printedIn(without, UNIQUE_A)).toBe(0);
@@ -520,7 +547,10 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
             DEFAULT_OUTPUT_POLICY,
         );
         const parts = noRepeat({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY }).parts.get(alice) ?? [];
-        for (const p of parts) expect(p.end <= start || p.start >= end, JSON.stringify(p)).toBe(true);
+        for (const p of parts)
+        {
+            expect(p.end <= start || p.start >= end, JSON.stringify(p)).toBe(true);
+        }
         const d = docOf(out);
         expect(squash(bodyOf(emailOf(d, out, 'alice subject')!))).toContain(squash(CHANGED));
         expect(squash(bodyOf(emailOf(d, out, 'alice subject')!))).toContain(squash(OWN));

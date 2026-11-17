@@ -75,7 +75,10 @@ class Listeners
                 event.defaultPrevented = true;
             },
         };
-        for (const listener of this.byType.get(type) ?? []) listener(event);
+        for (const listener of this.byType.get(type) ?? [])
+        {
+            listener(event);
+        }
         return event;
     }
 }
@@ -173,16 +176,28 @@ export class FakeElement
     append(...nodes: (FakeNode | string)[]): void
     {
         // Like the real append(): a string becomes a text node, never markup.
-        for (const node of nodes) this.children.push(typeof node === 'string' ? new FakeText(node) : node);
+        for (const node of nodes)
+        {
+            this.children.push(typeof node === 'string' ? new FakeText(node) : node);
+        }
     }
 
     /** Like the real insertBefore(): `node` goes before `reference`, or at the end when it is null. */
     insertBefore(node: FakeNode, reference: FakeNode | null): FakeNode
     {
         const at = reference === null ? -1 : this.children.indexOf(reference);
-        if (reference !== null && at < 0) throw new Error('fake DOM: insertBefore reference is not a child');
-        if (at < 0) this.children.push(node);
-        else this.children.splice(at, 0, node);
+        if (reference !== null && at < 0)
+        {
+            throw new Error('fake DOM: insertBefore reference is not a child');
+        }
+        if (at < 0)
+        {
+            this.children.push(node);
+        }
+        else
+        {
+            this.children.splice(at, 0, node);
+        }
         return node;
     }
 

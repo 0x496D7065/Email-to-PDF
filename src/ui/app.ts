@@ -263,7 +263,10 @@ function languagePicker(
         radio.checked = ticked;
         radio.addEventListener('change', () =>
         {
-            if (radio.checked) onChange(locale);
+            if (radio.checked)
+            {
+                onChange(locale);
+            }
         });
         radios.set(locale, radio);
         // The language's own name, in its own language (never translated).
@@ -399,7 +402,13 @@ export function mountApp(root: HTMLElement, options: AppOptions = {}): AppShell
             labels.relabel();
             // Defensive: the page language's radio is the ticked one (it already
             // is when the reader picked it: the radios are never rebuilt).
-            if (picker !== null) for (const [locale, radio] of picker.radios) radio.checked = locale === getLocale();
+            if (picker !== null)
+            {
+                for (const [locale, radio] of picker.radios)
+                {
+                    radio.checked = locale === getLocale();
+                }
+            }
         },
     };
 }

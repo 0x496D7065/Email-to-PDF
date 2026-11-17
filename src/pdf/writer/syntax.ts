@@ -30,17 +30,29 @@ const DECIMALS = 3;
  */
 export function num(value: number): string
 {
-    if (typeof value !== 'number' || !Number.isFinite(value)) fail(`not a finite number: ${String(value)}`);
-    if (Math.abs(value) > MAX_NUMBER) fail(`number out of range: ${value}`);
+    if (typeof value !== 'number' || !Number.isFinite(value))
+    {
+        fail(`not a finite number: ${String(value)}`);
+    }
+    if (Math.abs(value) > MAX_NUMBER)
+    {
+        fail(`number out of range: ${value}`);
+    }
     let text = value.toFixed(DECIMALS);
-    if (text.includes('.')) text = text.replace(/0+$/, '').replace(/\.$/, '');
+    if (text.includes('.'))
+    {
+        text = text.replace(/0+$/, '').replace(/\.$/, '');
+    }
     return text === '-0' ? '0' : text;
 }
 
 /** A non-negative integer (object numbers, lengths, counts, glyph ids). */
 export function int(value: number): string
 {
-    if (!Number.isSafeInteger(value) || value < 0) fail(`not a non-negative integer: ${String(value)}`);
+    if (!Number.isSafeInteger(value) || value < 0)
+    {
+        fail(`not a non-negative integer: ${String(value)}`);
+    }
     return String(value);
 }
 
@@ -56,7 +68,10 @@ export function isValidName(value: string): boolean
 /** "/Name". Throws unless the name is 1 to 127 of A-Z a-z 0-9 . _ - */
 export function name(value: string): string
 {
-    if (!isValidName(value)) fail(`invalid PDF name: ${JSON.stringify(String(value)).slice(0, 80)}`);
+    if (!isValidName(value))
+    {
+        fail(`invalid PDF name: ${JSON.stringify(String(value)).slice(0, 80)}`);
+    }
     return `/${value}`;
 }
 
@@ -84,9 +99,18 @@ export function utf16Hex(text: string): string
     for (const character of text)
     {
         const cp = character.codePointAt(0)!;
-        if (cp >= 0xd800 && cp <= 0xdfff) parts.push('FFFD');
-        else if (cp < 0x10000) parts.push(hex4(cp));
-        else parts.push(hex4(0xd800 + ((cp - 0x10000) >> 10)) + hex4(0xdc00 + ((cp - 0x10000) & 0x3ff)));
+        if (cp >= 0xd800 && cp <= 0xdfff)
+        {
+            parts.push('FFFD');
+        }
+        else if (cp < 0x10000)
+        {
+            parts.push(hex4(cp));
+        }
+        else
+        {
+            parts.push(hex4(0xd800 + ((cp - 0x10000) >> 10)) + hex4(0xdc00 + ((cp - 0x10000) & 0x3ff)));
+        }
     }
     return parts.join('');
 }
@@ -117,7 +141,10 @@ export function ascii(text: string): Uint8Array<ArrayBuffer>
     for (let i = 0; i < text.length; i++)
     {
         const unit = text.charCodeAt(i);
-        if (unit > 0x7e || (unit < 0x20 && unit !== 0x0a && unit !== 0x0d)) fail('PDF syntax must be printable ASCII');
+        if (unit > 0x7e || (unit < 0x20 && unit !== 0x0a && unit !== 0x0d))
+        {
+            fail('PDF syntax must be printable ASCII');
+        }
         bytes[i] = unit;
     }
     return bytes;

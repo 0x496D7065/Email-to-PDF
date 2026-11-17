@@ -48,7 +48,10 @@ beforeAll(async () =>
 {
     fonts = await loadPdfFonts();
     const found = (await parseAllFixtures()).find((m) => m.source.fileName === THREAD_LAST);
-    if (found === undefined) throw new Error(`no fixture ${THREAD_LAST}`);
+    if (found === undefined)
+    {
+        throw new Error(`no fixture ${THREAD_LAST}`);
+    }
     threadLast = found;
 });
 
@@ -123,8 +126,14 @@ function plansOf(result: EngineResult, positions: readonly number[]): MessagePla
     return planOutput(positions.map((p) => result.messages[p]!)).map((plan, k) =>
     {
         const subject = result.messages[positions[k]!]!.message.subject;
-        if (subject === 'Fallback') return { ...plan, fallback: true };
-        if (subject === 'Kept all') return { ...plan, keptAllBecauseEmpty: true };
+        if (subject === 'Fallback')
+        {
+            return { ...plan, fallback: true };
+        }
+        if (subject === 'Kept all')
+        {
+            return { ...plan, keptAllBecauseEmpty: true };
+        }
         return plan;
     });
 }
@@ -188,9 +197,18 @@ const REMOVED_KEYS = ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unrea
 /** Every text of a catalog value, plural forms included. */
 function textsOf(value: unknown): string[]
 {
-    if (typeof value === 'string') return [value];
-    if (isPluralForms(value)) return Object.values(value).flatMap(textsOf);
-    if (typeof value === 'object' && value !== null) return Object.values(value).flatMap(textsOf);
+    if (typeof value === 'string')
+    {
+        return [value];
+    }
+    if (isPluralForms(value))
+    {
+        return Object.values(value).flatMap(textsOf);
+    }
+    if (typeof value === 'object' && value !== null)
+    {
+        return Object.values(value).flatMap(textsOf);
+    }
     return [];
 }
 
@@ -236,7 +254,10 @@ describe('task 8.8: the PDF holds no notes', () =>
         for (const locale of LOCALES)
         {
             const keys = Object.keys(CATALOG[locale]!.pdf.document);
-            for (const key of REMOVED_KEYS) expect(keys, `${locale}: pdf.document.${key}`).not.toContain(key);
+            for (const key of REMOVED_KEYS)
+            {
+                expect(keys, `${locale}: pdf.document.${key}`).not.toContain(key);
+            }
             const s = createPdfStrings(locale) as unknown as Record<string, unknown>;
             for (const key of ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unreadableHeading', 'unreadableIntro', 'noFingerprint', 'controlChars', 'dateAsWritten', 'zoneUnknown', 'keptAllEmpty', 'fallback', 'contentNotes'])
             {
@@ -271,17 +292,29 @@ describe('task 8.8: the PDF holds no notes', () =>
                 for (const f of forbidden(locale))
                 {
                     expect(all, `"${f}"`).not.toContain(flat(f));
-                    for (const title of bookmarks) expect(title, `"${f}"`).not.toContain(f);
+                    for (const title of bookmarks)
+                    {
+                        expect(title, `"${f}"`).not.toContain(f);
+                    }
                 }
                 // Nothing of the file that could not be read.
                 expect(all).not.toContain(UNREADABLE_FILE);
                 expect(bare(all)).not.toContain(UNREADABLE_SHA);
                 // No paragraph on the cover, and no line above an email's text but "(no text)".
                 expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
-                for (const e of doc.emails) for (const line of e.notes) expect(line.map((r) => r.text).join('')).toBe(s.noText);
+                for (const e of doc.emails)
+                {
+                    for (const line of e.notes)
+                    {
+                        expect(line.map((r) => r.text).join('')).toBe(s.noText);
+                    }
+                }
 
                 // Kept: the blank-field placeholders.
-                for (const placeholder of [s.noSubject, s.unknownSender, s.noText, s.noAttachmentName, s.noDate]) expect(all, placeholder).toContain(flat(placeholder));
+                for (const placeholder of [s.noSubject, s.unknownSender, s.noText, s.noAttachmentName, s.noDate])
+                {
+                    expect(all, placeholder).toContain(flat(placeholder));
+                }
                 // Kept: the date as written, alone in its row (its control character as a code).
                 expect(bare(all)).toContain(bare(`${s.dateLabel} Someday[U+0007] around noon ${s.subjectLabel}`));
                 // Kept: the zone used, and nothing after it.

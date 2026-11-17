@@ -172,8 +172,14 @@ export function normalizeBody(bodyText: string): string
         .map((line) => line.replace(/[ \t]+$/, ''));
     let start = 0;
     let end = lines.length;
-    while (start < end && lines[start] === '') start++;
-    while (end > start && lines[end - 1] === '') end--;
+    while (start < end && lines[start] === '')
+    {
+        start++;
+    }
+    while (end > start && lines[end - 1] === '')
+    {
+        end--;
+    }
     return lines.slice(start, end).join('\n');
 }
 
@@ -205,7 +211,10 @@ export function fromKey(message: NormalizedMessage): string
 export function authorKey(message: NormalizedMessage): string
 {
     const first = message.from[0];
-    if (first !== undefined) return first.address.toLowerCase();
+    if (first !== undefined)
+    {
+        return first.address.toLowerCase();
+    }
     return message.sender?.address.toLowerCase() ?? '';
 }
 
@@ -281,7 +290,13 @@ function prepare(message: NormalizedMessage, index: number): Prepared
 
 function isSuperset(big: ReadonlySet<string>, small: ReadonlySet<string>): boolean
 {
-    for (const item of small) if (!big.has(item)) return false;
+    for (const item of small)
+    {
+        if (!big.has(item))
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -349,13 +364,25 @@ export interface DedupeOptions {
 /** Why neither copy covers the other (see the warning codes). */
 function whyNotCovered(a: Prepared, b: Prepared): DedupeWarningCode
 {
-    if (!recipientsCover(a, b) && !recipientsCover(b, a)) return 'duplicate-recipients-differ';
-    if (!senderCovers(a, b) && !senderCovers(b, a)) return 'duplicate-sender-differs';
+    if (!recipientsCover(a, b) && !recipientsCover(b, a))
+    {
+        return 'duplicate-recipients-differ';
+    }
+    if (!senderCovers(a, b) && !senderCovers(b, a))
+    {
+        return 'duplicate-sender-differs';
+    }
     // Each part alone is comparable, but no copy holds all of them. Name the
     // threading headers if they are part of the problem, then the date (one
     // copy has none), else the sender. (Dates alone are always comparable.)
-    if (!threadingCovers(a, b) || !threadingCovers(b, a)) return 'duplicate-threading-differs';
-    if (!dateCovers(a, b) || !dateCovers(b, a)) return 'duplicate-date-differs';
+    if (!threadingCovers(a, b) || !threadingCovers(b, a))
+    {
+        return 'duplicate-threading-differs';
+    }
+    if (!dateCovers(a, b) || !dateCovers(b, a))
+    {
+        return 'duplicate-date-differs';
+    }
     // Only a sender-vs-recipients mix is left, e.g. one copy has a sender and
     // the other has no sender but more recipients.
     return 'duplicate-sender-differs';
@@ -378,12 +405,18 @@ function compareInBucket(a: Prepared, b: Prepared): Comparison
     const aMs = a.message.date.utcMs;
     const bMs = b.message.date.utcMs;
     const sameAuthorDate = a.author !== '' && b.author !== '' && aMs !== null && aMs === bMs;
-    if (!sameId && !sameAuthorDate) return { warning: null };
+    if (!sameId && !sameAuthorDate)
+    {
+        return { warning: null };
+    }
     if (!sameAuthorDate && aMs !== null && bMs !== null && Math.abs(aMs - bMs) > DATE_TOLERANCE_MS)
     {
         return { warning: 'duplicate-date-differs' };
     }
-    if (!covers(a, b) && !covers(b, a)) return { warning: whyNotCovered(a, b) };
+    if (!covers(a, b) && !covers(b, a))
+    {
+        return { warning: whyNotCovered(a, b) };
+    }
     return { rule: sameId ? 'message-id' : 'author-date-body' };
 }
 
@@ -397,8 +430,14 @@ function canonicalOrder(a: Prepared, b: Prepared): number
 {
     const sa = a.message.source;
     const sb = b.message.source;
-    if (sa.sha256 !== sb.sha256) return sa.sha256 < sb.sha256 ? -1 : 1;
-    if (sa.fileName !== sb.fileName) return sa.fileName < sb.fileName ? -1 : 1;
+    if (sa.sha256 !== sb.sha256)
+    {
+        return sa.sha256 < sb.sha256 ? -1 : 1;
+    }
+    if (sa.fileName !== sb.fileName)
+    {
+        return sa.fileName < sb.fileName ? -1 : 1;
+    }
     return a.index - b.index;
 }
 
@@ -406,8 +445,14 @@ function canonicalOrder(a: Prepared, b: Prepared): number
 function pushTo<K, V>(map: Map<K, V[]>, key: K, item: V): void
 {
     const list = map.get(key);
-    if (list === undefined) map.set(key, [item]);
-    else list.push(item);
+    if (list === undefined)
+    {
+        map.set(key, [item]);
+    }
+    else
+    {
+        list.push(item);
+    }
 }
 
 /**
@@ -442,7 +487,13 @@ interface Related {
 function lowest(lists: readonly (readonly number[])[]): number[]
 {
     const all: number[] = [];
-    for (const list of lists) for (let i = 0; i < list.length && i < MAX_RELATED; i++) all.push(list[i]!);
+    for (const list of lists)
+    {
+        for (let i = 0; i < list.length && i < MAX_RELATED; i++)
+        {
+            all.push(list[i]!);
+        }
+    }
     return all.sort((a, b) => a - b).slice(0, MAX_RELATED);
 }
 
@@ -467,7 +518,10 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
         // A signature is a JSON array, so it never starts with '#'.
         const key = p.message.messageId !== null || useDate(p) ? p.signature : `#${String(p.index)}`;
         const twins = twinsByKey.get(key);
-        if (twins !== undefined) twins.members.push(p);
+        if (twins !== undefined)
+        {
+            twins.members.push(p);
+        }
         else
         {
             const created = { first: p, members: [p] };
@@ -483,19 +537,40 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
     const dateIndex = new Map<number, Twins[]>();
     for (const t of all)
     {
-        if (t.first.message.messageId !== null) pushTo(idIndex, t.first.message.messageId, t);
-        if (useDate(t.first)) pushTo(dateIndex, t.first.message.date.utcMs!, t); // `!`: checked by useDate
+        if (t.first.message.messageId !== null)
+        {
+            pushTo(idIndex, t.first.message.messageId, t);
+        }
+        if (useDate(t.first))
+        {
+            pushTo(dateIndex, t.first.message.date.utcMs!, t); // `!`: checked by useDate
+        }
     }
     /** Calls `visit` once for every other Twins sharing t's Message-ID or date. */
     const forEachCandidate = (t: Twins, visit: (u: Twins) => void): void =>
     {
         const p = t.first;
         const id = p.message.messageId;
-        if (id !== null) for (const u of idIndex.get(id)!) if (u !== t) visit(u);
-        if (!useDate(p)) return;
+        if (id !== null)
+        {
+            for (const u of idIndex.get(id)!)
+            {
+                if (u !== t)
+                {
+                    visit(u);
+                }
+            }
+        }
+        if (!useDate(p))
+        {
+            return;
+        }
         for (const u of dateIndex.get(p.message.date.utcMs!)!)
         {
-            if (u !== t && (id === null || u.first.message.messageId !== id)) visit(u); // skip those seen by id
+            if (u !== t && (id === null || u.first.message.messageId !== id))
+            {
+                visit(u); // skip those seen by id
+            }
         }
     };
 
@@ -510,7 +585,10 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
         forEachCandidate(t, (u) =>
         {
             const n = groupNumber.get(u);
-            if (n !== undefined) tried.add(n);
+            if (n !== undefined)
+            {
+                tried.add(n);
+            }
         });
         const n = [...tried].sort((x, y) => x - y).find((k) => groups[k]!.every((u) => isDuplicate(t.first, u.first)));
         let groupIndex: number;
@@ -538,20 +616,35 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
         {
             forEachCandidate(t, (u) =>
             {
-                if (groupNumber.get(u) === number) return;
+                if (groupNumber.get(u) === number)
+                {
+                    return;
+                }
                 const result = compareInBucket(t.first, u.first);
                 const code = 'rule' in result ? 'possible-duplicate-not-merged' : result.warning;
-                if (code === null) return;
+                if (code === null)
+                {
+                    return;
+                }
                 const set = found.get(code);
-                if (set === undefined) found.set(code, new Set([u]));
-                else set.add(u);
+                if (set === undefined)
+                {
+                    found.set(code, new Set([u]));
+                }
+                else
+                {
+                    set.add(u);
+                }
             });
         }
         const related = new Map<DedupeWarningCode, Related>();
         for (const [code, set] of found)
         {
             let total = 0;
-            for (const u of set) total += u.members.length;
+            for (const u of set)
+            {
+                total += u.members.length;
+            }
             related.set(code, { total, first: lowest([...set].map((u) => lowestOf.get(u)!)) });
         }
         return { twins, related };
@@ -589,10 +682,19 @@ export function dedupe(messages: readonly NormalizedMessage[], options: DedupeOp
 
     // Buckets, each listed in canonical order.
     const buckets = new Map<string, Prepared[]>();
-    for (const p of [...prepared].sort(canonicalOrder)) pushTo(buckets, p.bucketKey, p);
+    for (const p of [...prepared].sort(canonicalOrder))
+    {
+        pushTo(buckets, p.bucketKey, p);
+    }
     const groups: Group[] = [];
     // Appended one by one: a spread into push overflows the stack for very long lists.
-    for (const bucket of buckets.values()) for (const group of groupBucket(bucket)) groups.push(group);
+    for (const bucket of buckets.values())
+    {
+        for (const group of groupBucket(bucket))
+        {
+            groups.push(group);
+        }
+    }
 
     const sameId = sameIdDifferentContent(prepared);
     const reps = groups.map((group) =>
@@ -610,7 +712,10 @@ export function dedupe(messages: readonly NormalizedMessage[], options: DedupeOp
         const others = members.filter((p) => p !== rep).sort((a, b) => a.index - b.index);
         const related = new Map(group.related);
         const other = sameId(rep.bucketKey, members);
-        if (other.total > 0) related.set('same-id-different-content', other);
+        if (other.total > 0)
+        {
+            related.set('same-id-different-content', other);
+        }
         kept.push({
             message: rep.message,
             index: rep.index,
@@ -637,9 +742,15 @@ function sameIdDifferentContent(prepared: readonly Prepared[]): (bucketKey: stri
     for (const p of prepared)
     {
         const id = p.message.messageId;
-        if (id === null) continue;
+        if (id === null)
+        {
+            continue;
+        }
         let entry = byId.get(id);
-        if (entry === undefined) byId.set(id, (entry = { list: [], perBucket: new Map<string, number>() }));
+        if (entry === undefined)
+        {
+            byId.set(id, (entry = { list: [], perBucket: new Map<string, number>() }));
+        }
         entry.list.push(p);
         entry.perBucket.set(p.bucketKey, (entry.perBucket.get(p.bucketKey) ?? 0) + 1);
     }
@@ -651,21 +762,36 @@ function sameIdDifferentContent(prepared: readonly Prepared[]): (bucketKey: stri
         const lists: number[][] = [];
         for (const id of new Set(members.map((p) => p.message.messageId)))
         {
-            if (id === null) continue;
+            if (id === null)
+            {
+                continue;
+            }
             const entry = byId.get(id)!; // `!`: every id was indexed
             const outside = entry.list.length - entry.perBucket.get(bucketKey)!;
-            if (outside === 0) continue;
+            if (outside === 0)
+            {
+                continue;
+            }
             total += outside;
             let perBucket = memo.get(id);
-            if (perBucket === undefined) memo.set(id, (perBucket = new Map<string, number[]>()));
+            if (perBucket === undefined)
+            {
+                memo.set(id, (perBucket = new Map<string, number[]>()));
+            }
             let first = perBucket.get(bucketKey);
             if (first === undefined)
             {
                 first = [];
                 for (const p of entry.list)
                 {
-                    if (first.length === MAX_RELATED) break;
-                    if (p.bucketKey !== bucketKey) first.push(p.index);
+                    if (first.length === MAX_RELATED)
+                    {
+                        break;
+                    }
+                    if (p.bucketKey !== bucketKey)
+                    {
+                        first.push(p.index);
+                    }
                 }
                 perBucket.set(bucketKey, first);
             }
@@ -690,7 +816,13 @@ function pickRepresentative(group: readonly Prepared[], firstAttached: number): 
     // In a valid group every pair is comparable, so one pass finds the top:
     // switch only to a copy that strictly covers the current best.
     let top = byIndex[0]!; // `!`: a group is never empty
-    for (const p of byIndex) if (covers(p, top) && !covers(top, p)) top = p;
+    for (const p of byIndex)
+    {
+        if (covers(p, top) && !covers(top, p))
+        {
+            top = p;
+        }
+    }
     if (!byIndex.every((other) => covers(top, other)))
     {
         throw new Error('dedupe: group without a representative (internal error)');
@@ -701,6 +833,9 @@ function pickRepresentative(group: readonly Prepared[], firstAttached: number): 
 function ruleBetween(a: Prepared, b: Prepared): DuplicateRule
 {
     const result = compareInBucket(a, b);
-    if (!('rule' in result)) throw new Error('dedupe: group members are not duplicates (internal error)');
+    if (!('rule' in result))
+    {
+        throw new Error('dedupe: group members are not duplicates (internal error)');
+    }
     return result.rule;
 }

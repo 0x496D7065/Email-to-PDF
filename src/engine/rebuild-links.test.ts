@@ -560,7 +560,10 @@ describe('linkRebuilt: rebuilt vs real', () =>
     {
         const rest = Array.from({ length: extra - 2 }, (_, k) => `X${String.fromCharCode(97 + (k % 26))}${String.fromCharCode(97 + Math.floor(k / 26))}`);
         const lines = ['Alice'];
-        for (let k = 0; k < rest.length; k += 4) lines.push(rest.slice(k, k + 4).join(' '));
+        for (let k = 0; k < rest.length; k += 4)
+        {
+            lines.push(rest.slice(k, k + 4).join(' '));
+        }
         lines.push('+3221234567');
         return `\n\n${lines.join('\n')}\n`;
     };

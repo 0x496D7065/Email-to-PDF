@@ -102,15 +102,24 @@ function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeRe
             for (const role of ['to', 'cc', 'bcc'] as const)
             {
                 const keptKeys = new Set(keys(kept[role]));
-                for (const key of keys(copy[role])) expect(keptKeys.has(key)).toBe(true);
+                for (const key of keys(copy[role]))
+                {
+                    expect(keptKeys.has(key)).toBe(true);
+                }
             }
             if (copy.sender !== undefined)
             {
                 expect(kept.sender).toBeDefined();
                 expect(keys([kept.sender!])).toEqual(keys([copy.sender]));
             }
-            if (copy.inReplyTo !== null) expect(kept.inReplyTo).toBe(copy.inReplyTo);
-            for (const ref of copy.references) expect(kept.references).toContain(ref);
+            if (copy.inReplyTo !== null)
+            {
+                expect(kept.inReplyTo).toBe(copy.inReplyTo);
+            }
+            for (const ref of copy.references)
+            {
+                expect(kept.references).toContain(ref);
+            }
             // The rule really holds.
             const keptMs = kept.date.utcMs;
             const copyMs = copy.date.utcMs;
@@ -118,7 +127,10 @@ function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeRe
             {
                 expect(copy.messageId).not.toBeNull();
                 expect(copy.messageId).toBe(kept.messageId);
-                if (keptMs !== null && copyMs !== null) expect(Math.abs(keptMs - copyMs)).toBeLessThanOrEqual(DATE_TOLERANCE_MS);
+                if (keptMs !== null && copyMs !== null)
+                {
+                    expect(Math.abs(keptMs - copyMs)).toBeLessThanOrEqual(DATE_TOLERANCE_MS);
+                }
             }
             else
             {
@@ -128,7 +140,10 @@ function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeRe
                 expect(copyMs).toBe(keptMs);
             }
             // A known date is never dropped.
-            if (copyMs !== null) expect(keptMs).not.toBeNull();
+            if (copyMs !== null)
+            {
+                expect(keptMs).not.toBeNull();
+            }
             seen.set(d.index, (seen.get(d.index) ?? 0) + 1);
         }
         // Warnings: at most MAX_RELATED positions, ascending, never the group's own members.
@@ -137,12 +152,21 @@ function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeRe
         {
             expect(w.related.length).toBeLessThanOrEqual(MAX_RELATED);
             expect(w.related.length).toBe(Math.min(w.relatedTotal, MAX_RELATED));
-            for (let i = 1; i < w.related.length; i++) expect(w.related[i]!).toBeGreaterThan(w.related[i - 1]!);
-            for (const i of w.related) expect(members.has(i)).toBe(false);
+            for (let i = 1; i < w.related.length; i++)
+            {
+                expect(w.related[i]!).toBeGreaterThan(w.related[i - 1]!);
+            }
+            for (const i of w.related)
+            {
+                expect(members.has(i)).toBe(false);
+            }
         }
     }
     expect(seen.size).toBe(input.length);
-    for (const count of seen.values()) expect(count).toBe(1);
+    for (const count of seen.values())
+    {
+        expect(count).toBe(1);
+    }
     expect(result.mergedCount).toBe(result.kept.reduce((n, k) => n + k.duplicates.length, 0));
     expect(result.kept.length + result.mergedCount).toBe(input.length);
 }
@@ -646,7 +670,13 @@ describe('dedupe: groups', () =>
         for (const k of result.kept)
         {
             const members = new Set([k.index, ...k.duplicates.map((d) => d.index)]);
-            for (const w of k.warnings) for (const i of w.related) expect(members.has(i)).toBe(false);
+            for (const w of k.warnings)
+            {
+                for (const i of w.related)
+                {
+                    expect(members.has(i)).toBe(false);
+                }
+            }
         }
     });
 
@@ -718,7 +748,10 @@ describe('dedupe: groups', () =>
                 expect(result.mergedCount, warning).toBe(0);
                 expect(result.kept.map((k) => k.message.warnings), warning).toEqual(input.map((m) => m.warnings));
                 // Same Message-ID, different content: both say so.
-                for (const k of result.kept) expect(codes(k), warning).toEqual(['same-id-different-content']);
+                for (const k of result.kept)
+                {
+                    expect(codes(k), warning).toEqual(['same-id-different-content']);
+                }
             }
             // Two copies with the same warning still merge.
             expect(run([flagged, make({ bodyText: 'Intro', warnings: [warning] })]).mergedCount, warning).toBe(1);
@@ -737,7 +770,10 @@ describe('dedupe: groups', () =>
             const result = run(input);
             expect(result.mergedCount).toBe(0);
             expect(result.kept.map((k) => k.message.warnings)).toEqual(input.map((m) => m.warnings));
-            for (const k of result.kept) expect(codes(k)).toEqual(['same-id-different-content']);
+            for (const k of result.kept)
+            {
+                expect(codes(k)).toEqual(['same-id-different-content']);
+            }
         }
         // Two RTF-only copies still merge.
         expect(run([rtfOnly, make({ bodyText: '', warnings: ['rtf-only-body'] })]).mergedCount).toBe(1);
@@ -831,7 +867,10 @@ describe('dedupe: speed', () =>
                 input.push(make({ messageId: `m${String(m)}@example.test`, bodyText: 'Thanks!', date: at(m * 1000) }));
             }
         }
-        for (let c = 0; c < 1000; c++) input.push(make({ messageId: 'big@example.test', bodyText: 'Same' }));
+        for (let c = 0; c < 1000; c++)
+        {
+            input.push(make({ messageId: 'big@example.test', bodyText: 'Same' }));
+        }
         const start = performance.now();
         const result = dedupe(input);
         const elapsed = performance.now() - start;
@@ -890,7 +929,10 @@ describe('dedupe: a dropped file against attached copies (D2, task 8.13b-3 revie
     it('which messages are duplicates does not change', () =>
     {
         const list = [make(), make({ bcc: [PERSON] }), make({ cc: [CAROL] }), make({ messageId: 'other@example.test' })];
-        for (const firstAttached of [0, 1, 2, 3, 4]) expect(groupsOf(dedupe(list, { firstAttached }))).toEqual(groupsOf(dedupe(list)));
+        for (const firstAttached of [0, 1, 2, 3, 4])
+        {
+            expect(groupsOf(dedupe(list, { firstAttached }))).toEqual(groupsOf(dedupe(list)));
+        }
     });
 
     it('keepsHeaderData: true when the kept copy covers the other one with the same date', () =>

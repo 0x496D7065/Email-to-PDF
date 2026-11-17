@@ -68,7 +68,10 @@ test.beforeAll(async () =>
         const { buildMsg } = (await server.ssrLoadModule('/tests/fixtures/msg/builder.ts')) as typeof Builder;
         const { MSG_SPECS } = (await server.ssrLoadModule('/tests/fixtures/msg/specs.ts')) as typeof Specs;
         const spec = MSG_SPECS[0];
-        if (spec === undefined) throw new Error('no .msg spec');
+        if (spec === undefined)
+        {
+            throw new Error('no .msg spec');
+        }
         goodMsgBytes = Array.from(buildMsg(spec));
     }
     finally
@@ -100,7 +103,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -124,15 +130,24 @@ async function open(page: Page): Promise<void>
     {
         const status = document.getElementById('status');
         const progress = document.getElementById('add-progress');
-        if (!status || !progress) throw new Error('step 1 is missing');
+        if (!status || !progress)
+        {
+            throw new Error('step 1 is missing');
+        }
         window.__addSeen = { statuses: [], progressShown: false };
         new MutationObserver(() =>
         {
-            if (status.textContent) window.__addSeen.statuses.push(status.textContent);
+            if (status.textContent)
+            {
+                window.__addSeen.statuses.push(status.textContent);
+            }
         }).observe(status, { childList: true, characterData: true, subtree: true });
         new MutationObserver(() =>
         {
-            if (!progress.hidden) window.__addSeen.progressShown = true;
+            if (!progress.hidden)
+            {
+                window.__addSeen.progressShown = true;
+            }
         }).observe(progress, { attributes: true, attributeFilter: ['hidden'] });
     });
 }
@@ -176,13 +191,22 @@ async function dropFiles(page: Page, selector: string, paths: readonly string[],
         return input;
     });
     const holderInput = holder.asElement();
-    if (holderInput === null) throw new Error('no input');
-    if (paths.length > 0) await holderInput.setInputFiles([...paths]);
+    if (holderInput === null)
+    {
+        throw new Error('no input');
+    }
+    if (paths.length > 0)
+    {
+        await holderInput.setInputFiles([...paths]);
+    }
     return page.evaluate(
         ({ input, selector: target, extra: made }) =>
         {
             const data = new DataTransfer();
-            for (const file of input.files ?? []) data.items.add(file);
+            for (const file of input.files ?? [])
+            {
+                data.items.add(file);
+            }
             input.remove();
             for (const item of made)
             {
@@ -199,7 +223,10 @@ async function dropFiles(page: Page, selector: string, paths: readonly string[],
                 }
             }
             const element = document.querySelector(target);
-            if (!element) throw new Error(`no ${target}`);
+            if (!element)
+            {
+                throw new Error(`no ${target}`);
+            }
             return ['dragenter', 'dragover', 'drop'].map(
                 (type) => !element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data })),
             );
@@ -226,7 +253,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(1000);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(requestsAfterLoad().filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(parseWorkers() + engineWorkers()).toBe(watch.workers.length);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);

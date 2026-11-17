@@ -53,7 +53,10 @@ export class OwnPdfWriter implements PdfBackend
         }
         catch (error)
         {
-            if (error instanceof PdfWriteError) throw error;
+            if (error instanceof PdfWriteError)
+            {
+                throw error;
+            }
             throw new PdfWriteError('invalid laid-out document', { cause: error });
         }
     }
@@ -73,7 +76,10 @@ function isObject(value: unknown): boolean
 
 function checkPageSize(doc: LaidOutDocument): { width: number; height: number }
 {
-    if (!isObject(doc) || !isObject(doc.pageSize)) fail('the document needs a page size');
+    if (!isObject(doc) || !isObject(doc.pageSize))
+    {
+        fail('the document needs a page size');
+    }
     const { width, height } = doc.pageSize;
     for (const side of [width, height])
     {
@@ -93,8 +99,14 @@ function collectFonts(doc: LaidOutDocument, fonts: PdfFontSet): Map<PdfFontName,
     {
         for (const run of page.text)
         {
-            if (!isObject(run)) fail('a text run must be an object');
-            if (!FONT_ORDER.includes(run.font)) fail(`unknown font: ${JSON.stringify(String(run.font)).slice(0, 40)}`);
+            if (!isObject(run))
+            {
+                fail('a text run must be an object');
+            }
+            if (!FONT_ORDER.includes(run.font))
+            {
+                fail(`unknown font: ${JSON.stringify(String(run.font)).slice(0, 40)}`);
+            }
             if (!isArray(run.glyphs) || !isArray(run.glyphText) || run.glyphs.length !== run.glyphText.length)
             {
                 fail('a text run needs as many glyphText entries as glyphs');
@@ -103,12 +115,18 @@ function collectFonts(doc: LaidOutDocument, fonts: PdfFontSet): Map<PdfFontName,
             {
                 fail('a text run needs a copyText string (and actualText, if set, must be a string)');
             }
-            if (run.glyphs.length === 0) continue;
+            if (run.glyphs.length === 0)
+            {
+                continue;
+            }
             let usage = usages.get(run.font);
             if (usage === undefined)
             {
                 const font = fonts[run.font];
-                if (font === undefined) fail(`font ${run.font} is used but was not given`);
+                if (font === undefined)
+                {
+                    fail(`font ${run.font} is used but was not given`);
+                }
                 checkEmbeddable(font);
                 usage = new FontUsage(font, `F${FONT_ORDER.indexOf(run.font) + 1}`);
                 usages.set(run.font, usage);
@@ -116,7 +134,10 @@ function collectFonts(doc: LaidOutDocument, fonts: PdfFontSet): Map<PdfFontName,
             for (let i = 0; i < run.glyphs.length; i++)
             {
                 const text = run.glyphText[i];
-                if (typeof text !== 'string') fail('glyphText entries must be strings');
+                if (typeof text !== 'string')
+                {
+                    fail('glyphText entries must be strings');
+                }
                 usage.use(run.glyphs[i]!, text);
             }
         }
@@ -139,12 +160,24 @@ function allocOutline(
 ): OutlineNode[]
 {
     // Only items count as a level (a leaf's empty children list is not one).
-    if (items.length > 0 && depth > MAX_OUTLINE_DEPTH) fail(`bookmarks are nested deeper than ${MAX_OUTLINE_DEPTH} levels`);
+    if (items.length > 0 && depth > MAX_OUTLINE_DEPTH)
+    {
+        fail(`bookmarks are nested deeper than ${MAX_OUTLINE_DEPTH} levels`);
+    }
     return items.map((item) =>
     {
-        if (!isObject(item) || !isArray(item.children)) fail('a bookmark must be an object with a children array');
-        if (typeof item.title !== 'string') fail('a bookmark title must be a string');
-        if (!destinations.has(item.destination)) fail(`bookmark to an unknown destination: ${JSON.stringify(String(item.destination)).slice(0, 80)}`);
+        if (!isObject(item) || !isArray(item.children))
+        {
+            fail('a bookmark must be an object with a children array');
+        }
+        if (typeof item.title !== 'string')
+        {
+            fail('a bookmark title must be a string');
+        }
+        if (!destinations.has(item.destination))
+        {
+            fail(`bookmark to an unknown destination: ${JSON.stringify(String(item.destination)).slice(0, 80)}`);
+        }
         return { item, number: file.alloc(), children: allocOutline(file, item.children, destinations, depth + 1) };
     });
 }
@@ -162,8 +195,14 @@ function writeOutline(file: PdfFile, nodes: readonly OutlineNode[], parent: numb
         const entries = [`/Title ${hexText(copyLayerText(node.item.title))}`, `/Parent ${parent} 0 R`, `/Dest ${name(node.item.destination)}`];
         const previous = nodes[index - 1];
         const next = nodes[index + 1];
-        if (previous !== undefined) entries.push(`/Prev ${previous.number} 0 R`);
-        if (next !== undefined) entries.push(`/Next ${next.number} 0 R`);
+        if (previous !== undefined)
+        {
+            entries.push(`/Prev ${previous.number} 0 R`);
+        }
+        if (next !== undefined)
+        {
+            entries.push(`/Next ${next.number} 0 R`);
+        }
         if (node.children.length > 0)
         {
             const count = openDescendants(node);
@@ -184,11 +223,26 @@ export async function writePdf(doc: LaidOutDocument, fonts: PdfFontSet, options:
 {
     const maxPages = options.maxPages ?? MAX_PAGES;
     const { width, height } = checkPageSize(doc);
-    if (!isArray(doc.pages) || doc.pages.length === 0) fail('a PDF needs at least one page');
-    if (doc.pages.length > maxPages) fail(`the PDF would have ${doc.pages.length} pages, more than the limit of ${maxPages}`);
-    if (typeof doc.info?.title !== 'string' || typeof doc.info.producer !== 'string') fail('info needs a title and a producer string');
-    if (!isArray(doc.destinations)) fail('destinations must be an array');
-    if (!isArray(doc.outline)) fail('the outline must be an array');
+    if (!isArray(doc.pages) || doc.pages.length === 0)
+    {
+        fail('a PDF needs at least one page');
+    }
+    if (doc.pages.length > maxPages)
+    {
+        fail(`the PDF would have ${doc.pages.length} pages, more than the limit of ${maxPages}`);
+    }
+    if (typeof doc.info?.title !== 'string' || typeof doc.info.producer !== 'string')
+    {
+        fail('info needs a title and a producer string');
+    }
+    if (!isArray(doc.destinations))
+    {
+        fail('destinations must be an array');
+    }
+    if (!isArray(doc.outline))
+    {
+        fail('the outline must be an array');
+    }
     for (const page of doc.pages)
     {
         if (!isObject(page) || !isArray(page.fills) || !isArray(page.lines) || !isArray(page.text) || !isArray(page.links))
@@ -201,9 +255,15 @@ export async function writePdf(doc: LaidOutDocument, fonts: PdfFontSet, options:
     const destinations = new Map<string, { page: number; y: number }>();
     for (const destination of doc.destinations)
     {
-        if (!isObject(destination)) fail('a destination must be an object');
+        if (!isObject(destination))
+        {
+            fail('a destination must be an object');
+        }
         name(destination.name); // throws unless it is a valid name
-        if (destinations.has(destination.name)) fail(`destination ${destination.name} is defined twice`);
+        if (destinations.has(destination.name))
+        {
+            fail(`destination ${destination.name} is defined twice`);
+        }
         if (!Number.isInteger(destination.page) || destination.page < 0 || destination.page >= doc.pages.length)
         {
             fail(`destination ${destination.name} points to page ${String(destination.page)}, which does not exist`);
@@ -225,7 +285,10 @@ export async function writePdf(doc: LaidOutDocument, fonts: PdfFontSet, options:
     for (const fontName of FONT_ORDER)
     {
         const usage = usages.get(fontName);
-        if (usage === undefined) continue;
+        if (usage === undefined)
+        {
+            continue;
+        }
         const font = usage.font;
         const [type0, descendant, descriptor, fontFile, toUnicode] = [file.alloc(), file.alloc(), file.alloc(), file.alloc(), file.alloc()];
         file.object(type0, type0Font(font, descendant, toUnicode));
@@ -245,8 +308,14 @@ export async function writePdf(doc: LaidOutDocument, fonts: PdfFontSet, options:
         const annots: number[] = [];
         for (const link of page.links)
         {
-            if (!isObject(link) || !isObject(link.rect)) fail('a link needs a rect');
-            if (!destinations.has(link.destination)) fail(`link to an unknown destination: ${JSON.stringify(String(link.destination)).slice(0, 80)}`);
+            if (!isObject(link) || !isObject(link.rect))
+            {
+                fail('a link needs a rect');
+            }
+            if (!destinations.has(link.destination))
+            {
+                fail(`link to an unknown destination: ${JSON.stringify(String(link.destination)).slice(0, 80)}`);
+            }
             const { x, y, width: w, height: h } = link.rect;
             const annot = file.alloc();
             file.object(

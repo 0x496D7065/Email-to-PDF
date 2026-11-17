@@ -123,7 +123,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -175,7 +178,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
@@ -221,7 +227,10 @@ test('each folded part says whether it will be in the PDF', async ({ page }) =>
     // #6, quotes the writer put between their own answers: they stay.
     const writerLabels = await labelsOf(items.nth(5));
     expect(writerLabels.length).toBeGreaterThan(0);
-    for (const text of writerLabels) expect(text).toBe(IN(R['writer-quote']));
+    for (const text of writerLabels)
+    {
+        expect(text).toBe(IN(R['writer-quote']));
+    }
 
     // Labels are text in the summary, so screen readers read them with the fold.
     await expect(items.nth(2).locator('summary')).toHaveAccessibleName(new RegExp(`^${OUT('').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.* \\d+ lines`));
@@ -351,7 +360,10 @@ test('unticking an email in the middle never moves the emails below, nor does ti
     const readTops = (clickThird = false): Promise<{ state: string | null | undefined; tops: number[] }> =>
         page.evaluate((click) =>
         {
-            if (click) document.querySelector<HTMLInputElement>('#include-2')?.click();
+            if (click)
+            {
+                document.querySelector<HTMLInputElement>('#include-2')?.click();
+            }
             return {
                 state: document.querySelector('#preview-list')?.getAttribute('data-pdf-labels'),
                 tops: [3, 4, 5].map((k) => (document.querySelector(`#preview-list > li[data-position="${String(k)}"]`)?.getBoundingClientRect().top ?? Number.NaN) + window.scrollY),
@@ -367,7 +379,10 @@ test('unticking an email in the middle never moves the emails below, nor does ti
 
     const ready = await below();
     expect(ready.state).toBe('ready');
-    for (const top of ready.tops) expect(Number.isFinite(top)).toBe(true);
+    for (const top of ready.tops)
+    {
+        expect(Number.isFinite(top)).toBe(true);
+    }
 
     // Unticked: "updating" at once, nothing below moved.
     const unticked = await clickThird();
@@ -380,7 +395,10 @@ test('unticking an email in the middle never moves the emails below, nor does ti
     // #3 shows no label (none visible, none read out), but its label lines keep their place.
     expect(await labelsOf(third)).toEqual([]);
     await expect(third.locator('.pdf-label')).toHaveCount(labelCount);
-    for (const mark of await third.locator('.pdf-label').all()) await expect(mark).toHaveCSS('visibility', 'hidden');
+    for (const mark of await third.locator('.pdf-label').all())
+    {
+        await expect(mark).toHaveCSS('visibility', 'hidden');
+    }
     await expect(third.locator('summary').first()).not.toHaveAccessibleName(new RegExp(en.pdf.label.out.replace('{reasons}', '').trim()));
     // The other emails' labels did not change.
     expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
@@ -526,7 +544,10 @@ test('"Print full original text" makes every label say so, and Clear everything 
     await expectReady(page);
     const all = await page.locator('#preview-list .pdf-label:visible').allTextContents();
     expect(all.length).toBe(await page.locator('#preview-list details.fold').count());
-    for (const text of all) expect(text.trim().startsWith(en.pdf.label.in.replace('{reasons}', ''))).toBe(true);
+    for (const text of all)
+    {
+        expect(text.trim().startsWith(en.pdf.label.in.replace('{reasons}', ''))).toBe(true);
+    }
     expect(await labelsOf(items.nth(2))).toEqual([IN(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
     // The forward is printed whole: its forwarded email is in it (task 8.11: no "printed as" label).
     expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);

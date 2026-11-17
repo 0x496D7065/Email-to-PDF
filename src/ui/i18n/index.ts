@@ -93,7 +93,10 @@ export function isSupportedLocale(value: unknown): value is string
 export function pickLocale(languages: readonly string[], supported: readonly string[] = SUPPORTED_LOCALES): string
 {
     const first = languages[0];
-    if (typeof first !== 'string') return DEFAULT_LOCALE;
+    if (typeof first !== 'string')
+    {
+        return DEFAULT_LOCALE;
+    }
     const primary = first.trim().toLowerCase().split(/[-_]/)[0] ?? '';
     return supported.includes(primary) ? primary : DEFAULT_LOCALE;
 }
@@ -124,7 +127,10 @@ const translators = new Map<string, Translator>();
 /** Makes `locale` the page language for t(). Throws for a language the page does not ship (a bug). */
 export function setLocale(locale: string): void
 {
-    if (!isSupportedLocale(locale)) throw new Error(`setLocale(): unsupported language "${String(locale)}"`);
+    if (!isSupportedLocale(locale))
+    {
+        throw new Error(`setLocale(): unsupported language "${String(locale)}"`);
+    }
     active = locale;
 }
 
@@ -140,18 +146,30 @@ export function lookup(table: Messages, key: string): string | PluralForms | und
     let node: unknown = table;
     for (const part of key.split('.'))
     {
-        if (typeof node !== 'object' || node === null || !Object.hasOwn(node, part)) return undefined;
+        if (typeof node !== 'object' || node === null || !Object.hasOwn(node, part))
+        {
+            return undefined;
+        }
         node = (node as Record<string, unknown>)[part];
     }
-    if (typeof node === 'string') return node;
-    if (isPluralForms(node)) return node;
+    if (typeof node === 'string')
+    {
+        return node;
+    }
+    if (isPluralForms(node))
+    {
+        return node;
+    }
     return undefined;
 }
 
 /** True for an object with exactly the plural shape { one, other }. */
 export function isPluralForms(value: unknown): value is PluralForms
 {
-    if (typeof value !== 'object' || value === null) return false;
+    if (typeof value !== 'object' || value === null)
+    {
+        return false;
+    }
     const v = value as Record<string, unknown>;
     return Object.keys(v).length === 2 && typeof v.one === 'string' && typeof v.other === 'string';
 }
@@ -173,7 +191,10 @@ export function interpolate(template: string, params: Readonly<Record<string, st
     const tr = translator(locale);
     return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
     {
-        if (!Object.hasOwn(params, name)) return whole;
+        if (!Object.hasOwn(params, name))
+        {
+            return whole;
+        }
         const value = params[name];
         return typeof value === 'number' ? tr.number(value) : String(value);
     });
@@ -193,9 +214,15 @@ export function pluralForm(forms: PluralForms, count: number, locale: string = a
 export function translator(locale: string): Translator
 {
     const known = translators.get(locale);
-    if (known !== undefined) return known;
+    if (known !== undefined)
+    {
+        return known;
+    }
     const messages = isSupportedLocale(locale) ? CATALOG[locale] : undefined;
-    if (messages === undefined) throw new Error(`translator(): unsupported language "${String(locale)}"`);
+    if (messages === undefined)
+    {
+        throw new Error(`translator(): unsupported language "${String(locale)}"`);
+    }
     const pluralRules = new Intl.PluralRules(locale);
     const numberFormat = new Intl.NumberFormat(locale);
     const listFormat = new Intl.ListFormat(locale, { style: 'short', type: 'unit' });
@@ -207,8 +234,14 @@ export function translator(locale: string): Translator
             const value = lookup(messages, key);
             // Only reachable by bypassing the types (e.g. a key built at run time):
             // show the key rather than nothing, so the mistake is visible.
-            if (value === undefined) return key;
-            if (typeof value === 'string') return interpolate(value, params, locale);
+            if (value === undefined)
+            {
+                return key;
+            }
+            if (typeof value === 'string')
+            {
+                return interpolate(value, params, locale);
+            }
             const count = params.count;
             return interpolate(tr.plural(value, typeof count === 'number' ? count : Number.NaN), params, locale);
         },

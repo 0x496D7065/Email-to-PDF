@@ -73,7 +73,10 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
 
         const finish = (outcome: EngineOutcome): void =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             settled = true;
             clearTimeout(timer);
             signal?.removeEventListener('abort', onAbort);
@@ -105,7 +108,10 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
 
         const onMessage = (data: unknown): void =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             if (!isFromEngineWorker(data) || data.type === 'failed')
             {
                 fail('engine-failed');

@@ -119,9 +119,15 @@ describe('copyLayerText', () =>
         {
             let input = '';
             const length = 1 + random(12);
-            for (let i = 0; i < length; i++) input += String.fromCharCode(...codeUnits(pool[random(pool.length)]!));
+            for (let i = 0; i < length; i++)
+            {
+                input += String.fromCharCode(...codeUnits(pool[random(pool.length)]!));
+            }
             // Sometimes a whole kept flag.
-            if (random(5) === 0) input += flag('gbeng');
+            if (random(5) === 0)
+            {
+                input += flag('gbeng');
+            }
             const output = copyLayerText(input);
             const cps = [...output].map((c) => c.codePointAt(0)!);
             for (const [k, cp] of cps.entries())
@@ -135,7 +141,10 @@ describe('copyLayerText', () =>
                 }
                 expect(isGroup1(cp)).toBe(false);
                 expect(cp).not.toBe(0xad);
-                if (cp === 0x200d || cp === 0xfe0e || cp === 0xfe0f) continue;
+                if (cp === 0x200d || cp === 0xfe0e || cp === 0xfe0f)
+                {
+                    continue;
+                }
                 expect(isDrawnAsNothing(cp)).toBe(false);
             }
             // Stable: the copy layer of copy-layer text is itself.
@@ -158,7 +167,10 @@ describe('copyLayerText', () =>
 /** UTF-16 code units of a code point, or of a lone surrogate as itself. */
 function codeUnits(cp: number): number[]
 {
-    if (cp < 0x10000) return [cp];
+    if (cp < 0x10000)
+    {
+        return [cp];
+    }
     return [0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff)];
 }
 
@@ -179,7 +191,10 @@ describe('copyLayerCutIndex', () =>
     it('moves back to the start of a whole ZWJ chain, across several ZWJs', () =>
     {
         const family = '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}'; // 11 units
-        for (let limit = 3; limit < 13; limit++) expect(copyLayerCutIndex('ab' + family + 'cd', limit)).toBe(2);
+        for (let limit = 3; limit < 13; limit++)
+        {
+            expect(copyLayerCutIndex('ab' + family + 'cd', limit)).toBe(2);
+        }
         expect(copyLayerCutIndex('ab' + family + 'cd', 13)).toBe(13);
     });
 

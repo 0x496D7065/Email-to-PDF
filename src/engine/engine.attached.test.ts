@@ -55,13 +55,19 @@ async function parseMsg(name: string, spec: MsgSpec): Promise<ParseResult>
 }
 const ok = (r: ParseResult): Extract<ParseResult, { ok: true }> =>
 {
-    if (!r.ok) throw new Error(r.detail);
+    if (!r.ok)
+    {
+        throw new Error(r.detail);
+    }
     return r;
 };
 const bySubject = (out: EngineResult, subject: string): EngineMessage =>
 {
     const m = out.messages.find((x) => x.message.subject === subject);
-    if (m === undefined) throw new Error(`no message ${subject}`);
+    if (m === undefined)
+    {
+        throw new Error(`no message ${subject}`);
+    }
     return m;
 };
 const subjects = (out: EngineResult): string[] => out.messages.map((m) => m.message.subject);
@@ -75,10 +81,13 @@ function expectWhole(out: EngineResult): void
         expect(reconstruct(m.message.bodyText, m.segments)).toBe(m.message.bodyText);
     }
     const seen = new Set<number>();
-    for (const m of out.messages) for (const i of [m.index, ...m.duplicates.map((d) => d.index)])
+    for (const m of out.messages)
     {
-        expect(seen.has(i)).toBe(false);
-        seen.add(i);
+        for (const i of [m.index, ...m.duplicates.map((d) => d.index)])
+        {
+            expect(seen.has(i)).toBe(false);
+            seen.add(i);
+        }
     }
     expect(seen.size).toBe(out.counts.messagesFound);
     expect(out.positionByIndex.filter((p) => p !== null)).toHaveLength(out.counts.messagesFound);
@@ -365,7 +374,10 @@ describe('runEngine: an email holding an attached email always quotes it (task 8
     {
         const { given } = spied([ok(await parseEml('one.eml', simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY))), ok(await parseEml('two.eml', simple('carol', null, B_BODY)))]);
         expect(given).toHaveLength(2);
-        for (const g of given) expect(g).not.toHaveProperty('holds');
+        for (const g of given)
+        {
+            expect(g).not.toHaveProperty('holds');
+        }
     });
 });
 
@@ -415,7 +427,10 @@ describe('runEngine: attached emails and rebuilt emails', () =>
         const block = attachedAt(out, 2)!.places[0]!;
         for (const r of out.reconstructed)
         {
-            if (out.positionByIndex[r.sourceIndex] !== parentPosition) continue;
+            if (out.positionByIndex[r.sourceIndex] !== parentPosition)
+            {
+                continue;
+            }
             expect(r.rebuilt.end <= block.start || r.rebuilt.start >= block.end).toBe(true);
         }
         // The reply's quote of the attached email is linked to it ("the real file wins"): not its own entry.

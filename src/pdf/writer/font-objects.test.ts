@@ -24,7 +24,10 @@ describe('widthsArray', () =>
         const ids = [sans.glyphFor(0x41), sans.glyphFor(0x42), sans.glyphFor(0x61)];
         const text = widthsArray(sans, ids);
         expect(text.startsWith('[')).toBe(true);
-        for (const id of ids) expect(text).toContain(String((sans.advance(id) * 1000) / sans.unitsPerEm));
+        for (const id of ids)
+        {
+            expect(text).toContain(String((sans.advance(id) * 1000) / sans.unitsPerEm));
+        }
     });
 
     it('uses the "first last width" form for 3 or more equal widths (monospaced)', () =>
@@ -61,8 +64,14 @@ describe('toUnicodeCmap', () =>
     it('never lets a bfrange cross a glyph or destination byte boundary', () =>
     {
         const map = new Map<number, string>();
-        for (let g = 0xfc; g <= 0x104; g++) map.set(g, String.fromCharCode(0x41 + g - 0xfc));
-        for (let g = 0x200; g <= 0x204; g++) map.set(g, String.fromCharCode(0xfd + g - 0x200)); // U+00FD to U+0101
+        for (let g = 0xfc; g <= 0x104; g++)
+        {
+            map.set(g, String.fromCharCode(0x41 + g - 0xfc));
+        }
+        for (let g = 0x200; g <= 0x204; g++)
+        {
+            map.set(g, String.fromCharCode(0xfd + g - 0x200)); // U+00FD to U+0101
+        }
         const cmap = toUnicodeCmap(map);
         expect(parseToUnicode(cmap)).toEqual(map);
         expect(cmap).toContain('<00FC> <00FF> <0041>');
@@ -73,7 +82,10 @@ describe('toUnicodeCmap', () =>
     it('splits into blocks of at most 100 entries', () =>
     {
         const map = new Map<number, string>();
-        for (let g = 0; g < 250; g++) map.set(g * 2, String.fromCodePoint(0x1f600 + (g % 50)));
+        for (let g = 0; g < 250; g++)
+        {
+            map.set(g * 2, String.fromCodePoint(0x1f600 + (g % 50)));
+        }
         const cmap = toUnicodeCmap(map);
         expect(cmap.match(/beginbfchar/g)).toHaveLength(3);
         expect(parseToUnicode(cmap)).toEqual(map);

@@ -89,7 +89,10 @@ describe('postal-mime 4.0.8 internals used by eml-tree.ts', () =>
                 { kind: 'attachment', attachment: email.attachments[1] },
             ],
         });
-        if (root.kind !== 'multipart') throw new Error('expected multipart');
+        if (root.kind !== 'multipart')
+        {
+            throw new Error('expected multipart');
+        }
         const forwarded = root.children[1];
         expect(forwarded?.kind === 'attachment' && forwarded.attachment).toBe(email.attachments[0]);
     });

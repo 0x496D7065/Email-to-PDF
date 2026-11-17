@@ -99,7 +99,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     context.on('request', (request) => requestObjects.push(request));
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -195,8 +198,14 @@ const cutNetwork = (route: Route): Promise<void> => route.abort('internetdisconn
 
 async function goOnline(context: BrowserContext): Promise<void>
 {
-    if (engineOf(context) !== 'firefox') await context.setOffline(false);
-    else await context.unroute('**/*', cutNetwork);
+    if (engineOf(context) !== 'firefox')
+    {
+        await context.setOffline(false);
+    }
+    else
+    {
+        await context.unroute('**/*', cutNetwork);
+    }
 }
 
 test('after one visit online, the page reloads offline and the whole tool works from the stored copy', async ({ context, page }) =>
@@ -431,7 +440,10 @@ test('a new version deletes only the older caches of this service worker, never 
     const FOREIGN = 'another-cache';
     await page.evaluate(async (names) =>
     {
-        for (const name of names) await caches.open(name);
+        for (const name of names)
+        {
+            await caches.open(name);
+        }
     }, [OLD, FOREIGN]);
     // Register now, as a later visit would.
     await page.evaluate(async () =>

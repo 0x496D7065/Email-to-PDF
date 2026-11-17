@@ -17,10 +17,22 @@ function keptText(m: EngineMessage, p: MessagePlan): string
 function state(m: EngineMessage, p: MessagePlan, snippet: string): 'kept' | 'left out' | 'mixed'
 {
     const at = m.message.bodyText.indexOf(snippet);
-    if (at < 0) throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+    }
     let out = 0;
-    for (const r of p.ranges) if (!r.keep) out += Math.max(0, Math.min(r.end, at + snippet.length) - Math.max(r.start, at));
-    if (out === 0) return 'kept';
+    for (const r of p.ranges)
+    {
+        if (!r.keep)
+        {
+            out += Math.max(0, Math.min(r.end, at + snippet.length) - Math.max(r.start, at));
+        }
+    }
+    if (out === 0)
+    {
+        return 'kept';
+    }
     return out === snippet.length ? 'left out' : 'mixed';
 }
 
@@ -40,7 +52,10 @@ describe('output plan over the parsed fixtures', () =>
     const find = (c: NonNullable<typeof cached>, file: string): [EngineMessage, MessagePlan] =>
     {
         const k = c.messages.findIndex((m) => m.message.source.fileName === file);
-        if (k < 0) throw new Error(`no kept message for ${file}`);
+        if (k < 0)
+        {
+            throw new Error(`no kept message for ${file}`);
+        }
         return [c.messages[k]!, c.plans[k]!];
     };
 
@@ -55,9 +70,15 @@ describe('output plan over the parsed fixtures', () =>
             const body = m.message.bodyText;
             expect(p.fallback, m.message.source.fileName).toBe(false);
             const firstLine = body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
-            if (firstLine !== undefined) expect(state(m, p, firstLine), `${m.message.source.fileName}: first line`).toBe('kept');
+            if (firstLine !== undefined)
+            {
+                expect(state(m, p, firstLine), `${m.message.source.fileName}: first line`).toBe('kept');
+            }
             const left = p.ranges.filter((r) => !r.keep).reduce((n, r) => n + r.end - r.start, 0);
-            if (p.tailStart !== null) tails++;
+            if (p.tailStart !== null)
+            {
+                tails++;
+            }
             signatures += p.omittedSignatures;
             const notes = [
                 p.tailStart === null ? '' : `quoted history from ${p.tailStart}`,

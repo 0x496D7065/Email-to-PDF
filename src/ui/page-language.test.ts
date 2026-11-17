@@ -98,7 +98,10 @@ function emails(): { messages: NormalizedMessage[]; result: EngineResult; standI
     ]);
     // The item of this email cannot be built (only a bug does that): the preview shows a stand-in.
     const target = result.messages.find((m) => m.message.subject === 'Broken item');
-    if (target === undefined) throw new Error('no broken item');
+    if (target === undefined)
+    {
+        throw new Error('no broken item');
+    }
     (target as { message: NormalizedMessage }).message = { ...target.message, attachments: null as unknown as [] };
     return { messages, result, standInSubject: 'Broken item' };
 }
@@ -170,7 +173,10 @@ afterEach(() =>
 function byId(id: string): FakeElement
 {
     const found = root.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 const hasClass = (e: FakeElement, name: string): boolean => (e.getAttribute('class') ?? '').split(' ').includes(name);
@@ -179,7 +185,10 @@ const items = (): FakeElement[] => byId('preview-list').children.filter((c): c i
 const status = (): string => byId('status').textContent;
 const runAll = (): void =>
 {
-    while (tasks.length > 0) tasks.shift()?.task();
+    while (tasks.length > 0)
+    {
+        tasks.shift()?.task();
+    }
 };
 
 /** Adds the emails of emails() and waits until everything is shown and the PDF labels are ready. */
@@ -225,19 +234,28 @@ function englishFragments(): string[]
         if (typeof value === 'string' || isPluralForms(value))
         {
             // The app's name is never translated (a user decision).
-            if (path === 'app.name') return;
+            if (path === 'app.name')
+            {
+                return;
+            }
             const texts = typeof value === 'string' ? [value] : [value.one, value.other];
             for (const text of texts)
             {
                 for (const part of text.split(/\{\w+\}/))
                 {
                     const trimmed = part.trim();
-                    if (/[A-Za-z].*[A-Za-z]|[A-Za-z]{2}/.test(trimmed)) out.add(trimmed);
+                    if (/[A-Za-z].*[A-Za-z]|[A-Za-z]{2}/.test(trimmed))
+                    {
+                        out.add(trimmed);
+                    }
                 }
             }
             return;
         }
-        for (const [key, inner] of Object.entries(value as Record<string, unknown>)) walk(inner, path === '' ? key : `${path}.${key}`);
+        for (const [key, inner] of Object.entries(value as Record<string, unknown>))
+        {
+            walk(inner, path === '' ? key : `${path}.${key}`);
+        }
     };
     walk(en, '');
     return [...out];
@@ -285,27 +303,54 @@ function englishLeft(data: ReturnType<typeof emails>, sameInBoth: readonly strin
     const pieces: string[] = [];
     for (const e of [root, ...root.descendants()])
     {
-        if (skipped.has(e)) continue;
+        if (skipped.has(e))
+        {
+            continue;
+        }
         for (const name of ['aria-label', 'aria-description'])
         {
             const value = e.getAttribute(name);
-            if (value !== null) pieces.push(value);
+            if (value !== null)
+            {
+                pieces.push(value);
+            }
         }
         const childElements = e.children.filter((c) => c instanceof FakeElement);
-        if (childElements.length === 0) pieces.push(e.textContent);
-        else for (const c of e.children) if (c instanceof FakeText) pieces.push(c.data);
+        if (childElements.length === 0)
+        {
+            pieces.push(e.textContent);
+        }
+        else
+        {
+            for (const c of e.children)
+            {
+                if (c instanceof FakeText)
+                {
+                    pieces.push(c.data);
+                }
+            }
+        }
     }
     const cleaned = pieces.map((piece) =>
     {
         let text = piece.replace(/\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?( UTC[+-]\d{2}:\d{2})?/g, ' ');
-        for (const a of allowed) text = text.replaceAll(a, ' ');
+        for (const a of allowed)
+        {
+            text = text.replaceAll(a, ' ');
+        }
         return text;
     });
     const found: string[] = [];
     for (const fragment of englishFragments())
     {
         const pattern = new RegExp(`(?<![A-Za-z])${escape(fragment)}(?![A-Za-z])`);
-        for (const piece of cleaned) if (pattern.test(piece)) found.push(`"${fragment}" in "${piece}"`);
+        for (const piece of cleaned)
+        {
+            if (pattern.test(piece))
+            {
+                found.push(`"${fragment}" in "${piece}"`);
+            }
+        }
     }
     return found;
 }
@@ -438,7 +483,10 @@ describe('setLanguage with files loaded', () =>
         expect(root.contains(radio)).toBe(true);
         for (const e of root.descendants())
         {
-            if (e !== radio) expect(e.focuses, e.tagName).toBe(0);
+            if (e !== radio)
+            {
+                expect(e.focuses, e.tagName).toBe(0);
+            }
             expect(e.scrollIntoViewCalls, e.tagName).toEqual([]);
         }
         // The emails' own text is unchanged; the technical details stay English, marked so.

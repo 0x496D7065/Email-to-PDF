@@ -68,7 +68,10 @@ export interface PrintedText {
 function hashAt(ids: readonly number[], at: number): number
 {
     let h = 0x811c9dc5;
-    for (let t = 0; t < SHINGLE_WORDS; t++) h = Math.imul(h ^ (ids[at + t] ?? 0), 0x01000193);
+    for (let t = 0; t < SHINGLE_WORDS; t++)
+    {
+        h = Math.imul(h ^ (ids[at + t] ?? 0), 0x01000193);
+    }
     return h;
 }
 
@@ -87,7 +90,10 @@ export function printedText(): PrintedText
     function add(text: string): void
     {
         const words = tokenizeWords(text);
-        if (words.length === 0) return;
+        if (words.length === 0)
+        {
+            return;
+        }
         const piece = pieces++;
         const from = ids.length;
         for (const w of words)
@@ -102,15 +108,27 @@ export function printedText(): PrintedText
             ids.push(id);
             pieceOf.push(piece);
             const list = places.get(id);
-            if (list === undefined) places.set(id, [at]);
-            else list.push(at);
+            if (list === undefined)
+            {
+                places.set(id, [at]);
+            }
+            else
+            {
+                list.push(at);
+            }
         }
         for (let g = from; g + SHINGLE_WORDS <= ids.length; g++)
         {
             const h = hashAt(ids, g);
             const list = shingles.get(h);
-            if (list === undefined) shingles.set(h, [g]);
-            else if (list.length < MAX_POSTINGS) list.push(g);
+            if (list === undefined)
+            {
+                shingles.set(h, [g]);
+            }
+            else if (list.length < MAX_POSTINGS)
+            {
+                list.push(g);
+            }
         }
     }
 
@@ -118,12 +136,18 @@ export function printedText(): PrintedText
     {
         const words = tokenizeWords(text);
         const n = words.length;
-        if (n === 0) return true;
+        if (n === 0)
+        {
+            return true;
+        }
         const c: number[] = [];
         for (const w of words)
         {
             const id = vocabulary.get(w.key);
-            if (id === undefined) return false; // a word printed nowhere
+            if (id === undefined)
+            {
+                return false; // a word printed nowhere
+            }
             c.push(id);
         }
         // Equal words from s (in c) and g (printed), in one piece: how many in a row.
@@ -131,18 +155,30 @@ export function printedText(): PrintedText
         {
             const piece = pieceOf[g];
             let len = 0;
-            while (s + len < n && g + len < ids.length && ids[g + len] === c[s + len] && pieceOf[g + len] === piece) len++;
+            while (s + len < n && g + len < ids.length && ids[g + len] === c[s + len] && pieceOf[g + len] === piece)
+            {
+                len++;
+            }
             return len;
         };
         if (n < SHINGLE_WORDS)
         {
             // All of it in a row: tried at every place of its rarest word.
             let rare = 0;
-            for (let j = 1; j < n; j++) if ((places.get(c[j]!)?.length ?? 0) < (places.get(c[rare]!)?.length ?? 0)) rare = j;
+            for (let j = 1; j < n; j++)
+            {
+                if ((places.get(c[j]!)?.length ?? 0) < (places.get(c[rare]!)?.length ?? 0))
+                {
+                    rare = j;
+                }
+            }
             for (const p of places.get(c[rare]!) ?? [])
             {
                 const g = p - rare;
-                if (g >= 0 && runAt(0, g) === n) return true;
+                if (g >= 0 && runAt(0, g) === n)
+                {
+                    return true;
+                }
             }
             return false;
         }
@@ -159,10 +195,16 @@ export function printedText(): PrintedText
                 for (const g of shingles.get(hashAt(c, s)) ?? [])
                 {
                     const len = runAt(s, g);
-                    if (len >= least && s + len > e && s + len > reach) reach = s + len;
+                    if (len >= least && s + len > e && s + len > reach)
+                    {
+                        reach = s + len;
+                    }
                 }
             }
-            if (reach < 0) return false;
+            if (reach < 0)
+            {
+                return false;
+            }
             e = reach;
         }
         return true;

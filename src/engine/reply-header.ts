@@ -160,7 +160,10 @@ for (const lang of REPLY_LANGUAGES)
     {
         for (const word of lang.labels[role])
         {
-            if (!LABEL_ROLES.has(labelKey(word))) LABEL_ROLES.set(labelKey(word), role);
+            if (!LABEL_ROLES.has(labelKey(word)))
+            {
+                LABEL_ROLES.set(labelKey(word), role);
+            }
         }
     }
 }
@@ -213,9 +216,15 @@ function isSpace(ch: string): boolean
 function readLine(text: string, range: LineRange): LineInfo
 {
     let i = range.start;
-    while (i < range.contentEnd && isSpace(text.charAt(i))) i++;
+    while (i < range.contentEnd && isSpace(text.charAt(i)))
+    {
+        i++;
+    }
     const marked = i < range.contentEnd && text.charAt(i) === '>';
-    while (i < range.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i)))) i++;
+    while (i < range.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i))))
+    {
+        i++;
+    }
     return { range, marked, gap: i === range.contentEnd, textStart: i };
 }
 
@@ -268,19 +277,28 @@ export function detectReplyHeaders(bodyText: string, subject?: string): FoldRang
  */
 export function findReplyHeaders(bodyText: string, subject?: string): FoundHeader[]
 {
-    if (typeof (bodyText as unknown) !== 'string') return [];
+    if (typeof (bodyText as unknown) !== 'string')
+    {
+        return [];
+    }
     const text = bodyText;
     const lines = lineRanges(text).map((range) => readLine(text, range));
     const n = lines.length;
     const folds: FoundHeader[] = [];
     const fold = (start: number, end: number, headEnd: number, kind: FoundHeader['kind'], marked: boolean): void =>
     {
-        if (start < end) folds.push({ start, end, headEnd: Math.min(headEnd, end), kind, marked });
+        if (start < end)
+        {
+            folds.push({ start, end, headEnd: Math.min(headEnd, end), kind, marked });
+        }
     };
     const at = (i: number): LineInfo =>
     {
         const line = lines[i];
-        if (line === undefined) throw new Error('line index out of range'); // never happens: callers check bounds
+        if (line === undefined)
+        {
+            throw new Error('line index out of range'); // never happens: callers check bounds
+        }
         return line;
     };
 
@@ -297,7 +315,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
         const line = at(i);
         if (line.marked)
         {
-            if (lastMarked < 0) lastMarked = i;
+            if (lastMarked < 0)
+            {
+                lastMarked = i;
+            }
             runEnd[i] = lastMarked;
         }
         else if (!line.gap)
@@ -311,7 +332,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
     const roleOf = (i: number): Role | null =>
     {
         const line = at(i);
-        if (line.gap) return null;
+        if (line.gap)
+        {
+            return null;
+        }
         const head = clean(text, line.textStart, Math.min(line.range.contentEnd, line.textStart + LABEL_HEAD_LENGTH));
         const match = LABEL_PATTERN.exec(head);
         return match?.[1] === undefined ? null : (LABEL_ROLES.get(labelKey(match[1])) ?? null);
@@ -322,7 +346,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
     {
         const line = at(i);
         // Whitespace runs shrink when cleaned; four times the limit is a generous bound.
-        if (line.range.contentEnd - line.textStart > limit * 4) return null;
+        if (line.range.contentEnd - line.textStart > limit * 4)
+        {
+            return null;
+        }
         const cleaned = clean(text, line.textStart, line.range.contentEnd);
         return cleaned.length <= limit ? cleaned : null;
     };
@@ -331,7 +358,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
     const replyEnd = (first: number, lastHeader: number): number =>
     {
         const line = at(first);
-        if (line.marked) return at(Math.max(runEnd[first] ?? first, lastHeader)).range.end;
+        if (line.marked)
+        {
+            return at(Math.max(runEnd[first] ?? first, lastHeader)).range.end;
+        }
         const tool = nextTool[lastHeader + 1] ?? n;
         return tool < n ? at(tool).range.start : text.length;
     };
@@ -341,9 +371,15 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
     {
         // Only this line is read (never text.indexOf over the rest of the body).
         const value = text.slice(at(i).textStart, at(i).range.contentEnd);
-        if (role === 'sent') return DATE_EVIDENCE.test(value);
+        if (role === 'sent')
+        {
+            return DATE_EVIDENCE.test(value);
+        }
         // Bcc counts exactly like Cc (it was one role with it before the field reader needed them apart).
-        if (role === 'from' || role === 'to' || role === 'cc' || role === 'bcc') return value.includes('@');
+        if (role === 'from' || role === 'to' || role === 'cc' || role === 'bcc')
+        {
+            return value.includes('@');
+        }
         return false;
     };
 
@@ -371,7 +407,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
             {
                 const content = text.slice(at(j).range.start, at(j).range.contentEnd);
                 const k = FORWARDED_HEADER_LABELS.findIndex((label, idx) => idx >= next && content.startsWith(`${label}: `));
-                if (k < 0) break;
+                if (k < 0)
+                {
+                    break;
+                }
                 next = k + 1;
                 j++;
             }
@@ -389,7 +428,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
         if (isSeparator || isForwardMarker || isRule)
         {
             let k = i + 1;
-            while (k < n && k <= i + MAX_GAP_LINES && at(k).gap) k++;
+            while (k < n && k <= i + MAX_GAP_LINES && at(k).gap)
+            {
+                k++;
+            }
             if (k < n && at(k).marked === line.marked && roleOf(k) === 'from')
             {
                 intro = i;
@@ -399,7 +441,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
             {
                 // Rule 4, last part: a separator or marker alone folds alone; a row
                 // of underscores alone stays shown.
-                if (!isRule) fold(line.range.start, line.range.end, line.range.end, isForwardMarker ? 'forward' : 'reply', line.marked);
+                if (!isRule)
+                {
+                    fold(line.range.start, line.range.end, line.range.end, isForwardMarker ? 'forward' : 'reply', line.marked);
+                }
                 i++;
                 continue;
             }
@@ -415,9 +460,15 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
             while (j < n && at(j).marked === marked)
             {
                 const role = roleOf(j);
-                if (role === null) break;
+                if (role === null)
+                {
+                    break;
+                }
                 roles.add(role);
-                if (!evidence && intro < 0) evidence = hasEvidence(j, role);
+                if (!evidence && intro < 0)
+                {
+                    evidence = hasEvidence(j, role);
+                }
                 j++;
             }
             const last = j - 1; // last label line
@@ -441,7 +492,10 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
             if (intro >= 0)
             {
                 // A forward marker with a short label list: still header lines only.
-                if (isForwardMarker) fold(line.range.start, at(last).range.end, at(last).range.end, 'forward', line.marked);
+                if (isForwardMarker)
+                {
+                    fold(line.range.start, at(last).range.end, at(last).range.end, 'forward', line.marked);
+                }
                 i = j;
                 continue;
             }
@@ -459,10 +513,16 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
         {
             for (const lang of LANGUAGES)
             {
-                if (!lang.endings.some((re) => re.test(one))) continue;
+                if (!lang.endings.some((re) => re.test(one)))
+                {
+                    continue;
+                }
                 lastLine = i;
                 attribution = one;
-                if (lang.opener.test(one)) strong = true;
+                if (lang.opener.test(one))
+                {
+                    strong = true;
+                }
             }
             if (lastLine < 0 && i + 1 < n && !at(i + 1).gap && at(i + 1).marked === line.marked)
             {
@@ -488,16 +548,31 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
             if (at(lastLine).marked)
             {
                 const end = runEnd[lastLine] ?? lastLine;
-                if (end > lastLine) blockEnd = end;
+                if (end > lastLine)
+                {
+                    blockEnd = end;
+                }
             }
             else
             {
                 let k = lastLine + 1;
-                while (k < n && at(k).gap && !at(k).marked) k++;
-                if (k < n && at(k).marked) blockEnd = runEnd[k] ?? k;
+                while (k < n && at(k).gap && !at(k).marked)
+                {
+                    k++;
+                }
+                if (k < n && at(k).marked)
+                {
+                    blockEnd = runEnd[k] ?? k;
+                }
             }
-            if (blockEnd >= 0) fold(line.range.start, at(blockEnd).range.end, at(lastLine).range.end, 'reply', line.marked);
-            else if (strong && ATTRIBUTION_EVIDENCE.test(attribution)) fold(line.range.start, at(lastLine).range.end, at(lastLine).range.end, 'reply', line.marked);
+            if (blockEnd >= 0)
+            {
+                fold(line.range.start, at(blockEnd).range.end, at(lastLine).range.end, 'reply', line.marked);
+            }
+            else if (strong && ATTRIBUTION_EVIDENCE.test(attribution))
+            {
+                fold(line.range.start, at(lastLine).range.end, at(lastLine).range.end, 'reply', line.marked);
+            }
             i = lastLine + 1;
             continue;
         }

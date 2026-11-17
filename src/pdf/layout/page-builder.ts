@@ -41,7 +41,10 @@ export class PageBuilder
         this.bottom = config.page.height - config.margin.bottom;
         this.left = config.margin.left;
         this.width = config.page.width - config.margin.left - config.margin.right;
-        if (!(this.width > 0 && this.bottom > this.top)) throw new Error('layout: the margins leave no room for text');
+        if (!(this.width > 0 && this.bottom > this.top))
+        {
+            throw new Error('layout: the margins leave no room for text');
+        }
         this.y = this.top;
         this.newPage();
     }
@@ -83,13 +86,19 @@ export class PageBuilder
     /** Starts a new page unless `height` fits below the cursor (or the page is still empty). */
     ensure(height: number): void
     {
-        if (!this.atTop && !this.fits(height)) this.newPage();
+        if (!this.atTop && !this.fits(height))
+        {
+            this.newPage();
+        }
     }
 
     /** Vertical space; none at the top of a page. */
     space(height: number): void
     {
-        if (!this.atTop) this.y += height;
+        if (!this.atTop)
+        {
+            this.y += height;
+        }
     }
 
     /** Places one line at `x` (a new page first if it does not fit). */
@@ -102,7 +111,10 @@ export class PageBuilder
 
     placeAll(lines: readonly LaidLine[], x: number = this.left): void
     {
-        for (const line of lines) this.place(line, x);
+        for (const line of lines)
+        {
+            this.place(line, x);
+        }
     }
 
     /** A horizontal rule across the text area at height `y` of the current page. */
@@ -115,7 +127,10 @@ export class PageBuilder
     /** A named destination at `y` of the current page (clamped to the page). */
     destination(name: string, y: number): void
     {
-        if (!DESTINATION_NAME.test(name)) throw new Error(`layout: invalid destination name ${JSON.stringify(name).slice(0, 80)}`);
+        if (!DESTINATION_NAME.test(name))
+        {
+            throw new Error(`layout: invalid destination name ${JSON.stringify(name).slice(0, 80)}`);
+        }
         this.destinations.push({ name, page: this.pageIndex, y: Math.max(0, y) });
     }
 }

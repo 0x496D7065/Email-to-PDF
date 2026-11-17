@@ -174,8 +174,14 @@ export function resultFromFields(
     const corrupt = (detail: string): ParseResult => ({ ok: false, error: 'corrupt', detail, fileName, sha256 });
     try
     {
-        if (fields.error !== undefined) return corrupt(shortDetail(String(fields.error)));
-        if (!looksLikeMessage(fields)) return corrupt('not an Outlook message: no message properties found');
+        if (fields.error !== undefined)
+        {
+            return corrupt(shortDetail(String(fields.error)));
+        }
+        if (!looksLikeMessage(fields))
+        {
+            return corrupt('not an Outlook message: no message properties found');
+        }
         const built = buildMessage(fields, { fileName, sha256, kind: 'msg' }, options);
         const { attached, allRead } = readAttachedItems(fields, reads, { fileName, sha256 }, options);
         // Every attached Outlook item was read as an email of its own: its text is
@@ -220,7 +226,10 @@ function readFields(bytes: Uint8Array): { fields: FieldsData; reads: FieldReads 
     const first = new MsgReader(view);
     first.parserConfig = { includeRawProps: true };
     const fields = first.getFileData();
-    if (fields.error !== undefined || !hasAnsiStrings(fields)) return { fields, reads: { encoding: null, reread } };
+    if (fields.error !== undefined || !hasAnsiStrings(fields))
+    {
+        return { fields, reads: { encoding: null, reread } };
+    }
 
     const encoding = ansiEncodingOf(fields) ?? FALLBACK_ANSI_ENCODING;
     return { fields: reread(encoding), reads: { encoding, reread } };
@@ -282,13 +291,19 @@ function buildMessage(fields: FieldsData, source: NormalizedMessage['source'], o
     const senders = readSenders(fields);
 
     const warnings: ParseWarning[] = [...date.warnings, ...body.warnings];
-    if (messageId === null) warnings.push('missing-message-id');
+    if (messageId === null)
+    {
+        warnings.push('missing-message-id');
+    }
     // Like the .eml adapter: an attached e-mail whose text is not part of
     // bodyText is flagged, so the preview can say that some text is missing.
     // Removed again (withoutNotExpanded) when every attached Outlook item of
     // this email was read as an email of its own: the PDF and the preview then
     // show its text there (task 8.13b-3, see readAttachedItems).
-    if (attachments.some((a) => a.innerMsgContent === true)) warnings.push('forwarded-message-not-expanded');
+    if (attachments.some((a) => a.innerMsgContent === true))
+    {
+        warnings.push('forwarded-message-not-expanded');
+    }
 
     return {
         messageId,
@@ -430,19 +445,31 @@ function readAttachedItems(
     {
         // Every read by encoding (null: it failed); the file's own read included.
         const byEncoding = new Map<string, FieldsData | null>();
-        if (reads.encoding !== null) byEncoding.set(reads.encoding, top);
+        if (reads.encoding !== null)
+        {
+            byEncoding.set(reads.encoding, top);
+        }
         let extraReads = 0;
         const fieldsWith = (encoding: string): FieldsData | null =>
         {
             const known = byEncoding.get(encoding);
-            if (known !== undefined) return known;
-            if (reads.reread === undefined || extraReads >= MAX_ENCODING_READS) return null;
+            if (known !== undefined)
+            {
+                return known;
+            }
+            if (reads.reread === undefined || extraReads >= MAX_ENCODING_READS)
+            {
+                return null;
+            }
             extraReads++;
             let fields: FieldsData | null = null;
             try
             {
                 const again = reads.reread(encoding);
-                if (again.error === undefined) fields = again;
+                if (again.error === undefined)
+                {
+                    fields = again;
+                }
             }
             catch
             {
@@ -469,22 +496,37 @@ function readAttachedItems(
         for (let q = 0; q < queue.length; q++)
         {
             const holder = queue[q];
-            if (holder === undefined) continue;
+            if (holder === undefined)
+            {
+                continue;
+            }
             const list = holder.fields.attachments ?? [];
             let number = 0;
             for (let index = 0; index < list.length; index++)
             {
-                if (list[index]?.innerMsgContent !== true) continue;
+                if (list[index]?.innerMsgContent !== true)
+                {
+                    continue;
+                }
                 // Numbered before anything else is checked: a skipped item (not an
                 // email, too deep, over the budget, unreadable) keeps its number, so
                 // `path` stays "the n-th Outlook item line of its holder".
                 const slot: ItemSlot = { number: ++number, name: itemName(list[index]), node: null };
                 holder.slots.push(slot);
-                if (!isEmailItem(list[index])) continue;
-                if (holder.depth >= MAX_FORWARD_DEPTH || remaining <= 0) continue;
+                if (!isEmailItem(list[index]))
+                {
+                    continue;
+                }
+                if (holder.depth >= MAX_FORWARD_DEPTH || remaining <= 0)
+                {
+                    continue;
+                }
                 remaining--;
                 const item = readAttachedItem(holder, index, slot.number, fieldsWith, file, options);
-                if (item === null) continue;
+                if (item === null)
+                {
+                    continue;
+                }
                 const node: ItemNode = { message: item.message, children: [] };
                 slot.node = node;
                 queue.push({ ...item.holder, depth: holder.depth + 1, slots: node.children });
@@ -520,7 +562,10 @@ function allSlotsRead(slots: readonly ItemSlot[]): boolean
 /** `message` without the 'forwarded-message-not-expanded' warning (a new object; the same one when it has none). */
 function withoutNotExpanded(message: NormalizedMessage): NormalizedMessage
 {
-    if (!message.warnings.includes('forwarded-message-not-expanded')) return message;
+    if (!message.warnings.includes('forwarded-message-not-expanded'))
+    {
+        return message;
+    }
     return { ...message, warnings: message.warnings.filter((w) => w !== 'forwarded-message-not-expanded') };
 }
 
@@ -541,7 +586,10 @@ function readAttachedItem(
     try
     {
         const first: unknown = holder.fields.attachments?.[index]?.innerMsgContentFields;
-        if (!isFieldsData(first) || first.error !== undefined || !looksLikeMessage(first)) return null;
+        if (!isFieldsData(first) || first.error !== undefined || !looksLikeMessage(first))
+        {
+            return null;
+        }
         let fields = first;
         const at = [...holder.at, index];
         const path = [...holder.path, number];
@@ -571,13 +619,19 @@ function readAttachedItem(
             }
         }
         const built = buildMessage(fields, { ...file, kind: 'msg', attachedPath: [...path] }, options);
-        if (hasNothingToShow(built)) return null;
+        if (hasNothingToShow(built))
+        {
+            return null;
+        }
         // An HTML body stored as bytes is decoded with the item's code page
         // (htmlBody). msgreader loses both code page properties of an item with
         // no recipients (its fixed-size properties are read from the wrong
         // offset), and htmlBody then assumes UTF-8: 8-bit accented letters would
         // silently become U+FFFD. Flagged, so the preview says so.
-        if (htmlFromBytesWithoutCodepage(fields, built)) uncertain = true;
+        if (htmlFromBytesWithoutCodepage(fields, built))
+        {
+            uncertain = true;
+        }
         const message = uncertain ? { ...built, warnings: [...built.warnings, 'text-encoding-uncertain' as const] } : built;
         return { message, holder: { fields, at, readEncoding, inheritedEncoding, path } };
     }
@@ -595,7 +649,10 @@ function fieldsAt(fields: FieldsData, at: readonly number[]): FieldsData | undef
     for (const index of at)
     {
         const attachment: FieldsData | undefined = current?.attachments?.[index];
-        if (attachment?.innerMsgContent !== true) return undefined;
+        if (attachment?.innerMsgContent !== true)
+        {
+            return undefined;
+        }
         current = attachment.innerMsgContentFields;
     }
     return isFieldsData(current) ? current : undefined;
@@ -645,7 +702,10 @@ function isEmailItem(attachment: FieldsData | undefined): boolean
     try
     {
         const inner: unknown = attachment?.innerMsgContentFields;
-        if (!isFieldsData(inner)) return false;
+        if (!isFieldsData(inner))
+        {
+            return false;
+        }
         const messageClass = asString(inner.messageClass)?.toLowerCase();
         return messageClass === 'ipm.note' || messageClass?.startsWith('ipm.note.') === true;
     }
@@ -690,7 +750,10 @@ function flattenItems(roots: readonly ItemSlot[]): AttachedMessage[]
     {
         for (const { node, name } of slots)
         {
-            if (node === null) continue;
+            if (node === null)
+            {
+                continue;
+            }
             const index = attached.length;
             const path = [...(node.message.source.attachedPath ?? [])];
             // Its own items all read: their text is shown as emails of their own (see withoutNotExpanded).
@@ -722,12 +785,21 @@ function headerValue(headers: string, name: string): string | undefined
     for (let i = 0; i < lines.length; i++)
     {
         const line = lines[i] ?? '';
-        if (line === '') return undefined; // end of the header block
+        if (line === '')
+        {
+            return undefined; // end of the header block
+        }
         const colon = line.indexOf(':');
-        if (colon <= 0 || line.slice(0, colon).trim().toLowerCase() !== name) continue;
+        if (colon <= 0 || line.slice(0, colon).trim().toLowerCase() !== name)
+        {
+            continue;
+        }
         let value = line.slice(colon + 1);
         // Continuation lines start with a space or tab (RFC 5322 folding).
-        while (/^[ \t]/.test(lines[i + 1] ?? '')) value += ` ${(lines[++i] ?? '').trim()}`;
+        while (/^[ \t]/.test(lines[i + 1] ?? ''))
+        {
+            value += ` ${(lines[++i] ?? '').trim()}`;
+        }
         return value.trim();
     }
     return undefined;
@@ -777,7 +849,10 @@ function readDate(fields: FieldsData, headers: string): { value: EmailDate; warn
         // Read as UTC for sorting only if the zone is unknown: the preview flags it.
         return { value: header, warnings: header.zoneKnown ? [] : ['unknown-time-zone'] };
     }
-    if (delivered !== null) return { value: delivered, warnings: [] };
+    if (delivered !== null)
+    {
+        return { value: delivered, warnings: [] };
+    }
 
     // A time that exists but cannot be read (a damaged property, or a Date
     // header that is not understood) is reported as unparseable, keeping its text.
@@ -798,9 +873,15 @@ function readDate(fields: FieldsData, headers: string): { value: EmailDate; warn
  */
 function propertyTime(text: string | undefined): EmailDate | null
 {
-    if (text === undefined) return null;
+    if (text === undefined)
+    {
+        return null;
+    }
     const { utcMs } = parseEmailDate(text);
-    if (utcMs === null) return null;
+    if (utcMs === null)
+    {
+        return null;
+    }
     return { utcMs, original: new Date(utcMs).toISOString(), offsetMinutes: null, zoneKnown: true };
 }
 
@@ -863,7 +944,10 @@ function readSenders(fields: FieldsData): Senders
     // A represented mailbox with a name but no address never matches a sender
     // that has an address (no address equals ''), so that sender is then always
     // reported: this may over-report, but never loses data.
-    if (sameAsSender) return { from, sender: undefined };
+    if (sameAsSender)
+    {
+        return { from, sender: undefined };
+    }
     const actual = {
         name: senderName ?? '',
         // Only the sender's own SMTP property: PidTagSentRepresentingSmtpAddress
@@ -902,7 +986,10 @@ function readRecipients(fields: FieldsData): { to: EmailAddress[]; cc: EmailAddr
             name: asString(recipient.name) ?? '',
             address: smtpAddress(asString(recipient.email), asString(recipient.addressType), [asString(recipient.smtpAddress)]),
         };
-        if (mailbox.name === '' && mailbox.address === '') continue;
+        if (mailbox.name === '' && mailbox.address === '')
+        {
+            continue;
+        }
         (type === 'cc' ? cc : type === 'bcc' ? bcc : to).push(mailbox);
     }
     return { to, cc, bcc };
@@ -921,7 +1008,10 @@ function readRecipients(fields: FieldsData): { to: EmailAddress[]; cc: EmailAddr
 function smtpAddress(email: string | undefined, addressType: string | undefined, fallbacks: (string | undefined)[]): string
 {
     const isExchange = addressType?.toUpperCase() === 'EX' || email?.startsWith('/') === true;
-    if (email !== undefined && email !== '' && !isExchange) return email;
+    if (email !== undefined && email !== '' && !isExchange)
+    {
+        return email;
+    }
     const smtp = fallbacks.find((f) => f !== undefined && f.includes('@') && !f.startsWith('/'));
     return smtp ?? email ?? '';
 }
@@ -957,8 +1047,14 @@ interface MessageBody {
 function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody
 {
     const plain: unknown = fields.body;
-    if (plain !== undefined && typeof plain !== 'string') throw new DamagedPropertyError('plain-text body');
-    if (plain !== undefined && plain.trim() !== '') return { text: toLfLineEndings(plain), warnings: [] };
+    if (plain !== undefined && typeof plain !== 'string')
+    {
+        throw new DamagedPropertyError('plain-text body');
+    }
+    if (plain !== undefined && plain.trim() !== '')
+    {
+        return { text: toLfLineEndings(plain), warnings: [] };
+    }
 
     const html = htmlBody(fields);
     if (html !== undefined && html.trim() !== '')
@@ -971,7 +1067,10 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody
         catch (error)
         {
             // Only a converter failure becomes a warning; anything else still fails the file.
-            if (!(error instanceof HtmlConversionError)) throw error;
+            if (!(error instanceof HtmlConversionError))
+            {
+                throw error;
+            }
             // Even if an RTF body is also present, only 'html-body-unreadable' is
             // given: the content is flagged as missing either way.
             return { text: '', warnings: ['html-body-unreadable'] };
@@ -981,7 +1080,10 @@ function readBody(fields: FieldsData, options: MsgParserOptions): MessageBody
     }
 
     const rtf: unknown = fields.compressedRtf;
-    if (rtf !== undefined && !(rtf instanceof Uint8Array)) throw new DamagedPropertyError('RTF body');
+    if (rtf !== undefined && !(rtf instanceof Uint8Array))
+    {
+        throw new DamagedPropertyError('RTF body');
+    }
     if (rtf !== undefined && rtf.length > 0)
     {
         return { text: '', warnings: ['rtf-only-body'] };
@@ -1002,12 +1104,21 @@ function htmlBody(fields: FieldsData): string | undefined
     const text: unknown = fields.bodyHtml;
     if (text !== undefined)
     {
-        if (typeof text !== 'string') throw new DamagedPropertyError('HTML body');
+        if (typeof text !== 'string')
+        {
+            throw new DamagedPropertyError('HTML body');
+        }
         return text;
     }
     const bytes: unknown = fields.html;
-    if (bytes === undefined) return undefined;
-    if (!(bytes instanceof Uint8Array)) throw new DamagedPropertyError('HTML body');
+    if (bytes === undefined)
+    {
+        return undefined;
+    }
+    if (!(bytes instanceof Uint8Array))
+    {
+        throw new DamagedPropertyError('HTML body');
+    }
     const encoding =
         encodingForCodepage(fields.internetCodepage) ?? encodingForCodepage(fields.messageCodepage) ?? 'utf-8';
     return new TextDecoder(encoding).decode(bytes);
@@ -1050,7 +1161,10 @@ function attachmentInfo(attachment: FieldsData): AttachmentInfo
  */
 function displayFileName(displayName: string | undefined, isOutlookItem: boolean): string
 {
-    if (displayName === undefined || displayName === '') return '';
+    if (displayName === undefined || displayName === '')
+    {
+        return '';
+    }
     return isOutlookItem ? `${displayName}.msg` : displayName;
 }
 
@@ -1096,9 +1210,18 @@ class DamagedPropertyError extends Error
  */
 export function errorDetail(error: unknown, reason: string): string
 {
-    if (error instanceof HtmlConversionError) return shortDetail(error.message);
-    if (error instanceof DamagedPropertyError) return shortDetail(error.message);
-    if (error instanceof TypeError || error instanceof RangeError) return shortDetail(`damaged property: ${reason}`);
+    if (error instanceof HtmlConversionError)
+    {
+        return shortDetail(error.message);
+    }
+    if (error instanceof DamagedPropertyError)
+    {
+        return shortDetail(error.message);
+    }
+    if (error instanceof TypeError || error instanceof RangeError)
+    {
+        return shortDetail(`damaged property: ${reason}`);
+    }
     return shortDetail(error instanceof Error ? error.message : String(error));
 }
 

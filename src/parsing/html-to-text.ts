@@ -191,11 +191,17 @@ export function htmlTreeToText(root: HtmlNode, limits: HtmlToTextLimits = DEFAUL
     const writer = new TextWriter(limits.maxOutputLength);
     new Walker(writer, limits.maxDepth).walkChildren(root, 0);
     const text = writer.finish();
-    if (!writer.full) return { text, truncated: false };
+    if (!writer.full)
+    {
+        return { text, truncated: false };
+    }
     let kept = text.slice(0, limits.maxOutputLength);
     // Never keep half of a surrogate pair (an emoji, for example): the cut
     // moves back one character instead.
-    if (/[\uD800-\uDBFF]$/.test(kept)) kept = kept.slice(0, -1);
+    if (/[\uD800-\uDBFF]$/.test(kept))
+    {
+        kept = kept.slice(0, -1);
+    }
     return { text: `${kept.trimEnd()}\n\n${truncationNote(limits.maxOutputLength)}`, truncated: true };
 }
 
@@ -276,7 +282,10 @@ class TextWriter
         let piece = text.replace(/[ \t\n\f\r]+/g, ' ');
         // Only whitespace while separators are held: the separators bring their
         // own spaces, and writing this space now would flush them too early.
-        if (this.separators > 0 && /^ *$/.test(piece)) return;
+        if (this.separators > 0 && /^ *$/.test(piece))
+        {
+            return;
+        }
         // A space at the start of a line, or after another space, is dropped.
         if (piece.startsWith(' ') && (this.pending > 0 || this.current === '' || this.current.endsWith(' ')))
         {
@@ -290,7 +299,10 @@ class TextWriter
     {
         text.split(/\r\n?|\n/).forEach((segment, index) =>
         {
-            if (index > 0) this.lineBreak();
+            if (index > 0)
+            {
+                this.lineBreak();
+            }
             this.append(segment, true);
         });
     }
@@ -299,7 +311,10 @@ class TextWriter
     lineBreak(): void
     {
         this.separators = 0;
-        if (this.full) return;
+        if (this.full)
+        {
+            return;
+        }
         this.applyPending();
         this.pushLine();
     }
@@ -307,7 +322,10 @@ class TextWriter
     /** All lines, rendered: quote prefixes, trimming, at most one blank line in a row. */
     finish(): string
     {
-        if (this.current !== '') this.pushLine();
+        if (this.current !== '')
+        {
+            this.pushLine();
+        }
         const out: string[] = [];
         let previousBlank = true; // drops blank lines at the start
         for (const line of this.lines)
@@ -316,7 +334,10 @@ class TextWriter
             const prefix = '> '.repeat(line.quote);
             if (content === '')
             {
-                if (!previousBlank) out.push(prefix.trimEnd());
+                if (!previousBlank)
+                {
+                    out.push(prefix.trimEnd());
+                }
                 previousBlank = true;
             }
             else
@@ -325,13 +346,19 @@ class TextWriter
                 previousBlank = false;
             }
         }
-        if (previousBlank && out.length > 0) out.pop(); // a blank line at the end
+        if (previousBlank && out.length > 0)
+        {
+            out.pop(); // a blank line at the end
+        }
         return out.join('\n');
     }
 
     private append(piece: string, pre: boolean): void
     {
-        if (piece === '' || this.full) return;
+        if (piece === '' || this.full)
+        {
+            return;
+        }
         this.applyPending();
         let text = piece;
         if (this.separators > 0)
@@ -371,13 +398,22 @@ class TextWriter
     private count(characters: number): void
     {
         this.length += characters;
-        if (this.length > this.maxLength) this.full = true;
+        if (this.length > this.maxLength)
+        {
+            this.full = true;
+        }
     }
 
     private applyPending(): void
     {
-        if (this.pending === 0) return;
-        if (this.current !== '') this.pushLine();
+        if (this.pending === 0)
+        {
+            return;
+        }
+        if (this.current !== '')
+        {
+            this.pushLine();
+        }
         const last = this.lines.at(-1);
         if (this.pending === 2 && last !== undefined && last.text.trim() !== '')
         {
@@ -437,7 +473,10 @@ class Walker
         for (let i = 0; i < children.length && !this.writer.full; i++)
         {
             const child = children[i];
-            if (child === undefined) continue;
+            if (child === undefined)
+            {
+                continue;
+            }
             if (child.nodeType === ELEMENT_NODE && depth >= this.maxDepth)
             {
                 flattenText(child, this.writer);
@@ -455,8 +494,14 @@ class Walker
         {
             case TEXT_NODE:
             case CDATA_SECTION_NODE:
-                if (this.preDepth > 0) this.writer.preformatted(node.nodeValue ?? '');
-                else this.writer.inline(node.nodeValue ?? '');
+                if (this.preDepth > 0)
+                {
+                    this.writer.preformatted(node.nodeValue ?? '');
+                }
+                else
+                {
+                    this.writer.inline(node.nodeValue ?? '');
+                }
                 return;
             case DOCUMENT_NODE:
             case DOCUMENT_FRAGMENT_NODE:
@@ -475,7 +520,10 @@ class Walker
     private element(node: HtmlNode, depth: number): void
     {
         const name = node.nodeName.toLowerCase();
-        if (isSkipped(name)) return;
+        if (isSkipped(name))
+        {
+            return;
+        }
         const writer = this.writer;
 
         if (name === 'br')
@@ -495,24 +543,63 @@ class Walker
         }
 
         const breakKind = PARAGRAPH_BLOCKS.has(name) ? 2 : LINE_BLOCKS.has(name) ? 1 : 0;
-        if (breakKind > 0) writer.requestBreak(breakKind as 1 | 2);
+        if (breakKind > 0)
+        {
+            writer.requestBreak(breakKind as 1 | 2);
+        }
 
-        if (name === 'blockquote') writer.quote++;
-        if (PREFORMATTED.has(name)) this.preDepth++;
-        if (LISTS.has(name)) this.lists.push({ ordered: ORDERED_LISTS.has(name), next: listStart(node) });
-        if (name === 'li') writer.setMarker(this.listMarker());
-        if (name === 'tr') this.rows.push({ cells: 0, piecesAtStart: writer.pieces });
-        if (name === 'td' || name === 'th') this.cell();
+        if (name === 'blockquote')
+        {
+            writer.quote++;
+        }
+        if (PREFORMATTED.has(name))
+        {
+            this.preDepth++;
+        }
+        if (LISTS.has(name))
+        {
+            this.lists.push({ ordered: ORDERED_LISTS.has(name), next: listStart(node) });
+        }
+        if (name === 'li')
+        {
+            writer.setMarker(this.listMarker());
+        }
+        if (name === 'tr')
+        {
+            this.rows.push({ cells: 0, piecesAtStart: writer.pieces });
+        }
+        if (name === 'td' || name === 'th')
+        {
+            this.cell();
+        }
 
         this.walkChildren(node, depth);
 
-        if (name === 'tr') this.rows.pop();
-        if (name === 'li') writer.setMarker(null); // an item with no text gets no marker line
-        if (LISTS.has(name)) this.lists.pop();
-        if (PREFORMATTED.has(name)) this.preDepth--;
-        if (name === 'blockquote') writer.quote--;
+        if (name === 'tr')
+        {
+            this.rows.pop();
+        }
+        if (name === 'li')
+        {
+            writer.setMarker(null); // an item with no text gets no marker line
+        }
+        if (LISTS.has(name))
+        {
+            this.lists.pop();
+        }
+        if (PREFORMATTED.has(name))
+        {
+            this.preDepth--;
+        }
+        if (name === 'blockquote')
+        {
+            writer.quote--;
+        }
 
-        if (breakKind > 0) writer.requestBreak(breakKind as 1 | 2);
+        if (breakKind > 0)
+        {
+            writer.requestBreak(breakKind as 1 | 2);
+        }
     }
 
     /** "- " in a bullet list, "N. " in a numbered list, indented two spaces per nesting level. */
@@ -520,7 +607,10 @@ class Walker
     {
         const list = this.lists.at(-1);
         const indent = '  '.repeat(Math.max(0, this.lists.length - 1));
-        if (list === undefined || !list.ordered) return `${indent}- `;
+        if (list === undefined || !list.ordered)
+        {
+            return `${indent}- `;
+        }
         return `${indent}${String(list.next++)}. `;
     }
 
@@ -539,9 +629,15 @@ class Walker
     private cell(): void
     {
         const row = this.rows.at(-1);
-        if (row === undefined) return;
+        if (row === undefined)
+        {
+            return;
+        }
         const rowHasText = this.writer.pieces > row.piecesAtStart;
-        if (row.cells > 0 && !(rowHasText && this.writer.breakPending)) this.writer.holdSeparator();
+        if (row.cells > 0 && !(rowHasText && this.writer.breakPending))
+        {
+            this.writer.holdSeparator();
+        }
         row.cells++;
     }
 }
@@ -565,8 +661,14 @@ function altText(node: HtmlNode): string
 function inputText(node: HtmlNode): string
 {
     const type = node.getAttribute?.('type')?.trim().toLowerCase() ?? '';
-    if (BUTTON_INPUTS.has(type)) return node.getAttribute?.('value') ?? '';
-    if (type === 'image') return altText(node);
+    if (BUTTON_INPUTS.has(type))
+    {
+        return node.getAttribute?.('value') ?? '';
+    }
+    if (type === 'image')
+    {
+        return altText(node);
+    }
     return '';
 }
 
@@ -589,7 +691,10 @@ function flattenText(root: HtmlNode, writer: TextWriter): void
     while (stack.length > 0 && !writer.full)
     {
         const item = stack.pop();
-        if (item === undefined) break;
+        if (item === undefined)
+        {
+            break;
+        }
         if (item === SPACE)
         {
             writer.inline(SPACE);
@@ -600,9 +705,15 @@ function flattenText(root: HtmlNode, writer: TextWriter): void
             writer.inline(item.nodeValue ?? '');
             continue;
         }
-        if (item.nodeType !== ELEMENT_NODE) continue;
+        if (item.nodeType !== ELEMENT_NODE)
+        {
+            continue;
+        }
         const name = item.nodeName.toLowerCase();
-        if (isSkipped(name)) continue;
+        if (isSkipped(name))
+        {
+            continue;
+        }
         if (name === 'img' || name === 'input')
         {
             writer.inline(name === 'img' ? altText(item) : inputText(item));
@@ -610,13 +721,22 @@ function flattenText(root: HtmlNode, writer: TextWriter): void
         }
         // A block or line break becomes a space, so words of two blocks never merge.
         const block = name === 'br' || PARAGRAPH_BLOCKS.has(name) || LINE_BLOCKS.has(name) || name === 'td' || name === 'th';
-        if (block) stack.push(SPACE);
+        if (block)
+        {
+            stack.push(SPACE);
+        }
         const children = item.childNodes;
         for (let i = children.length - 1; i >= 0; i--)
         {
             const child = children[i];
-            if (child !== undefined) stack.push(child);
+            if (child !== undefined)
+            {
+                stack.push(child);
+            }
         }
-        if (block) stack.push(SPACE);
+        if (block)
+        {
+            stack.push(SPACE);
+        }
     }
 }

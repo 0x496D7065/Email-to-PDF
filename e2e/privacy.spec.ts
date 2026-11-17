@@ -33,7 +33,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -118,7 +121,10 @@ test('the panel is the first Tab stop after the header top row, opens and closes
     );
     expect(headings[0]).toEqual({ level: 1, text: en.app.name });
     expect(headings.filter((h) => h.level === 1)).toHaveLength(1);
-    for (let i = 1; i < headings.length; i++) expect(headings[i]?.level ?? 9).toBeLessThanOrEqual((headings[i - 1]?.level ?? 0) + 1);
+    for (let i = 1; i < headings.length; i++)
+    {
+        expect(headings[i]?.level ?? 9).toBeLessThanOrEqual((headings[i - 1]?.level ?? 0) + 1);
+    }
     expect(headings.slice(1, 5)).toEqual(
         [en.privacy.does.title, en.privacy.never.title, en.privacy.check.title, en.privacy.notes.title].map((text) => ({ level: 2, text })),
     );

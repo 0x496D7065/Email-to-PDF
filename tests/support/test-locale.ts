@@ -26,8 +26,14 @@ const UPPER = 'ÀƁÇĎÉƑĞĤÎĴĶĻṀÑÖÞǪŔŠŢÜṼŴẊÝŽ';
 function swap(ch: string): string
 {
     const code = ch.charCodeAt(0);
-    if (code >= 97 && code <= 122) return LOWER[code - 97] ?? ch;
-    if (code >= 65 && code <= 90) return UPPER[code - 65] ?? ch;
+    if (code >= 97 && code <= 122)
+    {
+        return LOWER[code - 97] ?? ch;
+    }
+    if (code >= 65 && code <= 90)
+    {
+        return UPPER[code - 65] ?? ch;
+    }
     return ch;
 }
 
@@ -41,7 +47,10 @@ export function pseudo(text: string): string
 /** Same shape as en: strings and plural forms rewritten with pseudo(). */
 function rewrite(value: unknown, path: string): unknown
 {
-    if (typeof value === 'string') return path === 'app.name' ? value : pseudo(value);
+    if (typeof value === 'string')
+    {
+        return path === 'app.name' ? value : pseudo(value);
+    }
     return Object.fromEntries(
         Object.entries(value as Record<string, unknown>).map(([key, inner]) => [key, rewrite(inner, path === '' ? key : `${path}.${key}`)]),
     );

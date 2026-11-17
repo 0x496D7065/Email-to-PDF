@@ -46,13 +46,19 @@ const UNREADABLE = '\r\n';
 async function run(...files: [string, string][]): Promise<EngineResult>
 {
     const parsed: ParseResult[] = [];
-    for (const [name, text] of files) parsed.push(await eml.parse({ name, bytes: new TextEncoder().encode(text) }));
+    for (const [name, text] of files)
+    {
+        parsed.push(await eml.parse({ name, bytes: new TextEncoder().encode(text) }));
+    }
     return runEngine(parsed);
 }
 const numberOf = (out: EngineResult, subject: string): number =>
 {
     const position = out.messages.findIndex((m) => m.message.subject === subject);
-    if (position < 0) throw new Error(`no message ${subject}`);
+    if (position < 0)
+    {
+        throw new Error(`no message ${subject}`);
+    }
     return position + 1;
 };
 const at = <T>(list: readonly T[], out: EngineResult, subject: string): T => list[numberOf(out, subject) - 1] as T;

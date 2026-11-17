@@ -21,7 +21,10 @@ function isObject(value: unknown): boolean
 
 function unit(value: number, what: string): string
 {
-    if (typeof value !== 'number' || !(value >= 0 && value <= 1)) fail(`${what} must be between 0 and 1, not ${String(value)}`);
+    if (typeof value !== 'number' || !(value >= 0 && value <= 1))
+    {
+        fail(`${what} must be between 0 and 1, not ${String(value)}`);
+    }
     return num(value);
 }
 
@@ -42,7 +45,10 @@ export function colorOperator(color: LaidOutColor, stroke: boolean): string
 /** The ActualText a run needs, in copy-layer form, or undefined when ToUnicode already gives its copy text. */
 export function actualTextFor(run: LaidOutTextRun, usage: FontUsage): string | undefined
 {
-    if (run.actualText !== undefined) return copyLayerText(run.actualText);
+    if (run.actualText !== undefined)
+    {
+        return copyLayerText(run.actualText);
+    }
     const copy = copyLayerText(run.copyText);
     return copy === usage.yields(run.glyphs) ? undefined : copy;
 }
@@ -60,25 +66,43 @@ export function pageContent(page: LaidOutPage, pageHeight: number, usageOf: (run
     const setFill = (color: LaidOutColor): void =>
     {
         const op = colorOperator(color, false);
-        if (op !== fill) out.push(op);
+        if (op !== fill)
+        {
+            out.push(op);
+        }
         fill = op;
     };
 
     for (const rect of page.fills)
     {
-        if (!isObject(rect)) fail('a fill must be an object');
+        if (!isObject(rect))
+        {
+            fail('a fill must be an object');
+        }
         setFill(rect.color);
         out.push(`${num(rect.x)} ${num(pageHeight - rect.y - rect.height)} ${num(rect.width)} ${num(rect.height)} re f`);
     }
     for (const line of page.lines)
     {
-        if (!isObject(line)) fail('a line must be an object');
+        if (!isObject(line))
+        {
+            fail('a line must be an object');
+        }
         const op = colorOperator(line.color, true);
-        if (op !== stroke) out.push(op);
+        if (op !== stroke)
+        {
+            out.push(op);
+        }
         stroke = op;
-        if (!(line.width >= 0)) fail(`line width must be 0 or more, not ${String(line.width)}`);
+        if (!(line.width >= 0))
+        {
+            fail(`line width must be 0 or more, not ${String(line.width)}`);
+        }
         const width = `${num(line.width)} w`;
-        if (width !== lineWidth) out.push(width);
+        if (width !== lineWidth)
+        {
+            out.push(width);
+        }
         lineWidth = width;
         out.push(`${num(line.x1)} ${num(pageHeight - line.y1)} m ${num(line.x2)} ${num(pageHeight - line.y2)} l S`);
     }
@@ -87,24 +111,48 @@ export function pageContent(page: LaidOutPage, pageHeight: number, usageOf: (run
     let inText = false;
     for (const run of page.text)
     {
-        if (run.glyphs.length === 0) continue; // nothing drawn, nothing to copy
+        if (run.glyphs.length === 0)
+        {
+            continue; // nothing drawn, nothing to copy
+        }
         const usage = usageOf(run);
-        if (!(run.size > 0 && run.size <= MAX_FONT_SIZE)) fail(`font size must be above 0 and at most ${MAX_FONT_SIZE}, not ${String(run.size)}`);
-        if (!inText) out.push('BT');
+        if (!(run.size > 0 && run.size <= MAX_FONT_SIZE))
+        {
+            fail(`font size must be above 0 and at most ${MAX_FONT_SIZE}, not ${String(run.size)}`);
+        }
+        if (!inText)
+        {
+            out.push('BT');
+        }
         inText = true;
         const actual = actualTextFor(run, usage);
-        if (actual !== undefined) out.push(`/Span << /ActualText ${hexText(actual)} >> BDC`);
+        if (actual !== undefined)
+        {
+            out.push(`/Span << /ActualText ${hexText(actual)} >> BDC`);
+        }
         const tf = `${name(usage.resourceName)} ${num(run.size)} Tf`;
-        if (tf !== font) out.push(tf);
+        if (tf !== font)
+        {
+            out.push(tf);
+        }
         font = tf;
         setFill(run.color);
         out.push(`1 0 0 1 ${num(run.x)} ${num(pageHeight - run.y)} Tm`);
         let glyphs = '';
-        for (const glyph of run.glyphs) glyphs += hex4(glyph);
+        for (const glyph of run.glyphs)
+        {
+            glyphs += hex4(glyph);
+        }
         out.push(`<${glyphs}> Tj`);
-        if (actual !== undefined) out.push('EMC');
+        if (actual !== undefined)
+        {
+            out.push('EMC');
+        }
     }
-    if (inText) out.push('ET');
+    if (inText)
+    {
+        out.push('ET');
+    }
     out.push('');
     return out.join('\n');
 }

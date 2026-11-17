@@ -52,7 +52,10 @@ const undatedDate: NormalizedMessage['date'] = { utcMs: null, original: '', offs
 function byIndex(out: EngineResult, index: number): EngineMessage
 {
     const position = out.positionByIndex[index];
-    if (position === null || position === undefined) throw new Error(`input ${index} has no kept message`);
+    if (position === null || position === undefined)
+    {
+        throw new Error(`input ${index} has no kept message`);
+    }
     return out.messages[position]!;
 }
 
@@ -61,10 +64,16 @@ function reasonsAt(m: EngineMessage, snippet: string): readonly FoldReason[]
 {
     const body = m.message.bodyText;
     const at = body.indexOf(snippet);
-    if (at < 0) throw new Error(`snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`snippet not found: ${snippet}`);
+    }
     const covering = m.segments.filter((s) => s.start < at + snippet.length && s.end > at);
     const first = covering[0]!;
-    for (const s of covering) expect(s.reasons, snippet).toEqual(first.reasons);
+    for (const s of covering)
+    {
+        expect(s.reasons, snippet).toEqual(first.reasons);
+    }
     return first.reasons;
 }
 
@@ -228,7 +237,13 @@ describe('runEngine: detectors working together', () =>
         const m = byIndex(out, 1);
         expect(primaryReason(reasonsAt(m, 'Met vriendelijke groeten,'))).toBe('signature');
         const quoteAt = m.message.bodyText.indexOf('On Mon, 3 Mar');
-        for (const s of m.segments) if (s.end > quoteAt) expect(s.reasons).not.toContain('signature');
+        for (const s of m.segments)
+        {
+            if (s.end > quoteAt)
+            {
+                expect(s.reasons).not.toContain('signature');
+            }
+        }
         expect(primaryReason(reasonsAt(m, 'On Mon, 3 Mar'))).toBe('reply-header');
     });
 });
@@ -283,7 +298,10 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
             // Fails for the second message only.
             detectReplyHeaders: (text) =>
             {
-                if (text === body) throw new Error('synthetic bug');
+                if (text === body)
+                {
+                    throw new Error('synthetic bug');
+                }
                 return [];
             },
         });

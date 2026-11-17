@@ -61,11 +61,20 @@ function nextSubject(prev: string, style: QuoteStyle): string
     const frenchOutlook = style.startsWith('outlook') && style.endsWith('-fr');
     if (isForwardStyle(style))
     {
-        if (style === 'outlook-forward-fr') return `TR : ${prev}`;
+        if (style === 'outlook-forward-fr')
+        {
+            return `TR : ${prev}`;
+        }
         return `${style === 'outlook-forward-en' ? 'FW' : 'Fwd'}: ${prev}`;
     }
-    if (/^(re|aw|antw) ?:/i.test(prev)) return prev;
-    if (frenchOutlook) return `RE : ${prev}`;
+    if (/^(re|aw|antw) ?:/i.test(prev))
+    {
+        return prev;
+    }
+    if (frenchOutlook)
+    {
+        return `RE : ${prev}`;
+    }
     const prefix = style.startsWith('outlook') ? 'RE' : 'Re';
     return `${prefix}: ${prev}`;
 }
@@ -103,7 +112,10 @@ export function chain(styles: readonly QuoteStyle[], options: ChainOptions = {})
         const from = people[i % people.length] ?? ALICE;
         const to = people[(i + 1) % people.length] ?? BOB;
         const style = i === 0 ? undefined : styles[i - 1];
-        if (style !== undefined) subject = nextSubject(subject, style);
+        if (style !== undefined)
+        {
+            subject = nextSubject(subject, style);
+        }
         // Step the UTC moment, then write it in the sender's zone: stepping the
         // wall clock instead would put a reply before the message it answers
         // when the senders are in different zones.
@@ -245,7 +257,10 @@ function makeRefusalCostCases(): ThreadCase[]
     const b = buildThread(passed);
     const cut = `> ${placeholder}\n>\n`;
     const at = b.body.indexOf(cut);
-    if (at < 0 || b.body.indexOf(cut, at + 1) >= 0) throw new Error('refusal-cost: placeholder not found once');
+    if (at < 0 || b.body.indexOf(cut, at + 1) >= 0)
+    {
+        throw new Error('refusal-cost: placeholder not found once');
+    }
     const passedThread: BuiltThread = {
         ...b,
         body: b.body.slice(0, at) + b.body.slice(at + cut.length),
@@ -285,7 +300,10 @@ function negative(id: string, expect: NegativeCase['expect'], lines: readonly st
     const realHeaders = headerLines.map((h) =>
     {
         const at = body.indexOf(`${h}\n`);
-        if (at < 0) throw new Error(`${id}: header line not found: ${h}`);
+        if (at < 0)
+        {
+            throw new Error(`${id}: header line not found: ${h}`);
+        }
         return at;
     });
     return { id, expect, body, subject: 'Re: Office desks and chairs', realHeaders };

@@ -46,7 +46,10 @@ const BODY = (who: string): string => `${who} wrote this text about the oak desk
 async function run(...files: [string, string][]): Promise<EngineResult>
 {
     const parsed: ParseResult[] = [];
-    for (const [name, text] of files) parsed.push(await eml.parse({ name, bytes: new TextEncoder().encode(text) }));
+    for (const [name, text] of files)
+    {
+        parsed.push(await eml.parse({ name, bytes: new TextEncoder().encode(text) }));
+    }
     return runEngine(parsed);
 }
 
@@ -76,14 +79,20 @@ const hasClass = (e: FakeElement, name: string): boolean => (e.getAttribute('cla
 const items = (): FakeElement[] =>
 {
     const list = area.descendants().find((e) => e.getAttribute('id') === 'preview-list');
-    if (list === undefined) throw new Error('no list');
+    if (list === undefined)
+    {
+        throw new Error('no list');
+    }
     return list.children.filter((c): c is FakeElement => c instanceof FakeElement);
 };
 const subjectOf = (item: FakeElement): string => item.descendants().find((e) => hasClass(e, 'message-subject'))?.textContent ?? '';
 const card = (subject: string): FakeElement =>
 {
     const found = items().find((i) => subjectOf(i) === subject);
-    if (found === undefined) throw new Error(`no card ${subject}`);
+    if (found === undefined)
+    {
+        throw new Error(`no card ${subject}`);
+    }
     return found;
 };
 const numberOf = (subject: string): string => card(subject).descendants().find((e) => hasClass(e, 'message-number'))?.textContent ?? '';

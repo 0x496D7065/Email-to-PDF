@@ -38,7 +38,13 @@ function isBlank(mailbox: EmailAddress): boolean
 export function displayAuthor(message: Pick<NormalizedMessage, 'from' | 'sender'>): DisplayAuthor
 {
     const from = message.from.filter((m) => !isBlank(m));
-    if (from.length > 0) return { source: 'from', mailboxes: from };
-    if (message.sender !== undefined && !isBlank(message.sender)) return { source: 'sender', mailboxes: [message.sender] };
+    if (from.length > 0)
+    {
+        return { source: 'from', mailboxes: from };
+    }
+    if (message.sender !== undefined && !isBlank(message.sender))
+    {
+        return { source: 'sender', mailboxes: [message.sender] };
+    }
     return { source: 'none', mailboxes: [] };
 }

@@ -110,12 +110,18 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
             expect(doc.emails.map((e) => e.position)).toEqual(kept);
             expect(doc.emails.map((e) => e.number)).toEqual([1, 2]);
             expect(doc.emails.map((e) => e.heading)).toEqual([EN.emailHeading(1), EN.emailHeading(2)]);
-            for (const p of gone) expect(doc.pdfNumberByPosition[p]).toBeNull();
+            for (const p of gone)
+            {
+                expect(doc.pdfNumberByPosition[p]).toBeNull();
+            }
             expect(kept.map((p) => doc.pdfNumberByPosition[p])).toEqual([1, 2]);
             expect(doc.index.entries.map((e) => e.number)).toEqual([1, 2]);
             expect(doc.index.entries.map((e) => lineText(e.subject))).toEqual(['Oak', 'Pine']);
             const bookmarks = doc.index.entries.map((e) => e.bookmark).join('\n');
-            for (const word of ['Empty with attachment', 'Only spaces', 'floor-plan.pdf']) expect(bookmarks).not.toContain(word);
+            for (const word of ['Empty with attachment', 'Only spaces', 'floor-plan.pdf'])
+            {
+                expect(bookmarks).not.toContain(word);
+            }
             expect(doc.index.entries.flatMap((e) => e.attachmentLines.map(lineText)).join('\n')).not.toContain('floor-plan.pdf');
             // Cover (Q1): count, date range, undated and people of the emails in the PDF only.
             expect(doc.cover.emailCount).toBe(2);
@@ -139,7 +145,13 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
         expect(order.slots.map((s) => (s.kind === 'email' ? s.position : -1))).toEqual(pdfPositions(result, positions));
         expect(order.slots.map((s) => s.number)).toEqual([1, 2]);
         // The plan index still points at the right plan (the position's place in `positions`).
-        for (const s of order.slots) if (s.kind === 'email') expect(positions[s.plan]).toBe(s.position);
+        for (const s of order.slots)
+        {
+            if (s.kind === 'email')
+            {
+                expect(positions[s.plan]).toBe(s.position);
+            }
+        }
     });
 
     it('keeps bodies that only look empty: a lone ">", U+200B, VT, FF, U+0000', () =>
@@ -148,7 +160,10 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
         {
             const r = runEngine([ok(make('Odd', { bodyText: body }))]);
             expect(hasNoPrintableText(r.messages[0]!.message), JSON.stringify(body)).toBe(false);
-            for (const [, policy] of POLICIES) expect(build(r, { policy }).emails, JSON.stringify(body)).toHaveLength(1);
+            for (const [, policy] of POLICIES)
+            {
+                expect(build(r, { policy }).emails, JSON.stringify(body)).toHaveLength(1);
+            }
         }
     });
 

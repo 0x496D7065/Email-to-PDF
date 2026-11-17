@@ -143,7 +143,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -166,7 +169,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         const seen = (records: MutationRecord[], id: string, list: string[]): void =>
         {
             const element = document.getElementById(id);
-            if (element === null || !records.some((r) => element === r.target || element.contains(r.target))) return;
+            if (element === null || !records.some((r) => element === r.target || element.contains(r.target)))
+            {
+                return;
+            }
             list.push(element.textContent ?? '');
         };
         new MutationObserver((records) =>
@@ -204,7 +210,10 @@ async function expectNoRequestLeftThePage(page: Page, cspPolicies = 2): Promise<
 {
     await page.waitForTimeout(500);
     const ownBlob = new RegExp(`^blob:${origin}/[0-9a-f-]+$`);
-    for (const url of watch.requests.slice(loadedAt)) expect(url).toMatch(ownBlob);
+    for (const url of watch.requests.slice(loadedAt))
+    {
+        expect(url).toMatch(ownBlob);
+    }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     expect(withoutSelectConsole(engineOf(page.context()), problems, cspPolicies)).toEqual([]);
@@ -263,7 +272,10 @@ async function measureControls(page: Page): Promise<Control[]>
             for (let e = start; e; e = e.parentElement)
             {
                 const bg = parse(getComputedStyle(e).backgroundColor);
-                if ((bg[3] ?? 1) > 0) return bg;
+                if ((bg[3] ?? 1) > 0)
+                {
+                    return bg;
+                }
             }
             return [255, 255, 255, 1];
         };
@@ -288,8 +300,14 @@ async function measureControls(page: Page): Promise<Control[]>
                     outlineContrast: (Math.max(outline, around) + 0.05) / (Math.min(outline, around) + 0.05),
                 };
             });
-        if (before instanceof HTMLElement) before.focus();
-        else (document.activeElement as HTMLElement | null)?.blur();
+        if (before instanceof HTMLElement)
+        {
+            before.focus();
+        }
+        else
+        {
+            (document.activeElement as HTMLElement | null)?.blur();
+        }
         return found;
     }, [CONTROLS, before] as const);
 }
@@ -313,12 +331,18 @@ async function expectAccessibleState(page: Page, state: string, minControls: num
         .filter((c) => c.outlineStyle === 'none' || c.outlineWidth < 2 || c.outlineContrast < 3)
         .map((c) => `${c.what} ${c.outlineStyle} ${String(c.outlineWidth)}px ${c.outlineContrast.toFixed(2)}:1`);
     expect(unclear, `${state}: focus outlines`).toEqual([]);
-    for (const control of await page.locator(CONTROLS).filter({ visible: true }).all()) await expect(control, state).toHaveAccessibleName(/\S/);
+    for (const control of await page.locator(CONTROLS).filter({ visible: true }).all())
+    {
+        await expect(control, state).toHaveAccessibleName(/\S/);
+    }
     expect(await contrastFailures(page), `${state}: text contrast`).toEqual([]);
     expect(await sidewaysScroll(page), `${state}: sideways scroll`).toBeLessThanOrEqual(0);
     const levels = await headingLevels(page);
     expect(levels.filter((level) => level === 1), state).toHaveLength(1);
-    for (let i = 1; i < levels.length; i++) expect(levels[i] ?? 9, `${state}: heading ${String(i)}`).toBeLessThanOrEqual((levels[i - 1] ?? 0) + 1);
+    for (let i = 1; i < levels.length; i++)
+    {
+        expect(levels[i] ?? 9, `${state}: heading ${String(i)}`).toBeLessThanOrEqual((levels[i - 1] ?? 0) + 1);
+    }
 }
 
 /** The focused element's id ('' for none, 'BODY' when the focus was lost). */
@@ -431,7 +455,10 @@ test('a long batch: the progress line follows every file, the status line has on
         window.__a11yRelease = () =>
         {
             holding = false;
-            for (const send of held.splice(0)) send();
+            for (const send of held.splice(0))
+            {
+                send();
+            }
         };
         const RealWorker = window.Worker;
         window.Worker = class extends RealWorker
@@ -439,13 +466,22 @@ test('a long batch: the progress line follows every file, the status line has on
             constructor(url: string | URL, options?: WorkerOptions)
             {
                 super(url, options);
-                if (options?.name !== 'engine-worker') return;
+                if (options?.name !== 'engine-worker')
+                {
+                    return;
+                }
                 const send = this.postMessage.bind(this) as (...args: unknown[]) => void;
                 Object.defineProperty(this, 'postMessage', {
                     value: (...args: unknown[]) =>
                     {
-                        if (holding) held.push(() => send(...args));
-                        else send(...args);
+                        if (holding)
+                        {
+                            held.push(() => send(...args));
+                        }
+                        else
+                        {
+                            send(...args);
+                        }
                     },
                 });
             }
@@ -589,7 +625,10 @@ test('a PDF that could not be made: the error is announced, readable, and the fo
         {
             constructor(url: string | URL, options?: WorkerOptions)
             {
-                if (options?.name === 'pdf-worker') throw new Error('test: no PDF worker');
+                if (options?.name === 'pdf-worker')
+                {
+                    throw new Error('test: no PDF worker');
+                }
                 super(url, options);
             }
         };
@@ -632,7 +671,10 @@ test.describe('with larger text spacing (WCAG 1.4.12)', () =>
                 [...document.querySelectorAll<HTMLElement>('body *')]
                     .filter((e) =>
                     {
-                        if (!e.checkVisibility()) return false;
+                        if (!e.checkVisibility())
+                        {
+                            return false;
+                        }
                         const style = getComputedStyle(e);
                         const clips = /hidden|clip/.test(`${style.overflowX} ${style.overflowY}`);
                         return clips && (e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1);

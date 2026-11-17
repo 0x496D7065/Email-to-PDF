@@ -367,7 +367,10 @@ describe('lineRanges and linesToRange', () =>
         const lines = lineRanges(text);
         const range = linesToRange(lines, 1, 2);
         expect(range).toEqual({ start: 3, end: 17 });
-        if (range === null) throw new Error('unreachable');
+        if (range === null)
+        {
+            throw new Error('unreachable');
+        }
         const segs = buildSegments(text, [{ ...range, reason: 'quote-marker' }]);
         expect(segs.map((s) => segmentText(text, s))).toEqual(['Hi\n', '> old\n> older\n', 'Bye']);
     });
@@ -412,7 +415,10 @@ describe('visibleView', () =>
             [0, 8, []],
             [8, 19, [2]],
         ]);
-        for (const b of view) expect(text.slice(b.start, b.end)).toBe(b.text);
+        for (const b of view)
+        {
+            expect(text.slice(b.start, b.end)).toBe(b.text);
+        }
     });
 
     it('with unfoldAll, collapses nothing but still reports what is folded', () =>
@@ -451,7 +457,10 @@ const RARE_PIECES = ['\ud83d', '\ude00'];
 
 function randomText(rand: () => number): string
 {
-    if (rand() < 0.05) return '';
+    if (rand() < 0.05)
+    {
+        return '';
+    }
     const count = Math.floor(rand() * 30);
     let text = '';
     for (let i = 0; i < count; i++)
@@ -465,8 +474,14 @@ function randomText(rand: () => number): string
 function randomOffset(rand: () => number, length: number): number
 {
     const r = rand();
-    if (r < 0.03) return NaN;
-    if (r < 0.05) return rand() < 0.5 ? Infinity : -Infinity;
+    if (r < 0.03)
+    {
+        return NaN;
+    }
+    if (r < 0.05)
+    {
+        return rand() < 0.5 ? Infinity : -Infinity;
+    }
     const base = Math.floor(rand() * (length + 7)) - 3; // a little out of range on both sides
     return r < 0.12 ? base + 0.5 : base;
 }
@@ -512,24 +527,42 @@ function expectedCover(text: string, folds: readonly FoldRange[]): Expected
     let snapped = 0;
     for (const f of folds)
     {
-        if (Number.isNaN(f.start) || Number.isNaN(f.end)) continue;
+        if (Number.isNaN(f.start) || Number.isNaN(f.end))
+        {
+            continue;
+        }
         let s = Math.min(Math.max(Math.floor(f.start), 0), text.length);
         let e = Math.min(Math.max(Math.ceil(f.end), 0), text.length);
-        if (s >= e) continue; // empty or reversed: ignored, before any snapping
+        if (s >= e)
+        {
+            continue; // empty or reversed: ignored, before any snapping
+        }
         const rawS = s;
         const rawE = e;
-        if (insidePair(text, s)) s--;
-        if (insidePair(text, e)) e++;
+        if (insidePair(text, s))
+        {
+            s--;
+        }
+        if (insidePair(text, e))
+        {
+            e++;
+        }
         // Snapping moves a boundary by at most one unit, outwards.
         expect(rawS - s).toBeLessThanOrEqual(1);
         expect(e - rawE).toBeLessThanOrEqual(1);
-        if (s !== rawS || e !== rawE) snapped++;
+        if (s !== rawS || e !== rawE)
+        {
+            snapped++;
+        }
         const link =
             f.related !== undefined && Number.isSafeInteger(f.related) && f.related >= 0 ? f.related : null;
         for (let i = s; i < e; i++)
         {
             reasons[i]!.add(f.reason);
-            if (link !== null) related[i]!.add(link);
+            if (link !== null)
+            {
+                related[i]!.add(link);
+            }
         }
     }
     return { reasons, related, snapped };

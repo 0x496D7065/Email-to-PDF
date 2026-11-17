@@ -132,7 +132,10 @@ describe('isFromWorker: attached emails (strict)', () =>
     {
         const result = await parsed();
         expect(isFromWorker({ type: 'result', result })).toBe(true);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.attached?.map((e) => [e.message.subject, e.parent, e.path, e.places.map((p) => p.holder)])).toEqual([
             ['A', -1, [1], [-1]],
             ['C', 0, [1, 1], []],
@@ -172,14 +175,20 @@ describe('isFromWorker: attached emails (strict)', () =>
     function at<T>(list: unknown, index: number): T
     {
         const value = (list as T[])[index];
-        if (value === undefined) throw new Error(`nothing at ${String(index)}`);
+        if (value === undefined)
+        {
+            throw new Error(`nothing at ${String(index)}`);
+        }
         return value;
     }
     const entry = (r: LooseResult, i: number): LooseEntry => at<LooseEntry>(r.attached, i);
     const place = (r: LooseResult, i: number): LoosePlace => at<LoosePlace>(entry(r, i).places, 0);
     const ownMessage = (r: LooseResult): LooseMessage =>
     {
-        if (r.message === undefined) throw new Error('no message');
+        if (r.message === undefined)
+        {
+            throw new Error('no message');
+        }
         return r.message;
     };
     const pushAttachment = (m: LooseMessage, attachedIndex: number): void =>
@@ -273,7 +282,10 @@ describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
     {
         const result = await parsed();
         expect(isFromWorker({ type: 'result', result })).toBe(true);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.attached?.map((e) => [e.message.subject, e.parent, e.path, e.places, e.message.source.kind])).toEqual([
             ['A', -1, [1], [], 'msg'],
             ['A1', 0, [1, 1], [], 'msg'],
@@ -288,7 +300,10 @@ describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
     const entry = (r: LooseMsgResult, i: number): LooseMsgResult['attached'][number] =>
     {
         const value = r.attached[i];
-        if (value === undefined) throw new Error(`nothing at ${String(i)}`);
+        if (value === undefined)
+        {
+            throw new Error(`nothing at ${String(i)}`);
+        }
         return value;
     };
 
@@ -350,8 +365,14 @@ function workerSide()
     const handle = createWorkerSide((message) =>
     {
         const waiter = waiters.shift();
-        if (waiter) waiter(message);
-        else posted.push(message);
+        if (waiter)
+        {
+            waiter(message);
+        }
+        else
+        {
+            posted.push(message);
+        }
     });
     const next = (): Promise<FromWorker> =>
     {
@@ -414,7 +435,10 @@ const inMemoryWorker: WorkerFactory = (events) =>
         const copy = structuredClone(message);
         setTimeout(() =>
         {
-            if (!terminated) events.message(copy);
+            if (!terminated)
+            {
+                events.message(copy);
+            }
         }, 0);
     });
     return {
@@ -423,7 +447,10 @@ const inMemoryWorker: WorkerFactory = (events) =>
             const copy = structuredClone(message, { transfer });
             setTimeout(() =>
             {
-                if (!terminated) handle(copy);
+                if (!terminated)
+                {
+                    handle(copy);
+                }
             }, 0);
         },
         terminate: () =>
@@ -464,7 +491,10 @@ describe('round trip: runInWorker + createWorkerSide', () =>
     it('carries sender and bcc through the worker (.eml and .msg), and no sender key when there is none', async () =>
     {
         const eml = await viaWorker('on-behalf.eml', 'eml', encode(ON_BEHALF_EML));
-        if (!eml.ok) throw new Error(eml.detail);
+        if (!eml.ok)
+        {
+            throw new Error(eml.detail);
+        }
         expect(eml.message.sender).toEqual({ name: 'Carol Test', address: 'carol@example.test' });
         expect(eml.message.bcc).toEqual([
             { name: 'Sample Furniture Planning', address: 'planning@example.test' },
@@ -474,19 +504,31 @@ describe('round trip: runInWorker + createWorkerSide', () =>
         const spec = (id: string) =>
         {
             const found = MSG_SPECS.find((s) => s.id === id);
-            if (found === undefined) throw new Error(`missing spec ${id}`);
+            if (found === undefined)
+            {
+                throw new Error(`missing spec ${id}`);
+            }
             return found;
         };
         const onBehalf = await viaWorker('a.msg', 'msg', buildMsg(spec('msg-10-on-behalf')));
-        if (!onBehalf.ok) throw new Error(onBehalf.detail);
+        if (!onBehalf.ok)
+        {
+            throw new Error(onBehalf.detail);
+        }
         expect(onBehalf.message.sender).toEqual({ name: 'Sample Furniture Planning', address: 'planning@furniture.example.test' });
         const bcc = await viaWorker('b.msg', 'msg', buildMsg(spec('msg-11-bcc-own-copy')));
-        if (!bcc.ok) throw new Error(bcc.detail);
+        if (!bcc.ok)
+        {
+            throw new Error(bcc.detail);
+        }
         expect(bcc.message.bcc).toEqual([{ name: 'Carol Test - Équipe Livraisons', address: 'carol@sample.invalid' }]);
         expect('sender' in bcc.message).toBe(false);
 
         const plain = await viaWorker('plain.eml', 'eml', encode(PLAIN_EML));
-        if (!plain.ok) throw new Error(plain.detail);
+        if (!plain.ok)
+        {
+            throw new Error(plain.detail);
+        }
         expect('sender' in plain.message).toBe(false);
         expect(plain.message.bcc).toEqual([]);
     });

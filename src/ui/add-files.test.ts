@@ -81,7 +81,10 @@ let filesChanges: number;
 function byId(id: string): FakeElement
 {
     const found = root.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 
@@ -330,8 +333,14 @@ describe('mountAddFiles: elements', () =>
         expect(donate.map((e) => e.tagName)).toEqual(['a', 'img']);
         for (const element of doc.created)
         {
-            if (donate.includes(element)) continue;
-            for (const name of element.attributes.keys()) expect(name).not.toMatch(/^(on|style$|href$|src$)/);
+            if (donate.includes(element))
+            {
+                continue;
+            }
+            for (const name of element.attributes.keys())
+            {
+                expect(name).not.toMatch(/^(on|style$|href$|src$)/);
+            }
         }
         const ids = root.descendants().flatMap((e) => e.getAttribute('id') ?? []);
         expect(new Set(ids).size).toBe(ids.length);
@@ -498,7 +507,10 @@ describe('mountAddFiles: results', () =>
         expect(t('errors.file.tool-error')).toBe(
             'The tool could not read this file. To try again, reconnect to the internet, reload the page and add it again. If it fails again, the tool cannot read this file.',
         );
-        for (const item of items) expect(item.textContent).not.toContain(t('errors.file.corrupt'));
+        for (const item of items)
+        {
+            expect(item.textContent).not.toContain(t('errors.file.corrupt'));
+        }
     });
 
     it('a file the browser could not open is not shown as a damaged file', async () =>
@@ -515,8 +527,14 @@ describe('mountAddFiles: results', () =>
     it('every piece of reload advice says the internet is needed (an offline page cannot reload)', () =>
     {
         const keys = ['errors.file.timeout', 'errors.file.tool-error', 'errors.batch.engine-timeout', 'errors.batch.engine-failed', 'errors.batch.unexpected'] as const;
-        for (const key of keys) expect(t(key)).toContain('reconnect to the internet, reload the page');
-        for (const key of ['errors.file.unreadable', 'errors.file.corrupt'] as const) expect(t(key)).not.toMatch(/reload/i);
+        for (const key of keys)
+        {
+            expect(t(key)).toContain('reconnect to the internet, reload the page');
+        }
+        for (const key of ['errors.file.unreadable', 'errors.file.corrupt'] as const)
+        {
+            expect(t(key)).not.toMatch(/reload/i);
+        }
     });
 
     it('does not open step 2 when no email was found', async () =>
@@ -712,7 +730,10 @@ describe('mountAddFiles: drag and drop', () =>
     {
         addFiles.destroy();
         expect(win.fire('drop', { target: zone(), dataTransfer: { types: ['Files'], items: [] } }).defaultPrevented).toBe(false);
-        for (const type of ['dragenter', 'dragover', 'dragleave', 'drop']) expect(win.listeners.count(type), type).toBe(0);
+        for (const type of ['dragenter', 'dragover', 'dragleave', 'drop'])
+        {
+            expect(win.listeners.count(type), type).toBe(0);
+        }
     });
 });
 

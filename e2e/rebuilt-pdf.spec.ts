@@ -80,7 +80,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -125,11 +128,17 @@ async function expectNothingLeftThePage(page: Page, pdfs = 1): Promise<void>
     await page.waitForTimeout(500);
     const ownBlob = new RegExp(`^blob:${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[0-9a-f-]+$`);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(ownBlob);
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(ownBlob);
+    }
     // The PDFs' own blob: URLs (Chromium may list a blob: download as a request), nothing else.
     const others = watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url));
     expect(others.length).toBeLessThanOrEqual(pdfs);
-    for (const url of others) expect(url).toMatch(ownBlob);
+    for (const url of others)
+    {
+        expect(url).toMatch(ownBlob);
+    }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = engineOf(page.context());
@@ -168,7 +177,10 @@ test('by default the PDF holds the three rebuilt emails, shown and numbered like
     // The index (on the cover page) lists the rebuilt ones too.
     expect(pages[0]).toContain('Re: Office desks and chairs');
     // Emails 1 to 4 in timeline order: the three rebuilt ones, then the email added.
-    for (const n of [1, 2, 3, 4]) expect(all.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
+    for (const n of [1, 2, 3, 4])
+    {
+        expect(all.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
+    }
     expect(all.indexOf(`${heading(3)} From`)).toBeLessThan(all.indexOf(`${heading(4)} From`));
     // A quoted time is shown as a real email's date (no "about").
     expect(all).toMatch(/Date 2025-03-03 \d\d:40:00 UTC\+01:00/);
@@ -264,7 +276,10 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
     await expect(hint).toBeHidden();
     // No rebuilt card is shown: exactly as with the switch off (no dimmed card left behind).
     await expect(cards).toHaveCount(3);
-    for (const card of await cards.all()) await expect(card).toBeHidden();
+    for (const card of await cards.all())
+    {
+        await expect(card).toBeHidden();
+    }
     await expect(page.locator('#preview-list > li').filter({ visible: true })).toHaveCount(1);
     // The email added keeps all its text: its quoted history is still there, folded, one click away.
     await expect(source).toBeVisible();
@@ -322,7 +337,10 @@ test('the switch off, then "Print full original text" ticked and unticked: the s
     const cards = page.locator('#preview-list > li.message-rebuilt');
     await cards.nth(1).getByRole('checkbox').uncheck();
     await rebuild.uncheck();
-    for (const card of await cards.all()) await expect(card).toBeHidden();
+    for (const card of await cards.all())
+    {
+        await expect(card).toBeHidden();
+    }
     await everything.check();
     await expect(rebuild).not.toBeChecked();
     await expect(rebuild).toBeDisabled();
@@ -331,7 +349,10 @@ test('the switch off, then "Print full original text" ticked and unticked: the s
     await expect(rebuild).not.toBeChecked();
     await expect(page.locator('#review-rebuilt')).toBeHidden();
     await expect(page.locator('#review-messages')).toHaveText('1 email found.');
-    for (const card of await cards.all()) await expect(card).toBeHidden();
+    for (const card of await cards.all())
+    {
+        await expect(card).toBeHidden();
+    }
     const off = (await makePdfText(page)).join(' ');
     expect(off).not.toContain(heading(2));
     expect(off).not.toMatch(/rebuilt/i);

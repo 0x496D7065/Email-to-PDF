@@ -327,7 +327,10 @@ function shingles(w: Words, k: number): ReadonlySet<string>
         for (let i = 0; i + k <= t.length; i++)
         {
             let shingle = t[i] as string;
-            for (let j = 1; j < k; j++) shingle += ` ${t[i + j] as string}`;
+            for (let j = 1; j < k; j++)
+            {
+                shingle += ` ${t[i + j] as string}`;
+            }
             s.add(shingle);
         }
         w.sets.set(k, s);
@@ -412,17 +415,29 @@ function vetoWord(w: string): boolean
 export function contactLine(line: string): boolean
 {
     const s = line.trim().normalize('NFC');
-    if (s === '' || s.length > MAX_SIGNATURE_LINE_LENGTH || /[?!;\u00bf\u00a1]/u.test(s)) return false;
+    if (s === '' || s.length > MAX_SIGNATURE_LINE_LENGTH || /[?!;\u00bf\u00a1]/u.test(s))
+    {
+        return false;
+    }
     const colon = s.indexOf(':');
     const label = colon < 0 ? [] : (s.slice(0, colon).match(WORD) ?? []);
-    if (label.length > 2 || label.some((w) => vetoWord(w.toLowerCase()))) return false;
+    if (label.length > 2 || label.some((w) => vetoWord(w.toLowerCase())))
+    {
+        return false;
+    }
     const rest = (colon < 0 ? s : s.slice(colon + 1)).replace(/\S+@\S+/gu, ' ').replace(/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+/giu, ' ');
     const words = rest.match(WORD) ?? [];
-    if (words.length > MAX_SIGNATURE_LINE_WORDS) return false;
+    if (words.length > MAX_SIGNATURE_LINE_WORDS)
+    {
+        return false;
+    }
     return words.every((w) =>
     {
         const lower = w.toLowerCase();
-        if (vetoWord(lower)) return false;
+        if (vetoWord(lower))
+        {
+            return false;
+        }
         return !/^\p{Ll}/u.test(w) || CONNECTORS.has(lower);
     });
 }
@@ -454,11 +469,26 @@ export function contactMarker(line: string): boolean
         s = s.slice(label[0].length);
         labelled = true;
     }
-    if (/^<?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/u.test(s)) return true;
-    if (/^(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+$/iu.test(s)) return true;
-    if (!/^\+?\(?\d[\d .()-]*\d\)?$/u.test(s)) return false;
-    if (/^\d{1,4}[.-]\d{1,2}[.-]\d{1,4}$/u.test(s)) return false;
-    if ((s.match(/\d/gu) ?? []).length < 6) return false;
+    if (/^<?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/u.test(s))
+    {
+        return true;
+    }
+    if (/^(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+$/iu.test(s))
+    {
+        return true;
+    }
+    if (!/^\+?\(?\d[\d .()-]*\d\)?$/u.test(s))
+    {
+        return false;
+    }
+    if (/^\d{1,4}[.-]\d{1,2}[.-]\d{1,4}$/u.test(s))
+    {
+        return false;
+    }
+    if ((s.match(/\d/gu) ?? []).length < 6)
+    {
+        return false;
+    }
     return labelled || /^[+(0]/u.test(s);
 }
 
@@ -480,7 +510,10 @@ export function contactMarker(line: string): boolean
  */
 export function signatureStart(text: string, senderWords: ReadonlySet<string>): number | null
 {
-    if (senderWords.size === 0) return null;
+    if (senderWords.size === 0)
+    {
+        return null;
+    }
     const lines: { start: number; text: string }[] = [];
     let at = 0;
     for (const raw of text.split('\n'))
@@ -490,7 +523,10 @@ export function signatureStart(text: string, senderWords: ReadonlySet<string>): 
     }
     const blank = (k: number): boolean => (lines[k] as { text: string }).text.trim() === '';
     let end = lines.length;
-    while (end > 0 && blank(end - 1)) end--;
+    while (end > 0 && blank(end - 1))
+    {
+        end--;
+    }
     let first = -1; // first line of the block content
     let start = -1; // offset where the block starts (the separator, or the first content line)
     for (let k = end - 1; k >= 0; k--)
@@ -505,19 +541,46 @@ export function signatureStart(text: string, senderWords: ReadonlySet<string>): 
     if (first < 0)
     {
         let b = end - 1;
-        while (b >= 0 && !blank(b)) b--;
-        if (b < 0) return null;
+        while (b >= 0 && !blank(b))
+        {
+            b--;
+        }
+        if (b < 0)
+        {
+            return null;
+        }
         first = b + 1;
         start = (lines[first] as { start: number }).start;
     }
     const content: string[] = [];
-    for (let k = first; k < end; k++) if (!blank(k)) content.push((lines[k] as { text: string }).text);
-    if (content.length === 0 || content.length > MAX_SIGNATURE_LINES) return null;
+    for (let k = first; k < end; k++)
+    {
+        if (!blank(k))
+        {
+            content.push((lines[k] as { text: string }).text);
+        }
+    }
+    if (content.length === 0 || content.length > MAX_SIGNATURE_LINES)
+    {
+        return null;
+    }
     const nameWords = wordsOf(content[0] as string).tokens;
-    if (nameWords.length === 0 || !nameWords.every((w) => senderWords.has(w)) || /[\p{N}@:]/u.test(content[0] as string)) return null;
-    if (!content.every(contactLine)) return null;
-    if (content.length > 1 && !content.slice(1).some(contactMarker)) return null;
-    if (wordsOf(text.slice(0, start)).tokens.length === 0) return null;
+    if (nameWords.length === 0 || !nameWords.every((w) => senderWords.has(w)) || /[\p{N}@:]/u.test(content[0] as string))
+    {
+        return null;
+    }
+    if (!content.every(contactLine))
+    {
+        return null;
+    }
+    if (content.length > 1 && !content.slice(1).some(contactMarker))
+    {
+        return null;
+    }
+    if (wordsOf(text.slice(0, start)).tokens.length === 0)
+    {
+        return null;
+    }
     return start;
 }
 
@@ -538,7 +601,13 @@ export function compared(text: string, senderWords: ReadonlySet<string>): Compar
 export function nameWordsOf(mailboxes: readonly Pick<EmailAddress, 'name'>[]): Set<string>
 {
     const out = new Set<string>();
-    for (const m of mailboxes) for (const w of wordsOf(m.name).tokens) out.add(w);
+    for (const m of mailboxes)
+    {
+        for (const w of wordsOf(m.name).tokens)
+        {
+            out.add(w);
+        }
+    }
     return out;
 }
 
@@ -552,10 +621,22 @@ export function sharedWords(a: Compared, b: Compared): { readonly a: number; rea
 {
     const na = a.full.tokens.length;
     const nb = b.full.tokens.length;
-    if (na === 0 || nb === 0) return null;
-    if (sameWords(a.full, b.full)) return { a: 1, b: 1, words: a.full };
-    if (a.core !== null && a.core.tokens.length > 0 && sameWords(a.core, b.full)) return { a: a.core.tokens.length / na, b: 1, words: a.core };
-    if (b.core !== null && b.core.tokens.length > 0 && sameWords(a.full, b.core)) return { a: 1, b: b.core.tokens.length / nb, words: b.core };
+    if (na === 0 || nb === 0)
+    {
+        return null;
+    }
+    if (sameWords(a.full, b.full))
+    {
+        return { a: 1, b: 1, words: a.full };
+    }
+    if (a.core !== null && a.core.tokens.length > 0 && sameWords(a.core, b.full))
+    {
+        return { a: a.core.tokens.length / na, b: 1, words: a.core };
+    }
+    if (b.core !== null && b.core.tokens.length > 0 && sameWords(a.full, b.core))
+    {
+        return { a: 1, b: b.core.tokens.length / nb, words: b.core };
+    }
     return null;
 }
 
@@ -571,7 +652,10 @@ export function digitsOf(w: Words): string
         const runs: string[] = [];
         for (const t of w.tokens)
         {
-            for (const run of t.match(DIGITS) ?? []) runs.push(run);
+            for (const run of t.match(DIGITS) ?? [])
+            {
+                runs.push(run);
+            }
         }
         d = runs.join(' ');
         digitCache.set(w, d);
@@ -603,14 +687,26 @@ const COPY_RULES: Readonly<Record<DateAgreement, TextRule>> = {
 /** Both shares when texts A and B agree under `rule` (file comment, 1c, 1d and 2), else null. */
 function textAgreement(a: Compared, b: Compared, rule: TextRule): { fwd: number; rev: number } | null
 {
-    if (rule.minEvidence && (distinctShingles(a.full) < MIN_SHINGLES || distinctShingles(b.full) < MIN_SHINGLES)) return null;
+    if (rule.minEvidence && (distinctShingles(a.full) < MIN_SHINGLES || distinctShingles(b.full) < MIN_SHINGLES))
+    {
+        return null;
+    }
     const shares = sharedWords(a, b);
-    if (shares === null || shares.a < rule.forward || shares.b < rule.reverse) return null;
+    if (shares === null || shares.a < rule.forward || shares.b < rule.reverse)
+    {
+        return null;
+    }
     // The figures of the compared words (1d). A figure in a signature block (a phone number) is not compared.
-    if (rule.minEvidence && distinctShingles(shares.words) < MIN_SHINGLES) return null;
+    if (rule.minEvidence && distinctShingles(shares.words) < MIN_SHINGLES)
+    {
+        return null;
+    }
     const da = digitsOf(shares.a === 1 ? a.full : (a.core as Words));
     const db = digitsOf(shares.b === 1 ? b.full : (b.core as Words));
-    if (da !== db) return null;
+    if (da !== db)
+    {
+        return null;
+    }
     return { fwd: shares.a, rev: shares.b };
 }
 
@@ -625,7 +721,10 @@ function normalName(name: string): string
 function mailboxKey(m: EmailAddress, useName: boolean): string | null
 {
     const address = m.address.trim().toLowerCase();
-    if (!useName) return address === '' ? null : `a:${address}`;
+    if (!useName)
+    {
+        return address === '' ? null : `a:${address}`;
+    }
     const name = normalName(m.name);
     return name === '' ? null : `n:${name}`;
 }
@@ -633,7 +732,10 @@ function mailboxKey(m: EmailAddress, useName: boolean): string | null
 /** The rebuilt message's sender key (file comment, 1a); null without exactly one From mailbox. */
 export function rebuiltSenderKey(r: Pick<ReconstructedMessage, 'from'>): string | null
 {
-    if (r.from.length !== 1) return null;
+    if (r.from.length !== 1)
+    {
+        return null;
+    }
     const m = r.from[0] as EmailAddress;
     return mailboxKey(m, false) ?? mailboxKey(m, true);
 }
@@ -647,7 +749,10 @@ export function realSenderKeys(message: Pick<NormalizedMessage, 'from'>): string
         for (const useName of [false, true])
         {
             const k = mailboxKey(m, useName);
-            if (k !== null) keys.add(k);
+            if (k !== null)
+            {
+                keys.add(k);
+            }
         }
     }
     return [...keys];
@@ -684,13 +789,22 @@ export function realDateAgreement(
     senderDiffMs: number | null = null,
 ): DateAgreement | null
 {
-    if (!Number.isFinite(diffMs) || Math.abs(diffMs) > MATCH_WINDOW_MS) return null;
-    if (date.precision !== 'minute' && date.precision !== 'day') return null;
+    if (!Number.isFinite(diffMs) || Math.abs(diffMs) > MATCH_WINDOW_MS)
+    {
+        return null;
+    }
+    if (date.precision !== 'minute' && date.precision !== 'day')
+    {
+        return null;
+    }
     const span = date.precision === 'day' ? DAY_MS : 0;
     if (!approximate)
     {
         // It carries its own zone: the moment itself (a day: that day, in that zone).
-        if (!within(diffMs, 0, span, EXACT_SLACK_MS)) return null;
+        if (!within(diffMs, 0, span, EXACT_SLACK_MS))
+        {
+            return null;
+        }
         return span === 0 ? 'exact' : 'strict';
     }
     // Zone of the source unknown: the wall time was read as UTC, so diff = -W
@@ -698,14 +812,29 @@ export function realDateAgreement(
     // more than MAX_EAST_MS (14 h) either way; only the strict text rule.
     if (sourceOffsetMs === null)
     {
-        if (Math.abs(diffMs) > MAX_EAST_MS + ZONE_SLACK_MS) return null;
+        if (Math.abs(diffMs) > MAX_EAST_MS + ZONE_SLACK_MS)
+        {
+            return null;
+        }
         return within(diffMs, -MAX_EAST_MS, MAX_WEST_MS + span, ZONE_SLACK_MS) ? 'strict' : null;
     }
     // Written in a zone W of [-12 h, +14 h]: diff = S - W (plus up to a day for a day only).
-    if (!within(diffMs, sourceOffsetMs - MAX_EAST_MS, sourceOffsetMs + MAX_WEST_MS + span, ZONE_SLACK_MS)) return null;
-    if (span !== 0) return 'strict';
-    if (Math.abs(diffMs) <= ZONE_SLACK_MS) return 'exact';
-    if (senderDiffMs !== null && Math.abs(diffMs - senderDiffMs) <= ZONE_SLACK_MS) return 'strong';
+    if (!within(diffMs, sourceOffsetMs - MAX_EAST_MS, sourceOffsetMs + MAX_WEST_MS + span, ZONE_SLACK_MS))
+    {
+        return null;
+    }
+    if (span !== 0)
+    {
+        return 'strict';
+    }
+    if (Math.abs(diffMs) <= ZONE_SLACK_MS)
+    {
+        return 'exact';
+    }
+    if (senderDiffMs !== null && Math.abs(diffMs - senderDiffMs) <= ZONE_SLACK_MS)
+    {
+        return 'strong';
+    }
     return offGrid(diffMs) <= ZONE_SLACK_MS ? 'zone' : null;
 }
 
@@ -734,8 +863,14 @@ export interface CopyDate {
  */
 export function copyDateAgreement(a: CopyDate, b: CopyDate, diffMs: number): DateAgreement | null
 {
-    if (!Number.isFinite(diffMs) || Math.abs(diffMs) > MATCH_WINDOW_MS) return null;
-    if (a.precision === null || b.precision === null) return null;
+    if (!Number.isFinite(diffMs) || Math.abs(diffMs) > MATCH_WINDOW_MS)
+    {
+        return null;
+    }
+    if (a.precision === null || b.precision === null)
+    {
+        return null;
+    }
     const spanA = a.precision === 'day' ? DAY_MS : 0;
     const spanB = b.precision === 'day' ? DAY_MS : 0;
     const minutes = spanA === 0 && spanB === 0;
@@ -743,7 +878,10 @@ export function copyDateAgreement(a: CopyDate, b: CopyDate, diffMs: number): Dat
     const sb = b.zoneMinutes * MINUTE_MS;
     if (!a.approximate && !b.approximate)
     {
-        if (!within(diffMs, -spanB, spanA, EXACT_SLACK_MS)) return null;
+        if (!within(diffMs, -spanB, spanA, EXACT_SLACK_MS))
+        {
+            return null;
+        }
         return minutes ? 'exact' : 'strict';
     }
     if (a.approximate && b.approximate)
@@ -751,16 +889,31 @@ export function copyDateAgreement(a: CopyDate, b: CopyDate, diffMs: number): Dat
         // Two days only are two midnights: the very same shift, no day part.
         const da = spanB === 0 ? spanA : 0;
         const db = spanA === 0 ? spanB : 0;
-        if (within(diffMs, -db, da, ZONE_SLACK_MS)) return minutes ? 'exact' : 'strict';
-        if (within(diffMs, sa - sb - db, sa - sb + da, ZONE_SLACK_MS)) return minutes ? 'zone' : 'strict';
+        if (within(diffMs, -db, da, ZONE_SLACK_MS))
+        {
+            return minutes ? 'exact' : 'strict';
+        }
+        if (within(diffMs, sa - sb - db, sa - sb + da, ZONE_SLACK_MS))
+        {
+            return minutes ? 'zone' : 'strict';
+        }
         return null;
     }
     // One exact (its W is its S: no shift), one approximate with W in [-12 h, +14 h].
     const lo = a.approximate ? sa - MAX_EAST_MS : -(sb + MAX_WEST_MS);
     const hi = a.approximate ? sa + MAX_WEST_MS : -(sb - MAX_EAST_MS);
-    if (!within(diffMs, lo - spanB, hi + spanA, ZONE_SLACK_MS)) return null;
-    if (!minutes) return 'strict';
-    if (Math.abs(diffMs) <= ZONE_SLACK_MS) return 'exact';
+    if (!within(diffMs, lo - spanB, hi + spanA, ZONE_SLACK_MS))
+    {
+        return null;
+    }
+    if (!minutes)
+    {
+        return 'strict';
+    }
+    if (Math.abs(diffMs) <= ZONE_SLACK_MS)
+    {
+        return 'exact';
+    }
     return offGrid(diffMs) <= ZONE_SLACK_MS ? 'zone' : null;
 }
 
@@ -786,11 +939,20 @@ interface Item {
 function leftoverLine(line: string): boolean
 {
     const s = line.replace(/\s+/gu, ' ').trim().normalize('NFC');
-    if (s === '') return false;
+    if (s === '')
+    {
+        return false;
+    }
     const label = LABEL_PATTERN.exec(s.slice(0, LABEL_HEAD_LENGTH))?.[1];
-    if (label !== undefined && LABEL_ROLE_OF.has(labelKey(label))) return true;
+    if (label !== undefined && LABEL_ROLE_OF.has(labelKey(label)))
+    {
+        return true;
+    }
     // A mailbox list goes on with ";" (Outlook) or with addresses.
-    if (!/[;@]/u.test(s)) return false;
+    if (!/[;@]/u.test(s))
+    {
+        return false;
+    }
     const items = s
         .split(/[;,]/u)
         .map((x) => x.trim())
@@ -799,7 +961,10 @@ function leftoverLine(line: string): boolean
         items.length > 0 &&
         items.every((x) =>
         {
-            if (/^[^<>@]*<[^<>\s]*@[^\s]*>$/u.test(x) || /^(?:mailto:)?[^\s<>@]+@[^\s<>@]+$/iu.test(x)) return true;
+            if (/^[^<>@]*<[^<>\s]*@[^\s]*>$/u.test(x) || /^(?:mailto:)?[^\s<>@]+@[^\s<>@]+$/iu.test(x))
+            {
+                return true;
+            }
             const name = x.replace(/"/gu, '').trim();
             return name !== '' && !/[\p{N}<>@()[\]]/u.test(name) && isPlainName(name, false);
         })
@@ -827,8 +992,14 @@ function leftoverLine(line: string): boolean
 export function comparableText(r: Pick<ReconstructedMessage, 'incomplete' | 'reconstructedText' | 'to' | 'cc'>): string
 {
     const text = r.reconstructedText;
-    if (r.incomplete.length === 0) return text;
-    if (r.incomplete.some((role) => (role === 'to' ? r.to : r.cc).length === 0)) return text;
+    if (r.incomplete.length === 0)
+    {
+        return text;
+    }
+    if (r.incomplete.some((role) => (role === 'to' ? r.to : r.cc).length === 0))
+    {
+        return text;
+    }
     const line = /[^\n]*(?:\n|$)/gu;
     let skipped = 0;
     for (let at = 0; at < text.length; )
@@ -836,8 +1007,14 @@ export function comparableText(r: Pick<ReconstructedMessage, 'incomplete' | 'rec
         line.lastIndex = at;
         const m = line.exec(text) as RegExpExecArray;
         const next = at + m[0].length;
-        if (m[0].trim() === '') return skipped === 0 ? text : text.slice(next);
-        if (!leftoverLine(m[0])) return text;
+        if (m[0].trim() === '')
+        {
+            return skipped === 0 ? text : text.slice(next);
+        }
+        if (!leftoverLine(m[0]))
+        {
+            return text;
+        }
         skipped++;
         at = next;
     }
@@ -850,14 +1027,20 @@ const SWAPPABLE = /^\s*(\d{1,2})([./-])(\d{1,2})\2(\d{4})(?![\d])(.*)$/su;
 function ambiguousDates(dateText: string | null, sourceOffsetMinutes: number | null): QuotedDate[]
 {
     const m = dateText === null ? null : SWAPPABLE.exec(dateText);
-    if (m === null) return [];
+    if (m === null)
+    {
+        return [];
+    }
     const [, a, , b, year, rest] = m as unknown as [string, string, string, string, string, string];
     const out: QuotedDate[] = [];
     for (const text of [`${year}-${b}-${a}${rest}`, `${year}-${a}-${b}${rest}`])
     {
         const d = parseQuotedDate(text, sourceOffsetMinutes);
         const ms = d.estimatedUtcMs;
-        if (ms !== null && Number.isFinite(ms) && !out.some((x) => x.estimatedUtcMs === ms)) out.push(d);
+        if (ms !== null && Number.isFinite(ms) && !out.some((x) => x.estimatedUtcMs === ms))
+        {
+            out.push(d);
+        }
     }
     return out;
 }
@@ -914,8 +1097,14 @@ function lowerBound<T>(list: readonly T[], value: number, at: (t: T) => number):
     while (lo < hi)
     {
         const mid = (lo + hi) >> 1;
-        if (at(list[mid] as T) < value) lo = mid + 1;
-        else hi = mid;
+        if (at(list[mid] as T) < value)
+        {
+            lo = mid + 1;
+        }
+        else
+        {
+            hi = mid;
+        }
     }
     return lo;
 }
@@ -958,21 +1147,36 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
     const realByKey = new Map<string, { readonly pos: number; readonly utc: number }[]>();
     sources.forEach((s, pos) =>
     {
-        if (s.utcMs === null) return;
+        if (s.utcMs === null)
+        {
+            return;
+        }
         for (const k of realSenderKeys(s.message))
         {
             let list = realByKey.get(k);
-            if (list === undefined) realByKey.set(k, (list = []));
+            if (list === undefined)
+            {
+                realByKey.set(k, (list = []));
+            }
             list.push({ pos, utc: s.utcMs });
         }
     });
-    for (const list of realByKey.values()) list.sort((a, b) => a.utc - b.utc || a.pos - b.pos);
+    for (const list of realByKey.values())
+    {
+        list.sort((a, b) => a.utc - b.utc || a.pos - b.pos);
+    }
 
     for (const it of items)
     {
-        if (it.key === null) continue;
+        if (it.key === null)
+        {
+            continue;
+        }
         const list = realByKey.get(it.key);
-        if (list === undefined) continue;
+        if (list === undefined)
+        {
+            continue;
+        }
         const addressed = it.key.startsWith('a:');
         const ambiguous = it.est === null;
         const dates: QuotedDate[] = ambiguous ? ambiguousDates(it.r.dateText, offsetOf(it.pos)) : [it.r.date as QuotedDate];
@@ -987,16 +1191,31 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
             for (let i = lowerBound(list, est - MATCH_WINDOW_MS, (e) => e.utc); i < list.length; i++)
             {
                 const e = list[i] as { pos: number; utc: number };
-                if (e.utc > est + MATCH_WINDOW_MS) break;
-                if (e.pos === it.pos) continue;
+                if (e.utc > est + MATCH_WINDOW_MS)
+                {
+                    break;
+                }
+                if (e.pos === it.pos)
+                {
+                    continue;
+                }
                 const diff = e.utc - est;
                 const realOffset = offsetOf(e.pos);
                 const senderDiff = realOffset === null || sourceOffset === null ? null : (sourceOffset - realOffset) * MINUTE_MS;
                 let level = realDateAgreement(date, approximate, diff, sourceOffset === null ? null : sourceOffset * MINUTE_MS, senderDiff);
-                if (level === null) continue;
-                if (ambiguous || (!addressed && (level === 'exact' || level === 'strong'))) level = ambiguous ? 'strict' : 'zone';
+                if (level === null)
+                {
+                    continue;
+                }
+                if (ambiguous || (!addressed && (level === 'exact' || level === 'strong')))
+                {
+                    level = ambiguous ? 'strict' : 'zone';
+                }
                 const old = nearest.get(e.pos);
-                if (old === undefined || Math.abs(diff) < Math.abs(old.diff)) nearest.set(e.pos, { diff, level });
+                if (old === undefined || Math.abs(diff) < Math.abs(old.diff))
+                {
+                    nearest.set(e.pos, { diff, level });
+                }
             }
         }
         const near = [...nearest].map(([pos, v]) => ({ pos, ...v }));
@@ -1005,7 +1224,10 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         for (const c of near.slice(0, MAX_CANDIDATES))
         {
             const agreed = textAgreement(wordsOfItem(it), ownWordsOf(c.pos), REAL_RULES[c.level]);
-            if (agreed === null) continue;
+            if (agreed === null)
+            {
+                continue;
+            }
             const better =
                 best === null ||
                 agreed.fwd > best.match.coverage ||
@@ -1055,9 +1277,15 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         const consider = (e: Item, diff: number, level: DateAgreement): void =>
         {
             const agreed = textAgreement(wordsOfItem(it), wordsOfItem(e), COPY_RULES[level]);
-            if (agreed === null) return;
+            if (agreed === null)
+            {
+                return;
+            }
             const score = Math.min(agreed.fwd, agreed.rev);
-            if (best === null || score > best.score || (score === best.score && Math.abs(diff) < Math.abs(best.diff))) best = { entry: e, score, diff };
+            if (best === null || score > best.score || (score === best.score && Math.abs(diff) < Math.abs(best.diff)))
+            {
+                best = { entry: e, score, diff };
+            }
         };
         if (it.key !== null && it.est !== null)
         {
@@ -1069,8 +1297,14 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
             for (let i = lowerBound(list, est - MATCH_WINDOW_MS, (e) => e.est as number); i < list.length; i++)
             {
                 const e = list[i] as Item;
-                if ((e.est as number) > est + MATCH_WINDOW_MS) break;
-                if (!(groupSources.get(e.id) as Set<number>).has(it.pos)) inWindow.push(e);
+                if ((e.est as number) > est + MATCH_WINDOW_MS)
+                {
+                    break;
+                }
+                if (!(groupSources.get(e.id) as Set<number>).has(it.pos))
+                {
+                    inWindow.push(e);
+                }
             }
             const near = inWindow
                 .sort((a, b) => Math.abs((a.est as number) - est) - Math.abs((b.est as number) - est) || a.id - b.id)
@@ -1079,8 +1313,14 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
             {
                 const diff = (e.est as number) - est;
                 let level = copyDateAgreement(copyDate(it), copyDate(e), diff);
-                if (level === null) continue;
-                if (!addressed && level === 'exact') level = 'zone';
+                if (level === null)
+                {
+                    continue;
+                }
+                if (!addressed && level === 'exact')
+                {
+                    level = 'zone';
+                }
                 consider(e, diff, level);
             }
         }
@@ -1092,7 +1332,10 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
             const same = (undatedEntries.get(uk) ?? []).filter(
                 (x) => !(groupSources.get(x.id) as Set<number>).has(it.pos) && Math.abs((sourceTime(x) as number) - t) <= MATCH_WINDOW_MS,
             );
-            for (const e of same.slice(0, MAX_CANDIDATES)) consider(e, 0, 'strict');
+            for (const e of same.slice(0, MAX_CANDIDATES))
+            {
+                consider(e, 0, 'strict');
+            }
         }
         const chosen = best as { entry: Item } | null;
         if (chosen !== null)
@@ -1109,18 +1352,27 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
             if (it.key !== null && it.est !== null)
             {
                 let list = entriesByKey.get(it.key);
-                if (list === undefined) entriesByKey.set(it.key, (list = []));
+                if (list === undefined)
+                {
+                    entriesByKey.set(it.key, (list = []));
+                }
                 // Kept sorted by date (then id), for the window search above.
                 const est = it.est;
                 const id = it.id;
                 let at = lowerBound(list, est, (e) => e.est as number);
-                while (at < list.length && (list[at] as Item).est === est && (list[at] as Item).id < id) at++;
+                while (at < list.length && (list[at] as Item).est === est && (list[at] as Item).id < id)
+                {
+                    at++;
+                }
                 list.splice(at, 0, it);
             }
             if (uk !== null)
             {
                 let list = undatedEntries.get(uk);
-                if (list === undefined) undatedEntries.set(uk, (list = []));
+                if (list === undefined)
+                {
+                    undatedEntries.set(uk, (list = []));
+                }
                 list.push(it);
             }
         }
@@ -1145,7 +1397,10 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         {
             upper.push(u);
             const t = realTime(it);
-            if (t !== null) u = u === null ? t : Math.min(u, t);
+            if (t !== null)
+            {
+                u = u === null ? t : Math.min(u, t);
+            }
         }
         const lower: (number | null)[] = chain.map(() => null);
         let l: number | null = null;
@@ -1153,13 +1408,19 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         {
             lower[k] = l;
             const t = realTime(chain[k] as Item);
-            if (t !== null) l = l === null ? t : Math.max(l, t);
+            if (t !== null)
+            {
+                l = l === null ? t : Math.max(l, t);
+            }
         }
         // Clamp, then keep the chain order: never after the newer rebuilt message.
         let prev: { key: number; side: number } | null = null;
         chain.forEach((it, k) =>
         {
-            if (it.realPos !== null || it.est === null) return;
+            if (it.realPos !== null || it.est === null)
+            {
+                return;
+            }
             const lo = lower[k] ?? null;
             const hi = upper[k] ?? null;
             let key = it.est;
@@ -1185,7 +1446,10 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         });
         chain.forEach((it, k) =>
         {
-            if (it.realPos !== null || it.est !== null) return;
+            if (it.realPos !== null || it.est !== null)
+            {
+                return;
+            }
             let anchor = `m${pos}`;
             for (let j = k - 1; j >= 0; j--)
             {
@@ -1218,40 +1482,67 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
     {
         if (s.utcMs !== null)
         {
-            while (j < keyed.length && before(keyed[j] as Item, s.utcMs)) base.push(`r${(keyed[j++] as Item).id}`);
+            while (j < keyed.length && before(keyed[j] as Item, s.utcMs))
+            {
+                base.push(`r${(keyed[j++] as Item).id}`);
+            }
         }
         else
         {
-            while (j < keyed.length) base.push(`r${(keyed[j++] as Item).id}`);
+            while (j < keyed.length)
+            {
+                base.push(`r${(keyed[j++] as Item).id}`);
+            }
         }
         base.push(`m${pos}`);
     });
-    while (j < keyed.length) base.push(`r${(keyed[j++] as Item).id}`);
+    while (j < keyed.length)
+    {
+        base.push(`r${(keyed[j++] as Item).id}`);
+    }
 
     // Undated entries just before their anchor, older first.
     const children = new Map<string, Item[]>();
     for (const it of items)
     {
         const anchor = anchorOf.get(it.id);
-        if (anchor === undefined || !isEntry(it)) continue;
+        if (anchor === undefined || !isEntry(it))
+        {
+            continue;
+        }
         let list = children.get(anchor);
-        if (list === undefined) children.set(anchor, (list = []));
+        if (list === undefined)
+        {
+            children.set(anchor, (list = []));
+        }
         list.push(it);
     }
-    for (const list of children.values()) list.sort((a, b) => b.r.generation - a.r.generation || a.pos - b.pos || a.id - b.id);
+    for (const list of children.values())
+    {
+        list.sort((a, b) => b.r.generation - a.r.generation || a.pos - b.pos || a.id - b.id);
+    }
 
     const timeline: TimelineEntry[] = [];
     const emit = (ref: string): void =>
     {
-        for (const child of children.get(ref) ?? []) emit(`r${child.id}`);
-        if (ref.startsWith('m')) timeline.push({ kind: 'message', position: Number(ref.slice(1)) });
+        for (const child of children.get(ref) ?? [])
+        {
+            emit(`r${child.id}`);
+        }
+        if (ref.startsWith('m'))
+        {
+            timeline.push({ kind: 'message', position: Number(ref.slice(1)) });
+        }
         else
         {
             const id = Number(ref.slice(1));
             timeline.push({ kind: 'rebuilt', id, placement: keyOf.get(id)?.placement ?? 'before-quoter' });
         }
     };
-    for (const ref of base) emit(ref);
+    for (const ref of base)
+    {
+        emit(ref);
+    }
 
     const reconstructed: EngineRebuilt[] = items.map((it) =>
     {

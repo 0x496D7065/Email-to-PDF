@@ -114,7 +114,10 @@ describe('isPlainPath', () =>
 {
     it('accepts plain site paths', () =>
     {
-        for (const path of ['/', '/a.js', '/assets/index-abc_123.js', '/THIRD_PARTY_NOTICES.txt', '/a/b/c.css']) expect(isPlainPath(path), path).toBe(true);
+        for (const path of ['/', '/a.js', '/assets/index-abc_123.js', '/THIRD_PARTY_NOTICES.txt', '/a/b/c.css'])
+        {
+            expect(isPlainPath(path), path).toBe(true);
+        }
     });
 
     it('refuses anything else', () =>

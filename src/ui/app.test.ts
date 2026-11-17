@@ -35,7 +35,10 @@ function all(tag: string): FakeElement[]
 function byId(id: string): FakeElement
 {
     const found = root.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 
@@ -434,9 +437,18 @@ describe('mountApp', () =>
             for (const name of element.attributes.keys())
             {
                 expect(name).not.toMatch(/^(on|style$)/);
-                if (element === donate) expect(name, 'the Ko-fi link').not.toBe('src');
-                else if (element === image) expect(name, 'the Ko-fi image').not.toBe('href');
-                else expect(name, element.tagName).not.toMatch(/^(href|src)$/);
+                if (element === donate)
+                {
+                    expect(name, 'the Ko-fi link').not.toBe('src');
+                }
+                else if (element === image)
+                {
+                    expect(name, 'the Ko-fi image').not.toBe('href');
+                }
+                else
+                {
+                    expect(name, element.tagName).not.toMatch(/^(href|src)$/);
+                }
             }
         }
         expect(all('a')).toEqual([donate]);

@@ -170,10 +170,19 @@ export function tokenizeWords(text: string): Word[]
 function referencedIds(message: OverlapInput): Set<string>
 {
     const ids = new Set<string>();
-    if (typeof message.inReplyTo === 'string' && message.inReplyTo !== '') ids.add(message.inReplyTo);
+    if (typeof message.inReplyTo === 'string' && message.inReplyTo !== '')
+    {
+        ids.add(message.inReplyTo);
+    }
     if (Array.isArray(message.references))
     {
-        for (const id of message.references) if (typeof id === 'string' && id !== '') ids.add(id);
+        for (const id of message.references)
+        {
+            if (typeof id === 'string' && id !== '')
+            {
+                ids.add(id);
+            }
+        }
     }
     return ids;
 }
@@ -190,7 +199,16 @@ function heldIndices(message: OverlapInput): Set<number>
 {
     const out = new Set<number>();
     const list: unknown = message.holds;
-    if (Array.isArray(list)) for (const i of list as readonly unknown[]) if (typeof i === 'number') out.add(i);
+    if (Array.isArray(list))
+    {
+        for (const i of list as readonly unknown[])
+        {
+            if (typeof i === 'number')
+            {
+                out.add(i);
+            }
+        }
+    }
     return out;
 }
 
@@ -210,18 +228,30 @@ function withHeldReferences(messages: readonly OverlapInput[], own: readonly Set
     messages.forEach((m, k) =>
     {
         const index = m?.index;
-        if (typeof index === 'number' && !at.has(index)) at.set(index, k);
+        if (typeof index === 'number' && !at.has(index))
+        {
+            at.set(index, k);
+        }
     });
     return own.map((ids, m) =>
     {
         const held = holds[m];
-        if (held === undefined || held.size === 0) return ids;
+        if (held === undefined || held.size === 0)
+        {
+            return ids;
+        }
         const out = new Set(ids);
         for (const index of held)
         {
             const k = at.get(index);
-            if (k === undefined || k === m) continue;
-            for (const id of own[k] ?? []) out.add(id);
+            if (k === undefined || k === m)
+            {
+                continue;
+            }
+            for (const id of own[k] ?? [])
+            {
+                out.add(id);
+            }
         }
         return out;
     });
@@ -243,10 +273,16 @@ function isEligible(refs: readonly Set<string>[], holds: readonly Set<number>[],
 {
     const mHoldsO = holds[m]?.has(messages[o]?.index ?? Number.NaN) ?? false;
     const oHoldsM = holds[o]?.has(messages[m]?.index ?? Number.NaN) ?? false;
-    if (mHoldsO !== oHoldsM) return mHoldsO;
+    if (mHoldsO !== oHoldsM)
+    {
+        return mHoldsO;
+    }
     const mToO = points(refs, messages, m, o);
     const oToM = points(refs, messages, o, m);
-    if (mToO !== oToM) return mToO;
+    if (mToO !== oToM)
+    {
+        return mToO;
+    }
     return o < m;
 }
 
@@ -254,7 +290,10 @@ function isEligible(refs: readonly Set<string>[], holds: readonly Set<number>[],
 function shingleHash(ids: Int32Array, at: number): number
 {
     let h = 0x811c9dc5;
-    for (let t = 0; t < SHINGLE_WORDS; t++) h = Math.imul(h ^ (ids[at + t] ?? 0), 0x01000193);
+    for (let t = 0; t < SHINGLE_WORDS; t++)
+    {
+        h = Math.imul(h ^ (ids[at + t] ?? 0), 0x01000193);
+    }
     return h;
 }
 
@@ -278,7 +317,10 @@ function wordLines(lines: readonly LineRange[], words: readonly Word[]): Int32Ar
     let at = 0;
     words.forEach((w, k) =>
     {
-        while (at + 1 < lines.length && (lines[at + 1]?.start ?? Infinity) <= w.start) at++;
+        while (at + 1 < lines.length && (lines[at + 1]?.start ?? Infinity) <= w.start)
+        {
+            at++;
+        }
         lineOf[k] = at;
     });
     return lineOf;
@@ -291,14 +333,23 @@ function wordLines(lines: readonly LineRange[], words: readonly Word[]): Int32Ar
  */
 function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Array, runs: readonly Run[]): FoldRange[]
 {
-    if (runs.length === 0) return [];
+    if (runs.length === 0)
+    {
+        return [];
+    }
     const lineCount = lines.length;
-    if (lineCount === 0) return [];
+    if (lineCount === 0)
+    {
+        return [];
+    }
 
     // Words covered by at least one run (runs may overlap, see step 3), then
     // per line its number of words and of covered words.
     const covered = new Uint8Array(lineOf.length);
-    for (const r of runs) covered.fill(1, r.first, r.last + 1);
+    for (const r of runs)
+    {
+        covered.fill(1, r.first, r.last + 1);
+    }
     const wordCount = new Int32Array(lineCount);
     const coveredCount = new Int32Array(lineCount);
     lineOf.forEach((l, k) =>
@@ -316,21 +367,45 @@ function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Arr
         let b = lineOf[r.last] ?? 0;
         // Only the first and last lines can be partly covered (the lines in
         // between hold only words of this run); word-less lines are skipped too.
-        while (a <= b && !full(a)) a++;
-        while (b >= a && !full(b)) b--;
-        if (a > b) continue;
+        while (a <= b && !full(a))
+        {
+            a++;
+        }
+        while (b >= a && !full(b))
+        {
+            b--;
+        }
+        if (a > b)
+        {
+            continue;
+        }
         let lo = r.first;
         let hi = r.last;
-        while ((lineOf[lo] ?? 0) < a) lo++;
-        while ((lineOf[hi] ?? 0) > b) hi--;
+        while ((lineOf[lo] ?? 0) < a)
+        {
+            lo++;
+        }
+        while ((lineOf[hi] ?? 0) > b)
+        {
+            hi--;
+        }
         const kept = hi - lo + 1;
         const accepted = kept >= MIN_RUN_WORDS || (r.wholeShortMessage && kept === r.last - r.first + 1);
-        if (!accepted) continue;
+        if (!accepted)
+        {
+            continue;
+        }
         for (let l = a; l <= b; l++)
         {
             const list = lineRelated[l];
-            if (list === undefined) lineRelated[l] = [r.related];
-            else if (!list.includes(r.related)) list.push(r.related);
+            if (list === undefined)
+            {
+                lineRelated[l] = [r.related];
+            }
+            else if (!list.includes(r.related))
+            {
+                list.push(r.related);
+            }
         }
     }
 
@@ -345,7 +420,10 @@ function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Arr
             const above = lineRelated[lastFolded];
             if (lastFolded >= 0 && !gapHasWords && above !== undefined)
             {
-                for (let g = lastFolded + 1; g < l; g++) lineRelated[g] = [...above];
+                for (let g = lastFolded + 1; g < l; g++)
+                {
+                    lineRelated[g] = [...above];
+                }
             }
             lastFolded = l;
             gapHasWords = false;
@@ -370,10 +448,16 @@ function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Arr
     for (let l = 0; l < lineCount; l++)
     {
         const list = lineRelated[l];
-        if (list === undefined) continue;
+        if (list === undefined)
+        {
+            continue;
+        }
         if (l === 0 || lineRelated[l - 1] === undefined)
         {
-            for (let g = l - 1; g >= 0 && markerOnly(g); g--) lineRelated[g] = [...list];
+            for (let g = l - 1; g >= 0 && markerOnly(g); g--)
+            {
+                lineRelated[g] = [...list];
+            }
         }
         // Below. `l` moves past the lines added here, so the outer loop does not
         // visit them again (they are marker-only: nothing more would join them).
@@ -392,9 +476,18 @@ function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Arr
         {
             const list = blocks.get(related);
             const last = list?.[list.length - 1];
-            if (last && last.b === l - 1) last.b = l;
-            else if (list) list.push({ a: l, b: l });
-            else blocks.set(related, [{ a: l, b: l }]);
+            if (last && last.b === l - 1)
+            {
+                last.b = l;
+            }
+            else if (list)
+            {
+                list.push({ a: l, b: l });
+            }
+            else
+            {
+                blocks.set(related, [{ a: l, b: l }]);
+            }
         }
     }
     const folds: FoldRange[] = [];
@@ -468,8 +561,14 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
         {
             const h = shingleHash(ids, g);
             const postings = index.get(h);
-            if (postings === undefined) index.set(h, [g]);
-            else if (postings.length < MAX_POSTINGS) postings.push(g);
+            if (postings === undefined)
+            {
+                index.set(h, [g]);
+            }
+            else if (postings.length < MAX_POSTINGS)
+            {
+                postings.push(g);
+            }
         }
     }
 
@@ -496,14 +595,23 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
             for (const g of index.get(shingleHash(ids, i)) ?? [])
             {
                 const o = owner[g] ?? -1;
-                if (o === m || o < 0 || !isEligible(refs, holds, list, m, o)) continue;
+                if (o === m || o < 0 || !isEligible(refs, holds, list, m, o))
+                {
+                    continue;
+                }
                 const oStart = first[o] ?? 0;
                 const oEnd = first[o + 1] ?? 0;
                 // Longest run of equal words starting at i (in M) and g (in O).
                 const maxLen = Math.min(mEnd - i, oEnd - g);
                 let len = 0;
-                while (len < maxLen && ids[i + len] === ids[g + len]) len++;
-                if (len < SHINGLE_WORDS) continue; // hash collision, not a real match
+                while (len < maxLen && ids[i + len] === ids[g + len])
+                {
+                    len++;
+                }
+                if (len < SHINGLE_WORDS)
+                {
+                    continue; // hash collision, not a real match
+                }
                 const wholeShortMessage = g === oStart && len === oEnd - oStart && len >= SHORT_MESSAGE_MIN_WORDS;
                 const accepted = len >= MIN_RUN_WORDS || wholeShortMessage;
                 // Strictly longer wins, so on a tie the earliest posting (earliest message) stays.
@@ -535,7 +643,10 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
                 // word of the next line, so a quote starting there is still found.
                 retryFloor = i + bestLen;
                 let next = firstWord + 1;
-                while (lineOf[next] === line) next++;
+                while (lineOf[next] === line)
+                {
+                    next++;
+                }
                 i = mStart + next;
             }
             else

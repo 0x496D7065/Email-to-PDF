@@ -26,8 +26,14 @@ export function fail(message: string): never
  */
 export function toFontError(error: unknown, context: string): FontError
 {
-    if (error instanceof FontError) return error;
-    if (error instanceof Error) return new FontError(`${context}: ${error.message}`, { cause: error });
+    if (error instanceof FontError)
+    {
+        return error;
+    }
+    if (error instanceof Error)
+    {
+        return new FontError(`${context}: ${error.message}`, { cause: error });
+    }
     return new FontError(`${context}: unexpected failure`);
 }
 
@@ -123,7 +129,10 @@ export class BinaryReader
  */
 export function tableChecksum(bytes: Uint8Array, offset: number, length: number): number
 {
-    if (offset < 0 || length < 0 || offset + length > bytes.length) fail('checksum range is past the end of the data');
+    if (offset < 0 || length < 0 || offset + length > bytes.length)
+    {
+        fail('checksum range is past the end of the data');
+    }
     let sum = 0;
     const end = offset + length;
     const whole = offset + (length & ~3);
@@ -135,7 +144,10 @@ export function tableChecksum(bytes: Uint8Array, offset: number, length: number)
     if (whole < end)
     {
         let last = 0;
-        for (let i = 0; i < 4; i++) last = (last << 8) | (whole + i < end ? bytes[whole + i]! : 0);
+        for (let i = 0; i < 4; i++)
+        {
+            last = (last << 8) | (whole + i < end ? bytes[whole + i]! : 0);
+        }
         sum = (sum + (last >>> 0)) >>> 0;
     }
     return sum;
@@ -152,7 +164,10 @@ export const TAG_HEAD = 0x68656164;
 export function directoryChecksum(tag: number, bytes: Uint8Array, offset: number, length: number): number
 {
     const sum = tableChecksum(bytes, offset, length);
-    if (tag !== TAG_HEAD || length < 12) return sum;
+    if (tag !== TAG_HEAD || length < 12)
+    {
+        return sum;
+    }
     const adjustment = ((bytes[offset + 8]! << 24) | (bytes[offset + 9]! << 16) | (bytes[offset + 10]! << 8) | bytes[offset + 11]!) >>> 0;
     return (sum - adjustment) >>> 0;
 }

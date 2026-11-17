@@ -20,8 +20,14 @@ function texts(table: unknown, prefix = ''): [string, string][]
 {
     return Object.entries(table as Record<string, unknown>).flatMap(([key, value]): [string, string][] =>
     {
-        if (typeof value === 'string') return [[prefix + key, value]];
-        if (isPluralForms(value)) return [[`${prefix}${key}.one`, value.one], [`${prefix}${key}.other`, value.other]];
+        if (typeof value === 'string')
+        {
+            return [[prefix + key, value]];
+        }
+        if (isPluralForms(value))
+        {
+            return [[`${prefix}${key}.one`, value.one], [`${prefix}${key}.other`, value.other]];
+        }
         return texts(value, `${prefix}${key}.`);
     });
 }
@@ -79,7 +85,10 @@ describe('Dutch strings', () =>
         const english = new Set(enTexts.values());
         for (const [key, text] of nlTexts)
         {
-            if (SAME_AS_ENGLISH.has(key.replace(/\.(one|other)$/, ''))) continue;
+            if (SAME_AS_ENGLISH.has(key.replace(/\.(one|other)$/, '')))
+            {
+                continue;
+            }
             expect(english.has(text), `${key}: "${text}"`).toBe(false);
         }
     });
@@ -105,7 +114,10 @@ describe('Dutch strings', () =>
     {
         for (const [key, text] of nlTexts)
         {
-            if (key !== 'app.name') expect(text, key).not.toMatch(/(?<!\p{L})email/iu);
+            if (key !== 'app.name')
+            {
+                expect(text, key).not.toMatch(/(?<!\p{L})email/iu);
+            }
             expect(text, key).not.toMatch(/(?<!\p{L})(je|jij|jou|jouw|jullie)(?!\p{L})/iu);
         }
         expect(nl.steps.add.title).toBe('Voeg uw e-mails toe');
@@ -132,7 +144,10 @@ describe('Dutch strings', () =>
             for (const [key, text] of nlTexts)
             {
                 expect(text, key).not.toMatch(/'/);
-                for (const m of text.matchAll(/(.)’(.)/g)) expect(`${m[1] ?? ''}${m[2] ?? ''}`, `${key}: "${text}"`).toMatch(/^\p{L}\p{L}$/u);
+                for (const m of text.matchAll(/(.)’(.)/g))
+                {
+                    expect(`${m[1] ?? ''}${m[2] ?? ''}`, `${key}: "${text}"`).toMatch(/^\p{L}\p{L}$/u);
+                }
                 expect(text, key).not.toMatch(/^’|’$/);
             }
             expect(nl.download.ready.other).toContain('pagina’s');
@@ -195,11 +210,17 @@ describe('Dutch strings', () =>
                 // No stronger or extra hedge words that English does not have.
                 expect(dutch, where).not.toMatch(/(?<!\p{L})(altijd|zeker|gewoonlijk|vaak|misschien|wellicht|normaal)(?!\p{L})/iu);
             };
-            for (const client of clients) hedges(en.help.clients[client].how, nl.help.clients[client].how, client);
+            for (const client of clients)
+            {
+                hedges(en.help.clients[client].how, nl.help.clients[client].how, client);
+            }
             hedges(en.help.note, nl.help.note, 'note');
             // Classic Outlook: either file type, depending on the version.
             expect(nl.help.clients.outlookClassic.how).toContain('.eml- of .msg-bestand, afhankelijk van uw Outlook-versie');
-            for (const [key, text] of nlTexts) expect(text, key).not.toMatch(/https?:|www\.|@/);
+            for (const [key, text] of nlTexts)
+            {
+                expect(text, key).not.toMatch(/https?:|www\.|@/);
+            }
         });
     });
 });
@@ -266,14 +287,26 @@ describe('the PDF in Dutch', () =>
         const fonts: Partial<Record<PdfFontName, ParsedFont>> = {};
         beforeAll(async () =>
         {
-            for (const name of ['sans-regular', 'sans-bold', 'sans-italic'] as const) fonts[name] = await readWoffFont(PDF_FONTS[name]);
+            for (const name of ['sans-regular', 'sans-bold', 'sans-italic'] as const)
+            {
+                fonts[name] = await readWoffFont(PDF_FONTS[name]);
+            }
         });
 
         it.each(['sans-regular', 'sans-bold', 'sans-italic'] as const)('%s', (name) =>
         {
             const font = fonts[name]!;
             const missing = new Set<string>();
-            for (const [, text] of nlTexts) for (const ch of text) if (!font.hasGlyph(ch.codePointAt(0) ?? 0)) missing.add(ch);
+            for (const [, text] of nlTexts)
+            {
+                for (const ch of text)
+                {
+                    if (!font.hasGlyph(ch.codePointAt(0) ?? 0))
+                    {
+                        missing.add(ch);
+                    }
+                }
+            }
             expect([...missing]).toEqual([]);
             // And the Dutch letters with marks that names and email text often use
             // (één, geëxporteerd, ruïne, ...), the quotes, the apostrophe and the ellipsis.

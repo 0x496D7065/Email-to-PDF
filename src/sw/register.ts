@@ -31,7 +31,10 @@ export function registerServiceWorker(host: ServiceWorkerHost | undefined): void
         .then(() =>
         {
             const container = host?.serviceWorker;
-            if (container === undefined || container === null || typeof container.register !== 'function') return undefined;
+            if (container === undefined || container === null || typeof container.register !== 'function')
+            {
+                return undefined;
+            }
             // updateViaCache 'none': the browser always asks the site for a new
             // sw.js, so an update is noticed on the next visit.
             return container.register(SERVICE_WORKER_URL, { scope: SERVICE_WORKER_SCOPE, updateViaCache: 'none' });
@@ -51,6 +54,12 @@ export interface LoadTarget {
  */
 export function registerWhenLoaded(target: LoadTarget, host: ServiceWorkerHost | undefined): void
 {
-    if (target.document.readyState === 'complete') registerServiceWorker(host);
-    else target.addEventListener('load', () => registerServiceWorker(host), { once: true });
+    if (target.document.readyState === 'complete')
+    {
+        registerServiceWorker(host);
+    }
+    else
+    {
+        target.addEventListener('load', () => registerServiceWorker(host), { once: true });
+    }
 }

@@ -81,7 +81,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -130,7 +133,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const ownBlob = new RegExp(`^blob:${origin}/[0-9a-f-]+$`);
-    for (const url of watch.requests.slice(loadedAt)) expect(url).toMatch(ownBlob);
+    for (const url of watch.requests.slice(loadedAt))
+    {
+        expect(url).toMatch(ownBlob);
+    }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = engineOf(page.context());

@@ -23,8 +23,14 @@ function texts(table: unknown, prefix = ''): [string, string][]
 {
     return Object.entries(table as Record<string, unknown>).flatMap(([key, value]): [string, string][] =>
     {
-        if (typeof value === 'string') return [[prefix + key, value]];
-        if (isPluralForms(value)) return [[`${prefix}${key}.one`, value.one], [`${prefix}${key}.other`, value.other]];
+        if (typeof value === 'string')
+        {
+            return [[prefix + key, value]];
+        }
+        if (isPluralForms(value))
+        {
+            return [[`${prefix}${key}.one`, value.one], [`${prefix}${key}.other`, value.other]];
+        }
         return texts(value, `${prefix}${key}.`);
     });
 }
@@ -80,7 +86,10 @@ describe('French strings', () =>
         const english = new Set(enTexts.values());
         for (const [key, text] of frTexts)
         {
-            if (SAME_AS_ENGLISH.has(key.replace(/\.(one|other)$/, ''))) continue;
+            if (SAME_AS_ENGLISH.has(key.replace(/\.(one|other)$/, '')))
+            {
+                continue;
+            }
             expect(english.has(text), `${key}: "${text}"`).toBe(false);
         }
     });
@@ -121,12 +130,27 @@ describe('French strings', () =>
                 for (const m of text.matchAll(/(.):/g))
                 {
                     const before = m[1] ?? '';
-                    if (/[A-Za-z]/.test(before)) expect(text.slice(Math.max(0, (m.index ?? 0) - 3), (m.index ?? 0) + 2), key).toBe('blob:');
-                    else expect(before, `${key}: "${text}"`).toBe(NBSP);
+                    if (/[A-Za-z]/.test(before))
+                    {
+                        expect(text.slice(Math.max(0, (m.index ?? 0) - 3), (m.index ?? 0) + 2), key).toBe('blob:');
+                    }
+                    else
+                    {
+                        expect(before, `${key}: "${text}"`).toBe(NBSP);
+                    }
                 }
-                for (const m of text.matchAll(/(.)[;!?]/g)) expect(m[1], `${key}: "${text}"`).toBe(NNBSP);
-                for (const m of text.matchAll(/«(.)/g)) expect(m[1], `${key}: "${text}"`).toBe(NBSP);
-                for (const m of text.matchAll(/(.)»/g)) expect(m[1], `${key}: "${text}"`).toBe(NBSP);
+                for (const m of text.matchAll(/(.)[;!?]/g))
+                {
+                    expect(m[1], `${key}: "${text}"`).toBe(NNBSP);
+                }
+                for (const m of text.matchAll(/«(.)/g))
+                {
+                    expect(m[1], `${key}: "${text}"`).toBe(NBSP);
+                }
+                for (const m of text.matchAll(/(.)»/g))
+                {
+                    expect(m[1], `${key}: "${text}"`).toBe(NBSP);
+                }
                 // Every « is closed.
                 expect((text.match(/«/g) ?? []).length, key).toBe((text.match(/»/g) ?? []).length);
             }
@@ -134,7 +158,10 @@ describe('French strings', () =>
 
         it('uses the typographic apostrophe and no English quotation marks', () =>
         {
-            for (const [key, text] of frTexts) expect(text, key).not.toMatch(/['"“”]/);
+            for (const [key, text] of frTexts)
+            {
+                expect(text, key).not.toMatch(/['"“”]/);
+            }
             expect(fr.disclaimer.text).toContain('l’envoyer');
         });
 
@@ -147,7 +174,10 @@ describe('French strings', () =>
 
         it('has no other invisible or unusual space', () =>
         {
-            for (const [key, text] of frTexts) expect(text, key).not.toMatch(/[\u2000-\u200B\u2060\u3000\t]/);
+            for (const [key, text] of frTexts)
+            {
+                expect(text, key).not.toMatch(/[\u2000-\u200B\u2060\u3000\t]/);
+            }
         });
     });
 
@@ -180,7 +210,10 @@ describe('French strings', () =>
                 expect(count(french, /\bpeut\b/g), client).toBe(count(english, /\bmay\b/g));
             }
             expect(fr.help.note).toMatch(/peuvent changer/);
-            for (const [key, text] of frTexts) expect(text, key).not.toMatch(/https?:|www\.|@/);
+            for (const [key, text] of frTexts)
+            {
+                expect(text, key).not.toMatch(/https?:|www\.|@/);
+            }
         });
     });
 });
@@ -238,14 +271,26 @@ describe('the PDF in French', () =>
         const fonts: Partial<Record<PdfFontName, ParsedFont>> = {};
         beforeAll(async () =>
         {
-            for (const name of ['sans-regular', 'sans-bold', 'sans-italic'] as const) fonts[name] = await readWoffFont(PDF_FONTS[name]);
+            for (const name of ['sans-regular', 'sans-bold', 'sans-italic'] as const)
+            {
+                fonts[name] = await readWoffFont(PDF_FONTS[name]);
+            }
         });
 
         it.each(['sans-regular', 'sans-bold', 'sans-italic'] as const)('%s', (name) =>
         {
             const font = fonts[name]!;
             const missing = new Set<string>();
-            for (const [, text] of frTexts) for (const ch of text) if (!font.hasGlyph(ch.codePointAt(0) ?? 0)) missing.add(ch);
+            for (const [, text] of frTexts)
+            {
+                for (const ch of text)
+                {
+                    if (!font.hasGlyph(ch.codePointAt(0) ?? 0))
+                    {
+                        missing.add(ch);
+                    }
+                }
+            }
             expect([...missing]).toEqual([]);
             // Including the spaces of French typography and of French numbers (Intl uses U+202F).
             expect(font.hasGlyph(0x00a0) && font.hasGlyph(0x202f)).toBe(true);

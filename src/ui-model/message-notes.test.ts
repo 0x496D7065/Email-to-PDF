@@ -49,7 +49,10 @@ describe('code lists', () =>
 {
     it('name each code once', () =>
     {
-        for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, ENGINE_WARNINGS, REBUILD_WARNINGS]) expect(new Set(list).size).toBe(list.length);
+        for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, ENGINE_WARNINGS, REBUILD_WARNINGS])
+        {
+            expect(new Set(list).size).toBe(list.length);
+        }
     });
 });
 
@@ -138,7 +141,10 @@ describe('messageNotes', () =>
             { kind: 'rebuild', code: 'reconstruct-limit' },
         ]);
         expect(messageNotes(m, 0, [null, null, null, 0])).toEqual([{ kind: 'engine', code: 'detector-failed' }]);
-        for (const code of REBUILD_WARNINGS) expect(t(`warnings.rebuild.${code}`)).toMatch(/still in this email[.]$/);
+        for (const code of REBUILD_WARNINGS)
+        {
+            expect(t(`warnings.rebuild.${code}`)).toMatch(/still in this email[.]$/);
+        }
     });
 
     it('shows each code once even if it is repeated', () =>
@@ -226,6 +232,9 @@ describe('the unread-attached note (task 8.13b-4, P3)', () =>
     {
         expect(t('warnings.attached.attached-unread')).toMatch(/^An email attached to this one as a file was not read/);
         expect(t('warnings.attached.attached-unread-inside')).toMatch(/^An email inside this one has an email attached as a file that was not read/);
-        for (const code of ['attached-unread', 'attached-unread-inside'] as const) expect(t(`warnings.attached.${code}`)).toContain('still in the original file');
+        for (const code of ['attached-unread', 'attached-unread-inside'] as const)
+        {
+            expect(t(`warnings.attached.${code}`)).toContain('still in the original file');
+        }
     });
 });

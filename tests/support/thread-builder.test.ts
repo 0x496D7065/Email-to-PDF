@@ -123,7 +123,10 @@ describe('thread builder: exact rendering', () =>
         const t = THREAD_CASES.find((c) => c.id === 'outlook-en wrapped to/cc')?.thread;
         expect(t).toBeDefined();
         const h = t?.headers[0];
-        if (t === undefined || h === undefined) return;
+        if (t === undefined || h === undefined)
+        {
+            return;
+        }
         const block = t.body.slice(h.start, h.headEnd).split('\n');
         expect(block.length).toBeGreaterThan(7); // intro + 5 labels + at least 2 continuation lines + ''
         expect(block.every((line) => line.length <= 76)).toBe(true);
@@ -189,9 +192,18 @@ describe('thread builder: ground truth over every case', () =>
             const joined = joinedHeader(body, h);
             expect(joined).toContain(h.fields.from);
             expect(joined).toContain(h.fields.date);
-            if (h.fields.subject !== undefined) expect(joined).toContain(h.fields.subject);
-            if (h.fields.to !== undefined) expect(joined).toContain(h.fields.to);
-            if (h.fields.cc !== undefined) expect(joined).toContain(h.fields.cc);
+            if (h.fields.subject !== undefined)
+            {
+                expect(joined).toContain(h.fields.subject);
+            }
+            if (h.fields.to !== undefined)
+            {
+                expect(joined).toContain(h.fields.to);
+            }
+            if (h.fields.cc !== undefined)
+            {
+                expect(joined).toContain(h.fields.cc);
+            }
             // The own text is there verbatim once its quote markers are removed.
             const rendered = body.slice(h.ownStart, h.ownEnd);
             expect(markers(rendered)).toBe(h.textDepth);
@@ -218,6 +230,9 @@ describe('thread builder: negative cases', () =>
     {
         expect(c.body.endsWith('\n')).toBe(true);
         expect(c.realHeaders.length > 0).toBe(c.expect === 'refuse');
-        for (const at of c.realHeaders) expect(at === 0 || c.body.charAt(at - 1) === '\n').toBe(true);
+        for (const at of c.realHeaders)
+        {
+            expect(at === 0 || c.body.charAt(at - 1) === '\n').toBe(true);
+        }
     });
 });

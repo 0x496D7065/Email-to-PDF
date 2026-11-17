@@ -65,8 +65,14 @@ export function startsLikeEmailHeader(bytes: Uint8Array): boolean
     while (i < bytes.length && i - start < 256)
     {
         const b = bytes[i] ?? 0;
-        if (b === 0x3a) return i > start; // ':' after at least one name character
-        if (b < 0x21 || b > 0x7e) return false;
+        if (b === 0x3a)
+        {
+            return i > start; // ':' after at least one name character
+        }
+        if (b < 0x21 || b > 0x7e)
+        {
+            return false;
+        }
         i++;
     }
     return false;
@@ -86,11 +92,20 @@ export function detectFileType(name: string, bytes: Uint8Array): FileTypeDecisio
     {
         return { error: 'unsupported-type', detail: 'not an email file: only .eml and .msg files can be read' };
     }
-    if (bytes.length === 0) return { error: 'corrupt', detail: 'the file is empty' };
-    if (hasCfbSignature(bytes)) return { kind: 'msg' };
+    if (bytes.length === 0)
+    {
+        return { error: 'corrupt', detail: 'the file is empty' };
+    }
+    if (hasCfbSignature(bytes))
+    {
+        return { kind: 'msg' };
+    }
     if (extension === 'msg')
     {
-        if (startsLikeEmailHeader(bytes)) return { kind: 'eml' };
+        if (startsLikeEmailHeader(bytes))
+        {
+            return { kind: 'eml' };
+        }
         return { error: 'corrupt', detail: 'damaged file structure: this is not a readable Outlook message file' };
     }
     if (hasNulNearStart(bytes))

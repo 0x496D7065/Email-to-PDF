@@ -17,10 +17,22 @@ function state(m: EngineMessage, snippet: string): 'folded' | 'shown' | 'mixed'
 {
     const body = m.message.bodyText;
     const at = body.indexOf(snippet);
-    if (at < 0) throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+    }
     let folded = 0;
-    for (const s of m.segments) if (s.folded) folded += Math.max(0, Math.min(s.end, at + snippet.length) - Math.max(s.start, at));
-    if (folded === 0) return 'shown';
+    for (const s of m.segments)
+    {
+        if (s.folded)
+        {
+            folded += Math.max(0, Math.min(s.end, at + snippet.length) - Math.max(s.start, at));
+        }
+    }
+    if (folded === 0)
+    {
+        return 'shown';
+    }
     return folded === snippet.length ? 'folded' : 'mixed';
 }
 
@@ -28,12 +40,18 @@ function state(m: EngineMessage, snippet: string): 'folded' | 'shown' | 'mixed'
 function labels(m: EngineMessage, snippet: string): FoldReason[]
 {
     const at = m.message.bodyText.indexOf(snippet);
-    if (at < 0) throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+    }
     const found = new Set<FoldReason>();
     for (const s of m.segments)
     {
         const label = primaryReason(s.reasons);
-        if (label !== null && s.start < at + snippet.length && s.end > at) found.add(label);
+        if (label !== null && s.start < at + snippet.length && s.end > at)
+        {
+            found.add(label);
+        }
     }
     return [...found];
 }
@@ -54,7 +72,10 @@ describe('engine over the parsed fixtures', () =>
     const get = (out: EngineResult, file: string): EngineMessage =>
     {
         const m = out.messages.find((x) => x.message.source.fileName === file);
-        if (m === undefined) throw new Error(`no kept message for ${file}`);
+        if (m === undefined)
+        {
+            throw new Error(`no kept message for ${file}`);
+        }
         return m;
     };
 
@@ -71,7 +92,10 @@ describe('engine over the parsed fixtures', () =>
             expect(unfolded.map((b) => b.text).join(''), file).toBe(body);
             expect(unfolded.some((b) => b.collapsed), file).toBe(false);
             expect(m.engineWarnings, file).toEqual([]);
-            for (const d of m.duplicates) expect(normalizeBody(messages[d.index]!.bodyText), d.source.fileName).toBe(normalizeBody(body));
+            for (const d of m.duplicates)
+            {
+                expect(normalizeBody(messages[d.index]!.bodyText), d.source.fileName).toBe(normalizeBody(body));
+            }
         }
         // Every fixture is kept or merged into a kept message.
         expect(out.positionByIndex.every((p) => p !== null)).toBe(true);
@@ -108,7 +132,10 @@ describe('engine over the parsed fixtures', () =>
             for (const s of m.segments)
             {
                 const label = primaryReason(s.reasons);
-                if (label !== null) chars.set(label, (chars.get(label) ?? 0) + s.end - s.start);
+                if (label !== null)
+                {
+                    chars.set(label, (chars.get(label) ?? 0) + s.end - s.start);
+                }
             }
             const parts = FOLD_REASONS.filter((r) => chars.has(r)).map((r) => `${r} ${chars.get(r)}`);
             return `${m.message.source.fileName} [${m.order}]: ${m.message.bodyText.length} chars${parts.length > 0 ? `, folded: ${parts.join(', ')}` : ''}`;
@@ -162,7 +189,10 @@ describe('engine over the parsed fixtures', () =>
             const body = m.message.bodyText;
             const at = body.indexOf('Met vriendelijke groeten,');
             const quoteAt = m.segments.find((s) => s.reasons.some((r) => r === 'quote-marker' || r === 'reply-header'))?.start ?? body.length;
-            if (at < 0 || at > quoteAt) continue;
+            if (at < 0 || at > quoteAt)
+            {
+                continue;
+            }
             const file = m.message.source.fileName;
             expect(state(m, 'Met vriendelijke groeten,\nBob Sample'), file).toBe('folded');
             expect(labels(m, 'Met vriendelijke groeten,\nBob Sample'), file).toEqual(['signature']);
@@ -180,7 +210,10 @@ describe('engine over the parsed fixtures', () =>
         for (const m of out.messages)
         {
             const firstLine = m.message.bodyText.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
-            if (firstLine === undefined) continue;
+            if (firstLine === undefined)
+            {
+                continue;
+            }
             expect(state(m, firstLine), `${m.message.source.fileName}: first line`).toBe('shown');
         }
     });

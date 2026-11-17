@@ -58,7 +58,10 @@ describe('language files', () =>
     it('has a reasonable number of entries, all strings or plural forms', () =>
     {
         expect(enEntries.length).toBeGreaterThan(50);
-        for (const [key, value] of enEntries) expect(textsOf(value).length, key).toBeGreaterThan(0);
+        for (const [key, value] of enEntries)
+        {
+            expect(textsOf(value).length, key).toBeGreaterThan(0);
+        }
     });
 
     it('has no empty string and no stray spaces', () =>
@@ -107,7 +110,10 @@ describe('language files', () =>
         {
             for (const [key, value] of entries(table))
             {
-                if (!isPluralForms(value)) continue;
+                if (!isPluralForms(value))
+                {
+                    continue;
+                }
                 expect(placeholderSet(value.one), `${name} ${key}`).toEqual(placeholderSet(value.other));
                 expect(placeholderSet(value.one), `${name} ${key}`).toContain('count');
             }
@@ -118,7 +124,10 @@ describe('language files', () =>
     {
         for (const [key, value] of enEntries)
         {
-            for (const text of textsOf(value)) expect(text, key).toMatch(/^[\x20-\x7e]*$/);
+            for (const text of textsOf(value))
+            {
+                expect(text, key).toMatch(/^[\x20-\x7e]*$/);
+            }
         }
     });
 
@@ -130,14 +139,20 @@ describe('language files', () =>
             expect(reasons.length, name).toBeGreaterThan(0);
             for (const [key, value] of reasons)
             {
-                for (const text of textsOf(value)) expect(text, `${name} ${key}`).not.toContain(',');
+                for (const text of textsOf(value))
+                {
+                    expect(text, `${name} ${key}`).not.toContain(',');
+                }
             }
         }
     });
 
     it('has a fold label for every fold reason', () =>
     {
-        for (const reason of FOLD_REASONS) expect(lookup(en, `preview.fold.${reason}`), reason).toEqual(expect.any(String));
+        for (const reason of FOLD_REASONS)
+        {
+            expect(lookup(en, `preview.fold.${reason}`), reason).toEqual(expect.any(String));
+        }
     });
 });
 

@@ -101,9 +101,12 @@ export default defineConfig(
     // them alone (an object literal must also stay on its `return` line).
     // Quotes: single, except double quotes or a template literal where they
     // avoid escaping a quote (as the code already did).
+    // curly: every if/else/for/while/do body is a braced block, even a single
+    // statement, so the Allman layout above applies to it too.
     {
         plugins: { '@stylistic': stylistic },
         rules: {
+            curly: ['error', 'all'],
             '@stylistic/indent': ['error', 4, { SwitchCase: 1 }],
             '@stylistic/brace-style': ['error', 'allman', { allowSingleLine: false }],
             '@stylistic/semi': ['error', 'always'],

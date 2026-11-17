@@ -67,8 +67,14 @@ export const SOURCE_FILE_URL_ALLOWLIST = [{ url: 'http://scripts.sil.org/OFL', o
  */
 export function isUrlAllowed(url, distFile, sourceFile)
 {
-    if (URL_ALLOWLIST.includes(url)) return true;
-    if (distFile !== undefined && FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === distFile)) return true;
+    if (URL_ALLOWLIST.includes(url))
+    {
+        return true;
+    }
+    if (distFile !== undefined && FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === distFile))
+    {
+        return true;
+    }
     return sourceFile !== undefined && SOURCE_FILE_URL_ALLOWLIST.some((entry) => entry.url === url && entry.onlyIn === sourceFile);
 }
 
@@ -146,7 +152,10 @@ export const RULE_EXEMPTIONS = [
  */
 export function isRuleExempt(rule, isDist, distFile, sourceFile)
 {
-    if (rule.id === undefined) return false;
+    if (rule.id === undefined)
+    {
+        return false;
+    }
     return RULE_EXEMPTIONS.some((entry) =>
         entry.rule === rule.id && (isDist ? distFile !== undefined && entry.distFile === distFile : sourceFile !== undefined && entry.sourceFile === sourceFile),
     );
@@ -189,8 +198,14 @@ export function findViolations(text, { isDist, distFile, sourceFile })
     {
         for (const rule of RULES)
         {
-            if (rule.distOnly && !isDist) continue;
-            if (isRuleExempt(rule, isDist, distFile, sourceFile)) continue;
+            if (rule.distOnly && !isDist)
+            {
+                continue;
+            }
+            if (isRuleExempt(rule, isDist, distFile, sourceFile))
+            {
+                continue;
+            }
             for (const m of lineText.matchAll(rule.pattern))
             {
                 findings.push({ line: index + 1, match: m[0], reason: rule.reason });
@@ -239,9 +254,18 @@ export function decodeJsEscapes(text)
             const code = Number.parseInt(braced, 16);
             return code <= 0x10ffff ? String.fromCodePoint(code) : '';
         }
-        if (hex4 !== undefined) return String.fromCharCode(Number.parseInt(hex4, 16));
-        if (hex2 !== undefined) return String.fromCharCode(Number.parseInt(hex2, 16));
-        if (other === '\n' || other === '\r' || other === '\r\n' || other === '\u2028' || other === '\u2029') return '';
+        if (hex4 !== undefined)
+        {
+            return String.fromCharCode(Number.parseInt(hex4, 16));
+        }
+        if (hex2 !== undefined)
+        {
+            return String.fromCharCode(Number.parseInt(hex2, 16));
+        }
+        if (other === '\n' || other === '\r' || other === '\r\n' || other === '\u2028' || other === '\u2029')
+        {
+            return '';
+        }
         return Object.hasOwn(SIMPLE_ESCAPES, other) ? SIMPLE_ESCAPES[other] : other;
     });
 }
@@ -258,17 +282,29 @@ export function decodeJsEscapes(text)
 export function findEmbeddedViolations(text, options)
 {
     const decoded = decodeJsEscapes(text);
-    if (decoded === text) return [];
+    if (decoded === text)
+    {
+        return [];
+    }
     const key = (finding) => `${finding.reason}\u0000${finding.match}`;
     // How many times each (reason, match) is already reported in the raw text.
     const seen = new Map();
-    for (const finding of findViolations(text, options)) seen.set(key(finding), (seen.get(key(finding)) ?? 0) + 1);
+    for (const finding of findViolations(text, options))
+    {
+        seen.set(key(finding), (seen.get(key(finding)) ?? 0) + 1);
+    }
     const extra = [];
     for (const finding of findViolations(decoded, options))
     {
         const left = seen.get(key(finding)) ?? 0;
-        if (left > 0) seen.set(key(finding), left - 1);
-        else extra.push({ ...finding, reason: `${finding.reason} [inside a string, e.g. inlined worker code; decoded line ${finding.line}]` });
+        if (left > 0)
+        {
+            seen.set(key(finding), left - 1);
+        }
+        else
+        {
+            extra.push({ ...finding, reason: `${finding.reason} [inside a string, e.g. inlined worker code; decoded line ${finding.line}]` });
+        }
     }
     return extra;
 }
@@ -318,7 +354,10 @@ export function findOpaquePayloads(text, minLength = OPAQUE_PAYLOAD_MIN_LENGTH)
         if (start >= 0)
         {
             let end = i;
-            while (end < text.length && end - i < 2 && text.charCodeAt(end) === 61) end += 1; // '=' padding
+            while (end < text.length && end - i < 2 && text.charCodeAt(end) === 61)
+            {
+                end += 1; // '=' padding
+            }
             if (end - start >= minLength)
             {
                 findings.push({
@@ -329,7 +368,10 @@ export function findOpaquePayloads(text, minLength = OPAQUE_PAYLOAD_MIN_LENGTH)
             }
             start = -1;
         }
-        if (code === 10) line += 1;
+        if (code === 10)
+        {
+            line += 1;
+        }
     }
     return findings;
 }
@@ -384,9 +426,18 @@ export function checkHeadersFile(text)
     const rules = [];
     for (const raw of text.split(/\r?\n/))
     {
-        if (raw.trim() === '' || raw.trim().startsWith('#')) continue;
-        if (/^\s/.test(raw)) rules.at(-1)?.lines.push(raw.trim());
-        else rules.push({ path: raw.trim(), lines: [] });
+        if (raw.trim() === '' || raw.trim().startsWith('#'))
+        {
+            continue;
+        }
+        if (/^\s/.test(raw))
+        {
+            rules.at(-1)?.lines.push(raw.trim());
+        }
+        else
+        {
+            rules.push({ path: raw.trim(), lines: [] });
+        }
     }
     const cspOf = (rule) => rule.lines.filter((line) => line.startsWith('Content-Security-Policy:'));
     const all = rules.find((rule) => rule.path === '/*');
@@ -421,7 +472,10 @@ export function checkHeadersFile(text)
     const sw = rules.filter((rule) => rule.path === '/sw.js');
     for (const rule of rules)
     {
-        if (rule.path === '/*' || rule.path === '/sw.js') continue;
+        if (rule.path === '/*' || rule.path === '/sw.js')
+        {
+            continue;
+        }
         if (rule.lines.some((line) => /^!?\s*Content-Security-Policy\b/.test(line)))
         {
             problems.push(`the rule for ${rule.path} changes the Content-Security-Policy: only /sw.js may (README.md, rule R2)`);

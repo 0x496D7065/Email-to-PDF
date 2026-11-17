@@ -15,7 +15,10 @@ const lines = (...l: string[]): string => `${l.join('\n')}\n`;
 /** An independent reading of option A: up to `depth` ">" marks (spaces before each) and one space after them removed per line. */
 function oracle(slice: string, depth: number): string
 {
-    if (depth === 0) return slice;
+    if (depth === 0)
+    {
+        return slice;
+    }
     const marks = new RegExp(`^(?:[^\\S\\r\\n]*>){1,${depth}} ?`, 'u');
     return slice
         .split(/(\r\n|\r|\n)/u)
@@ -29,8 +32,14 @@ function onlyMarksRemoved(big: string, small: string): boolean
     let j = 0;
     for (let i = 0; i < big.length; i++)
     {
-        if (j < small.length && big.charAt(i) === small.charAt(j)) j++;
-        else if (big.charAt(i) !== '>' && !/\s/u.test(big.charAt(i))) return false;
+        if (j < small.length && big.charAt(i) === small.charAt(j))
+        {
+            j++;
+        }
+        else if (big.charAt(i) !== '>' && !/\s/u.test(big.charAt(i)))
+        {
+            return false;
+        }
     }
     return j === small.length;
 }
@@ -41,15 +50,36 @@ function checkProperties(body: string, got: readonly ReconstructedMessage[]): st
     const problems: string[] = [];
     got.forEach((m, i) =>
     {
-        if (!(m.start < m.headerEnd && m.headerEnd <= m.end && m.end <= body.length)) problems.push(`#${i}: offsets ${m.start} ${m.headerEnd} ${m.end}`);
+        if (!(m.start < m.headerEnd && m.headerEnd <= m.end && m.end <= body.length))
+        {
+            problems.push(`#${i}: offsets ${m.start} ${m.headerEnd} ${m.end}`);
+        }
         const next = got[i + 1];
-        if (next !== undefined && next.start !== m.end) problems.push(`#${i}: ends at ${m.end}, next starts at ${next.start}`);
-        if (m.generation !== i + 1) problems.push(`#${i}: generation ${m.generation}`);
+        if (next !== undefined && next.start !== m.end)
+        {
+            problems.push(`#${i}: ends at ${m.end}, next starts at ${next.start}`);
+        }
+        if (m.generation !== i + 1)
+        {
+            problems.push(`#${i}: generation ${m.generation}`);
+        }
         const slice = body.slice(m.headerEnd, m.end);
-        if (m.reconstructedText !== oracle(slice, m.depth)) problems.push(`#${i}: text is not the slice with ${m.depth} marks removed`);
-        if (!onlyMarksRemoved(slice, m.reconstructedText)) problems.push(`#${i}: more than marks removed`);
-        if (m.reconstructedText.split('\n').length !== slice.split('\n').length) problems.push(`#${i}: line count changed`);
-        if (m.quoteMarksRemoved !== m.depth > 0) problems.push(`#${i}: quoteMarksRemoved`);
+        if (m.reconstructedText !== oracle(slice, m.depth))
+        {
+            problems.push(`#${i}: text is not the slice with ${m.depth} marks removed`);
+        }
+        if (!onlyMarksRemoved(slice, m.reconstructedText))
+        {
+            problems.push(`#${i}: more than marks removed`);
+        }
+        if (m.reconstructedText.split('\n').length !== slice.split('\n').length)
+        {
+            problems.push(`#${i}: line count changed`);
+        }
+        if (m.quoteMarksRemoved !== m.depth > 0)
+        {
+            problems.push(`#${i}: quoteMarksRemoved`);
+        }
     });
     return problems;
 }
@@ -70,13 +100,22 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
             c.thread.headers.forEach((h, i) =>
             {
                 const m = got[i];
-                if (m === undefined) return;
+                if (m === undefined)
+                {
+                    return;
+                }
                 const want = { start: h.start, generation: h.generation, depth: h.textDepth };
                 const have = { start: m.start, generation: m.generation, depth: m.depth };
-                if (JSON.stringify(want) !== JSON.stringify(have)) problems.push(`${c.id} #${i}: ${JSON.stringify(have)}, want ${JSON.stringify(want)}`);
+                if (JSON.stringify(want) !== JSON.stringify(have))
+                {
+                    problems.push(`${c.id} #${i}: ${JSON.stringify(have)}, want ${JSON.stringify(want)}`);
+                }
             });
             const last = got[got.length - 1];
-            if (last !== undefined && last.end !== c.thread.body.length) problems.push(`${c.id}: last ends at ${last.end}`);
+            if (last !== undefined && last.end !== c.thread.body.length)
+            {
+                problems.push(`${c.id}: last ends at ${last.end}`);
+            }
         }
         expect(problems).toEqual([]);
     });
@@ -89,7 +128,10 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
             const got = rebuild(c.thread.body, c.thread.subject);
             c.thread.headers.forEach((h, i) =>
             {
-                if (got[i]?.reconstructedText.trim() !== h.ownText) misses.push(`${c.id} #${i}`);
+                if (got[i]?.reconstructedText.trim() !== h.ownText)
+                {
+                    misses.push(`${c.id} #${i}`);
+                }
             });
         }
         expect(misses).toEqual(['outlook-nl wrapped names only #0', 'outlook-nl wrapped names only #1']);
@@ -97,7 +139,10 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
 
     it('keeps every character: the properties hold for every case (collapse, never delete)', () =>
     {
-        for (const c of THREAD_CASES) expect(checkProperties(c.thread.body, rebuild(c.thread.body, c.thread.subject)), c.id).toEqual([]);
+        for (const c of THREAD_CASES)
+        {
+            expect(checkProperties(c.thread.body, rebuild(c.thread.body, c.thread.subject)), c.id).toEqual([]);
+        }
     });
 
     it('keeps the raw header text in the source: [start, headerEnd) is the header as written', () =>
@@ -108,7 +153,10 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
             c.thread.headers.forEach((h, i) =>
             {
                 const m = got[i];
-                if (m === undefined || c.id === 'outlook-nl wrapped names only') return;
+                if (m === undefined || c.id === 'outlook-nl wrapped names only')
+                {
+                    return;
+                }
                 expect(c.thread.body.slice(m.start, m.headerEnd), `${c.id} #${i}`).toBe(c.thread.body.slice(h.start, h.headEnd));
             });
         }
@@ -119,7 +167,10 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
         for (const c of THREAD_CASES)
         {
             const first = c.thread.headers[0];
-            if (first === undefined) continue;
+            if (first === undefined)
+            {
+                continue;
+            }
             // The source is the quoting message: its zone is the zone gen 1 is shown in.
             const got = rebuild(c.thread.body, c.thread.subject, first.shownIn.offsetMinutes)[0];
             // Thunderbird's numeric dates such as 03/04/2025 (3 April or 4 March?) are unreadable on purpose (quoted-date.ts).
@@ -137,7 +188,10 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
     it('a date with a written zone (Apple forward "GMT+5:30") is exact; no source offset gives basis "none"', () =>
     {
         const c = THREAD_CASES.find((t) => t.id === 'apple forward of a gmail thread');
-        if (c === undefined) throw new Error('case missing');
+        if (c === undefined)
+        {
+            throw new Error('case missing');
+        }
         const got = rebuild(c.thread.body, c.thread.subject, null);
         expect(got[0]?.kind).toBe('forward');
         expect(got[0]?.date?.basis).toBe('written-zone');
@@ -150,7 +204,10 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
     it('rebuilds inside forwarded text (user decision Q3)', () =>
     {
         const c = THREAD_CASES.find((t) => t.id === 'forward in the middle');
-        if (c === undefined) throw new Error('case missing');
+        if (c === undefined)
+        {
+            throw new Error('case missing');
+        }
         expect(rebuild(c.thread.body, c.thread.subject).map((m) => [m.generation, m.kind, m.depth])).toEqual([
             [1, 'reply', 1],
             [2, 'forward', 1],
@@ -333,7 +390,10 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
         {
             let body = '';
             const length = 5 + rand(120);
-            for (let k = 0; k < length; k++) body += pieces[rand(pieces.length)] ?? '';
+            for (let k = 0; k < length; k++)
+            {
+                body += pieces[rand(pieces.length)] ?? '';
+            }
             expect(checkProperties(body, rebuild(body, rand(2) === 0 ? 'Fwd: x' : 'Re: x')), body).toEqual([]);
         }
     });
@@ -351,7 +411,10 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
         for (let round = 0; round < 400; round++)
         {
             const c = THREAD_CASES[rand(THREAD_CASES.length)];
-            if (c === undefined) continue;
+            if (c === undefined)
+            {
+                continue;
+            }
             const bodyLines = c.thread.body.split('\n');
             const at = rand(bodyLines.length);
             bodyLines.splice(at, 0, inserts[rand(inserts.length)] ?? '');
@@ -378,7 +441,10 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
         expect(rebuild(deep)).toEqual([]);
         // A Gmail chain 150 levels deep: the chain stops past MAX_QUOTE_DEPTH (the last holder dropped too).
         const parts: string[] = ['Thanks.', ''];
-        for (let d = 0; d < 150; d++) parts.push(`${'>'.repeat(d)}${d === 0 ? '' : ' '}${GMAIL}`, `${'>'.repeat(d + 1)} text ${d}`, '>'.repeat(d + 1));
+        for (let d = 0; d < 150; d++)
+        {
+            parts.push(`${'>'.repeat(d)}${d === 0 ? '' : ' '}${GMAIL}`, `${'>'.repeat(d + 1)} text ${d}`, '>'.repeat(d + 1));
+        }
         const chain = lines(...parts);
         const got = rebuild(chain);
         expect(got.length).toBe(MAX_QUOTE_DEPTH - 1);

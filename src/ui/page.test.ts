@@ -119,7 +119,10 @@ afterEach(() =>
 function byId(id: string): FakeElement
 {
     const found = root.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 const hasClass = (e: FakeElement, name: string): boolean => (e.getAttribute('class') ?? '').split(' ').includes(name);
@@ -158,14 +161,20 @@ async function addAndShow(): Promise<{ messages: NormalizedMessage[]; result: En
     choose(...messages.map((m) => m.source.fileName), 'bench-copy.eml', 'notes.txt');
     control.calls.at(-1)?.resolve({ ok: true, engine: result });
     await settle();
-    while (tasks.length > 0) tasks.shift()?.task();
+    while (tasks.length > 0)
+    {
+        tasks.shift()?.task();
+    }
     return { messages, result };
 }
 
 function expectEmpty(texts: readonly string[]): void
 {
     const all = root.textContent;
-    for (const text of texts) expect(all).not.toContain(text);
+    for (const text of texts)
+    {
+        expect(all).not.toContain(text);
+    }
     expect(byId('file-input').value).toBe('');
     expect(items()).toEqual([]);
     expect(byId('add-summary').hasAttribute('hidden')).toBe(true);
@@ -224,7 +233,10 @@ describe('mountPage', () =>
         control.calls.at(-1)?.resolve({ ok: true, engine: engineOf(messages) });
         await settle();
         expect(page.preview.pdfLabelState()).toBe('updating');
-        while (tasks.length > 0) tasks.shift()?.task();
+        while (tasks.length > 0)
+        {
+            tasks.shift()?.task();
+        }
         expect(page.preview.pdfLabelState()).toBe('ready');
         const labelOf = (k: number): string =>
             items()[k]!.descendants().find((e) => hasClass(e, 'pdf-label'))?.textContent.trim() ?? '';
@@ -237,7 +249,10 @@ describe('mountPage', () =>
         box.fire('change');
         expect(page.preview.pdfLabelState()).toBe('updating'); // hidden at once
         expect(page.pdfLabels.currentPlans()).toBeNull();
-        while (tasks.length > 0) tasks.shift()?.task();
+        while (tasks.length > 0)
+        {
+            tasks.shift()?.task();
+        }
         expect(page.preview.pdfLabelState()).toBe('ready');
         expect(labelOf(1)).toBe('In the PDF: signature');
         expect(page.pdfLabels.currentPlans()?.positions).toEqual([1]);
@@ -245,7 +260,10 @@ describe('mountPage', () =>
         const everything = byId('pdf-everything');
         everything.checked = true;
         everything.fire('change');
-        while (tasks.length > 0) tasks.shift()?.task();
+        while (tasks.length > 0)
+        {
+            tasks.shift()?.task();
+        }
         expect(page.pdfLabels.getPdfPolicy().unfoldEverything).toBe(true);
         expect(page.pdfLabels.currentPlans()?.policy.unfoldEverything).toBe(true);
         expect(labelOf(1)).toBe('In the PDF: signature');
@@ -273,7 +291,10 @@ describe('mountPage', () =>
         await settle();
         const run = (): void =>
         {
-            while (tasks.length > 0) tasks.shift()?.task();
+            while (tasks.length > 0)
+            {
+                tasks.shift()?.task();
+            }
         };
         run();
         expect(page.preview.pdfLabelState()).toBe('ready');
@@ -491,7 +512,10 @@ describe('"Clear everything": after a finished batch', () =>
         const texts = emailTexts(messages, ['notes.txt', 'bench-copy.eml']);
         // Everything but the read files' names is on the page before (those only show for merged copies).
         const fileNames = new Set(messages.map((m) => m.source.fileName));
-        for (const text of texts.filter((x) => !fileNames.has(x))) expect(root.textContent).toContain(text);
+        for (const text of texts.filter((x) => !fileNames.has(x)))
+        {
+            expect(root.textContent).toContain(text);
+        }
 
         clearButton().click();
 
@@ -546,7 +570,10 @@ describe('"Clear everything": while processing', () =>
         run.options.onProgress?.({ stage: 'organizing', filesDone: 2, filesTotal: 2 });
         run.resolve({ ok: true, engine: engineOf(messages) });
         await settle();
-        while (tasks.length > 0) tasks.shift()?.task();
+        while (tasks.length > 0)
+        {
+            tasks.shift()?.task();
+        }
         expectEmpty(emailTexts(messages, []));
         expect(status()).toBe(t('clear.done'));
     });
@@ -586,7 +613,10 @@ describe('"Clear everything": while the list is built in chunks', () =>
         clearButton().click();
         expect(tasks).toEqual([]); // cancelled
         // Even if a cancelled chunk still ran, it would add nothing.
-        for (const { task } of waiting) task();
+        for (const { task } of waiting)
+        {
+            task();
+        }
         expectEmpty(emailTexts(messages, []));
     });
 });

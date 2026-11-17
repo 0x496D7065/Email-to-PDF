@@ -28,7 +28,10 @@ beforeAll(async () =>
 {
     fonts = await loadPdfFonts();
     const found = (await parseAllFixtures()).find((m) => m.source.fileName === 'eml/13-order-4-bob-outlook-nl.eml');
-    if (found === undefined) throw new Error('no fixture');
+    if (found === undefined)
+    {
+        throw new Error('no fixture');
+    }
     last = found;
 });
 
@@ -63,7 +66,10 @@ async function pdfText(options: { rebuilt?: readonly number[]; positions?: reado
 function between(all: string, start: string, ...ends: string[]): string
 {
     const from = all.indexOf(start);
-    if (from < 0) throw new Error(`not found: ${start}`);
+    if (from < 0)
+    {
+        throw new Error(`not found: ${start}`);
+    }
     const stops = ends.map((e) => all.indexOf(e, from + start.length)).filter((k) => k >= 0);
     return all.slice(from, stops.length === 0 ? undefined : Math.min(...stops));
 }
@@ -118,7 +124,10 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         const { pdf, pages } = await pdfText();
         const dests = readDests(pdf);
         const indexPage = pages[dests.get('index')!.page]!;
-        for (const n of [1, 2, 3, 4]) expect(indexPage.some((l) => l.startsWith(`${String(n)} `)), `row ${String(n)}`).toBe(true);
+        for (const n of [1, 2, 3, 4])
+        {
+            expect(indexPage.some((l) => l.startsWith(`${String(n)} `)), `row ${String(n)}`).toBe(true);
+        }
         expect(indexPage.join('\n')).toContain('3 2025-03-03');
         expect(indexPage.join('\n')).not.toContain('[Rebuilt]');
         expect(indexPage.join('\n')).toContain('Re: Office desks and chairs');
@@ -132,7 +141,10 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         const titles = readOutline(pdf)!.items.map((i) => i.title);
         expect(titles.slice(0, 2)).toEqual(['Cover', 'Index']);
         expect(titles).toHaveLength(6);
-        for (const [k, title] of titles.slice(2).entries()) expect(title.startsWith(`${String(k + 1)}. `)).toBe(true);
+        for (const [k, title] of titles.slice(2).entries())
+        {
+            expect(title.startsWith(`${String(k + 1)}. `)).toBe(true);
+        }
         expect(titles[4]).toBe('3. 2025-03-03, Alice Example: Re: Office desks and chairs');
         expect(titles.some((t) => t.includes('[Rebuilt]'))).toBe(false);
     });
@@ -140,7 +152,10 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
     it('a rebuilt email: the heading and rows of a real email, no "Taken from", no note; its text', async () =>
     {
         const { all } = await pdfText();
-        for (const n of [1, 2, 3, 4]) expect(all).toContain(`Email ${String(n)} From`);
+        for (const n of [1, 2, 3, 4])
+        {
+            expect(all).toContain(`Email ${String(n)} From`);
+        }
         // The newest rebuilt one (an Outlook block in Dutch, no quote marks), up to the real email.
         const newest = between(all, 'Email 3 From', 'Email 4 From');
         expect(newest).toContain('From Alice Example <alice@example.test>');
@@ -167,8 +182,14 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
             const { all, pdf } = await pdfText({ locale });
             const { fragments, word } = removedTexts(locale);
             expect(all).not.toMatch(word);
-            for (const f of fragments) expect(all, `"${f}"`).not.toContain(f);
-            for (const t of readOutline(pdf)!.items.map((i) => i.title)) expect(t).not.toMatch(word);
+            for (const f of fragments)
+            {
+                expect(all, `"${f}"`).not.toContain(f);
+            }
+            for (const t of readOutline(pdf)!.items.map((i) => i.title))
+            {
+                expect(t).not.toMatch(word);
+            }
             // Four emails, with the real emails' heading.
             const heading = createPdfStrings(locale).emailHeading(4);
             expect(all).toContain(heading);
@@ -195,7 +216,10 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         const starts = anchors.map((a) => dests.get(a)!.page);
         // The first right after the index, then one page each (the rebuilt emails are short), in PDF order.
         expect(starts[0]).toBe(dests.get('index')!.page + 1);
-        for (let k = 1; k < starts.length; k++) expect(starts[k]).toBe(starts[k - 1]! + 1);
+        for (let k = 1; k < starts.length; k++)
+        {
+            expect(starts[k]).toBe(starts[k - 1]! + 1);
+        }
         // Each destination at the same height (the top of the text area), its heading the first line of its page.
         const top = CONFIG.page.height - CONFIG.margin.top + CONFIG.spacing.destinationAbove;
         for (const [k, anchor] of anchors.entries())
@@ -205,7 +229,10 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         }
         // No empty page: each has text above its footer.
         const footerY = CONFIG.footer.baselineFromBottom + 1;
-        for (const page of runs) expect(page.some((r) => r.y > footerY)).toBe(true);
+        for (const page of runs)
+        {
+            expect(page.some((r) => r.y > footerY)).toBe(true);
+        }
         // Index: each row's link goes to its email, the number drawn in the row's page column is that page + 1.
         const pageColumn = CONFIG.page.width - CONFIG.margin.right - CONFIG.index.pageWidth;
         const shown = new Map<string, string[]>();
@@ -220,6 +247,9 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
             }
         }
         expect([...shown.keys()].sort()).toEqual([...anchors].sort());
-        for (const [k, anchor] of anchors.entries()) expect(shown.get(anchor)).toEqual([String(starts[k]! + 1)]);
+        for (const [k, anchor] of anchors.entries())
+        {
+            expect(shown.get(anchor)).toEqual([String(starts[k]! + 1)]);
+        }
     });
 });

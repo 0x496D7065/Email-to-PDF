@@ -72,12 +72,21 @@ function sorted(set: ReadonlySet<number> | undefined): number[]
 function holdsUnread(result: LinkInput, position: number, readAsFile: ReadonlyMap<number, number>): boolean
 {
     const m = result.messages[position];
-    if (m === undefined) return false;
+    if (m === undefined)
+    {
+        return false;
+    }
     const message = m.message;
-    if (message.source.kind !== 'eml' || message.warnings.includes('forwarded-message-not-expanded')) return false;
+    if (message.source.kind !== 'eml' || message.warnings.includes('forwarded-message-not-expanded'))
+    {
+        return false;
+    }
     // Its own attachments only: those of an email printed inside it carry attachedIndex.
     const own = message.attachments.filter((a) => a.attachedIndex === undefined);
-    if (own.some((a) => REPORT_TYPES.has(a.mimeType))) return false;
+    if (own.some((a) => REPORT_TYPES.has(a.mimeType)))
+    {
+        return false;
+    }
     const listed = own.filter((a) => a.mimeType === RFC822).length;
     return listed > (readAsFile.get(m.index) ?? 0);
 }
@@ -86,7 +95,10 @@ function holdsUnread(result: LinkInput, position: number, readAsFile: ReadonlyMa
 function usableEntries(result: LinkInput): EngineAttached[]
 {
     const list: unknown = result.attached;
-    if (!Array.isArray(list)) return [];
+    if (!Array.isArray(list))
+    {
+        return [];
+    }
     return (list as readonly unknown[]).filter(
         (e): e is EngineAttached =>
             typeof e === 'object' &&
@@ -106,7 +118,10 @@ export function attachedLinks(result: LinkInput): AttachedLinks
     const add = (map: Map<number, Set<number>>, position: number, number: number): void =>
     {
         let set = map.get(position);
-        if (set === undefined) map.set(position, (set = new Set()));
+        if (set === undefined)
+        {
+            map.set(position, (set = new Set()));
+        }
         set.add(number);
     };
     const entries = usableEntries(result);
@@ -114,10 +129,16 @@ export function attachedLinks(result: LinkInput): AttachedLinks
     const readAsFile = new Map<number, number>();
     for (const e of entries)
     {
-        if (e.places.length === 0) readAsFile.set(e.parentIndex, (readAsFile.get(e.parentIndex) ?? 0) + 1);
+        if (e.places.length === 0)
+        {
+            readAsFile.set(e.parentIndex, (readAsFile.get(e.parentIndex) ?? 0) + 1);
+        }
         const child = positionOf(result, e.index);
         const holder = positionOf(result, e.parentIndex);
-        if (child === null || holder === null || child === holder) continue;
+        if (child === null || holder === null || child === holder)
+        {
+            continue;
+        }
         add(to, child, holder + 1);
         add(held, holder, child + 1);
     }
@@ -126,7 +147,10 @@ export function attachedLinks(result: LinkInput): AttachedLinks
     const unread: (UnreadAttachedCode | null)[] = Array.from({ length: count }, (_, p) => (holdsUnread(result, p, readAsFile) ? 'attached-unread' : null));
     for (let position = 0; position < count; position++)
     {
-        if (unread[position] !== 'attached-unread') continue;
+        if (unread[position] !== 'attached-unread')
+        {
+            continue;
+        }
         // The emails that print it inline: the places of every copy of it (the
         // kept one and the copies merged into it), at every level.
         const m = result.messages[position];
@@ -134,11 +158,17 @@ export function attachedLinks(result: LinkInput): AttachedLinks
         for (const index of copies)
         {
             const places: unknown = attachedAt(result, index)?.places;
-            if (!Array.isArray(places)) continue;
+            if (!Array.isArray(places))
+            {
+                continue;
+            }
             for (const place of places as readonly EngineAttachedPlace[])
             {
                 const holder = positionOf(result, place.holderIndex);
-                if (holder !== null && unread[holder] === null) unread[holder] = 'attached-unread-inside';
+                if (holder !== null && unread[holder] === null)
+                {
+                    unread[holder] = 'attached-unread-inside';
+                }
             }
         }
     }

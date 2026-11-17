@@ -293,7 +293,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
             pdfLabels.show(shown);
             choicesChanged();
             // The rebuilt lists may have taken the focused control with them (see the top of this file).
-            if (focusedControlWasRemoved(document, lastFocused)) addFiles.focus();
+            if (focusedControlWasRemoved(document, lastFocused))
+            {
+                addFiles.focus();
+            }
         },
         // Files added (or cleared): the emails of a PDF made before are no longer the ones shown.
         onFilesChange: () =>
@@ -306,12 +309,27 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
     /** Why the PDF cannot be made now, or null (see PdfUnavailable in src/ui/pdf-job.ts). */
     function pdfUnavailable(): PdfUnavailable | null
     {
-        if (addFiles.isBusy()) return 'busy';
-        if (shown === null || shown.messages.length === 0) return 'no-emails';
-        if (plansFailed) return 'labels-failed';
+        if (addFiles.isBusy())
+        {
+            return 'busy';
+        }
+        if (shown === null || shown.messages.length === 0)
+        {
+            return 'no-emails';
+        }
+        if (plansFailed)
+        {
+            return 'labels-failed';
+        }
         const plans = pdfLabels.currentPlans();
-        if (preview.isRendering() || plans === null || plans.result !== shown) return 'busy';
-        if (plans.positions.length === 0) return 'none-included';
+        if (preview.isRendering() || plans === null || plans.result !== shown)
+        {
+            return 'busy';
+        }
+        if (plans.positions.length === 0)
+        {
+            return 'none-included';
+        }
         // Every ticked email has no text: the PDF would hold none of them (task 8.14).
         return pdfPositions(plans.result, plans.positions).length === 0 ? 'none-with-text' : null;
     }
@@ -324,7 +342,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
     function pdfInput(generatedAt: number): PdfJobInput | null
     {
         const plans = pdfLabels.currentPlans();
-        if (plans === null || plans.result !== shown) return null;
+        if (plans === null || plans.result !== shown)
+        {
+            return null;
+        }
         return {
             result: plans.result,
             positions: plans.positions,
@@ -383,7 +404,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
 
     function setLanguage(locale: string): void
     {
-        if (!isSupportedLocale(locale) || locale === getLocale()) return;
+        if (!isSupportedLocale(locale) || locale === getLocale())
+        {
+            return;
+        }
         setLocale(locale);
         shell.relabel();
         addFiles.relabel();
@@ -401,7 +425,10 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
     shell.clearButton.addEventListener('click', () =>
     {
         // aria-disabled: still focusable, but does nothing while there is nothing to clear.
-        if (!addFiles.hasFiles()) return;
+        if (!addFiles.hasFiles())
+        {
+            return;
+        }
         clearEverything();
     });
 

@@ -419,7 +419,10 @@ describe('htmlTreeToText: depth limit', () =>
     function nested(tag: string, levels: number, inner: Child[]): HtmlNode
     {
         let node = h(tag, {}, ...inner);
-        for (let i = 1; i < levels; i++) node = h(tag, {}, node);
+        for (let i = 1; i < levels; i++)
+        {
+            node = h(tag, {}, node);
+        }
         return node;
     }
 
@@ -508,7 +511,10 @@ describe('htmlTreeToText: output limit', () =>
     it('quote prefixes count towards the limit: deep quotes cannot blow up the output', () =>
     {
         let tree = h('p', {}, ...Array.from({ length: 1000 }, () => [h('br'), 'x']).flat());
-        for (let i = 0; i < 400; i++) tree = h('blockquote', {}, tree);
+        for (let i = 0; i < 400; i++)
+        {
+            tree = h('blockquote', {}, tree);
+        }
         const limits: HtmlToTextLimits = { maxDepth: 500, maxOutputLength: 10_000 };
         const text = textOf(doc(tree), limits);
         expect(text.length).toBeLessThanOrEqual(10_000 + truncationNote(10_000).length + 2);

@@ -81,7 +81,10 @@ describe('manifestVersion', () =>
             manifestVersion(files, 'sw code', `${headers} `),
             manifestVersion(files, 'sw code', new Uint8Array()),
         ];
-        for (const other of changed) expect(other).not.toBe(version);
+        for (const other of changed)
+        {
+            expect(other).not.toBe(version);
+        }
         expect(new Set(changed).size).toBe(changed.length);
     });
 

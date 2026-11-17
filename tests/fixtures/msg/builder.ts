@@ -178,7 +178,10 @@ function ascii(text: string): Uint8Array
     for (let i = 0; i < text.length; i++)
     {
         const code = text.charCodeAt(i);
-        if (code > 0x7f) throw new Error(`character U+${code.toString(16)} not allowed in an ASCII attachment`);
+        if (code > 0x7f)
+        {
+            throw new Error(`character U+${code.toString(16)} not allowed in an ASCII attachment`);
+        }
         bytes[i] = code;
     }
     return bytes;
@@ -211,7 +214,10 @@ function utf8(text: string): Uint8Array
 function fileTime(iso: string): Uint8Array
 {
     const ms = Date.parse(iso);
-    if (Number.isNaN(ms) || !iso.endsWith('Z')) throw new Error(`bad ISO UTC time: ${iso}`);
+    if (Number.isNaN(ms) || !iso.endsWith('Z'))
+    {
+        throw new Error(`bad ISO UTC time: ${iso}`);
+    }
     const ticks = (BigInt(ms) + 11_644_473_600_000n) * 10_000n;
     const out = new Uint8Array(8);
     new DataView(out.buffer).setBigUint64(0, ticks, true);
@@ -281,8 +287,14 @@ function hex4(n: number): string
 /** Adds a string property, typed by the spec's string mode. */
 function putString(folder: Folder, mode: MsgSpec['strings'], propId: number, text: string): void
 {
-    if (mode === 'unicode') folder.streams.set(`__substg1.0_${hex4(propId)}001F`, utf16le(text));
-    else folder.streams.set(`__substg1.0_${hex4(propId)}001E`, cp1252(text));
+    if (mode === 'unicode')
+    {
+        folder.streams.set(`__substg1.0_${hex4(propId)}001F`, utf16le(text));
+    }
+    else
+    {
+        folder.streams.set(`__substg1.0_${hex4(propId)}001E`, cp1252(text));
+    }
 }
 
 function putBinary(folder: Folder, propId: number, bytes: Uint8Array): void
@@ -335,7 +347,10 @@ function writeMessage(root: Folder, spec: MsgSpec, headerSize: 24 | 32): void
     const mode = spec.strings;
     const fixed: FixedProp[] = [];
 
-    if (spec.messageClass !== null) putString(root, mode, 0x001a, spec.messageClass ?? 'IPM.Note'); // message class
+    if (spec.messageClass !== null)
+    {
+        putString(root, mode, 0x001a, spec.messageClass ?? 'IPM.Note'); // message class
+    }
     putString(root, mode, 0x0037, spec.subject);
     putString(root, mode, 0x6800, SYNTHETIC_MARKER_VALUE); // synthetic marker (see top of file)
 
@@ -343,7 +358,10 @@ function writeMessage(root: Folder, spec: MsgSpec, headerSize: 24 | 32): void
     putString(root, mode, 0x0c1a, spec.sender.name);
     putString(root, mode, 0x0c1e, spec.sender.exchangeDn ? 'EX' : 'SMTP');
     putString(root, mode, 0x0c1f, spec.sender.exchangeDn ?? spec.sender.smtp);
-    if (spec.sender.exchangeDn && spec.sender.smtpFallback !== false) putString(root, mode, 0x5d01, spec.sender.smtp);
+    if (spec.sender.exchangeDn && spec.sender.smtpFallback !== false)
+    {
+        putString(root, mode, 0x5d01, spec.sender.smtp);
+    }
     // Sent representing (PR_SENT_REPRESENTING_*), same layout as the sender.
     const represented = spec.sentRepresenting;
     if (represented !== undefined)
@@ -351,30 +369,72 @@ function writeMessage(root: Folder, spec: MsgSpec, headerSize: 24 | 32): void
         putString(root, mode, 0x0042, represented.name);
         putString(root, mode, 0x0064, represented.exchangeDn ? 'EX' : 'SMTP');
         putString(root, mode, 0x0065, represented.exchangeDn ?? represented.smtp);
-        if (represented.exchangeDn && represented.smtpFallback !== false) putString(root, mode, 0x5d02, represented.smtp);
+        if (represented.exchangeDn && represented.smtpFallback !== false)
+        {
+            putString(root, mode, 0x5d02, represented.smtp);
+        }
     }
-    for (const extra of spec.extraStrings ?? []) putString(root, mode, extra.propId, extra.value);
-    for (const extra of spec.extraBinaries ?? []) putBinary(root, extra.propId, extra.bytes);
+    for (const extra of spec.extraStrings ?? [])
+    {
+        putString(root, mode, extra.propId, extra.value);
+    }
+    for (const extra of spec.extraBinaries ?? [])
+    {
+        putBinary(root, extra.propId, extra.bytes);
+    }
 
-    if (spec.bodyText !== undefined) putString(root, mode, 0x1000, spec.bodyText.replace(/\r?\n/g, '\r\n'));
+    if (spec.bodyText !== undefined)
+    {
+        putString(root, mode, 0x1000, spec.bodyText.replace(/\r?\n/g, '\r\n'));
+    }
     if (spec.bodyHtml !== undefined)
     {
-        if (mode !== 'unicode') throw new Error('bodyHtml is only supported for unicode specs');
+        if (mode !== 'unicode')
+        {
+            throw new Error('bodyHtml is only supported for unicode specs');
+        }
         putBinary(root, 0x1013, utf8(spec.bodyHtml));
     }
-    if (spec.messageId !== undefined) putString(root, mode, 0x1035, spec.messageId);
-    if (spec.inReplyTo !== undefined) putString(root, mode, 0x1042, spec.inReplyTo);
-    if (spec.references !== undefined) putString(root, mode, 0x1039, spec.references);
-    if (spec.transportHeaders !== undefined) putString(root, mode, 0x007d, spec.transportHeaders.replace(/\r?\n/g, '\r\n'));
+    if (spec.messageId !== undefined)
+    {
+        putString(root, mode, 0x1035, spec.messageId);
+    }
+    if (spec.inReplyTo !== undefined)
+    {
+        putString(root, mode, 0x1042, spec.inReplyTo);
+    }
+    if (spec.references !== undefined)
+    {
+        putString(root, mode, 0x1039, spec.references);
+    }
+    if (spec.transportHeaders !== undefined)
+    {
+        putString(root, mode, 0x007d, spec.transportHeaders.replace(/\r?\n/g, '\r\n'));
+    }
 
-    if (spec.bodyRtf !== undefined) putBinary(root, 0x1009, uncompressedRtf(spec.bodyRtf));
+    if (spec.bodyRtf !== undefined)
+    {
+        putBinary(root, 0x1009, uncompressedRtf(spec.bodyRtf));
+    }
 
-    if (spec.submitTime !== undefined) fixed.push({ tag: 0x00390040, value: fileTime(spec.submitTime) });
-    if (spec.deliveryTime !== undefined) fixed.push({ tag: 0x0e060040, value: fileTime(spec.deliveryTime) });
+    if (spec.submitTime !== undefined)
+    {
+        fixed.push({ tag: 0x00390040, value: fileTime(spec.submitTime) });
+    }
+    if (spec.deliveryTime !== undefined)
+    {
+        fixed.push({ tag: 0x0e060040, value: fileTime(spec.deliveryTime) });
+    }
     const messageCodepage = spec.codepages?.message !== undefined ? spec.codepages.message : mode === 'ansi-1252' ? CODEPAGE_1252 : null;
     const internetCodepage = spec.codepages?.internet !== undefined ? spec.codepages.internet : mode === 'unicode' ? CODEPAGE_UTF8 : CODEPAGE_1252;
-    if (messageCodepage !== null) fixed.push({ tag: 0x3ffd0003, value: int32(messageCodepage) }); // PR_MESSAGE_CODEPAGE
-    if (internetCodepage !== null) fixed.push({ tag: 0x3fde0003, value: int32(internetCodepage) }); // PR_INTERNET_CPID
+    if (messageCodepage !== null)
+    {
+        fixed.push({ tag: 0x3ffd0003, value: int32(messageCodepage) }); // PR_MESSAGE_CODEPAGE
+    }
+    if (internetCodepage !== null)
+    {
+        fixed.push({ tag: 0x3fde0003, value: int32(internetCodepage) }); // PR_INTERNET_CPID
+    }
 
     spec.recipients.forEach((recipient, i) =>
     {
@@ -382,7 +442,10 @@ function writeMessage(root: Folder, spec: MsgSpec, headerSize: 24 | 32): void
         putString(folder, mode, 0x3001, recipient.name);
         putString(folder, mode, 0x3002, recipient.exchangeDn ? 'EX' : 'SMTP');
         putString(folder, mode, 0x3003, recipient.exchangeDn ?? recipient.smtp);
-        if (recipient.exchangeDn && recipient.smtpFallback !== false) putString(folder, mode, 0x39fe, recipient.smtp);
+        if (recipient.exchangeDn && recipient.smtpFallback !== false)
+        {
+            putString(folder, mode, 0x39fe, recipient.smtp);
+        }
         folder.streams.set(
             '__properties_version1.0',
             propertiesStream(8, [
@@ -401,7 +464,10 @@ function writeMessage(root: Folder, spec: MsgSpec, headerSize: 24 | 32): void
         putString(folder, mode, 0x3707, attachment.fileName); // long file name
         putString(folder, mode, 0x3704, attachment.fileName); // short file name (same, kept simple)
         putString(folder, mode, 0x3703, /\.[^.]*$/.exec(attachment.fileName)?.[0] ?? ''); // extension: last one only (a.b.txt -> .txt)
-        if (attachment.mimeType !== undefined) putString(folder, mode, 0x370e, attachment.mimeType);
+        if (attachment.mimeType !== undefined)
+        {
+            putString(folder, mode, 0x370e, attachment.mimeType);
+        }
         putBinary(folder, 0x3701, data);
         folder.streams.set(
             '__properties_version1.0',

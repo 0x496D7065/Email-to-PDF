@@ -156,8 +156,14 @@ const authorOf = (from: readonly ExpectedAddress[], sender: ExpectedAddress | un
 {
     const shown = from.filter((m) => m.name.trim() !== '' || m.address.trim() !== '');
     const m = shown[0] ?? sender;
-    if (shown.length > 1) throw new Error('the expected author of several From mailboxes is not written here');
-    if (m === undefined) return en.preview.author.none;
+    if (shown.length > 1)
+    {
+        throw new Error('the expected author of several From mailboxes is not written here');
+    }
+    if (m === undefined)
+    {
+        return en.preview.author.none;
+    }
     return m.name.trim() !== '' ? m.name : m.address;
 };
 
@@ -194,7 +200,10 @@ test.beforeAll(async () =>
         const bodyOf = async (kind: 'eml' | 'msg', name: string, bytes: Uint8Array): Promise<string | null> =>
         {
             const result = await parsers[kind].parse({ name, bytes });
-            if (!result.ok) throw new Error(`${name} does not parse`);
+            if (!result.ok)
+            {
+                throw new Error(`${name} does not parse`);
+            }
             return result.message.bodyText.includes(HTML) ? null : result.message.bodyText;
         };
 
@@ -210,7 +219,10 @@ test.beforeAll(async () =>
             else
             {
                 const spec = MSG_SPECS.find((s) => s.id === f.id);
-                if (spec === undefined) throw new Error(`no .msg spec ${f.id}`);
+                if (spec === undefined)
+                {
+                    throw new Error(`no .msg spec ${f.id}`);
+                }
                 bytes = buildMsg(spec);
             }
             built.push({
@@ -248,10 +260,19 @@ test.beforeAll(async () =>
 function expectedEmails(): { readonly first: Source; readonly files: readonly Source[] }[]
 {
     const groups = new Map<string, Source[]>();
-    for (const s of sources) groups.set(s.group, [...(groups.get(s.group) ?? []), s]);
+    for (const s of sources)
+    {
+        groups.set(s.group, [...(groups.get(s.group) ?? []), s]);
+    }
     const list = [...groups.values()].map((files) => ({ first: files[0]!, files }));
     const dated = list.filter((e) => e.first.utcMs !== null).sort((a, b) => (a.first.utcMs ?? 0) - (b.first.utcMs ?? 0));
-    for (let i = 1; i < dated.length; i++) if (dated[i]?.first.utcMs === dated[i - 1]?.first.utcMs) throw new Error(`same date: ${dated[i]?.first.id ?? ''}`);
+    for (let i = 1; i < dated.length; i++)
+    {
+        if (dated[i]?.first.utcMs === dated[i - 1]?.first.utcMs)
+        {
+            throw new Error(`same date: ${dated[i]?.first.id ?? ''}`);
+        }
+    }
     const undated = list.filter((e) => e.first.utcMs === null);
     return [...dated, ...undated].filter((e) => e.first.id !== UNTICKED_ID);
 }
@@ -263,7 +284,10 @@ const fill = (template: string, values: Record<string, string | number>): string
     template.replace(/\{(\w+)\}/g, (_, key: string) =>
     {
         const value = values[key];
-        if (value === undefined) throw new Error(`no value for {${key}}`);
+        if (value === undefined)
+        {
+            throw new Error(`no value for {${key}}`);
+        }
         return String(value);
     });
 
@@ -344,7 +368,10 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
     const dests = readDests(pdf);
     const indexDest = dests.get('index');
     const firstEmailPage = dests.get('email-1')?.page;
-    if (indexDest === undefined || firstEmailPage === undefined) throw new Error('no index or no first email destination');
+    if (indexDest === undefined || firstEmailPage === undefined)
+    {
+        throw new Error('no index or no first email destination');
+    }
     const indexPage = indexDest.page;
     expect(dests.get('cover')?.page).toBe(0);
     // Task 8.12: the index follows the cover information directly (no source file list between),
@@ -373,7 +400,10 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
     for (let k = 1; k <= emails; k++)
     {
         const dest = dests.get(`email-${String(k)}`);
-        if (dest === undefined) throw new Error(`no destination email-${String(k)}`);
+        if (dest === undefined)
+        {
+            throw new Error(`no destination email-${String(k)}`);
+        }
         const at = flat.findIndex((x) => x.page === dest.page && x.line.y < dest.top);
         expect(flat[at]?.line.copied, `heading of email ${String(k)}`).toBe(fill(en.pdf.document.emailHeading, { number: k }));
         expect(dest.top - (flat[at]?.line.y ?? 0)).toBeLessThan(30);
@@ -394,13 +424,19 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
     const labels = new Set([d.dates, d.emails, d.generated, d.timeZone, v.from, v.author.sender, v.to, v.cc, v.bcc, v.date, v.subject, d.file, '\u{2022}']);
     for (const line of [...coverLines, ...flat.map((x) => x.line)])
     {
-        if (line.insertedSpaces === 0) continue;
+        if (line.insertedSpaces === 0)
+        {
+            continue;
+        }
         const label = line.runs[0]?.copied ?? '';
         expect({ line: line.copied, label: labels.has(label), spaces: line.insertedSpaces }).toEqual({ line: line.copied, label: true, spaces: 1 });
     }
 
     const outline = readOutline(pdf);
-    if (outline === undefined) throw new Error('no outline');
+    if (outline === undefined)
+    {
+        throw new Error('no outline');
+    }
     return {
         pageCount,
         cover: coverLines,
@@ -469,7 +505,10 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     {
         for (const p of e.first.people)
         {
-            if (p.address === '') continue;
+            if (p.address === '')
+            {
+                continue;
+            }
             const key = p.address.toLowerCase();
             names.set(key, new Set([...(names.get(key) ?? []), ...(p.name === '' ? [] : [p.name])]));
         }
@@ -479,7 +518,10 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     for (const [address, known] of names)
     {
         const line = peopleText.split('\n').find((l) => l.toLowerCase().includes(address)) ?? '';
-        if (known.size > 0) expect([...known].some((name) => line.includes(`${name} <`)), line).toBe(true);
+        if (known.size > 0)
+        {
+            expect([...known].some((name) => line.includes(`${name} <`)), line).toBe(true);
+        }
     }
     // A person named only in a Cc header, and one only in a Sender header (of
     // ANSWERS, in no other fixture): listed, with their names.
@@ -523,11 +565,17 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     const indexLines = doc.indexLines;
     expect(indexLines[0]?.copied).toBe(d.index);
     const titleLine = indexLines.find((l) => l.runs[0]?.copied === d.column.number);
-    if (titleLine === undefined) throw new Error('no column titles');
+    if (titleLine === undefined)
+    {
+        throw new Error('no column titles');
+    }
     const titleX = (title: string): number =>
     {
         const run = titleLine.runs.find((r) => r.copied.startsWith(title));
-        if (run === undefined) throw new Error(`no column title ${title}`);
+        if (run === undefined)
+        {
+            throw new Error(`no column title ${title}`);
+        }
         return run.x;
     };
     const columns = {
@@ -581,8 +629,14 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
         }
         // Attachments under the row: name, size, type.
         const extras = norm(extrasAt < 0 ? '' : lines.slice(extrasAt).map((l) => l.copied).join(' '));
-        if (e.first.attachments.length === 0) expect(extrasAt, e.first.id).toBe(-1);
-        for (const a of e.first.attachments) expect(extras).toContain(attachmentText(a));
+        if (e.first.attachments.length === 0)
+        {
+            expect(extrasAt, e.first.id).toBe(-1);
+        }
+        for (const a of e.first.attachments)
+        {
+            expect(extras).toContain(attachmentText(a));
+        }
     }
 
     // --- Bookmarks: Cover, Index, then one per email, in order. ---------------
@@ -624,7 +678,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -659,7 +716,10 @@ async function prepare(page: Page): Promise<ReturnType<typeof expectedEmails>>
     const transfer = await page.evaluateHandle((list) =>
     {
         const data = new DataTransfer();
-        for (const f of list) data.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+        for (const f of list)
+        {
+            data.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+        }
         return data;
     }, sources.map((s) => ({ name: s.name, type: s.type, bytes: s.bytes })));
     const cancelled = await page.evaluate(
@@ -667,7 +727,10 @@ async function prepare(page: Page): Promise<ReturnType<typeof expectedEmails>>
             ['dragenter', 'dragover', 'drop'].map((type) =>
             {
                 const zone = document.querySelector('#drop-zone');
-                if (zone === null) throw new Error('no drop zone');
+                if (zone === null)
+                {
+                    throw new Error('no drop zone');
+                }
                 return !zone.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }));
             }),
         transfer,
@@ -714,7 +777,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     // blob: URL as a request; nothing else may be there.
     const ownBlob = new RegExp(`^blob:${escapeRegExp(origin)}/[0-9a-f-]+$`);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(ownBlob);
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(ownBlob);
+    }
     const pdfUrl = await page.locator('#download-link').getAttribute('href');
     expect(pdfUrl).toMatch(ownBlob);
     expect(workerUrls.has(pdfUrl ?? '')).toBe(false);
@@ -755,7 +821,10 @@ function sectionOf(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, id:
     const group = sources.find((s) => s.id === id)?.group;
     const k = emails.findIndex((e) => e.first.group === group);
     const section = doc.sections[k];
-    if (section === undefined) throw new Error(`${id} is not in the PDF`);
+    if (section === undefined)
+    {
+        throw new Error(`${id} is not in the PDF`);
+    }
     return section;
 }
 
@@ -780,7 +849,10 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
             expect(text).toContain(attachmentText(a));
             expect(text.lastIndexOf(en.preview.attachments, text.indexOf(attachmentText(a)))).toBeGreaterThan(text.indexOf(e.first.snippets[0] ?? '?'));
         }
-        if (e.first.attachments.length === 0) expect(sectionText[k]).not.toContain(`${en.preview.attachments} `);
+        if (e.first.attachments.length === 0)
+        {
+            expect(sectionText[k]).not.toContain(`${en.preview.attachments} `);
+        }
     }
 
     // Quoted history added by the mail app: out of the reply (its reply header
@@ -838,7 +910,10 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     const xOf = (text: string): number =>
     {
         const line = answersSection.lines.find((l) => norm(l.copied).startsWith(norm(text)));
-        if (line === undefined) throw new Error(`no line ${text}`);
+        if (line === undefined)
+        {
+            throw new Error(`no line ${text}`);
+        }
         return line.runs[0]!.x;
     };
     const own = xOf('My answers are between your lines.');
@@ -846,16 +921,25 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     // No step per quote level: the quoted lines at the same x as the own text,
     // which is one tab (4 spaces of the body font) in from the header labels
     // (src/pdf/layout/config.ts, bodyIndentSpaces; task 8.9).
-    for (const text of quotedLines) expect(xOf(text), text).toBeCloseTo(own, 2);
+    for (const text of quotedLines)
+    {
+        expect(xOf(text), text).toBeCloseTo(own, 2);
+    }
     expect(bodyIndent).toBeGreaterThan(5);
     expect(own - xOf('From')).toBeCloseTo(bodyIndent, 2);
-    for (const l of answersSection.lines) expect(l.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
+    for (const l of answersSection.lines)
+    {
+        expect(l.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
+    }
 
     // ANSWERS' header rows, from the manifest: each label, then its value, in
     // order (From, Sent by, To, Cc, Date in the chosen zone, Subject).
     const fixture = FIXTURES.find((f) => f.id === ANSWERS_ID);
     const answersMs = fixture?.date.utcMs;
-    if (fixture === undefined || fixture.sender === undefined || answersMs === null || answersMs === undefined) throw new Error(`${ANSWERS_ID}: no date or no Sender`);
+    if (fixture === undefined || fixture.sender === undefined || answersMs === null || answersMs === undefined)
+    {
+        throw new Error(`${ANSWERS_ID}: no date or no Sender`);
+    }
     const v = en.preview;
     const mailboxes = (list: readonly ExpectedAddress[]): string => list.map((m) => fill(v.mailbox, { name: m.name, address: m.address })).join(', ');
     expect([fixture.sender, ...fixture.cc]).toEqual([ANSWERS_SENDER, ANSWERS_CC]);
@@ -1015,14 +1099,23 @@ async function prepareNoText(page: Page): Promise<void>
     const transfer = await page.evaluateHandle((list) =>
     {
         const data = new DataTransfer();
-        for (const f of list) data.items.add(new File([f.text], f.name, { type: 'message/rfc822' }));
+        for (const f of list)
+        {
+            data.items.add(new File([f.text], f.name, { type: 'message/rfc822' }));
+        }
         return data;
     }, NO_TEXT_FILES);
     await page.evaluate((data) =>
     {
         const zone = document.querySelector('#drop-zone');
-        if (zone === null) throw new Error('no drop zone');
-        for (const type of ['dragenter', 'dragover', 'drop']) zone.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }));
+        if (zone === null)
+        {
+            throw new Error('no drop zone');
+        }
+        for (const type of ['dragenter', 'dragover', 'drop'])
+        {
+            zone.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }));
+        }
     }, transfer);
     const items = page.locator('#preview-list > li');
     await expect(items).toHaveCount(4, { timeout: 60_000 });
@@ -1046,7 +1139,10 @@ async function expectNoTextLeftOut(bytes: Uint8Array): Promise<void>
 {
     const doc = await readBack(bytes, 2);
     const all = norm(doc.pages.flatMap((lines) => lines.map((l) => l.copied)).join('\n'));
-    for (const gone of [EMPTY_SUBJECT, BLANK_SUBJECT, EMPTY_ATTACHMENT, 'no-text-2.eml', 'no-text-3.eml']) expect(all, gone).not.toContain(gone);
+    for (const gone of [EMPTY_SUBJECT, BLANK_SUBJECT, EMPTY_ATTACHMENT, 'no-text-2.eml', 'no-text-3.eml'])
+    {
+        expect(all, gone).not.toContain(gone);
+    }
     expect(norm(doc.sections[0]!.copied)).toContain('The oak shelves arrive on Friday morning.');
     expect(norm(doc.sections[1]!.copied)).toContain('The pine table needs one more coat of oil.');
     expect(norm(doc.cover.map((l) => l.copied).join('\n'))).toContain(`${en.pdf.document.emails} ${fill(en.pdf.document.emailCount.other, { count: 2 })}`);
@@ -1054,7 +1150,10 @@ async function expectNoTextLeftOut(bytes: Uint8Array): Promise<void>
     expect(titles).toHaveLength(4);
     expect(titles[2]!.startsWith('1. ')).toBe(true);
     expect(titles[3]!.startsWith('2. ')).toBe(true);
-    for (const gone of [EMPTY_SUBJECT, BLANK_SUBJECT]) expect(titles.some((t) => t.includes(gone))).toBe(false);
+    for (const gone of [EMPTY_SUBJECT, BLANK_SUBJECT])
+    {
+        expect(titles.some((t) => t.includes(gone))).toBe(false);
+    }
 }
 
 test('emails with no text: in the preview with a note, left out of the PDF (task 8.14)', async ({ page }) =>
@@ -1101,7 +1200,10 @@ test('emails with no text: only those ticked, no PDF can be made and the page sa
     // Nothing left the page after its own files but the workers' own blob: URLs, no WebSocket, no CSP violation.
     const ownBlob = new RegExp(`^blob:${escapeRegExp(origin)}/[0-9a-f-]+$`);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(ownBlob);
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(ownBlob);
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.websockets).toEqual([]);
     const browserName = engineOf(page.context());

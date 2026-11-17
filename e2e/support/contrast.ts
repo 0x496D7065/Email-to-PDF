@@ -36,7 +36,10 @@ export async function contrastFailures(page: Page, rootSelector = 'body', minChe
                 for (let e: Element | null = start; e; e = e.parentElement)
                 {
                     const bg = parse(getComputedStyle(e).backgroundColor);
-                    if (bg[3] > 0) return bg;
+                    if (bg[3] > 0)
+                    {
+                        return bg;
+                    }
                 }
                 return [255, 255, 255, 1];
             };
@@ -46,7 +49,10 @@ export async function contrastFailures(page: Page, rootSelector = 'body', minChe
             for (const element of document.querySelectorAll(`${selector}, ${selector} *`))
             {
                 const ownText = [...element.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim());
-                if (!ownText || element.getClientRects().length === 0) continue;
+                if (!ownText || element.getClientRects().length === 0)
+                {
+                    continue;
+                }
                 const style = getComputedStyle(element);
                 const fg = luminance(parse(style.color));
                 const bg = luminance(background(element));
@@ -54,7 +60,10 @@ export async function contrastFailures(page: Page, rootSelector = 'body', minChe
                 const size = Number.parseFloat(style.fontSize);
                 const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
                 checked++;
-                if (ratio < (large ? 3 : 4.5)) found.push(`${element.tagName} "${element.textContent}" ${ratio.toFixed(2)}:1`);
+                if (ratio < (large ? 3 : 4.5))
+                {
+                    found.push(`${element.tagName} "${element.textContent}" ${ratio.toFixed(2)}:1`);
+                }
             }
             return checked >= min ? found : [`only ${String(checked)} texts checked`];
         },

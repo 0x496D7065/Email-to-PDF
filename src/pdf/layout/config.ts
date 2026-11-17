@@ -145,7 +145,10 @@ export const SHORT_DATE_EM = 8.6;
 /** One check of validateLayoutConfig. */
 function check(ok: boolean, what: string): void
 {
-    if (!ok) throw new Error(`layout: invalid config: ${what}`);
+    if (!ok)
+    {
+        throw new Error(`layout: invalid config: ${what}`);
+    }
 }
 
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -171,11 +174,17 @@ export function validateLayoutConfig(config: LayoutConfig): void
 {
     positive(config.page.width, 'page.width');
     positive(config.page.height, 'page.height');
-    for (const side of ['top', 'right', 'bottom', 'left'] as const) nonNegative(config.margin[side], `margin.${side}`);
+    for (const side of ['top', 'right', 'bottom', 'left'] as const)
+    {
+        nonNegative(config.margin[side], `margin.${side}`);
+    }
     const contentWidth = config.page.width - config.margin.left - config.margin.right;
     check(contentWidth > 0, 'the left and right margins leave no room for text');
     check(config.page.height - config.margin.top - config.margin.bottom > 0, 'the top and bottom margins leave no room for text');
-    for (const role of ROLE_NAMES) checkStyle(config.roles[role], `roles.${role}`);
+    for (const role of ROLE_NAMES)
+    {
+        checkStyle(config.roles[role], `roles.${role}`);
+    }
     checkStyle(config.footer.style, 'footer.style');
     nonNegative(config.footer.baselineFromBottom, 'footer.baselineFromBottom');
     check(config.footer.baselineFromBottom < config.page.height, 'footer.baselineFromBottom must be inside the page');
@@ -190,8 +199,14 @@ export function validateLayoutConfig(config: LayoutConfig): void
     nonNegative(config.list.itemGap, 'list.itemGap');
     check(Number.isInteger(config.bodyIndentSpaces) && config.bodyIndentSpaces >= 1, 'bodyIndentSpaces must be a whole number >= 1');
     const ix = config.index;
-    for (const name of ['numberWidth', 'dateWidth', 'fromWidth', 'pageWidth'] as const) positive(ix[name], `index.${name}`);
-    for (const name of ['gap', 'rowGap', 'headerGap'] as const) nonNegative(ix[name], `index.${name}`);
+    for (const name of ['numberWidth', 'dateWidth', 'fromWidth', 'pageWidth'] as const)
+    {
+        positive(ix[name], `index.${name}`);
+    }
+    for (const name of ['gap', 'rowGap', 'headerGap'] as const)
+    {
+        nonNegative(ix[name], `index.${name}`);
+    }
     check(
         ix.numberWidth + ix.dateWidth + ix.fromWidth + ix.pageWidth + 4 * ix.gap < contentWidth,
         'the index columns and gaps must leave room for the subject column',
@@ -202,7 +217,10 @@ export function validateLayoutConfig(config: LayoutConfig): void
     check(ix.dateWidth >= SHORT_DATE_EM * bodySize - 1e-9, 'index.dateWidth must hold a date as "YYYY-MM-DD HH:mm" on one line');
     // The attachment lines of an index row run from the date column to the end of the subject column.
     check(config.list.indent < contentWidth - ix.numberWidth - ix.pageWidth - 2 * ix.gap, 'list.indent must be less than the width of the index attachment lines');
-    for (const [name, value] of Object.entries(config.spacing)) nonNegative(value, `spacing.${name}`);
+    for (const [name, value] of Object.entries(config.spacing))
+    {
+        nonNegative(value, `spacing.${name}`);
+    }
     nonNegative(config.rule.width, 'rule.width');
     check(typeof config.newPagePerEmail === 'boolean', 'newPagePerEmail must be true or false');
     check(Number.isInteger(config.keepBodyLines) && config.keepBodyLines >= 0, 'keepBodyLines must be a whole number >= 0');

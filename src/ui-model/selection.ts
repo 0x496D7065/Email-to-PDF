@@ -64,8 +64,14 @@ export function createSelection(): Selection
         {
             for (const key of selectionKeys(m))
             {
-                if (included) excluded.delete(key);
-                else excluded.add(key);
+                if (included)
+                {
+                    excluded.delete(key);
+                }
+                else
+                {
+                    excluded.add(key);
+                }
             }
         },
         clear: () => excluded.clear(),
@@ -78,7 +84,10 @@ export function includedPositions(messages: readonly EngineMessage[], selection:
     const positions: number[] = [];
     messages.forEach((m, position) =>
     {
-        if (selection.isIncluded(m)) positions.push(position);
+        if (selection.isIncluded(m))
+        {
+            positions.push(position);
+        }
     });
     return positions;
 }

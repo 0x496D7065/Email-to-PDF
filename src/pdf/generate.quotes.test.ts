@@ -134,24 +134,45 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
                     const input = files(styles, mode);
                     const before = structuredClone(input);
                     const { lines, result, rebuilt } = await emailLines(input, { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: unfold });
-                    if (mode === 'single') expect(result.reconstructed.length).toBe(styles.length);
-                    if (mode === 'single' && !unfold) expect(rebuilt).toBeGreaterThan(0);
+                    if (mode === 'single')
+                    {
+                        expect(result.reconstructed.length).toBe(styles.length);
+                    }
+                    if (mode === 'single' && !unfold)
+                    {
+                        expect(rebuilt).toBeGreaterThan(0);
+                    }
 
                     // No line starts with a quote mark.
-                    for (const l of lines) expect(l.text, l.text).not.toMatch(/^\s*>/u);
+                    for (const l of lines)
+                    {
+                        expect(l.text, l.text).not.toMatch(/^\s*>/u);
+                    }
                     // Only three x positions: the margin (heading, header labels, notes), a header value, the body step.
-                    for (const l of lines) expect([LEFT, VALUE_X, BODY_X].some((x) => Math.abs(l.x - x) < 1e-3), `${l.text} at ${String(l.x)}`).toBe(true);
+                    for (const l of lines)
+                    {
+                        expect([LEFT, VALUE_X, BODY_X].some((x) => Math.abs(l.x - x) < 1e-3), `${l.text} at ${String(l.x)}`).toBe(true);
+                    }
                     expect(lines.find((l) => l.text.startsWith('Email 1'))!.x).toBeCloseTo(LEFT, 3);
-                    for (const l of lines.filter((r) => /^(From|Date|Subject) /u.test(r.text))) expect(l.x).toBeCloseTo(LEFT, 3);
+                    for (const l of lines.filter((r) => /^(From|Date|Subject) /u.test(r.text)))
+                    {
+                        expect(l.x).toBeCloseTo(LEFT, 3);
+                    }
 
                     // Every email's own text is printed, one step in, the ">" inside the line kept; the long line wrapped, every piece one step in.
                     const total = mode === 'multi' ? styles.length + 1 : 1 + (unfold ? 0 : styles.length);
                     const notes = lines.filter((l) => /^Note \d+: price > cost, a -> b\.$/u.test(l.text));
                     expect(new Set(notes.map((l) => l.text)).size).toBe(styles.length + 1);
-                    for (const l of notes) expect(l.x).toBeCloseTo(BODY_X, 3);
+                    for (const l of notes)
+                    {
+                        expect(l.x).toBeCloseTo(BODY_X, 3);
+                    }
                     const pieces = lines.filter((l) => /delivery van|side street|hall free of boxes/u.test(l.text));
                     expect(pieces.length).toBeGreaterThanOrEqual(2 * total);
-                    for (const l of pieces) expect(l.x).toBeCloseTo(BODY_X, 3);
+                    for (const l of pieces)
+                    {
+                        expect(l.x).toBeCloseTo(BODY_X, 3);
+                    }
 
                     // Collapse, never delete: the messages are unchanged; the full text keeps every body whole (only quote prefixes left out).
                     expect(result.messages.map((m) => m.message)).toEqual(before);

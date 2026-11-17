@@ -40,8 +40,14 @@ const textOf = (record: LabelRecord): string =>
 function apply(record: LabelRecord): void
 {
     const text = textOf(record);
-    if (record.attribute === null) record.element.textContent = text;
-    else setSafeAttribute(record.element, record.attribute, text);
+    if (record.attribute === null)
+    {
+        record.element.textContent = text;
+    }
+    else
+    {
+        setSafeAttribute(record.element, record.attribute, text);
+    }
 }
 
 export function createStaticLabels(): StaticLabels
@@ -65,7 +71,10 @@ export function createStaticLabels(): StaticLabels
         },
         relabel()
         {
-            for (const record of records) apply(record);
+            for (const record of records)
+            {
+                apply(record);
+            }
         },
     };
 }

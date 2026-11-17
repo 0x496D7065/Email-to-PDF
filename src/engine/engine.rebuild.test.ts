@@ -101,7 +101,10 @@ describe('runEngine: rebuilding safety net', () =>
             ...DEFAULT_PARTS,
             reconstructQuotedMessages: (body, options) =>
             {
-                if (body === bad.bodyText) throw new Error('synthetic bug');
+                if (body === bad.bodyText)
+                {
+                    throw new Error('synthetic bug');
+                }
                 return reconstructQuotedMessages(body, options);
             },
         });
@@ -244,9 +247,15 @@ describe('runEngine: quoted history the splitter did not rebuild (7.4 review not
         expect(realPart(out)).toEqual(realPart(runEngine(results, NO_REBUILD)));
         const fromSource = out.reconstructed.filter((r) => r.sourceIndex === 0);
         expect(fromSource.length).toBe(1);
-        for (const r of fromSource) expect(r.rebuilt.end).toBeLessThanOrEqual(h2);
+        for (const r of fromSource)
+        {
+            expect(r.rebuilt.end).toBeLessThanOrEqual(h2);
+        }
         // Every rebuilt message from any email stays inside its own source's rebuilt range.
-        for (const r of out.reconstructed) expect(r.sourceIndex === 0 ? r.rebuilt.end <= h2 : true).toBe(true);
+        for (const r of out.reconstructed)
+        {
+            expect(r.sourceIndex === 0 ? r.rebuilt.end <= h2 : true).toBe(true);
+        }
         // The tail is still shown by the source message itself, whole.
         const kept = out.messages[out.positionByIndex[0]!]!;
         expect(reconstruct(broken, kept.segments)).toBe(broken);

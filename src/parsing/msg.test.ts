@@ -45,7 +45,10 @@ async function parse(data: Uint8Array, name = 'test.msg'): Promise<ParseResult>
 async function parseOk(s: MsgSpec): Promise<NormalizedMessage>
 {
     const result = await parse(buildMsg(s));
-    if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    }
     return result.message;
 }
 
@@ -55,7 +58,10 @@ describe('createMsgParser: basic fields', () =>
     {
         const data = buildMsg(BASE);
         const result = await parse(data);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.source).toEqual({ fileName: 'test.msg', sha256: await sha256Hex(data), kind: 'msg' });
         expect(result.message.subject).toBe('Test message');
         expect(result.message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
@@ -78,7 +84,10 @@ describe('createMsgParser: basic fields', () =>
         big.set(data, 37);
         const view = big.subarray(37, 37 + data.length);
         const result = await parse(view);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.subject).toBe('Test message');
         expect(result.message.source.sha256).toBe(await sha256Hex(data));
     });
@@ -435,7 +444,10 @@ describe('createMsgParser: body', () =>
             name: 'a.msg',
             bytes: buildMsg(spec({ bodyText: 'Plain text.', bodyHtml: HTML })),
         });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('Plain text.');
         expect(result.message.warnings).toEqual([]);
         expect(htmlToText).not.toHaveBeenCalled();
@@ -448,7 +460,10 @@ describe('createMsgParser: body', () =>
             name: 'a.msg',
             bytes: buildMsg(spec({ bodyText: undefined, bodyHtml: HTML })),
         });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(htmlToText).toHaveBeenCalledTimes(1);
         expect(htmlToText).toHaveBeenCalledWith(HTML);
         expect(result.message.bodyText).toBe(`converted ${HTML.length}`);
@@ -462,7 +477,10 @@ describe('createMsgParser: body', () =>
             name: 'a.msg',
             bytes: buildMsg(spec({ bodyText: undefined, bodyHtml: HTML })),
         });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('start\n\n[Text cut here: ...]');
         expect(result.message.warnings).toEqual(['html-converted-body', 'html-body-truncated']);
     });
@@ -482,7 +500,10 @@ describe('createMsgParser: body', () =>
             name: 'a.msg',
             bytes: buildMsg(spec({ bodyText: undefined, bodyRtf: rtf })),
         });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('');
         expect(result.message.warnings).toEqual(['rtf-only-body']);
         expect(htmlToText).not.toHaveBeenCalled();
@@ -522,7 +543,10 @@ describe('createMsgParser: body', () =>
         {
             const htmlToText = (): HtmlToTextResult => ({ text: 'a\rb\r\nc\u2028d', truncated: false });
             const result = await createMsgParser({ htmlToText }).parse({ name: 'a.msg', bytes: buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' })) });
-            if (!result.ok) throw new Error(result.detail);
+            if (!result.ok)
+            {
+                throw new Error(result.detail);
+            }
             expect(result.message.bodyText).toBe('a\nb\nc\u2028d');
         });
 
@@ -530,7 +554,10 @@ describe('createMsgParser: body', () =>
         {
             const data = buildMsg(spec({ bodyText: 'one\rtwo' }));
             const result = await parse(data);
-            if (!result.ok) throw new Error(result.detail);
+            if (!result.ok)
+            {
+                throw new Error(result.detail);
+            }
             expect(result.message.source.sha256).toBe(await sha256Hex(data));
         });
     });
@@ -550,7 +577,10 @@ describe('createMsgParser: attachments (metadata only, README.md rule R4)', () =
                 }),
             ),
         );
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.attachments).toEqual([
             { fileName: 'invoice.txt', size: 27, mimeType: 'text/plain' },
             { fileName: 'blob.bin', size: 34, mimeType: 'application/octet-stream' },
@@ -602,7 +632,10 @@ describe('createMsgParser: broken files never throw', () =>
     {
         const result = await parse(data, name);
         expect(result.ok).toBe(false);
-        if (result.ok) return '';
+        if (result.ok)
+        {
+            return '';
+        }
         expect(result.error).toBe('corrupt');
         expect(result.fileName).toBe(name);
         expect(result.sha256).toBe(await sha256Hex(data));
@@ -666,7 +699,10 @@ describe('createMsgParser: broken files never throw', () =>
         });
         const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>', attachments: [{ fileName: 'plan.pdf', content: 'x' }] }));
         const result = await throwing.parse({ name: 'x.msg', bytes: data });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('');
         expect(result.message.warnings).toEqual(['html-body-unreadable']);
         expect(result.message.subject).toBe('Test message');
@@ -764,7 +800,10 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
     const ok = (fields: FieldsData): NormalizedMessage =>
     {
         const result = map(fields);
-        if (!result.ok) throw new Error(`expected ok, got ${result.detail}`);
+        if (!result.ok)
+        {
+            throw new Error(`expected ok, got ${result.detail}`);
+        }
         return result.message;
     };
 

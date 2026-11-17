@@ -30,8 +30,14 @@ function mailboxes(list: readonly Address[] | undefined): ExpectedAddress[]
 
 function dateWarnings(utcMs: number | null, zoneKnown: boolean, hadDate: boolean): ParseWarning[]
 {
-    if (!hadDate) return ['missing-date'];
-    if (utcMs === null) return ['unparseable-date'];
+    if (!hadDate)
+    {
+        return ['missing-date'];
+    }
+    if (utcMs === null)
+    {
+        return ['unparseable-date'];
+    }
     return zoneKnown ? [] : ['unknown-time-zone'];
 }
 
@@ -76,8 +82,14 @@ const SNIPPETS_NEEDING_TAG_REMOVAL = new Set(['The showroom visit is on Friday 2
 
 function checkBody(expected: FixtureExpectation, body: string): void
 {
-    for (const snippet of expected.bodyContains) expect(body, `body should contain "${snippet}"`).toContain(snippet);
-    for (const snippet of expected.bodyExcludes ?? []) expect(body, `body must not contain "${snippet}"`).not.toContain(snippet);
+    for (const snippet of expected.bodyContains)
+    {
+        expect(body, `body should contain "${snippet}"`).toContain(snippet);
+    }
+    for (const snippet of expected.bodyExcludes ?? [])
+    {
+        expect(body, `body must not contain "${snippet}"`).not.toContain(snippet);
+    }
     checkTags(expected, body);
 }
 
@@ -89,7 +101,10 @@ describe('manifest matches the .eml fixtures', () =>
     it.each(emlFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected) =>
     {
         const raw = files[`./${id}`];
-        if (raw === undefined) throw new Error(`missing file for ${id}`);
+        if (raw === undefined)
+        {
+            throw new Error(`missing file for ${id}`);
+        }
         // Fixtures are 7-bit ASCII (checked by the guard), so this gives the exact file bytes.
         const email = await PostalMime.parse(new TextEncoder().encode(raw));
 
@@ -101,7 +116,10 @@ describe('manifest matches the .eml fixtures', () =>
         const date = parseEmailDate(dateHeader);
         expect(date.utcMs).toBe(expected.date.utcMs);
         expect(date.zoneKnown).toBe(expected.date.zoneKnown);
-        if (expected.date.offsetMinutes !== undefined) expect(date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        if (expected.date.offsetMinutes !== undefined)
+        {
+            expect(date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        }
 
         expect(mailboxes(email.from ? [email.from] : [])).toEqual(expected.from);
         expect(mailboxes(email.to)).toEqual(expected.to);
@@ -121,9 +139,18 @@ describe('manifest matches the .eml fixtures', () =>
         ).toEqual(expected.attachments);
 
         const warnings: ParseWarning[] = dateWarnings(date.utcMs, date.zoneKnown, dateHeader !== null);
-        if (!email.messageId) warnings.push('missing-message-id');
-        if (email.text === undefined && email.html !== undefined) warnings.push('html-converted-body');
-        if (email.text === undefined && email.html === undefined) warnings.push('no-body');
+        if (!email.messageId)
+        {
+            warnings.push('missing-message-id');
+        }
+        if (email.text === undefined && email.html !== undefined)
+        {
+            warnings.push('html-converted-body');
+        }
+        if (email.text === undefined && email.html === undefined)
+        {
+            warnings.push('no-body');
+        }
         expect(sorted(warnings)).toEqual(sorted(expected.warnings));
 
         // postal-mime's own joined `email.text` is an independent reference for
@@ -133,8 +160,14 @@ describe('manifest matches the .eml fixtures', () =>
         // inline forwarded messages, while the adapter keeps file order and uses
         // our converter (see src/parsing/eml.ts). A fixture of either shape must
         // get an explicit expected body instead of this comparison.
-        if (email.text !== undefined) checkBody(expected, email.text);
-        else expect(email.html).toContain('<body'); // HTML-only: text conversion is task 2.4's job.
+        if (email.text !== undefined)
+        {
+            checkBody(expected, email.text);
+        }
+        else
+        {
+            expect(email.html).toContain('<body'); // HTML-only: text conversion is task 2.4's job.
+        }
     });
 });
 
@@ -142,7 +175,10 @@ describe('manifest matches the .eml fixtures', () =>
 function readMsg(id: string): FieldsData
 {
     const spec = MSG_SPECS.find((s) => s.id === id);
-    if (spec === undefined) throw new Error(`no .msg spec ${id}`);
+    if (spec === undefined)
+    {
+        throw new Error(`no .msg spec ${id}`);
+    }
     const reader = new MsgReader(buildMsgView(spec));
     reader.parserConfig = {
         includeRawProps: true,
@@ -200,11 +236,17 @@ describe('manifest matches the .msg builder specs', () =>
         ).toEqual(expected.attachments);
 
         const warnings: ParseWarning[] = time === undefined ? ['missing-date'] : [];
-        if (!data.messageId) warnings.push('missing-message-id');
+        if (!data.messageId)
+        {
+            warnings.push('missing-message-id');
+        }
         // The builder writes an HTML body as UTF-8 bytes (PidTagHtml).
         const html = data.html === undefined ? undefined : new TextDecoder().decode(data.html);
         const htmlOnly = (data.body ?? '').trim() === '' && html !== undefined;
-        if (htmlOnly) warnings.push('html-converted-body');
+        if (htmlOnly)
+        {
+            warnings.push('html-converted-body');
+        }
         expect(sorted(warnings)).toEqual(sorted(expected.warnings));
 
         if (htmlOnly)
@@ -215,11 +257,17 @@ describe('manifest matches the .msg builder specs', () =>
             expect(html).toContain('<body');
             for (const snippet of expected.bodyContains)
             {
-                if (SNIPPETS_NEEDING_TAG_REMOVAL.has(snippet)) continue;
+                if (SNIPPETS_NEEDING_TAG_REMOVAL.has(snippet))
+                {
+                    continue;
+                }
                 expect(html, `stored HTML should contain "${snippet}"`).toContain(snippet);
             }
         }
-        else checkBody(expected, data.body ?? '');
+        else
+        {
+            checkBody(expected, data.body ?? '');
+        }
     });
 
     it('the cross-format duplicate has the same body as its .eml twin (up to line ends)', async () =>
@@ -239,7 +287,10 @@ describe('manifest structure', () =>
         const threads = new Map<string, FixtureExpectation[]>();
         for (const f of FIXTURES)
         {
-            if (f.thread && f.duplicateGroup === undefined) threads.set(f.thread.id, [...(threads.get(f.thread.id) ?? []), f]);
+            if (f.thread && f.duplicateGroup === undefined)
+            {
+                threads.set(f.thread.id, [...(threads.get(f.thread.id) ?? []), f]);
+            }
         }
         // Duplicates share their original's position; compare one per position.
         for (const f of FIXTURES)
@@ -247,7 +298,10 @@ describe('manifest structure', () =>
             if (f.thread && f.duplicateGroup !== undefined)
             {
                 const list = threads.get(f.thread.id) ?? [];
-                if (!list.some((g) => g.thread?.position === f.thread?.position)) threads.set(f.thread.id, [...list, f]);
+                if (!list.some((g) => g.thread?.position === f.thread?.position))
+                {
+                    threads.set(f.thread.id, [...list, f]);
+                }
             }
         }
         for (const [, list] of threads)
@@ -264,11 +318,17 @@ describe('manifest structure', () =>
         {
             const position = f.thread?.position ?? 0;
             const previous = threaded.filter((g) => g.thread?.id === f.thread?.id && g.thread?.position === position - 1);
-            if (position === 1) expect(f.inReplyTo, `${f.id}: first in thread`).toBeNull();
+            if (position === 1)
+            {
+                expect(f.inReplyTo, `${f.id}: first in thread`).toBeNull();
+            }
             else
             {
                 expect(previous.length, `${f.id}: no message at position ${position - 1}`).toBeGreaterThan(0);
-                for (const p of previous) expect(f.inReplyTo, `${f.id} should reply to ${p.id}`).toBe(p.messageId);
+                for (const p of previous)
+                {
+                    expect(f.inReplyTo, `${f.id} should reply to ${p.id}`).toBe(p.messageId);
+                }
             }
         }
     });

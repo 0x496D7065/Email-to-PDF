@@ -50,7 +50,10 @@ export { default as FIXTURE_ORDER_2_COPY } from '../../tests/fixtures/eml/30-dup
 export function goodMsg(): Uint8Array
 {
     const spec = MSG_SPECS[0];
-    if (spec === undefined) throw new Error('no .msg spec');
+    if (spec === undefined)
+    {
+        throw new Error('no .msg spec');
+    }
     return buildMsg(spec);
 }
 

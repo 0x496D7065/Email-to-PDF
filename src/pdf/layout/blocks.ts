@@ -44,7 +44,10 @@ export function layRow(b: PageBuilder, row: PdfFieldRow): LaidRow
 export function placeRow(b: PageBuilder, row: LaidRow): void
 {
     const { labelWidth, gap, rowGap } = b.config.fields;
-    if (row.height <= b.contentHeight) b.ensure(row.height);
+    if (row.height <= b.contentHeight)
+    {
+        b.ensure(row.height);
+    }
     const valueX = b.left + labelWidth + gap;
     const bands = Math.max(row.label.length, row.value.length);
     for (let k = 0; k < bands; k++)
@@ -53,8 +56,14 @@ export function placeRow(b: PageBuilder, row: LaidRow): void
         const value = row.value[k];
         const height = Math.max(label?.height ?? 0, value?.height ?? 0);
         b.ensure(height);
-        if (label !== undefined) b.typesetter.emit(label, b.left, b.y, b.page.text);
-        if (value !== undefined) b.typesetter.emit(value, valueX, b.y, b.page.text);
+        if (label !== undefined)
+        {
+            b.typesetter.emit(label, b.left, b.y, b.page.text);
+        }
+        if (value !== undefined)
+        {
+            b.typesetter.emit(value, valueX, b.y, b.page.text);
+        }
         b.y += height;
     }
     b.y += rowGap;
@@ -79,7 +88,10 @@ export function layItem(b: PageBuilder, item: readonly PdfLine[]): LaidItem
 export function placeItem(b: PageBuilder, item: LaidItem): void
 {
     const { indent } = b.config.list;
-    if (item.height <= b.contentHeight) b.ensure(item.height);
+    if (item.height <= b.contentHeight)
+    {
+        b.ensure(item.height);
+    }
     const [first, ...rest] = item.lines;
     if (first !== undefined)
     {

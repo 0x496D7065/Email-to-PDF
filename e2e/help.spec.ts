@@ -33,7 +33,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -126,7 +129,10 @@ test('the help sits by step 1, opens and closes with Enter and Space, and reads 
     );
     expect(headings[0]).toEqual({ level: 1, text: en.app.name });
     expect(headings.filter((h) => h.level === 1)).toHaveLength(1);
-    for (let i = 1; i < headings.length; i++) expect(headings[i]?.level ?? 9).toBeLessThanOrEqual((headings[i - 1]?.level ?? 0) + 1);
+    for (let i = 1; i < headings.length; i++)
+    {
+        expect(headings[i]?.level ?? 9).toBeLessThanOrEqual((headings[i - 1]?.level ?? 0) + 1);
+    }
     const stepIndex = headings.findIndex((h) => h.level === 2 && h.text.endsWith(en.steps.add.title));
     expect(headings.slice(stepIndex + 1, stepIndex + 6)).toEqual(CLIENTS.map((client) => ({ level: 3, text: client.name })));
 

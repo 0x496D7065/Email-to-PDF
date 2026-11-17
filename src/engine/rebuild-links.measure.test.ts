@@ -23,7 +23,10 @@ import { DEFAULT_PARTS, runEngine, type EngineResult } from './engine';
 export function realFile(messages: readonly ThreadMessage[], i: number, tag: string): NormalizedMessage
 {
     const m = messages[i];
-    if (m === undefined) throw new Error(`no message ${i}`);
+    if (m === undefined)
+    {
+        throw new Error(`no message ${i}`);
+    }
     const id = (k: number): string => `${tag}-${k}@example.test`;
     const utcMs = instantOf(m.sent, m.zone);
     return {
@@ -59,7 +62,10 @@ export interface Outcome {
 export function runScenario(c: ThreadCase, dropped: readonly number[]): Outcome
 {
     const messages = c.messages;
-    if (messages === undefined) throw new Error(`${c.id}: no messages`);
+    if (messages === undefined)
+    {
+        throw new Error(`${c.id}: no messages`);
+    }
     const tag = c.id.replace(/[^a-z0-9]+/giu, '-');
     const results: ParseResult[] = dropped.map((i) => ({ ok: true, message: realFile(messages, i, tag) }));
     const result = runEngine(results);
@@ -84,8 +90,14 @@ export function runScenario(c: ThreadCase, dropped: readonly number[]): Outcome
             continue;
         }
         expected.add(conv);
-        if (r.link === 'real' && convOfInput(r.realIndex ?? -1) !== conv) wrong.push(`message ${conv} linked to real message ${convOfInput(r.realIndex ?? -1)}`);
-        if (r.link === 'same-as' && convOfRebuilt(r.sameAs ?? -1) !== conv) wrong.push(`message ${conv} merged with a copy of message ${convOfRebuilt(r.sameAs ?? -1)}`);
+        if (r.link === 'real' && convOfInput(r.realIndex ?? -1) !== conv)
+        {
+            wrong.push(`message ${conv} linked to real message ${convOfInput(r.realIndex ?? -1)}`);
+        }
+        if (r.link === 'same-as' && convOfRebuilt(r.sameAs ?? -1) !== conv)
+        {
+            wrong.push(`message ${conv} merged with a copy of message ${convOfRebuilt(r.sameAs ?? -1)}`);
+        }
     }
     const order = result.timeline.map((e) => (e.kind === 'message' ? convOfInput(result.messages[e.position]?.index ?? -1) : convOfRebuilt(e.id)));
     return { order, rebuiltEntries: result.timeline.filter((e) => e.kind === 'rebuilt').length, wrong, expected, result };
@@ -112,7 +124,10 @@ function partialDrops(n: number): number[][]
     for (const s of sets)
     {
         const clean = [...new Set(s.filter((k) => k >= 0 && k < n))];
-        if (clean.length > 0 && clean.length < n) unique.set(clean.join(','), clean);
+        if (clean.length > 0 && clean.length < n)
+        {
+            unique.set(clean.join(','), clean);
+        }
     }
     // Each one also dropped in reverse order: the drop order must not matter.
     return [...unique.values()].flatMap((s) => [s, [...s].reverse()]);
@@ -139,7 +154,10 @@ describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =
             rebuilt += o.result.reconstructed.length;
             linked += o.result.reconstructed.filter((r) => r.link === 'real').length;
             const inSequence = o.order.join(' ') === Array.from({ length: n }, (_, k) => k).join(' ');
-            if (o.rebuiltEntries > 0 || o.wrong.length > 0 || !inSequence) rows.push(`  ${c.id}: ${o.rebuiltEntries} entries; order ${o.order.join(' ')}; ${o.wrong.join('; ')}`);
+            if (o.rebuiltEntries > 0 || o.wrong.length > 0 || !inSequence)
+            {
+                rows.push(`  ${c.id}: ${o.rebuiltEntries} entries; order ${o.order.join(' ')}; ${o.wrong.join('; ')}`);
+            }
         }
         console.log(`target 1 (all dropped): ${rebuilt} rebuilt messages, ${linked} linked to their real file${rows.length === 0 ? '' : `\n${rows.join('\n')}`}`);
         expect(rows).toEqual([]);
@@ -165,7 +183,10 @@ describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =
             expect(missingIn(o), c.id).toEqual([]);
             entries += o.rebuiltEntries;
             truths += n - 1;
-            if (o.rebuiltEntries < n - 1) short.push(`  ${c.id}: ${o.rebuiltEntries} of ${n - 1}`);
+            if (o.rebuiltEntries < n - 1)
+            {
+                short.push(`  ${c.id}: ${o.rebuiltEntries} of ${n - 1}`);
+            }
         }
         console.log(`target 2 (last dropped): ${entries} of ${truths} earlier messages in the timeline${short.length === 0 ? '' : `\n${short.join('\n')}`}`);
         expect(entries / truths).toBeGreaterThanOrEqual(0.9);
@@ -219,8 +240,14 @@ describe('thread rebuilding in the engine: speed (task 7.5)', () =>
             onStage: (stage) =>
             {
                 const now = performance.now();
-                if (stage === 'reconstruct') at = now;
-                if (stage === 'done') rebuild = now - at;
+                if (stage === 'reconstruct')
+                {
+                    at = now;
+                }
+                if (stage === 'done')
+                {
+                    rebuild = now - at;
+                }
             },
         });
         return { out, total: performance.now() - t0, rebuild };
@@ -234,7 +261,10 @@ describe('thread rebuilding in the engine: speed (task 7.5)', () =>
         {
             const styles = Array.from({ length: 19 }, (_, i) => STYLES[(i + k) % STYLES.length] as QuoteStyle);
             const messages = chain(styles, { people: PEOPLE, subject: `Case ${k}`, start: Date.UTC(2025, 2, 3 + 2 * k, 8, 0) });
-            for (let i = messages.length - 1; i >= 0; i--) all.push({ ok: true, message: realFile(messages, i, `speed-${k}`) });
+            for (let i = messages.length - 1; i >= 0; i--)
+            {
+                all.push({ ok: true, message: realFile(messages, i, `speed-${k}`) });
+            }
         }
         const chars = all.reduce((n, r) => n + (r.ok ? r.message.bodyText.length : 0), 0);
         const { out, total, rebuild } = timed(all);

@@ -26,7 +26,10 @@ const fixtures = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', { qu
 function fixture(name: string): string
 {
     const text = fixtures[`../../tests/fixtures/eml/${name}`];
-    if (text === undefined) throw new Error(`missing fixture ${name}`);
+    if (text === undefined)
+    {
+        throw new Error(`missing fixture ${name}`);
+    }
     return text;
 }
 
@@ -65,7 +68,10 @@ describe('processFilesWith', () =>
         const progress: ProcessProgress[] = [];
         const result = await processFilesWith(files, STEPS, { onProgress: (p) => progress.push(p) });
 
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.engine.counts).toMatchObject({ filesGiven: 6, messagesFound: 4, duplicatesMerged: 1, filesFailed: 2 });
         expect(result.engine.messages.map((m) => m.message.source.fileName)).toEqual(['order-1.eml', 'order-2.eml', 'order-3.eml']);
         expect(result.engine.failed.map((f) => [f.index, f.fileName, f.error])).toEqual([
@@ -110,7 +116,10 @@ describe('processFilesWith', () =>
         const steps: ProcessSteps = { ...STEPS, organize: () => Promise.resolve({ ok: false, error: 'engine-timeout', detail: ENGINE_TIMEOUT_DETAIL }) };
         const result = await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], steps);
         expect(result.ok).toBe(false);
-        if (result.ok) return;
+        if (result.ok)
+        {
+            return;
+        }
         expect(result.error).toBe('engine-timeout');
         expect(result.detail).toBe(ENGINE_TIMEOUT_DETAIL);
         expect(result.parsed.map((r) => r.ok)).toEqual([true]);
@@ -132,7 +141,10 @@ describe('processFilesWith', () =>
         const steps: ProcessSteps = { ...STEPS, parse: (inputs) => (inputs[0]?.name === 'bad.eml' ? broken() : parse(inputs)) };
         const files = [textFile('bad.eml', fixture('01-plain-english.eml')).file, textFile('good.eml', fixture('70-no-date.eml')).file];
         const result = await processFilesWith(files, steps);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.engine.failed).toEqual([{ index: 0, fileName: 'bad.eml', sha256: null, error: 'tool-error', detail: UNEXPECTED_FILE_DETAIL }]);
         expect(result.engine.messages.map((m) => m.message.source.fileName)).toEqual(['good.eml']);
     });
@@ -168,7 +180,10 @@ describe('processFilesWith', () =>
                 }).parse(job),
             );
         const result = await processFilesWith([textFile('html.eml', fixture('50-html-only.eml')).file], { ...STEPS, parse: failing });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.engine.counts.filesFailed).toBe(0);
         expect(result.engine.messages[0]?.parserWarnings).toContain('html-body-unreadable');
         expect(result.engine.messages[0]?.message.bodyText).toBe('');

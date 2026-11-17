@@ -48,13 +48,19 @@ function layout(bytes: Uint8Array)
     const directorySectors = (): number[] =>
     {
         const sectors: number[] = [];
-        for (let s = u32(0x30); s !== 0xfffffffe; s = u32(fatEntry(s))) sectors.push(s);
+        for (let s = u32(0x30); s !== 0xfffffffe; s = u32(fatEntry(s)))
+        {
+            sectors.push(s);
+        }
         return sectors;
     };
     const entry = (index: number): number =>
     {
         const sector = directorySectors()[Math.floor(index / 4)];
-        if (sector === undefined) throw new Error(`no directory entry ${String(index)}`);
+        if (sector === undefined)
+        {
+            throw new Error(`no directory entry ${String(index)}`);
+        }
         return sectorAt(sector) + (index % 4) * 128;
     };
     const entryCount = (): number => directorySectors().length * 4;
@@ -63,7 +69,10 @@ function layout(bytes: Uint8Array)
     {
         for (let i = 1; i < entryCount(); i++)
         {
-            if (bytes[entry(i) + 0x42] === 2 && test(u32(entry(i) + 0x78))) return i;
+            if (bytes[entry(i) + 0x42] === 2 && test(u32(entry(i) + 0x78)))
+            {
+                return i;
+            }
         }
         throw new Error('no such stream');
     };
@@ -289,7 +298,10 @@ describe('findCfbDamage: damaged files are rejected', () =>
         {
             const stream = l.findStream((size) => size >= 4096);
             let length = 0;
-            for (let s = l.u32(l.entry(stream) + 0x74); s !== 0xfffffffe; s = l.u32(l.fatEntry(s))) length++;
+            for (let s = l.u32(l.entry(stream) + 0x74); s !== 0xfffffffe; s = l.u32(l.fatEntry(s)))
+            {
+                length++;
+            }
             l.setU32(l.entry(stream) + 0x78, length * SECTOR + 1);
         });
         expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
@@ -300,7 +312,10 @@ describe('findCfbDamage: damaged files are rejected', () =>
         const bytes = damaged(BASE, (l) =>
         {
             let length = 0;
-            for (let s = l.u32(l.entry(0) + 0x74); s !== 0xfffffffe; s = l.u32(l.fatEntry(s))) length++;
+            for (let s = l.u32(l.entry(0) + 0x74); s !== 0xfffffffe; s = l.u32(l.fatEntry(s)))
+            {
+                length++;
+            }
             l.setU32(l.entry(0) + 0x78, length * SECTOR + 1);
         });
         expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
@@ -343,7 +358,10 @@ describe('findCfbDamage: damaged files are rejected', () =>
         view.setUint32(0x38, 4096, true);
         view.setUint32(0x2c, 1, true); // one FAT sector: sector 0
         view.setUint32(0x4c, 0, true);
-        for (let i = 1; i < 109; i++) view.setUint32(0x4c + 4 * i, 0xffffffff, true);
+        for (let i = 1; i < 109; i++)
+        {
+            view.setUint32(0x4c + 4 * i, 0xffffffff, true);
+        }
         view.setUint32(0x30, 1, true); // directory: sector 1
         view.setUint32(0x3c, 0xfffffffe, true);
         view.setUint32(0x44, 0xfffffffe, true);

@@ -130,7 +130,13 @@ function printedOf(made: Made, k: number): { readonly kept: Uint8Array; readonly
     }
     const parts = noRepeat({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt, rebuildingOff, unticked }).parts.get(position) ?? [];
     const ranges = pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, parts);
-    for (const r of ranges ?? plan.ranges) if (r.keep) kept.fill(1, r.start, r.end);
+    for (const r of ranges ?? plan.ranges)
+    {
+        if (r.keep)
+        {
+            kept.fill(1, r.start, r.end);
+        }
+    }
     return { kept, ranges };
 }
 
@@ -165,7 +171,10 @@ function expectNoHeaderLines(made: Made, what: string): Stats
         for (const h of findReplyHeaders(body, message.subject))
         {
             let shown = false;
-            for (let i = h.start; i < h.headEnd && !shown; i++) shown = kept[i] === 1 && /\S/u.test(body[i]!);
+            for (let i = h.start; i < h.headEnd && !shown; i++)
+            {
+                shown = kept[i] === 1 && /\S/u.test(body[i]!);
+            }
             if (!shown)
             {
                 stats.cut++;
@@ -196,9 +205,15 @@ function expectNoHeaderLines(made: Made, what: string): Stats
         // 3. Every character left out by the rule is printed where its label says (or nowhere: Q2).
         for (const r of ranges ?? [])
         {
-            if (r.printedAs === null) continue;
+            if (r.printedAs === null)
+            {
+                continue;
+            }
             const text = squash(body.slice(r.start, r.end));
-            if (text === '') continue;
+            if (text === '')
+            {
+                continue;
+            }
             if (r.printedAs.kind === 'unticked')
             {
                 stats.unticked++;
@@ -217,14 +232,23 @@ function expectNoHeaderLines(made: Made, what: string): Stats
             }
             const target = doc.emails[r.printedAs.number - 1]!;
             expect(target.number, what).toBe(r.printedAs.number);
-            if (r.printedAs.kind === 'rebuilt') expect(target.rebuilt?.id, what).toBe(r.printedAs.id);
-            else expect(target.position, what).toBe(r.printedAs.position);
+            if (r.printedAs.kind === 'rebuilt')
+            {
+                expect(target.rebuilt?.id, what).toBe(r.printedAs.id);
+            }
+            else
+            {
+                expect(target.position, what).toBe(r.printedAs.position);
+            }
             // Its text lines are in that email's text, its header lines in its text (moved) or its header rows.
             const there = squash(`${rowsOf(target)}\n${bodyOf(target)}`);
             for (const line of body.slice(r.start, r.end).split(/\r\n?|\n/u))
             {
                 const l = squash(line);
-                if (l === '') continue;
+                if (l === '')
+                {
+                    continue;
+                }
                 const value = l.replace(/^[^:]{1,40}:\s*/u, '');
                 // A header line printed as a row shows its value (the row's own label may be another word). A
                 // marker line with no value ("Begin forwarded message:") says only that a quoted email starts: the
@@ -238,10 +262,16 @@ function expectNoHeaderLines(made: Made, what: string): Stats
     // 2. A rebuilt email: no header block in its text below the moved header lines; moved lines printed once.
     for (const e of doc.emails)
     {
-        if (e.rebuilt === null) continue;
+        if (e.rebuilt === null)
+        {
+            continue;
+        }
         const entry = result.reconstructed[e.rebuilt.shownId]!;
         const text = entry.rebuilt.reconstructedText;
-        for (const h of findReplyHeaders(text)) violations.push(`rebuilt Email ${String(e.number)}: "${squash(text.slice(h.start, h.headEnd)).slice(0, 80)}"`);
+        for (const h of findReplyHeaders(text))
+        {
+            violations.push(`rebuilt Email ${String(e.number)}: "${squash(text.slice(h.start, h.headEnd)).slice(0, 80)}"`);
+        }
         if (e.rebuilt.movedHeaders > 0)
         {
             stats.moved += e.rebuilt.movedHeaders;
@@ -280,7 +310,10 @@ describe('no header lines of another email inside a body, "Print full original t
     const totals: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0 };
     const add = (s: Stats): void =>
     {
-        for (const key of Object.keys(totals) as (keyof Stats)[]) totals[key] += s[key];
+        for (const key of Object.keys(totals) as (keyof Stats)[])
+        {
+            totals[key] += s[key];
+        }
     };
     let switchOffInline = 0;
     const choices: [string, (ids: readonly number[]) => number[]][] = [
@@ -313,7 +346,10 @@ describe('no header lines of another email inside a body, "Print full original t
             for (const [name, idx] of batches)
             {
                 const files = idx.map((i) => realFile(ms, i, tag));
-                for (const [choice, rebuilt] of choices) add(expectNoHeaderLines(make(files, rebuilt), `${c.id}, ${name}, ${choice}`));
+                for (const [choice, rebuilt] of choices)
+                {
+                    add(expectNoHeaderLines(make(files, rebuilt), `${c.id}, ${name}, ${choice}`));
+                }
                 expectSwitchOff(files, `${c.id}, ${name}`);
                 expectFullTextWhole(files, `${c.id}, ${name}`);
             }
@@ -325,7 +361,10 @@ describe('no header lines of another email inside a body, "Print full original t
         for (const [choice, rebuilt] of choices)
         {
             add(expectNoHeaderLines(make(fixtures, rebuilt), `all fixtures, ${choice}`));
-            for (const f of fixtures) add(expectNoHeaderLines(make([f], rebuilt), `${f.source.fileName}, ${choice}`));
+            for (const f of fixtures)
+            {
+                add(expectNoHeaderLines(make([f], rebuilt), `${f.source.fileName}, ${choice}`));
+            }
         }
         expectSwitchOff(fixtures, 'all fixtures');
         expectFullTextWhole(fixtures, 'all fixtures');

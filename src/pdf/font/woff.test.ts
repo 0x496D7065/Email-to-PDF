@@ -17,7 +17,10 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<A
     for (;;)
     {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done)
+        {
+            break;
+        }
         parts.push(value);
     }
     const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
@@ -77,7 +80,10 @@ async function buildWoff(tables: SyntheticTable[], flavor = TRUETYPE_FLAVOR): Pr
     // WOFF stores a table raw unless compressing makes it smaller.
     stored.forEach((data, i) =>
     {
-        if (sorted[i]!.compress && data.length >= sorted[i]!.data.length) throw new Error(`test table ${sorted[i]!.tag} does not compress`);
+        if (sorted[i]!.compress && data.length >= sorted[i]!.data.length)
+        {
+            throw new Error(`test table ${sorted[i]!.tag} does not compress`);
+        }
     });
     const directoryEnd = 44 + 20 * sorted.length;
     let length = directoryEnd;
@@ -185,7 +191,10 @@ describe('unwrapWoff on synthetic files', () =>
         const sfnt = await unwrapWoff(await buildWoff(tables));
         const directory = readSfntDirectory(sfnt);
         expect([...directory.tables.keys()]).toEqual(['aaaa', 'mmmm', 'zzzz']);
-        for (const table of tables) expect(tableBytes(sfnt, directory, table.tag)).toEqual(table.data);
+        for (const table of tables)
+        {
+            expect(tableBytes(sfnt, directory, table.tag)).toEqual(table.data);
+        }
         expect(sfnt.length).toBe(12 + 16 * 3 + 4000 + 1000 + 40);
         expect(() => checkSumAdjustment(sfnt, directory)).toThrow(/no head table/);
     });
@@ -210,7 +219,10 @@ describe('unwrapWoff on synthetic files', () =>
         const view = new DataView(sfnt.buffer);
         // OpenType: entrySelector = floor(log2(numTables)), searchRange = 16 * 2^entrySelector.
         let entrySelector = 0;
-        while (2 ** (entrySelector + 1) <= count) entrySelector++;
+        while (2 ** (entrySelector + 1) <= count)
+        {
+            entrySelector++;
+        }
         expect(view.getUint16(4)).toBe(count);
         expect(view.getUint16(6)).toBe(16 * 2 ** entrySelector);
         expect(view.getUint16(8)).toBe(entrySelector);

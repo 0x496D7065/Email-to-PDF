@@ -95,7 +95,10 @@ function isRecord(value: unknown): value is Record<string, unknown>
 /** True if `data` is a well-formed page -> PDF worker message (its overall shape). */
 export function isToPdfWorker(data: unknown): data is ToPdfWorker
 {
-    if (!isRecord(data) || data.type !== 'make' || !isRecord(data.input) || !isRecord(data.fonts)) return false;
+    if (!isRecord(data) || data.type !== 'make' || !isRecord(data.input) || !isRecord(data.fonts))
+    {
+        return false;
+    }
     const { input, fonts } = data;
     return (
         isRecord(input.result) &&
@@ -120,8 +123,14 @@ export function isToPdfWorker(data: unknown): data is ToPdfWorker
  */
 export function isFromPdfWorker(data: unknown): data is FromPdfWorker
 {
-    if (!isRecord(data)) return false;
-    if (data.type === 'failed') return true;
+    if (!isRecord(data))
+    {
+        return false;
+    }
+    if (data.type === 'failed')
+    {
+        return true;
+    }
     return (
         data.type === 'done' &&
         data.bytes instanceof Uint8Array &&
@@ -147,7 +156,10 @@ export async function makePdf(request: MakePdfRequest): Promise<GeneratedPdf>
 export function ownBuffer(bytes: Uint8Array): Uint8Array<ArrayBuffer>
 {
     const { buffer } = bytes;
-    if (buffer instanceof ArrayBuffer && bytes.byteOffset === 0 && bytes.byteLength === buffer.byteLength) return new Uint8Array(buffer);
+    if (buffer instanceof ArrayBuffer && bytes.byteOffset === 0 && bytes.byteLength === buffer.byteLength)
+    {
+        return new Uint8Array(buffer);
+    }
     return bytes.slice();
 }
 
@@ -166,9 +178,15 @@ export function createPdfWorkerSide(
     let started = false;
     return async (data) =>
     {
-        if (!isToPdfWorker(data)) return;
+        if (!isToPdfWorker(data))
+        {
+            return;
+        }
         // One PDF per worker: a second request is ignored.
-        if (started) return;
+        if (started)
+        {
+            return;
+        }
         started = true;
         let made: GeneratedPdf;
         try

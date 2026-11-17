@@ -35,19 +35,37 @@ const NEVER_PRECACHED: ReadonlySet<string> = new Set(['_headers', '_redirects', 
  */
 export function precachePaths(fileNames: readonly string[], base = '/'): string[]
 {
-    if (!base.startsWith('/') || !base.endsWith('/')) throw new Error(`precache list: base must start and end with "/", not ${base}`);
+    if (!base.startsWith('/') || !base.endsWith('/'))
+    {
+        throw new Error(`precache list: base must start and end with "/", not ${base}`);
+    }
     const paths: string[] = [];
     let page = false;
     for (const name of fileNames)
     {
-        if (NEVER_PRECACHED.has(name) || name.endsWith('.map')) continue;
+        if (NEVER_PRECACHED.has(name) || name.endsWith('.map'))
+        {
+            continue;
+        }
         const path = name === 'index.html' ? base : `${base}${name}`;
-        if (name === 'index.html') page = true;
-        else if (!isPlainPath(path)) throw new Error(`precache list: "${name}" is not a plain file path`);
+        if (name === 'index.html')
+        {
+            page = true;
+        }
+        else if (!isPlainPath(path))
+        {
+            throw new Error(`precache list: "${name}" is not a plain file path`);
+        }
         paths.push(path);
     }
-    if (!page) throw new Error('precache list: dist/index.html is missing');
-    if (new Set(paths).size !== paths.length) throw new Error('precache list: a file is listed twice');
+    if (!page)
+    {
+        throw new Error('precache list: dist/index.html is missing');
+    }
+    if (new Set(paths).size !== paths.length)
+    {
+        throw new Error('precache list: a file is listed twice');
+    }
     return paths.sort();
 }
 
@@ -61,7 +79,10 @@ export function injectManifest(code: string, manifest: PrecacheManifest): string
     const literal = new RegExp(`(["'\`])${MANIFEST_PLACEHOLDER}\\1`, 'g');
     const found = code.match(literal)?.length ?? 0;
     const anywhere = code.split(MANIFEST_PLACEHOLDER).length - 1;
-    if (found !== 1 || anywhere !== 1) throw new Error(`sw.js must contain the precache placeholder exactly once (found ${String(anywhere)})`);
+    if (found !== 1 || anywhere !== 1)
+    {
+        throw new Error(`sw.js must contain the precache placeholder exactly once (found ${String(anywhere)})`);
+    }
     const json = JSON.stringify({ version: manifest.version, paths: manifest.paths });
     return code.replace(literal, () => JSON.stringify(json));
 }

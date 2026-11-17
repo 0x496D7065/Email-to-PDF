@@ -39,7 +39,10 @@ export const PDF_FONT_FILES: Readonly<Record<PdfFontName, string>> = {
  */
 export function isWoff(bytes: Uint8Array): boolean
 {
-    if (bytes.length < 44) return false; // a WOFF header is 44 bytes
+    if (bytes.length < 44)
+    {
+        return false; // a WOFF header is 44 bytes
+    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getUint32(0) === 0x774f4646 && view.getUint32(8) === bytes.length;
 }

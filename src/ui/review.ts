@@ -121,7 +121,10 @@ import { headingId, joinList, messageNumberText, rebuiltHeadingId } from './prev
  */
 export function relatedText(numbers: readonly number[], more: number): string
 {
-    if (numbers.length === 0) return more > 0 ? t('review.relatedOnlyMore', { count: more }) : '';
+    if (numbers.length === 0)
+    {
+        return more > 0 ? t('review.relatedOnlyMore', { count: more }) : '';
+    }
     const list = joinList(numbers.map(messageNumberText));
     const see = numbers.length === 1 ? t('review.relatedOne', { list }) : t('review.relatedMany', { list });
     return more > 0 ? `${see} ${t('review.relatedMoreFiles', { count: more })}` : see;
@@ -156,7 +159,10 @@ export function noteText(note: MessageNote): string
 export function filesText(counts: EngineCounts): string
 {
     const files = t('counts.files', { count: counts.filesGiven });
-    if (counts.filesFailed === 0) return t('counts.sentence', { text: files });
+    if (counts.filesFailed === 0)
+    {
+        return t('counts.sentence', { text: files });
+    }
     // A template, not a list: the failed files are among the given ones
     // ("12 fichiers, dont 1", not "12 fichiers et 1").
     const failed = t('counts.filesFailed', { count: counts.filesFailed });
@@ -173,8 +179,14 @@ export function messagesText(counts: EngineCounts, rebuilt = 0, attached = 0): s
 {
     const found = t('counts.messagesFound', { count: counts.messagesFound });
     const parts = [attached > 0 ? t('counts.messagesFoundAttached', { found, attached: t('counts.attachedFound', { count: attached }) }) : found];
-    if (counts.duplicatesMerged > 0) parts.push(t('counts.duplicatesMerged', { count: counts.duplicatesMerged }));
-    if (rebuilt > 0) parts.push(t('counts.rebuiltFound', { count: rebuilt }));
+    if (counts.duplicatesMerged > 0)
+    {
+        parts.push(t('counts.duplicatesMerged', { count: counts.duplicatesMerged }));
+    }
+    if (rebuilt > 0)
+    {
+        parts.push(t('counts.rebuiltFound', { count: rebuilt }));
+    }
     return t('counts.sentence', { text: joinList(parts) });
 }
 
@@ -445,7 +457,10 @@ export function createReview(options: ReviewOptions = {}): Review
 
     function positions(): number[]
     {
-        if (current === null) return [];
+        if (current === null)
+        {
+            return [];
+        }
         // Once the list is complete, an email without a registered item (its
         // stand-in could not be decorated, only a bug causes that) shows no
         // checkbox and no "Not in the PDF" mark: it counts as included.
@@ -453,7 +468,10 @@ export function createReview(options: ReviewOptions = {}): Review
         const found: number[] = [];
         current.messages.forEach((m, position) =>
         {
-            if ((complete && !entries.has(position)) || isIncluded(m)) found.push(position);
+            if ((complete && !entries.has(position)) || isIncluded(m))
+            {
+                found.push(position);
+            }
         });
         return found;
     }
@@ -533,7 +551,10 @@ export function createReview(options: ReviewOptions = {}): Review
      */
     function sourceInPdf(r: EngineRebuilt, included: ReadonlySet<number>): boolean
     {
-        if (current === null) return true;
+        if (current === null)
+        {
+            return true;
+        }
         try
         {
             return rebuiltInPdf(r, current, (p) => (included.has(p) ? p + 1 : null)) !== null;
@@ -555,7 +576,10 @@ export function createReview(options: ReviewOptions = {}): Review
      */
     function pdfSourceNumber(r: EngineRebuilt, included: ReadonlySet<number>): number | null
     {
-        if (current === null) return null;
+        if (current === null)
+        {
+            return null;
+        }
         try
         {
             const source = rebuiltInPdf(r, current, (p) => (included.has(p) ? p + 1 : null));
@@ -577,7 +601,10 @@ export function createReview(options: ReviewOptions = {}): Review
      */
     function rebuiltIncluded(): EngineRebuilt[]
     {
-        if (current === null || !rebuiltOn()) return [];
+        if (current === null || !rebuiltOn())
+        {
+            return [];
+        }
         const complete = renderedResult === current;
         const included = new Set(positions());
         return rebuiltList.filter((r) => ((complete && !rebuiltItems.has(r.id)) || isRebuiltTicked(r)) && sourceInPdf(r, included));
@@ -591,7 +618,10 @@ export function createReview(options: ReviewOptions = {}): Review
      */
     function rebuiltUnticked(): number[]
     {
-        if (current === null || !rebuiltOn()) return [];
+        if (current === null || !rebuiltOn())
+        {
+            return [];
+        }
         return rebuiltList.filter((r) => rebuiltItems.has(r.id) && !isRebuiltTicked(r)).map((r) => r.id);
     }
 
@@ -604,13 +634,19 @@ export function createReview(options: ReviewOptions = {}): Review
     /** Shows or hides an item's "could not be rebuilt" notes (and its notes list when nothing is left in it). */
     function applyNotes(parts: Parts, on: boolean = rebuiltOn()): void
     {
-        if (parts.notesList === null) return;
+        if (parts.notesList === null)
+        {
+            return;
+        }
         let shown = 0;
         for (const { element, note } of parts.notes)
         {
             const visible = on || !isRebuildNote(note);
             setSafeAttribute(element, 'hidden', !visible);
-            if (visible) shown++;
+            if (visible)
+            {
+                shown++;
+            }
         }
         setSafeAttribute(parts.notesList, 'hidden', shown === 0);
     }
@@ -631,12 +667,18 @@ export function createReview(options: ReviewOptions = {}): Review
         const printedRebuilt = shown ? rebuiltIncluded().filter((r) => !rebuiltHasNoPrintableText(r)).length : 0;
         rebuiltLine.textContent = shown ? t('counts.rebuiltIncluded', { included: printedRebuilt, count: rebuiltList.length }) : '';
         setSafeAttribute(rebuiltLine, 'hidden', !shown);
-        if (current === null) return;
+        if (current === null)
+        {
+            return;
+        }
         messagesLine.textContent = messagesText(current.counts, shown ? rebuiltList.length : 0, attachedCount(current));
         const notes = on ? withNotes : withNotesNoRebuild;
         notesLine.textContent = notes > 0 ? t('counts.withNotes', { count: notes }) : '';
         setSafeAttribute(notesLine, 'hidden', notes === 0);
-        for (const entry of entries.values()) applyNotes(entry, on);
+        for (const entry of entries.values())
+        {
+            applyNotes(entry, on);
+        }
     }
 
     /**
@@ -648,7 +690,10 @@ export function createReview(options: ReviewOptions = {}): Review
      */
     function rebuiltAnnouncement(): string
     {
-        if (rebuiltLine.textContent !== '') return rebuiltLine.textContent;
+        if (rebuiltLine.textContent !== '')
+        {
+            return rebuiltLine.textContent;
+        }
         return switchNeeded() ? includedLine.textContent : '';
     }
 
@@ -688,7 +733,10 @@ export function createReview(options: ReviewOptions = {}): Review
     function applyAllRebuilt(): void
     {
         const included = new Set(positions());
-        for (const entry of rebuiltItems.values()) applyRebuilt(entry, included);
+        for (const entry of rebuiltItems.values())
+        {
+            applyRebuilt(entry, included);
+        }
     }
 
     function apply(entry: Entry): void
@@ -713,8 +761,14 @@ export function createReview(options: ReviewOptions = {}): Review
     {
         parts.label.textContent = t('actions.include');
         parts.excludedNote.textContent = t('review.excluded');
-        if (parts.notesList !== null) setSafeAttribute(parts.notesList, 'aria-label', t('review.notesLabel'));
-        for (const { element, note } of parts.notes) element.textContent = noteText(note);
+        if (parts.notesList !== null)
+        {
+            setSafeAttribute(parts.notesList, 'aria-label', t('review.notesLabel'));
+        }
+        for (const { element, note } of parts.notes)
+        {
+            element.textContent = noteText(note);
+        }
     }
 
     function emptyCounts(): void
@@ -744,7 +798,10 @@ export function createReview(options: ReviewOptions = {}): Review
     /** Shows a result's counts; does nothing for the result already shown (its items stay registered). */
     function show(result: EngineResult): void
     {
-        if (result === current) return;
+        if (result === current)
+        {
+            return;
+        }
         current = result;
         entries = new Map();
         setSafeAttribute(failedPointer, 'hidden', result.counts.filesFailed === 0);
@@ -755,9 +812,18 @@ export function createReview(options: ReviewOptions = {}): Review
         result.messages.forEach((m, position) =>
         {
             const notes = safeNotes(m, position, result.positionByIndex, result.reconstructionWarnings, unreadAttached[position] ?? null);
-            if (notes.length > 0) withNotes++;
-            if (notes.some((note) => !isRebuildNote(note))) withNotesNoRebuild++;
-            if (notes.some(isRebuildNote)) hasRebuildNote = true;
+            if (notes.length > 0)
+            {
+                withNotes++;
+            }
+            if (notes.some((note) => !isRebuildNote(note)))
+            {
+                withNotesNoRebuild++;
+            }
+            if (notes.some(isRebuildNote))
+            {
+                hasRebuildNote = true;
+            }
         });
         rebuiltItems = new Map();
         try
@@ -801,7 +867,10 @@ export function createReview(options: ReviewOptions = {}): Review
             note,
         }));
         const notesList = notes.length === 0 ? null : el('ul', { attrs: { class: 'message-notes' }, children: notes.map((n) => n.element) });
-        if (notesList !== null) children.push(notesList);
+        if (notesList !== null)
+        {
+            children.push(notesList);
+        }
         const parts: Parts = { checkbox, excludedNote, label, notesList, notes };
         writeParts(parts);
         checkbox.addEventListener('change', () =>
@@ -809,7 +878,10 @@ export function createReview(options: ReviewOptions = {}): Review
             const rebuiltBefore = rebuiltLine.textContent;
             selection.setIncluded(m, checkbox.checked);
             // Every shown item: two items can share a file (see selection.ts).
-            for (const entry of entries.values()) apply(entry);
+            for (const entry of entries.values())
+            {
+                apply(entry);
+            }
             showIncludedLine();
             // The rebuilt emails follow the emails they were read from (rebuiltInPdf).
             applyAllRebuilt();
@@ -840,7 +912,10 @@ export function createReview(options: ReviewOptions = {}): Review
         writeRebuiltParts(parts);
         checkbox.addEventListener('change', () =>
         {
-            if (current !== null) rebuiltSelection.setTicked(r, current, checkbox.checked);
+            if (current !== null)
+            {
+                rebuiltSelection.setTicked(r, current, checkbox.checked);
+            }
             // Every shown card: two cards could share a key (see src/ui-model/rebuilt.ts).
             applyAllRebuilt();
             showRebuiltLine();
@@ -859,7 +934,10 @@ export function createReview(options: ReviewOptions = {}): Review
 
     const decorateRebuilt: Review['decorateRebuilt'] = (item, r, result) =>
     {
-        if (result !== current) show(result);
+        if (result !== current)
+        {
+            show(result);
+        }
         let parts = addedRebuilt.get(item);
         if (parts === undefined)
         {
@@ -882,7 +960,10 @@ export function createReview(options: ReviewOptions = {}): Review
 
     const decorate: Review['decorate'] = (item, m, position, result) =>
     {
-        if (result !== current) show(result);
+        if (result !== current)
+        {
+            show(result);
+        }
         let parts = added.get(item);
         if (parts === undefined)
         {
@@ -902,8 +983,14 @@ export function createReview(options: ReviewOptions = {}): Review
         show,
         showResult(result)
         {
-            if (result.ok) show(result.engine);
-            else emptyCounts();
+            if (result.ok)
+            {
+                show(result.engine);
+            }
+            else
+            {
+                emptyCounts();
+            }
         },
         reset()
         {
@@ -924,7 +1011,10 @@ export function createReview(options: ReviewOptions = {}): Review
             // list; adopting it would bring back old counts. (Should an empty list
             // ever be reported before showResult, it has nothing to complete, and
             // showResult still gives its counts.)
-            if (result !== current) return;
+            if (result !== current)
+            {
+                return;
+            }
             renderedResult = result;
             showIncludedLine();
             // An email without a decorated item now counts as included: its rebuilt emails follow.
@@ -934,9 +1024,18 @@ export function createReview(options: ReviewOptions = {}): Review
         relabel()
         {
             labels.relabel();
-            if (current !== null) writeCounts(current);
-            for (const entry of entries.values()) writeParts(entry);
-            for (const entry of rebuiltItems.values()) writeRebuiltParts(entry);
+            if (current !== null)
+            {
+                writeCounts(current);
+            }
+            for (const entry of entries.values())
+            {
+                writeParts(entry);
+            }
+            for (const entry of rebuiltItems.values())
+            {
+                writeRebuiltParts(entry);
+            }
             applyAllRebuilt();
         },
         rebuiltSwitch,

@@ -126,7 +126,10 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
 
         const finish = (result: ParseResult): void =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             settled = true;
             clearTimeout(timer);
             signal?.removeEventListener('abort', onAbort);
@@ -158,7 +161,10 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
 
         const onMessage = (data: unknown): void =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             if (!isFromWorker(data) || data.type === 'failed')
             {
                 toolError();
@@ -226,7 +232,10 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
  */
 function ownedCopy(bytes: Uint8Array): Uint8Array<ArrayBuffer>
 {
-    if (coversWholeBuffer(bytes)) return new Uint8Array(bytes.buffer);
+    if (coversWholeBuffer(bytes))
+    {
+        return new Uint8Array(bytes.buffer);
+    }
     return bytes.slice();
 }
 

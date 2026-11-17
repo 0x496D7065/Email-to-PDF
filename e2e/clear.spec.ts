@@ -93,7 +93,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -162,7 +165,10 @@ async function expectEmptyApp(page: Page): Promise<void>
     await expect(page.locator('#add-summary')).toBeHidden();
     await expect(page.locator('#add-failed-list > li')).toHaveCount(0);
     await expect(page.locator('#add-progress')).toBeHidden();
-    for (const id of ['review-files-text', 'review-messages', 'review-included', 'review-notes']) await expect(page.locator(`#${id}`)).toHaveText('');
+    for (const id of ['review-files-text', 'review-messages', 'review-included', 'review-notes'])
+    {
+        await expect(page.locator(`#${id}`)).toHaveText('');
+    }
     await expect(page.locator('#clear-everything')).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('#clear-unavailable')).toBeVisible();
     await expect(page.locator('#clear-everything')).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
@@ -173,7 +179,10 @@ async function expectNothingLeftThePage(page: Page, loads = 1): Promise<void>
 {
     await page.waitForTimeout(500);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
@@ -253,7 +262,10 @@ test('after adding files, Clear removes every email text, file name and count; a
     expect(['11-order-2-bob-outlook-en.eml', '30-dup-order-2-copy.eml']).toContain(alsoIn[0]);
     const before = await pageTextAndValues(page);
     const secret = [...subjects, ...bodies, ...attachments, ...alsoIn, 'notes.txt'];
-    for (const text of secret) expect(before.text).toContain(text);
+    for (const text of secret)
+    {
+        expect(before.text).toContain(text);
+    }
 
     const clear = page.getByRole('button', { name: en.actions.clearEverything });
     await expect(clear).not.toHaveAttribute('aria-disabled', /.*/);
@@ -268,8 +280,17 @@ test('after adding files, Clear removes every email text, file name and count; a
     await expect(page.getByRole('button', { name: en.actions.chooseFiles })).toBeFocused();
     await expectEmptyApp(page);
     const after = await pageTextAndValues(page);
-    for (const text of [...secret, ...fileNames]) expect(after.text).not.toContain(text);
-    for (const value of after.values) for (const text of [...secret, ...fileNames]) expect(value).not.toContain(text);
+    for (const text of [...secret, ...fileNames])
+    {
+        expect(after.text).not.toContain(text);
+    }
+    for (const value of after.values)
+    {
+        for (const text of [...secret, ...fileNames])
+        {
+            expect(value).not.toContain(text);
+        }
+    }
     expect(after.chosenFiles).toBe(0);
     await expect(page.locator('#file-input')).toHaveValue('');
     // The toolbar is back to its defaults.
@@ -338,7 +359,10 @@ test('reloading after adding files shows an empty app: nothing was kept', async 
     await expectEmptyApp(page);
     await expect(page.getByRole('status')).toHaveText('');
     const after = await pageTextAndValues(page);
-    for (const name of FILES.map((f) => f.name)) expect(after.text).not.toContain(name);
+    for (const name of FILES.map((f) => f.name))
+    {
+        expect(after.text).not.toContain(name);
+    }
     expect(after.text).not.toContain('Office desks');
     expect(after.chosenFiles).toBe(0);
     expect(await storedState(page)).toEqual(NOTHING_STORED);

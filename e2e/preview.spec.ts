@@ -35,7 +35,10 @@ function plainBody(name: string): string
 {
     const raw = readFileSync(fixture(name), 'utf8').replaceAll('\r\n', '\n');
     const start = raw.indexOf('\n\n');
-    if (start < 0 || raw.includes('\r')) throw new Error(`${name} is not a simple plain-text fixture`);
+    if (start < 0 || raw.includes('\r'))
+    {
+        throw new Error(`${name} is not a simple plain-text fixture`);
+    }
     return raw.slice(start + 2);
 }
 
@@ -71,7 +74,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     await page.addInitScript(() =>
@@ -107,7 +113,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
@@ -201,7 +210,10 @@ test('quoted text is folded and can be shown, one block or all at once', async (
     );
     expect(joined[0]).toBe(plainBody('10-order-1-alice.eml'));
     expect(joined[1]).toBe(plainBody('11-order-2-bob-outlook-en.eml'));
-    for (const block of await page.locator('.message-body .body-text').all()) await expect(block).toBeVisible();
+    for (const block of await page.locator('.message-body .body-text').all())
+    {
+        await expect(block).toBeVisible();
+    }
 
     expect(await contrastFailures(page, '#step-check', 20)).toEqual([]);
 

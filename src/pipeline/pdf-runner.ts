@@ -67,7 +67,10 @@ export function runPdfInWorker(request: MakePdfRequest, options: PdfRunOptions):
 
         const finish = (outcome: PdfOutcome): void =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             settled = true;
             clearTimeout(timer);
             signal?.removeEventListener('abort', onAbort);
@@ -98,7 +101,10 @@ export function runPdfInWorker(request: MakePdfRequest, options: PdfRunOptions):
 
         const onMessage = (data: unknown): void =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             if (!isFromPdfWorker(data) || data.type === 'failed')
             {
                 fail('tool-error');

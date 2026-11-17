@@ -81,12 +81,21 @@ const LINES = [
 
 function randomBody(random: () => number): string
 {
-    if (random() < 0.05) return '';
+    if (random() < 0.05)
+    {
+        return '';
+    }
     const count = 1 + Math.floor(random() * 25);
     const breaks = ['\n', '\n', '\n', '\r\n', '\r'];
     let body = '';
-    for (let i = 0; i < count; i++) body += pick(random, LINES) + pick(random, breaks);
-    if (random() < 0.3) body = body.slice(0, Math.floor(random() * body.length)); // may cut an emoji in half
+    for (let i = 0; i < count; i++)
+    {
+        body += pick(random, LINES) + pick(random, breaks);
+    }
+    if (random() < 0.3)
+    {
+        body = body.slice(0, Math.floor(random() * body.length)); // may cut an emoji in half
+    }
     return body;
 }
 
@@ -132,7 +141,10 @@ function deepFreeze<T>(value: T): T
     if (typeof value === 'object' && value !== null && !Object.isFrozen(value))
     {
         Object.freeze(value);
-        for (const v of Object.values(value)) deepFreeze(v);
+        for (const v of Object.values(value))
+        {
+            deepFreeze(v);
+        }
     }
     return value;
 }
@@ -141,14 +153,26 @@ function deepFreeze<T>(value: T): T
 function mask(length: number, plan: MessagePlan): Uint8Array
 {
     const out = new Uint8Array(length);
-    for (const r of plan.ranges) if (!r.keep) out.fill(1, r.start, r.end);
+    for (const r of plan.ranges)
+    {
+        if (!r.keep)
+        {
+            out.fill(1, r.start, r.end);
+        }
+    }
     return out;
 }
 
 function foldedMask(length: number, segments: readonly Segment[]): Uint8Array
 {
     const out = new Uint8Array(length);
-    for (const s of segments) if (s.folded) out.fill(1, s.start, s.end);
+    for (const s of segments)
+    {
+        if (s.folded)
+        {
+            out.fill(1, s.start, s.end);
+        }
+    }
     return out;
 }
 
@@ -165,8 +189,14 @@ function checkPlans(inputs: readonly PlanInput[], plans: readonly MessagePlan[],
             expect(r.start, at).toBe(next);
             expect(r.end, at).toBeGreaterThan(r.start);
             const prev = p.ranges[i - 1];
-            if (prev !== undefined) expect(prev.keep === r.keep && prev.reason === r.reason, `${at}: unmerged neighbours`).toBe(false);
-            if (!r.keep) expect(['app-quoted-history', 'signature', 'repeated-signature'], at).toContain(r.reason);
+            if (prev !== undefined)
+            {
+                expect(prev.keep === r.keep && prev.reason === r.reason, `${at}: unmerged neighbours`).toBe(false);
+            }
+            if (!r.keep)
+            {
+                expect(['app-quoted-history', 'signature', 'repeated-signature'], at).toContain(r.reason);
+            }
             next = r.end;
         });
         expect(next, at).toBe(body.length);
@@ -174,13 +204,31 @@ function checkPlans(inputs: readonly PlanInput[], plans: readonly MessagePlan[],
 
         const left = mask(body.length, p);
         const folded = foldedMask(body.length, inputs[k]!.segments);
-        if (!p.fallback) for (let i = 0; i < body.length; i++) if (left[i] === 1 && folded[i] !== 1) expect.fail(`${at}: unfolded offset ${i} left out`);
-        if (policy.unfoldEverything) expect(left.includes(1), at).toBe(false);
+        if (!p.fallback)
+        {
+            for (let i = 0; i < body.length; i++)
+            {
+                if (left[i] === 1 && folded[i] !== 1)
+                {
+                    expect.fail(`${at}: unfolded offset ${i} left out`);
+                }
+            }
+        }
+        if (policy.unfoldEverything)
+        {
+            expect(left.includes(1), at).toBe(false);
+        }
 
         // Rule 4: an email with text always keeps some of it; when nothing else was left, everything is kept.
         const keptText = p.ranges.some((r) => r.keep && /\S/.test(body.slice(r.start, r.end)));
-        if (/\S/.test(body)) expect(keptText, at).toBe(true);
-        if (p.keptAllBecauseEmpty) expect(left.includes(1), at).toBe(false);
+        if (/\S/.test(body))
+        {
+            expect(keptText, at).toBe(true);
+        }
+        if (p.keptAllBecauseEmpty)
+        {
+            expect(left.includes(1), at).toBe(false);
+        }
     });
 }
 
@@ -190,8 +238,15 @@ function checkAllPolicies(inputs: readonly PlanInput[], where: string): void
     deepFreeze(inputs);
     const policies: OutputPolicy[] = [];
     for (const appQuotedHistory of ['omit', 'keep'] as const)
+    {
         for (const signatures of ['first-per-sender', 'all', 'none'] as const)
-            for (const unfoldEverything of [false, true]) policies.push({ appQuotedHistory, signatures, unfoldEverything });
+        {
+            for (const unfoldEverything of [false, true])
+            {
+                policies.push({ appQuotedHistory, signatures, unfoldEverything });
+            }
+        }
+    }
     const results = new Map<string, MessagePlan[]>();
     for (const policy of policies)
     {
@@ -211,18 +266,36 @@ function checkAllPolicies(inputs: readonly PlanInput[], where: string): void
         for (const signatures of ['first-per-sender', 'all', 'none'] as const)
         {
             const omitPlan = get({ appQuotedHistory: 'omit', signatures, unfoldEverything: false })[k]!;
-            if (omitPlan.keptAllBecauseEmpty) continue;
+            if (omitPlan.keptAllBecauseEmpty)
+            {
+                continue;
+            }
             const omit = mask(length, omitPlan);
             const keep = mask(length, get({ appQuotedHistory: 'keep', signatures, unfoldEverything: false })[k]!);
-            for (let i = 0; i < length; i++) if (keep[i] === 1 && omit[i] !== 1) expect.fail(`${where} message ${k}: 'keep' left out more at ${i}`);
+            for (let i = 0; i < length; i++)
+            {
+                if (keep[i] === 1 && omit[i] !== 1)
+                {
+                    expect.fail(`${where} message ${k}: 'keep' left out more at ${i}`);
+                }
+            }
         }
         for (const appQuotedHistory of ['omit', 'keep'] as const)
         {
             const nonePlan = get({ appQuotedHistory, signatures: 'none', unfoldEverything: false })[k]!;
-            if (nonePlan.keptAllBecauseEmpty) continue;
+            if (nonePlan.keptAllBecauseEmpty)
+            {
+                continue;
+            }
             const first = mask(length, get({ appQuotedHistory, signatures: 'first-per-sender', unfoldEverything: false })[k]!);
             const none = mask(length, nonePlan);
-            for (let i = 0; i < length; i++) if (first[i] === 1 && none[i] !== 1) expect.fail(`${where} message ${k}: 'none' left out less at ${i}`);
+            for (let i = 0; i < length; i++)
+            {
+                if (first[i] === 1 && none[i] !== 1)
+                {
+                    expect.fail(`${where} message ${k}: 'none' left out less at ${i}`);
+                }
+            }
         }
     });
 }
@@ -277,7 +350,10 @@ describe('planOutput: properties', () =>
 {
     it('holds the invariants over random folds (300 seeded sets)', () =>
     {
-        for (const seed of FOLD_SEEDS) checkAllPolicies(foldSet(seed), `seed ${seed}`);
+        for (const seed of FOLD_SEEDS)
+        {
+            checkAllPolicies(foldSet(seed), `seed ${seed}`);
+        }
     });
 
     it('holds the invariants over the real engine (150 seeded sets), and for every subset of included emails', () =>
@@ -298,12 +374,24 @@ describe('planOutput: properties', () =>
         {
             for (const p of planOutput(inputs))
             {
-                if (p.ranges.some((r) => !r.keep && r.reason === 'app-quoted-history')) seen.tails++;
-                if (p.omittedSignatures > 0) seen.signatures++;
-                if (p.ranges.some((r) => r.reason === 'forwarded')) seen.forwarded++;
+                if (p.ranges.some((r) => !r.keep && r.reason === 'app-quoted-history'))
+                {
+                    seen.tails++;
+                }
+                if (p.omittedSignatures > 0)
+                {
+                    seen.signatures++;
+                }
+                if (p.ranges.some((r) => r.reason === 'forwarded'))
+                {
+                    seen.forwarded++;
+                }
             }
         };
-        for (const seed of FOLD_SEEDS) count(foldSet(seed));
+        for (const seed of FOLD_SEEDS)
+        {
+            count(foldSet(seed));
+        }
         for (const seed of ENGINE_SEEDS)
         {
             const inputs = engineSet(seed);

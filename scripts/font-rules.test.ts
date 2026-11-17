@@ -281,8 +281,14 @@ describe('checkSourceFonts', () =>
 
     it('recognises font file names', () =>
     {
-        for (const path of ['a.woff', 'a.WOFF2', 'a.ttf', 'a.otf', 'a.eot']) expect(isFontFile(path), path).toBe(true);
-        for (const path of ['a.ts', 'LICENSE.txt', 'a.woff.ts']) expect(isFontFile(path), path).toBe(false);
+        for (const path of ['a.woff', 'a.WOFF2', 'a.ttf', 'a.otf', 'a.eot'])
+        {
+            expect(isFontFile(path), path).toBe(true);
+        }
+        for (const path of ['a.ts', 'LICENSE.txt', 'a.woff.ts'])
+        {
+            expect(isFontFile(path), path).toBe(false);
+        }
     });
 });
 

@@ -80,7 +80,10 @@ describe('el', () =>
 
     it('creates every safe tag', () =>
     {
-        for (const tag of SAFE_TAGS) expect(fake(el(tag)).tagName).toBe(tag);
+        for (const tag of SAFE_TAGS)
+        {
+            expect(fake(el(tag)).tagName).toBe(tag);
+        }
     });
 
     it('refuses dangerous attributes and throws before adding the element anywhere', () =>

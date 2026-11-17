@@ -98,7 +98,10 @@ const captureWorkerCode: Plugin = {
     {
         for (const item of Object.values(output))
         {
-            if (item.type !== 'chunk' || !item.isEntry || item.facadeModuleId === null) continue;
+            if (item.type !== 'chunk' || !item.isEntry || item.facadeModuleId === null)
+            {
+                continue;
+            }
             const file = item.facadeModuleId.split('?')[0]?.split('/').pop() ?? '';
             workerSources.set(file.replace(/[.]ts$/, ''), item.code);
         }
@@ -127,7 +130,10 @@ test.beforeAll(async () =>
     {
         const code = item.type === 'chunk' ? item.code : typeof item.source === 'string' ? item.source : new TextDecoder().decode(item.source);
         bundle.set(item.fileName, code);
-        if (item.type === 'chunk' && item.isEntry) entryUrl = `${BUNDLE_PATH}${item.fileName}`;
+        if (item.type === 'chunk' && item.isEntry)
+        {
+            entryUrl = `${BUNDLE_PATH}${item.fileName}`;
+        }
     }
     expect(entryUrl).not.toBe('');
     expect(workerSources.get('parse-worker')?.length ?? 0).toBeGreaterThan(1000);
@@ -159,7 +165,10 @@ async function watchNetwork(context: BrowserContext): Promise<void>
     const webkit = engineOf(context) === 'webkit';
     context.on('request', (request) =>
     {
-        if (!(webkit && isWebKitBlobRead(request, origin))) requestUrls.push(request.url());
+        if (!(webkit && isWebKitBlobRead(request, origin)))
+        {
+            requestUrls.push(request.url());
+        }
     });
     await context.route('**/*', (route) =>
         new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
@@ -204,7 +213,10 @@ type PageCsp = 'header and meta' | 'meta' | 'none';
 
 async function servePageWith(page: Page, csp: PageCsp): Promise<void>
 {
-    if (csp === 'header and meta') return;
+    if (csp === 'header and meta')
+    {
+        return;
+    }
     await page.route(
         (url) => url.origin === origin && url.pathname === '/',
         async (route) =>
@@ -363,7 +375,10 @@ test('the parse, engine and PDF workers are inlined in the page script, and the 
     // misbehaving worker; the real ones start from blob: URLs.
     const fileWorkers = [...allCode.matchAll(/new Worker[(]new URL[(]`([^`]+)`/g)].map((m) => m[1]);
     expect(fileWorkers.length).toBeGreaterThan(0);
-    for (const url of fileWorkers) expect(url).toMatch(/misbehaving-worker/);
+    for (const url of fileWorkers)
+    {
+        expect(url).toMatch(/misbehaving-worker/);
+    }
 });
 
 test('a batch with broken, huge and unsupported files: one result per file, in order, and the page survives', async ({ page }) =>
@@ -480,13 +495,19 @@ test('a stuck worker is stopped at its time limit and a crashed one fails alone;
         const results = await entry.parseFilesWith(files, async (job) =>
         {
             const hang = /hang/.test(job.name);
-            if (hang) window.__e2eHang = 'running';
+            if (hang)
+            {
+                window.__e2eHang = 'running';
+            }
             const result = await entry.runInWorker(job, {
                 createWorker: /hang|crash/.test(job.name) ? entry.createMisbehavingWorker : entry.createBrowserWorker,
                 htmlToText: (html) => entry.htmlToTextWithDomParser(html),
                 timeoutMs: hang ? 4000 : entry.PARSE_TIMEOUT_MS,
             });
-            if (hang) window.__e2eHang = 'settled';
+            if (hang)
+            {
+                window.__e2eHang = 'settled';
+            }
             return result;
         });
         return {
@@ -558,7 +579,10 @@ test('processFiles: File objects in, organized messages out; every worker ends a
         ];
         const progress: Entry.ProcessProgress[] = [];
         const result = await entry.processFiles(files, { onProgress: (p) => progress.push(p) });
-        if (!result.ok) return { ok: false as const, detail: result.detail };
+        if (!result.ok)
+        {
+            return { ok: false as const, detail: result.detail };
+        }
         return {
             ok: true as const,
             hugeRead,
@@ -571,7 +595,10 @@ test('processFiles: File objects in, organized messages out; every worker ends a
         };
     }, entryUrl);
 
-    if (!outcome.ok) throw new Error(outcome.detail);
+    if (!outcome.ok)
+    {
+        throw new Error(outcome.detail);
+    }
     expect(outcome.hugeRead).toBe(false);
     expect(outcome.counts).toMatchObject({ filesGiven: 7, messagesFound: 5, duplicatesMerged: 1, filesFailed: 2 });
     expect(outcome.kept).toHaveLength(4);

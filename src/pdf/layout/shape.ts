@@ -144,9 +144,21 @@ export class Shaper
         const out = new ShapedText();
         for (const run of runs)
         {
-            if (run.text === '') continue;
-            if (SIMPLE.test(run.text)) this.simple(out, run.style, run.text);
-            else for (const { segment } of segmenter.segment(run.text)) this.cluster(out, run.style, segment);
+            if (run.text === '')
+            {
+                continue;
+            }
+            if (SIMPLE.test(run.text))
+            {
+                this.simple(out, run.style, run.text);
+            }
+            else
+            {
+                for (const { segment } of segmenter.segment(run.text))
+                {
+                    this.cluster(out, run.style, segment);
+                }
+            }
         }
         return out;
     }
@@ -182,7 +194,10 @@ export class Shaper
     {
         const { metrics, style: look } = this.styles[style]!;
         const cps: number[] = [];
-        for (const ch of cluster) cps.push(ch.codePointAt(0)!);
+        for (const ch of cluster)
+        {
+            cps.push(ch.codePointAt(0)!);
+        }
         if (cps.length === 1 && cps[0] === SOFT_HYPHEN)
         {
             out.push(style, SOFT_HYPHEN_ITEM, 0, cluster);

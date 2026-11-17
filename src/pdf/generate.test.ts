@@ -107,9 +107,15 @@ function checkLayout(doc: PdfDocument, layout: PdfLayout): void
     {
         const destination = document.destinations.find((d) => d.name === email.anchor)!;
         expect(destination.y).toBeCloseTo(CONFIG.margin.top - CONFIG.spacing.destinationAbove, 6);
-        if (k > 0) expect(anchorPages.get(email.anchor)).toBeGreaterThan(anchorPages.get(doc.emails[k - 1]!.anchor)!);
+        if (k > 0)
+        {
+            expect(anchorPages.get(email.anchor)).toBeGreaterThan(anchorPages.get(doc.emails[k - 1]!.anchor)!);
+        }
     }
-    for (const page of document.pages) expect(page.text.some((r) => r.y <= BOTTOM)).toBe(true);
+    for (const page of document.pages)
+    {
+        expect(page.text.some((r) => r.y <= BOTTOM)).toBe(true);
+    }
     for (const entry of doc.index.entries)
     {
         const page = anchorPages.get(entry.anchor)!;
@@ -123,7 +129,10 @@ function checkLayout(doc: PdfDocument, layout: PdfLayout): void
     }
     for (const [i, page] of document.pages.entries())
     {
-        if (!index.includes(i)) expect(page.links).toEqual([]);
+        if (!index.includes(i))
+        {
+            expect(page.links).toEqual([]);
+        }
         expect(page.text.filter((r) => r.y > BOTTOM).map((r) => r.copyText)).toEqual([`Page ${String(i + 1)} of ${String(total)}`]);
     }
 }
@@ -136,7 +145,10 @@ async function pageRuns(pdf: ParsedPdf): Promise<{ x: number; y: number; text: s
     {
         const fontDict = pdf.dict(pdf.dict(pageDict.get('Resources')).get('Font'));
         const maps = new Map<string, Map<number, string>>();
-        for (const key of fontDict.keys()) maps.set(key, parseToUnicode(await pdf.dataText(pdf.dict(fontDict.get(key)).get('ToUnicode'))));
+        for (const key of fontDict.keys())
+        {
+            maps.set(key, parseToUnicode(await pdf.dataText(pdf.dict(fontDict.get(key)).get('ToUnicode'))));
+        }
         const { runs } = readContent(await pdf.dataText(pageDict.get('Contents')));
         out.push(runs.map((r) => ({ x: r.x, y: r.y, text: r.actualText ?? r.glyphs.map((g) => maps.get(r.font)!.get(g) ?? '').join('') })));
     }
@@ -162,7 +174,10 @@ async function checkPdf(bytes: Uint8Array, doc: PdfDocument): Promise<ParsedPdf>
             const link: PdfDict = pdf.dict(a);
             expect(pdf.name(link.get('Subtype'))).toBe('Link');
             const dest = pdf.name(link.get('Dest'));
-            if (shownFor.has(dest)) continue; // a later piece of the same row
+            if (shownFor.has(dest))
+            {
+                continue; // a later piece of the same row
+            }
             const [, y1, , y2] = link.get('Rect') as number[];
             shownFor.set(
                 dest,
@@ -259,8 +274,14 @@ describe('generatePdf: index page numbers', () =>
         {
             const { doc, layout } = docAndLayout(inputFor(crowd(count)));
             expect(indexDestination(layout).page, `${String(count)} people`).toBe(page);
-            if (page === 0) expect(firstRowPage(doc, layout), 'first index row with the heading').toBe(0);
-            else checkNewPage(doc, layout);
+            if (page === 0)
+            {
+                expect(firstRowPage(doc, layout), 'first index row with the heading').toBe(0);
+            }
+            else
+            {
+                checkNewPage(doc, layout);
+            }
             checkLayout(doc, layout);
         }
         // With people - 1, the heading, column titles and a one-line first row fit below the cover; so
@@ -314,7 +335,10 @@ describe('generatePdf: index page numbers', () =>
         const index = indexPages(layout);
         expect(index.length).toBeGreaterThanOrEqual(3);
         checkLayout(doc, layout);
-        for (const p of index) expect(layout.document.pages[p]!.text.filter((r) => r.copyText === 'No.')).toHaveLength(1);
+        for (const p of index)
+        {
+            expect(layout.document.pages[p]!.text.filter((r) => r.copyText === 'No.')).toHaveLength(1);
+        }
         // The date column: its title (bold, here wrapped) the same on every index page; below it, each
         // row's short date in one piece (one line), then only attachment labels and bullets.
         const titleFont = CONFIG.roles['field-label'].font;
@@ -322,17 +346,26 @@ describe('generatePdf: index page numbers', () =>
         const titles = inDateColumn.map((runs) => runs.filter((r) => r.font === titleFont && r.copyText !== 'Attachments').map((r) => r.copyText));
         expect(titles[0]!.length).toBeGreaterThan(1);
         expect(titles[0]!.join('').replace(/\s+/g, ' ')).toBe('Date (America/New York)');
-        for (const t of titles) expect(t).toEqual(titles[0]);
+        for (const t of titles)
+        {
+            expect(t).toEqual(titles[0]);
+        }
         const dates = inDateColumn.flat().filter((r) => r.font !== titleFont && r.copyText !== '\u{2022}').map((r) => r.copyText);
         expect(dates).toEqual(doc.index.entries.map((e) => lineText(e.date)));
-        for (const d of dates) expect(d).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+        for (const d of dates)
+        {
+            expect(d).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+        }
         expect(dates[0]).toBe('2025-03-04 03:00'); // 08:00 UTC in New York (UTC-05:00)
         // Index rows inside the text area, the page numbers right-aligned on the right margin.
         for (const p of index)
         {
             for (const run of layout.document.pages[p]!.text)
             {
-                if (run.y > BOTTOM) continue;
+                if (run.y > BOTTOM)
+                {
+                    continue;
+                }
                 expect(run.x).toBeGreaterThanOrEqual(CONFIG.margin.left - 1e-6);
                 expect(run.x).toBeLessThan(RIGHT);
             }
@@ -351,7 +384,10 @@ describe('generatePdf: index page numbers', () =>
         const withLink = index.filter((p) => layout.document.pages[p]!.links.some((l) => l.destination === 'email-2'));
         expect(withLink.length).toBeGreaterThan(1);
         // The column titles again at the top of each index page.
-        for (const p of index) expect(layout.document.pages[p]!.text.some((r) => r.copyText === 'No.')).toBe(true);
+        for (const p of index)
+        {
+            expect(layout.document.pages[p]!.text.some((r) => r.copyText === 'No.')).toBe(true);
+        }
         checkLayout(doc, layout);
         await checkPdf((await generatePdf(input)).bytes, doc);
     });
@@ -424,7 +460,10 @@ describe('generatePdf: bookmarks', () =>
         expect(titles[4]!.endsWith('x\u{2026}')).toBe(true);
         expect(titles[5]).toBe('4. 2025-03-04, Unknown sender: (no subject)');
         expect(titles[6]).toBe('5. (no date), Bob Sample: Office desks, part 5');
-        for (const title of titles) expect(title).not.toMatch(/[\r\n\t]/);
+        for (const title of titles)
+        {
+            expect(title).not.toMatch(/[\r\n\t]/);
+        }
     });
 });
 
@@ -623,7 +662,10 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
         const xOf = (text: string): number =>
         {
             const found = lines.find((l) => l.text === text);
-            if (found === undefined) throw new Error(`not found: ${text}`);
+            if (found === undefined)
+            {
+                throw new Error(`not found: ${text}`);
+            }
             return found.x;
         };
         // Own text and every quote level: the same single step in.
@@ -634,7 +676,10 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
         // The long quoted line wraps; every piece keeps the step, and together they are the text as written.
         const pieces = lines.filter((l) => l.text.includes('alpha') || l.text.includes('theta'));
         expect(pieces.length).toBeGreaterThan(1);
-        for (const p of pieces) expect(p.x).toBeCloseTo(LEFT + STEP, 3);
+        for (const p of pieces)
+        {
+            expect(p.x).toBeCloseTo(LEFT + STEP, 3);
+        }
         expect(pieces.map((p) => p.text.trim()).join(' ')).toBe(long);
         // No ">" at the start of any line (the text copied out follows the printed text), none added inside one.
         for (const l of lines)

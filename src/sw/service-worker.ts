@@ -72,7 +72,10 @@ async function deleteOldCopies(): Promise<void>
 {
     for (const name of await caches.keys())
     {
-        if (isOldCacheOfOurs(name, CACHE)) await caches.delete(name);
+        if (isOldCacheOfOurs(name, CACHE))
+        {
+            await caches.delete(name);
+        }
     }
 }
 
@@ -104,6 +107,9 @@ scope.addEventListener('activate', (event) =>
 scope.addEventListener('fetch', (event) =>
 {
     const path = precachedPathFor(event.request, scope.location.origin, PATHS);
-    if (path === null) return;
+    if (path === null)
+    {
+        return;
+    }
     event.respondWith(answer(path, event.request));
 });

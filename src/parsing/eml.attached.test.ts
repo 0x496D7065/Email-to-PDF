@@ -57,14 +57,20 @@ type OkResult = Extract<ParseResult, { ok: true }>;
 async function parseOk(data: Uint8Array, name = 'attached-test.eml'): Promise<OkResult>
 {
     const result = await parser.parse({ name, bytes: data });
-    if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    }
     return result;
 }
 
 function attachedAt(result: OkResult, index: number): AttachedMessage
 {
     const entry = result.attached?.[index];
-    if (entry === undefined) throw new Error(`no attached email ${String(index)}`);
+    if (entry === undefined)
+    {
+        throw new Error(`no attached email ${String(index)}`);
+    }
     return entry;
 }
 
@@ -298,7 +304,10 @@ describe('attached emails: sent as an attachment (Content-Disposition: attachmen
             rfc822(crlf('From: b@example.test', htmlPart('<p>inline</p>'))),
         );
         const result = await createEmlParser({ htmlToText }).parse({ name: 'h.eml', bytes: data });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(calls).toEqual(['<p>inline</p>\n', '<p>attached</p>\n']);
         expect(result.message.bodyText).toContain('[html 1]');
         expect(result.message.bodyText).not.toContain('[html 2]');
@@ -312,7 +321,10 @@ describe('attached emails: sent as an attachment (Content-Disposition: attachmen
     it('unreadable inner bytes: the parent is unchanged and there is no AttachedMessage', async () =>
     {
         let deep = 'Content-Type: text/plain\r\n\r\ndeep\r\n';
-        for (let i = 0; i < 70; i++) deep = `Content-Type: multipart/mixed; boundary="n${i}"\r\n\r\n--n${i}\r\n${deep}--n${i}--\r\n`;
+        for (let i = 0; i < 70; i++)
+        {
+            deep = `Content-Type: multipart/mixed; boundary="n${i}"\r\n\r\n--n${i}\r\n${deep}--n${i}--\r\n`;
+        }
         const tooDeep = `From: carol@example.test\r\nSubject: Too deep\r\n${deep}`;
         const result = await expectParentUnchanged(
             file(plain('x'), rfc822('\0\x01garbage no headers', AS_FILE), rfc822(tooDeep, AS_FILE)),
@@ -382,7 +394,10 @@ describe('attached emails: limits (shared by both kinds)', () =>
     function chain(level: number, levels: number, disposition: (level: number) => string | undefined): string
     {
         const head = [`From: level${level}@example.test`, `Subject: Level ${level}`];
-        if (level === levels) return crlf(...head, '', `Body ${level}.`);
+        if (level === levels)
+        {
+            return crlf(...head, '', `Body ${level}.`);
+        }
         return crlf(...head, mixed(`c${level}`, plain(`Body ${level}.`), rfc822(chain(level + 1, levels, disposition), disposition(level + 1))));
     }
 

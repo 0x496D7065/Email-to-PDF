@@ -26,7 +26,10 @@ const T = (iso: string): number => Date.parse(iso);
 /** The `text` of a formatted date, failing the test if there was none. */
 function textOf(result: ZonedDateTime): string
 {
-    if (result.kind !== 'date') throw new Error(`expected a date, got ${result.kind}`);
+    if (result.kind !== 'date')
+    {
+        throw new Error(`expected a date, got ${result.kind}`);
+    }
     return result.text;
 }
 
@@ -137,7 +140,10 @@ describe('formatInZone', () =>
         const short = (utcMs: number, zone: string): string =>
         {
             const result = formatInZone(utcMs, zone);
-            if (result.kind !== 'date') throw new Error('expected a date');
+            if (result.kind !== 'date')
+            {
+                throw new Error('expected a date');
+            }
             return result.shortText;
         };
         expect(short(T('2025-04-02T09:00:59.999Z'), 'UTC')).toBe('2025-04-02 09:00');
@@ -291,7 +297,10 @@ describe('formatInZone', () =>
             for (const utcMs of [MIN_DISPLAYABLE_MS, MAX_DISPLAYABLE_MS])
             {
                 const result = formatInZone(utcMs, zone);
-                if (result.kind !== 'date') throw new Error(`expected a date for ${utcMs} in ${zone}`);
+                if (result.kind !== 'date')
+                {
+                    throw new Error(`expected a date for ${utcMs} in ${zone}`);
+                }
                 expect(Number.isFinite(result.offsetMinutes)).toBe(true);
                 expect(Math.abs(result.offsetMinutes)).toBeLessThan(24 * 60);
                 // Year, then the offset: hours and minutes, plus seconds for an old local mean time.
@@ -313,13 +322,19 @@ describe('formatInZone', () =>
     {
         const utcMs = T('2025-04-02T09:00:00Z');
         const reference = formatInZone(utcMs, 'Asia/Tokyo');
-        if (reference.kind !== 'date') throw new Error('expected a date');
+        if (reference.kind !== 'date')
+        {
+            throw new Error('expected a date');
+        }
         for (const locale of [Symbol('not a locale'), 42, null, {}, ['fr']])
         {
             // The type says string; JavaScript callers can still pass anything.
             const result = formatInZone(utcMs, 'Asia/Tokyo', locale as unknown as string);
             expect(result).toMatchObject({ kind: 'date', text: '2025-04-02 18:00:00 UTC+09:00' });
-            if (result.kind === 'date') expect(result.localized).toBe(reference.localized);
+            if (result.kind === 'date')
+            {
+                expect(result.localized).toBe(reference.localized);
+            }
         }
     });
 
@@ -341,7 +356,10 @@ describe('formatInZone', () =>
     it('includes seconds in the localized string', () =>
     {
         const result = formatInZone(T('2025-04-02T09:00:42Z'), 'Asia/Tokyo', 'en');
-        if (result.kind !== 'date') throw new Error('expected a date');
+        if (result.kind !== 'date')
+        {
+            throw new Error('expected a date');
+        }
         expect(result.localized).toContain('42');
     });
 
@@ -351,7 +369,10 @@ describe('formatInZone', () =>
         for (const locale of ['en', 'fr', 'de', 'nl', 'this is not a locale'])
         {
             const result = formatInZone(utcMs, 'Asia/Tokyo', locale);
-            if (result.kind !== 'date') throw new Error('expected a date');
+            if (result.kind !== 'date')
+            {
+                throw new Error('expected a date');
+            }
             expect(result.localized).not.toBe('');
             expect(result.localized).not.toContain('Invalid');
             expect(result.localized).toContain('2025');
@@ -363,7 +384,10 @@ describe('formatInZone', () =>
     {
         const base = T('2025-01-01T00:00:00Z');
         const start = performance.now();
-        for (let i = 0; i < 10_000; i++) formatInZone(base + i * 3_600_000, 'America/New_York');
+        for (let i = 0; i < 10_000; i++)
+        {
+            formatInZone(base + i * 3_600_000, 'America/New_York');
+        }
         // Generous bound: well under a second in practice.
         expect(performance.now() - start).toBeLessThan(5000);
     });
@@ -507,7 +531,10 @@ describe('isValidTimeZone', () =>
 
     it('rejects non-strings', () =>
     {
-        for (const value of [null, undefined, 42, {}, ['UTC']]) expect(isValidTimeZone(value)).toBe(false);
+        for (const value of [null, undefined, 42, {}, ['UTC']])
+        {
+            expect(isValidTimeZone(value)).toBe(false);
+        }
     });
 });
 

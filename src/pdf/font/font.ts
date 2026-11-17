@@ -103,33 +103,54 @@ function parse(sfnt: Uint8Array): ParsedFont
     const table = (tag: (typeof REQUIRED_TABLES)[number]): BinaryReader =>
     {
         const bytes = tableBytes(sfnt, directory, tag);
-        if (bytes === undefined) fail(`font: no "${tag}" table`);
+        if (bytes === undefined)
+        {
+            fail(`font: no "${tag}" table`);
+        }
         return new BinaryReader(bytes, tag);
     };
-    for (const tag of REQUIRED_TABLES) table(tag);
+    for (const tag of REQUIRED_TABLES)
+    {
+        table(tag);
+    }
 
     const head = table('head');
     head.need(0, 54, 'head table');
-    if (head.u32(12) !== 0x5f0f3cf5) fail('head: wrong magic number');
+    if (head.u32(12) !== 0x5f0f3cf5)
+    {
+        fail('head: wrong magic number');
+    }
     const unitsPerEm = head.u16(18);
-    if (unitsPerEm < 16 || unitsPerEm > 16384) fail(`head: unitsPerEm ${unitsPerEm} is out of range (16 to 16384)`);
+    if (unitsPerEm < 16 || unitsPerEm > 16384)
+    {
+        fail(`head: unitsPerEm ${unitsPerEm} is out of range (16 to 16384)`);
+    }
     const macStyle = head.u16(44);
 
     const maxp = table('maxp');
     const numGlyphs = maxp.u16(4);
-    if (numGlyphs === 0) fail('maxp: font has no glyphs');
+    if (numGlyphs === 0)
+    {
+        fail('maxp: font has no glyphs');
+    }
 
     const hhea = table('hhea');
     hhea.need(0, 36, 'hhea table');
     const numberOfHMetrics = hhea.u16(34);
-    if (numberOfHMetrics === 0 || numberOfHMetrics > numGlyphs) fail('hhea: numberOfHMetrics is 0 or more than the glyph count');
+    if (numberOfHMetrics === 0 || numberOfHMetrics > numGlyphs)
+    {
+        fail('hhea: numberOfHMetrics is 0 or more than the glyph count');
+    }
 
     const advances = readAdvances(table('hmtx'), numberOfHMetrics, numGlyphs);
 
     const os2 = table('OS/2');
     os2.need(0, 78, 'OS/2 table');
     const os2Version = os2.u16(0);
-    if (os2Version >= 2) os2.need(0, 96, 'OS/2 version 2 table');
+    if (os2Version >= 2)
+    {
+        os2.need(0, 96, 'OS/2 version 2 table');
+    }
     const fsSelection = os2.u16(62);
 
     const post = table('post');
@@ -139,14 +160,23 @@ function parse(sfnt: Uint8Array): ParsedFont
 
     const glyphFor = (codePoint: number): number =>
     {
-        if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return 0;
-        if (codePoint >= 0xd800 && codePoint <= 0xdfff) return 0; // a surrogate is never a character
+        if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff)
+        {
+            return 0;
+        }
+        if (codePoint >= 0xd800 && codePoint <= 0xdfff)
+        {
+            return 0; // a surrogate is never a character
+        }
         return cmap.lookup(codePoint);
     };
     const advance = (glyphId: number): number =>
     {
         const width = Number.isInteger(glyphId) ? advances[glyphId] : undefined;
-        if (width === undefined) throw new RangeError(`font: glyph id ${glyphId} is not in the font (0 to ${numGlyphs - 1})`);
+        if (width === undefined)
+        {
+            throw new RangeError(`font: glyph id ${glyphId} is not in the font (0 to ${numGlyphs - 1})`);
+        }
         return width;
     };
 
@@ -180,7 +210,10 @@ function parse(sfnt: Uint8Array): ParsedFont
         {
             let width = 0;
             // for...of walks code points; a lone surrogate comes out alone and maps to 0.
-            for (const character of text) width += advance(glyphFor(character.codePointAt(0)!));
+            for (const character of text)
+            {
+                width += advance(glyphFor(character.codePointAt(0)!));
+            }
             return width;
         },
     });
@@ -195,7 +228,10 @@ function readAdvances(hmtx: BinaryReader, numberOfHMetrics: number, numGlyphs: n
 {
     hmtx.need(0, 4 * numberOfHMetrics + 2 * (numGlyphs - numberOfHMetrics), 'hmtx table');
     const advances = new Uint16Array(numGlyphs);
-    for (let i = 0; i < numberOfHMetrics; i++) advances[i] = hmtx.u16(4 * i);
+    for (let i = 0; i < numberOfHMetrics; i++)
+    {
+        advances[i] = hmtx.u16(4 * i);
+    }
     advances.fill(advances[numberOfHMetrics - 1]!, numberOfHMetrics);
     return advances;
 }
@@ -220,20 +256,32 @@ function postScriptNameFor(name: BinaryReader): string
     for (let i = 0; i < count; i++)
     {
         const at = 6 + i * 12;
-        if (name.u16(at + 6) !== 6) continue;
+        if (name.u16(at + 6) !== 6)
+        {
+            continue;
+        }
         const platformId = name.u16(at);
         const encodingId = name.u16(at + 2);
         const rank = platformId === 3 && encodingId === 1 ? 0 : platformId === 1 && encodingId === 0 ? 1 : platformId === 0 ? 2 : -1;
-        if (rank < 0) continue;
+        if (rank < 0)
+        {
+            continue;
+        }
         const bytes = name.slice(storage + name.u16(at + 10), name.u16(at + 8), 'name string');
         let text = '';
         if (platformId === 1)
         {
-            for (const byte of bytes) text += String.fromCharCode(byte);
+            for (const byte of bytes)
+            {
+                text += String.fromCharCode(byte);
+            }
         }
         else
         {
-            for (let j = 0; j + 1 < bytes.length; j += 2) text += String.fromCharCode((bytes[j]! << 8) | bytes[j + 1]!);
+            for (let j = 0; j + 1 < bytes.length; j += 2)
+            {
+                text += String.fromCharCode((bytes[j]! << 8) | bytes[j + 1]!);
+            }
         }
         candidates.push({ rank, text });
     }
@@ -241,7 +289,10 @@ function postScriptNameFor(name: BinaryReader): string
     for (const { text } of candidates)
     {
         const safe = text.replace(/[^\x21-\x7e]|[()<>[\]{}/%#]/g, '').slice(0, MAX_POSTSCRIPT_NAME);
-        if (safe !== '') return safe;
+        if (safe !== '')
+        {
+            return safe;
+        }
     }
     fail('name: no usable PostScript name (name ID 6)');
 }

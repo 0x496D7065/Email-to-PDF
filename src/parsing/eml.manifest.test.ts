@@ -36,10 +36,16 @@ const emlFixtures = FIXTURES.filter((f) => f.kind === 'eml');
 async function parseFixture(id: string): Promise<NormalizedMessage>
 {
     const raw = files[`../../tests/fixtures/${id}`];
-    if (raw === undefined) throw new Error(`missing file for ${id}`);
+    if (raw === undefined)
+    {
+        throw new Error(`missing file for ${id}`);
+    }
     // Fixtures are 7-bit ASCII (checked by the privacy guard), so this gives the exact file bytes.
     const result = await parser.parse({ name: id, bytes: new TextEncoder().encode(raw) });
-    if (!result.ok) throw new Error(`${id} failed to parse: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`${id} failed to parse: ${result.detail}`);
+    }
     return result.message;
 }
 
@@ -61,7 +67,10 @@ describe('.eml adapter matches the manifest', () =>
 
         expect(message.date.utcMs).toBe(expected.date.utcMs);
         expect(message.date.zoneKnown).toBe(expected.date.zoneKnown);
-        if (expected.date.offsetMinutes !== undefined) expect(message.date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        if (expected.date.offsetMinutes !== undefined)
+        {
+            expect(message.date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        }
 
         expect(message.from).toEqual(expected.from);
         expect(message.to).toEqual(expected.to);
@@ -90,10 +99,19 @@ describe('.eml adapter matches the manifest', () =>
             const html = htmlCalls[Number(message.bodyText.slice(STUB_PREFIX.length + 2))] ?? '';
             expect(html).toContain('<p>Dear Alice,</p>');
             expect(html).not.toContain('=3D'); // quoted-printable was decoded
-            for (const snippet of expected.bodyContains) expect(html).toContain(snippet);
+            for (const snippet of expected.bodyContains)
+            {
+                expect(html).toContain(snippet);
+            }
             return;
         }
-        for (const snippet of expected.bodyContains) expect(message.bodyText).toContain(snippet);
-        for (const snippet of expected.bodyExcludes ?? []) expect(message.bodyText).not.toContain(snippet);
+        for (const snippet of expected.bodyContains)
+        {
+            expect(message.bodyText).toContain(snippet);
+        }
+        for (const snippet of expected.bodyExcludes ?? [])
+        {
+            expect(message.bodyText).not.toContain(snippet);
+        }
     });
 });

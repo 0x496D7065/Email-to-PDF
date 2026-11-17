@@ -57,7 +57,10 @@ type OkResult = Extract<ParseResult, { ok: true }>;
 async function parseOk(spec: MsgSpec, name = 'attached-test.msg'): Promise<OkResult>
 {
     const result = await parser.parse({ name, bytes: buildMsg(spec) });
-    if (!result.ok) throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    if (!result.ok)
+    {
+        throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
+    }
     expect(isFromWorker({ type: 'result', result })).toBe(true);
     return result;
 }
@@ -65,7 +68,10 @@ async function parseOk(spec: MsgSpec, name = 'attached-test.msg'): Promise<OkRes
 function entry(result: OkResult, index: number): AttachedMessage
 {
     const value = result.attached?.[index];
-    if (value === undefined) throw new Error(`no attached email at ${String(index)}`);
+    if (value === undefined)
+    {
+        throw new Error(`no attached email at ${String(index)}`);
+    }
     return value;
 }
 
@@ -199,7 +205,10 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
         ]);
         expect(entry(result, 0).message.attachments).toEqual([{ fileName: 'invoice.txt', size: 20, mimeType: 'text/plain' }]);
         // No line is marked as belonging to an attached email: none is printed in a body.
-        for (const a of [...result.message.attachments, ...entry(result, 0).message.attachments]) expect('attachedIndex' in a).toBe(false);
+        for (const a of [...result.message.attachments, ...entry(result, 0).message.attachments])
+        {
+            expect('attachedIndex' in a).toBe(false);
+        }
         const json = JSON.stringify(result);
         expect(json).not.toContain('OUTER-CONTENT-MARKER');
         expect(json).not.toContain('INNER-CONTENT-MARKER');
@@ -232,7 +241,10 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
     const parseIdentity = async (spec: MsgSpec): Promise<OkResult> =>
     {
         const result = await identity.parse({ name: 'html.msg', bytes: buildMsg(spec) });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         return result;
     };
 
@@ -374,7 +386,10 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
     {
         // resultFromFields with crafted msgreader output has no way to read again.
         const result = resultFromFields(craftedAnsi(['A']), 'crafted.msg', 'f'.repeat(64), { htmlToText: stub });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.attached?.map((e) => [e.message.subject, e.message.warnings])).toEqual([['A', UNCERTAIN]]);
     });
 
@@ -400,7 +415,10 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
             },
         };
         const result = resultFromFields(craftedAnsi(['A', 'B']), 'crafted.msg', 'f'.repeat(64), { htmlToText: stub }, reads);
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('Outer body.');
         expect(result.attached?.map((e) => [e.message.subject, e.message.bodyText, e.message.warnings])).toEqual([
             ['A', 'A body.', UNCERTAIN],
@@ -550,7 +568,10 @@ describe('createMsgParser: an attached item that cannot be read stays listed onl
     ])('crafted: %s', (_label, innerFields) =>
     {
         const result = resultFromFields(crafted(innerFields), 'crafted.msg', 'f'.repeat(64), { htmlToText: stub });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.bodyText).toBe('Outer body.');
         expect(result.message.attachments.map((a) => a.fileName)).toEqual(['Broken.msg', 'Fine.msg']);
         expect(result.attached?.map((e) => [e.message.subject, e.path])).toEqual([['Fine', [2]]]);
@@ -568,14 +589,20 @@ describe('createMsgParser: an attached item that cannot be read stays listed onl
                 get()
                 {
                     reads++;
-                    if (reads > 2) throw new Error('boom');
+                    if (reads > 2)
+                    {
+                        throw new Error('boom');
+                    }
                     return undefined;
                 },
                 enumerable: true,
             }),
         );
         const result = resultFromFields(fields as unknown as FieldsData, 'crafted.msg', 'f'.repeat(64), { htmlToText: stub });
-        if (!result.ok) throw new Error(result.detail);
+        if (!result.ok)
+        {
+            throw new Error(result.detail);
+        }
         expect(result.message.attachments).toHaveLength(3);
         expect('attached' in result).toBe(false);
     });

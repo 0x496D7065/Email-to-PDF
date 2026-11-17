@@ -122,7 +122,10 @@ describe('createEngineWorkerSide', () =>
         const posted: FromEngineWorker[] = [];
         const handle = createEngineWorkerSide((m) =>
         {
-            if (m.type === 'result') throw new Error('DataCloneError');
+            if (m.type === 'result')
+            {
+                throw new Error('DataCloneError');
+            }
             posted.push(m);
         });
         handle({ type: 'run', results: [] });

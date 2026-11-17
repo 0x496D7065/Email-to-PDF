@@ -41,7 +41,10 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
         let checked = 0;
         for (const c of THREAD_CASES)
         {
-            if (c.id === NAMES_ONLY_WRAPPED) continue; // a safe refusal (next test)
+            if (c.id === NAMES_ONLY_WRAPPED)
+            {
+                continue; // a safe refusal (next test)
+            }
             const found = findReplyHeaders(c.thread.body, c.thread.subject);
             for (const h of c.thread.headers)
             {
@@ -53,7 +56,10 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
                 }
                 checked++;
                 const diffs = fieldDiffs(h, readQuotedHeader(c.thread.body, hit));
-                if (diffs.length > 0) problems.push(`${c.id}: generation ${h.generation} (${h.style}): ${diffs.join('; ')}`);
+                if (diffs.length > 0)
+                {
+                    problems.push(`${c.id}: generation ${h.generation} (${h.style}): ${diffs.join('; ')}`);
+                }
             }
         }
         expect(problems).toEqual([]);
@@ -63,12 +69,18 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
     it('refuses a wrapped names-only list: the label line only, flagged incomplete, nothing after it read', () =>
     {
         const c = THREAD_CASES.find((x) => x.id === NAMES_ONLY_WRAPPED);
-        if (c === undefined) throw new Error('case missing');
+        if (c === undefined)
+        {
+            throw new Error('case missing');
+        }
         let checked = 0;
         for (const f of findReplyHeaders(c.thread.body, c.thread.subject))
         {
             const truth = c.thread.headers.find((h) => h.start === f.start);
-            if (truth === undefined) continue;
+            if (truth === undefined)
+            {
+                continue;
+            }
             checked++;
             const want = expectedFields(truth);
             const got = readQuotedHeader(c.thread.body, f);
@@ -95,12 +107,21 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
         let shortened = 0;
         for (const c of wrapped)
         {
-            if (c.id === NAMES_ONLY_WRAPPED) continue; // refused (test above)
+            if (c.id === NAMES_ONLY_WRAPPED)
+            {
+                continue; // refused (test above)
+            }
             for (const f of findReplyHeaders(c.thread.body, c.thread.subject))
             {
                 const truth = c.thread.headers.find((h) => h.start === f.start);
-                if (truth === undefined) continue;
-                if (f.headEnd < truth.headEnd) shortened++;
+                if (truth === undefined)
+                {
+                    continue;
+                }
+                if (f.headEnd < truth.headEnd)
+                {
+                    shortened++;
+                }
                 const got = readQuotedHeader(c.thread.body, f);
                 expect(got.headerEnd).toBe(truth.headEnd);
                 expect(got.headerEnd).toBeGreaterThanOrEqual(f.headEnd);
@@ -115,7 +136,10 @@ describe('readQuotedHeader: fixtures', () =>
     it('reads the three headers of fixture 13 (Outlook NL over a Gmail quote over a quoted Outlook EN block)', async () =>
     {
         const m = (await parseAllFixtures()).find((x) => x.source.fileName === 'eml/13-order-4-bob-outlook-nl.eml');
-        if (m === undefined) throw new Error('fixture 13 missing');
+        if (m === undefined)
+        {
+            throw new Error('fixture 13 missing');
+        }
         const body = m.bodyText;
         const found = findReplyHeaders(body, m.subject ?? undefined);
         const got = found.map((h) => readQuotedHeader(body, h));
@@ -133,7 +157,10 @@ describe('readQuotedHeader: fixtures', () =>
     it('reads both attributions of fixture 22 (Gmail FR, Apple EN inside ">>", accented name)', async () =>
     {
         const m = (await parseAllFixtures()).find((x) => x.source.fileName === 'eml/22-delivery-3-carol-gmail-fr.eml');
-        if (m === undefined) throw new Error('fixture 22 missing');
+        if (m === undefined)
+        {
+            throw new Error('fixture 22 missing');
+        }
         const got = findReplyHeaders(m.bodyText, m.subject ?? undefined).map((h) => readQuotedHeader(m.bodyText, h));
         expect(got.map((g) => [g.from, g.dateText, g.subject])).toEqual([
             [[box('Alice Example', 'alice@example.test')], 'mar. 4 mars 2025 \u00e0 13:05', null],
@@ -780,7 +807,10 @@ describe('readQuotedHeader: odd input', () =>
         {
             let body = '';
             const length = 5 + rand(80);
-            for (let k = 0; k < length; k++) body += pieces[rand(pieces.length)] ?? '';
+            for (let k = 0; k < length; k++)
+            {
+                body += pieces[rand(pieces.length)] ?? '';
+            }
             for (const h of findReplyHeaders(body, rand(2) === 0 ? 'Fwd: x' : 'Re: x'))
             {
                 const got = readQuotedHeader(body, h);

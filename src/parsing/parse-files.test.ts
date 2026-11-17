@@ -27,7 +27,10 @@ const fixtureFiles = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', 
 function fixture(name: string): string
 {
     const entry = Object.entries(fixtureFiles).find(([path]) => path.endsWith(`/${name}`));
-    if (entry === undefined) throw new Error(`missing fixture ${name}`);
+    if (entry === undefined)
+    {
+        throw new Error(`missing fixture ${name}`);
+    }
     return entry[1];
 }
 
@@ -36,7 +39,10 @@ const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 function msgSpec(index: number): MsgSpec
 {
     const spec = MSG_SPECS[index];
-    if (spec === undefined) throw new Error(`missing .msg spec ${String(index)}`);
+    if (spec === undefined)
+    {
+        throw new Error(`missing .msg spec ${String(index)}`);
+    }
     return spec;
 }
 
@@ -44,7 +50,10 @@ function msgSpec(index: number): MsgSpec
 function emlOfSize(size: number): Uint8Array
 {
     const head = 'X-Synthetic-Fixture: true\r\nFrom: Alice Example <alice@example.test>\r\nSubject: Size test\r\n\r\n';
-    if (size < head.length) throw new Error('too small');
+    if (size < head.length)
+    {
+        throw new Error('too small');
+    }
     return encode(head + 'x'.repeat(size - head.length));
 }
 
@@ -308,8 +317,14 @@ describe('parseFilesWith: never throws, keeps going, keeps order', () =>
         const bytes = encode(fixture('01-plain-english.eml'));
         const runJob = vi.fn<JobRunner>((job) =>
         {
-            if (job.name === 'throws.eml') throw new Error('boom');
-            if (job.name === 'rejects.eml') return Promise.reject(new Error('boom'));
+            if (job.name === 'throws.eml')
+            {
+                throw new Error('boom');
+            }
+            if (job.name === 'rejects.eml')
+            {
+                return Promise.reject(new Error('boom'));
+            }
             return realRunner(job);
         });
         const results = await parseFilesWith(

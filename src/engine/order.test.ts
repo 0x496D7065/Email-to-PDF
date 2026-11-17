@@ -228,7 +228,10 @@ describe('orderMessages', () =>
             {
                 seenUndated = true;
                 expect(entry.order).toBe('file-order');
-                if (previous?.message.date.utcMs === null) expect(entry.item.index).toBeGreaterThan(previous.index);
+                if (previous?.message.date.utcMs === null)
+                {
+                    expect(entry.item.index).toBeGreaterThan(previous.index);
+                }
             }
             else
             {
@@ -238,7 +241,10 @@ describe('orderMessages', () =>
                 if (previous !== undefined && prevMs !== null && prevMs !== undefined)
                 {
                     expect(utcMs).toBeGreaterThanOrEqual(prevMs);
-                    if (utcMs === prevMs) expect(entry.item.index).toBeGreaterThan(previous.index);
+                    if (utcMs === prevMs)
+                    {
+                        expect(entry.item.index).toBeGreaterThan(previous.index);
+                    }
                 }
             }
             previous = entry.item;

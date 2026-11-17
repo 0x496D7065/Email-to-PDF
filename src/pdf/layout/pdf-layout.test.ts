@@ -25,7 +25,10 @@ import { Typesetter } from './typesetter';
 const fonts = {} as Record<PdfFontName, ParsedFont>;
 beforeAll(async () =>
 {
-    for (const name of Object.keys(PDF_FONTS) as PdfFontName[]) fonts[name] = await readWoffFont(PDF_FONTS[name]);
+    for (const name of Object.keys(PDF_FONTS) as PdfFontName[])
+    {
+        fonts[name] = await readWoffFont(PDF_FONTS[name]);
+    }
 });
 
 const strings = createPdfStrings('en');
@@ -129,9 +132,15 @@ function runWidth(run: LaidOutTextRun): number
 {
     const font = fonts[run.font];
     let end = run.glyphs.length;
-    while (end > 0 && run.glyphText[end - 1] === ' ') end--;
+    while (end > 0 && run.glyphText[end - 1] === ' ')
+    {
+        end--;
+    }
     let w = 0;
-    for (let i = 0; i < end; i++) w += font.advance(run.glyphs[i]!);
+    for (let i = 0; i < end; i++)
+    {
+        w += font.advance(run.glyphs[i]!);
+    }
     return (w * run.size) / font.unitsPerEm;
 }
 
@@ -141,7 +150,10 @@ function expectInsideTextArea(doc: LaidOutDocument): void
     {
         for (const run of page.text)
         {
-            if (isFooter(run)) continue;
+            if (isFooter(run))
+            {
+                continue;
+            }
             expect(run.y).toBeGreaterThan(TOP);
             expect(run.y).toBeLessThanOrEqual(BOTTOM);
             expect(run.x).toBeGreaterThanOrEqual(CONFIG.margin.left - 1e-6);
@@ -255,7 +267,10 @@ describe('layoutPdf: pagination', () =>
                 const n = String(email.number);
                 expect(pageOf(document, `Email ${n}`)).toBe(page);
                 expect(pageOf(document, `Line 1 of email ${n}.`)).toBe(page);
-                if (email.body.length > 1) expect(pageOf(document, `Line 2 of email ${n}.`)).toBe(page);
+                if (email.body.length > 1)
+                {
+                    expect(pageOf(document, `Line 2 of email ${n}.`)).toBe(page);
+                }
             }
             expectInsideTextArea(document);
         }
@@ -270,7 +285,10 @@ describe('layoutPdf: pagination', () =>
         expect(apart.frontPages).toBe(1);
         expect([...apart.anchorPages.values()]).toEqual([1, 2, 3, 4, 5]);
         expect(apart.document.pages).toHaveLength(6);
-        for (const page of apart.document.pages.slice(1)) expect(page.lines).toHaveLength(0);
+        for (const page of apart.document.pages.slice(1))
+        {
+            expect(page.lines).toHaveLength(0);
+        }
         // The explicit option does the same.
         expect([...lay(doc, true).anchorPages.values()]).toEqual([1, 2, 3, 4, 5]);
         // Switched off (option or config): four short emails start on the first email page (after the cover and
@@ -280,7 +298,10 @@ describe('layoutPdf: pagination', () =>
         expect([...together.anchorPages.values()]).toEqual([1, 1, 1, 1, 2]);
         expect(together.document.pages.slice(1).flatMap((p) => p.lines)).toHaveLength(4);
         const rules = together.document.pages[1]!.lines;
-        for (const rule of rules) expect(rule).toMatchObject({ x1: CONFIG.margin.left, x2: CONFIG.page.width - CONFIG.margin.right, width: CONFIG.rule.width });
+        for (const rule of rules)
+        {
+            expect(rule).toMatchObject({ x1: CONFIG.margin.left, x2: CONFIG.page.width - CONFIG.margin.right, width: CONFIG.rule.width });
+        }
         const viaConfig = layoutPdf(doc, fonts, { strings, config: { ...CONFIG, newPagePerEmail: false } });
         expect([...viaConfig.anchorPages.values()]).toEqual([1, 1, 1, 1, 2]);
     });
@@ -296,7 +317,10 @@ describe('layoutPdf: pagination', () =>
             const { document, anchorPages, frontPages } = lay(doc);
             const starts = doc.emails.map((e) => anchorPages.get(e.anchor)!);
             expect(starts[0]).toBe(frontPages);
-            for (let k = 1; k < starts.length; k++) expect(starts[k]).toBeGreaterThan(starts[k - 1]!);
+            for (let k = 1; k < starts.length; k++)
+            {
+                expect(starts[k]).toBeGreaterThan(starts[k - 1]!);
+            }
             for (const [k, email] of doc.emails.entries())
             {
                 const page = document.pages[starts[k]!]!;
@@ -310,11 +334,20 @@ describe('layoutPdf: pagination', () =>
                 // Each email's pages hold only that email: its last body line is before the next email's page.
                 const lastLine = pageOf(document, `Line ${String(counts[k])} of email ${String(email.number)}.`, frontPages);
                 expect(lastLine).toBeGreaterThanOrEqual(starts[k]!);
-                if (k + 1 < starts.length) expect(lastLine).toBe(starts[k + 1]! - 1);
+                if (k + 1 < starts.length)
+                {
+                    expect(lastLine).toBe(starts[k + 1]! - 1);
+                }
             }
             // No empty page: every page has text besides its footer, and no rules between emails.
-            for (const page of document.pages) expect(page.text.some((r) => !isFooter(r))).toBe(true);
-            for (const page of document.pages.slice(frontPages)) expect(page.lines).toHaveLength(0);
+            for (const page of document.pages)
+            {
+                expect(page.text.some((r) => !isFooter(r))).toBe(true);
+            }
+            for (const page of document.pages.slice(frontPages))
+            {
+                expect(page.lines).toHaveLength(0);
+            }
             expectInsideTextArea(document);
         }
     });
@@ -332,7 +365,10 @@ describe('layoutPdf: pagination', () =>
             expect(doc.emails.length).toBeGreaterThanOrEqual(4);
             // One page per email (each is short), right after the index, in PDF order; no empty page.
             expect(document.pages).toHaveLength(frontPages + doc.emails.length);
-            for (const page of document.pages) expect(page.text.some((r) => !isFooter(r))).toBe(true);
+            for (const page of document.pages)
+            {
+                expect(page.text.some((r) => !isFooter(r))).toBe(true);
+            }
             for (const [k, email] of doc.emails.entries())
             {
                 const page = frontPages + k;
@@ -361,7 +397,10 @@ describe('layoutPdf: pagination', () =>
                 }
             }
             expect([...shown.keys()].sort()).toEqual(doc.emails.map((e) => e.anchor).sort());
-            for (const email of doc.emails) expect(shown.get(email.anchor)).toEqual([String(anchorPages.get(email.anchor)! + 1)]);
+            for (const email of doc.emails)
+            {
+                expect(shown.get(email.anchor)).toEqual([String(anchorPages.get(email.anchor)! + 1)]);
+            }
         }
     });
 
@@ -383,7 +422,10 @@ describe('layoutPdf: pagination', () =>
         const toLabel = document.pages[toPage]!.text.find((r) => r.copyText === 'To')!;
         const toValue = document.pages[toPage]!.text.find((r) => r.copyText.startsWith('Person 0 Example'))!;
         expect(toValue.y).toBe(toLabel.y);
-        for (let p = toPage + 1; p < datePage; p++) expect(document.pages[p]!.text.some((r) => r.copyText.includes('@example.test'))).toBe(true);
+        for (let p = toPage + 1; p < datePage; p++)
+        {
+            expect(document.pages[p]!.text.some((r) => r.copyText.includes('@example.test'))).toBe(true);
+        }
         expectInsideTextArea(document);
     });
 
@@ -396,7 +438,10 @@ describe('layoutPdf: pagination', () =>
         const labels = ['From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'File'];
         // Searched from the first email page: the index has columns named like some of them.
         const pages = labels.map((label) => pageOf(document, label, frontPages));
-        for (const p of pages) expect(p).toBeGreaterThanOrEqual(frontPages);
+        for (const p of pages)
+        {
+            expect(p).toBeGreaterThanOrEqual(frontPages);
+        }
         // Each value line sits on the page of its label or later, and rows are in order.
         expect([...pages].sort((a, b) => a - b)).toEqual(pages);
         expect(new Set(pages).size).toBeGreaterThan(1);
@@ -445,7 +490,13 @@ function tallRow(label: string, count: number): PdfFieldRow
 function pagesOfRow(doc: LaidOutDocument, label: string): Set<number>
 {
     const pages = new Set<number>();
-    for (const [i, page] of doc.pages.entries()) if (page.text.some((r) => r.copyText === label || r.copyText.startsWith(`${label} `))) pages.add(i);
+    for (const [i, page] of doc.pages.entries())
+    {
+        if (page.text.some((r) => r.copyText === label || r.copyText.startsWith(`${label} `)))
+        {
+            pages.add(i);
+        }
+    }
     return pages;
 }
 
@@ -490,7 +541,10 @@ describe('layoutPdf: keeping things together', () =>
             expect([...pagesOfRow(document, 'A')]).toEqual([headingPage]);
             // The tall row may start on the next page (it is broken between its lines anyway).
             expect(pageOf(document, 'B value line 1.') - headingPage).toBeOneOf([0, 1]);
-            if (anchorPages.get('email-2') === anchorPages.get('email-1')) shared++;
+            if (anchorPages.get('email-2') === anchorPages.get('email-1'))
+            {
+                shared++;
+            }
         }
         // Not always on a new page: it follows the email before when the heading and the first row fit.
         expect(shared).toBeGreaterThan(10);
@@ -626,7 +680,10 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
     const xOf = (runs: readonly LaidOutTextRun[], text: string): number =>
     {
         const run = runs.find((r) => r.copyText.startsWith(text));
-        if (run === undefined) throw new Error(`not found: ${text}`);
+        if (run === undefined)
+        {
+            throw new Error(`not found: ${text}`);
+        }
         return run.x;
     };
 
@@ -674,7 +731,10 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
             expect(xOf(runs, text), text).toBeCloseTo(LEFT + STEP, 6);
         }
         // No ">" drawn at the start of any body line.
-        for (const r of runs) expect(r.copyText).not.toMatch(/^\s*>/);
+        for (const r of runs)
+        {
+            expect(r.copyText).not.toMatch(/^\s*>/);
+        }
         // The heading and the header rows (labels) stay at the margin.
         const page = document.pages[frontPages]!.text;
         expect(page.find((r) => r.copyText.startsWith('Email 1'))!.x).toBeCloseTo(LEFT, 6);
@@ -691,13 +751,22 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const width = CONFIG.page.width - CONFIG.margin.left - CONFIG.margin.right;
         // The first x of each line (one y per line).
         const byY = new Map<number, number>();
-        for (const r of runs) if (!byY.has(r.y)) byY.set(r.y, r.x);
+        for (const r of runs)
+        {
+            if (!byY.has(r.y))
+            {
+                byY.set(r.y, r.x);
+            }
+        }
         const xs = [...byY.values()];
         const ts = new Typesetter(fonts, CONFIG);
         const count = ts.wrap([{ role: 'body', text: long }], width - STEP, 'body').length;
         expect(count).toBeGreaterThan(1);
         expect(xs).toHaveLength(1 + 2 * count);
-        for (const x of xs) expect(x).toBeCloseTo(LEFT + STEP, 6);
+        for (const x of xs)
+        {
+            expect(x).toBeCloseTo(LEFT + STEP, 6);
+        }
         expectInsideTextArea(document);
     });
 
@@ -712,14 +781,26 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const run = (text: string): LaidOutTextRun =>
         {
             const found = page.find((r) => r.copyText === text);
-            if (found === undefined) throw new Error(`not found: ${text}`);
+            if (found === undefined)
+            {
+                throw new Error(`not found: ${text}`);
+            }
             return found;
         };
-        for (const text of ['Email 1', 'From', 'To', 'Date', 'Subject', 'Attachments', CONFIG.list.bullet]) expect(run(text).x, text).toBeCloseTo(LEFT, 6);
+        for (const text of ['Email 1', 'From', 'To', 'Date', 'Subject', 'Attachments', CONFIG.list.bullet])
+        {
+            expect(run(text).x, text).toBeCloseTo(LEFT, 6);
+        }
         // The item text after the bullet, as on the cover (list.indent), not one body step in.
-        for (const text of ['plan.pdf', 'photo.jpg']) expect(run(text).x, text).toBeCloseTo(LEFT + CONFIG.list.indent, 6);
+        for (const text of ['plan.pdf', 'photo.jpg'])
+        {
+            expect(run(text).x, text).toBeCloseTo(LEFT + CONFIG.list.indent, 6);
+        }
         expect(run('Alice Example <alice@example.test>').x).toBeCloseTo(LEFT + CONFIG.fields.labelWidth + CONFIG.fields.gap, 6);
-        for (const text of ['Own text.', 'More text.']) expect(run(text).x, text).toBeCloseTo(LEFT + STEP, 6);
+        for (const text of ['Own text.', 'More text.'])
+        {
+            expect(run(text).x, text).toBeCloseTo(LEFT + STEP, 6);
+        }
     });
 
     it('places the "(no text)" placeholder one step in, where the text would be (task 8.10)', () =>
@@ -737,7 +818,10 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const laid = lay(syntheticDoc([wide]));
         const runs = laid.document.pages[laid.frontPages]!.text.filter((r) => long.includes(r.copyText.trim()) && r.copyText.trim() !== '');
         expect(new Set(runs.map((r) => r.y)).size).toBeGreaterThan(1);
-        for (const r of runs) expect(r.x).toBeGreaterThanOrEqual(LEFT + STEP - 1e-6);
+        for (const r of runs)
+        {
+            expect(r.x).toBeGreaterThanOrEqual(LEFT + STEP - 1e-6);
+        }
         expectInsideTextArea(laid.document);
     });
 
@@ -750,7 +834,10 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         expect(bodyIndent).toBeCloseTo(2 * STEP, 9);
         const runs = bodyRuns(document, frontPages);
         expect(runs.map((r) => r.copyText)).toEqual(['Own.', 'One.', 'Two.', 'Three.']);
-        for (const r of runs) expect(r.x - LEFT, r.copyText).toBeCloseTo(2 * STEP, 6);
+        for (const r of runs)
+        {
+            expect(r.x - LEFT, r.copyText).toBeCloseTo(2 * STEP, 6);
+        }
         // The empty line takes its line height: "Two." is two lines below "One.".
         const y = (t: string): number => runs.find((r) => r.copyText === t)!.y;
         expect(y('Two.') - y('One.')).toBeCloseTo(2 * (y('Three.') - y('Two.')), 6);
@@ -793,23 +880,38 @@ describe('layoutPdf + OwnPdfWriter', () =>
         const doc = build(messages);
         const { document } = lay(doc);
         // Already in the layout's own copy texts, before the backend's copy layer.
-        for (const page of document.pages) for (const run of page.text) expect(run.copyText).not.toContain('\u{AD}');
+        for (const page of document.pages)
+        {
+            for (const run of page.text)
+            {
+                expect(run.copyText).not.toContain('\u{AD}');
+            }
+        }
         const bytes = await new OwnPdfWriter().render(document, fonts);
         const pdf = readPdf(bytes);
         expect(pdf.pages()).toHaveLength(document.pages.length);
         expect(document.pages.length).toBeGreaterThan(2);
         const all = (await pageTexts(pdf)).join('\n');
         // What you copy is what you see: a soft hyphen not at a line break is not drawn, so not copied.
-        for (const line of special) expect(all).toContain(line.trimStart().replaceAll('\u{AD}', ''));
+        for (const line of special)
+        {
+            expect(all).toContain(line.trimStart().replaceAll('\u{AD}', ''));
+        }
         expect(all).toContain('Softhyphen not copied');
         expect(all).not.toContain('\u{AD}');
         expect(all).toContain('    Indented');
-        for (let n = 2; n <= 12; n++) expect(all).toContain(`Line 30 of email ${String(n)}.`);
+        for (let n = 2; n <= 12; n++)
+        {
+            expect(all).toContain(`Line 30 of email ${String(n)}.`);
+        }
         expect(all).toContain(`Page 1 of ${String(document.pages.length)}`);
         // The destinations, as the reader sees them.
         const dests = readDests(pdf);
         expect([...dests.keys()].sort()).toEqual(['cover', 'index', ...doc.emails.map((e) => e.anchor)].sort());
-        for (const d of document.destinations) expect(dests.get(d.name)!.page).toBe(d.page);
+        for (const d of document.destinations)
+        {
+            expect(dests.get(d.name)!.page).toBe(d.page);
+        }
         // Info: title and producer only.
         expect(pdf.info.keys().sort()).toEqual(['Producer', 'Title']);
         expect((pdf.info.get('Producer') as PdfString).text).toBe('Email to PDF');

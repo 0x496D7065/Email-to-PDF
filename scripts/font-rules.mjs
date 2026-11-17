@@ -89,14 +89,23 @@ const NUMBER_RUN = new RegExp(String.raw`(?<![\w$.])${NUM}(?:\s*,\s*(?:${NUM})?)
 function numberValue(part)
 {
     let s = part.trim().replace(/_/g, '');
-    if (s === '') return NaN;
+    if (s === '')
+    {
+        return NaN;
+    }
     let sign = 1;
     if (s[0] === '-' || s[0] === '+')
     {
-        if (s[0] === '-') sign = -1;
+        if (s[0] === '-')
+        {
+            sign = -1;
+        }
         s = s.slice(1);
     }
-    if (s.endsWith('n')) s = s.slice(0, -1);
+    if (s.endsWith('n'))
+    {
+        s = s.slice(0, -1);
+    }
     return sign * Number(s);
 }
 
@@ -115,11 +124,26 @@ export function findNumberArrays(text, minLength = NUMBER_ARRAY_MIN_LENGTH)
     {
         // Cheap pre-filter: a run of minLength numbers has minLength - 1 commas.
         let commas = 0;
-        for (let i = 0; i < m[0].length && commas < minLength - 1; i += 1) if (m[0].charCodeAt(i) === 44) commas += 1;
-        if (commas < minLength - 1) continue;
+        for (let i = 0; i < m[0].length && commas < minLength - 1; i += 1)
+        {
+            if (m[0].charCodeAt(i) === 44)
+            {
+                commas += 1;
+            }
+        }
+        if (commas < minLength - 1)
+        {
+            continue;
+        }
         const values = m[0].split(',').map(numberValue);
         let line = 1;
-        for (let i = 0; i < m.index; i += 1) if (text.charCodeAt(i) === 10) line += 1;
+        for (let i = 0; i < m.index; i += 1)
+        {
+            if (text.charCodeAt(i) === 10)
+            {
+                line += 1;
+            }
+        }
         found.push({ line, start: m.index, end: m.index + m[0].length, values });
     }
     return found;
@@ -185,7 +209,10 @@ export function checkNumberArrays(files, fonts = PDF_FONT_FILES, minLength = NUM
         for (const font of fonts)
         {
             const count = seen.get(font.sha256) ?? 0;
-            if (count !== 1) problems.push(`${font.file} must be in the font chunk exactly once, found ${count} time(s) (README.md, rule R3)`);
+            if (count !== 1)
+            {
+                problems.push(`${font.file} must be in the font chunk exactly once, found ${count} time(s) (README.md, rule R3)`);
+            }
         }
     }
     return problems;
@@ -204,9 +231,15 @@ export function checkFontChunkLoadedAtStartup(html, files)
 {
     const entry = /<script type="module"[^>]*\ssrc="\/([^"]+)"/.exec(html)?.[1];
     const entryFile = files.find((f) => f.path === entry);
-    if (entryFile === undefined) return ['dist/index.html: no entry <script type="module" src=...> found (README.md, rule R3)'];
+    if (entryFile === undefined)
+    {
+        return ['dist/index.html: no entry <script type="module" src=...> found (README.md, rule R3)'];
+    }
     const chunk = files.find((f) => FONT_CHUNK_PATTERN.test(f.path));
-    if (chunk === undefined) return []; // reported by checkNumberArrays
+    if (chunk === undefined)
+    {
+        return []; // reported by checkNumberArrays
+    }
     const name = chunk.path.slice('assets/'.length).replace(/[.]/g, '\\.');
     // `import"./x.js"` or `import{a as b}from"./x.js"`, never `import("./x.js")`.
     // This is only a text check on the minified output, not a real parse. The
@@ -245,7 +278,10 @@ export function checkSourceFonts(files, fonts = PDF_FONT_FILES)
     }
     for (const font of fonts)
     {
-        if (!files.some((f) => f.path === font.file)) problems.push(`${font.file}: font file is missing (README.md, rule R3)`);
+        if (!files.some((f) => f.path === font.file))
+        {
+            problems.push(`${font.file}: font file is missing (README.md, rule R3)`);
+        }
     }
     return problems;
 }

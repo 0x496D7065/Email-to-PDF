@@ -80,8 +80,17 @@ function state(body: string, folds: readonly FoldRange[], snippet: string): 'fol
     const at = body.indexOf(snippet);
     expect(at, snippet).toBeGreaterThanOrEqual(0);
     let count = 0;
-    for (let i = at; i < at + snippet.length; i++) if (folds.some((f) => f.start <= i && i < f.end)) count++;
-    if (count === 0) return 'shown';
+    for (let i = at; i < at + snippet.length; i++)
+    {
+        if (folds.some((f) => f.start <= i && i < f.end))
+        {
+            count++;
+        }
+    }
+    if (count === 0)
+    {
+        return 'shown';
+    }
     return count === snippet.length ? 'folded' : 'mixed';
 }
 
@@ -121,7 +130,10 @@ describe('tokenizeWords', () =>
         const text = '> Hello, Bob!\n> Room 2 at 10:00.';
         const words = tokenizeWords(text);
         expect(words.map((w) => w.key)).toEqual(['hello', 'bob', 'room', '2', 'at', '10', '00']);
-        for (const w of words) expect(text.slice(w.start, w.end).toLowerCase()).toBe(w.key);
+        for (const w of words)
+        {
+            expect(text.slice(w.start, w.end).toLowerCase()).toBe(w.key);
+        }
     });
 
     it('normalizes case and composed/decomposed accents, and treats nbsp as a space', () =>
@@ -643,7 +655,10 @@ describe('detectQuotedOverlap: purity', () =>
             { body: BOB_2, id: 'b@example.test', inReplyTo: 'a@example.test', references: ['a@example.test'] },
         ]);
         const snapshot = JSON.stringify(messages);
-        for (const m of messages) Object.freeze(m);
+        for (const m of messages)
+        {
+            Object.freeze(m);
+        }
         Object.freeze(messages);
         detectQuotedOverlap(messages);
         expect(JSON.stringify(messages)).toBe(snapshot);
@@ -692,7 +707,10 @@ describe('detectQuotedOverlap: speed', () =>
         result.forEach((folds, k) =>
         {
             const body = specs[k]!.body;
-            if (k === 0) expect(folds).toEqual([]);
+            if (k === 0)
+            {
+                expect(folds).toEqual([]);
+            }
             else
             {
                 expect(folds.map((f) => f.related)).toEqual([10 * k]);
@@ -740,6 +758,9 @@ describe('detectQuotedOverlap: speed', () =>
         console.log(`overlap speed: 50 x ${body.length} chars of repeated boilerplate, ${ms.toFixed(0)} ms`);
         expect(ms).toBeLessThan(5000);
         expect(result[0]).toEqual([]);
-        for (const folds of result.slice(1)) expect(folds).toEqual([{ start: 0, end: body.length, reason: 'quoted-overlap', related: 10 }]);
+        for (const folds of result.slice(1))
+        {
+            expect(folds).toEqual([{ start: 0, end: body.length, reason: 'quoted-overlap', related: 10 }]);
+        }
     });
 });

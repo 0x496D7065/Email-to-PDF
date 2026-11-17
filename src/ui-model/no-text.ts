@@ -61,10 +61,16 @@ function isEmptyText(text: unknown): boolean
  */
 export function hasNoPrintableText(m: Pick<NormalizedMessage, 'bodyText' | 'warnings'>): boolean
 {
-    if (!isEmptyText(m.bodyText)) return false;
+    if (!isEmptyText(m.bodyText))
+    {
+        return false;
+    }
     // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
     const isList: boolean = Array.isArray(m.warnings);
-    if (!isList) return false;
+    if (!isList)
+    {
+        return false;
+    }
     return !m.warnings.some((w) => UNREADABLE_BODY_WARNINGS.includes(w));
 }
 

@@ -101,7 +101,10 @@ for (const [files, isDist] of [
         const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
         const sourceFile = isDist ? undefined : display(path);
         const text = readFileSync(path, 'utf8');
-        if (isDist) distTexts.push({ path: distFile, text });
+        if (isDist)
+        {
+            distTexts.push({ path: distFile, text });
+        }
         // Source only: no long number array at all (the fonts are .woff files
         // there; in dist/ they are checked by checkNumberArrays below).
         if (!isDist)
@@ -113,10 +116,16 @@ for (const [files, isDist] of [
         }
         const findings = findViolations(text, { isDist, distFile, sourceFile });
         // dist/ only: code embedded in strings (the inlined workers, see the top).
-        if (isDist) findings.push(...findEmbeddedViolations(text, { isDist, distFile }));
+        if (isDist)
+        {
+            findings.push(...findEmbeddedViolations(text, { isDist, distFile }));
+        }
         // dist/ only: a long base64 literal would hide code from both scans above
         // (e.g. if a future Vite inlined workers as base64): fail so a person looks.
-        if (isDist) findings.push(...findOpaquePayloads(text));
+        if (isDist)
+        {
+            findings.push(...findOpaquePayloads(text));
+        }
         for (const { line, match, reason } of findings)
         {
             // Minified lines can be huge; cap what we print.
@@ -157,7 +166,10 @@ for (const [path, check] of [
 
 // The service worker script must be there: dist/_headers has a rule for it
 // (checked above), and its two rule exceptions (RULE_EXEMPTIONS) are for it.
-if (!existsSync(join(dist, 'sw.js'))) errors.push('dist/sw.js: file is missing (README.md, "How the privacy model works")');
+if (!existsSync(join(dist, 'sw.js')))
+{
+    errors.push('dist/sw.js: file is missing (README.md, "How the privacy model works")');
+}
 // Its version must be the one computed from what dist/ really holds: the
 // listed files, the service worker's code and dist/_headers (the same
 // manifestVersion the build uses, scripts/sw-version.mjs). A build that
@@ -171,7 +183,10 @@ else
         const { version, paths } = readBuiltManifest(swJs);
         const files = paths.map((path) => ({ path, bytes: readFileSync(join(dist, path === '/' ? 'index.html' : path.slice(1))) }));
         const expected = manifestVersion(files, swJs, readFileSync(headersFile));
-        if (version !== expected) errors.push(`dist/sw.js: version ${version} is not the one computed from dist/ (${expected}): the build left something out of it`);
+        if (version !== expected)
+        {
+            errors.push(`dist/sw.js: version ${version} is not the one computed from dist/ (${expected}): the build left something out of it`);
+        }
     }
     catch (error)
     {
@@ -183,7 +198,10 @@ const scanned = sourceFiles.length + distFiles.length;
 if (errors.length > 0)
 {
     console.error(`check-no-network: FAILED with ${errors.length} problem(s):`);
-    for (const error of errors) console.error(`  ${error}`);
+    for (const error of errors)
+    {
+        console.error(`  ${error}`);
+    }
     process.exit(1);
 }
 console.log(`check-no-network: OK (${scanned} files scanned, ${fontFiles.length} fonts verified, security headers present).`);

@@ -52,11 +52,23 @@ async function measure(): Promise<Map<string, Measured>>
 function state(m: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
 {
     const at = m.body.indexOf(snippet);
-    if (at < 0) throw new Error(`${m.file}: snippet not found: ${snippet}`);
+    if (at < 0)
+    {
+        throw new Error(`${m.file}: snippet not found: ${snippet}`);
+    }
     const covered = (i: number): boolean => m.folds.some((f) => f.start <= i && i < f.end);
     let foldedCount = 0;
-    for (let i = at; i < at + snippet.length; i++) if (covered(i)) foldedCount++;
-    if (foldedCount === 0) return 'shown';
+    for (let i = at; i < at + snippet.length; i++)
+    {
+        if (covered(i))
+        {
+            foldedCount++;
+        }
+    }
+    if (foldedCount === 0)
+    {
+        return 'shown';
+    }
     return foldedCount === snippet.length ? 'folded' : 'mixed';
 }
 
@@ -68,7 +80,10 @@ describe('overlap detection over the parsed fixtures', () =>
         const get = (file: string): Measured =>
         {
             const m = all.get(file);
-            if (m === undefined) throw new Error(`no result for ${file}`);
+            if (m === undefined)
+            {
+                throw new Error(`no result for ${file}`);
+            }
             return m;
         };
 
@@ -107,7 +122,10 @@ describe('overlap detection over the parsed fixtures', () =>
         for (const m of all.values())
         {
             const firstLine = m.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
-            if (firstLine === undefined) continue; // no text at all: nothing to fold
+            if (firstLine === undefined)
+            {
+                continue; // no text at all: nothing to fold
+            }
             expect(state(m, firstLine), `${m.file}: first line`).toBe('shown');
         }
 
@@ -118,7 +136,10 @@ describe('overlap detection over the parsed fixtures', () =>
             ['eml/81-setup-b-bob.eml', 'Can we meet at the office on Thursday 12 June at 9:00'],
             ['msg-02-chain-1-bob', 'Hierbij mijn offerte voor de vergadertafel'],
         ];
-        for (const [file, text] of firsts) expect(state(get(file), text), file).toBe('shown');
+        for (const [file, text] of firsts)
+        {
+            expect(state(get(file), text), file).toBe('shown');
+        }
         expect(get('eml/10-order-1-alice.eml').folds).toEqual([]);
         expect(get('eml/20-delivery-1-carol.eml').folds).toEqual([]);
 

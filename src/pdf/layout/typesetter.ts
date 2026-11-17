@@ -64,13 +64,19 @@ export class Typesetter
             if (m === undefined)
             {
                 const font = fonts[name];
-                if (font === undefined) throw new Error(`layout: font ${name} was not given`);
+                if (font === undefined)
+                {
+                    throw new Error(`layout: font ${name} was not given`);
+                }
                 m = new FontMetrics(font);
                 metrics.set(name, m);
             }
             return m;
         };
-        for (const role of ROLES) this.roleStyle.set(role, this.addStyle(config.roles[role], metricsOf));
+        for (const role of ROLES)
+        {
+            this.roleStyle.set(role, this.addStyle(config.roles[role], metricsOf));
+        }
         this.footerStyle = this.addStyle(config.footer.style, metricsOf);
         this.shaper = new Shaper(this.styles, this.styleOf('code'));
     }
@@ -115,7 +121,10 @@ export class Typesetter
     {
         const { metrics, style } = this.styles[this.styleOf(role)]!;
         const glyph = metrics.glyph(0x20);
-        if (glyph === 0) throw new Error(`layout: the font of the ${role} text has no space`);
+        if (glyph === 0)
+        {
+            throw new Error(`layout: the font of the ${role} text has no space`);
+        }
         return metrics.advance(glyph) * style.size;
     }
 
@@ -138,11 +147,20 @@ export class Typesetter
             for (let i = r.start; i < r.end; i++)
             {
                 const s = shaped.style[i]!;
-                if (s === last) continue;
+                if (s === last)
+                {
+                    continue;
+                }
                 last = s;
                 const st = this.styles[s]!;
-                if (st.above > above) above = st.above;
-                if (st.below > below) below = st.below;
+                if (st.above > above)
+                {
+                    above = st.above;
+                }
+                if (st.below > below)
+                {
+                    below = st.below;
+                }
             }
             return { text: shaped, start: r.start, end: r.end, hyphenAt: r.hyphenAt, width: r.width, height: above + below, above };
         });

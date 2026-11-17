@@ -50,7 +50,10 @@ const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: t
 function thread(id: string): ThreadCase
 {
     const c = THREAD_CASES.find((x) => x.id === id);
-    if (c === undefined) throw new Error(`no case ${id}`);
+    if (c === undefined)
+    {
+        throw new Error(`no case ${id}`);
+    }
     return c;
 }
 
@@ -139,7 +142,10 @@ function exactDates(body: string): string
         const m = quoted[k++];
         return m === undefined ? line : `${label}: ${rfcDate(instantOf(m.sent, m.zone))}`;
     });
-    if (k !== 2) throw new Error(`FORWARD has ${String(k)} quoted dates: update exactDates`);
+    if (k !== 2)
+    {
+        throw new Error(`FORWARD has ${String(k)} quoted dates: update exactDates`);
+    }
     return out;
 }
 
@@ -371,7 +377,10 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
         const off = build(result, { rebuilt: [], rebuildingOff: true });
         const plain = bodyOf(realOf(off, 0));
         expect(realOf(off, 0).flags.printedElsewhere).toBe(false);
-        for (const k of [0, 1]) expect(squash(plain)).toContain(sentence(FORWARD, k));
+        for (const k of [0, 1])
+        {
+            expect(squash(plain)).toContain(sentence(FORWARD, k));
+        }
     });
 
     it('a forwarded email whose rebuilt email is unticked is left out of the forward (task 8.13a, Q2); "Print full original text" still prints it', () =>
@@ -390,7 +399,10 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
         expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, 0))).map((e) => e.rebuilt?.id)).toEqual([older.id]);
         // Collapse, never delete: the full text prints the whole forward.
         const full = build(result, { rebuilt: [], policy: EVERYTHING });
-        for (const k of [0, 1, 2]) expect(squash(bodyOf(realOf(full, 0)))).toContain(sentence(FORWARD, k));
+        for (const k of [0, 1, 2])
+        {
+            expect(squash(bodyOf(realOf(full, 0)))).toContain(sentence(FORWARD, k));
+        }
     });
 
     it('a rebuilt email merely missing from the chosen ones is NOT unticked (task 8.13a review round 2): its forwarded part stays in the forward', () =>
@@ -402,7 +414,10 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
         {
             expect(doc.emails).toHaveLength(1);
             expect(realOf(doc, 0).flags.printedElsewhere).toBe(false);
-            for (const k of [0, 1]) expect(squash(bodyOf(realOf(doc, 0)))).toContain(sentence(FORWARD, k));
+            for (const k of [0, 1])
+            {
+                expect(squash(bodyOf(realOf(doc, 0)))).toContain(sentence(FORWARD, k));
+            }
         }
         const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
         for (const rebuilt of [undefined, [] as number[]])
@@ -427,17 +442,26 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
         expect(doc.emails).toHaveLength(1);
         expect(doc.emails[0]!.flags.printedElsewhere).toBe(false);
         expect(doc).toEqual(build(result, { policy: EVERYTHING, rebuilt: [] }));
-        for (const k of [0, 1, 2]) expect(squash(bodyOf(doc.emails[0]!))).toContain(sentence(FORWARD, k));
+        for (const k of [0, 1, 2])
+        {
+            expect(squash(bodyOf(doc.emails[0]!))).toContain(sentence(FORWARD, k));
+        }
     });
 
     it('every email added as a file: the forwarded part is left out of the forward, the real files print it', () =>
     {
         const result = engineOf(FORWARD, [0, 1, 2]);
         const doc = build(result, { rebuilt: [] });
-        for (const k of [0, 1, 2]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k))), `message ${String(k)}`).toHaveLength(1);
+        for (const k of [0, 1, 2])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k))), `message ${String(k)}`).toHaveLength(1);
+        }
         // Without the real files it quotes, the forward keeps them.
         const alone = build(result, { positions: [2], rebuilt: [] });
-        for (const k of [0, 1, 2]) expect(squash(bodyOf(alone.emails[0]!))).toContain(sentence(FORWARD, k));
+        for (const k of [0, 1, 2])
+        {
+            expect(squash(bodyOf(alone.emails[0]!))).toContain(sentence(FORWARD, k));
+        }
     });
 
     it('a forward with no text of its own (dates with a zone): "(no text)", its forwarded emails printed once as their own', () =>
@@ -454,7 +478,10 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
         expect(hasNoPrintableText(result.messages[0]!.message)).toBe(false);
         expect(doc.pdfNumberByPosition[0]).toBe(forward.number);
         expect(doc.emails).toHaveLength(3);
-        for (const k of [0, 1]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        for (const k of [0, 1])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        }
     });
 
     it('a reply: its quoted history is left out by its plan anyway, the rule changes nothing', () =>
@@ -613,7 +640,10 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
         expect(movedTo(doc, result, 1, header)).toBe(true);
         expect(keptIn(doc, headerOf(result, 2))).toBe(false);
         expect(movedTo(doc, result, 2, headerOf(result, 2))).toBe(false);
-        for (const k of [0, 1]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        for (const k of [0, 1])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        }
     });
 
     it('a From value with two mailboxes ("Unknown sender"): that header block moves to its rebuilt email', () =>
@@ -638,14 +668,20 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
             expect(keptIn(doc, headerOf(result, g))).toBe(false);
             expect(movedTo(doc, result, g, headerOf(result, g))).toBe(true);
         }
-        for (const k of [0, 1]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        for (const k of [0, 1])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        }
     });
 
     it('the rebuilt email not in the PDF and not an unticked forward (the switch off): the header lines stay where they are', () =>
     {
         const result = engineOf(FORWARD, [2]);
         const doc = build(result, { rebuilt: [], rebuildingOff: true });
-        for (const g of [1, 2]) expect(keptIn(doc, headerOf(result, g))).toBe(true);
+        for (const g of [1, 2])
+        {
+            expect(keptIn(doc, headerOf(result, g))).toBe(true);
+        }
     });
 
     it('headerShownInPdf: each thing the header rows cannot show keeps the lines', () =>
@@ -729,7 +765,10 @@ describe('the cut places: CRLF bodies, touching and overlapping places', () =>
         expect(printedElsewhere(result, order.slots, order.pdfNumberByPosition).get(forwardPosition)).toEqual([[newer.rebuilt.start, older.rebuilt.end]]);
         const doc = build(result);
         expect(squash(bodyOf(realOf(doc, forwardPosition)))).toBe(squash(FORWARD.messages![2]!.text));
-        for (const k of [0, 1, 2]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k))), `message ${String(k)}`).toHaveLength(1);
+        for (const k of [0, 1, 2])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k))), `message ${String(k)}`).toHaveLength(1);
+        }
     });
 
     it('overlapping places (odd offsets) are merged into one cut', () =>
@@ -842,7 +881,13 @@ describe('printedElsewhereParts, pdfRanges, noRepeat: where the PDF prints each 
             expect(parts.some((p) => p.start <= r.start && r.end <= p.end && p.printedAs === r.printedAs)).toBe(true);
         }
         // Nothing named for what the plan already left out.
-        for (const r of ranges) if (r.printedAs === null && !r.keep) expect(plan.ranges.some((x) => !x.keep && x.start <= r.start && r.end <= x.end)).toBe(true);
+        for (const r of ranges)
+        {
+            if (r.printedAs === null && !r.keep)
+            {
+                expect(plan.ranges.some((x) => !x.keep && x.start <= r.start && r.end <= x.end)).toBe(true);
+            }
+        }
         // The whole body printed, or nothing left out this way: null.
         expect(pdfRanges(body, plan, EVERYTHING, parts)).toBeNull();
         expect(pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, [])).toBeNull();
@@ -993,7 +1038,10 @@ describe('attribution first: a place whose text holds own text or a kept signatu
         expect(printedElsewhere(result, order.slots, order.pdfNumberByPosition, new Map([[0, plan]])).get(0)).toEqual([[g1.start, g2.end]]);
         const doc = build(result, { plans: [plan] });
         expect(squash(bodyOf(realOf(doc, 0)))).toBe(squash(FORWARD.messages![2]!.text));
-        for (const k of [0, 1]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        for (const k of [0, 1])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toHaveLength(1);
+        }
     });
 
     it('the whole PDF: that place stays in the forward exactly as its plan says, header lines included', () =>
@@ -1023,7 +1071,10 @@ describe('header lines read short: the lines left at the top of the text stay wi
         expect(body.slice(end).trim().startsWith('Hello Bob,')).toBe(true);
         // A header read whole: its own end.
         const whole = engineOf(FORWARD, [2]);
-        for (const x of whole.reconstructed) expect(headerLinesEnd(whole.messages[0]!.message.bodyText, x.rebuilt)).toBe(x.rebuilt.headerEnd);
+        for (const x of whole.reconstructed)
+        {
+            expect(headerLinesEnd(whole.messages[0]!.message.bodyText, x.rebuilt)).toBe(x.rebuilt.headerEnd);
+        }
         // Everything left over: the whole place; odd input: headerEnd.
         expect(headerLinesEnd(body, { ...r, reconstructedText: 'Onderwerp: x\n' })).toBe(r.end);
         expect(headerLinesEnd(body, { ...r, reconstructedText: undefined as unknown as string })).toBe(r.headerEnd);
@@ -1033,7 +1084,10 @@ describe('header lines read short: the lines left at the top of the text stay wi
     {
         const result = engineOf(c, [0, 1, 2]);
         const doc = build(result, { rebuilt: [] });
-        for (const k of [0, 1, 2]) expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(c, k))), `message ${String(k)}`).toHaveLength(1);
+        for (const k of [0, 1, 2])
+        {
+            expect(doc.emails.filter((e) => squash(bodyOf(e)).includes(sentence(c, k))), `message ${String(k)}`).toHaveLength(1);
+        }
         expect(result.reconstructed.length).toBeGreaterThan(0);
         for (const r of result.reconstructed)
         {
@@ -1050,7 +1104,13 @@ describe('header lines read short: the lines left at the top of the text stay wi
         const result = engineOf(c, [2]);
         const doc = build(result);
         expect(doc.emails.filter((e) => e.rebuilt !== null).length).toBeGreaterThan(0);
-        for (const e of doc.emails) if (e.rebuilt !== null) expect(e.rebuilt.movedHeaders).toBe(0);
+        for (const e of doc.emails)
+        {
+            if (e.rebuilt !== null)
+            {
+                expect(e.rebuilt.movedHeaders).toBe(0);
+            }
+        }
         expect(noRepeat({ result, positions: [0], plans: planOutput(result.messages, DEFAULT_OUTPUT_POLICY), policy: DEFAULT_OUTPUT_POLICY, rebuilt: rebuiltEntries(result).map((x) => x.id) }).moved.size).toBe(0);
     });
 });
@@ -1152,7 +1212,10 @@ describe('header lines against a real file: name-only recipients (S3), a strong 
             expect(r.rebuilt.dateApproximate).toBe(true);
             const real = result.messages[result.positionByIndex[r.realIndex!]!]!.message;
             const shown = headerShownInPdf(body, r.rebuilt, { kind: 'real', message: real, strong: r.match!.strong && !r.match!.ambiguousDate });
-            if (r.match!.strong && shown) strong++;
+            if (r.match!.strong && shown)
+            {
+                strong++;
+            }
             // The whole place is cut, header lines included, and they are printed nowhere (the real file's rows are its header).
             expect(cut.some(([a, b]) => a <= r.rebuilt.start && r.rebuilt.end <= b)).toBe(true);
             const lines = squash(body.slice(r.rebuilt.start, r.rebuilt.headerEnd));
@@ -1199,10 +1262,16 @@ describe('Q3, option B (user decision 2026-11-09, task 8.13a, replaces 3a option
             expect(squash(bodyOf(lastEmail))).toContain(sentence(c, last));
             // The rebuilt emails unticked (not forwarded parts): the middle emails stay in the last email, nothing is lost.
             const none = build(result, { rebuilt: [] });
-            for (let k = 1; k < last; k++) expect(squash(bodyOf(realOf(none, lastPosition)))).toContain(sentence(c, k));
+            for (let k = 1; k < last; k++)
+            {
+                expect(squash(bodyOf(realOf(none, lastPosition)))).toContain(sentence(c, k));
+            }
             // "Print full original text": the last email whole.
             const full = build(result, { policy: EVERYTHING });
-            for (let k = 0; k <= last; k++) expect(squash(bodyOf(realOf(full, lastPosition)))).toContain(sentence(c, k));
+            for (let k = 0; k <= last; k++)
+            {
+                expect(squash(bodyOf(realOf(full, lastPosition)))).toContain(sentence(c, k));
+            }
         });
     }
 });
@@ -1239,7 +1308,10 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         expect(squash(bodyOf(realOf(doc, refusedAt)))).toContain(refusedText);
         expect(squash(bodyOf(realOf(doc, refusedAt)))).toContain('From: the accounting team');
         expect(squash(bodyOf(realOf(doc, forwardAt)))).toBe(squash(FORWARD.messages![2]!.text));
-        for (const k of [0, 1]) expect(doc.emails.some((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toBe(false);
+        for (const k of [0, 1])
+        {
+            expect(doc.emails.some((e) => squash(bodyOf(e)).includes(sentence(FORWARD, k)))).toBe(false);
+        }
         // The preview's labels: the left-out parts name no PDF email ('unticked'); the refused forward has no cut.
         const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
         const { parts } = noRepeat({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [], unticked: ids });
@@ -1254,10 +1326,16 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         // Collapse, never delete: "Print full original text" prints both forwards whole.
         const full = build(result, { policy: EVERYTHING });
         expect(squash(bodyOf(realOf(full, refusedAt)))).toContain(refusedText);
-        for (const k of [0, 1, 2]) expect(squash(bodyOf(realOf(full, forwardAt)))).toContain(sentence(FORWARD, k));
+        for (const k of [0, 1, 2])
+        {
+            expect(squash(bodyOf(realOf(full, forwardAt)))).toContain(sentence(FORWARD, k));
+        }
         // The switch off: nothing is unticked, both forwards as their plans say.
         const off = build(result, { rebuilt: [], unticked: ids, rebuildingOff: true });
-        for (const k of [0, 1]) expect(squash(bodyOf(realOf(off, forwardAt)))).toContain(sentence(FORWARD, k));
+        for (const k of [0, 1])
+        {
+            expect(squash(bodyOf(realOf(off, forwardAt)))).toContain(sentence(FORWARD, k));
+        }
         expect(squash(bodyOf(realOf(off, refusedAt)))).toContain(refusedText);
     });
 
@@ -1365,7 +1443,10 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
         const parts = noRepeat({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: ids }).parts.get(carolAt)!;
         const own = parts.find((p) => p.start === carolCopy.rebuilt.start)!;
         expect(own).toEqual({ start: carolCopy.rebuilt.start, end: tail, printedAs: { kind: 'rebuilt', id: carolCopy.sameAs, number: expect.any(Number) as number } });
-        for (const p of parts) expect(p.end <= tail || p.start >= tail + signature.length).toBe(true);
+        for (const p of parts)
+        {
+            expect(p.end <= tail || p.start >= tail + signature.length).toBe(true);
+        }
         // "Print full original text" prints Carol's email whole anyway.
         expect(squash(bodyOf(realOf(build(result, { policy: EVERYTHING }), carolAt)))).toContain(squash(bobText + signature));
     });
@@ -1413,7 +1494,10 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
         const parts = noRepeat({ result: real, positions: real.messages.map((_, k) => k), plans: realPlans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: rebuiltEntries(real).map((r) => r.id) }).parts.get(at)!;
         const own = parts.find((p) => p.start === copy.rebuilt.start)!;
         expect(own).toEqual({ start: copy.rebuilt.start, end: tail, printedAs: { kind: 'email', position: bobAt, number: expect.any(Number) as number } });
-        for (const p of parts) expect(p.end <= tail || p.start >= tail + signature.length).toBe(true);
+        for (const p of parts)
+        {
+            expect(p.end <= tail || p.start >= tail + signature.length).toBe(true);
+        }
         // The PDF: the block once, in Carol's email; Bob's words once, in his own file.
         const doc = build(real);
         const holding = doc.emails.filter((e) => squash(bodyOf(e)).includes('Phone +32 2 555 01 23'));

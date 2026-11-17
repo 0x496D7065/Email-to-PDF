@@ -28,7 +28,10 @@ beforeAll(async () =>
 const fixture = (name: string): NormalizedMessage =>
 {
     const m = fixtures.get(`eml/${name}`);
-    if (m === undefined) throw new Error(`no fixture ${name}`);
+    if (m === undefined)
+    {
+        throw new Error(`no fixture ${name}`);
+    }
     return m;
 };
 const engineOf = (...names: string[]): EngineResult => runEngine(names.map((n) => ({ ok: true as const, message: fixture(n) })));
@@ -97,11 +100,17 @@ const blockTexts = (blocks: readonly PdfBlock[]): string[] =>
 function ownTexts(doc: PdfDocument): string[]
 {
     const out = [doc.title, ...blockTexts(doc.cover.blocks), doc.index.heading, ...Object.values(doc.index.columns)];
-    for (const e of doc.index.entries) out.push(String(e.number), text(e.date), text(e.from), text(e.subject), e.bookmark, ...e.attachmentLines.map(text));
+    for (const e of doc.index.entries)
+    {
+        out.push(String(e.number), text(e.date), text(e.from), text(e.subject), e.bookmark, ...e.attachmentLines.map(text));
+    }
     for (const e of doc.emails)
     {
         out.push(e.heading, ...e.fields.flatMap((f) => [f.label, ...f.value.map(text)]), ...e.notes.map(text));
-        if (e.attachments !== null) out.push(e.attachments.label, ...e.attachments.items.map(text));
+        if (e.attachments !== null)
+        {
+            out.push(e.attachments.label, ...e.attachments.items.map(text));
+        }
     }
     return out;
 }
@@ -169,7 +178,10 @@ describe('planPdfOrder', () =>
         expect(order.pdfNumberByPosition).toEqual([4]);
         for (const slot of order.slots)
         {
-            if (slot.kind !== 'rebuilt') continue;
+            if (slot.kind !== 'rebuilt')
+            {
+                continue;
+            }
             // The source's rank among the real emails (not printed; the PDF number is in pdfNumberByPosition).
             expect(slot.source.number).toBe(1);
             expect(slot.source.also).toEqual([]);
@@ -206,7 +218,10 @@ describe('planPdfOrder', () =>
         const all = two.reconstructed.map((r) => r.id);
         const ids = planPdfOrder(two, [0, 1], all).slots.flatMap((s) => (s.kind === 'rebuilt' ? [s.entry.id] : []));
         expect(ids.length).toBeGreaterThan(0);
-        for (const id of ids) expect(two.reconstructed[id]!.link).toBe('entry');
+        for (const id of ids)
+        {
+            expect(two.reconstructed[id]!.link).toBe('entry');
+        }
         expect(new Set(ids).size).toBe(ids.length);
         const files = engineOf('10-order-1-alice.eml', '11-order-2-bob-outlook-en.eml', THIRD, LAST);
         const real = planPdfOrder(files, [0, 1, 2, 3], files.reconstructed.map((r) => r.id));
@@ -366,7 +381,10 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
         const result = engineOf(THIRD, LAST);
         expect(sharedEntries(result).length).toBeGreaterThan(0);
         const doc = build(result);
-        for (const e of rebuiltOf(doc)) expect(e.notes).toEqual([]);
+        for (const e of rebuiltOf(doc))
+        {
+            expect(e.notes).toEqual([]);
+        }
         expect(ownTexts(doc).some((t) => t.includes('Same quoted text'))).toBe(false);
     });
 
@@ -469,10 +487,16 @@ describe('nothing in the PDF says an email was rebuilt (task 8.3), in every lang
             for (const t of texts)
             {
                 expect(t, locale).not.toMatch(word);
-                for (const f of fragments) expect(t, `${locale}: "${f}"`).not.toContain(f);
+                for (const f of fragments)
+                {
+                    expect(t, `${locale}: "${f}"`).not.toContain(f);
+                }
             }
             // The anchors and bookmarks too.
-            for (const e of doc.emails) expect(e.anchor).toMatch(/^email-\d+$/);
+            for (const e of doc.emails)
+            {
+                expect(e.anchor).toMatch(/^email-\d+$/);
+            }
             // A date that could not be read: shown as written, alone in its row (task 8.8: no note).
             expect(texts).toContain('gisteren');
         });
@@ -497,9 +521,18 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
         expect(entries.map((e) => e.number)).toEqual(numbers);
         expect(entries.map((e) => e.anchor)).toEqual(numbers.map(emailAnchor));
         expect(entries.map((e) => e.anchor)).toEqual(doc.emails.map((e) => e.anchor));
-        for (const [k, e] of entries.entries()) expect(e.bookmark.startsWith(`${String(k + 1)}. `)).toBe(true);
+        for (const [k, e] of entries.entries())
+        {
+            expect(e.bookmark.startsWith(`${String(k + 1)}. `)).toBe(true);
+        }
         // The real emails' numbers are the ones pdfNumberByPosition gives.
-        for (const e of doc.emails) if (e.position !== null) expect(doc.pdfNumberByPosition[e.position]).toBe(e.number);
+        for (const e of doc.emails)
+        {
+            if (e.position !== null)
+            {
+                expect(doc.pdfNumberByPosition[e.position]).toBe(e.number);
+            }
+        }
         // The rebuilt rows: the same form as a real one's.
         for (const e of entries.filter((x) => x.rebuilt))
         {
@@ -538,8 +571,20 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
         expect(texts).toContain(`Dates: ${EN.dateRange(doc.cover.dateRange!.first, doc.cover.dateRange!.last)}`);
         // People: every real one, plus every sender read from a quote.
         const addresses = doc.cover.participants.map((p) => p.address.toLowerCase());
-        for (const p of off.cover.participants) expect(addresses).toContain(p.address.toLowerCase());
-        for (const r of rebuiltEntries(result)) for (const m of r.rebuilt.from) if (m.address !== '') expect(addresses).toContain(m.address.toLowerCase());
+        for (const p of off.cover.participants)
+        {
+            expect(addresses).toContain(p.address.toLowerCase());
+        }
+        for (const r of rebuiltEntries(result))
+        {
+            for (const m of r.rebuilt.from)
+            {
+                if (m.address !== '')
+                {
+                    expect(addresses).toContain(m.address.toLowerCase());
+                }
+            }
+        }
     });
 
     it('cover: a rebuilt email without a date counts as undated, like a real one', () =>
@@ -700,7 +745,10 @@ describe('dayStartInZone (a rebuilt email dated by a day alone, on the cover)', 
 
     it('gives null for a text that is not a day', () =>
     {
-        for (const bad of ['', '2025-3-3', '2025-03-03x', 'gisteren', '2025-13-45']) expect(dayStartInZone(bad, 'UTC')).toBeNull();
+        for (const bad of ['', '2025-3-3', '2025-03-03x', 'gisteren', '2025-13-45'])
+        {
+            expect(dayStartInZone(bad, 'UTC')).toBeNull();
+        }
     });
 });
 
@@ -732,7 +780,10 @@ describe('"Print full original text" (policy.unfoldEverything; user decision 202
         for (const r of rebuiltEntries(result))
         {
             const lines = r.rebuilt.reconstructedText.split('\n').filter((l) => l.trim() !== '');
-            for (const line of lines) expect(body.join('\n')).toContain(line.trim());
+            for (const line of lines)
+            {
+                expect(body.join('\n')).toContain(line.trim());
+            }
         }
         expect(doc).toEqual(build(result, { rebuilt: [], policy: EVERYTHING }));
     });

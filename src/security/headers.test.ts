@@ -32,7 +32,10 @@ function parse(policy: string): Record<string, string>
     for (const part of policy.split(';'))
     {
         const [name = '', ...sources] = part.trim().split(/\s+/);
-        if (name) result[name] = sources.join(' ');
+        if (name)
+        {
+            result[name] = sources.join(' ');
+        }
     }
     return result;
 }

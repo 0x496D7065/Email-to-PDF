@@ -34,7 +34,10 @@ const FONT_NAMES = Object.keys(PDF_FONTS) as PdfFontName[];
 const fonts = {} as Record<PdfFontName, ParsedFont>;
 beforeAll(async () =>
 {
-    for (const font of FONT_NAMES) fonts[font] = await readWoffFont(PDF_FONTS[font]);
+    for (const font of FONT_NAMES)
+    {
+        fonts[font] = await readWoffFont(PDF_FONTS[font]);
+    }
 });
 
 const A4 = { width: 595.28, height: 841.89 };
@@ -49,7 +52,10 @@ function run(text: string, options: Partial<LaidOutTextRun> = {}): LaidOutTextRu
     const glyphText: string[] = [];
     for (const character of text)
     {
-        if (isDrawnAsNothing(character.codePointAt(0)!)) continue;
+        if (isDrawnAsNothing(character.codePointAt(0)!))
+        {
+            continue;
+        }
         glyphs.push(fonts[font].glyphFor(character.codePointAt(0)!));
         glyphText.push(character);
     }
@@ -90,7 +96,10 @@ async function copiedRuns(pdf: ParsedPdf, index = 0): Promise<{ copied: string; 
     const pageDict = pdf.pages()[index]!;
     const fontsOfPage = pageFonts(pdf, pageDict);
     const maps = new Map<string, Map<number, string>>();
-    for (const [key, type0] of fontsOfPage) maps.set(key, await toUnicodeOf(pdf, type0));
+    for (const [key, type0] of fontsOfPage)
+    {
+        maps.set(key, await toUnicodeOf(pdf, type0));
+    }
     const { runs } = readContent(await pdf.dataText(pageDict.get('Contents')));
     return runs.map((r) =>
     {
@@ -108,16 +117,28 @@ function* allValues(pdf: ParsedPdf): Generator<PdfValue>
     {
         const value = stack.pop()!;
         yield value;
-        if (Array.isArray(value)) stack.push(...value);
-        else if (value instanceof PdfDict) stack.push(...value.entries.values(), ...value.keys().map((k) => new PdfName(k)));
-        else if (value instanceof PdfStream) stack.push(value.dict);
+        if (Array.isArray(value))
+        {
+            stack.push(...value);
+        }
+        else if (value instanceof PdfDict)
+        {
+            stack.push(...value.entries.values(), ...value.keys().map((k) => new PdfName(k)));
+        }
+        else if (value instanceof PdfStream)
+        {
+            stack.push(value.dict);
+        }
     }
 }
 
 const latin1 = (bytes: Uint8Array): string =>
 {
     let s = '';
-    for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    for (let i = 0; i < bytes.length; i += 8192)
+    {
+        s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
     return s;
 };
 
@@ -143,7 +164,10 @@ describe('OwnPdfWriter: structure', () =>
         const texts = ['Page one', 'Page two', 'Page three'];
         const { pdf } = await write(doc(texts.map((t) => page([run(t)]))));
         expect(pdf.pages()).toHaveLength(3);
-        for (const [i, t] of texts.entries()) expect((await copiedRuns(pdf, i))[0]!.copied).toBe(t);
+        for (const [i, t] of texts.entries())
+        {
+            expect((await copiedRuns(pdf, i))[0]!.copied).toBe(t);
+        }
     });
 
     it('draws fills and lines below the text, converting y to the PDF origin', async () =>
@@ -206,9 +230,15 @@ describe('OwnPdfWriter: structure', () =>
         const forbidden = ['JavaScript', 'JS', 'URI', 'Launch', 'OpenAction', 'AA', 'A', 'EmbeddedFile', 'EmbeddedFiles', 'AcroForm', 'XFA', 'GoToR', 'SubmitForm'];
         for (const value of allValues(pdf))
         {
-            if (value instanceof PdfName) expect(forbidden).not.toContain(value.value);
+            if (value instanceof PdfName)
+            {
+                expect(forbidden).not.toContain(value.value);
+            }
             // The only literal strings are our fixed CIDSystemInfo ones.
-            if (value instanceof PdfString && !value.hex) expect(['Adobe', 'Identity']).toContain(value.text);
+            if (value instanceof PdfString && !value.hex)
+            {
+                expect(['Adobe', 'Identity']).toContain(value.text);
+            }
         }
     });
 });
@@ -248,7 +278,10 @@ describe('OwnPdfWriter: fonts', () =>
             const widths = readWidths(cid.get('W') as PdfValue[]);
             const used = new Set(runs[index]!.glyphs);
             expect(new Set(widths.keys())).toEqual(used);
-            for (const glyph of used) expect(widths.get(glyph)).toBe((parsed.advance(glyph) * 1000) / parsed.unitsPerEm);
+            for (const glyph of used)
+            {
+                expect(widths.get(glyph)).toBe((parsed.advance(glyph) * 1000) / parsed.unitsPerEm);
+            }
         }
     }, 60_000); // four whole fonts: slow on a busy machine
 
@@ -258,11 +291,20 @@ describe('OwnPdfWriter: fonts', () =>
         const embedded = pageFonts(pdf, pdf.pages()[0]!);
         expect([...embedded.keys()]).toEqual(['F2']);
         let fontFiles = 0;
-        for (const value of pdf.objects.values()) if (value instanceof PdfDict && value.has('FontFile2')) fontFiles++;
+        for (const value of pdf.objects.values())
+        {
+            if (value instanceof PdfDict && value.has('FontFile2'))
+            {
+                fontFiles++;
+            }
+        }
         expect(fontFiles).toBe(1);
         const raw = latin1(bytes);
         expect(raw).toContain('/IBMPlexSans-Bold');
-        for (const other of ['/IBMPlexSans ', '/IBMPlexSans-Italic', '/IBMPlexMono']) expect(raw).not.toContain(other);
+        for (const other of ['/IBMPlexSans ', '/IBMPlexSans-Italic', '/IBMPlexMono'])
+        {
+            expect(raw).not.toContain(other);
+        }
     });
 
     it('only needs the fonts it uses', async () =>
@@ -471,7 +513,10 @@ describe('OwnPdfWriter: links, destinations, bookmarks', () =>
         expect(long.endsWith('\u{2026}')).toBe(true);
         expect((pdf.info.get('Title') as PdfString).text).toBe(hostile[1]);
         const raw = latin1(bytes);
-        for (const fragment of ['app.alert', '/JavaScript', ')>> /JS', 'back\\slash', '(hello)']) expect(raw).not.toContain(fragment);
+        for (const fragment of ['app.alert', '/JavaScript', ')>> /JS', 'back\\slash', '(hello)'])
+        {
+            expect(raw).not.toContain(fragment);
+        }
     });
 });
 
@@ -581,12 +626,18 @@ describe('OwnPdfWriter: invalid input', () =>
         const nested = (levels: number): LaidOutDocument =>
         {
             let item: LaidOutOutlineItem = { title: 'leaf', destination: 'a', children: [] };
-            for (let i = 1; i < levels; i++) item = { title: `level ${i}`, destination: 'a', children: [item] };
+            for (let i = 1; i < levels; i++)
+            {
+                item = { title: `level ${i}`, destination: 'a', children: [item] };
+            }
             return doc([page()], { destinations: [{ name: 'a', page: 0, y: 0 }], outline: [item] });
         };
         const { pdf } = await write(nested(MAX_OUTLINE_DEPTH));
         let depth = 0;
-        for (let items = readOutline(pdf)!.items; items.length > 0; items = items[0]!.children) depth++;
+        for (let items = readOutline(pdf)!.items; items.length > 0; items = items[0]!.children)
+        {
+            depth++;
+        }
         expect(depth).toBe(MAX_OUTLINE_DEPTH);
         await expect(new OwnPdfWriter().render(nested(MAX_OUTLINE_DEPTH + 1), fonts)).rejects.toThrow(/nested deeper/);
     });
@@ -656,7 +707,10 @@ function readWidths(w: PdfValue[]): Map<number, number>
         }
         else
         {
-            for (let g = first; g <= (next as number); g++) result.set(g, w[i + 2] as number);
+            for (let g = first; g <= (next as number); g++)
+            {
+                result.set(g, w[i + 2] as number);
+            }
             i += 3;
         }
     }

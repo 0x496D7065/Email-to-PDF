@@ -66,7 +66,10 @@ const benBody = `${FINE}\n\n${ATTRIBUTION}\n> ${S}\n`;
 async function parse(name: string, text: string): Promise<ParseResult>
 {
     const r = await eml.parse({ name, bytes: new TextEncoder().encode(text) });
-    if (!r.ok) throw new Error(r.detail);
+    if (!r.ok)
+    {
+        throw new Error(r.detail);
+    }
     return r;
 }
 
@@ -170,7 +173,10 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
             expect(printedIn(d, HELLO)).toBe(1);
             // Ben's quote of S stays in Cy's forward (round 4, M1).
             expect(bodyAt(d, out, 'cy')).toContain(squash(S));
-            if (parts === DEFAULT_PARTS) expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+            if (parts === DEFAULT_PARTS)
+            {
+                expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+            }
         }
     });
 
@@ -189,7 +195,10 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
             // page prints it, so it is cut from Cy's copy of Dee's block, printed as Dee.
             expect(bodyAt(d, out, 'dee')).toContain(squash(S));
             expect(bodyAt(d, out, 'cy')).not.toContain(squash(S));
-            if (parts === DEFAULT_PARTS) expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+            if (parts === DEFAULT_PARTS)
+            {
+                expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+            }
         }
     });
 });

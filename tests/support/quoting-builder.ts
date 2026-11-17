@@ -61,7 +61,10 @@ const WORDS = ['north', 'warehouse', 'shelf', 'label', 'oak', 'desk', 'invoice',
 export function quotingSentence(name: string): string
 {
     let h = 0;
-    for (const c of name) h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+    for (const c of name)
+    {
+        h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+    }
     const words = Array.from({ length: 10 }, (_, k) => WORDS[(h >>> (k * 3)) % WORDS.length]!);
     return `Own words of ${name}: the ${words.join(' ')} were checked again this week.`;
 }
@@ -124,9 +127,18 @@ export function quotingCase(random: () => number, id: string, { quoteShare = 0.3
         subject.push(p === null ? `Topic ${name}` : how === 'gmail-forward-en' ? `Fwd: ${subject[p]!}` : `Re: ${subject[p]!}`);
 
         let body: string;
-        if (p === null || how === null) body = `${own[k]!}\n`;
-        else if (how === 'pasted') body = `${own[k]!}\n\n${bodies[p]!}`;
-        else if (how === 'pasted-partial') body = `${own[k]!}\n\n${quotingSentence(names[p]!)}\n`;
+        if (p === null || how === null)
+        {
+            body = `${own[k]!}\n`;
+        }
+        else if (how === 'pasted')
+        {
+            body = `${own[k]!}\n\n${bodies[p]!}`;
+        }
+        else if (how === 'pasted-partial')
+        {
+            body = `${own[k]!}\n\n${quotingSentence(names[p]!)}\n`;
+        }
         else if (how === 'partial')
         {
             const date = formatQuotedDate('gmail-en-gb', START + p * STEP, zone[k]!);
@@ -142,7 +154,10 @@ export function quotingCase(random: () => number, id: string, { quoteShare = 0.3
                 chain.unshift(up);
                 const above = parent[up];
                 const style = kind[up];
-                if (above === null || above === undefined || style === null || style === undefined || ['partial', 'pasted', 'pasted-partial'].includes(style)) break;
+                if (above === null || above === undefined || style === null || style === undefined || ['partial', 'pasted', 'pasted-partial'].includes(style))
+                {
+                    break;
+                }
                 up = above;
             }
             body = buildThread(chain.map((c, at) => threadMessage(c, at === 0 ? null : (kind[c] as QuoteStyle)))).body;

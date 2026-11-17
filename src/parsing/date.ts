@@ -36,9 +36,18 @@ function stripComments(text: string): string
     let depth = 0;
     for (const ch of text)
     {
-        if (ch === '(') depth++;
-        else if (ch === ')' && depth > 0) depth--;
-        else if (depth === 0) out += ch;
+        if (ch === '(')
+        {
+            depth++;
+        }
+        else if (ch === ')' && depth > 0)
+        {
+            depth--;
+        }
+        else if (depth === 0)
+        {
+            out += ch;
+        }
         // Inside a comment: the character is dropped.
     }
     return out;
@@ -47,7 +56,10 @@ function stripComments(text: string): string
 /** Parses a whole number made only of digits, with a length between min and max. */
 function readInt(token: string | undefined, minLen: number, maxLen: number): number | null
 {
-    if (token === undefined || token.length < minLen || token.length > maxLen) return null;
+    if (token === undefined || token.length < minLen || token.length > maxLen)
+    {
+        return null;
+    }
     return /^\d+$/.test(token) ? Number(token) : null;
 }
 
@@ -61,20 +73,35 @@ function readZone(token: string | undefined): { offset: number | null } | null
 {
     // RFC 5322 4.3: a missing zone, "-0000" and unknown letter zones all mean
     // "this is UTC, but the sender's local zone is unknown".
-    if (token === undefined) return { offset: null };
+    if (token === undefined)
+    {
+        return { offset: null };
+    }
     const numeric = /^([+-])(\d\d)(\d\d)$/.exec(token);
     if (numeric)
     {
         const [, sign, hh, mm] = numeric;
         const hours = Number(hh);
         const minutes = Number(mm);
-        if (hours > 23 || minutes > 59) return null;
-        if (token === '-0000') return { offset: null };
+        if (hours > 23 || minutes > 59)
+        {
+            return null;
+        }
+        if (token === '-0000')
+        {
+            return { offset: null };
+        }
         return { offset: (sign === '-' ? -1 : 1) * (hours * 60 + minutes) };
     }
     const named = NAMED_ZONES[token.toLowerCase()];
-    if (named !== undefined) return { offset: named };
-    if (/^[a-z]+$/i.test(token)) return { offset: null }; // unknown letters, e.g. military zones
+    if (named !== undefined)
+    {
+        return { offset: named };
+    }
+    if (/^[a-z]+$/i.test(token))
+    {
+        return { offset: null }; // unknown letters, e.g. military zones
+    }
     return null;
 }
 
@@ -105,21 +132,39 @@ export function parseEmailDate(raw: string | null | undefined): EmailDate
     const day = readInt(dayToken, 1, 2);
     const month = MONTHS.indexOf((monthToken ?? '').toLowerCase());
     let year = readInt(yearToken, 2, 4);
-    if (day === null || month === -1 || year === null) return failed;
+    if (day === null || month === -1 || year === null)
+    {
+        return failed;
+    }
     // Obsolete 2- and 3-digit years (RFC 5322 4.3): 00-49 -> 2000s, 50-999 -> add 1900.
-    if (yearToken !== undefined && yearToken.length < 4) year += year < 50 ? 2000 : 1900;
-    if (year < 1900) return failed;
+    if (yearToken !== undefined && yearToken.length < 4)
+    {
+        year += year < 50 ? 2000 : 1900;
+    }
+    if (year < 1900)
+    {
+        return failed;
+    }
 
     const time = /^(\d\d?):(\d\d)(?::(\d\d))?$/.exec(timeToken ?? '');
-    if (!time) return failed;
+    if (!time)
+    {
+        return failed;
+    }
     const hour = Number(time[1]);
     const minute = Number(time[2]);
     const second = time[3] === undefined ? 0 : Number(time[3]);
     // second 60 is a leap second, allowed by the RFC; Date.UTC rolls it into the next minute.
-    if (hour > 23 || minute > 59 || second > 60) return failed;
+    if (hour > 23 || minute > 59 || second > 60)
+    {
+        return failed;
+    }
 
     const zone = readZone(zoneToken);
-    if (zone === null) return failed;
+    if (zone === null)
+    {
+        return failed;
+    }
     let offset = zone.offset;
     let zoneKnown = offset !== null; // null offset = missing, "-0000" or unknown zone
     // Some clients write a zone NAME followed by a numeric offset, e.g.
@@ -156,7 +201,10 @@ export function parseEmailDate(raw: string | null | undefined): EmailDate
 
     // Date.UTC accepts "31 Feb" and silently moves it to March, so check the day exists.
     const local = Date.UTC(year, month, day, hour, minute, second);
-    if (new Date(Date.UTC(year, month, day)).getUTCDate() !== day) return failed;
+    if (new Date(Date.UTC(year, month, day)).getUTCDate() !== day)
+    {
+        return failed;
+    }
 
     // The header shows local time at `offset`; subtract the offset to get UTC.
     // Example: 10:00 +0200 is 08:00 UTC.

@@ -62,9 +62,18 @@ export function isToEngineWorker(data: unknown): data is ToEngineWorker
  */
 export function isFromEngineWorker(data: unknown): data is FromEngineWorker
 {
-    if (!isRecord(data)) return false;
-    if (data.type === 'failed') return true;
-    if (data.type !== 'result' || !isRecord(data.result)) return false;
+    if (!isRecord(data))
+    {
+        return false;
+    }
+    if (data.type === 'failed')
+    {
+        return true;
+    }
+    if (data.type !== 'result' || !isRecord(data.result))
+    {
+        return false;
+    }
     const { messages, failed, counts, positionByIndex, reconstructed, timeline, reconstructionWarnings } = data.result;
     return (
         Array.isArray(messages) &&
@@ -91,9 +100,15 @@ export function createEngineWorkerSide(
     let started = false;
     return (data) =>
     {
-        if (!isToEngineWorker(data)) return;
+        if (!isToEngineWorker(data))
+        {
+            return;
+        }
         // One batch per worker: a second request is ignored.
-        if (started) return;
+        if (started)
+        {
+            return;
+        }
         started = true;
         let result: EngineResult;
         try

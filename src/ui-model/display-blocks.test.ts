@@ -226,10 +226,16 @@ const PIECES = ['a', 'Z', ' ', ' ', '\n', '\n', '\r\n', '\t', '>', '\u00e9', '\u
 
 function randomText(rand: () => number): string
 {
-    if (rand() < 0.05) return '';
+    if (rand() < 0.05)
+    {
+        return '';
+    }
     const count = Math.floor(rand() * 40);
     let text = '';
-    for (let i = 0; i < count; i++) text += PIECES[Math.floor(rand() * PIECES.length)];
+    for (let i = 0; i < count; i++)
+    {
+        text += PIECES[Math.floor(rand() * PIECES.length)];
+    }
     return text;
 }
 
@@ -255,13 +261,22 @@ function randomFolds(rand: () => number, length: number): FoldRange[]
  */
 function expectedLabel(b: DisplayBlock, inside: readonly Segment[]): string | null
 {
-    if (!b.folded) return null;
+    if (!b.folded)
+    {
+        return null;
+    }
     const totals = new Map<string, number>();
     for (const s of inside)
     {
-        if (!s.folded) continue;
+        if (!s.folded)
+        {
+            continue;
+        }
         const r = primaryReason(s.reasons);
-        if (r !== null) totals.set(r, (totals.get(r) ?? 0) + s.end - s.start);
+        if (r !== null)
+        {
+            totals.set(r, (totals.get(r) ?? 0) + s.end - s.start);
+        }
     }
     const ranked = [...FOLD_REASONS].sort((x, y) =>
     {
@@ -294,7 +309,10 @@ function checkBlocks(text: string, segments: readonly Segment[], label: string):
         blocks.forEach((b, i) =>
         {
             // No two folded blocks side by side (they would have been one).
-            if (i > 0) expect(b.folded && blocks[i - 1]!.folded, label).toBe(false);
+            if (i > 0)
+            {
+                expect(b.folded && blocks[i - 1]!.folded, label).toBe(false);
+            }
             const inside = segments.filter((s) => s.start >= b.start && s.end <= b.end);
             // Blocks only ever group whole segments.
             expect(inside.reduce((n, s) => n + (s.end - s.start), 0), label).toBe(b.end - b.start);
@@ -302,7 +320,10 @@ function checkBlocks(text: string, segments: readonly Segment[], label: string):
             expect(b.reasons, label).toEqual(wantReasons);
             expect(b.related, label).toEqual([...new Set(inside.flatMap((s) => s.related))].sort((x, y) => x - y));
             expect(b.label, label).toBe(expectedLabel(b, inside));
-            if (!unfoldAll && b.label !== primaryReason(wantReasons)) byLength++;
+            if (!unfoldAll && b.label !== primaryReason(wantReasons))
+            {
+                byLength++;
+            }
             expect(b.collapsed, label).toBe(b.folded && !unfoldAll);
             if (!b.folded)
             {
@@ -318,7 +339,10 @@ function checkBlocks(text: string, segments: readonly Segment[], label: string):
                 {
                     expect(text.slice(s.start, s.end), label).toMatch(/^\s+$/);
                     expect(s.end - s.start, label).toBeLessThanOrEqual(MAX_ABSORBED_WHITESPACE);
-                    if (!unfoldAll) absorbed++;
+                    if (!unfoldAll)
+                    {
+                        absorbed++;
+                    }
                 }
             }
         });
@@ -371,7 +395,10 @@ describe('every synthetic fixture through the real engine', () =>
         const blocksOf = (file: string): DisplayBlock[] =>
         {
             const m = out.messages.find((x) => x.message.source.fileName === file);
-            if (m === undefined) throw new Error(`no kept message for ${file}`);
+            if (m === undefined)
+            {
+                throw new Error(`no kept message for ${file}`);
+            }
             return displayBlocks(m.message.bodyText, m.segments, SHOWN);
         };
         // msg-04: the engine's signature, 1-char quoted-overlap line break,

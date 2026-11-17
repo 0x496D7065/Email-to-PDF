@@ -56,18 +56,36 @@ export function isPlainPath(path: string): boolean
 export function parseManifest(json: string): PrecacheManifest
 {
     const value: unknown = JSON.parse(json);
-    if (typeof value !== 'object' || value === null) throw new Error('precache list: not an object');
+    if (typeof value !== 'object' || value === null)
+    {
+        throw new Error('precache list: not an object');
+    }
     const { version, paths } = value as { version?: unknown; paths?: unknown };
-    if (typeof version !== 'string' || !VERSION.test(version)) throw new Error('precache list: bad version');
-    if (!Array.isArray(paths) || paths.length === 0) throw new Error('precache list: no paths');
+    if (typeof version !== 'string' || !VERSION.test(version))
+    {
+        throw new Error('precache list: bad version');
+    }
+    if (!Array.isArray(paths) || paths.length === 0)
+    {
+        throw new Error('precache list: no paths');
+    }
     const list: string[] = [];
     for (const path of paths as unknown[])
     {
-        if (typeof path !== 'string' || !isPlainPath(path)) throw new Error('precache list: bad path');
+        if (typeof path !== 'string' || !isPlainPath(path))
+        {
+            throw new Error('precache list: bad path');
+        }
         list.push(path);
     }
-    if (new Set(list).size !== list.length) throw new Error('precache list: duplicate path');
-    if (Object.keys(value).length !== 2) throw new Error('precache list: unexpected field');
+    if (new Set(list).size !== list.length)
+    {
+        throw new Error('precache list: duplicate path');
+    }
+    if (Object.keys(value).length !== 2)
+    {
+        throw new Error('precache list: unexpected field');
+    }
     return { version, paths: list };
 }
 
@@ -90,7 +108,10 @@ export interface RequestLike {
  */
 export function precachedPathFor(request: RequestLike, origin: string, paths: ReadonlySet<string>): string | null
 {
-    if (request.method !== 'GET') return null;
+    if (request.method !== 'GET')
+    {
+        return null;
+    }
     let url: URL;
     try
     {
@@ -102,10 +123,22 @@ export function precachedPathFor(request: RequestLike, origin: string, paths: Re
     }
     // A blob: URL reports the origin of the page that made it, so the scheme
     // is checked first.
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    if (url.origin !== origin) return null;
-    if (url.search !== '' || url.username !== '' || url.password !== '') return null;
+    if (url.protocol !== 'https:' && url.protocol !== 'http:')
+    {
+        return null;
+    }
+    if (url.origin !== origin)
+    {
+        return null;
+    }
+    if (url.search !== '' || url.username !== '' || url.password !== '')
+    {
+        return null;
+    }
     // `url.search` is "" for a lone "?" too: refuse it on the raw text.
-    if (request.url.includes('?')) return null;
+    if (request.url.includes('?'))
+    {
+        return null;
+    }
     return paths.has(url.pathname) ? url.pathname : null;
 }

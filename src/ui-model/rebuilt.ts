@@ -64,7 +64,10 @@ export function previewOrder(result: Pick<EngineResult, 'messages' | 'timeline' 
     // (Array.isArray would turn a readonly array's type into any[]: hence the typed copies.)
     const timeline: readonly TimelineEntry[] | undefined = Array.isArray(result.timeline) ? result.timeline : undefined;
     const reconstructed: readonly EngineRebuilt[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
-    if (timeline === undefined) return plain();
+    if (timeline === undefined)
+    {
+        return plain();
+    }
     const seen = new Set<number>();
     const seenIds = new Set<number>();
     const out: PreviewSlot[] = [];
@@ -73,14 +76,20 @@ export function previewOrder(result: Pick<EngineResult, 'messages' | 'timeline' 
         if (entry.kind === 'message')
         {
             const p = entry.position;
-            if (!Number.isInteger(p) || p < 0 || p >= result.messages.length || seen.has(p)) return plain();
+            if (!Number.isInteger(p) || p < 0 || p >= result.messages.length || seen.has(p))
+            {
+                return plain();
+            }
             seen.add(p);
             out.push({ kind: 'message', position: p });
         }
         else
         {
             const r = reconstructed[entry.id];
-            if (r === undefined || r.id !== entry.id || r.link !== 'entry' || seenIds.has(entry.id)) return plain();
+            if (r === undefined || r.id !== entry.id || r.link !== 'entry' || seenIds.has(entry.id))
+            {
+                return plain();
+            }
             seenIds.add(entry.id);
             out.push({ kind: 'rebuilt', id: entry.id });
         }
@@ -94,9 +103,15 @@ export function rebuiltEntries(result: Pick<EngineResult, 'messages' | 'timeline
     const out: EngineRebuilt[] = [];
     for (const slot of previewOrder(result))
     {
-        if (slot.kind !== 'rebuilt') continue;
+        if (slot.kind !== 'rebuilt')
+        {
+            continue;
+        }
         const r = result.reconstructed[slot.id];
-        if (r !== undefined) out.push(r);
+        if (r !== undefined)
+        {
+            out.push(r);
+        }
     }
     return out;
 }
@@ -127,7 +142,10 @@ export function alsoNumbers(r: Pick<EngineRebuilt, 'sourceIndex' | 'alsoQuotedIn
     for (const index of r.alsoQuotedIn)
     {
         const position = result.positionByIndex[index];
-        if (typeof position === 'number' && position + 1 !== own) numbers.add(position + 1);
+        if (typeof position === 'number' && position + 1 !== own)
+        {
+            numbers.add(position + 1);
+        }
     }
     return [...numbers].sort((a, b) => a - b);
 }
@@ -138,13 +156,25 @@ export function rebuiltSelectionKeys(r: EngineRebuilt, result: Pick<EngineResult
     const keys = new Set<string>();
     const add = (x: EngineRebuilt | undefined): void =>
     {
-        if (x === undefined) return;
+        if (x === undefined)
+        {
+            return;
+        }
         const source = sourceMessageOf(x, result);
-        if (source === undefined) return;
-        for (const hash of selectionKeys(source)) keys.add(`${hash}@${String(x.rebuilt.start)}`);
+        if (source === undefined)
+        {
+            return;
+        }
+        for (const hash of selectionKeys(source))
+        {
+            keys.add(`${hash}@${String(x.rebuilt.start)}`);
+        }
     };
     add(r);
-    for (const id of r.copies) add(result.reconstructed[id]);
+    for (const id of r.copies)
+    {
+        add(result.reconstructed[id]);
+    }
     return [...keys];
 }
 
@@ -178,8 +208,14 @@ export function createRebuiltSelection(): RebuiltSelection
         {
             for (const key of rebuiltSelectionKeys(r, result))
             {
-                if (ticked) excluded.delete(key);
-                else excluded.add(key);
+                if (ticked)
+                {
+                    excluded.delete(key);
+                }
+                else
+                {
+                    excluded.add(key);
+                }
             }
         },
         isIncluded: (r, result) => all && isTicked(r, result),
@@ -194,7 +230,10 @@ export function createRebuiltSelection(): RebuiltSelection
 /** The rebuilt entries the reader wants in the PDF (switch on, card ticked), in preview (timeline) order. Not yet the follow-source rule (rebuiltInPdf). */
 export function includedRebuilt(result: EngineResult, selection: RebuiltSelection): EngineRebuilt[]
 {
-    if (!selection.includeAll()) return [];
+    if (!selection.includeAll())
+    {
+        return [];
+    }
     return rebuiltEntries(result).filter((r) => selection.isIncluded(r, result));
 }
 
@@ -214,15 +253,24 @@ export function rebuiltSources(r: EngineRebuilt, result: Pick<EngineResult, 'pos
     const out: RebuiltSource[] = [];
     const add = (x: EngineRebuilt | undefined): void =>
     {
-        if (x === undefined) return;
+        if (x === undefined)
+        {
+            return;
+        }
         const position = result.positionByIndex[x.sourceIndex];
-        if (typeof position === 'number') out.push({ rebuilt: x, position });
+        if (typeof position === 'number')
+        {
+            out.push({ rebuilt: x, position });
+        }
     };
     add(r);
     for (const id of r.copies)
     {
         const copy = result.reconstructed[id];
-        if (copy !== undefined && copy.link === 'same-as' && copy.sameAs === r.id) add(copy);
+        if (copy !== undefined && copy.link === 'same-as' && copy.sameAs === r.id)
+        {
+            add(copy);
+        }
     }
     return out;
 }
@@ -272,18 +320,30 @@ export function rebuiltInPdf(
     options: RebuiltInPdfOptions = {},
 ): RebuiltInPdf | null
 {
-    if (options.unfoldEverything === true) return null;
+    if (options.unfoldEverything === true)
+    {
+        return null;
+    }
     let best: { source: RebuiltSource; number: number } | null = null;
     const numbers = new Set<number>();
     for (const source of rebuiltSources(r, result))
     {
         const number = numberOf(source.position);
-        if (number === null) continue;
+        if (number === null)
+        {
+            continue;
+        }
         numbers.add(number);
         // The entry's own source wins when it is in the PDF (it comes first); else the smallest number.
-        if (best === null || (best.source.rebuilt !== r && number < best.number)) best = { source, number };
+        if (best === null || (best.source.rebuilt !== r && number < best.number))
+        {
+            best = { source, number };
+        }
     }
-    if (best === null) return null;
+    if (best === null)
+    {
+        return null;
+    }
     const chosen = best;
     return { shown: chosen.source, number: chosen.number, also: [...numbers].filter((n) => n !== chosen.number).sort((a, b) => a - b) };
 }
@@ -303,9 +363,15 @@ export type RebuiltDate =
 export function rebuiltDate(r: Pick<EngineRebuilt, 'rebuilt'>): RebuiltDate
 {
     const { dateText, date, dateApproximate } = r.rebuilt;
-    if (dateText === null || dateText.trim() === '') return { kind: 'none' };
+    if (dateText === null || dateText.trim() === '')
+    {
+        return { kind: 'none' };
+    }
     const text = dateText;
-    if (date === null) return { kind: 'unreadable', text };
+    if (date === null)
+    {
+        return { kind: 'unreadable', text };
+    }
     if (date.precision === 'minute' && typeof date.estimatedUtcMs === 'number' && Number.isFinite(date.estimatedUtcMs))
     {
         return { kind: 'moment', utcMs: date.estimatedUtcMs, approximate: dateApproximate, text };
@@ -313,7 +379,10 @@ export function rebuiltDate(r: Pick<EngineRebuilt, 'rebuilt'>): RebuiltDate
     if (date.precision === 'day' && typeof date.wallMs === 'number' && Number.isFinite(date.wallMs))
     {
         const d = new Date(date.wallMs);
-        if (!Number.isNaN(d.getTime())) return { kind: 'day', day: d.toISOString().slice(0, 10), approximate: dateApproximate, text };
+        if (!Number.isNaN(d.getTime()))
+        {
+            return { kind: 'day', day: d.toISOString().slice(0, 10), approximate: dateApproximate, text };
+        }
     }
     return { kind: 'unreadable', text };
 }

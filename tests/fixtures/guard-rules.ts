@@ -23,7 +23,10 @@ export function isReservedTestHost(host: string): boolean
 export function isAllowedIPv4(ip: string): boolean
 {
     const octets = ip.split('.').map(Number);
-    if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return false;
+    if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255))
+    {
+        return false;
+    }
     const [a, b, c] = octets;
     return (
         a === 127 || (a === 192 && b === 0 && c === 2) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)
@@ -34,7 +37,10 @@ export function isAllowedIPv4(ip: string): boolean
 export function isAllowedIPv6(ip: string): boolean
 {
     const lower = ip.toLowerCase();
-    if (lower === '::1') return true;
+    if (lower === '::1')
+    {
+        return true;
+    }
     const groups = lower.split(':');
     return groups[0] === '2001' && parseInt(groups[1] ?? '', 16) === 0xdb8;
 }
@@ -43,8 +49,14 @@ export function isAllowedIPv6(ip: string): boolean
 export function isAllowedHost(host: string): boolean
 {
     const bare = host.replace(/^\[|\]$/g, '');
-    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(bare)) return isAllowedIPv4(bare);
-    if (bare.includes(':')) return isAllowedIPv6(bare);
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(bare))
+    {
+        return isAllowedIPv4(bare);
+    }
+    if (bare.includes(':'))
+    {
+        return isAllowedIPv6(bare);
+    }
     return isReservedTestHost(bare);
 }
 
@@ -72,7 +84,10 @@ export function isSevenBitAscii(text: string): boolean
 function decodeBase64Loose(b64: string): string
 {
     let clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
-    if (clean.length % 4 === 1) clean = clean.slice(0, -1);
+    if (clean.length % 4 === 1)
+    {
+        clean = clean.slice(0, -1);
+    }
     try
     {
         return atob(clean.padEnd(Math.ceil(clean.length / 4) * 4, '='));
@@ -105,7 +120,10 @@ function decodeHtmlEntities(text: string): string
 {
     return text.replace(/&#(?:([0-9]{1,7})|[xX]([0-9A-Fa-f]{1,6}));?|&(commat|period|sol|colon);/g, (match, dec?: string, hex?: string, name?: string) =>
     {
-        if (name !== undefined) return NAMED_ENTITIES[name] ?? match;
+        if (name !== undefined)
+        {
+            return NAMED_ENTITIES[name] ?? match;
+        }
         const code = dec !== undefined ? parseInt(dec, 10) : parseInt(hex ?? '', 16);
         return code <= 0x10ffff ? String.fromCodePoint(code) : match;
     });
@@ -137,7 +155,10 @@ function decodeBase64Parts(text: string): string[]
     {
         const line = lines[i] ?? '';
         // Matches `Content-Transfer-Encoding: base64` and `content-transfer-encoding: "BASE64"; x=y`, not `...: 7bit`.
-        if (/^content-transfer-encoding[ \t]*:[ \t]*"?base64\b/i.test(line)) base64Header = true;
+        if (/^content-transfer-encoding[ \t]*:[ \t]*"?base64\b/i.test(line))
+        {
+            base64Header = true;
+        }
         if (line.trim() === '' && base64Header)
         {
             base64Header = false;
@@ -208,7 +229,10 @@ export function decodedViews(text: string, depth = 0): string[]
     ];
     if (depth < MAX_DEPTH)
     {
-        for (const part of decodeBase64Parts(text)) views.push(...decodedViews(part, depth + 1));
+        for (const part of decodeBase64Parts(text))
+        {
+            views.push(...decodedViews(part, depth + 1));
+        }
     }
     return views;
 }
@@ -263,21 +287,30 @@ export function findForbiddenHosts(text: string, mode: ScanMode = 'fixture'): st
         for (const m of view.matchAll(new RegExp(`[A-Za-z0-9._%+-]+@(${LABEL}(?:\\.${LABEL})+)`, 'g')))
         {
             const domain = m[1] ?? '';
-            if (!isAllowedHost(domain)) problems.add(`email domain "${domain}" in "${m[0]}"`);
+            if (!isAllowedHost(domain))
+            {
+                problems.add(`email domain "${domain}" in "${m[0]}"`);
+            }
         }
         // URLs with a scheme: host after "://", without user info and port.
         // In `https://user@cdn.invalid:8080/x` it checks `cdn.invalid`; `cid:part1` has no "//", so it is skipped.
         for (const m of view.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/([^\s/?#"'<>()\\]+)/gi))
         {
             const host = (m[1] ?? '').replace(/^.*@/, '').replace(/:\d*$/, '');
-            if (!isAllowedHost(host)) problems.add(`URL host "${host}" in "${m[0]}"`);
+            if (!isAllowedHost(host))
+            {
+                problems.add(`URL host "${host}" in "${m[0]}"`);
+            }
         }
         // Protocol-relative URLs "//host/...": not after a scheme colon, a word char or another slash.
         // Finds `src="//cdn.invalid/p.png"` (checks `cdn.invalid`), not `// a comment` (no dotted host).
         for (const m of view.matchAll(new RegExp(`(?<![\\w:/])//(?:[^\\s/@]*@)?(\\[[0-9A-Fa-f:.]+\\]|${LABEL}(?:\\.${LABEL})+)`, 'g')))
         {
             const host = m[1] ?? '';
-            if (!isAllowedHost(host)) problems.add(`protocol-relative URL host "${host}" in "${m[0]}"`);
+            if (!isAllowedHost(host))
+            {
+                problems.add(`protocol-relative URL host "${host}" in "${m[0]}"`);
+            }
         }
         // Bare host names: any dotted name starting with "www", or ending in a common real TLD.
         // Flags `shop.example` + `.de` written together; allows `www.shop.test`, `manifest.ts` and `version 1.2`.
@@ -287,12 +320,18 @@ export function findForbiddenHosts(text: string, mode: ScanMode = 'fixture'): st
             const tld = host.slice(host.lastIndexOf('.') + 1);
             const next = view.charAt(m.index + host.length);
             const realTld = REAL_TLDS.test(tld) && !(mode === 'code' && isCodeMemberAccess(host, next));
-            if ((/^www\./i.test(host) || realTld) && !isReservedTestHost(host)) problems.add(`host name "${host}"`);
+            if ((/^www\./i.test(host) || realTld) && !isReservedTestHost(host))
+            {
+                problems.add(`host name "${host}"`);
+            }
         }
         // Bare IPv4 literals. Finds `192.0.2.10` (then checks the range), not `1.2.3` or `1.2.3.4.5`.
         for (const m of view.matchAll(/(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w]|\.\d)/g))
         {
-            if (m[0].split('.').every((o) => Number(o) <= 255) && !isAllowedIPv4(m[0])) problems.add(`IPv4 address "${m[0]}"`);
+            if (m[0].split('.').every((o) => Number(o) <= 255) && !isAllowedIPv4(m[0]))
+            {
+                problems.add(`IPv4 address "${m[0]}"`);
+            }
         }
         // Bare IPv6 literals: compressed ("::") with a hex digit, or the full 8-group form (times like 10:00:00 never match).
         // Finds `2001:db8::25` and `[::1]` (then checks the prefix), not `10:00:00`.
@@ -301,7 +340,10 @@ export function findForbiddenHosts(text: string, mode: ScanMode = 'fixture'): st
             const ip = m[0];
             const full = /^[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}$/.test(ip);
             const compressed = ip.includes('::') && /[0-9A-Fa-f]/.test(ip);
-            if ((full || compressed) && !isAllowedIPv6(ip)) problems.add(`IPv6 address "${ip}"`);
+            if ((full || compressed) && !isAllowedIPv6(ip))
+            {
+                problems.add(`IPv6 address "${ip}"`);
+            }
         }
     }
     return [...problems];
@@ -338,7 +380,10 @@ export function findPersonalPaths(text: string): string[]
         for (const m of view.matchAll(HOME_PATH))
         {
             const name = (m[1] ?? '').replace(/\.+$/, '');
-            if (!PLACEHOLDER_USER_NAMES.has(name.toLowerCase())) problems.add(`home-folder path "${m[0]}"`);
+            if (!PLACEHOLDER_USER_NAMES.has(name.toLowerCase()))
+            {
+                problems.add(`home-folder path "${m[0]}"`);
+            }
         }
     }
     return [...problems];
@@ -401,7 +446,10 @@ export function findUnlistedTimeZones(text: string): string[]
         for (const m of view.matchAll(ZONE_START))
         {
             ALLOWED_ZONE_AT.lastIndex = m.index;
-            if (!ALLOWED_ZONE_AT.test(view)) problems.add(`time zone "${m[0]}" (not in the allowed list)`);
+            if (!ALLOWED_ZONE_AT.test(view))
+            {
+                problems.add(`time zone "${m[0]}" (not in the allowed list)`);
+            }
         }
     }
     return [...problems];

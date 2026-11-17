@@ -70,14 +70,23 @@ describe('no text of its own for rebuilt emails (user decision 2026-11-02, task 
             const texts: string[] = [];
             const collect = (value: unknown): void =>
             {
-                if (typeof value === 'string') texts.push(value);
-                else if (typeof value === 'object' && value !== null) Object.values(value).forEach(collect);
+                if (typeof value === 'string')
+                {
+                    texts.push(value);
+                }
+                else if (typeof value === 'object' && value !== null)
+                {
+                    Object.values(value).forEach(collect);
+                }
             };
             collect(s);
             // The functions too, with sample values.
             texts.push(s.emailHeading(3), s.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'), s.senderLocal('2025-03-03 09:00'), s.emailCount(2));
             expect(texts.length).toBeGreaterThan(30);
-            for (const text of texts) expect(text, locale).not.toMatch(words[locale]!);
+            for (const text of texts)
+            {
+                expect(text, locale).not.toMatch(words[locale]!);
+            }
         }
     });
 });

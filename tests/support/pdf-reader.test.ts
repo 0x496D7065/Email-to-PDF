@@ -10,7 +10,10 @@ import { readContent, readLinks, readPageRuns, readPdf, textLines } from './pdf-
 const enc = (s: string): Uint8Array =>
 {
     const b = new Uint8Array(s.length);
-    for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+    for (let i = 0; i < s.length; i++)
+    {
+        b[i] = s.charCodeAt(i);
+    }
     return b;
 };
 
@@ -34,7 +37,10 @@ function tinyPdf(options: { shift?: number; length?: number } = {}): Uint8Array
     }
     const xrefAt = body.length;
     body += `xref\n0 6\n0000000000 65535 f \n`;
-    for (const [i, off] of offsets.entries()) body += `${String(off + (i === 2 ? (options.shift ?? 0) : 0)).padStart(10, '0')} 00000 n \n`;
+    for (const [i, off] of offsets.entries())
+    {
+        body += `${String(off + (i === 2 ? (options.shift ?? 0) : 0)).padStart(10, '0')} 00000 n \n`;
+    }
     body += `trailer\n<< /Size 6 /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
     return enc(body);
 }
@@ -102,7 +108,10 @@ function textPdf(content: string): Uint8Array
     }
     const xrefAt = body.length;
     body += `xref\n0 ${String(objects.length + 1)}\n0000000000 65535 f \n`;
-    for (const off of offsets) body += `${String(off).padStart(10, '0')} 00000 n \n`;
+    for (const off of offsets)
+    {
+        body += `${String(off).padStart(10, '0')} 00000 n \n`;
+    }
     body += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xrefAt)}\n%%EOF\n`;
     return enc(body);
 }

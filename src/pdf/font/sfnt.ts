@@ -40,15 +40,30 @@ const SFNT_ENTRY = 16;
  */
 export function readSfntDirectory(sfnt: Uint8Array): SfntDirectory
 {
-    if (!(sfnt instanceof Uint8Array)) fail('font: input is not a Uint8Array');
-    if (sfnt.length > MAX_FONT_BYTES) fail(`font: larger than ${MAX_FONT_BYTES} bytes`);
+    if (!(sfnt instanceof Uint8Array))
+    {
+        fail('font: input is not a Uint8Array');
+    }
+    if (sfnt.length > MAX_FONT_BYTES)
+    {
+        fail(`font: larger than ${MAX_FONT_BYTES} bytes`);
+    }
     const r = new BinaryReader(sfnt, 'font');
     r.need(0, SFNT_HEADER, 'offset table');
     const flavor = r.u32(0);
-    if (flavor !== TRUETYPE_FLAVOR) fail(`font: unsupported sfnt version "${tagName(flavor)}" (expected TrueType 0x00010000)`);
+    if (flavor !== TRUETYPE_FLAVOR)
+    {
+        fail(`font: unsupported sfnt version "${tagName(flavor)}" (expected TrueType 0x00010000)`);
+    }
     const numTables = r.u16(4);
-    if (numTables === 0) fail('font: has no tables');
-    if (numTables > MAX_TABLES) fail(`font: too many tables (${numTables}, at most ${MAX_TABLES})`);
+    if (numTables === 0)
+    {
+        fail('font: has no tables');
+    }
+    if (numTables > MAX_TABLES)
+    {
+        fail(`font: too many tables (${numTables}, at most ${MAX_TABLES})`);
+    }
     const directoryEnd = SFNT_HEADER + numTables * SFNT_ENTRY;
     r.need(SFNT_HEADER, numTables * SFNT_ENTRY, 'table directory');
 
@@ -59,9 +74,18 @@ export function readSfntDirectory(sfnt: Uint8Array): SfntDirectory
         const tagValue = r.u32(at);
         const table: SfntTable = { tag: tagName(tagValue), checksum: r.u32(at + 4), offset: r.u32(at + 8), length: r.u32(at + 12) };
         const name = `table "${table.tag}"`;
-        if (tables.has(table.tag)) fail(`font: ${name} appears twice`);
-        if (table.offset < directoryEnd) fail(`font: ${name} starts inside the table directory`);
-        if (table.offset % 4 !== 0) fail(`font: ${name} does not start on a 4-byte boundary`);
+        if (tables.has(table.tag))
+        {
+            fail(`font: ${name} appears twice`);
+        }
+        if (table.offset < directoryEnd)
+        {
+            fail(`font: ${name} starts inside the table directory`);
+        }
+        if (table.offset % 4 !== 0)
+        {
+            fail(`font: ${name} does not start on a 4-byte boundary`);
+        }
         r.need(table.offset, table.length, name);
         if (directoryChecksum(tagValue, sfnt, table.offset, table.length) !== table.checksum)
         {
@@ -74,7 +98,10 @@ export function readSfntDirectory(sfnt: Uint8Array): SfntDirectory
     {
         const before = byOffset[i - 1]!;
         const table = byOffset[i]!;
-        if (table.offset < before.offset + before.length) fail(`font: tables "${before.tag}" and "${table.tag}" overlap`);
+        if (table.offset < before.offset + before.length)
+        {
+            fail(`font: tables "${before.tag}" and "${table.tag}" overlap`);
+        }
     }
     return { flavor, tables };
 }
@@ -96,7 +123,10 @@ export function tableBytes(sfnt: Uint8Array, directory: SfntDirectory, tag: stri
 export function checkSumAdjustment(sfnt: Uint8Array, directory: SfntDirectory): { stored: number; computed: number }
 {
     const head = directory.tables.get(tagName(TAG_HEAD));
-    if (head === undefined || head.length < 12) fail('font: no head table');
+    if (head === undefined || head.length < 12)
+    {
+        fail('font: no head table');
+    }
     const stored = new BinaryReader(sfnt, 'font').u32(head.offset + 8);
     const whole = (tableChecksum(sfnt, 0, sfnt.length) - stored) >>> 0;
     return { stored, computed: (0xb1b0afba - whole) >>> 0 };

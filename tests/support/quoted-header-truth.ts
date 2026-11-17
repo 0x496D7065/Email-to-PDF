@@ -9,7 +9,10 @@ import type { ExpectedHeader, Person } from './thread-builder';
 /** People as a header writes them: the address only when it is written (Outlook names-only blocks and Thunderbird attributions have none). */
 function expectedBoxes(people: readonly Person[], written: string | undefined): EmailAddress[]
 {
-    if (written === undefined) return [];
+    if (written === undefined)
+    {
+        return [];
+    }
     return people.map((p) => ({ name: p.name, address: written.includes(p.address) ? p.address : '' }));
 }
 
@@ -34,7 +37,10 @@ export function fieldDiffs(h: ExpectedHeader, got: QuotedHeaderFields): string[]
     const diffs: string[] = [];
     for (const key of Object.keys(want) as (keyof QuotedHeaderFields)[])
     {
-        if (JSON.stringify(got[key]) !== JSON.stringify(want[key])) diffs.push(`${key}: got ${JSON.stringify(got[key])}, want ${JSON.stringify(want[key])}`);
+        if (JSON.stringify(got[key]) !== JSON.stringify(want[key]))
+        {
+            diffs.push(`${key}: got ${JSON.stringify(got[key])}, want ${JSON.stringify(want[key])}`);
+        }
     }
     return diffs;
 }

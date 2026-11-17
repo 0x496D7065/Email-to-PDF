@@ -125,7 +125,10 @@ export async function watchWorkers(context: BrowserContext, page: Page, sink: Wo
     await page.exposeFunction('__e2eWorkerStarted', (url: string, name: string, wrapped: boolean) =>
     {
         sink.workerNames.set(url, name);
-        if (!wrapped) sink.unwrappedWorkers.push(url);
+        if (!wrapped)
+        {
+            sink.unwrappedWorkers.push(url);
+        }
     });
     await page.exposeFunction('__e2eWorkerReport', (line: string) =>
     {
@@ -142,7 +145,10 @@ export async function watchWorkers(context: BrowserContext, page: Page, sink: Wo
             URL.createObjectURL = (object: Blob | MediaSource): string =>
             {
                 const url = createObjectURL(object);
-                if (object instanceof Blob && /javascript/.test(object.type)) scripts.set(url, object);
+                if (object instanceof Blob && /javascript/.test(object.type))
+                {
+                    scripts.set(url, object);
+                }
                 return url;
             };
             window.Worker = new Proxy(window.Worker, {
@@ -166,7 +172,10 @@ export async function watchWorkers(context: BrowserContext, page: Page, sink: Wo
         { channelName: REPORT_CHANNEL, prelude: WORKER_PRELUDE },
     );
 
-    if (engineOf(context) !== 'chromium') return;
+    if (engineOf(context) !== 'chromium')
+    {
+        return;
+    }
     // Chromium only: auto-attach to each new worker paused before its script
     // runs (waitForDebuggerOnStart), enable its Log domain, then let it run, so
     // no entry can be missed. `flatten: false` routes the worker's messages
@@ -181,14 +190,20 @@ export async function watchWorkers(context: BrowserContext, page: Page, sink: Wo
                 .send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: ++nextId, method, params: {} }) })
                 .catch(() => undefined); // the worker may already be gone
         };
-        if (targetInfo.type === 'worker') send('Log.enable');
+        if (targetInfo.type === 'worker')
+        {
+            send('Log.enable');
+        }
         send('Runtime.runIfWaitingForDebugger');
     });
     cdp.on('Target.receivedMessageFromTarget', ({ message }) =>
     {
         const parsed = JSON.parse(message) as { method?: string; params?: { entry?: { source: string; level: string; text: string } } };
         const entry = parsed.params?.entry;
-        if (parsed.method === 'Log.entryAdded' && entry !== undefined) sink.workerLog.push(`${entry.source} ${entry.level} | ${entry.text}`);
+        if (parsed.method === 'Log.entryAdded' && entry !== undefined)
+        {
+            sink.workerLog.push(`${entry.source} ${entry.level} | ${entry.text}`);
+        }
     });
     await cdp.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: false });
 }
@@ -201,7 +216,10 @@ export async function watchPage(context: BrowserContext, page: Page, origin: str
     const webkit = engineOf(context) === 'webkit';
     context.on('request', (request) =>
     {
-        if (!(webkit && isWebKitBlobRead(request, origin))) watch.requests.push(request.url());
+        if (!(webkit && isWebKitBlobRead(request, origin)))
+        {
+            watch.requests.push(request.url());
+        }
     });
     await context.route('**/*', (route) =>
         new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),

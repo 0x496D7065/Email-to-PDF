@@ -155,7 +155,10 @@ export async function parseFilesWith(
             sha256 = await sha256Hex(file.bytes);
             // Only a buffer that is moved is recorded: a view into a larger buffer
             // is copied, so later views of that buffer still hold their bytes.
-            if (coversWholeBuffer(file.bytes)) handedOver.add(file.bytes.buffer);
+            if (coversWholeBuffer(file.bytes))
+            {
+                handedOver.add(file.bytes.buffer);
+            }
             results.push(await runJob({ name: file.name, kind: decision.kind, bytes: file.bytes, sha256 }));
         }
         catch

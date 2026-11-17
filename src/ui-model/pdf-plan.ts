@@ -112,7 +112,10 @@ function printedKey(r: LabelRange): string
 /** A short key of a PrintedAs: the same kind, email and number give the same key ('' for none). */
 function printedAsKey(p: PrintedAs | null | undefined): string
 {
-    if (p === null || p === undefined) return '';
+    if (p === null || p === undefined)
+    {
+        return '';
+    }
     switch (p.kind)
     {
         case 'rebuilt':
@@ -167,9 +170,15 @@ export function pdfBreaks(text: string, ranges: readonly LabelRange[]): number[]
     let last: string | null = null;
     for (const r of ranges)
     {
-        if (!hasNonSpace(text, r.start, r.end)) continue;
+        if (!hasNonSpace(text, r.start, r.end))
+        {
+            continue;
+        }
         const key = `${r.keep ? '+' : '-'}${printedKey(r)}`;
-        if (last !== null && key !== last) breaks.push(r.start);
+        if (last !== null && key !== last)
+        {
+            breaks.push(r.start);
+        }
         last = key;
     }
     return breaks;
@@ -187,15 +196,24 @@ export function labelOf(text: string, start: number, end: number, view: PdfView)
     const from = new Set<number>();
     for (const r of deciding)
     {
-        if (r.reason !== 'repeated-signature') continue;
+        if (r.reason !== 'repeated-signature')
+        {
+            continue;
+        }
         const n = view.signatureFrom.get(r.start);
-        if (n !== undefined) from.add(n);
+        if (n !== undefined)
+        {
+            from.add(n);
+        }
     }
     const label: PdfLabel = { status, reasons, signaturesFrom: [...from].sort((a, b) => a - b) };
     // Printed as an email of its own: only when every deciding range is, as the same email.
     const first = deciding[0];
     const printedAs = first?.printedAs ?? null;
-    if (status === 'out' && printedAs !== null && deciding.every((r) => printedKey(r) === printedKey(first!))) return { ...label, printedAs };
+    if (status === 'out' && printedAs !== null && deciding.every((r) => printedKey(r) === printedKey(first!)))
+    {
+        return { ...label, printedAs };
+    }
     return label;
 }
 
@@ -206,7 +224,10 @@ export function labelOf(text: string, start: number, end: number, view: PdfView)
  */
 export function pdfBlocks(text: string, segments: readonly Segment[], view: PdfView | null): PdfBlock[]
 {
-    if (view === null) return displayBlocks(text, segments, { unfoldAll: false }).map((block) => ({ block, label: null }));
+    if (view === null)
+    {
+        return displayBlocks(text, segments, { unfoldAll: false }).map((block) => ({ block, label: null }));
+    }
     const blocks = displayBlocks(text, segments, { unfoldAll: false, breaks: pdfBreaks(text, rangesOf(view)) });
     const labelled = blocks.map((block) =>
     {
@@ -221,7 +242,10 @@ export function pdfBlocks(text: string, segments: readonly Segment[], view: PdfV
 /** Whether two labels both say "left out, printed as" the very same email (or both "unticked", the same one). */
 function samePrintedAsLabel(a: PdfLabel | null, b: PdfLabel | null): boolean
 {
-    if (a === null || b === null || a.status !== 'out' || b.status !== 'out') return false;
+    if (a === null || b === null || a.status !== 'out' || b.status !== 'out')
+    {
+        return false;
+    }
     const key = printedAsKey(a.printedAs);
     return key !== '' && key === printedAsKey(b.printedAs);
 }
@@ -300,7 +324,10 @@ export function signatureSources(emails: readonly PlannedEmail[], plans: readonl
     emails.forEach((e, k) =>
     {
         const plan = plans[k];
-        if (plan === undefined) return;
+        if (plan === undefined)
+        {
+            return;
+        }
         let sender: string;
         try
         {
@@ -310,22 +337,40 @@ export function signatureSources(emails: readonly PlannedEmail[], plans: readonl
         {
             sender = ''; // as the plan does
         }
-        if (sender === '') return; // an unknown sender's signature is never "repeated" (rule 3)
+        if (sender === '')
+        {
+            return; // an unknown sender's signature is never "repeated" (rule 3)
+        }
         const body = e.message.bodyText;
         const found = new Map<number, number>();
         for (const r of plan.ranges)
         {
-            if (r.reason !== 'repeated-signature') continue;
+            if (r.reason !== 'repeated-signature')
+            {
+                continue;
+            }
             const from = firstKept.get(`${sender}\n${signatureBlockKey(body.slice(r.start, r.end))}`);
-            if (from !== undefined) found.set(r.start, from);
+            if (from !== undefined)
+            {
+                found.set(r.start, from);
+            }
         }
-        if (found.size > 0) out.set(e.position, found);
+        if (found.size > 0)
+        {
+            out.set(e.position, found);
+        }
         // Recorded after the whole email, as the plan does.
         for (const r of plan.ranges)
         {
-            if (r.reason !== 'signature' || !r.keep) continue;
+            if (r.reason !== 'signature' || !r.keep)
+            {
+                continue;
+            }
             const key = `${sender}\n${signatureBlockKey(body.slice(r.start, r.end))}`;
-            if (!firstKept.has(key)) firstKept.set(key, e.position + 1);
+            if (!firstKept.has(key))
+            {
+                firstKept.set(key, e.position + 1);
+            }
         }
     });
     return out;
@@ -338,7 +383,10 @@ export function signatureSources(emails: readonly PlannedEmail[], plans: readonl
  */
 export function viewKey(view: PdfView | null): string
 {
-    if (view === null) return 'none';
+    if (view === null)
+    {
+        return 'none';
+    }
     const p = view.plan;
     const ranges = p.ranges.map((r) => `${String(r.start)}-${String(r.end)}${r.keep ? '+' : '-'}${r.reason}`).join(',');
     const from = [...view.signatureFrom].map(([s, n]) => `${String(s)}>${String(n)}`).join(',');

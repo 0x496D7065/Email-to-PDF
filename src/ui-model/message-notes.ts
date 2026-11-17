@@ -87,8 +87,14 @@ export type PdfNoteCode = (typeof PDF_NOTES)[number];
  */
 export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>, printedElsewhere = false): PdfNoteCode | null
 {
-    if (plan.fallback) return 'pdf-fallback';
-    if (plan.keptAllBecauseEmpty) return printedElsewhere ? 'pdf-kept-all-empty-elsewhere' : 'pdf-kept-all-empty';
+    if (plan.fallback)
+    {
+        return 'pdf-fallback';
+    }
+    if (plan.keptAllBecauseEmpty)
+    {
+        return printedElsewhere ? 'pdf-kept-all-empty-elsewhere' : 'pdf-kept-all-empty';
+    }
     return null;
 }
 
@@ -129,7 +135,10 @@ export function relatedListNumbers(related: readonly number[], ownPosition: numb
     for (const index of related)
     {
         const position = positionByIndex[index];
-        if (typeof position === 'number' && position !== ownPosition) numbers.add(position + 1);
+        if (typeof position === 'number' && position !== ownPosition)
+        {
+            numbers.add(position + 1);
+        }
     }
     return [...numbers].sort((a, b) => a - b);
 }
@@ -150,8 +159,14 @@ export function codedCharacters(m: EngineMessage): number
     {
         texts.push(box.name, box.address);
     }
-    for (const a of message.attachments) texts.push(a.fileName, a.mimeType);
-    if (!isDisplayableMs(message.date.utcMs)) texts.push(message.date.original);
+    for (const a of message.attachments)
+    {
+        texts.push(a.fileName, a.mimeType);
+    }
+    if (!isDisplayableMs(message.date.utcMs))
+    {
+        texts.push(message.date.original);
+    }
     return texts.reduce((n, text) => n + (typeof text === 'string' ? codedCharacterCount(text) : 0), 0);
 }
 
@@ -175,16 +190,28 @@ export function messageNotes(
     const parse = new Set<ParseWarning>(m.parserWarnings);
     for (const code of PARSE_WARNINGS)
     {
-        if (parse.has(code)) notes.push({ kind: 'parse', code });
+        if (parse.has(code))
+        {
+            notes.push({ kind: 'parse', code });
+        }
         // The "placed at the end" (or "placed before the email it is attached to") note right after the date notes.
-        if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && (m.order === 'file-order' || m.order === 'before-parent')) notes.push({ kind: 'order', code: m.order });
+        if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && (m.order === 'file-order' || m.order === 'before-parent'))
+        {
+            notes.push({ kind: 'order', code: m.order });
+        }
     }
-    if (unreadAttached !== null) notes.push({ kind: 'attached', code: unreadAttached });
+    if (unreadAttached !== null)
+    {
+        notes.push({ kind: 'attached', code: unreadAttached });
+    }
     for (const code of DEDUPE_WARNINGS)
     {
         for (const w of m.dedupeWarnings)
         {
-            if (w.code !== code) continue;
+            if (w.code !== code)
+            {
+                continue;
+            }
             // relatedTotal counts input files (src/engine/dedupe.ts), like `related`.
             const total = Number.isInteger(w.relatedTotal) ? w.relatedTotal : w.related.length;
             notes.push({
@@ -195,10 +222,25 @@ export function messageNotes(
             });
         }
     }
-    if (codedCharacters(m) > 0) notes.push({ kind: 'chars', code: 'coded-characters' });
+    if (codedCharacters(m) > 0)
+    {
+        notes.push({ kind: 'chars', code: 'coded-characters' });
+    }
     const engine = new Set<EngineWarningCode>(m.engineWarnings);
-    for (const code of ENGINE_WARNINGS) if (engine.has(code)) notes.push({ kind: 'engine', code });
+    for (const code of ENGINE_WARNINGS)
+    {
+        if (engine.has(code))
+        {
+            notes.push({ kind: 'engine', code });
+        }
+    }
     const rebuild = new Set<ReconstructionWarningCode>(rebuildWarnings.filter((w) => w.index === m.index).map((w) => w.code));
-    for (const code of REBUILD_WARNINGS) if (rebuild.has(code)) notes.push({ kind: 'rebuild', code });
+    for (const code of REBUILD_WARNINGS)
+    {
+        if (rebuild.has(code))
+        {
+            notes.push({ kind: 'rebuild', code });
+        }
+    }
     return notes;
 }

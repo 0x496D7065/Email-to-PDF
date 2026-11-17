@@ -183,7 +183,10 @@ export function mailboxText(m: EmailAddress): string
 {
     const hasName = m.name.trim() !== '';
     const hasAddress = m.address.trim() !== '';
-    if (hasName && hasAddress) return t('preview.mailbox', { name: m.name, address: m.address });
+    if (hasName && hasAddress)
+    {
+        return t('preview.mailbox', { name: m.name, address: m.address });
+    }
     return hasName ? m.name : m.address;
 }
 
@@ -206,10 +209,19 @@ function roundSize(n: number): number
 /** A file size for people: "512 bytes", "1.4 KB", "12 MB"; "size unknown" if not given. */
 export function sizeText(size: number | null): string
 {
-    if (size === null || !Number.isFinite(size) || size < 0) return t('preview.size.unknown');
-    if (size < 1024) return t('preview.size.bytes', { count: size });
+    if (size === null || !Number.isFinite(size) || size < 0)
+    {
+        return t('preview.size.unknown');
+    }
+    if (size < 1024)
+    {
+        return t('preview.size.bytes', { count: size });
+    }
     const kb = size / 1024;
-    if (kb < 1024) return t('preview.size.kb', { size: roundSize(kb) });
+    if (kb < 1024)
+    {
+        return t('preview.size.kb', { size: roundSize(kb) });
+    }
     return t('preview.size.mb', { size: roundSize(kb / 1024) });
 }
 
@@ -218,7 +230,10 @@ export function attachmentText(a: AttachmentInfo): string
 {
     const name = a.fileName.trim() === '' ? t('preview.noAttachmentName') : a.fileName;
     const size = sizeText(a.size);
-    if (a.mimeType.trim() === '') return t('preview.attachmentNoType', { name, size });
+    if (a.mimeType.trim() === '')
+    {
+        return t('preview.attachmentNoType', { name, size });
+    }
     return t('preview.attachment', { name, size, type: a.mimeType });
 }
 
@@ -256,7 +271,10 @@ export function dateTexts(date: EmailDate, zone: string): DateTexts
  */
 export function lineCount(text: string): number
 {
-    if (text === '') return 0;
+    if (text === '')
+    {
+        return 0;
+    }
     const breaks = text.split('\n').length - 1;
     return text.endsWith('\n') ? breaks : breaks + 1;
 }
@@ -273,7 +291,10 @@ export function relatedNumbers(block: DisplayBlock, ownPosition: number, positio
     for (const index of block.related)
     {
         const position = positionByIndex[index];
-        if (position !== null && position !== undefined && position !== ownPosition) numbers.add(position + 1);
+        if (position !== null && position !== undefined && position !== ownPosition)
+        {
+            numbers.add(position + 1);
+        }
     }
     return [...numbers].sort((a, b) => a - b);
 }
@@ -291,7 +312,10 @@ export function foldSummaryText(block: DisplayBlock, ownPosition: number, positi
     const kind = block.label === null ? t('preview.foldOther') : t(`preview.fold.${block.label}`);
     const lines = t('preview.foldLines', { count: lineCount(block.text) });
     const numbers = relatedNumbers(block, ownPosition, positionByIndex);
-    if (numbers.length === 0) return t('preview.foldLabel', { kind, lines });
+    if (numbers.length === 0)
+    {
+        return t('preview.foldLabel', { kind, lines });
+    }
     // The email numbers ARE a list: "from emails #1, #3" ("#1 et #3" in French).
     const list = joinList(numbers.map(messageNumberText));
     const from = numbers.length === 1 ? t('preview.foldFromOne', { list }) : t('preview.foldFromMany', { list });
@@ -306,7 +330,10 @@ export function foldSummaryText(block: DisplayBlock, ownPosition: number, positi
  */
 export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly number[]): string
 {
-    if (reason !== 'repeated-signature' || signaturesFrom.length === 0) return t(`pdf.reason.${reason}`);
+    if (reason !== 'repeated-signature' || signaturesFrom.length === 0)
+    {
+        return t(`pdf.reason.${reason}`);
+    }
     const list = joinList(signaturesFrom.map(messageNumberText));
     return signaturesFrom.length === 1 ? t('pdf.repeatedFrom', { number: list }) : t('pdf.repeatedFromMany', { list });
 }
@@ -388,14 +415,26 @@ export interface RebuiltDateTexts {
  */
 export function rebuiltDateTexts(date: RebuiltDate, zone: string): RebuiltDateTexts
 {
-    if (date.kind === 'none') return { main: t('preview.noDate'), iso: null, asWritten: null };
+    if (date.kind === 'none')
+    {
+        return { main: t('preview.noDate'), iso: null, asWritten: null };
+    }
     const asWritten = t('rebuilt.dateAsWritten', { text: date.text });
     const unreadable = { main: t('rebuilt.dateUnreadable'), iso: null, asWritten };
-    if (date.kind === 'unreadable') return unreadable;
+    if (date.kind === 'unreadable')
+    {
+        return unreadable;
+    }
     // A day alone is shown as written, never "about" (user decision Q2, task 7.7): only a time can be off.
-    if (date.kind === 'day') return { main: date.day, iso: date.day, asWritten };
+    if (date.kind === 'day')
+    {
+        return { main: date.day, iso: date.day, asWritten };
+    }
     const shown = formatInZone(date.utcMs, zone, getLocale());
-    if (shown.kind === 'no-date') return unreadable;
+    if (shown.kind === 'no-date')
+    {
+        return unreadable;
+    }
     const text = `${shown.shortText} ${formatOffset(shown.offsetMinutes)}`;
     return {
         main: date.approximate ? t('rebuilt.dateAbout', { date: text }) : text,
@@ -407,7 +446,10 @@ export function rebuiltDateTexts(date: RebuiltDate, zone: string): RebuiltDateTe
 /** The fixed note of a rebuilt card: where it was taken from, may be incomplete or inexact (quote marks removed, if so). */
 export function rebuiltNoteText(card: Pick<RebuiltCard, 'sourceNumber' | 'quoteMarksRemoved'>): string
 {
-    if (card.sourceNumber === null) throw new Error('rebuilt email without a source'); // a stand-in is shown instead
+    if (card.sourceNumber === null)
+    {
+        throw new Error('rebuilt email without a source'); // a stand-in is shown instead
+    }
     const number = messageNumberText(card.sourceNumber);
     return card.quoteMarksRemoved ? t('rebuilt.noteMarks', { number }) : t('rebuilt.noteNoMarks', { number });
 }
@@ -415,7 +457,10 @@ export function rebuiltNoteText(card: Pick<RebuiltCard, 'sourceNumber' | 'quoteM
 /** "Same quoted text also in emails #4, #6."; '' if none. */
 export function rebuiltAlsoText(numbers: readonly number[]): string
 {
-    if (numbers.length === 0) return '';
+    if (numbers.length === 0)
+    {
+        return '';
+    }
     const list = joinList(numbers.map(messageNumberText));
     return numbers.length === 1 ? t('rebuilt.alsoOne', { list }) : t('rebuilt.alsoMany', { list });
 }
@@ -644,7 +689,10 @@ function emptyKey(noText: boolean): 'preview.notInPdfNoText' | 'preview.noText'
 function setBlockLabel(block: BuiltBlock, label: PdfLabel | null): void
 {
     block.pdf = label;
-    if (block.label !== null) applyLabel(block.label, label);
+    if (block.label !== null)
+    {
+        applyLabel(block.label, label);
+    }
 }
 
 /** Sets a PDF label element's text and state (hidden without a label). */
@@ -672,7 +720,10 @@ function row(name: string, label: string, value: readonly (Node | string)[]): No
 /** "email #2" or "emails #2, #5": the value of an "Attached to" row; '' if none. */
 export function attachedToText(numbers: readonly number[]): string
 {
-    if (numbers.length === 0) return '';
+    if (numbers.length === 0)
+    {
+        return '';
+    }
     const list = joinList(numbers.map(messageNumberText));
     return numbers.length === 1 ? t('preview.attachedToOne', { list }) : t('preview.attachedToMany', { list });
 }
@@ -716,15 +767,24 @@ function metaRows(m: EngineMessage, date: DateSlot, result: EngineResult | null,
     ] as const)
     {
         const text = mailboxListText(mailboxes);
-        if (text !== '') meta.push(...row(name, label, [text]));
+        if (text !== '')
+        {
+            meta.push(...row(name, label, [text]));
+        }
     }
     if (message.attachments.length > 0)
     {
         const items = message.attachments.map((a) => el('li', { attrs: { class: 'attachment' }, text: attachmentText(a) }));
         meta.push(...row('attachments', t('preview.attachments'), [el('ul', { attrs: { class: 'attachment-list' }, children: items })]));
     }
-    if (links.attachedEmails.length > 0) meta.push(...row('attached-emails', t('preview.attachedEmails'), [attachedEmailsText(links.attachedEmails)]));
-    if (links.attachedTo.length > 0) meta.push(...row('attached-to', t('preview.attachedTo'), [attachedToText(links.attachedTo)]));
+    if (links.attachedEmails.length > 0)
+    {
+        meta.push(...row('attached-emails', t('preview.attachedEmails'), [attachedEmailsText(links.attachedEmails)]));
+    }
+    if (links.attachedTo.length > 0)
+    {
+        meta.push(...row('attached-to', t('preview.attachedTo'), [attachedToText(links.attachedTo)]));
+    }
     if (m.duplicates.length > 0)
     {
         // Without a result (not expected) the chain cannot be worked out: the file names alone, as before.
@@ -758,11 +818,17 @@ function applyRebuiltDate(slot: RebuiltDateSlot, zone: string): void
 function rebuiltListRow(name: 'to' | 'cc', label: string, list: readonly EmailAddress[], incomplete: boolean): Node[]
 {
     const text = mailboxListText(list);
-    if (text === '' && !incomplete) return [];
+    if (text === '' && !incomplete)
+    {
+        return [];
+    }
     const value: (Node | string)[] = text === '' ? [] : [text];
     if (incomplete)
     {
-        if (text !== '') value.push(' ');
+        if (text !== '')
+        {
+            value.push(' ');
+        }
         value.push(el('span', { attrs: { class: 'placeholder list-incomplete' }, text: t('rebuilt.listIncomplete') }));
     }
     return row(name, label, value);
@@ -775,7 +841,10 @@ function rebuiltListRow(name: 'to' | 'cc', label: string, list: readonly EmailAd
  */
 function rebuiltMetaRows(card: RebuiltCard, date: RebuiltDateSlot): Node[]
 {
-    if (card.sourceNumber === null) throw new Error('rebuilt email without a source'); // a stand-in is shown instead
+    if (card.sourceNumber === null)
+    {
+        throw new Error('rebuilt email without a source'); // a stand-in is shown instead
+    }
     return [
         ...row('date', t('preview.date'), [date.time, ' ', date.asWritten]),
         ...(card.from.length === 0
@@ -795,7 +864,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     const cancel = options.cancel ?? ((handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>));
     const homeZone = options.initialZone ?? browserTimeZone();
     const zones = [...(options.zones ?? listTimeZones())];
-    if (!zones.includes(homeZone)) zones.unshift(homeZone);
+    if (!zones.includes(homeZone))
+    {
+        zones.unshift(homeZone);
+    }
 
     // --- State (memory only, README.md, rule R5) ------------------------------
     let zone = homeZone;
@@ -906,14 +978,20 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     /** The attached-email links of the email at `position` in the result shown. */
     function linksOf(position: number): ItemLinks
     {
-        if (currentLinks === null) return NO_LINKS;
+        if (currentLinks === null)
+        {
+            return NO_LINKS;
+        }
         return { attachedTo: currentLinks.attachedTo[position] ?? [], attachedEmails: currentLinks.attachedEmails[position] ?? [] };
     }
 
     /** The PDF view of one email under the plans in use; null: no labels (not in the PDF, or no plans). */
     function viewFor(position: number): PdfView | null
     {
-        if (pdfPlans === null || pdfPlans.result !== currentResult) return null;
+        if (pdfPlans === null || pdfPlans.result !== currentResult)
+        {
+            return null;
+        }
         return pdfPlans.views.get(position) ?? null;
     }
 
@@ -928,7 +1006,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     function focusSpotIn(slot: BodySlot): FocusSpot | null
     {
         const active = document.activeElement;
-        if (active === null || active === slot.body || !slot.body.contains(active)) return null;
+        if (active === null || active === slot.body || !slot.body.contains(active))
+        {
+            return null;
+        }
         const block = slot.blocks.find((b) => b.nodes.some((n) => n.contains(active)));
         const rect = active.getBoundingClientRect();
         return {
@@ -963,7 +1044,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
             if (spot.wasVisible)
             {
                 const rect = target.summary.getBoundingClientRect();
-                if (rect.top < 0 || rect.bottom > window.innerHeight) target.summary.scrollIntoView({ block: 'nearest' });
+                if (rect.top < 0 || rect.bottom > window.innerHeight)
+                {
+                    target.summary.scrollIntoView({ block: 'nearest' });
+                }
             }
             return;
         }
@@ -1022,14 +1106,32 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         // also under a body of white space only (its blank block stays: nothing is ever dropped from the page).
         const noText = hasNoPrintableText(slot.m.message);
         const empty = noText || blocks.length === 0 ? el('p', { attrs: { class: 'note body-empty' }, text: t(emptyKey(noText)) }) : null;
-        if (empty !== null) children.push(empty);
+        if (empty !== null)
+        {
+            children.push(empty);
+        }
         slot.body.replaceChildren(...children);
         slot.empty = empty;
         // Recorded only once in the page: a build that threw above leaves nothing behind.
-        for (const b of slot.blocks) if (b.details !== null) folds.delete(b.details);
-        for (const b of built) if (b.details !== null) folds.add(b.details);
+        for (const b of slot.blocks)
+        {
+            if (b.details !== null)
+            {
+                folds.delete(b.details);
+            }
+        }
+        for (const b of built)
+        {
+            if (b.details !== null)
+            {
+                folds.add(b.details);
+            }
+        }
         slot.blocks = built;
-        if (focusSpot !== null) restoreFocus(slot, focusSpot);
+        if (focusSpot !== null)
+        {
+            restoreFocus(slot, focusSpot);
+        }
     }
 
     /** Brings one body up to date with the plans in use: labels in place when the blocks stay the same, else redrawn. */
@@ -1043,9 +1145,15 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         const out = view === null && pdfPlans !== null && slot.shape !== NOT_DRAWN;
         setSafeAttribute(slot.body, 'data-pdf-out', out);
         setSafeAttribute(slot.note, 'data-pdf-out', out);
-        if (out) return;
+        if (out)
+        {
+            return;
+        }
         const key = viewKey(view);
-        if (key === slot.key) return;
+        if (key === slot.key)
+        {
+            return;
+        }
         const m = slot.m;
         const blocks = pdfBlocks(m.message.bodyText, m.segments, view);
         const shape = shapeOf(blocks);
@@ -1054,7 +1162,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
             blocks.forEach((b, i) =>
             {
                 const built = slot.blocks[i];
-                if (built !== undefined) setBlockLabel(built, b.label);
+                if (built !== undefined)
+                {
+                    setBlockLabel(built, b.label);
+                }
             });
         }
         else
@@ -1173,7 +1284,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     function decoratedFallbackOf(m: EngineMessage | undefined, position: number, result: EngineResult): HTMLLIElement
     {
         const item = fallbackItemOf(m, position);
-        if (m === undefined || options.decorate === undefined) return item;
+        if (m === undefined || options.decorate === undefined)
+        {
+            return item;
+        }
         try
         {
             options.decorate(item, m, position, result);
@@ -1191,7 +1305,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         const slotCount = slots.length;
         try
         {
-            if (m === undefined) throw new Error('missing message');
+            if (m === undefined)
+            {
+                throw new Error('missing message');
+            }
             return itemOf(m, position, result);
         }
         catch
@@ -1199,7 +1316,16 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
             // Forget the half-built item's dates, body and folds: they are not in the page.
             slots.length = slotCount;
             const body = bodies.get(position);
-            if (body !== undefined) for (const b of body.blocks) if (b.details !== null) folds.delete(b.details);
+            if (body !== undefined)
+            {
+                for (const b of body.blocks)
+                {
+                    if (b.details !== null)
+                    {
+                        folds.delete(b.details);
+                    }
+                }
+            }
             bodies.delete(position);
             itemSlots.delete(position);
             return decoratedFallbackOf(m, position, result);
@@ -1274,14 +1400,20 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     {
         try
         {
-            if (r === undefined) throw new Error('missing rebuilt email');
+            if (r === undefined)
+            {
+                throw new Error('missing rebuilt email');
+            }
             return rebuiltItemOf(r, result);
         }
         catch
         {
             rebuiltSlots.delete(id);
             const item = rebuiltFallbackOf(r, id);
-            if (r === undefined || options.decorateRebuilt === undefined) return item;
+            if (r === undefined || options.decorateRebuilt === undefined)
+            {
+                return item;
+            }
             try
             {
                 options.decorateRebuilt(item, r, result);
@@ -1311,20 +1443,29 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     function refreshRebuilt(): void
     {
         const shown = rebuiltShownNow();
-        for (const card of rebuiltCards) setSafeAttribute(card, 'hidden', !shown);
+        for (const card of rebuiltCards)
+        {
+            setSafeAttribute(card, 'hidden', !shown);
+        }
     }
 
     // --- Chunked building -----------------------------------------------------
     function stopPending(): void
     {
-        if (pending !== null) cancel(pending.handle);
+        if (pending !== null)
+        {
+            cancel(pending.handle);
+        }
         pending = null;
         setSafeAttribute(list, 'aria-busy', false);
     }
 
     function stopPdfPending(): void
     {
-        if (pdfPending !== null) cancel(pdfPending.handle);
+        if (pdfPending !== null)
+        {
+            cancel(pdfPending.handle);
+        }
         pdfPending = null;
     }
 
@@ -1362,7 +1503,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         }
         catch
         {
-            for (const b of slot.blocks) setBlockLabel(b, null);
+            for (const b of slot.blocks)
+            {
+                setBlockLabel(b, null);
+            }
             slot.noteCode = 'failed';
             writeNote(slot);
             setSafeAttribute(slot.note, 'hidden', false);
@@ -1390,14 +1534,20 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         pdfPlans = plans;
         setPdfState('updating');
         // Stand-ins are few (only a bug makes one) and cheap: updated at once.
-        for (const [position, standIn] of standIns) updateStandIn(position, standIn.pdfNote);
+        for (const [position, standIn] of standIns)
+        {
+            updateStandIn(position, standIn.pdfNote);
+        }
         const myGeneration = pdfGeneration;
         // The bodies built so far; those built later get the new labels as they are built.
         const todo = [...bodies.values()];
         let next = 0;
         const applyChunk = (): void =>
         {
-            if (myGeneration !== pdfGeneration) return; // newer plans, or clear(), came meanwhile
+            if (myGeneration !== pdfGeneration)
+            {
+                return; // newer plans, or clear(), came meanwhile
+            }
             pdfPending = null;
             let chars = 0;
             const first = next;
@@ -1406,12 +1556,21 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
             {
                 const slot = todo[next];
                 next++;
-                if (slot === undefined) continue;
+                if (slot === undefined)
+                {
+                    continue;
+                }
                 safeUpdateBody(slot);
                 chars += slot.m.message.bodyText.length;
             }
-            if (next < todo.length) pdfPending = { handle: schedule(applyChunk) };
-            else setPdfState('ready');
+            if (next < todo.length)
+            {
+                pdfPending = { handle: schedule(applyChunk) };
+            }
+            else
+            {
+                setPdfState('ready');
+            }
         };
         applyChunk();
     }
@@ -1444,7 +1603,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
         let next = 0;
         const buildChunk = (): void =>
         {
-            if (myGeneration !== generation) return; // a newer list or reset() came meanwhile
+            if (myGeneration !== generation)
+            {
+                return; // a newer list or reset() came meanwhile
+            }
             pending = null;
             const items: HTMLLIElement[] = [];
             let chars = 0;
@@ -1460,7 +1622,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
                         const card = safeRebuiltItemOf(r, slot.id, result);
                         rebuiltCards.push(card);
                         // Switch off: hidden too, even a stand-in the review never saw.
-                        if (!rebuiltShownNow()) setSafeAttribute(card, 'hidden', true);
+                        if (!rebuiltShownNow())
+                        {
+                            setSafeAttribute(card, 'hidden', true);
+                        }
                         items.push(card);
                         const text = r?.rebuilt?.reconstructedText;
                         chars += typeof text === 'string' ? text.length : 0;
@@ -1509,12 +1674,18 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     function relabel(): void
     {
         labels.relabel();
-        if (homeOption !== null) homeOption.textContent = zoneLabel(homeZone, homeZone);
+        if (homeOption !== null)
+        {
+            homeOption.textContent = zoneLabel(homeZone, homeZone);
+        }
         setPdfState(pdfState);
         for (const [position, item] of itemSlots)
         {
             item.number.textContent = messageNumberText(position + 1);
-            if (item.noSubject !== null) item.noSubject.textContent = t('preview.noSubject');
+            if (item.noSubject !== null)
+            {
+                item.noSubject.textContent = t('preview.noSubject');
+            }
             try
             {
                 item.meta.replaceChildren(...metaRows(item.m, item.date, currentResult, item.links));
@@ -1525,15 +1696,24 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
                 // swallowed so one bad email never stops the rest of the page from being relabelled.
             }
         }
-        for (const slot of slots) applyDate(slot);
+        for (const slot of slots)
+        {
+            applyDate(slot);
+        }
         for (const slot of bodies.values())
         {
             for (const b of slot.blocks)
             {
                 try
                 {
-                    if (b.what !== null) b.what.element.textContent = foldSummaryText(b.what.block, slot.position, slot.positionByIndex);
-                    if (b.label !== null) applyLabel(b.label, b.pdf);
+                    if (b.what !== null)
+                    {
+                        b.what.element.textContent = foldSummaryText(b.what.block, slot.position, slot.positionByIndex);
+                    }
+                    if (b.label !== null)
+                    {
+                        applyLabel(b.label, b.pdf);
+                    }
                 }
                 catch
                 {
@@ -1541,7 +1721,10 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
                     // swallowed so one bad block never stops the rest of the page from being relabelled.
                 }
             }
-            if (slot.empty !== null) slot.empty.textContent = t(emptyKey(hasNoPrintableText(slot.m.message)));
+            if (slot.empty !== null)
+            {
+                slot.empty.textContent = t(emptyKey(hasNoPrintableText(slot.m.message)));
+            }
             writeNote(slot);
         }
         for (const [position, standIn] of standIns)
@@ -1555,12 +1738,21 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
             try
             {
                 slot.label.textContent = t('rebuilt.label');
-                if (slot.noSubject !== null) slot.noSubject.textContent = t('rebuilt.noSubject');
+                if (slot.noSubject !== null)
+                {
+                    slot.noSubject.textContent = t('rebuilt.noSubject');
+                }
                 slot.note.textContent = rebuiltNoteText(slot.card);
-                if (slot.also !== null) slot.also.textContent = rebuiltAlsoText(slot.card.alsoNumbers);
+                if (slot.also !== null)
+                {
+                    slot.also.textContent = rebuiltAlsoText(slot.card.alsoNumbers);
+                }
                 slot.meta.replaceChildren(...rebuiltMetaRows(slot.card, slot.date));
                 applyRebuiltDate(slot.date, zone);
-                if (slot.empty !== null) slot.empty.textContent = t(emptyKey(slot.noText));
+                if (slot.empty !== null)
+                {
+                    slot.empty.textContent = t(emptyKey(slot.noText));
+                }
             }
             catch
             {
@@ -1580,8 +1772,14 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     {
         zone = zoneSelect.value;
         syncZoneNote();
-        for (const slot of slots) applyDate(slot);
-        for (const slot of rebuiltSlots.values()) applyRebuiltDate(slot.date, zone);
+        for (const slot of slots)
+        {
+            applyDate(slot);
+        }
+        for (const slot of rebuiltSlots.values())
+        {
+            applyRebuiltDate(slot.date, zone);
+        }
         try
         {
             options.onZoneChange?.();
@@ -1594,15 +1792,24 @@ export function mountPreview(shell: Pick<AppShell, 'checkArea'>, options: Previe
     foldToggle.addEventListener('change', () =>
     {
         showFolded = foldToggle.checked;
-        for (const details of folds) setSafeAttribute(details, 'open', showFolded);
+        for (const details of folds)
+        {
+            setSafeAttribute(details, 'open', showFolded);
+        }
     });
 
     return {
         show,
         showResult(result)
         {
-            if (result.ok) show(result.engine);
-            else clear();
+            if (result.ok)
+            {
+                show(result.engine);
+            }
+            else
+            {
+                clear();
+            }
         },
         reset()
         {

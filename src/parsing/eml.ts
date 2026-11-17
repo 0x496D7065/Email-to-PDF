@@ -270,7 +270,10 @@ function assembleMessage(
 ): NormalizedMessage
 {
     const warnings: ParseWarning[] = [...head.dateWarnings, ...content.warnings];
-    if (head.missingMessageId) warnings.push('missing-message-id');
+    if (head.missingMessageId)
+    {
+        warnings.push('missing-message-id');
+    }
     return { ...head.fields, bodyText: content.text, attachments: resolve(content.attachments), source, warnings };
 }
 
@@ -293,7 +296,10 @@ async function readDeferred(context: ReadContext): Promise<void>
     for (let i = 0; i < context.deferred.length; i++)
     {
         const slot = context.deferred[i];
-        if (slot === undefined || slot.pending === null) continue;
+        if (slot === undefined || slot.pending === null)
+        {
+            continue;
+        }
         const { attachment, depth } = slot.pending;
         slot.pending = null;
         const read = await readAttachedEmail(attachment, context, depth, false);
@@ -341,7 +347,10 @@ function flattenAttached(
         for (const slot of slots)
         {
             const { node } = slot;
-            if (node === null) continue;
+            if (node === null)
+            {
+                continue;
+            }
             const index = entries.length;
             indexOf.set(node, index);
             const ownPath = [...path, slot.number];
@@ -350,7 +359,13 @@ function flattenAttached(
                 block === null ? [] : frames.map((f) => ({ holder: f.holder, start: f.offset + block.start, end: f.offset + block.end }));
             entries.push({ node, parent, places, path: ownPath, name: slot.name });
             const inner: Frame[] = [{ holder: index, offset: 0 }];
-            if (block !== null) for (const f of frames) inner.push({ holder: f.holder, offset: f.offset + block.start + block.bodyStart });
+            if (block !== null)
+            {
+                for (const f of frames)
+                {
+                    inner.push({ holder: f.holder, offset: f.offset + block.start + block.bodyStart });
+                }
+            }
             walk(node.content.children, index, inner, ownPath);
         }
     };
@@ -392,10 +407,19 @@ function readDate(email: Email): { value: EmailDate; hadHeader: boolean }
 
 function dateWarnings(date: { value: EmailDate; hadHeader: boolean }): ParseWarning[]
 {
-    if (!date.hadHeader) return ['missing-date'];
-    if (date.value.utcMs === null) return ['unparseable-date'];
+    if (!date.hadHeader)
+    {
+        return ['missing-date'];
+    }
+    if (date.value.utcMs === null)
+    {
+        return ['unparseable-date'];
+    }
     // Read as UTC for sorting only: the preview must flag it.
-    if (!date.value.zoneKnown) return ['unknown-time-zone'];
+    if (!date.value.zoneKnown)
+    {
+        return ['unknown-time-zone'];
+    }
     return [];
 }
 
@@ -406,7 +430,10 @@ function dateWarnings(date: { value: EmailDate; hadHeader: boolean }): ParseWarn
 function readFrom(email: Email): EmailAddress[]
 {
     const header = email.headers.find((h) => h.key === 'from');
-    if (header === undefined || header.value.trim() === '') return [];
+    if (header === undefined || header.value.trim() === '')
+    {
+        return [];
+    }
     return mailboxes(addressParser(header.value));
 }
 
@@ -420,7 +447,10 @@ function readFrom(email: Email): EmailAddress[]
 function readSender(email: Email): EmailAddress | undefined
 {
     const header = email.headers.find((h) => h.key === 'sender');
-    if (header === undefined || header.value.trim() === '') return undefined;
+    if (header === undefined || header.value.trim() === '')
+    {
+        return undefined;
+    }
     return mailboxes(addressParser(header.value))[0];
 }
 
@@ -523,18 +553,27 @@ async function readContent(tree: EmlTree, context: ReadContext, depth: number): 
         {
             if (part.subtype !== 'alternative')
             {
-                for (const child of part.children) await visit(child, hideHtml);
+                for (const child of part.children)
+                {
+                    await visit(child, hideHtml);
+                }
                 return;
             }
             // null: no version's HTML is used, so every child hides its HTML.
             const htmlVersion = alternativeHtmlVersion(part.children);
-            for (const child of part.children) await visit(child, hideHtml || child !== htmlVersion);
+            for (const child of part.children)
+            {
+                await visit(child, hideHtml || child !== htmlVersion);
+            }
             return;
         }
 
         if (part.kind === 'text')
         {
-            if (part.text === '' || (part.type === 'html' && hideHtml)) return;
+            if (part.text === '' || (part.type === 'html' && hideHtml))
+            {
+                return;
+            }
             hasOwnBody = true;
             if (part.type === 'plain')
             {
@@ -550,15 +589,24 @@ async function readContent(tree: EmlTree, context: ReadContext, depth: number): 
             {
                 // Only a converter failure is turned into a warning; anything else is
                 // a real problem with the file and still fails it.
-                if (!(error instanceof HtmlConversionError)) throw error;
+                if (!(error instanceof HtmlConversionError))
+                {
+                    throw error;
+                }
                 // No text is invented for the missing part; the warning tells the
                 // preview that content is missing (README.md, rule R6).
                 addWarning(warnings, 'html-body-unreadable');
                 return;
             }
             addWarning(warnings, 'html-converted-body');
-            if (converted.truncated) addWarning(warnings, 'html-body-truncated');
-            if (converted.text !== '') segments.push({ text: toLfLineEndings(converted.text), isBlock: false, node: null });
+            if (converted.truncated)
+            {
+                addWarning(warnings, 'html-body-truncated');
+            }
+            if (converted.text !== '')
+            {
+                segments.push({ text: toLfLineEndings(converted.text), isBlock: false, node: null });
+            }
             return;
         }
 
@@ -593,17 +641,29 @@ async function readContent(tree: EmlTree, context: ReadContext, depth: number): 
         // One by one: a spread into push overflows the stack for very long lists.
         // Its lines are listed here too, marked as belonging to it (or to an
         // email inside it).
-        for (const item of inner.content.attachments) attachments.push({ info: item.info, owner: item.owner ?? node });
-        for (const warning of inner.warnings) addWarning(warnings, warning);
+        for (const item of inner.content.attachments)
+        {
+            attachments.push({ info: item.info, owner: item.owner ?? node });
+        }
+        for (const warning of inner.warnings)
+        {
+            addWarning(warnings, warning);
+        }
         expandedAny = true;
     };
     await visit(tree.root, false);
 
-    if (!hasOwnBody && !expandedAny) warnings.push('no-body');
+    if (!hasOwnBody && !expandedAny)
+    {
+        warnings.push('no-body');
+    }
     const { text, starts } = joinSegments(segments);
     segments.forEach((segment, i) =>
     {
-        if (segment.node === null) return;
+        if (segment.node === null)
+        {
+            return;
+        }
         const start = starts[i] ?? 0;
         segment.node.block = { start, end: start + segment.text.length, bodyStart: segment.bodyStart };
     });
@@ -636,9 +696,18 @@ function joinSegments(segments: readonly BodySegment[]): { text: string; starts:
     const starts: number[] = [];
     for (const segment of segments)
     {
-        if (text === '') text = segment.text;
-        else if (segment.isBlock || previousIsBlock) text = appendBlock(text, segment.text);
-        else text = `${text}\n${segment.text}`;
+        if (text === '')
+        {
+            text = segment.text;
+        }
+        else if (segment.isBlock || previousIsBlock)
+        {
+            text = appendBlock(text, segment.text);
+        }
+        else
+        {
+            text = `${text}\n${segment.text}`;
+        }
         // Every join adds the segment at the very end of the text.
         starts.push(text.length - segment.text.length);
         previousIsBlock = segment.isBlock;
@@ -684,7 +753,10 @@ function joinSegments(segments: readonly BodySegment[]): { text: string; starts:
  */
 function alternativeHtmlVersion(versions: readonly EmlPart[]): EmlPart | null
 {
-    if (versions.some((v) => holdsText(v, 'plain') && !holdsText(v, 'html'))) return null;
+    if (versions.some((v) => holdsText(v, 'plain') && !holdsText(v, 'html')))
+    {
+        return null;
+    }
     return versions.find((v) => holdsText(v, 'html')) ?? null;
 }
 
@@ -694,8 +766,14 @@ function alternativeHtmlVersion(versions: readonly EmlPart[]): EmlPart | null
  */
 function holdsText(part: EmlPart, type: 'plain' | 'html'): boolean
 {
-    if (part.kind === 'text') return part.type === type && part.text.trim() !== '';
-    if (part.kind === 'multipart') return part.children.some((child) => holdsText(child, type));
+    if (part.kind === 'text')
+    {
+        return part.type === type && part.text.trim() !== '';
+    }
+    if (part.kind === 'multipart')
+    {
+        return part.children.some((child) => holdsText(child, type));
+    }
     return false;
 }
 
@@ -741,7 +819,10 @@ async function expandForwarded(
 } | null>
 {
     const read = await readAttachedEmail(attachment, context, depth, true);
-    if (read === null) return null;
+    if (read === null)
+    {
+        return null;
+    }
     const { head, content: body, headerLines, noBody } = read;
     const header = [FORWARDED_SEPARATOR, ...headerLines].join('\n');
     return {
@@ -804,7 +885,10 @@ async function readAttachedEmail(
         return null;
     }
     // Counted before parsing: an attempt costs a parse even if it then fails.
-    if (context.budget.remaining <= 0) return null;
+    if (context.budget.remaining <= 0)
+    {
+        return null;
+    }
     context.budget.remaining--;
 
     let inner: EmlTree;
@@ -816,7 +900,10 @@ async function readAttachedEmail(
     {
         // For an inline forward a changed library must fail loudly, not hide as
         // an unreadable forward (see rethrowInternals above).
-        if (error instanceof PostalMimeInternalsError && rethrowInternals) throw error;
+        if (error instanceof PostalMimeInternalsError && rethrowInternals)
+        {
+            throw error;
+        }
         return null;
     }
     let body: MessageContent;
@@ -827,12 +914,18 @@ async function readAttachedEmail(
     catch (error)
     {
         // An inline forward inside it re-threw (see rethrowInternals above).
-        if (error instanceof PostalMimeInternalsError && !rethrowInternals) return null;
+        if (error instanceof PostalMimeInternalsError && !rethrowInternals)
+        {
+            return null;
+        }
         throw error;
     }
     const headerLines = forwardedHeaderLines(inner.email);
     const noBody = body.warnings.includes('no-body');
-    if (noBody && headerLines.length === 0 && body.attachments.length === 0) return null;
+    if (noBody && headerLines.length === 0 && body.attachments.length === 0)
+    {
+        return null;
+    }
     return { head: readHead(inner.email), content: body, headerLines, noBody };
 }
 
@@ -864,14 +957,20 @@ function forwardedHeaderLines(email: Email): string[]
     const lines: string[] = [];
     const add = (label: string, value: string | undefined, decode: boolean): void =>
     {
-        if (value === undefined) return;
+        if (value === undefined)
+        {
+            return;
+        }
         // Headers arrive unfolded. A decoded encoded word could still hold a line
         // break: it becomes a space, so one header stays one line in the block.
         const shown = (decode ? decodeWords(value) : value).replace(/[\r\n]+/g, ' ');
         lines.push(`${label}: ${shown}`);
     };
     add('From', first('from'), true);
-    if (senderIfDifferent(readSender(email), readFrom(email)) !== undefined) add('Sender', first('sender'), true);
+    if (senderIfDifferent(readSender(email), readFrom(email)) !== undefined)
+    {
+        add('Sender', first('sender'), true);
+    }
     add('Date', first('date'), false);
     add('Subject', first('subject'), true);
     add('To', all('to'), true);
@@ -883,13 +982,19 @@ function forwardedHeaderLines(email: Email): string[]
 /** Adds `block` after `text`, separated by one blank line. */
 function appendBlock(text: string, block: string): string
 {
-    if (text === '') return block;
+    if (text === '')
+    {
+        return block;
+    }
     return `${text.endsWith('\n') ? text : `${text}\n`}\n${block}`;
 }
 
 function addWarning(warnings: ParseWarning[], warning: ParseWarning): void
 {
-    if (!warnings.includes(warning)) warnings.push(warning);
+    if (!warnings.includes(warning))
+    {
+        warnings.push(warning);
+    }
 }
 
 /**

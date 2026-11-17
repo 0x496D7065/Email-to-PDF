@@ -36,16 +36,25 @@ export class FontUsage
             fail(`glyph id ${String(glyph)} is not in font ${this.font.postScriptName} (0 to ${this.font.numGlyphs - 1})`);
         }
         this.glyphs.add(glyph);
-        if (this.toUnicode.has(glyph)) return;
+        if (this.toUnicode.has(glyph))
+        {
+            return;
+        }
         const copy = copyLayerText(text);
-        if (copy !== '' && copy.length <= MAX_GLYPH_TEXT_UNITS) this.toUnicode.set(glyph, copy);
+        if (copy !== '' && copy.length <= MAX_GLYPH_TEXT_UNITS)
+        {
+            this.toUnicode.set(glyph, copy);
+        }
     }
 
     /** What a reader gets from ToUnicode for these glyphs. */
     yields(glyphs: readonly number[]): string
     {
         let text = '';
-        for (const glyph of glyphs) text += this.toUnicode.get(glyph) ?? '';
+        for (const glyph of glyphs)
+        {
+            text += this.toUnicode.get(glyph) ?? '';
+        }
         return text;
     }
 }
@@ -114,7 +123,10 @@ export function widthsArray(font: ParsedFont, glyphs: Iterable<number>): string
     while (i < ids.length)
     {
         let end = i;
-        while (end + 1 < ids.length && ids[end + 1] === ids[end]! + 1) end++;
+        while (end + 1 < ids.length && ids[end + 1] === ids[end]! + 1)
+        {
+            end++;
+        }
         const widths = ids.slice(i, end + 1).map((id) => num(scale(font, font.advance(id))));
         if (widths.length >= 3 && widths.every((w) => w === widths[0]))
         {
@@ -151,7 +163,10 @@ export function type0Font(font: ParsedFont, descendant: number, toUnicode: numbe
 /** One code unit when a text is a single BMP character (usable in a bfrange), else undefined. */
 function singleUnit(text: string): number | undefined
 {
-    if (text.length !== 1) return undefined;
+    if (text.length !== 1)
+    {
+        return undefined;
+    }
     const unit = text.charCodeAt(0);
     return unit >= 0xd800 && unit <= 0xdfff ? undefined : unit;
 }
@@ -180,8 +195,14 @@ export function toUnicodeCmap(map: ReadonlyMap<number, string>): string
             {
                 const next = ids[end + 1]!;
                 const step = next - first;
-                if (next !== ids[end]! + 1 || next >> 8 !== first >> 8) break;
-                if (singleUnit(map.get(next)!) !== start + step || (start & 0xff) + step > 0xff) break;
+                if (next !== ids[end]! + 1 || next >> 8 !== first >> 8)
+                {
+                    break;
+                }
+                if (singleUnit(map.get(next)!) !== start + step || (start & 0xff) + step > 0xff)
+                {
+                    break;
+                }
                 end++;
             }
         }

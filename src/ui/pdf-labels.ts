@@ -177,7 +177,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
 
     function stopJob(): void
     {
-        if (job !== null) cancel(job.handle);
+        if (job !== null)
+        {
+            cancel(job.handle);
+        }
         job = null;
     }
 
@@ -199,7 +202,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         planned.forEach(({ position }, k) =>
         {
             const plan = plans[k];
-            if (plan !== undefined) views.set(position, { plan, signatureFrom: sources.get(position) ?? new Map() });
+            if (plan !== undefined)
+            {
+                views.set(position, { plan, signatureFrom: sources.get(position) ?? new Map() });
+            }
         });
         const preview: PreviewPdfPlans = { result: inputs.result, views };
         const positions = planned.map((e) => e.position);
@@ -215,16 +221,25 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
      */
     function withCut(m: NonNullable<typeof made>): PreviewPdfPlans
     {
-        if (m.plans.policy.unfoldEverything) return m.preview;
+        if (m.plans.policy.unfoldEverything)
+        {
+            return m.preview;
+        }
         const rebuilt = [...(options.includedRebuilt?.() ?? [])];
         const unticked = [...(options.untickedRebuilt?.() ?? [])];
         const cut = printedElsewhereRanges({ ...m.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
-        if (cut.size === 0) return m.preview;
+        if (cut.size === 0)
+        {
+            return m.preview;
+        }
         const views = new Map(m.preview.views);
         for (const [position, pdfRanges] of cut)
         {
             const view = views.get(position);
-            if (view !== undefined) views.set(position, { ...view, pdfRanges });
+            if (view !== undefined)
+            {
+                views.set(position, { ...view, pdfRanges });
+            }
         }
         return { result: m.preview.result, views };
     }
@@ -257,7 +272,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         for (const position of inputs.positions)
         {
             const m = inputs.result.messages[position];
-            if (m === undefined) continue;
+            if (m === undefined)
+            {
+                continue;
+            }
             planned.push({ message: m.message, position });
             messages.push(m);
         }
@@ -266,7 +284,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         const mine = { inputs, handle: null as unknown };
         const slice = (): void =>
         {
-            if (job !== mine) return; // cancelled or replaced meanwhile
+            if (job !== mine)
+            {
+                return; // cancelled or replaced meanwhile
+            }
             try
             {
                 steps ??= planOutputSteps(messages, inputs.policy);
@@ -274,7 +295,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
                 for (;;)
                 {
                     const step = steps.next();
-                    if (step.done === true) break;
+                    if (step.done === true)
+                    {
+                        break;
+                    }
                     plans.push(step.value);
                     if (now() >= until)
                     {
@@ -325,7 +349,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
             }
             return;
         }
-        if (job !== null && job.inputs.result === result && job.inputs.key === inputs.key) return; // already on its way
+        if (job !== null && job.inputs.result === result && job.inputs.key === inputs.key)
+        {
+            return; // already on its way
+        }
         upToDate = false;
         options.setPdfPlans(null);
         start(inputs);
@@ -348,7 +375,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         element,
         show(next)
         {
-            if (next === result) return;
+            if (next === result)
+            {
+                return;
+            }
             result = next;
             made = null;
             upToDate = false;
@@ -370,7 +400,10 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         rebuiltChanged()
         {
             // Only plans in use go again; plans on their way get the new choice when they are handed over.
-            if (upToDate && made !== null && made.inputs.result === result) handOver(made);
+            if (upToDate && made !== null && made.inputs.result === result)
+            {
+                handOver(made);
+            }
         },
     };
 }

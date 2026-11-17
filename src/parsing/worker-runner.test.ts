@@ -30,7 +30,10 @@ function fakeWorker(options: { onSend?: (message: ToWorker) => void; sendThrows?
     const sent: { message: ToWorker; transfer: Transferable[] }[] = [];
     const terminate = vi.fn(() =>
     {
-        if (options.terminateThrows === true) throw new Error('terminate failed');
+        if (options.terminateThrows === true)
+        {
+            throw new Error('terminate failed');
+        }
     });
     const factory: WorkerFactory = (e) =>
     {
@@ -38,7 +41,10 @@ function fakeWorker(options: { onSend?: (message: ToWorker) => void; sendThrows?
         return {
             send: (message, transfer) =>
             {
-                if (options.sendThrows === true) throw new Error('DataCloneError');
+                if (options.sendThrows === true)
+                {
+                    throw new Error('DataCloneError');
+                }
                 sent.push({ message, transfer });
                 options.onSend?.(message);
             },
@@ -47,7 +53,10 @@ function fakeWorker(options: { onSend?: (message: ToWorker) => void; sendThrows?
     };
     const worker = (): WorkerEvents =>
     {
-        if (events === undefined) throw new Error('worker not started');
+        if (events === undefined)
+        {
+            throw new Error('worker not started');
+        }
         return events;
     };
     return { factory, sent, terminate, worker };
@@ -229,7 +238,10 @@ describe('runInWorker: worker failures', () =>
         const first = runInWorker(job(bytes), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
         // Play the browser's part: postMessage with a transfer list moves the buffer.
         const sent = fake.sent[0];
-        if (sent === undefined) throw new Error('nothing sent');
+        if (sent === undefined)
+        {
+            throw new Error('nothing sent');
+        }
         structuredClone(sent.message, { transfer: sent.transfer });
         fake.worker().message({ type: 'result', result: FAILED_IN_WORKER });
         await first;
@@ -312,7 +324,10 @@ describe('runInWorker: HTML converted on the page', () =>
         const fake = fakeWorker({
             onSend: () =>
             {
-                if (++calls === 2) throw new Error('DataCloneError');
+                if (++calls === 2)
+                {
+                    throw new Error('DataCloneError');
+                }
             },
         });
         const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: () => ({ text: 't', truncated: false }), timeoutMs: TIMEOUT_MS });

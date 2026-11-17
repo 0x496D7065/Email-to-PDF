@@ -39,7 +39,10 @@ describe('PDF document model over the parsed fixtures', () =>
     {
         const position = r.messages.findIndex((m) => m.message.source.fileName === file);
         const e = d.emails.find((x) => x.position === position);
-        if (e === undefined) throw new Error(`no email for ${file}`);
+        if (e === undefined)
+        {
+            throw new Error(`no email for ${file}`);
+        }
         return e;
     };
 

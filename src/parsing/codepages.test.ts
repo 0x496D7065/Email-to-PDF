@@ -26,7 +26,10 @@ describe('encodingForCodepage', () =>
 
     it('every label in the table is one TextDecoder accepts', () =>
     {
-        for (const label of allCodepageLabels()) expect(() => new TextDecoder(label), label).not.toThrow();
+        for (const label of allCodepageLabels())
+        {
+            expect(() => new TextDecoder(label), label).not.toThrow();
+        }
     });
 
     it('the UTF-16 code pages decode in the right byte order', () =>

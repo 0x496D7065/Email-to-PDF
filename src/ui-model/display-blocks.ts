@@ -88,7 +88,10 @@ function cutAtBreaks(segments: readonly Segment[], breaks: readonly number[]): P
     for (const s of segments)
     {
         let from = s.start;
-        while (c < points.length && (points[c] ?? 0) <= from) c++;
+        while (c < points.length && (points[c] ?? 0) <= from)
+        {
+            c++;
+        }
         while (c < points.length && (points[c] ?? 0) < s.end)
         {
             const at = points[c] ?? s.end;
@@ -127,7 +130,10 @@ export function displayBlocks(
 {
     if (checkSegments(text, segments).length > 0)
     {
-        if (text.length === 0) return [];
+        if (text.length === 0)
+        {
+            return [];
+        }
         return [{ start: 0, end: text.length, text, folded: false, reasons: [], related: [], label: null, collapsed: false }];
     }
 
@@ -155,10 +161,19 @@ export function displayBlocks(
             groups.push({ start: s.start, end: s.end, folded: s.folded, reasons: new Set(), related: new Set(), weight: new Map() });
         }
         const group = groups[groups.length - 1]!;
-        for (const r of s.reasons) group.reasons.add(r);
-        for (const n of s.related) group.related.add(n);
+        for (const r of s.reasons)
+        {
+            group.reasons.add(r);
+        }
+        for (const n of s.related)
+        {
+            group.related.add(n);
+        }
         const primary = s.folded ? primaryReason(s.reasons) : null;
-        if (primary !== null) group.weight.set(primary, (group.weight.get(primary) ?? 0) + (s.end - s.start));
+        if (primary !== null)
+        {
+            group.weight.set(primary, (group.weight.get(primary) ?? 0) + (s.end - s.start));
+        }
     });
 
     return groups.map((g) =>

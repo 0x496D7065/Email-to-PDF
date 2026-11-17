@@ -78,7 +78,10 @@ const ROOT = decodeURIComponent(new URL('..', import.meta.url).pathname).replace
 const HTML_ONLY = ((): FixtureExpectation =>
 {
     const f = FIXTURES.find((x) => x.id === 'msg-13-html-only');
-    if (f === undefined) throw new Error('no fixture msg-13-html-only');
+    if (f === undefined)
+    {
+        throw new Error('no fixture msg-13-html-only');
+    }
     return f;
 })();
 /** What its item must show (the manifest's snippets, and the sign-off) and must never show, on top of the manifest's exclusions. */
@@ -135,7 +138,10 @@ test.beforeAll(async () =>
             else
             {
                 const spec = MSG_SPECS.find((s) => s.id === f.id);
-                if (spec === undefined) throw new Error(`no .msg spec ${f.id}`);
+                if (spec === undefined)
+                {
+                    throw new Error(`no .msg spec ${f.id}`);
+                }
                 files.push({ name, type: 'application/vnd.ms-outlook', bytes: Array.from(buildMsg(spec)) });
             }
         }
@@ -166,10 +172,22 @@ test.beforeAll(async () =>
 function expectedList(): Expected[]
 {
     const kept = new Map<string, Expected>();
-    for (const e of expected) if (!kept.has(e.group)) kept.set(e.group, e);
+    for (const e of expected)
+    {
+        if (!kept.has(e.group))
+        {
+            kept.set(e.group, e);
+        }
+    }
     const list = [...kept.values()];
     const dated = list.filter((e) => e.utcMs !== null).sort((a, b) => (a.utcMs ?? 0) - (b.utcMs ?? 0));
-    for (let i = 1; i < dated.length; i++) if (dated[i]?.utcMs === dated[i - 1]?.utcMs) throw new Error(`same date: ${dated[i]?.id ?? ''}`);
+    for (let i = 1; i < dated.length; i++)
+    {
+        if (dated[i]?.utcMs === dated[i - 1]?.utcMs)
+        {
+            throw new Error(`same date: ${dated[i]?.id ?? ''}`);
+        }
+    }
     const dropIndex = (e: Expected): number => dropFiles.findIndex((f) => f.name === e.fileName);
     const undated = list.filter((e) => e.utcMs === null).sort((a, b) => dropIndex(a) - dropIndex(b));
     return [...dated, ...undated];
@@ -203,7 +221,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     watch = await watchPage(context, page, origin);
     page.on('console', (message) =>
     {
-        if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+        if (message.type() === 'error')
+        {
+            problems.push(`console: ${message.text()}`);
+        }
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
     page.on('dialog', (dialog) =>
@@ -244,14 +265,20 @@ async function drop(page: Page, selector: string, files: readonly DropFile[]): P
     const data = await page.evaluateHandle((list) =>
     {
         const transfer = new DataTransfer();
-        for (const f of list) transfer.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+        for (const f of list)
+        {
+            transfer.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+        }
         return transfer;
     }, files);
     return page.evaluate(
         ({ transfer, target }) =>
         {
             const element = document.querySelector(target);
-            if (!element) throw new Error(`no ${target}`);
+            if (!element)
+            {
+                throw new Error(`no ${target}`);
+            }
             return ['dragenter', 'dragover', 'drop'].map(
                 (type) => !element.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: transfer })),
             );
@@ -280,7 +307,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(1000);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
-    for (const url of workerUrls) expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    for (const url of workerUrls)
+    {
+        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+    }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
@@ -314,7 +344,10 @@ test('the whole journey: drop every fixture, check the list, change the choices,
 
     // --- A drop next to the zone adds nothing and opens nothing. -------------
     const [first] = dropFiles;
-    if (first === undefined) throw new Error('no files');
+    if (first === undefined)
+    {
+        throw new Error('no files');
+    }
     expect(await drop(page, '#step-check', [first])).toEqual([true, true, true]);
     await expect(page.getByRole('status')).toHaveText(en.drop.outside);
     await page.waitForTimeout(300);
@@ -352,8 +385,20 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     // Every email's text is in the page (folded or not), and no element was
     // made from email content: no link, image, frame, script or style.
     const before = await pageTextAndValues(page);
-    for (const f of FIXTURES) for (const snippet of f.bodyContains) expect(before.text, f.id).toContain(snippet);
-    for (const f of FIXTURES) for (const never of f.bodyExcludes ?? []) expect(before.text, f.id).not.toContain(never);
+    for (const f of FIXTURES)
+    {
+        for (const snippet of f.bodyContains)
+        {
+            expect(before.text, f.id).toContain(snippet);
+        }
+    }
+    for (const f of FIXTURES)
+    {
+        for (const never of f.bodyExcludes ?? [])
+        {
+            expect(before.text, f.id).not.toContain(never);
+        }
+    }
     await expect(page.locator('#preview-list :is(a, img, iframe, object, embed, script, style, link, form, b, p:not(.note))')).toHaveCount(0);
 
     // --- The HTML-only .msg: plain text only, nothing run or loaded. --------
@@ -362,9 +407,15 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     const htmlItem = items.nth(htmlIndex);
     await expect(htmlItem.locator('.message-subject')).toHaveText(HTML_ONLY.subject ?? '');
     const htmlBody = htmlItem.locator('.message-body');
-    for (const text of HTML_ONLY_SHOWS) await expect(htmlBody).toContainText(text);
+    for (const text of HTML_ONLY_SHOWS)
+    {
+        await expect(htmlBody).toContainText(text);
+    }
     const htmlText = (await htmlBody.textContent()) ?? '';
-    for (const never of HTML_ONLY_NEVER) expect(htmlText).not.toContain(never);
+    for (const never of HTML_ONLY_NEVER)
+    {
+        expect(htmlText).not.toContain(never);
+    }
     // Only the preview's own text blocks in its body.
     expect(await htmlBody.evaluate((body) => [...new Set([...body.querySelectorAll('*')].map((e) => e.tagName))])).toEqual(['DIV']);
     await expect(htmlItem.getByRole('list', { name: en.review.notesLabel }).locator('li')).toHaveText(
@@ -428,11 +479,17 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     // meant to show. No file failed, so the only file names in the page are
     // those of the merged copies, in the "also in" row of the email kept: in
     // each duplicate group, every file but one (the one kept).
-    for (const subject of subjects) expect(before.text).toContain(subject);
+    for (const subject of subjects)
+    {
+        expect(before.text).toContain(subject);
+    }
     await expect(page.locator('#add-failed-list > li')).toHaveCount(0);
     const alsoIn = page.locator('#preview-list dd.meta-also-in');
     const groups = new Map<string, string[]>();
-    for (const e of expected) groups.set(e.group, [...(groups.get(e.group) ?? []), e.fileName]);
+    for (const e of expected)
+    {
+        groups.set(e.group, [...(groups.get(e.group) ?? []), e.fileName]);
+    }
     const merges = [...groups.values()].filter((names) => names.length > 1);
     await expect(alsoIn).toHaveCount(merges.length);
     const alsoInText = (await alsoIn.allTextContents()).join('\n');
@@ -443,7 +500,10 @@ test('the whole journey: drop every fixture, check the list, change the choices,
         return shown;
     });
     expect(shownNames).toHaveLength(merged);
-    for (const name of shownNames) expect(before.text).toContain(name);
+    for (const name of shownNames)
+    {
+        expect(before.text).toContain(name);
+    }
     // Addresses were shown too (from, to, cc, bcc rows).
     expect(before.text).toMatch(/@example\.test|@sample\.invalid|@furniture\.example\.test/);
     await page.getByRole('button', { name: en.actions.clearEverything }).click();
@@ -461,7 +521,10 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     for (const text of [...subjects, ...snippets, ...fileNames])
     {
         expect(after.text).not.toContain(text);
-        for (const value of after.values) expect(value).not.toContain(text);
+        for (const value of after.values)
+        {
+            expect(value).not.toContain(text);
+        }
         expect(after.html, text).not.toContain(text);
         expect(after.html, text).not.toContain(escaped(text));
     }
@@ -492,7 +555,10 @@ async function focused(page: Page, key: string): Promise<Focus>
     return page.evaluate((mark) =>
     {
         const active = document.activeElement;
-        if (!(active instanceof HTMLElement) || active === document.body) throw new Error('nothing focused');
+        if (!(active instanceof HTMLElement) || active === document.body)
+        {
+            throw new Error('nothing focused');
+        }
         active.dataset.testFocus ??= mark;
         const style = getComputedStyle(active);
         const rect = active.getBoundingClientRect();
@@ -587,7 +653,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     const chosen = names.map((name) =>
     {
         const file = dropFiles.find((f) => f.name === name);
-        if (file === undefined) throw new Error(`no ${name}`);
+        if (file === undefined)
+        {
+            throw new Error(`no ${name}`);
+        }
         return { name: file.name, mimeType: file.type, buffer: NodeBuffer.from(file.bytes) as never };
     });
     await choosers[0]?.setFiles(chosen);
@@ -602,7 +671,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     const controls = page.locator('a[href], button, select, input:not([type="hidden"]):not([hidden]), summary');
     const controlCount = await controls.count();
     expect(controlCount).toBeGreaterThan(10);
-    for (const control of await controls.all()) await expect(control).toHaveAccessibleName(/\S/);
+    for (const control of await controls.all())
+    {
+        await expect(control).toHaveAccessibleName(/\S/);
+    }
     for (const box of await page.getByRole('checkbox', { name: en.actions.include }).all())
     {
         // Each include checkbox's name also says which email it is for.
@@ -616,7 +688,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     );
     expect(headings.filter((h) => h.level === 1)).toHaveLength(1);
     expect(headings[0]?.level).toBe(1);
-    for (let i = 1; i < headings.length; i++) expect(headings[i]?.level ?? 9).toBeLessThanOrEqual((headings[i - 1]?.level ?? 0) + 1);
+    for (let i = 1; i < headings.length; i++)
+    {
+        expect(headings[i]?.level ?? 9).toBeLessThanOrEqual((headings[i - 1]?.level ?? 0) + 1);
+    }
     expect(headings.filter((h) => h.level === 2).map((h) => h.step)).toEqual(['step-add', 'step-check', 'step-download']);
     // One h3 per email, inside step 2.
     expect(headings.filter((h) => h.level === 3 && h.step === 'step-check')).toHaveLength(5);
@@ -716,7 +791,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     const links = donateFocus.length;
     expect(tags.slice(0, 8 + links)).toEqual(['INPUT', ...donateFocus.map(() => 'A'), 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
     expect(walk[0]?.key).toBe('language');
-    if (links > 0) expect(walk[1]?.key).toBe('donate');
+    if (links > 0)
+    {
+        expect(walk[1]?.key).toBe('donate');
+    }
     expect(walk[2 + links]?.key).toBe('help');
     expect(walk[7 + links]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
     // The Ko-fi button is the only link (and a Tab stop where Tab stops on links).
@@ -742,9 +820,15 @@ test('keyboard only: every control is reached in order, shows its focus and work
     for (let i = 1; i < walk.length; i++)
     {
         const [previous, current] = [walk[i - 1], walk[i]];
-        if (previous === undefined || current === undefined) continue;
+        if (previous === undefined || current === undefined)
+        {
+            continue;
+        }
         expect(stepOrder.indexOf(current.step), current.key).toBeGreaterThanOrEqual(stepOrder.indexOf(previous.step));
-        if (current.step === 'step-check' && previous.position >= 0) expect(current.position, current.key).toBeGreaterThanOrEqual(previous.position);
+        if (current.step === 'step-check' && previous.position >= 0)
+        {
+            expect(current.position, current.key).toBeGreaterThanOrEqual(previous.position);
+        }
         expect(current.bottom, current.key).toBeGreaterThan(previous.top);
     }
 

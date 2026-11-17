@@ -119,9 +119,15 @@ test.beforeAll(async () =>
     const outputs = (Array.isArray(output) ? output : [output]) as Rolldown.RolldownOutput[];
     for (const item of outputs.flatMap((o) => o.output))
     {
-        if (item.type !== 'chunk') continue;
+        if (item.type !== 'chunk')
+        {
+            continue;
+        }
         bundle.set(item.fileName, item.code);
-        if (item.isEntry) entryFile = item.fileName;
+        if (item.isEntry)
+        {
+            entryFile = item.fileName;
+        }
     }
     expect(entryFile).not.toBe('');
 });
@@ -139,7 +145,10 @@ async function watchNetwork(context: BrowserContext): Promise<void>
     const webkit = engineOf(context) === 'webkit';
     context.on('request', (request) =>
     {
-        if (!(webkit && isWebKitBlobRead(request, origin))) requestUrls.push(request.url());
+        if (!(webkit && isWebKitBlobRead(request, origin)))
+        {
+            requestUrls.push(request.url());
+        }
     });
     await context.route('**/*', (route) =>
         new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
@@ -173,7 +182,10 @@ async function removeCsp(page: Page): Promise<void>
             const headers = { ...response.headers() };
             delete headers['content-security-policy'];
             const body = (await response.text()).replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
-            if (body.includes('Content-Security-Policy')) throw new Error('meta CSP not removed');
+            if (body.includes('Content-Security-Policy'))
+            {
+                throw new Error('meta CSP not removed');
+            }
             await route.fulfill({ response, headers, body });
         },
     );
@@ -214,7 +226,10 @@ let cspPolicies = 2;
 /** Opens the site, with or without its CSP, and notes where its own requests end. */
 async function open(page: Page, csp: 'with-csp' | 'without-csp'): Promise<void>
 {
-    if (csp === 'without-csp') await removeCsp(page);
+    if (csp === 'without-csp')
+    {
+        await removeCsp(page);
+    }
     cspPolicies = csp === 'with-csp' ? 2 : 0;
     await page.goto('/', { waitUntil: 'networkidle' });
     loadedAt = requestUrls.length;
@@ -333,7 +348,10 @@ for (const csp of ['with-csp', 'without-csp'] as const)
             await open(page, csp);
             const expected = FIXTURES.find((f) => f.id === 'eml/50-html-only.eml');
             expect(expected).toBeDefined();
-            if (expected === undefined) return;
+            if (expected === undefined)
+            {
+                return;
+            }
 
             const result = await page.evaluate(
                 async ({ url, name }) =>
@@ -346,10 +364,19 @@ for (const csp of ['with-csp', 'without-csp'] as const)
             );
 
             expect(result.ok).toBe(true);
-            if (!result.ok) return;
+            if (!result.ok)
+            {
+                return;
+            }
             const { bodyText, warnings } = result.message;
-            for (const snippet of expected.bodyContains) expect(bodyText).toContain(snippet);
-            for (const snippet of expected.bodyExcludes ?? []) expect(bodyText).not.toContain(snippet);
+            for (const snippet of expected.bodyContains)
+            {
+                expect(bodyText).toContain(snippet);
+            }
+            for (const snippet of expected.bodyExcludes ?? [])
+            {
+                expect(bodyText).not.toContain(snippet);
+            }
             expect([...warnings].sort()).toEqual([...expected.warnings].sort());
             // The whole text: CSS is ignored, so the "display: none" preheader is
             // kept (never silently lost); entities are decoded; links keep their
@@ -406,7 +433,10 @@ test('control, with CSP: email images moved into the live page are blocked AND r
     await page.evaluate((html) =>
     {
         const parsed = new DOMParser().parseFromString(html, 'text/html');
-        for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
+        for (const img of Array.from(parsed.querySelectorAll('img')))
+        {
+            document.body.append(document.adoptNode(img));
+        }
     }, HOSTILE_HTML);
     // Two reports about the LIVE page: the blocked remote image, and the
     // blocked inline handler of an image (fired at that element, so "live").
@@ -419,8 +449,14 @@ test('control, with CSP: email images moved into the live page are blocked AND r
     expect(untoleratedReports(browserName, await page.evaluate(() => window.__e2eViolations), isParseTimeReport)).toEqual(expect.arrayContaining(live));
     // Chromium lists the blocked image as a (failed) request; Firefox and
     // WebKit stop it before it becomes a request at all.
-    if (browserName === 'chromium') expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
-    else expect(requestsAfterLoad()).not.toContain('https://tracker.invalid/p.png');
+    if (browserName === 'chromium')
+    {
+        expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
+    }
+    else
+    {
+        expect(requestsAfterLoad()).not.toContain('https://tracker.invalid/p.png');
+    }
 });
 
 test('control, without CSP: email images moved into the live page load and run their handlers', async ({ page }) =>
@@ -429,7 +465,10 @@ test('control, without CSP: email images moved into the live page load and run t
     await page.evaluate((html) =>
     {
         const parsed = new DOMParser().parseFromString(html, 'text/html');
-        for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
+        for (const img of Array.from(parsed.querySelectorAll('img')))
+        {
+            document.body.append(document.adoptNode(img));
+        }
     }, HOSTILE_HTML);
     // The safety net aborts the remote request, but it is still seen; the
     // data: image loads and the broken one fails, so both handlers run.
@@ -448,7 +487,10 @@ test('control, without CSP: an email <track> moved into the live page requests i
             'text/html',
         );
         const video = parsed.querySelector('video');
-        if (video) document.body.append(document.adoptNode(video));
+        if (video)
+        {
+            document.body.append(document.adoptNode(video));
+        }
     });
     // The safety net aborts the remote request, but it is still seen. This
     // proves the request listener would catch a real track load, so tolerating

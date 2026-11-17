@@ -133,7 +133,10 @@ const fake = (e: Element | Node): FakeElement => e as unknown as FakeElement;
 function byId(id: string): FakeElement
 {
     const found = area.descendants().find((e) => e.getAttribute('id') === id);
-    if (!found) throw new Error(`no element with id ${id}`);
+    if (!found)
+    {
+        throw new Error(`no element with id ${id}`);
+    }
     return found;
 }
 
@@ -142,7 +145,10 @@ const withClass = (root: FakeElement, name: string): FakeElement[] => root.desce
 const one = (root: FakeElement, name: string): FakeElement =>
 {
     const found = withClass(root, name);
-    if (found.length !== 1) throw new Error(`expected one .${name}, found ${String(found.length)}`);
+    if (found.length !== 1)
+    {
+        throw new Error(`expected one .${name}, found ${String(found.length)}`);
+    }
     return found[0]!;
 };
 
@@ -380,7 +386,10 @@ describe('mountPreview', () =>
         expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(['Early', 'Middle', 'Late', 'Undated']);
         expect(items().map((i) => one(i, 'message-number').textContent)).toEqual(['#1', '#2', '#3', '#4']);
         expect(items().map((i) => i.getAttribute('data-position'))).toEqual(['0', '1', '2', '3']);
-        for (const item of items()) expect(item.descendants().find((e) => e.tagName === 'h3')?.textContent).toMatch(/^#\d /);
+        for (const item of items())
+        {
+            expect(item.descendants().find((e) => e.tagName === 'h3')?.textContent).toMatch(/^#\d /);
+        }
     });
 
     it('shows author, recipients and dates; the sender time only when it differs', () =>
@@ -618,8 +627,17 @@ describe('mountPreview', () =>
         expect(renderedBody(item)).toContain(evil);
         expect(one(item, 'attachment').textContent).toContain('<img src=x onerror=alert(5)>.pdf');
         const tags = new Set(doc.created.map((e) => e.tagName));
-        for (const tag of ['img', 'script', 'svg', 'iframe', 'b']) expect(tags.has(tag), tag).toBe(false);
-        for (const e of doc.created) for (const name of e.attributes.keys()) expect(name).not.toMatch(/^(on|src|href|style)/);
+        for (const tag of ['img', 'script', 'svg', 'iframe', 'b'])
+        {
+            expect(tags.has(tag), tag).toBe(false);
+        }
+        for (const e of doc.created)
+        {
+            for (const name of e.attributes.keys())
+            {
+                expect(name).not.toMatch(/^(on|src|href|style)/);
+            }
+        }
     });
 
     it('calls the decorate hook once per email, after building its item', () =>
@@ -658,7 +676,10 @@ describe('chunked building', () =>
     function runNext(): void
     {
         const next = tasks.shift();
-        if (next === undefined) throw new Error('nothing scheduled');
+        if (next === undefined)
+        {
+            throw new Error('nothing scheduled');
+        }
         next.task();
     }
 
@@ -686,7 +707,10 @@ describe('chunked building', () =>
         preview.show(engineOf([...thread(), ...thread(), ...thread()]));
         chooseZone('Asia/Tokyo');
         setShowFolded(true);
-        while (tasks.length > 0) runNext();
+        while (tasks.length > 0)
+        {
+            runNext();
+        }
         expect(items()).toHaveLength(6);
         expect(items().every((i) => one(i, 'message-date').textContent.endsWith('UTC+09:00'))).toBe(true);
         // Folds built in the later chunks (emails 3 to 6) are open too.
@@ -729,7 +753,10 @@ describe('chunked building', () =>
         preview.show(result);
         stale(); // the replaced list's chunk: does nothing
         expect(seen).toEqual([]);
-        while (queue.length > 0) queue.shift()!();
+        while (queue.length > 0)
+        {
+            queue.shift()!();
+        }
         expect(seen).toEqual([{ result, count: 3 }]);
         expect(preview.isRendering()).toBe(false);
         // A list built in one go, and an empty one, are complete at once.
@@ -761,7 +788,10 @@ describe('chunked building', () =>
         preview.reset();
         expect(items()).toEqual([]);
         expect(byId('preview-list').hasAttribute('aria-busy')).toBe(false);
-        while (tasks.length > 0) runNext();
+        while (tasks.length > 0)
+        {
+            runNext();
+        }
         expect(items()).toEqual([]);
         expect(preview.isRendering()).toBe(false);
     });
@@ -817,15 +847,24 @@ describe('chunked building', () =>
             cancel: () => undefined,
             decorate: (item, m) =>
             {
-                if (m.message.subject !== 'Mail 3') return;
+                if (m.message.subject !== 'Mail 3')
+                {
+                    return;
+                }
                 // Fails on the full item and on its stand-in too.
-                if (!hasClass(fake(item), 'message-failed')) halfBuilt = fake(item);
+                if (!hasClass(fake(item), 'message-failed'))
+                {
+                    halfBuilt = fake(item);
+                }
                 throw new Error('synthetic decorate failure');
             },
         });
         const result = engineOf(Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n\n-- \nSender ${String(k)}\n` })));
         preview.show(result);
-        while (tasks.length > 0) runNext();
+        while (tasks.length > 0)
+        {
+            runNext();
+        }
         expect(preview.isRendering()).toBe(false);
         const list = items();
         expect(list).toHaveLength(6);
@@ -838,7 +877,10 @@ describe('chunked building', () =>
         expect(renderedBody(failed)).toBe(result.messages[3]!.message.bodyText);
         for (const [k, item] of list.entries())
         {
-            if (k === 3) continue;
+            if (k === 3)
+            {
+                continue;
+            }
             expect(hasClass(item, 'message-failed')).toBe(false);
             expect(one(item, 'message-subject').textContent).toBe(`Mail ${String(k)}`);
         }
@@ -879,7 +921,10 @@ describe('chunked building', () =>
                 const isStandIn = hasClass(fake(item), 'message-failed');
                 calls.push([m.message.subject, position, isStandIn]);
                 // Fails on the full item of "Mail 1" only; its stand-in is decorated.
-                if (m.message.subject === 'Mail 1' && !isStandIn) throw new Error('synthetic decorate failure');
+                if (m.message.subject === 'Mail 1' && !isStandIn)
+                {
+                    throw new Error('synthetic decorate failure');
+                }
                 item.setAttribute('data-decorated', 'yes');
             },
         });
@@ -955,7 +1000,10 @@ describe('PDF labels', () =>
 
     const runAll = (): void =>
     {
-        while (tasks.length > 0) tasks.shift()?.();
+        while (tasks.length > 0)
+        {
+            tasks.shift()?.();
+        }
     };
     const list = (): FakeElement => byId('preview-list');
     const state = (): string | null => list().getAttribute('data-pdf-labels');
@@ -1017,7 +1065,10 @@ describe('PDF labels', () =>
         const plans = positions.map((p) => base.views.get(p)!.plan);
         const cut = printedElsewhereRanges({ result, positions, plans, policy, rebuilt, rebuildingOff, unticked });
         const views = new Map(base.views);
-        for (const [p, pdfRanges] of cut) views.set(p, { ...views.get(p)!, pdfRanges });
+        for (const [p, pdfRanges] of cut)
+        {
+            views.set(p, { ...views.get(p)!, pdfRanges });
+        }
         return { result, views };
     }
 
@@ -1095,7 +1146,10 @@ describe('PDF labels', () =>
             expect(labels.some((s) => s.startsWith('In the PDF: forwarded email'))).toBe(false);
             // A real label element, text only, marked "out" like any part left out.
             const marks = withClass(forward, 'pdf-label').filter((e) => e.textContent.includes('printed as'));
-            for (const mark of marks) expect(mark.getAttribute('data-pdf')).toBe('out');
+            for (const mark of marks)
+            {
+                expect(mark.getAttribute('data-pdf')).toBe('out');
+            }
             // The forwarded texts sit under those labels (a fold, or shown text with its mark above it,
             // as the forwarded email shown unfolded); every character is still in the page.
             const parts = one(forward, 'message-body').children.filter((c): c is FakeElement => c instanceof FakeElement);
@@ -1103,7 +1157,10 @@ describe('PDF labels', () =>
                 parts
                     .flatMap((c, k) =>
                     {
-                        if (!c.textContent.includes(`(Email ${String(n)} in the PDF)`)) return [];
+                        if (!c.textContent.includes(`(Email ${String(n)} in the PDF)`))
+                        {
+                            return [];
+                        }
                         return hasClass(c, 'pdf-label-shown') ? [parts[k + 1]!.textContent] : [c.textContent];
                     })
                     .join('');
@@ -1171,7 +1228,10 @@ describe('PDF labels', () =>
             runAll();
             const texts = labelsOf(items().find((i) => i.getAttribute('data-position') === '0')!).filter((s) => s !== '');
             expect(texts.length).toBeGreaterThan(0);
-            for (const text of texts) expect(text.startsWith('In the PDF: ')).toBe(true);
+            for (const text of texts)
+            {
+                expect(text.startsWith('In the PDF: ')).toBe(true);
+            }
             const plain = plansFor(result, [0], true);
             expect(plansWithCut(result, [0], ids, true).views.get(0)).toEqual(plain.views.get(0));
         });
@@ -1226,7 +1286,10 @@ describe('PDF labels', () =>
         // The line takes its place with the list (empty), so a tick later does not move the list.
         expect(byId('pdf-labels-status').hasAttribute('hidden')).toBe(false);
         expect(byId('pdf-labels-status').textContent).toBe('');
-        for (const item of items()) expect(labelsOf(item).every((s) => s === '')).toBe(true);
+        for (const item of items())
+        {
+            expect(labelsOf(item).every((s) => s === '')).toBe(true);
+        }
     });
 
     it('the status line keeps its place through updating and ready (only its text changes)', () =>
@@ -1330,11 +1393,17 @@ describe('PDF labels', () =>
         // Even a plan that fell back (whose note says the whole email is printed) gives it no PDF note: it is not printed.
         const base = plansFor(result, [0, 1, 2, 3]);
         const views = new Map(base.views);
-        for (const p of [1, 2, 3]) views.set(p, { ...views.get(p)!, plan: { ...views.get(p)!.plan, fallback: true } });
+        for (const p of [1, 2, 3])
+        {
+            views.set(p, { ...views.get(p)!, plan: { ...views.get(p)!.plan, fallback: true } });
+        }
         preview.setPdfPlans({ result, views });
         runAll();
         const [, emptyItem, spacedItem, unreadableItem] = items();
-        for (const item of [emptyItem!, spacedItem!]) expect(one(item, 'pdf-note').hasAttribute('hidden')).toBe(true);
+        for (const item of [emptyItem!, spacedItem!])
+        {
+            expect(one(item, 'pdf-note').hasAttribute('hidden')).toBe(true);
+        }
         expect(one(unreadableItem!, 'pdf-note').hasAttribute('hidden')).toBe(false);
         const noted = (): string[] => items().flatMap((i) => withClass(i, 'body-empty').map((e) => e.textContent));
         try
@@ -1362,7 +1431,10 @@ describe('PDF labels', () =>
             cancel: () => undefined,
             decorate: (item, m) =>
             {
-                if (m.message.subject === 'Re: Bench' && !hasClass(fake(item), 'message-failed')) throw new Error('synthetic decorate failure');
+                if (m.message.subject === 'Re: Bench' && !hasClass(fake(item), 'message-failed'))
+                {
+                    throw new Error('synthetic decorate failure');
+                }
             },
         });
         const result = engineOf(benchThread());
@@ -1457,7 +1529,10 @@ describe('PDF labels', () =>
         expect(body.hasAttribute('data-pdf-out')).toBe(true);
         expect(note.hasAttribute('data-pdf-out')).toBe(true);
         // The others are not marked.
-        for (const k of [0, 2]) expect(one(items()[k]!, 'message-body').hasAttribute('data-pdf-out')).toBe(false);
+        for (const k of [0, 2])
+        {
+            expect(one(items()[k]!, 'message-body').hasAttribute('data-pdf-out')).toBe(false);
+        }
         expect(renderedBody(reply)).toBe(result.messages[1]!.message.bodyText);
 
         // Ticked back: the same plan, so the same elements, shown again.
@@ -1503,7 +1578,13 @@ describe('PDF labels', () =>
         setShowFolded(false);
         expect(after[0]!.hasAttribute('open')).toBe(false);
         // "Print full original text": every label says "In the PDF".
-        for (const item of items()) for (const text of labelsOf(item)) expect(text.startsWith('In the PDF: ')).toBe(true);
+        for (const item of items())
+        {
+            for (const text of labelsOf(item))
+            {
+                expect(text.startsWith('In the PDF: ')).toBe(true);
+            }
+        }
     });
 
     describe('keyboard focus through a redraw', () =>
@@ -1604,7 +1685,10 @@ describe('PDF labels', () =>
                 const spy = vi.spyOn(doc, 'createElement').mockImplementation((tag: string) =>
                 {
                     const made = create(tag);
-                    if (tag === 'summary') made.rect = newRect;
+                    if (tag === 'summary')
+                    {
+                        made.rect = newRect;
+                    }
                     return made;
                 });
                 preview.setPdfPlans(plansFor(result, [0, 1, 2], true));

@@ -60,7 +60,10 @@ function messagesOf(set: SetName): NormalizedMessage[]
     return SETS[set].map((name) =>
     {
         const found = parsed.find((m) => m.source.fileName === name);
-        if (found === undefined) throw new Error(`no fixture ${name}`);
+        if (found === undefined)
+        {
+            throw new Error(`no fixture ${name}`);
+        }
         return found;
     });
 }
@@ -106,16 +109,31 @@ function rebuiltFragments(locale: Locale): string[]
     {
         if (typeof value === 'string')
         {
-            if (!inRebuilt && !REBUILT_WORDS[locale].test(value)) return;
-            for (const piece of value.split(/\{[a-z]+\}/i)) if (piece.trim().length >= 10) out.push(piece.trim());
+            if (!inRebuilt && !REBUILT_WORDS[locale].test(value))
+            {
+                return;
+            }
+            for (const piece of value.split(/\{[a-z]+\}/i))
+            {
+                if (piece.trim().length >= 10)
+                {
+                    out.push(piece.trim());
+                }
+            }
         }
         else if (isPluralForms(value))
         {
-            for (const v of Object.values(value)) walk(v, inRebuilt);
+            for (const v of Object.values(value))
+            {
+                walk(v, inRebuilt);
+            }
         }
         else if (typeof value === 'object' && value !== null)
         {
-            for (const [k, v] of Object.entries(value)) walk(v, inRebuilt || k === 'rebuilt');
+            for (const [k, v] of Object.entries(value))
+            {
+                walk(v, inRebuilt || k === 'rebuilt');
+            }
         }
     };
     walk(CATALOG[locale] satisfies Messages | undefined, false);
@@ -166,13 +184,22 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
             const result = runEngine(messagesOf(set).map((message) => ({ ok: true as const, message })));
             expect(rebuiltEntries(result).length, set).toBeGreaterThan(0);
         }
-        for (const locale of LOCALES) expect(rebuiltFragments(locale).length, locale).toBeGreaterThan(10);
-        // The note is gone from the PDF texts.
-        // So are the source file texts (task 8.12).
-        for (const key of ['sourcesIntro', 'sourcesHeading', 'sourceEmail', 'separator']) expect(Object.keys(createPdfStrings('en'))).not.toContain(key);
         for (const locale of LOCALES)
         {
-            for (const key of ['sourcesIntro', 'sources', 'sourceEmail']) expect(Object.keys(CATALOG[locale]!.pdf.document), locale).not.toContain(key);
+            expect(rebuiltFragments(locale).length, locale).toBeGreaterThan(10);
+        }
+        // The note is gone from the PDF texts.
+        // So are the source file texts (task 8.12).
+        for (const key of ['sourcesIntro', 'sourcesHeading', 'sourceEmail', 'separator'])
+        {
+            expect(Object.keys(createPdfStrings('en'))).not.toContain(key);
+        }
+        for (const locale of LOCALES)
+        {
+            for (const key of ['sourcesIntro', 'sources', 'sourceEmail'])
+            {
+                expect(Object.keys(CATALOG[locale]!.pdf.document), locale).not.toContain(key);
+            }
         }
     });
 
@@ -197,8 +224,14 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                     // Nothing about rebuilding, anywhere: cover, index, emails, bookmarks.
                     const text = flat(all);
                     expect(text).not.toMatch(REBUILT_WORDS[locale]);
-                    for (const f of [...rebuiltFragments(locale), ...REMOVED[locale]]) expect(text, `"${f}"`).not.toContain(flat(f));
-                    for (const title of bookmarks) expect(title).not.toMatch(REBUILT_WORDS[locale]);
+                    for (const f of [...rebuiltFragments(locale), ...REMOVED[locale]])
+                    {
+                        expect(text, `"${f}"`).not.toContain(flat(f));
+                    }
+                    for (const title of bookmarks)
+                    {
+                        expect(title).not.toMatch(REBUILT_WORDS[locale]);
+                    }
 
                     // The cover: title, dates, count, zone, made on; people. No source files, no SHA-256 (task 8.12).
                     expect(cover[0]).toBe(s.title);
@@ -208,7 +241,10 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                     expect(coverText).toContain(`${s.generatedLabel} ${doc.cover.generated}`);
                     expect(cover).toContain(s.peopleHeading);
                     expect(doc.cover.participants.length).toBeGreaterThan(0);
-                    for (const p of doc.cover.participants) expect(coverText).toContain(p.name === '' ? p.address : s.mailbox(p.name, p.address));
+                    for (const p of doc.cover.participants)
+                    {
+                        expect(coverText).toContain(p.name === '' ? p.address : s.mailbox(p.name, p.address));
+                    }
                     // Task 8.12: no source file list, no file names, no SHA-256 anywhere in the PDF.
                     // (The file names are only in each real email's own File row, never before the first email.)
                     expect(text).not.toMatch(/\b[0-9a-f]{64}\b/);
@@ -217,7 +253,10 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                     expect(firstEmailPage).toBeGreaterThan(0);
                     const front = pages.slice(0, firstEmailPage);
                     const frontText = flat(front.map((lines) => lines.join(' ')).join(' '));
-                    for (const name of SETS[set]) expect(frontText, name).not.toContain(name);
+                    for (const name of SETS[set])
+                    {
+                        expect(frontText, name).not.toContain(name);
+                    }
                     expect(Object.keys(doc.cover)).not.toContain('sources');
                     // The cover blocks end with the people list: no other heading after it.
                     const headings = doc.cover.blocks.filter((b) => b.kind === 'heading').map((b) => b.line.map((r) => r.text).join(''));
