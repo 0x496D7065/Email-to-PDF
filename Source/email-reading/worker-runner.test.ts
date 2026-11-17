@@ -1,7 +1,7 @@
 // Unit tests for the page's side of a parse worker (worker-runner.ts), with a
 // FAKE worker: time limits, terminate, error events, bad messages and the HTML
 // round trip run in Node without a browser. The real Worker is checked in
-// Chromium by e2e/parse-files.spec.ts.
+// Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HtmlToTextResult } from './html-to-text';

@@ -1,7 +1,7 @@
 // Unit tests for the UI's processing call (process-files.ts), in Node: fake
 // File-like objects, the real dispatcher and adapters (without workers), and
 // the real engine (without its worker). The browser version, with the real
-// workers, is checked in Chromium by e2e/parse-files.spec.ts.
+// workers, is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it, vi } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';
@@ -21,11 +21,11 @@ import {
 } from './process-files';
 import type { FileLike } from './read-files';
 
-const fixtures = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', { query: '?raw', import: 'default', eager: true });
+const fixtures = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
 
 function fixture(name: string): string
 {
-    const text = fixtures[`../../tests/fixtures/eml/${name}`];
+    const text = fixtures[`../../Helper/Test/test-data/eml/${name}`];
     if (text === undefined)
     {
         throw new Error(`missing fixture ${name}`);

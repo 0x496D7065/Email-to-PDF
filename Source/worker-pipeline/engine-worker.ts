@@ -18,7 +18,7 @@
 // `blob:` URL (allowed by `worker-src 'self' blob:`). A blob: worker takes
 // the CSP of the page that started it (header and <meta>), so
 // `connect-src 'none'` applies here too. The build check scans this code
-// inside the page's script (scripts/check-no-network.mjs).
+// inside the page's script (Helper/build-checks/check-no-network.mjs).
 
 import { createEngineWorkerSide, type FromEngineWorker } from './engine-protocol';
 

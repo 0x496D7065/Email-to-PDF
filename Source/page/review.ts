@@ -408,7 +408,7 @@ export function createReview(options: ReviewOptions = {}): Review
 
     // --- Counts box -----------------------------------------------------------
     const filesLine = el('span', { attrs: { id: 'review-files-text' } });
-    // Plain text, not a link: the page has no links at all yet (see e2e/app-shell.spec.ts).
+    // Plain text, not a link: the page has no links at all yet (see Helper/Test/browser-tests/app-shell.spec.ts).
     const failedPointer = labels.text(el('span', { attrs: { id: 'review-failed-pointer', hidden: true } }), 'counts.seeFailed');
     const messagesLine = el('p', { attrs: { id: 'review-messages', class: 'review-line' } });
     // Not a live region itself: the page has one (the shell's status line); see `onChange`.

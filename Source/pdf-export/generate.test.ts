@@ -6,7 +6,7 @@
 // the test reader (link annotations, named destinations, drawn text).
 // Special characters are written as braced escapes (ASCII file).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';

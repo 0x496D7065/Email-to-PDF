@@ -1,10 +1,10 @@
 // Runs overlap-based quote detection over every synthetic fixture
-// (tests/fixtures), parsed by the real .eml and .msg adapters, de-duplicated
+// (Helper/Test/test-data), parsed by the real .eml and .msg adapters, de-duplicated
 // and put in chronological order as the app will do. It measures how much of
 // each message is folded and checks the key expectations (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { dedupe } from './dedupe';
 import { orderMessages } from './order';
 import { detectQuotedOverlap } from './overlap';

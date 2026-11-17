@@ -3,7 +3,7 @@
 // text. Checked as a general INVARIANT on the PDF document model, with the
 // engine's own quoted-header detection (findReplyHeaders, the detector that
 // reconstruct.ts reads its places from), over every conversation of
-// tests/support/thread-cases.ts (several sets of files, every rebuilt email
+// Helper/Test/test-support/thread-cases.ts (several sets of files, every rebuilt email
 // ticked, none, every other one) and over the fixture set:
 //
 // 1. No header shown. For every real email of the PDF, no header block that
@@ -33,9 +33,9 @@
 // checked on the written file (Source/pdf-export/generate.header-blocks.test.ts).
 // Synthetic data only (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { buildThread, instantOf, type ThreadMessage } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';
 import { findReplyHeaders } from '../thread-analysis/reply-header';

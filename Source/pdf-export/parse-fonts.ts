@@ -2,7 +2,7 @@
 // PDF worker uses this (Source/worker-pipeline/pdf-worker.ts): the page passes it the
 // bundled font bytes, so the worker never imports the font chunk (fonts.ts,
 // about 1.2 MB of numbers that the build allows in one file only, see
-// scripts/font-rules.mjs). Only TYPES come from fonts.ts here: a type import
+// Helper/build-checks/font-rules.mjs). Only TYPES come from fonts.ts here: a type import
 // is erased by the build and pulls nothing in.
 //
 // No DOM, no network (README.md, rule R1), so it is worker-safe.

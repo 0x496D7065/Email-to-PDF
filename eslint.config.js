@@ -3,14 +3,14 @@
 // The extra rules below are an EARLY WARNING for the hard rules in
 // README.md, rules R1, R4 and R5 (no network, no innerHTML, no storage).
 // They catch mistakes while coding; the real guarantee is the build check
-// on the bundled output (scripts/check-no-network.mjs) plus the Content Security Policy.
+// on the bundled output (Helper/build-checks/check-no-network.mjs) plus the Content Security Policy.
 import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
-import bodyBraceStyle from './scripts/lint-rules/body-brace-style.mjs';
+import bodyBraceStyle from './Helper/lint-rules/body-brace-style.mjs';
 
-// The project's own lint rules (scripts/lint-rules/), used as 'local/<name>'.
+// The project's own lint rules (Helper/lint-rules/), used as 'local/<name>'.
 const localPlugin = { rules: { 'body-brace-style': bodyBraceStyle } };
 
 // APIs that can send data over the network or store data in the browser.
@@ -19,7 +19,7 @@ const storage = 'Message data must stay in memory only (README.md, rule R5).';
 const html = 'Email content is untrusted: use textContent, never HTML injection (README.md, rule R4).';
 
 // Properties and methods that turn a string into HTML (README.md, rule R4).
-// The build check (scripts/no-network-rules.mjs) looks for the same names in
+// The build check (Helper/build-checks/no-network-rules.mjs) looks for the same names in
 // the bundled output.
 const htmlSinks = [
     'innerHTML',
@@ -96,7 +96,7 @@ export default defineConfig(
     // This file (and any other plain .js config) is not part of tsconfig.json,
     // so type-aware rules are switched off for .js files instead of widening
     // the TypeScript project just to include tooling config.
-    // Same for the plain-JS build scripts in scripts/*.mjs.
+    // Same for the plain-JS build checks and lint rules in Helper/ (*.mjs).
     { files: ['**/*.js', '**/*.mjs'], ...tseslint.configs.disableTypeChecked },
 
     // Layout (task 9.6): 4-space indent with `case` one level inside `switch`,
@@ -107,7 +107,7 @@ export default defineConfig(
     // avoid escaping a quote (as the code already did).
     // curly: every if/else/for/while/do body is a braced block, even a single
     // statement, so the Allman layout above applies to it too.
-    // local/body-brace-style (scripts/lint-rules/): Allman braces for
+    // local/body-brace-style (Helper/lint-rules/): Allman braces for
     // interface and enum bodies too (brace-style skips them), and an empty
     // body (code block, empty switch, interface, enum) never written `{}` on
     // one line.
@@ -126,10 +126,10 @@ export default defineConfig(
         },
     },
 
-    // scripts/*.mjs run in Node, not the browser. `process` is imported from
-    // 'node:process'; `console` is declared here by hand so no extra globals
-    // package is needed.
-    { files: ['scripts/**/*.mjs'], languageOptions: { globals: { console: 'readonly' } } },
+    // Helper/build-checks/ and Helper/lint-rules/ (*.mjs) run in Node, not the browser.
+    // `process` is imported from 'node:process'; `console` is declared here by
+    // hand so no extra globals package is needed.
+    { files: ['Helper/build-checks/**/*.mjs', 'Helper/lint-rules/**/*.mjs'], languageOptions: { globals: { console: 'readonly' } } },
 
     // Privacy/security early-warning rules (README.md, rules R1, R4 and R5).
     {
@@ -164,8 +164,8 @@ export default defineConfig(
             'no-new-func': 'error',
         },
     },
-    // The app runs in the browser only. e2e/support/node-fs.d.ts declares
-    // 'node:fs' for the browser tests, and tsconfig.json covers Source/ and e2e/
+    // The app runs in the browser only. Helper/Test/browser-tests/support/node-fs.d.ts declares
+    // 'node:fs' for the browser tests, and tsconfig.json covers Source/ and Helper/Test/browser-tests/
     // together, so typecheck alone would not stop app code importing it.
     // 'no-restricted-imports' sees static imports only, so dynamic import()
     // is caught by 'no-restricted-syntax', which must repeat the shared
@@ -181,7 +181,7 @@ export default defineConfig(
     // allowed to call fetch(): a listed file of this site missing from its
     // copy is fetched from this site again, and nothing is stored (README.md,
     // "How the privacy model works"; the build check has the same single
-    // exception, RULE_EXEMPTIONS in scripts/no-network-rules.mjs). Only bare
+    // exception, RULE_EXEMPTIONS in Helper/build-checks/no-network-rules.mjs). Only bare
     // `fetch` is allowed there; every other entry of the list still applies.
     {
         files: ['Source/offline-copy/service-worker.ts'],
@@ -194,12 +194,12 @@ export default defineConfig(
             ],
         },
     },
-    // e2e/ browser tests deliberately try forbidden things (fetch, remote
+    // The browser tests (Helper/Test/browser-tests/) deliberately try forbidden things (fetch, remote
     // images) inside the page to PROVE the CSP blocks them. That code runs
     // only in the test browser and is never shipped, so the early-warning
-    // rules above are switched off for e2e/ only.
+    // rules above are switched off for Helper/Test/browser-tests/ only.
     {
-        files: ['e2e/**'],
+        files: ['Helper/Test/browser-tests/**'],
         rules: {
             'no-restricted-globals': 'off',
             'no-restricted-properties': 'off',

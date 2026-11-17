@@ -6,7 +6,7 @@
 // "Print full original text" it is printed in both. Synthetic data only
 // (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readDests, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';

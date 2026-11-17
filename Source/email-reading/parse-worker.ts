@@ -17,7 +17,7 @@
 // worker takes the CSP of the page that started it (the HTTP header and the
 // <meta> tag), so `connect-src 'none'` applies here too. The build check
 // scans this code inside the page's script, after undoing the string
-// escapes (scripts/check-no-network.mjs).
+// escapes (Helper/build-checks/check-no-network.mjs).
 
 import { createWorkerSide, type FromWorker } from './worker-protocol';
 

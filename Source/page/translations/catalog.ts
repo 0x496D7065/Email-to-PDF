@@ -6,7 +6,7 @@
 //
 // Kept apart from index.ts so the strings system has one place that lists
 // the languages; tests add a synthetic language here with vi.mock (see
-// tests/support/test-locale.ts), so nothing test-only is ever bundled.
+// Helper/Test/test-support/test-locale.ts), so nothing test-only is ever bundled.
 
 import { en } from './en';
 import { fr } from './fr';

@@ -14,10 +14,10 @@
 // "Print full original text" everything is printed as written.
 // The whole PDF path is checked over every test conversation in
 // Source/pdf-export/generate.no-repeat.test.ts. Synthetic data only
-// (tests/support/thread-cases.ts; README.md, rule R7).
+// (Helper/Test/test-support/thread-cases.ts; README.md, rule R7).
 import { describe, expect, it } from 'vitest';
-import { buildThread, instantOf, type ThreadMessage } from '../../tests/support/thread-builder';
-import { THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases';
+import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy, type PlanRange } from '../thread-analysis/output-plan';
 import type { NormalizedMessage } from '../email-reading/types';

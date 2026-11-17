@@ -1,4 +1,4 @@
-// Runs signature detection over every synthetic fixture (tests/fixtures),
+// Runs signature detection over every synthetic fixture (Helper/Test/test-data),
 // parsed by the real .eml and .msg adapters and de-duplicated as the app will
 // do. It measures how much of each message is folded and checks the key
 // expectations (README.md, rule R7).
@@ -10,7 +10,7 @@
 // pipeline will make that choice properly; this test uses the simple rule.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { dedupe } from './dedupe';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';

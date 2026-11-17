@@ -6,7 +6,7 @@
 // 2026-11-09). Checked on the whole PDF path (generatePdf, real fonts, our
 // own writer), read back from the written file (fonts by their PostScript
 // name, positions, links, destinations), as a general invariant over every
-// conversation of tests/support/thread-cases.ts (the last email alone, with
+// conversation of Helper/Test/test-support/thread-cases.ts (the last email alone, with
 // and without rebuilt emails; every email; the first and the last; the last
 // two) and over the fixture set, with "Print full original text" off and on.
 //
@@ -27,10 +27,10 @@
 // header lines stay is checked in Source/pdf-export/model.header-lines.test.ts).
 // Synthetic data only (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { readDests, readLinks, readPageRuns, readPdf, textLines, type PageRun, type ParsedPdf } from '../../tests/support/pdf-reader';
-import { buildThread, instantOf, type ThreadMessage } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { readDests, readLinks, readPageRuns, readPdf, textLines, type PageRun, type ParsedPdf } from '../../Helper/Test/test-support/pdf-reader';
+import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';

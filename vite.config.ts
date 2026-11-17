@@ -2,7 +2,7 @@
 // the `test` section below, so one file configures both the build and tests.
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { isBytesImportAllowed } from './scripts/font-rules.mjs';
+import { isBytesImportAllowed } from './Helper/build-checks/font-rules.mjs';
 import { cloudflareHeadersFile, cspForMeta, REFERRER_POLICY, securityHeadersFor } from './Source/security-headers/headers.ts';
 import { injectManifest, manifestVersion, precachePaths, SW_FILE_NAME } from './Source/offline-copy/precache-list.ts';
 
@@ -43,7 +43,7 @@ function securityHeaders(): Plugin
 }
 
 // `npm run preview` serves the BUILT site (dist/) with the same HTTP headers
-// Cloudflare Pages sends from dist/_headers, so the browser tests in e2e/
+// Cloudflare Pages sends from dist/_headers, so the browser tests in Helper/Test/browser-tests/
 // check the real header CSP, not only the <meta> fallback, including the
 // service worker's own CSP on /sw.js (securityHeadersFor). Preview only:
 // `npm run dev` stays without CSP (see securityHeaders() above for why).
@@ -78,13 +78,13 @@ function previewHeaders(): Plugin
 // its precache list is made from them (Source/offline-copy/precache-list.ts): every
 // file of dist/ except the host settings files, source maps and sw.js,
 // with index.html as "/", sorted, plus a version (a content hash of the
-// files, of the service worker's code and of _headers; scripts/sw-version.mjs,
+// files, of the service worker's code and of _headers; Helper/build-checks/sw-version.mjs,
 // shared with the build check), and written into
 // sw.js in place of its placeholder. The same build always gives the same
 // sw.js. No library is used for this.
 // Only for the site itself (its entry is index.html): the browser tests'
-// own in-memory builds of a test entry (e2e/parse-files.spec.ts,
-// e2e/html-to-text.spec.ts) have no page and get no service worker.
+// own in-memory builds of a test entry (Helper/Test/browser-tests/parse-files.spec.ts,
+// Helper/Test/browser-tests/html-to-text.spec.ts) have no page and get no service worker.
 const swEntry = decodeURIComponent(new URL('./Source/offline-copy/service-worker.ts', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 function offlineCopy(): Plugin
 {
@@ -174,7 +174,7 @@ function offlineCopy(): Plugin
                     throw new Error('offline-copy: _headers was not built');
                 }
                 // The build check computes this version again from dist/ and fails
-                // if sw.js holds another one (scripts/check-no-network.mjs).
+                // if sw.js holds another one (Helper/build-checks/check-no-network.mjs).
                 const version = manifestVersion(
                     listed.map(([fileName, bytes]) => ({ path: pathOf(fileName), bytes })),
                     sw.code,
@@ -193,10 +193,10 @@ function offlineCopy(): Plugin
 // (connect-src 'none'); `?inline` writes base64, which the build check
 // rejects (it could hide code); `?raw` reads the file as UTF-8 text, which
 // corrupts binary data. A plain number array is readable, and the build
-// check proves each one is exactly a committed font (scripts/font-rules.mjs).
+// check proves each one is exactly a committed font (Helper/build-checks/font-rules.mjs).
 // Only .woff files directly in this project's Source/pdf-export/fonts/ may be imported
 // this way (fontsDir, built like iconvLiteShim below; the check itself is
-// isBytesImportAllowed in scripts/font-rules.mjs, which has a self-test).
+// isBytesImportAllowed in Helper/build-checks/font-rules.mjs, which has a self-test).
 // `enforce: 'pre'` runs this before Vite's own asset handling of .woff files.
 const BYTES_SUFFIX = '?bytes';
 const fontsDir = decodeURIComponent(new URL('./Source/pdf-export/fonts/', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
@@ -235,8 +235,8 @@ const iconvLiteShim = decodeURIComponent(shimUrl.pathname).replace(/^\/([A-Za-z]
 // The project folder (with a trailing slash), made the same way. The site
 // (its code, index.html and the files copied as they are) lives in Source/,
 // which is Vite's root; the build still goes to dist/ at the project root,
-// and the tests (Vitest) run from the project root, so Source/, scripts/
-// and tests/ are all theirs.
+// and the tests (Vitest) run from the project root, so Source/ and Helper/
+// are both theirs.
 // Absolute paths, so they do not depend on the folder a command is run from.
 const projectDir = decodeURIComponent(new URL('./', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 
@@ -250,7 +250,7 @@ export default defineConfig({
     // mistake would get the font's asset URL as a string (and a .woff file
     // in dist/), which no build check sees. With it, the bytes would be a
     // long number array inside the page's script, outside the font chunk,
-    // and the build check fails (scripts/font-rules.mjs). The PDF worker
+    // and the build check fails (Helper/build-checks/font-rules.mjs). The PDF worker
     // gets the font bytes from the page instead (Source/worker-pipeline/pdf-protocol.ts).
     worker: { plugins: () => [bytesImport()] },
     resolve: {
@@ -278,7 +278,7 @@ export default defineConfig({
                 // The PDF fonts (the `?bytes` modules, about 1.2 MB of numbers) get a
                 // chunk of their own, assets/pdf-fonts-[hash].js: the main script
                 // stays small, and the build check knows the one file where long
-                // number arrays are allowed (scripts/font-rules.mjs). The page entry
+                // number arrays are allowed (Helper/build-checks/font-rules.mjs). The page entry
                 // imports it statically (Source/main.ts), so the browser loads it with
                 // the page, as a normal script under `script-src 'self'`.
                 // This option applies to the page only; the inlined workers are
@@ -296,16 +296,26 @@ export default defineConfig({
         // They run in Node (no browser DOM): detection and parsing logic is kept
         // as pure functions (README.md, rule R7). The production build never
         // includes them because nothing in index.html/main.ts imports them.
-        // scripts/ holds the self-test of the "no network" build check.
-        // tests/ holds the synthetic fixture set and its privacy guard test.
+        // Helper/build-checks/ holds the self-test of the "no network" build check,
+        // Helper/lint-rules/ the self-test of the project's own lint rules.
+        // Helper/Test/test-data/ holds the synthetic fixture set and its privacy guard
+        // test, Helper/Test/test-support/ the shared test helpers (and their tests).
         // root: the project folder, not Vite's root (Source/), so these paths
-        // and the "/tests/..." globs in the tests start from the project folder.
+        // and the "/Helper/..." globs in the tests start from the project folder.
         root: projectDir,
-        include: ['Source/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/**/*.test.ts'],
+        // Each Helper/ subfolder is listed by name: add any new Helper/ folder
+        // with tests here (and in Helper/Test/test-data/test-code-guard.test.ts).
+        include: [
+            'Source/**/*.test.ts',
+            'Helper/build-checks/**/*.test.ts',
+            'Helper/lint-rules/**/*.test.ts',
+            'Helper/Test/test-data/**/*.test.ts',
+            'Helper/Test/test-support/**/*.test.ts',
+        ],
         environment: 'node',
         // Vitest's persistent transform cache (node_modules/.vitest-cache) does
         // not notice NEW files matched by import.meta.glob, so the privacy guard
-        // (tests/fixtures/synthetic-guard.test.ts) could silently skip a newly
+        // (Helper/Test/test-data/synthetic-guard.test.ts) could silently skip a newly
         // added fixture on a developer machine. Off: always transform fresh.
         fsModuleCache: false,
         // Vitest normally hands packages from node_modules straight to Node, whose

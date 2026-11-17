@@ -1,12 +1,12 @@
 // Unit tests for the PDF labels' planning (pdf-labels.ts), in Node with the
-// recording fake DOM (tests/support/fake-dom.ts), a hand-run task queue and
+// recording fake DOM (Helper/Test/test-support/fake-dom.ts), a hand-run task queue and
 // a fake clock. Synthetic messages only, run through the real engine and the
 // real plan. The wiring with the page and the preview is tested in
-// page.test.ts, the real page in e2e/pdf-labels.spec.ts.
+// page.test.ts, the real page in Helper/Test/browser-tests/pdf-labels.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
-import { buildThread, instantOf } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
+import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';

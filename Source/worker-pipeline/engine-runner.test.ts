@@ -1,7 +1,7 @@
 // Unit tests for the page's side of the engine worker (engine-runner.ts),
 // with a FAKE worker: time limit, terminate on every path, error events, bad
 // and late messages. The real worker is checked in Chromium by
-// e2e/parse-files.spec.ts.
+// Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';

@@ -21,7 +21,7 @@
 // is reported as a CSP violation (an error line in the DevTools console
 // that names the Content Security Policy), although nothing runs and
 // nothing is loaded. Those reports stay in the browser: the CSP has no
-// report-uri. e2e/html-to-text.spec.ts checks all of this, with and without
+// report-uri. Helper/Test/browser-tests/html-to-text.spec.ts checks all of this, with and without
 // the CSP.
 
 import { htmlTreeToText, type HtmlToTextLimits, type HtmlToTextResult } from './html-to-text';

@@ -12,7 +12,7 @@
   - Controls are at least 24 x 24 CSS pixels.
   - Forced colours (Windows High Contrast) keep focus outlines and borders,
     and still show which buttons are unavailable.
-  e2e/accessibility.spec.ts checks these in the browser.
+  Helper/Test/browser-tests/accessibility.spec.ts checks these in the browser.
 */
 
 :root {

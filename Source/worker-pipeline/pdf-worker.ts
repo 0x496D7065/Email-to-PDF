@@ -16,7 +16,7 @@
 // the CSP of the page that started it, so `connect-src 'none'` applies here
 // too. It does NOT import the font chunk: the page hands it the font bytes
 // (see pdf-protocol.ts), and the build check fails if font bytes ever end up
-// in the worker's code (scripts/font-rules.mjs).
+// in the worker's code (Helper/build-checks/font-rules.mjs).
 
 import { createPdfWorkerSide, type FromPdfWorker } from './pdf-protocol';
 

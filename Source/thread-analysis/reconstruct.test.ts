@@ -3,7 +3,7 @@
 // people. Non-ASCII letters are written as \u escapes.
 
 import { describe, expect, it } from 'vitest';
-import { NEGATIVE_CASES, THREAD_CASES } from '../../tests/support/thread-cases';
+import { NEGATIVE_CASES, THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks, type ReconstructedMessage } from './reconstruct';
 

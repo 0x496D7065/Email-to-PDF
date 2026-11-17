@@ -1,6 +1,6 @@
 // Unit tests for the pure HTML-to-text converter. The trees are built by hand
 // with the small helpers below (README.md, rule R7): no DOM library, no real
-// email. The browser path (DOMParser) is tested in e2e/html-to-text.spec.ts.
+// email. The browser path (DOMParser) is tested in Helper/Test/browser-tests/html-to-text.spec.ts.
 
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LIMITS, htmlTreeToText, truncationNote, type HtmlNode, type HtmlToTextLimits } from './html-to-text';

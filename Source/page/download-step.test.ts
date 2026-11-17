@@ -1,11 +1,11 @@
 // Unit tests for step 3 wired into the page (download-step.ts, page.ts), in
-// Node with the recording fake DOM (tests/support/fake-dom.ts), the real
+// Node with the recording fake DOM (Helper/Test/test-support/fake-dom.ts), the real
 // steps 1 and 2 and engine, a controllable fake processFiles, a fake PDF
 // maker (no worker), fake blob: URLs and a fixed clock. Synthetic messages
 // only. The real worker, download and blob: URL are checked in Chromium by
-// e2e/download.spec.ts.
+// Helper/Test/browser-tests/download.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement, FakeEventTarget } from '../../tests/support/fake-dom';
+import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';

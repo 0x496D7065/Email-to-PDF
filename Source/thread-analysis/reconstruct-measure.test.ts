@@ -1,6 +1,6 @@
 // Measurement for thread reconstruction (milestone 7). Runs a boundary
-// detector over every generated conversation (tests/support/thread-cases.ts,
-// built with tests/support/thread-builder.ts, so the true header offsets are
+// detector over every generated conversation (Helper/Test/test-support/thread-cases.ts,
+// built with Helper/Test/test-support/thread-builder.ts, so the true header offsets are
 // known) and reports, per group and per quote style:
 // - recall: true headers whose start the detector found exactly,
 // - precision: found headers that start at a true header,
@@ -28,9 +28,9 @@
 //   equals the message's own text as written).
 
 import { describe, expect, it } from 'vitest';
-import { NEGATIVE_CASES, REFUSAL_COST_CASES, THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases';
-import type { QuoteStyle } from '../../tests/support/thread-builder';
-import { fieldDiffs } from '../../tests/support/quoted-header-truth';
+import { NEGATIVE_CASES, REFUSAL_COST_CASES, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
+import type { QuoteStyle } from '../../Helper/Test/test-support/thread-builder';
+import { fieldDiffs } from '../../Helper/Test/test-support/quoted-header-truth';
 import { readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
 import { reconstructQuotedMessages } from './reconstruct';
 import { findReplyHeaders } from './reply-header';
@@ -424,7 +424,7 @@ ${table(m)}`);
     });
 });
 
-// The cost of refusing (REFUSAL_COST_CASES, tests/support/thread-cases.ts):
+// The cost of refusing (REFUSAL_COST_CASES, Helper/Test/test-support/thread-cases.ts):
 // real threads in shapes the splitter refuses on purpose, and with them the
 // messages that hold the refused header. Measured apart from the per-style
 // targets above (they are not a supported style); recorded as a ratchet.

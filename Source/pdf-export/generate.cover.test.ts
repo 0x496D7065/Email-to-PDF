@@ -1,5 +1,5 @@
 // The whole PDF path (generatePdf, real fonts, our own writer), read back
-// from the written file as text (tests/support/pdf-reader.ts: glyphs
+// from the written file as text (Helper/Test/test-support/pdf-reader.ts: glyphs
 // through ToUnicode, as a reader sees them), for task 8.7 (user decision
 // 2026-11-05, PDF only):
 // - nothing in the PDF (cover, index, emails, bookmarks) says or hints that
@@ -12,12 +12,12 @@
 //   email starts at the top of a page of its own (task 8.12);
 // - collapse, never delete: the engine result (every message and every
 //   rebuilt email) is the same after the PDF is made.
-// Synthetic fixtures only (tests/fixtures/eml/): the last email of a thread
+// Synthetic fixtures only (Helper/Test/test-data/eml/): the last email of a thread
 // alone (three earlier emails rebuilt from its quote), and several files of
 // two threads, one of them an identical copy that is merged.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import type { NormalizedMessage } from '../email-reading/types';

@@ -9,15 +9,15 @@
 // header rows stay at the margin; a ">" inside a line is kept; VT / FF stay
 // visible as codes. And the full text is still there: the engine's messages
 // are unchanged and "Print full original text" prints every body whole,
-// only its quote prefixes left out (tests/support/pdf-reference.ts).
+// only its quote prefixes left out (Helper/Test/test-support/pdf-reference.ts).
 //
-// Synthetic data only (tests/support/thread-builder.ts: invented people,
+// Synthetic data only (Helper/Test/test-support/thread-builder.ts: invented people,
 // example.test addresses).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { quotePrefixProblems, referenceDisplayText } from '../../tests/support/pdf-reference';
-import { readDests, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
-import { buildThread, type QuoteStyle, type ThreadMessage } from '../../tests/support/thread-builder';
-import { chain } from '../../tests/support/thread-cases';
+import { quotePrefixProblems, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
+import { buildThread, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { chain } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
 import type { NormalizedMessage } from '../email-reading/types';

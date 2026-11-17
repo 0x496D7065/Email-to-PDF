@@ -2,12 +2,12 @@
 // (task 8.13b-4): "Attached to: email #N" (P1 / Q1), "Attached emails: #4,
 // #6" (Q2), both plain text (Q4), and "Also in" naming the same chain as the
 // PDF's File row (P2 / Q3), through one shared helper. In Node with the
-// recording fake DOM (tests/support/fake-dom.ts), on the real parser and
-// engine; the real page is checked in Chromium by e2e/attached.spec.ts.
+// recording fake DOM (Helper/Test/test-support/fake-dom.ts), on the real parser and
+// engine; the real page is checked in Chromium by Helper/Test/browser-tests/attached.spec.ts.
 // Synthetic data only (README.md, rule R7).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
+import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';

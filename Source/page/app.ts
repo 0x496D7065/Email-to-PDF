@@ -58,7 +58,7 @@
 //   <fieldset> with a <legend> and one native radio per language, first in
 //   the header (at the top left), so its place in the page, on screen and
 //   in the Tab order agree. Radios, not a <select>: WebKit reports every <select> as a CSP
-//   style violation (see e2e/support/watch.ts), and the arrow keys move
+//   style violation (see Helper/Test/browser-tests/support/watch.ts), and the arrow keys move
 //   between radios with no script of ours. Each radio and its label carry
 //   their language's lang attribute, and the label shows the language's own
 //   name (never translated). The radios are never rebuilt, so the focus

@@ -19,10 +19,12 @@
     // which Vite's future native config loader requires. Safe: tsc never emits.
     "allowImportingTsExtensions": true
   },
-  // scripts/ is included for the check-no-network self-test and its .d.mts
-  // types. The .mjs files themselves are not type-checked (no allowJs).
-  // e2e/ and playwright.config.ts: browser tests, type-checked but never shipped.
-  // tests/: synthetic fixtures, their .msg builder and guard tests (never shipped).
-  "include": ["Source", "scripts", "e2e", "tests", "vite.config.ts", "playwright.config.ts"],
+  // Helper/ (never shipped):
+  // - build-checks/ and lint-rules/ for the self-tests and their .d.mts
+  //   types. The .mjs files themselves are not type-checked (no allowJs).
+  // - Helper/Test/browser-tests/ (and playwright.config.ts): browser tests, type-checked.
+  // - Test/test-data/ and Test/test-support/: synthetic fixtures, their .msg
+  //   builder, guard tests and shared test helpers.
+  "include": ["Source", "Helper", "vite.config.ts", "playwright.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

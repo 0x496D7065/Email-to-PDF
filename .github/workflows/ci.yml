@@ -51,7 +51,7 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # Also runs scripts/check-no-network.mjs on the built output.
+      # Also runs Helper/build-checks/check-no-network.mjs on the built output.
       - name: Build and no-network check
         run: npm run build
 

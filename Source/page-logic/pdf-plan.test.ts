@@ -6,7 +6,7 @@
 // rule R6).
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { runEngine, type EngineMessage } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type PlanRange } from '../thread-analysis/output-plan';
 import { buildSegments, type FoldRange, type FoldReason } from '../thread-analysis/segments';

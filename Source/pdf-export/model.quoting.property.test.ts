@@ -1,6 +1,6 @@
 // Random tests of collapse, never delete when emails QUOTE each other (task
 // 8.13b-3, review round 3, finding M2). Seeded random conversations
-// (tests/support/quoting-builder.ts: reply headers in English, French and
+// (Helper/Test/test-support/quoting-builder.ts: reply headers in English, French and
 // Dutch with ">" marks, Outlook header blocks, "-----Original Message-----",
 // forwards, a quoted sentence alone, text pasted with no header; right,
 // missing and wrong In-Reply-To; right, missing, unreadable and wrong
@@ -10,7 +10,7 @@
 //   before task 8.13b-3, an undated or wrong-clock email whose paragraph a
 //   reply quotes without In-Reply-To);
 // - grouped into files with emails attached inside them, inline or as a
-//   file, up to three levels deep (tests/support/attached-builder.ts), with
+//   file, up to three levels deep (Helper/Test/test-support/attached-builder.ts), with
 //   some attached emails also dropped as files of their own (copies, merged).
 // Random ticks and random rebuilt emails chosen. Checked:
 // - every ticked email's own sentence is printed at least once in the PDF
@@ -24,9 +24,9 @@
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { groupAsAttached } from '../../tests/support/attached-builder';
-import { referenceDisplayText } from '../../tests/support/pdf-reference';
-import { quotingCase, quotingSentence, type QuotingCase } from '../../tests/support/quoting-builder';
+import { groupAsAttached } from '../../Helper/Test/test-support/attached-builder';
+import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { quotingCase, quotingSentence, type QuotingCase } from '../../Helper/Test/test-support/quoting-builder';
 import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';

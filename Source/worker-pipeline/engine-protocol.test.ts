@@ -1,6 +1,6 @@
 // Unit tests for the engine worker's messages and its side of the
 // conversation (engine-protocol.ts), in Node without a browser. The real
-// worker is checked in Chromium by e2e/parse-files.spec.ts.
+// worker is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';

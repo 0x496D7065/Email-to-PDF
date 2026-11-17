@@ -5,7 +5,7 @@
 // from synthetic text and read by the real parsers (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { createEmlParser } from '../email-reading/eml';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';

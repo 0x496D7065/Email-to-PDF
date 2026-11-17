@@ -9,8 +9,8 @@
 // parsers (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { referenceDisplayText } from '../../tests/support/pdf-reference';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
+import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';

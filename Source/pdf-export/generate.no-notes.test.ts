@@ -1,5 +1,5 @@
 // The whole PDF path (generatePdf, real fonts, our own writer), read back
-// from the written file as text (tests/support/pdf-reader.ts), for task 8.8
+// from the written file as text (Helper/Test/test-support/pdf-reader.ts), for task 8.8
 // (user rule 2026-11-05): the PDF is the final product and holds NO notes.
 // Nothing in it says that something went wrong, may be missing or may be
 // inaccurate, or how the tool works: the app says all of that in step 2
@@ -23,8 +23,8 @@
 // - collapse, never delete: the engine result is the same after the PDF is
 //   made, and the model still holds the data behind the removed notes.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../thread-analysis/output-plan';
 import type { NormalizedMessage, ParseResult } from '../email-reading/types';

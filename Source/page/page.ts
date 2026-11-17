@@ -2,7 +2,7 @@
 // step 2 (preview.ts with review.ts around it), step 3 (download-step.ts)
 // and "Clear everything". Source/main.ts only calls mountPage; this module is
 // unit tested with the fake DOM (page.test.ts) and in Chromium
-// (e2e/clear.spec.ts, e2e/download.spec.ts).
+// (Helper/Test/browser-tests/clear.spec.ts, Helper/Test/browser-tests/download.spec.ts).
 //
 // Results: step 1 hands each new result to step 2, the review FIRST, then
 // the list (see showResultInStep2), then the PDF labels (Source/page/pdf-labels.ts),

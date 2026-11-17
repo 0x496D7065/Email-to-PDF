@@ -1,7 +1,7 @@
 // Unit tests for the page's side of the PDF worker (pdf-runner.ts), with a
 // FAKE worker: time limit, terminate on every path, error events, bad and
 // late messages, cancel. The real worker is checked in Chromium by
-// e2e/download.spec.ts.
+// Helper/Test/browser-tests/download.spec.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerEvents } from '../email-reading/worker-runner';

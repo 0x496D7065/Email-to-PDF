@@ -7,7 +7,7 @@
 // signatures), are run through the real engine and output plan, and:
 // - with "include everything" (README.md, rule R6), every email's body in
 //   the model is the full body after the documented display transforms only
-//   (checked against the independent tests/support/pdf-reference.ts); and
+//   (checked against the independent Helper/Test/test-support/pdf-reference.ts); and
 //   compared with the body with every quote mark kept, the ONLY characters
 //   missing are the quote prefixes at line starts (tasks 8.1 and 8.6,
 //   quotePrefixProblems): every other character of the message is in the
@@ -37,13 +37,13 @@
 // special character is written as a \u escape.
 
 import { describe, expect, it } from 'vitest';
-import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../tests/support/pdf-reference';
-import { buildThread, instantOf } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../thread-analysis/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import { groupAsAttached, type AttachMode } from '../../tests/support/attached-builder';
+import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
 import { hasNoPrintableText, pdfPositions } from '../page-logic/no-text';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import type { ReconstructedMessage } from '../thread-analysis/reconstruct';
@@ -210,7 +210,7 @@ function randomMessage(random: () => number, k: number): NormalizedMessage
 /**
  * How the random emails of a seed are dropped (task 8.13b-3, review round 2):
  * each as a file of its own (as before), or grouped into files with emails
- * attached inside them (tests/support/attached-builder.ts) inline or as a
+ * attached inside them (Helper/Test/test-support/attached-builder.ts) inline or as a
  * file, or only as a file (no printed block in any body).
  */
 type Grouping = 'files' | AttachMode;

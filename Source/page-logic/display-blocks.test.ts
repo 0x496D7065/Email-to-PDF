@@ -4,7 +4,7 @@
 // (README.md, rule R6): joining all blocks gives the body back unchanged.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { primaryReason, runEngine } from '../thread-analysis/engine';
 import { buildSegments, FOLD_REASONS, type FoldRange, type Segment } from '../thread-analysis/segments';
 import { displayBlocks, MAX_ABSORBED_WHITESPACE, type DisplayBlock } from './display-blocks';

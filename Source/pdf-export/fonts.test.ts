@@ -3,7 +3,7 @@
 // The `?bytes` imports run through the same Vite plugin as the build.
 import { describe, expect, it } from 'vitest';
 import notices from '../public/THIRD_PARTY_NOTICES.txt?raw';
-import { PDF_FONT_FILES as PINNED } from '../../scripts/font-rules.mjs';
+import { PDF_FONT_FILES as PINNED } from '../../Helper/build-checks/font-rules.mjs';
 import license from './fonts/LICENSE.txt?raw';
 import { isWoff, PDF_FONT_FILES, PDF_FONTS, pdfFontsReady, type PdfFontName } from './fonts';
 

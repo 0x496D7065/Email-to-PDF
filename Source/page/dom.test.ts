@@ -1,8 +1,8 @@
 // Unit tests for the safe element builder (README.md, rule R4). They run in
-// Node with a recording fake DOM (tests/support/fake-dom.ts).
+// Node with a recording fake DOM (Helper/Test/test-support/fake-dom.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement, FakeText } from '../../tests/support/fake-dom';
-import { URL_ALLOWLIST } from '../../scripts/no-network-rules.mjs';
+import { FakeDocument, FakeElement, FakeText } from '../../Helper/Test/test-support/fake-dom';
+import { URL_ALLOWLIST } from '../../Helper/build-checks/no-network-rules.mjs';
 import {
     attributeProblem,
     DONATION_IMAGE,

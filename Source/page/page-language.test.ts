@@ -1,19 +1,19 @@
 // Unit tests for switching the page language with files loaded (page.ts,
 // setLanguage, and each part's relabel), in Node with the recording fake DOM
-// (tests/support/fake-dom.ts), the real steps and engine, a controllable
+// (Helper/Test/test-support/fake-dom.ts), the real steps and engine, a controllable
 // fake processFiles and a fake PDF maker. Synthetic messages only.
 //
 // The shipped page has English, French and Dutch. Here a synthetic test
 // language, 'xx' (every English string with accented look-alike letters,
-// in brackets; see tests/support/test-locale.ts), is also added to the
+// in brackets; see Helper/Test/test-support/test-locale.ts), is also added to the
 // catalog for this file only: since every one of its strings differs from
 // English, it shows any word of ours that a switch did not rewrite. What
 // changes (every word of ours, <html lang>, the title, one announcement,
 // the PDF dropped) and what must not (ticks, time zone, open folds, focus, the
 // elements themselves, stand-ins, the plans).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../tests/support/fake-dom';
-import { testLanguageName, TEST_LOCALE } from '../../tests/support/test-locale';
+import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../Helper/Test/test-support/fake-dom';
+import { testLanguageName, TEST_LOCALE } from '../../Helper/Test/test-support/test-locale';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';
@@ -27,7 +27,7 @@ import { mountPage, type Page } from './page';
 
 vi.mock('./translations/catalog', async (importOriginal) =>
 {
-    const { withTestLocales } = await import('../../tests/support/test-locale');
+    const { withTestLocales } = await import('../../Helper/Test/test-support/test-locale');
     return withTestLocales(await importOriginal());
 });
 

@@ -1,12 +1,12 @@
 // Unit tests for step 1 (adding files), in Node with the recording fake DOM
-// (tests/support/fake-dom.ts) and a fake processFiles. The real page, real
-// files and real workers are checked in Chromium by e2e/add-files.spec.ts.
+// (Helper/Test/test-support/fake-dom.ts) and a fake processFiles. The real page, real
+// files and real workers are checked in Chromium by Helper/Test/browser-tests/add-files.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineResult } from '../thread-analysis/engine';
 import type { ParseErrorCode, ParseResult } from '../email-reading/types';
 import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';
 import type { FileLike } from '../worker-pipeline/read-files';
-import { FakeDocument, FakeElement, FakeEventTarget } from '../../tests/support/fake-dom';
+import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
 import {
     carriesFiles,
     filesFromDrop,

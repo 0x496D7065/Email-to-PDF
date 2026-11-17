@@ -2,10 +2,10 @@
 // (pdf-protocol.ts), in Node without a browser: the real makePdf (fonts
 // parsed from their bytes, as the worker does) and fakes. Synthetic emails
 // only (made-up names, *.test addresses). The real worker is
-// checked in Chromium by e2e/download.spec.ts.
+// checked in Chromium by Helper/Test/browser-tests/download.spec.ts.
 
 import { describe, expect, it } from 'vitest';
-import { readPdf } from '../../tests/support/pdf-reader';
+import { readPdf } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import type { NormalizedMessage, ParseResult } from '../email-reading/types';

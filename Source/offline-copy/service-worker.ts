@@ -20,7 +20,7 @@
 // Network: it fetches this site's own listed files only. That is the one
 // exception to "no network API in the shipped code" (README.md, rules R1 and
 // R3): the build check allows the network call and the cache storage call
-// in this file and in dist/sw.js only (scripts/no-network-rules.mjs). Its
+// in this file and in dist/sw.js only (Helper/build-checks/no-network-rules.mjs). Its
 // CSP is the page's, with `connect-src 'self'` (Source/security-headers/headers.ts,
 // cspForServiceWorker), so it cannot reach any other site.
 //

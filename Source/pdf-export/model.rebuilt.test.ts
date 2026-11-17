@@ -5,11 +5,11 @@
 // files only. USER DECISION 2026-11-02 (task 8.3, PDF only): a rebuilt email
 // looks and is numbered exactly like a real one; nothing in the PDF says it
 // was rebuilt (the preview still does). Synthetic fixtures only
-// (tests/fixtures/eml), run through the real engine and output plan, as the
+// (Helper/Test/test-data/eml), run through the real engine and output plan, as the
 // app does; a few results are edited by hand to reach rare cases (a day
 // without a time, no sender, a list read short).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { runEngine, type EngineRebuilt, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
 import type { QuotedDate } from '../thread-analysis/quoted-date';

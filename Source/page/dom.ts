@@ -153,7 +153,7 @@ export function setBlobHref(link: HTMLAnchorElement, url: string, origin: string
 /**
  * The donation page: the one other website the page links to (README.md,
  * rule R1), and the one https URL in the page's code (allowed by the build
- * check as exactly this string, scripts/no-network-rules.mjs).
+ * check as exactly this string, Helper/build-checks/no-network-rules.mjs).
  */
 export const DONATION_URL = 'https://ko-fi.com/0x496d7065';
 

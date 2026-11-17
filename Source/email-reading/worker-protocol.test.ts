@@ -4,11 +4,11 @@
 // every message with structuredClone, like the browser does.
 //
 // The HTML converter here is a stub (Node has no DOMParser); the real one
-// is checked in Chromium by e2e/parse-files.spec.ts.
+// is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it } from 'vitest';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
-import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
+import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { createEmlParser } from './eml';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';

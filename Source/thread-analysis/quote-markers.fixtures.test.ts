@@ -1,9 +1,9 @@
-// Runs quote-marker detection over every synthetic fixture (tests/fixtures),
+// Runs quote-marker detection over every synthetic fixture (Helper/Test/test-data),
 // parsed by the real .eml and .msg adapters. It measures how much of each
 // message is folded and checks the key expectations (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { detectQuoteMarkers } from './quote-markers';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 

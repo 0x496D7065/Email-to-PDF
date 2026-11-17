@@ -4,9 +4,9 @@
 // with the own backend and read back with the test reader. Plus time bounds.
 // Special characters are written as braced escapes (ASCII file).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseToUnicode, readContent, readDests, readPdf, type ParsedPdf, PdfString } from '../../../tests/support/pdf-reader';
-import { buildThread } from '../../../tests/support/thread-builder';
-import { chain } from '../../../tests/support/thread-cases';
+import { parseToUnicode, readContent, readDests, readPdf, type ParsedPdf, PdfString } from '../../../Helper/Test/test-support/pdf-reader';
+import { buildThread } from '../../../Helper/Test/test-support/thread-builder';
+import { chain } from '../../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../../thread-analysis/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../email-reading/types';
@@ -71,7 +71,7 @@ function build(messages: readonly NormalizedMessage[]): PdfDocument
 }
 
 /**
- * The last email of a thread of `earlier + 1` short emails (tests/support/thread-cases.ts, synthetic), alone,
+ * The last email of a thread of `earlier + 1` short emails (Helper/Test/test-support/thread-cases.ts, synthetic), alone,
  * with every email rebuilt from its quotes chosen: `earlier` rebuilt emails, then the real one.
  */
 function buildRebuilt(earlier: number): PdfDocument

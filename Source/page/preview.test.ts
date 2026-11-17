@@ -1,16 +1,16 @@
 // Unit tests for step 2, the preview, in Node with the recording fake DOM
-// (tests/support/fake-dom.ts). Synthetic messages only, run through the real
+// (Helper/Test/test-support/fake-dom.ts). Synthetic messages only, run through the real
 // engine so the folds are the ones the page will show. The real page is
-// checked in Chromium by e2e/preview.spec.ts.
+// checked in Chromium by Helper/Test/browser-tests/preview.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import type { DisplayBlock } from '../page-logic/display-blocks';
-import { buildThread, instantOf } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { signatureSources } from '../page-logic/pdf-plan';
 import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../page-logic/rebuilt';

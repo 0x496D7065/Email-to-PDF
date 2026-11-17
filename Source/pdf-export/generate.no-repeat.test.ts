@@ -8,7 +8,7 @@
 // reader unticked (task 8.13a, Q2: left out; "Print full original text"
 // prints it). Checked on the whole PDF path (generatePdf, real fonts, our
 // own writer), read back from the written file as text, over every
-// conversation of tests/support/thread-cases.ts, in several ways:
+// conversation of Helper/Test/test-support/thread-cases.ts, in several ways:
 // - the last email alone, every rebuilt email chosen: each email of the
 //   conversation is in the PDF exactly once;
 // - the last email alone, some rebuilt emails unticked: those stay in the
@@ -26,10 +26,10 @@
 // SENTENCES: one per email, unique in a conversation), white space ignored
 // (a line may wrap anywhere). Synthetic data only (README.md, rule R7).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { instantOf, type ThreadMessage } from '../../tests/support/thread-builder';
-import { buildThread } from '../../tests/support/thread-builder';
-import { THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases';
-import { readDests, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { buildThread } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
+import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
 import type { NormalizedMessage } from '../email-reading/types';

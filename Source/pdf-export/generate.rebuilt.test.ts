@@ -1,17 +1,17 @@
 // The whole PDF path (generatePdf, real fonts, our own writer) with emails
 // rebuilt from quoted text (tasks 7.7 and 8.3), read back from the written
-// file as text (tests/support/pdf-reader.ts: glyphs through ToUnicode, as a
+// file as text (Helper/Test/test-support/pdf-reader.ts: glyphs through ToUnicode, as a
 // reader sees them). USER DECISION 2026-11-02 (task 8.3, PDF only): a
 // rebuilt email looks and is numbered exactly like a real one, so the PDF
 // holds no rebuilt heading, marker, note, "Taken from" row, cover count or
 // cover section, in any language; every email is numbered 1..n in PDF
 // order (index, headings, bookmarks, links); the cover has no source file
 // list and no SHA-256 (task 8.12). Synthetic fixture only
-// (tests/fixtures/eml/13-order-4-bob-outlook-nl.eml: the last email of a
+// (Helper/Test/test-data/eml/13-order-4-bob-outlook-nl.eml: the last email of a
 // thread, whose quote holds 3 earlier emails).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { type PdfValue, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { type PdfValue, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import type { NormalizedMessage } from '../email-reading/types';

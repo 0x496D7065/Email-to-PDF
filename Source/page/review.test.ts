@@ -1,11 +1,11 @@
 // Unit tests for step 2's counts, include checkboxes and notes (review.ts),
-// in Node with the recording fake DOM (tests/support/fake-dom.ts), wired to
+// in Node with the recording fake DOM (Helper/Test/test-support/fake-dom.ts), wired to
 // the real preview and the real engine like Source/page/page.ts does. Synthetic
-// messages only. The real page is checked in Chromium by e2e/review.spec.ts.
+// messages only. The real page is checked in Chromium by Helper/Test/browser-tests/review.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { attachedResult } from '../../tests/support/attached-builder';
+import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { runEngine, type EngineMessage, type EngineResult } from '../thread-analysis/engine';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS, type MessageNote } from '../page-logic/message-notes';

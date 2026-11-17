@@ -2,12 +2,12 @@
 // (ParseResult.attached, task 8.13b-2): each one becomes an email of its own,
 // read from its own properties, while the file's own email stays exactly as
 // before. Every .msg is built in memory from synthetic specs with
-// tests/fixtures/msg/builder.ts (README.md, rule R7); nothing is read from
+// Helper/Test/test-data/msg/builder.ts (README.md, rule R7); nothing is read from
 // disk and no .msg file is ever written.
 
 import type { FieldsData } from '@kenjiuno/msgreader';
 import { describe, expect, it } from 'vitest';
-import { buildMsg, type MsgAttachedItemSpec, type MsgSpec } from '../../tests/fixtures/msg/builder';
+import { buildMsg, type MsgAttachedItemSpec, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';

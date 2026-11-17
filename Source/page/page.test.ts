@@ -1,12 +1,12 @@
 // Unit tests for the wired page and "Clear everything" (page.ts), in Node
-// with the recording fake DOM (tests/support/fake-dom.ts), the real step 1,
+// with the recording fake DOM (Helper/Test/test-support/fake-dom.ts), the real step 1,
 // step 2 and engine, and a controllable fake processFiles. Synthetic
 // messages only. The real page, files and workers are checked in Chromium by
-// e2e/clear.spec.ts.
+// Helper/Test/browser-tests/clear.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement, FakeEventTarget } from '../../tests/support/fake-dom';
-import { buildThread, instantOf } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
+import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';

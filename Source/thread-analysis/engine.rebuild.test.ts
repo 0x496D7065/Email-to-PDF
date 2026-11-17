@@ -6,8 +6,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import { buildThread } from '../../tests/support/thread-builder';
-import { chain } from '../../tests/support/thread-cases';
+import { buildThread } from '../../Helper/Test/test-support/thread-builder';
+import { chain } from '../../Helper/Test/test-support/thread-cases';
 import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from './engine';
 import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, type ReconstructedMessage } from './reconstruct';
 import { reconstruct } from './segments';

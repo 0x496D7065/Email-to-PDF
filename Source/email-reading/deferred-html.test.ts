@@ -4,11 +4,11 @@
 //
 // The converters here are stubs, NOT converters: Node has no DOMParser. The
 // real converter on this path is checked in Chromium by
-// e2e/parse-files.spec.ts.
+// Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it, vi } from 'vitest';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
-import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
+import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { convertHtmlList, MISMATCH_DETAIL, parseWithDeferredHtml, type ConversionOutcome } from './deferred-html';
 import { createEmlParser } from './eml';
 import type { FileKind } from './file-type';
@@ -16,7 +16,7 @@ import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
 import type { InputFile, ParseResult } from './types';
 
-const fixtureFiles = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', { query: '?raw', import: 'default', eager: true });
+const fixtureFiles = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 

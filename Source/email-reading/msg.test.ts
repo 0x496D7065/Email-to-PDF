@@ -1,12 +1,12 @@
 // Unit tests for the .msg adapter. Every .msg is built in memory from
-// synthetic specs with tests/fixtures/msg/builder.ts (README.md, rule R7);
+// synthetic specs with Helper/Test/test-data/msg/builder.ts (README.md, rule R7);
 // nothing is read from disk and no .msg file is ever written.
 
 import type { FieldsData } from '@kenjiuno/msgreader';
 import { burn } from '@kenjiuno/msgreader/lib/Burner';
 import { TypeEnum } from '@kenjiuno/msgreader/lib/Reader';
 import { describe, expect, it, vi } from 'vitest';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { sha256Hex } from './hash';
 import { HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
@@ -773,7 +773,7 @@ describe('createMsgParser: broken files never throw', () =>
     // reach it through the dispatcher (parse-files.ts), which first runs the
     // Compound File check (cfb-check.ts, tested in cfb-check.test.ts) and
     // parses each file in a Web Worker with a time limit (worker-runner.ts,
-    // tested in worker-runner.test.ts and e2e/parse-files.spec.ts).
+    // tested in worker-runner.test.ts and Helper/Test/browser-tests/parse-files.spec.ts).
 });
 
 describe('resultFromFields: wrongly typed properties from a damaged file', () =>

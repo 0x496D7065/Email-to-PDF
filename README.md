@@ -153,8 +153,8 @@ by anyone, as described next.
    one visit with the internet on, you can also reload or reopen the page
    while offline: it then comes from the offline copy.
 3. **Read the source.** The security headers are in
-   `Source/security-headers/headers.ts`, the build checks in `scripts/`, the browser
-   tests in `e2e/`, and the offline copy in `Source/offline-copy/`.
+   `Source/security-headers/headers.ts`, the build checks in `Helper/build-checks/`, the browser
+   tests in `Helper/Test/browser-tests/`, and the offline copy in `Source/offline-copy/`.
 4. **Check the CSP.** In DevTools, on a host that sends headers, the
    response headers of the page show the policy listed under
    [R2](#r2-strict-content-security-policy); the served page repeats it in
@@ -531,7 +531,7 @@ microphone, location, and so on). The single source of all of these is
 
 ### R3: Automated checks in the build and CI
 
-- `npm run build` ends with `scripts/check-no-network.mjs`, which scans
+- `npm run build` ends with `Helper/build-checks/check-no-network.mjs`, which scans
   `Source/` (with `Source/index.html`) and the whole built site (`dist/`). It fails on a
   network API, a browser storage API, an HTML injection API in the build
   (`innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`), test
@@ -540,7 +540,7 @@ microphone, location, and so on). The single source of all of these is
   or an `http(s)://` / `ws(s)://` URL not on a tiny allowlist. The workers
   are built into the page's script as text, so each built file is scanned
   twice: as it is, and with its text escapes undone.
-- **URL allowlist** (`scripts/no-network-rules.mjs`): it may only ever hold
+- **URL allowlist** (`Helper/build-checks/no-network-rules.mjs`): it may only ever hold
   the donation link, the repository link and license links. Today it holds
   the Ko-fi donation link, allowed as exactly `https://ko-fi.com/0x496d7065`
   (any other Ko-fi address fails), and the Apache License and SIL Open
@@ -560,7 +560,7 @@ microphone, location, and so on). The single source of all of these is
   could neither send anything nor load more code).
 - **Lint** (ESLint) bans network and storage APIs, HTML injection and
   every way to run a string as code.
-- **Browser tests** (Playwright, `e2e/`) load the built site with its real
+- **Browser tests** (Playwright, `Helper/Test/browser-tests/`) load the built site with its real
   headers and fail on any request outside the site, or any CSP violation,
   in the page or its workers. They also switch the network off after
   loading and check that the tool still works, and one test reloads the
@@ -835,14 +835,15 @@ pure functions with no page or DOM access, unit tested in isolation with
 **synthetic** test emails. Real emails are never committed.
 
 A guard test checks this on every `npm test`, for the test emails in
-`tests/fixtures/` and the test code (`Source/**/*.test.ts`, `e2e/`,
-`tests/support/`, `scripts/**/*.test.*`). It fails on any email address,
+`Helper/Test/test-data/` and the test code (`Source/**/*.test.ts`, `Helper/Test/browser-tests/`,
+`Helper/Test/test-support/`, `Helper/build-checks/**/*.test.*`,
+`Helper/lint-rules/**/*.test.*`). It fails on any email address,
 web address or host name that is not a reserved test name (`*.test`,
 `*.invalid`), any IP address outside the documentation and loopback
 ranges, any home-folder path that could name a person, and any time-zone
 name outside a short list of neutral zones. The few real addresses the
 build-check tests need are listed one by one, with a reason, in
-`tests/fixtures/guard-exemptions.ts`. See `tests/fixtures/README.md`.
+`Helper/Test/test-data/guard-exemptions.ts`. See `Helper/Test/test-data/README.md`.
 
 ## Offline copy (service worker)
 
@@ -908,16 +909,20 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `Source/security-headers/` | The Content Security Policy and other security headers. |
 | `Source/library-shims/` | Small browser replacements for library dependencies. |
 | `Source/public/` | Files copied into the site as they are (third-party notices, Ko-fi button). |
-| `scripts/` | The no-network build check and the project's own lint rules. |
-| `tests/` | Synthetic test emails, their guards and test helpers. |
-| `e2e/` | Browser tests (Playwright). |
+| `Helper/` | Everything that is not the site: build checks, lint rules and tests. Never shipped. |
+| `Helper/build-checks/` | The no-network build check (font, URL and service-worker version rules). |
+| `Helper/lint-rules/` | The project's own lint rules. |
+| `Helper/Test/` | All tests that are not next to the code they test: browser tests, synthetic test emails, test helpers. |
+| `Helper/Test/browser-tests/` | Browser tests (Playwright); `support/` holds their shared helpers. |
+| `Helper/Test/test-data/` | Synthetic test emails, the `.msg` builder, the manifest and the privacy guards. |
+| `Helper/Test/test-support/` | Test helpers shared by the unit tests (PDF reader, thread builders, fake DOM). |
 
 **Test data is synthetic only.** Never add, copy or "anonymize" a real
 email. `.gitignore` ignores email files (`.eml`, `.msg`, `.mbox`, `.pst`,
 `.emlx`, `.ost`, `.oft`, in any letter case) everywhere, with one narrow
-exception for hand-written `.eml` fixtures in `tests/fixtures/`; `.msg`
+exception for hand-written `.eml` fixtures in `Helper/Test/test-data/`; `.msg`
 fixtures are built in memory at test time. The guard test (R7) rejects
-anything that looks real. Rules for new fixtures: `tests/fixtures/README.md`.
+anything that looks real. Rules for new fixtures: `Helper/Test/test-data/README.md`.
 
 **Dependencies:** two direct run-time ones, `postal-mime` (reads `.eml`)
 and `@kenjiuno/msgreader` (reads `.msg`, bundled with its own dependency

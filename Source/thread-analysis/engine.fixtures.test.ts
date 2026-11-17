@@ -1,12 +1,12 @@
-// Runs the whole engine over every synthetic fixture (tests/fixtures), parsed
+// Runs the whole engine over every synthetic fixture (Helper/Test/test-data), parsed
 // by the real .eml and .msg adapters, as the app will do. It checks the
 // collapse-never-delete invariants (README.md, rule R6), prints how much of
 // each message is folded and why, and checks the key expectations of the
 // detector fixture tests on the combined result (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { FIXTURES } from '../../tests/fixtures/manifest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { FIXTURES } from '../../Helper/Test/test-data/manifest';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import type { NormalizedMessage, ParseResult } from '../email-reading/types';
 import { normalizeBody } from './dedupe';
 import { primaryReason, runEngine, type EngineMessage, type EngineResult } from './engine';

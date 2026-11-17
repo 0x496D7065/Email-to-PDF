@@ -9,8 +9,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import { buildThread, instantOf, type ThreadMessage } from '../../tests/support/thread-builder';
-import { chain } from '../../tests/support/thread-cases';
+import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { chain } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineRebuilt, type EngineResult } from './engine';
 import { comparableText } from './rebuild-links';
 

@@ -15,8 +15,8 @@
 // Synthetic data only (README.md, rule R7).
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readOutline, readPageRuns, readPdf, textLines } from '../../tests/support/pdf-reader';
-import { attachedResult } from '../../tests/support/attached-builder';
+import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
+import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
 import type { NormalizedMessage, ParseResult, ParseWarning } from '../email-reading/types';

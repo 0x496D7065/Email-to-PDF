@@ -1,10 +1,10 @@
-// Runs de-duplication over every synthetic fixture (tests/fixtures), parsed
+// Runs de-duplication over every synthetic fixture (Helper/Test/test-data), parsed
 // by the real .eml and .msg adapters, and checks the groups against the
 // manifest's `duplicateGroup` marks (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { FIXTURES } from '../../tests/fixtures/manifest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { FIXTURES } from '../../Helper/Test/test-data/manifest';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { dedupe, normalizeBody } from './dedupe';
 
 describe('dedupe over the parsed fixtures', () =>

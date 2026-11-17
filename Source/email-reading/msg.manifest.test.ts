@@ -1,11 +1,11 @@
 // Runs the real .msg adapter on every synthetic .msg spec in
-// tests/fixtures/msg/specs.ts (built in memory, never stored on disk) and
-// compares the result with tests/fixtures/manifest.ts (README.md, rule R7).
+// Helper/Test/test-data/msg/specs.ts (built in memory, never stored on disk) and
+// compares the result with Helper/Test/test-data/manifest.ts (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { FIXTURES, type FixtureExpectation } from '../../tests/fixtures/manifest';
-import { buildMsg } from '../../tests/fixtures/msg/builder';
-import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
+import { FIXTURES, type FixtureExpectation } from '../../Helper/Test/test-data/manifest';
+import { buildMsg } from '../../Helper/Test/test-data/msg/builder';
+import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { createEmlParser } from './eml';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
@@ -14,7 +14,7 @@ import type { NormalizedMessage } from './types';
 // The real HTML-to-text converter needs the browser's DOMParser, which Node
 // does not have, and no DOM library is installed. So here the converter is a
 // stub that only marks that the HTML path was taken. The real converter is
-// checked in Chromium by e2e/html-to-text.spec.ts. The stub is NOT a
+// checked in Chromium by Helper/Test/browser-tests/html-to-text.spec.ts. The stub is NOT a
 // converter and must never be used outside tests.
 const STUB_PREFIX = '[stub html-to-text]';
 /** Every HTML string handed to the stub; the stub's output names the index (as in eml.manifest.test.ts). */
@@ -23,14 +23,14 @@ const htmlToText = (html: string): HtmlToTextResult => ({ text: `${STUB_PREFIX} 
 const msgParser = createMsgParser({ htmlToText });
 const emlParser = createEmlParser({ htmlToText });
 
-const emlFiles = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', {
+const emlFiles = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', {
     query: '?raw',
     import: 'default',
     eager: true,
 });
 
 // Fixtures whose body is HTML-only: their converted text is checked in the
-// browser (e2e/full-flow.spec.ts, with the real converter). Every other field
+// browser (Helper/Test/browser-tests/full-flow.spec.ts, with the real converter). Every other field
 // (and the 'html-converted-body' warning) is checked here.
 const BODY_CHECKS_NEED_HTML_TO_TEXT = new Set(['msg-13-html-only']);
 
@@ -53,7 +53,7 @@ async function parseMsgFixture(id: string): Promise<NormalizedMessage>
 
 async function parseEmlFixture(id: string): Promise<NormalizedMessage>
 {
-    const raw = emlFiles[`../../tests/fixtures/${id}`];
+    const raw = emlFiles[`../../Helper/Test/test-data/${id}`];
     if (raw === undefined)
     {
         throw new Error(`missing file for ${id}`);

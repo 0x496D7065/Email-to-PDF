@@ -1,7 +1,7 @@
 // Font embedding pieces: /W widths, the ToUnicode CMap layout, the
 // FontDescriptor values, and the fsType embedding check.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseToUnicode } from '../../../tests/support/pdf-reader';
+import { parseToUnicode } from '../../../Helper/Test/test-support/pdf-reader';
 import { type ParsedFont, readWoffFont } from '../font-reader/font';
 import { PDF_FONTS } from '../fonts';
 import { checkEmbeddable, fontDescriptor, FontUsage, toUnicodeCmap, widthsArray } from './font-objects';

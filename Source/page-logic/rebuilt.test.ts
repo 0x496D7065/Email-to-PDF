@@ -1,9 +1,9 @@
 // Unit tests for what step 2 shows of the emails rebuilt from quoted text
-// (Source/page-logic/rebuilt.ts). Synthetic fixtures only (tests/fixtures/eml),
+// (Source/page-logic/rebuilt.ts). Synthetic fixtures only (Helper/Test/test-data/eml),
 // run through the real engine; a few results are then edited by hand to
 // reach the rare cases (no sender, a list read short, a bad timeline).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { runEngine, type EngineRebuilt, type EngineResult } from '../thread-analysis/engine';
 import type { QuotedDate } from '../thread-analysis/quoted-date';
 import type { NormalizedMessage } from '../email-reading/types';

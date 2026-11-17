@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/check-no-network.mjs",
+    "build": "vite build && node Helper/build-checks/check-no-network.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -20,7 +20,7 @@
     "test:e2e:install:chromium": "playwright install chromium",
     "test:e2e:install:firefox": "playwright install firefox",
     "test:e2e:install:webkit": "playwright install webkit",
-    "check:network": "node scripts/check-no-network.mjs"
+    "check:network": "node Helper/build-checks/check-no-network.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

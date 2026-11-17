@@ -3,11 +3,11 @@
 // one bad file never stops the others. The worker step is injected: a fake
 // for the dispatcher rules, and the real worker-side parse
 // (parseWithDeferredHtml, with a stub HTML converter) for the end-to-end
-// cases. The real Web Worker is checked in Chromium by e2e/parse-files.spec.ts.
+// cases. The real Web Worker is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it, vi } from 'vitest';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
-import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
+import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { convertHtmlList, parseWithDeferredHtml } from './deferred-html';
 import { sha256Hex } from './hash';
 import {
@@ -22,7 +22,7 @@ import {
 import type { InputFile, ParseResult } from './types';
 import { DETACHED_DETAIL, type WorkerJob } from './worker-runner';
 
-const fixtureFiles = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', { query: '?raw', import: 'default', eager: true });
+const fixtureFiles = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
 
 function fixture(name: string): string
 {

@@ -1,15 +1,15 @@
 // Unit tests for the PDF's fixed texts (strings.ts): always in the language
 // asked for, never in the page's active language. A synthetic language
-// ('xx', tests/support/test-locale.ts) is added to the catalog for this
+// ('xx', Helper/Test/test-support/test-locale.ts) is added to the catalog for this
 // file only; it is never shipped.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { pseudo } from '../../tests/support/test-locale';
+import { pseudo } from '../../Helper/Test/test-support/test-locale';
 import { setLocale } from '../page/translations';
 import { createPdfStrings } from './strings';
 
 vi.mock('../page/translations/catalog', async (importOriginal) =>
 {
-    const { withTestLocales } = await import('../../tests/support/test-locale');
+    const { withTestLocales } = await import('../../Helper/Test/test-support/test-locale');
     return withTestLocales(await importOriginal(), ['xx']);
 });
 

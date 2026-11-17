@@ -1,10 +1,10 @@
 // Runs the PDF output plan (output-plan.ts) over every synthetic fixture
-// (tests/fixtures), parsed and run through the engine as the app does, with
+// (Helper/Test/test-data), parsed and run through the engine as the app does, with
 // the default policy. Prints, per email, what the PDF would leave out, and
 // checks the key expectations on the known fixture threads.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { runEngine, type EngineMessage } from './engine';
 import { planOutput, type MessagePlan } from './output-plan';
 

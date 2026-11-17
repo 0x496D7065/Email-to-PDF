@@ -1,15 +1,15 @@
 // Tests for the quoted header field reader (milestone 7, task 7.3; README.md,
 // rule R7). Synthetic data only: the ground-truth threads of
-// tests/support/thread-cases.ts, fixtures 13 and 22, and small bodies below.
+// Helper/Test/test-support/thread-cases.ts, fixtures 13 and 22, and small bodies below.
 //
 // Non-ASCII letters are written as \u escapes so this file stays ASCII:
 // \u00e0 = a grave, \u00e9 = e acute, \u00c0 = capital A grave,
 // \u00c9 = capital E acute, \u00a0 = no-break space.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
-import { expectedFields, fieldDiffs } from '../../tests/support/quoted-header-truth';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { expectedFields, fieldDiffs } from '../../Helper/Test/test-support/quoted-header-truth';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import type { EmailAddress } from '../email-reading/types';
 import { headerLabelCounts, MAX_MAILBOXES, parseMailboxList, readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
 import { findReplyHeaders } from './reply-header';

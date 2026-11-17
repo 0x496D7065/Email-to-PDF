@@ -1,5 +1,5 @@
 // The own PDF backend, end to end: every file is read back with the
-// independent test reader (tests/support/pdf-reader.ts), which checks the
+// independent test reader (Helper/Test/test-support/pdf-reader.ts), which checks the
 // structure strictly (xref offsets, stream lengths, links between objects).
 // Synthetic data only. Email-like text is untrusted (README.md, rule R4): it
 // must appear only as hex string data. Special characters are written as
@@ -18,7 +18,7 @@ import {
     readDests,
     readOutline,
     readPdf,
-} from '../../../tests/support/pdf-reader';
+} from '../../../Helper/Test/test-support/pdf-reader';
 import { directoryChecksum } from '../font-reader/binary';
 import { type ParsedFont, parseFont, readWoffFont } from '../font-reader/font';
 import { readSfntDirectory } from '../font-reader/sfnt';

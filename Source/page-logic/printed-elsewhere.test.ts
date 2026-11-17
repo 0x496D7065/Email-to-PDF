@@ -1,6 +1,6 @@
 // Unit tests for the preview's no-repeat labels (task 8.11;
 // printed-elsewhere.ts with pdf-plan.ts): over every conversation of
-// tests/support/thread-cases.ts, with "Print full original text" off and
+// Helper/Test/test-support/thread-cases.ts, with "Print full original text" off and
 // several sets of files and rebuilt emails chosen, the parts the preview
 // labels "printed as email #N" are EXACTLY the parts the PDF leaves out of
 // that email because it prints them as an email of its own, and N names the
@@ -9,11 +9,11 @@
 // own output (buildPdfDocument): the body of each email it prints.
 // Synthetic data only (README.md, rule R7).
 import { describe, expect, it } from 'vitest';
-import { buildThread, instantOf, type ThreadMessage } from '../../tests/support/thread-builder';
-import { THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases';
+import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine, type EngineResult } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';
-import { attachedResult } from '../../tests/support/attached-builder';
+import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import type { NormalizedMessage, ParseResult } from '../email-reading/types';
 import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere, type PdfDocument, type PdfEmail } from '../pdf-export/model';
 import { createPdfStrings } from '../pdf-export/strings';

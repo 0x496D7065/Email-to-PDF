@@ -1,12 +1,12 @@
 // Unit tests for the cards of emails rebuilt from quoted text in step 2
 // (Source/page/preview.ts builds them, Source/page/review.ts adds their checkboxes,
 // the switch and the counts), in Node with the recording fake DOM
-// (tests/support/fake-dom.ts), wired like Source/page/page.ts. Synthetic
-// fixtures only (tests/fixtures/eml), run through the real engine. The real
-// page is checked in the browsers by e2e/rebuilt.spec.ts.
+// (Helper/Test/test-support/fake-dom.ts), wired like Source/page/page.ts. Synthetic
+// fixtures only (Helper/Test/test-data/eml), run through the real engine. The real
+// page is checked in the browsers by Helper/Test/browser-tests/rebuilt.spec.ts.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement } from '../../tests/support/fake-dom';
-import { parseAllFixtures } from '../../tests/fixtures/parse-all';
+import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { runEngine, type EngineRebuilt, type EngineResult } from '../thread-analysis/engine';
 import type { NormalizedMessage } from '../email-reading/types';
 import { planPdfOrder } from '../pdf-export/model';

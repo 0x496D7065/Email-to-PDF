@@ -17,10 +17,10 @@ playwright/.cache/
 *.[eE][mM][lL][xX]
 *.[oO][sS][tT]
 *.[oO][fF][tT]
-# Narrow exception: hand-written SYNTHETIC .eml test emails (see tests/fixtures/README.md).
+# Narrow exception: hand-written SYNTHETIC .eml test emails (see Helper/Test/test-data/README.md).
 # No .msg exception: .msg fixtures are built in memory, never stored.
 # Real emails stay ignored everywhere else. Must come after the rules above.
-!tests/fixtures/**/*.[eE][mM][lL]
+!Helper/Test/test-data/**/*.[eE][mM][lL]
 # User's local test mail: never commit
 /Dummy mail/
 # Local junk

@@ -1,16 +1,16 @@
 // Unit tests for the Compound File pre-check (cfb-check.ts). Every .msg is
-// built in memory from synthetic specs (tests/fixtures/msg/builder.ts), then
+// built in memory from synthetic specs (Helper/Test/test-data/msg/builder.ts), then
 // damaged byte by byte here. Nothing is read from disk.
 //
 // The damaged files below are exactly the kind that make msgreader loop
 // forever or reserve gigabytes. They are only ever handed to findCfbDamage
 // and parseWithDeferredHtml (which checks first), NEVER to msgreader
 // directly: that would hang the test run. The browser test
-// (e2e/parse-files.spec.ts) checks the same protection in a real worker.
+// (Helper/Test/browser-tests/parse-files.spec.ts) checks the same protection in a real worker.
 
 import { describe, expect, it } from 'vitest';
-import { buildMsg, type MsgSpec } from '../../tests/fixtures/msg/builder';
-import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
+import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
+import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { findCfbDamage } from './cfb-check';
 import { parseWithDeferredHtml } from './deferred-html';
 

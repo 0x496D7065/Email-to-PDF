@@ -1,7 +1,7 @@
 // Measurement of thread rebuilding INSIDE the engine (milestone 7, task 7.5):
-// every conversation of tests/support/thread-cases.ts is dropped as real
+// every conversation of Helper/Test/test-support/thread-cases.ts is dropped as real
 // files in several ways, runEngine runs, and the timeline is compared with
-// the ground truth of tests/support/thread-builder.ts. Targets:
+// the ground truth of Helper/Test/test-support/thread-builder.ts. Targets:
 // 1. all messages dropped: 0 rebuilt entries in the timeline (each rebuilt
 //    message linked to its own real file);
 // 2. only the last message dropped: the timeline holds every earlier
@@ -15,8 +15,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { NormalizedMessage, ParseResult } from '../email-reading/types';
-import { buildThread, instantOf, isForwardStyle, QUOTE_STYLES, type QuoteStyle, type ThreadMessage } from '../../tests/support/thread-builder';
-import { ALICE, BOB, CAROL, chain, DAVE, ERIN, THREAD_CASES, type ThreadCase } from '../../tests/support/thread-cases';
+import { buildThread, instantOf, isForwardStyle, QUOTE_STYLES, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
+import { ALICE, BOB, CAROL, chain, DAVE, ERIN, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { DEFAULT_PARTS, runEngine, type EngineResult } from './engine';
 
 /** Message `i` of a conversation as a real dropped file (its body quotes the ones before it). */

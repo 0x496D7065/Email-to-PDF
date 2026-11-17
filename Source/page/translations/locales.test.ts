@@ -1,15 +1,15 @@
 // Unit tests for switching between languages, with two synthetic languages
-// added to the catalog for this file only (tests/support/test-locale.ts):
+// added to the catalog for this file only (Helper/Test/test-support/test-locale.ts):
 // 'xx' (not a real language) and 'de', whose strings are the same synthetic
 // text but whose code is a real one, so the browser's number and list rules
 // of a real other language can be checked. Neither is ever shipped.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { pseudo } from '../../../tests/support/test-locale';
+import { pseudo } from '../../../Helper/Test/test-support/test-locale';
 import { getLocale, interpolate, languageName, pickLocale, pluralForm, setLocale, SUPPORTED_LOCALES, t, translator } from './index';
 
 vi.mock('./catalog', async (importOriginal) =>
 {
-    const { withTestLocales } = await import('../../../tests/support/test-locale');
+    const { withTestLocales } = await import('../../../Helper/Test/test-support/test-locale');
     return withTestLocales(await importOriginal(), ['xx', 'de']);
 });
 

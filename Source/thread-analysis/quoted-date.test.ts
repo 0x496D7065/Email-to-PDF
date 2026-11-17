@@ -1,14 +1,14 @@
 // Tests for the quote header date reader (milestone 7, task 7.2; README.md,
 // rule R7). Synthetic dates only. The round-trip tests read back every date
-// form the ground-truth builder (tests/support/thread-builder.ts) writes.
+// form the ground-truth builder (Helper/Test/test-support/thread-builder.ts) writes.
 //
 // Non-ASCII letters are written as \u escapes so this file stays ASCII:
 // \u00e0 = a grave, \u00e9 = e acute, \u00fb = u circumflex,
 // \u00a0 = no-break space, \u202f = narrow no-break space.
 
 import { describe, expect, it } from 'vitest';
-import { formatQuotedDate, QUOTE_STYLES, type Zone } from '../../tests/support/thread-builder';
-import { THREAD_CASES } from '../../tests/support/thread-cases';
+import { formatQuotedDate, QUOTE_STYLES, type Zone } from '../../Helper/Test/test-support/thread-builder';
+import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { DATE_LANGUAGES } from './date-words';
 import { hasWrittenZone, MAX_QUOTED_DATE_LENGTH, parseQuotedDate, type QuotedDate } from './quoted-date';
 
@@ -608,7 +608,7 @@ describe('parseQuotedDate: robustness', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Round trip against the ground-truth builder (tests/support/thread-builder.ts)
+// Round trip against the ground-truth builder (Helper/Test/test-support/thread-builder.ts)
 
 type DateFormat = Parameters<typeof formatQuotedDate>[0];
 const FORMATS: readonly DateFormat[] = [

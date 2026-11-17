@@ -1,8 +1,8 @@
 // Unit tests for the page shell, in Node with the recording fake DOM
-// (tests/support/fake-dom.ts). The real page is checked in Chromium by
-// e2e/app-shell.spec.ts.
+// (Helper/Test/test-support/fake-dom.ts). The real page is checked in Chromium by
+// Helper/Test/browser-tests/app-shell.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeDocument, FakeElement, FakeText } from '../../tests/support/fake-dom';
+import { FakeDocument, FakeElement, FakeText } from '../../Helper/Test/test-support/fake-dom';
 import { HELP_CLIENTS, mountApp, type AppShell } from './app';
 import { DONATION_IMAGE, DONATION_URL } from './dom';
 import { setLocale, t } from './translations';
