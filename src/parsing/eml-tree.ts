@@ -7,7 +7,7 @@
 // inert converter. So this module reads the parser's INTERNAL parts tree
 // after parsing and copies it into the small typed tree below.
 //
-// This relies on postal-mime 4.0.5 internals, which are not public API:
+// This relies on postal-mime 4.0.8 internals, which are not public API:
 // `parser.root` and, on every node, `childNodes`, `contentType`,
 // `contentDisposition`, `content` and `getTextContent()`. The version is
 // pinned exactly in package.json. Every internal field is checked here before
@@ -36,7 +36,7 @@ export type EmlPart =
 /** postal-mime's internals are not what this module expects (library changed). */
 export class PostalMimeInternalsError extends Error {
   constructor(reason: string) {
-    super(`postal-mime internals changed (expected 4.0.5): ${reason}`);
+    super(`postal-mime internals changed (expected 4.0.8): ${reason}`);
     this.name = 'PostalMimeInternalsError';
   }
 }
@@ -65,7 +65,7 @@ export async function parseEmlTree(bytes: Uint8Array | ArrayBuffer, options: Pos
  * Copies the internal tree of a parser that has finished `parse()` into
  * EmlPart form. Exported for the guard test only.
  *
- * Each leaf is sorted the way postal-mime 4.0.5 sorts it (collectNode and
+ * Each leaf is sorted the way postal-mime 4.0.8 sorts it (collectNode and
  * isInlineTextNode, with forceRfc822Attachments on):
  * - text/plain or text/html without "Content-Disposition: attachment" is
  *   body text. A file name alone does not make it an attachment;

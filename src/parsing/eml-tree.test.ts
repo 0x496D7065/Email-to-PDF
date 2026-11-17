@@ -47,7 +47,7 @@ const NESTED = crlf(
   '',
 );
 
-describe('postal-mime 4.0.5 internals used by eml-tree.ts', () => {
+describe('postal-mime 4.0.8 internals used by eml-tree.ts', () => {
   it('a finished parser exposes root, and each node childNodes, contentType, contentDisposition, content, getTextContent', async () => {
     const parser = new PostalMime({ forceRfc822Attachments: true });
     await parser.parse(encode(NESTED));
@@ -103,7 +103,7 @@ describe('postal-mime 4.0.5 internals used by eml-tree.ts', () => {
 });
 
 describe('readPartsTree fails loudly when the internals change shape', () => {
-  /** A fake internal node, as postal-mime 4.0.5 shapes it. */
+  /** A fake internal node, as postal-mime 4.0.8 shapes it. */
   const node = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
     childNodes: [],
     contentType: { parsed: { value: 'text/plain' }, multipart: false },

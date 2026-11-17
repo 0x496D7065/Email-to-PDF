@@ -683,7 +683,7 @@ describe('createEmlParser: inline forwarded messages', () => {
       expect(lines.filter((line) => line.startsWith('From: spoof'))).toEqual([]);
     });
 
-    // postal-mime 4.0.5 already turns CR and LF into spaces; these simulate a
+    // postal-mime 4.0.8 already turns CR and LF into spaces; these simulate a
     // version that does not, so the adapter's own guard is what is tested.
     it.each([
       ['CR LF', '\r\n'],
@@ -1495,6 +1495,19 @@ describe('createEmlParser: malformed input never throws', () => {
   it('a 3 MB header line is over the header size limit: corrupt, with the hash', async () => {
     const data = bytes(HEADERS, `\r\nX-Long: ${'a'.repeat(3 * 1024 * 1024)}\r\n\r\nx\r\n`);
     const result = await parse(data, 'long-header.eml');
+    expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(data) });
+    expect(!result.ok && result.detail).toMatch(/header size/i);
+  });
+
+  it('more than about 32,768 tiny header lines across parts is over the header limit: corrupt, not a partial parse', async () => {
+    // postal-mime counts every header line as at least 64 bytes against the
+    // 2 MiB limit (eml.ts), so 1000 parts of 40 four-byte lines (40,000 lines,
+    // well under 1 MB of actual bytes) are rejected as a whole.
+    const lines = Array.from({ length: 40 }, () => 'X: a\r\n').join('');
+    const parts = Array.from({ length: 1000 }, () => `--p\r\nContent-Type: text/plain\r\n${lines}\r\nx\r\n`).join('');
+    const data = bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="p"\r\n\r\n', parts, '--p--\r\n');
+    expect(data.length).toBeLessThan(1024 * 1024);
+    const result = await parse(data, 'many-header-lines.eml');
     expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(data) });
     expect(!result.ok && result.detail).toMatch(/header size/i);
   });

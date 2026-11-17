@@ -83,7 +83,10 @@ export interface EmlParserOptions {
 const POSTAL_MIME_OPTIONS: PostalMimeOptions = {
   // Multipart inside multipart...: real mail rarely goes past 10 levels.
   maxNestingDepth: 64,
-  // Total header bytes across all parts (postal-mime's default, 2 MiB).
+  // Header budget across all parts (postal-mime's default, 2 MiB). Every
+  // header line counts as at least 64 bytes, so a file holds at most about
+  // 32,768 header lines in all; more and the whole file is 'corrupt' (an
+  // error, nothing dropped silently).
   maxHeadersSize: 2 * 1024 * 1024,
   // Number of MIME parts: a few dozen is typical, thousands is an attack.
   maxPartCount: 2000,
