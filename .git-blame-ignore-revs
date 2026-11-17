@@ -1,0 +1,6 @@
+# Commits listed here are mechanical formatting changes (no change in
+# behavior). GitHub blame skips them, so each line is credited to the commit
+# that really changed it. Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Milestone 9.6 A1: 4-space indentation and braces on their own lines
+ca8d7ee2a53dae6d983c23802c148bf0ef0af05d
