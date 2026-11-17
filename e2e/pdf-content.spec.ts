@@ -25,7 +25,7 @@
 //    date in the chosen zone, sender, subject, attachments, and the page
 //    where that email's heading really is; each row a link to it); the
 //    bookmarks; "Page X of Y" on every page; the unticked email nowhere;
-//    the first line of every email; the PDF-only policy (src/engine/
+//    the first line of every email; the PDF-only policy (Source/thread-analysis/
 //    output-plan.ts): quoted history added by the mail app left out of the
 //    reply (and still in the email it came from), a repeated signature only
 //    where its sender first used it, a quote the writer answered between
@@ -63,12 +63,12 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { createServer } from 'vite';
-import type * as FontModule from '../src/pdf/font/font.ts';
-import type * as ConfigModule from '../src/pdf/layout/config.ts';
-import type * as EmlModule from '../src/parsing/eml.ts';
-import type * as MsgModule from '../src/parsing/msg.ts';
-import type { EmailParser } from '../src/parsing/types.ts';
-import { en } from '../src/ui/i18n/en.ts';
+import type * as FontModule from '../Source/pdf-export/font-reader/font.ts';
+import type * as ConfigModule from '../Source/pdf-export/page-layout/config.ts';
+import type * as EmlModule from '../Source/email-reading/eml.ts';
+import type * as MsgModule from '../Source/email-reading/msg.ts';
+import type { EmailParser } from '../Source/email-reading/types.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../tests/fixtures/manifest.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
@@ -185,15 +185,15 @@ test.beforeAll(async () =>
     {
         const { buildMsg } = (await server.ssrLoadModule('/tests/fixtures/msg/builder.ts')) as typeof Builder;
         const { MSG_SPECS } = (await server.ssrLoadModule('/tests/fixtures/msg/specs.ts')) as typeof Specs;
-        const { createEmlParser } = (await server.ssrLoadModule('/src/parsing/eml.ts')) as typeof EmlModule;
-        const { createMsgParser } = (await server.ssrLoadModule('/src/parsing/msg.ts')) as typeof MsgModule;
+        const { createEmlParser } = (await server.ssrLoadModule('/Source/email-reading/eml.ts')) as typeof EmlModule;
+        const { createMsgParser } = (await server.ssrLoadModule('/Source/email-reading/msg.ts')) as typeof MsgModule;
         // The body indent expected in the PDF: one tab, 4 normal spaces of the body font at the body size (task 8.9),
         // measured here from the bundled font file's own tables.
-        const { readWoffFont } = (await server.ssrLoadModule('/src/pdf/font/font.ts')) as typeof FontModule;
-        const { DEFAULT_LAYOUT_CONFIG } = (await server.ssrLoadModule('/src/pdf/layout/config.ts')) as typeof ConfigModule;
+        const { readWoffFont } = (await server.ssrLoadModule('/Source/pdf-export/font-reader/font.ts')) as typeof FontModule;
+        const { DEFAULT_LAYOUT_CONFIG } = (await server.ssrLoadModule('/Source/pdf-export/page-layout/config.ts')) as typeof ConfigModule;
         const body = DEFAULT_LAYOUT_CONFIG.roles.body;
         expect(body.font).toBe('sans-regular');
-        const plex = await readWoffFont(new Uint8Array(readFileSync(`${ROOT}src/fonts/IBMPlexSans-Regular.woff`)));
+        const plex = await readWoffFont(new Uint8Array(readFileSync(`${ROOT}Source/pdf-export/fonts/IBMPlexSans-Regular.woff`)));
         bodyIndent = (4 * plex.advance(plex.glyphFor(0x20)) * body.size) / plex.unitsPerEm;
         // Node has no DOMParser: an HTML body is marked, and its email is checked with the manifest's snippets.
         const HTML = '\u{0}html';
@@ -255,7 +255,7 @@ test.beforeAll(async () =>
 
 /**
  * The emails of the PDF, in order: one per duplicate group, by date, the
- * undated ones last in drop order (src/engine/order.ts), without the
+ * undated ones last in drop order (Source/thread-analysis/order.ts), without the
  * unticked one. Each with every file of its group. Throws if two emails
  * share a date (their order would not be known here).
  */
@@ -924,7 +924,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     expect(xOf('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
     // No step per quote level: the quoted lines at the same x as the own text,
     // which is one tab (4 spaces of the body font) in from the header labels
-    // (src/pdf/layout/config.ts, bodyIndentSpaces; task 8.9).
+    // (Source/pdf-export/page-layout/config.ts, bodyIndentSpaces; task 8.9).
     for (const text of quotedLines)
     {
         expect(xOf(text), text).toBeCloseTo(own, 2);
@@ -995,7 +995,7 @@ test('"Print full original text": every email\'s whole text, in order', async ({
     const doc = await readBack(await makePdf(page), emails.length);
     checkFront(doc, emails, inZone(FIXED_NOW).full);
 
-    // Invisible characters (src/pdf/text.ts, group 2) are not in the copy
+    // Invisible characters (Source/pdf-export/text.ts, group 2) are not in the copy
     // layer: the copy layer is what you see. The fixtures have none; dropped
     // from the expectation all the same.
     const INVISIBLE: readonly (readonly [number, number])[] = [

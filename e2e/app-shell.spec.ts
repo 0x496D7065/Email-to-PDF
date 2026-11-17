@@ -7,8 +7,8 @@
 // dependency: landmarks, names, keyboard order, focus outlines and colour
 // contrast are checked explicitly below (contrast: e2e/support/contrast.ts).
 import { expect, test, type Page } from '@playwright/test';
-import { DONATION_IMAGE, DONATION_URL } from '../src/ui/dom.ts';
-import { en } from '../src/ui/i18n/en.ts';
+import { DONATION_IMAGE, DONATION_URL } from '../Source/page/dom.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
 import { withoutSelectConsole, withoutSelectReports } from './support/watch.ts';

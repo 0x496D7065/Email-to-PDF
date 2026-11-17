@@ -1,5 +1,5 @@
 // Type declarations for sw-version.mjs, so TypeScript (vite.config.ts,
-// src/sw/precache-list.ts and the tests) can import that plain-JS module
+// Source/offline-copy/precache-list.ts and the tests) can import that plain-JS module
 // under strict type checking. Keep in sync with it.
 
 export const MANIFEST_PLACEHOLDER: string;

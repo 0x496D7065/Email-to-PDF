@@ -1,6 +1,6 @@
 // Browser test of the cards of earlier emails rebuilt from quoted text in
-// step 2 (milestone 7, task 7.6: src/ui/preview.ts, src/ui/review.ts,
-// src/ui-model/rebuilt.ts), in each test browser against the BUILT site
+// step 2 (milestone 7, task 7.6: Source/page/preview.ts, Source/page/review.ts,
+// Source/page-logic/rebuilt.ts), in each test browser against the BUILT site
 // served by `vite preview` (see playwright.config.ts).
 //
 // The file added is the LAST email of a synthetic thread
@@ -15,7 +15,7 @@
 // The accessibility checks of this state are in e2e/accessibility.spec.ts.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { en } from '../src/ui/i18n/en.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
 declare global

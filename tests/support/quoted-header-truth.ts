@@ -1,9 +1,9 @@
-// Compares the fields read from a quoted header (src/engine/quoted-header.ts)
+// Compares the fields read from a quoted header (Source/thread-analysis/quoted-header.ts)
 // with the ground truth of the thread builder (thread-builder.ts). Shared by
 // the reader's tests and the reconstruction measurement. Test-only.
 
-import type { EmailAddress } from '../../src/parsing/types';
-import type { QuotedHeaderFields } from '../../src/engine/quoted-header';
+import type { EmailAddress } from '../../Source/email-reading/types';
+import type { QuotedHeaderFields } from '../../Source/thread-analysis/quoted-header';
 import type { ExpectedHeader, Person } from './thread-builder';
 
 /** People as a header writes them: the address only when it is written (Outlook names-only blocks and Thunderbird attributions have none). */

@@ -1,4 +1,4 @@
-// Browser test of the service worker (src/sw/; README.md, "How the privacy
+// Browser test of the service worker (Source/offline-copy/; README.md, "How the privacy
 // model works", rules R1, R2 and R5), in each test browser against the
 // BUILT site served by `vite preview` (see playwright.config.ts). Service
 // workers are blocked in every other spec; this one allows them.
@@ -33,8 +33,8 @@
 // Test data is made up: tests/fixtures/eml (invented people, *.test addresses).
 import { readdirSync, readFileSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
-import { cspForHeader, cspForMeta, cspForServiceWorker, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
-import { en } from '../src/ui/i18n/en.ts';
+import { cspForHeader, cspForMeta, cspForServiceWorker, PERMISSIONS_POLICY, REFERRER_POLICY } from '../Source/security-headers/headers.ts';
+import { en } from '../Source/page/translations/en.ts';
 import {
     engineOf,
     untoleratedReports,

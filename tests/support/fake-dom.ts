@@ -2,20 +2,20 @@
 //
 // Why not jsdom: it would be a new dependency, and our UI code only ever uses
 // a handful of DOM calls on purpose (createElement, setAttribute,
-// removeAttribute, textContent, append, replaceChildren; see src/ui/dom.ts).
+// removeAttribute, textContent, append, replaceChildren; see Source/page/dom.ts).
 // This fake implements exactly those and RECORDS them, so a test can also
 // prove that nothing else (such as innerHTML) was used: any other property
 // set on a fake element throws.
-// src/ui/review.ts also uses insertBefore (its box goes right after an
+// Source/page/review.ts also uses insertBefore (its box goes right after an
 // email's heading).
-// For the interactive parts (src/ui/add-files.ts, src/ui/preview.ts) it also
+// For the interactive parts (Source/page/add-files.ts, Source/page/preview.ts) it also
 // has event listeners (addEventListener + a test-side `fire`), click(),
 // focus() (counted, its options kept), getBoundingClientRect() (from a
 // test-set `rect`), scrollIntoView() (recorded), contains(), the `value` / `files` fields of a file input or select, and a
 // checkbox's `checked`. FakeEventTarget stands in for `window` (page-wide
 // drag-and-drop listeners). FakeDocument has a `body`, an `activeElement`
 // and event listeners ('focusin', 'pointerdown'), and FakeElement an
-// `isConnected`, which a test sets itself (src/ui/page.ts checks whether the
+// `isConnected`, which a test sets itself (Source/page/page.ts checks whether the
 // focused control was removed).
 // The real page is checked in a real browser by the e2e tests.
 

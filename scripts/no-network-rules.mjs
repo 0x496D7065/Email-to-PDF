@@ -8,8 +8,8 @@
 // so the check never scans the scripts/ folder itself.
 
 /**
- * URLs (http, https, ws, wss) that are allowed to appear anywhere in src/,
- * index.html or dist/. Compared EXACTLY (after trimming trailing punctuation).
+ * URLs (http, https, ws, wss) that are allowed to appear anywhere in Source/
+ * (Source/index.html included) or dist/. Compared EXACTLY (after trimming trailing punctuation).
  * See also FILE_URL_ALLOWLIST below, for URLs allowed in one dist/ file only.
  *
  * README.md, rule R3: the ONLY URLs ever allowed here are
@@ -20,7 +20,7 @@
  *
  * The Ko-fi donation page is the one entry: exactly this URL (no other
  * Ko-fi page, no http:, no longer path, no query), the href of the plain
- * link built by donationLink in src/ui/dom.ts. The page never loads it: the
+ * link built by donationLink in Source/page/dom.ts. The page never loads it: the
  * browser only goes there, in a new tab, when the reader clicks the link.
  * The repository link will be the next entry, at publish time, e.g.
  *   'https://github.com/OWNER/REPO',
@@ -29,11 +29,11 @@ export const URL_ALLOWLIST = ['https://ko-fi.com/0x496d7065'];
 
 /**
  * URLs allowed ONLY inside one specific file of dist/ (path relative to dist/).
- * Anywhere else (src/, index.html, any other dist/ file) they are still errors.
+ * Anywhere else (Source/, any other dist/ file) they are still errors.
  *
  * The two Apache links are part of the Apache-2.0 license text of
  * @kenjiuno/msgreader, which must be shipped unchanged in the third-party
- * notices (public/THIRD_PARTY_NOTICES.txt, copied to dist/ by Vite).
+ * notices (Source/public/THIRD_PARTY_NOTICES.txt, copied to dist/ by Vite).
  * They are plain text there, never loaded by the page.
  *
  * The SIL link is part of the copyright and license text of the IBM Plex
@@ -50,10 +50,10 @@ export const FILE_URL_ALLOWLIST = [
  * URLs allowed ONLY inside one specific SOURCE file (path relative to the
  * project root, forward slashes). Anywhere else they are still errors.
  *
- * src/fonts/LICENSE.txt is the fonts' license file, kept unchanged next to
+ * Source/pdf-export/fonts/LICENSE.txt is the fonts' license file, kept unchanged next to
  * them, as the license requires; its SIL link is plain text, never loaded.
  */
-export const SOURCE_FILE_URL_ALLOWLIST = [{ url: 'http://scripts.sil.org/OFL', onlyIn: 'src/fonts/LICENSE.txt' }];
+export const SOURCE_FILE_URL_ALLOWLIST = [{ url: 'http://scripts.sil.org/OFL', onlyIn: 'Source/pdf-export/fonts/LICENSE.txt' }];
 
 /**
  * Is `url` allowed in this file?
@@ -61,7 +61,7 @@ export const SOURCE_FILE_URL_ALLOWLIST = [{ url: 'http://scripts.sil.org/OFL', o
  * @param {string | undefined} distFile  Path relative to dist/ with forward
  *   slashes, e.g. 'THIRD_PARTY_NOTICES.txt'; undefined for files outside dist/.
  * @param {string | undefined} [sourceFile]  Path relative to the project
- *   root with forward slashes, e.g. 'src/fonts/LICENSE.txt'; undefined for
+ *   root with forward slashes, e.g. 'Source/pdf-export/fonts/LICENSE.txt'; undefined for
  *   dist/ files.
  * @returns {boolean}
  */
@@ -102,7 +102,7 @@ export const RULES = [
     { id: 'caches', pattern: /(?<![\w$])caches\s*\./g, reason: storage },
     { pattern: /\bvitest\b/g, reason: testCode, distOnly: true },
     { pattern: /(?<![\w$])describe\s*\(/g, reason: testCode, distOnly: true },
-    // HTML injection (README.md, rule R4). dist/ only, because comments in src/
+    // HTML injection (README.md, rule R4). dist/ only, because comments in Source/
     // legitimately say "never innerHTML"; the source is covered by ESLint
     // (eslint.config.js), and minified dist/ code has no comments left.
     // Stricter than "innerHTML=": ANY mention of these names fails, because a
@@ -130,15 +130,15 @@ export const RULES = [
  *     is ever stored at run time).
  * `distFile` is the built file (path relative to dist/), `sourceFile` its
  * source (path relative to the project root). Anywhere else, including
- * every other file of src/ and dist/ (the page's scripts, the inlined
+ * every other file of Source/ and dist/ (the page's scripts, the inlined
  * workers), both rules still fail the build. Every other rule (XHR,
  * WebSocket, script loading, the other storage APIs, URLs, ...) still
  * applies to these two files too. Never add an entry without the user's
  * approval.
  */
 export const RULE_EXEMPTIONS = [
-    { rule: 'fetch', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
-    { rule: 'caches', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
+    { rule: 'fetch', distFile: 'sw.js', sourceFile: 'Source/offline-copy/service-worker.ts' },
+    { rule: 'caches', distFile: 'sw.js', sourceFile: 'Source/offline-copy/service-worker.ts' },
 ];
 
 /**

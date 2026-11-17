@@ -1,5 +1,5 @@
 // Browser test of "Clear everything" and of "nothing is kept"
-// (src/ui/page.ts; README.md, rules R1, R2, R5 and R6), in each test browser against
+// (Source/page/page.ts; README.md, rules R1, R2, R5 and R6), in each test browser against
 // the BUILT site served by `vite preview` (see playwright.config.ts). The
 // real pipeline runs on synthetic fixtures from tests/fixtures/eml, plus a
 // large batch of made-up emails built in this file (invented names,
@@ -10,7 +10,7 @@
 // violation (page or worker) and no console error. See e2e/support/watch.ts.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { en } from '../src/ui/i18n/en.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/watch.ts';

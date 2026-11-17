@@ -1,7 +1,7 @@
 // The case set for thread reconstruction (milestone 7): conversations built
 // with thread-builder.ts, grouped by the style under test, plus negative
 // bodies where nothing (or nothing safe) can be rebuilt. Used by the
-// measurement test (src/engine/reconstruct-measure.test.ts) and the builder's
+// measurement test (Source/thread-analysis/reconstruct-measure.test.ts) and the builder's
 // own test. Synthetic data only (README.md, rule R7).
 
 import { buildThread, isForwardStyle, wallTimeOf, type BuiltThread, type ExpectedHeader, type Person, type QuoteOptions, type QuoteStyle, type ThreadMessage, type Zone } from './thread-builder';
@@ -227,7 +227,7 @@ function shiftHeader(h: ExpectedHeader, at: number, delta: number): ExpectedHead
 /**
  * Real threads in shapes the splitter (task 7.4) refuses on purpose, so the
  * recall cost of "drop the holder on refusal" stays visible. Measured apart
- * (src/engine/reconstruct-measure.test.ts), NOT in the per-style recall
+ * (Source/thread-analysis/reconstruct-measure.test.ts), NOT in the per-style recall
  * targets of THREAD_CASES. The builder forbids own text with ">" lines or
  * no own text, so both bodies are built, then edited; the ground truth is
  * edited with them.

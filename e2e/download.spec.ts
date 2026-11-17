@@ -1,5 +1,5 @@
-// Browser test of step 3, "Make the PDF" (src/ui/download-step.ts,
-// src/pipeline/pdf-runner.ts; README.md, rules R1, R2, R4 and R5), in
+// Browser test of step 3, "Make the PDF" (Source/page/download-step.ts,
+// Source/worker-pipeline/pdf-runner.ts; README.md, rules R1, R2, R4 and R5), in
 // each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts), with the real pipeline and the real PDF worker:
 //
@@ -31,7 +31,7 @@
 // (invented people, *.test addresses).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
-import { en } from '../src/ui/i18n/en.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { readOutline, readPdf } from '../tests/support/pdf-reader.ts';
 // untoleratedReports: all but the CSP reports Chromium makes while DOMParser PARSES email HTML (see e2e/full-flow.spec.ts).
 import {

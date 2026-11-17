@@ -1,11 +1,11 @@
 // A second, independent implementation of the PDF display transforms
-// (src/pdf/text.ts), for the tests only: the "include everything" checks
+// (Source/pdf-export/text.ts), for the tests only: the "include everything" checks
 // (README.md, rule R6) compare the model's body text with it. Written
 // differently on purpose (a loop over code points, no regular expression for
 // the special characters), so a mistake in one is not repeated in the other.
 // Test-only: never imported by the app.
 
-/** Spaces per tab, as documented in src/pdf/text.ts. */
+/** Spaces per tab, as documented in Source/pdf-export/text.ts. */
 const TAB = '    ';
 
 function isHigh(c: number): boolean
@@ -18,7 +18,7 @@ function isLow(c: number): boolean
     return c >= 0xdc00 && c <= 0xdfff;
 }
 
-/** Group 1 of the contract in src/pdf/text.ts, for one whole code point (tags handled by the caller). */
+/** Group 1 of the contract in Source/pdf-export/text.ts, for one whole code point (tags handled by the caller). */
 function isCoded(cp: number): boolean
 {
     if (cp < 0x20)
@@ -112,7 +112,7 @@ function displayLine(line: string): { text: string; codes: number }
 
 /**
  * May this code point come before or between the ">" of a quote prefix,
- * as src/pdf/text.ts (transform g) documents it? Whitespace (\s) except VT
+ * as Source/pdf-export/text.ts (transform g) documents it? Whitespace (\s) except VT
  * and FF (the PDF stops the prefix there so they stay visible as codes),
  * and the invisible characters drawn as nothing: soft hyphen, CGJ, ALM,
  * ZWSP to RLM (U+200B to U+200F), U+2060 to U+2064, the variation
@@ -141,7 +141,7 @@ function inPrefix(c: number): boolean
 
 /**
  * Quote marks at the start of a line, read here differently from
- * src/pdf/text.ts: first the longest start made only of ">" and inPrefix
+ * Source/pdf-export/text.ts: first the longest start made only of ">" and inPrefix
  * characters (by code point), then back to its last ">"; then one plain or
  * no-break space when there is one. Gives whether there was a prefix and
  * the rest of the line (the line itself when there is none).

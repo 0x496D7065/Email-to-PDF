@@ -1,5 +1,5 @@
 // Browser test of the step 1 help, "How do I get my email files?"
-// (src/ui/app.ts), in each test browser against the BUILT site served by
+// (Source/page/app.ts), in each test browser against the BUILT site served by
 // `vite preview` (see playwright.config.ts).
 //
 // The help is a native <details>/<summary> right above the drop zone: closed
@@ -10,7 +10,7 @@
 // (e2e/support/watch.ts). No accessibility library is used (no new
 // dependency): names, focus, headings and contrast are checked explicitly.
 import { expect, test, type Page } from '@playwright/test';
-import { en } from '../src/ui/i18n/en.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
 import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/watch.ts';

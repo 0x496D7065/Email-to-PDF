@@ -3,7 +3,7 @@
 
 export interface FontFile
 {
-    /** Path relative to the project root, e.g. 'src/fonts/IBMPlexSans-Regular.woff'. */
+    /** Path relative to the project root, e.g. 'Source/pdf-export/fonts/IBMPlexSans-Regular.woff'. */
     file: string;
     /** SHA-256 of the official, unmodified file, lowercase hex. */
     sha256: string;

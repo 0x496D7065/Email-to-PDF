@@ -21,7 +21,7 @@
 // the internet (README.md, "how to verify").
 import { expect, test, type FileChooser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
-import { en } from '../src/ui/i18n/en.ts';
+import { en } from '../Source/page/translations/en.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
@@ -468,7 +468,7 @@ test.describe('offline right after the page has loaded', () =>
         await open(page);
         // The PDF fonts came with the page, before going offline: their chunk
         // was requested once during the load, and the page entry has checked
-        // them (src/main.ts sets the flag only after reading their headers).
+        // them (Source/main.ts sets the flag only after reading their headers).
         const fontChunk = /^\/assets\/pdf-fonts-[\w-]+\.js$/;
         expect(watch.requests.slice(0, loadedAt).filter((url) => fontChunk.test(new URL(url).pathname))).toHaveLength(1);
         await expect(page.locator('html')).toHaveAttribute('data-pdf-fonts', 'ready');

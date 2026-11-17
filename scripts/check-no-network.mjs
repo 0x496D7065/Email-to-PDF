@@ -12,8 +12,9 @@
 // TypeScript runner is needed to run it.
 //
 // What is scanned:
-//   - src/ (every file) and index.html: catches problems early, in the code
-//     you write.
+//   - Source/ (every file, Source/index.html included, except Source/public/,
+//     which is copied into dist/ as is and scanned there): catches problems
+//     early, in the code you write.
 //   - dist/ (every file, including _headers): the code that is actually
 //     published. This is the real guarantee, because it also covers code
 //     added by Vite or by any future dependency.
@@ -24,21 +25,21 @@
 //     checked as the browser will run it. A long base64-looking literal
 //     fails the check (findOpaquePayloads): that format would hide the
 //     worker code from both scans.
-//   - The PDF fonts (scripts/font-rules.mjs): src/fonts/*.woff are binary,
+//   - The PDF fonts (scripts/font-rules.mjs): Source/pdf-export/fonts/*.woff are binary,
 //     so they are not scanned as text but must have their pinned SHA-256.
 //     In the build they are long number arrays, allowed only in the font
 //     chunk (dist/assets/pdf-fonts-*.js) and only if each one is exactly a
-//     committed font; anywhere else (src/ included) a long number array
+//     committed font; anywhere else (Source/ included) a long number array
 //     fails, like a long base64 literal. The page's entry script must
 //     import the font chunk statically, so it loads with the page.
-//   - One exception, for one file: the service worker (src/sw/service-worker.ts,
+//   - One exception, for one file: the service worker (Source/offline-copy/service-worker.ts,
 //     built as dist/sw.js) may use the network call and Cache Storage, to keep
 //     and serve a copy of the site's own files (RULE_EXEMPTIONS in
 //     no-network-rules.mjs). Every other rule still applies to it, and both
 //     rules still apply to every other file.
 // What is NOT scanned:
 //   - scripts/: these check files must contain the banned words to look for them.
-//   - src/**/*.test.ts: tests legitimately mention banned words as strings
+//   - Source/**/*.test.ts: tests legitimately mention banned words as strings
 //     (e.g. the CSP test checks that "http:" is absent). They are never
 //     shipped, and this cannot hide real app code: anything the app imports
 //     ends up in dist/, which is scanned with the same rules PLUS a check that
@@ -76,11 +77,15 @@ if (!existsSync(dist))
     process.exit(1);
 }
 
-// Font files (src/fonts/*.woff) are binary: they are not scanned as text but
+// Font files (Source/pdf-export/fonts/*.woff) are binary: they are not scanned as text but
 // checked against their pinned SHA-256 (scripts/font-rules.mjs).
-const srcFiles = listFiles(join(root, 'src')).filter((path) => !path.endsWith('.test.ts'));
+// Source/public/ is skipped here: Vite copies those files into dist/ as they
+// are, and they are scanned there byte for byte (with the dist/ rules).
+// Source/index.html is scanned here like any other Source/ file.
+const publicDir = join(root, 'Source', 'public');
+const srcFiles = listFiles(join(root, 'Source')).filter((path) => !path.endsWith('.test.ts') && !path.startsWith(publicDir + sep));
 const fontFiles = srcFiles.filter((path) => isFontFile(path));
-const sourceFiles = [...srcFiles.filter((path) => !isFontFile(path)), join(root, 'index.html')];
+const sourceFiles = srcFiles.filter((path) => !isFontFile(path));
 const distFiles = listFiles(dist);
 
 const errors = [];
@@ -97,7 +102,7 @@ for (const [files, isDist] of [
     {
         // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
         // used by the per-file URL allowlist. For source files: the path from
-        // the project root (e.g. 'src/fonts/LICENSE.txt'), same purpose.
+        // the project root (e.g. 'Source/pdf-export/fonts/LICENSE.txt'), same purpose.
         const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
         const sourceFile = isDist ? undefined : display(path);
         const text = readFileSync(path, 'utf8');

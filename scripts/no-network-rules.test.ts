@@ -115,7 +115,7 @@ describe('HTML injection APIs (README.md, rule R4)', () =>
         expect(findViolations(code, dist).every((f) => f.reason.includes('rule R4'))).toBe(true);
     });
 
-    it('does not flag them in src/ (comments there say "never innerHTML"; ESLint covers the source)', () =>
+    it('does not flag them in Source/ (comments there say "never innerHTML"; ESLint covers the source)', () =>
     {
         expect(findViolations('// never use innerHTML here\ne.textContent = t;', src)).toEqual([]);
     });
@@ -136,11 +136,11 @@ describe('global URL allowlist (the Ko-fi donation link)', () =>
         expect(URL_ALLOWLIST).toEqual([kofi]);
     });
 
-    it('accepts exactly the donation URL in src/ and in every dist/ file, also with escaped slashes', () =>
+    it('accepts exactly the donation URL in Source/ and in every dist/ file, also with escaped slashes', () =>
     {
         const code = `l.setAttribute("href","${kofi}");`;
         expect(findViolations(code, src)).toEqual([]);
-        expect(findViolations(code, { isDist: false, sourceFile: 'src/ui/dom.ts' })).toEqual([]);
+        expect(findViolations(code, { isDist: false, sourceFile: 'Source/page/dom.ts' })).toEqual([]);
         for (const distFile of ['assets/index-abc123.js', 'index.html'])
         {
             expect(findViolations(code, { isDist: true, distFile })).toEqual([]);
@@ -197,7 +197,7 @@ describe('file-scoped URL allowlist (third-party notices)', () =>
         expect(findViolations(apache, dist)).toHaveLength(2);
     });
 
-    it('rejects the Apache license URLs in src/, even with a notices file name', () =>
+    it('rejects the Apache license URLs in Source/, even with a notices file name', () =>
     {
         expect(findViolations(apache, src)).toHaveLength(2);
         expect(findViolations(apache, { isDist: false, distFile: 'THIRD_PARTY_NOTICES.txt' })).toHaveLength(2);
@@ -229,17 +229,17 @@ describe('file-scoped URL allowlist (font license)', () =>
 {
     const ofl = 'This license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n';
     const notices = { isDist: true, distFile: 'THIRD_PARTY_NOTICES.txt' };
-    const licenseFile = { isDist: false, sourceFile: 'src/fonts/LICENSE.txt' };
+    const licenseFile = { isDist: false, sourceFile: 'Source/pdf-export/fonts/LICENSE.txt' };
 
     it('lists exactly the one SIL link, for the notices file and the license file only', () =>
     {
         expect(FILE_URL_ALLOWLIST.filter((entry) => entry.url.includes('sil.org'))).toEqual([
             { url: 'http://scripts.sil.org/OFL', onlyIn: 'THIRD_PARTY_NOTICES.txt' },
         ]);
-        expect(SOURCE_FILE_URL_ALLOWLIST).toEqual([{ url: 'http://scripts.sil.org/OFL', onlyIn: 'src/fonts/LICENSE.txt' }]);
+        expect(SOURCE_FILE_URL_ALLOWLIST).toEqual([{ url: 'http://scripts.sil.org/OFL', onlyIn: 'Source/pdf-export/fonts/LICENSE.txt' }]);
     });
 
-    it('accepts the SIL link inside dist/THIRD_PARTY_NOTICES.txt and src/fonts/LICENSE.txt', () =>
+    it('accepts the SIL link inside dist/THIRD_PARTY_NOTICES.txt and Source/pdf-export/fonts/LICENSE.txt', () =>
     {
         expect(findViolations(ofl, notices)).toEqual([]);
         expect(findViolations(ofl, licenseFile)).toEqual([]);
@@ -247,11 +247,11 @@ describe('file-scoped URL allowlist (font license)', () =>
 
     it('rejects the SIL link in any other dist/ or source file', () =>
     {
-        for (const distFile of ['assets/index-abc123.js', 'assets/pdf-fonts-abc.js', 'index.html', 'src/fonts/LICENSE.txt'])
+        for (const distFile of ['assets/index-abc123.js', 'assets/pdf-fonts-abc.js', 'index.html', 'Source/pdf-export/fonts/LICENSE.txt'])
         {
             expect(findViolations(ofl, { isDist: true, distFile }), distFile).toHaveLength(1);
         }
-        for (const sourceFile of ['src/pdf/fonts.ts', 'src/fonts/license.txt', 'src/LICENSE.txt', 'index.html', 'THIRD_PARTY_NOTICES.txt'])
+        for (const sourceFile of ['Source/pdf-export/fonts.ts', 'Source/pdf-export/fonts/license.txt', 'Source/LICENSE.txt', 'Source/index.html', 'THIRD_PARTY_NOTICES.txt'])
         {
             expect(findViolations(ofl, { isDist: false, sourceFile }), sourceFile).toHaveLength(1);
         }
@@ -261,8 +261,8 @@ describe('file-scoped URL allowlist (font license)', () =>
 
     it('does not let a source-file entry count for dist/, or a dist/ entry for the source', () =>
     {
-        expect(findViolations(ofl, { isDist: true, distFile: 'x.js', sourceFile: 'src/fonts/LICENSE.txt' })).toHaveLength(1);
-        expect(findViolations(ofl, { isDist: false, distFile: 'THIRD_PARTY_NOTICES.txt', sourceFile: 'src/x.ts' })).toHaveLength(1);
+        expect(findViolations(ofl, { isDist: true, distFile: 'x.js', sourceFile: 'Source/pdf-export/fonts/LICENSE.txt' })).toHaveLength(1);
+        expect(findViolations(ofl, { isDist: false, distFile: 'THIRD_PARTY_NOTICES.txt', sourceFile: 'Source/x.ts' })).toHaveLength(1);
     });
 
     it('rejects variants of the SIL link even in the license file', () =>
@@ -437,32 +437,32 @@ describe('rule exceptions (the service worker only)', () =>
     it('are exactly fetch( and caches. in sw.js and its source', () =>
     {
         expect(RULE_EXEMPTIONS).toEqual([
-            { rule: 'fetch', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
-            { rule: 'caches', distFile: 'sw.js', sourceFile: 'src/sw/service-worker.ts' },
+            { rule: 'fetch', distFile: 'sw.js', sourceFile: 'Source/offline-copy/service-worker.ts' },
+            { rule: 'caches', distFile: 'sw.js', sourceFile: 'Source/offline-copy/service-worker.ts' },
         ]);
         expect(RULES.filter((rule) => rule.id !== undefined).map((rule) => rule.id)).toEqual(['fetch', 'caches']);
     });
 
-    it('allow those two calls in dist/sw.js and src/sw/service-worker.ts', () =>
+    it('allow those two calls in dist/sw.js and Source/offline-copy/service-worker.ts', () =>
     {
         expect(findViolations(swCode, { isDist: true, distFile: 'sw.js' })).toEqual([]);
-        expect(findViolations(swCode, { isDist: false, sourceFile: 'src/sw/service-worker.ts' })).toEqual([]);
+        expect(findViolations(swCode, { isDist: false, sourceFile: 'Source/offline-copy/service-worker.ts' })).toEqual([]);
         expect(findEmbeddedViolations(JSON.stringify(swCode), { isDist: true, distFile: 'sw.js' })).toEqual([]);
     });
 
-    it('still report them in every other file, src/ and dist/ alike', () =>
+    it('still report them in every other file, Source/ and dist/ alike', () =>
     {
         for (const options of [
             { isDist: true, distFile: 'assets/index-abc.js' },
             { isDist: true, distFile: 'assets/sw.js' },
             { isDist: true, distFile: 'index.html' },
             { isDist: true },
-            { isDist: false, sourceFile: 'src/sw/sw-logic.ts' },
-            { isDist: false, sourceFile: 'src/main.ts' },
+            { isDist: false, sourceFile: 'Source/offline-copy/sw-logic.ts' },
+            { isDist: false, sourceFile: 'Source/main.ts' },
             { isDist: false },
             // The two scopes never mix: the dist name for a source file, and the reverse.
             { isDist: false, sourceFile: 'sw.js' },
-            { isDist: true, distFile: 'src/sw/service-worker.ts' },
+            { isDist: true, distFile: 'Source/offline-copy/service-worker.ts' },
         ])
         {
             expect(findViolations(swCode, options).map((f) => f.match), JSON.stringify(options)).toEqual(['fetch(', 'caches.']);
@@ -488,9 +488,9 @@ describe('rule exceptions (the service worker only)', () =>
     {
         expect(isRuleExempt({}, true, 'sw.js', undefined)).toBe(false);
         expect(isRuleExempt({ id: 'fetch' }, true, 'sw.js', undefined)).toBe(true);
-        expect(isRuleExempt({ id: 'fetch' }, true, undefined, 'src/sw/service-worker.ts')).toBe(false);
+        expect(isRuleExempt({ id: 'fetch' }, true, undefined, 'Source/offline-copy/service-worker.ts')).toBe(false);
         expect(isRuleExempt({ id: 'fetch' }, false, 'sw.js', undefined)).toBe(false);
-        expect(isRuleExempt({ id: 'caches' }, false, undefined, 'src/sw/service-worker.ts')).toBe(true);
+        expect(isRuleExempt({ id: 'caches' }, false, undefined, 'Source/offline-copy/service-worker.ts')).toBe(true);
         expect(isRuleExempt({ id: 'other' }, true, 'sw.js', undefined)).toBe(false);
     });
 });

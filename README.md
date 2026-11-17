@@ -153,8 +153,8 @@ by anyone, as described next.
    one visit with the internet on, you can also reload or reopen the page
    while offline: it then comes from the offline copy.
 3. **Read the source.** The security headers are in
-   `src/security/headers.ts`, the build checks in `scripts/`, the browser
-   tests in `e2e/`, and the offline copy in `src/sw/`.
+   `Source/security-headers/headers.ts`, the build checks in `scripts/`, the browser
+   tests in `e2e/`, and the offline copy in `Source/offline-copy/`.
 4. **Check the CSP.** In DevTools, on a host that sends headers, the
    response headers of the page show the policy listed under
    [R2](#r2-strict-content-security-policy); the served page repeats it in
@@ -367,8 +367,8 @@ unticked).
 
 ### Accuracy on synthetic test conversations
 
-Measured by `src/engine/reconstruct-measure.test.ts` and
-`src/engine/rebuild-links.measure.test.ts` on 42 **synthetic**
+Measured by `Source/thread-analysis/reconstruct-measure.test.ts` and
+`Source/thread-analysis/rebuild-links.measure.test.ts` on 42 **synthetic**
 conversations (166 emails, 124 of them quoted inside later ones), written
 to imitate each mail program's quote style. These numbers say nothing
 certain about real emails.
@@ -501,7 +501,7 @@ No inline code and no `eval`. The policy may be tightened, never loosened.
 The site also sends `Referrer-Policy: no-referrer` and a
 `Permissions-Policy` that turns off features the page never uses (camera,
 microphone, location, and so on). The single source of all of these is
-`src/security/headers.ts`; the build writes them to `dist/_headers`
+`Source/security-headers/headers.ts`; the build writes them to `dist/_headers`
 (Cloudflare Pages format).
 
 - **Why `blob:`:** the files are read, and the PDF made, in Web Workers
@@ -532,7 +532,7 @@ microphone, location, and so on). The single source of all of these is
 ### R3: Automated checks in the build and CI
 
 - `npm run build` ends with `scripts/check-no-network.mjs`, which scans
-  `src/`, `index.html` and the whole built site (`dist/`). It fails on a
+  `Source/` (with `Source/index.html`) and the whole built site (`dist/`). It fails on a
   network API, a browser storage API, an HTML injection API in the build
   (`innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`), test
   code in the build, missing or wrong security headers, a missing or stale
@@ -545,16 +545,16 @@ microphone, location, and so on). The single source of all of these is
   the Ko-fi donation link, allowed as exactly `https://ko-fi.com/0x496d7065`
   (any other Ko-fi address fails), and the Apache License and SIL Open
   Font License links, each allowed in `THIRD_PARTY_NOTICES.txt` only (and
-  the SIL link in `src/fonts/LICENSE.txt`), rejected anywhere else.
+  the SIL link in `Source/pdf-export/fonts/LICENSE.txt`), rejected anywhere else.
 - **One file exempt from two scans:** the service worker
-  (`src/sw/service-worker.ts`, built as `dist/sw.js`) may call `fetch(`
+  (`Source/offline-copy/service-worker.ts`, built as `dist/sw.js`) may call `fetch(`
   and use Cache Storage (`caches.`), to keep the site's own files. Every
   other rule applies to it, and both stay banned everywhere else
   (`RULE_EXEMPTIONS`).
 - **Fonts:** the PDF fonts are built in as lists of numbers. The check
   fails if such a list appears anywhere but the font script, if a list is
   not exactly one of the committed font files (by SHA-256), if a font file
-  in `src/fonts/` changed, or if the page does not load the font script at
+  in `Source/pdf-export/fonts/` changed, or if the page does not load the font script at
   startup. This makes hiding code in numbers harder but does not catch
   every way of writing data down; the real barrier is the CSP (hidden code
   could neither send anything nor load more code).
@@ -575,7 +575,7 @@ microphone, location, and so on). The single source of all of these is
 
 HTML bodies are turned into plain text with an inert parser (one that runs
 no scripts and loads nothing) and shown with `textContent`, never as HTML.
-The page builds elements only through `src/ui/dom.ts`, which sets text only
+The page builds elements only through `Source/page/dom.ts`, which sets text only
 through `textContent` and refuses event handler attributes and unsafe
 URLs. Attachments are never opened or processed, only listed, with one
 exception: an email attached inside an `.eml` email (inline or sent as an
@@ -602,9 +602,9 @@ saved either. The offline copy keeps only the site's own static files.
 The tool never silently discards message content. Quoted history,
 repeated signatures and disclaimers are folded, not removed. Message text
 is never rewritten. Only provably identical duplicates are merged
-(`src/engine/dedupe.ts`), and the page says how many were merged.
+(`Source/thread-analysis/dedupe.ts`), and the page says how many were merged.
 
-One deliberate exception, in the PDF only (`src/engine/output-plan.ts`):
+One deliberate exception, in the PDF only (`Source/thread-analysis/output-plan.ts`):
 by default the PDF shows what each writer actually wrote. A second,
 narrow one, also in the PDF only: an email with no text is not in the PDF
 at all (see "Emails with no text" below).
@@ -707,7 +707,7 @@ at all (see "Emails with no text" below).
 - **Emails with no text:** an email whose text is empty or only white
   space (spaces, tabs, empty lines, non-breaking spaces) is left out of
   the PDF entirely, even when it has attachments, with or without "Print
-  full original text" (`src/ui-model/no-text.ts`). This is a second,
+  full original text" (`Source/page-logic/no-text.ts`). This is a second,
   narrow exception: such an email has nothing to print, so it gets no
   page, no index line, no bookmark and no number (the other emails are
   numbered without a gap), and it does not count on the cover (the number
@@ -805,7 +805,7 @@ already there, in full, in the email that quotes them, which keeps all of
 it (folded in the preview, whole in the PDF). Unticking it brings back the
 earlier choices exactly.
 
-A second display change, in the PDF only (`src/pdf/text.ts`): the quote
+A second display change, in the PDF only (`Source/pdf-export/text.ts`): the quote
 marks at the start of a line (one or more ">", the spaces and invisible
 characters before each, and one space or no-break space after the last)
 are not printed. The invisible characters are the ones the PDF draws as
@@ -814,7 +814,7 @@ the soft hyphen and all variation selectors (U+FE00 to U+FE0F and U+E0100
 to U+E01EF). Quote levels are not shown: every line of an email's text is
 indented by one fixed step, one tab: the width of 4 normal spaces of the
 body font at the body size, measured from the font
-(`src/pdf/layout/config.ts`, `bodyIndentSpaces`; 9.44 pt with the
+(`Source/pdf-export/page-layout/config.ts`, `bodyIndentSpaces`; 9.44 pt with the
 default 10 pt IBM Plex Sans), quoted or not, and so is the "(no text)"
 placeholder; the header rows and the attachment list stay at the margin. The PDF stops
 reading the marks at a vertical tab or form feed control, or at any other
@@ -835,7 +835,7 @@ pure functions with no page or DOM access, unit tested in isolation with
 **synthetic** test emails. Real emails are never committed.
 
 A guard test checks this on every `npm test`, for the test emails in
-`tests/fixtures/` and the test code (`src/**/*.test.ts`, `e2e/`,
+`tests/fixtures/` and the test code (`Source/**/*.test.ts`, `e2e/`,
 `tests/support/`, `scripts/**/*.test.*`). It fails on any email address,
 web address or host name that is not a reserved test name (`*.test`,
 `*.invalid`), any IP address outside the documentation and loopback
@@ -846,7 +846,7 @@ build-check tests need are listed one by one, with a reason, in
 
 ## Offline copy (service worker)
 
-The built site registers a service worker, `/sw.js` (source in `src/sw/`),
+The built site registers a service worker, `/sw.js` (source in `Source/offline-copy/`),
 from its own script (no inline script), so the page can be reopened
 without internet. `npm run dev` has none. If the browser refuses it, the
 page works as before; it just cannot be reopened offline.
@@ -893,6 +893,25 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `npm run lint` | ESLint, including the privacy rules. |
 | `npm run typecheck` | TypeScript type check. |
 
+**Where things are.** Unit tests (`*.test.ts`) sit next to the code they test.
+
+| Folder | What is in it |
+| --- | --- |
+| `Source/` | The site itself: `index.html`, `main.ts` (the page's entry), `bytes-import.d.ts` (the type declaration for the `?bytes` font imports; it moves to `Header/` later) and the folders below. |
+| `Source/email-reading/` | Reading `.eml` and `.msg` files into messages (in a worker). |
+| `Source/thread-analysis/` | Duplicates, order, quoted history, signatures, earlier emails rebuilt from quotes. |
+| `Source/pdf-export/` | The PDF: its content, `font-reader/`, `page-layout/`, `pdf-writer/` and the bundled `fonts/`. |
+| `Source/worker-pipeline/` | Starts the analysis and PDF workers and chains all the steps (`process-files`). The reading worker lives in `Source/email-reading/`. |
+| `Source/page/` | The page the user sees; `translations/` holds every visible word (English, French, Dutch). |
+| `Source/page-logic/` | What the page shows, as pure functions (no DOM). |
+| `Source/offline-copy/` | The service worker (offline copy of the site's own files). |
+| `Source/security-headers/` | The Content Security Policy and other security headers. |
+| `Source/library-shims/` | Small browser replacements for library dependencies. |
+| `Source/public/` | Files copied into the site as they are (third-party notices, Ko-fi button). |
+| `scripts/` | The no-network build check and the project's own lint rules. |
+| `tests/` | Synthetic test emails, their guards and test helpers. |
+| `e2e/` | Browser tests (Playwright). |
+
 **Test data is synthetic only.** Never add, copy or "anonymize" a real
 email. `.gitignore` ignores email files (`.eml`, `.msg`, `.mbox`, `.pst`,
 `.emlx`, `.ost`, `.oft`, in any letter case) everywhere, with one narrow
@@ -903,7 +922,7 @@ anything that looks real. Rules for new fixtures: `tests/fixtures/README.md`.
 **Dependencies:** two direct run-time ones, `postal-mime` (reads `.eml`)
 and `@kenjiuno/msgreader` (reads `.msg`, bundled with its own dependency
 `@kenjiuno/decompressrtf`; its `iconv-lite` dependency is not shipped,
-replaced by `src/shims/iconv-lite.ts`); the rest are development tools.
+replaced by `Source/library-shims/iconv-lite.ts`); the rest are development tools.
 Direct dependencies are pinned to exact versions (`.npmrc` has
 `save-exact=true`); the committed `package-lock.json` fixes every indirect
 one, and `npm ci` installs exactly that. Add a dependency only when it is
@@ -916,14 +935,14 @@ Firefox, WebKit). Actions are pinned to full commit SHAs, and the workflow
 can only read the repository.
 
 **Bundled fonts:** the PDF uses IBM Plex Sans (Regular, Bold, Italic) and
-IBM Plex Mono (Regular), stored unmodified in `src/fonts/` with their
+IBM Plex Mono (Regular), stored unmodified in `Source/pdf-export/fonts/` with their
 license. They are not used for the page itself. The build turns them into
 a script of their own, `assets/pdf-fonts-[hash].js` (about 1.2 MB, 440 kB
 compressed), loaded with the page, because nothing can be downloaded once
 the page has loaded. See R3 for how this script is checked.
 
 **Third-party notices:** the licenses of the bundled libraries and fonts
-are in `public/THIRD_PARTY_NOTICES.txt`, shipped with the site.
+are in `Source/public/THIRD_PARTY_NOTICES.txt`, shipped with the site.
 
 ## Security note for maintainers
 
@@ -938,10 +957,10 @@ open source so anyone can compare what is served with the code.
 MIT, copyright 0x496D7065. See `LICENSE`.
 
 The IBM Plex fonts are under the SIL Open Font License 1.1, copyright 2017
-IBM Corp., with Reserved Font Name "Plex" (`src/fonts/LICENSE.txt`). Other
-bundled libraries: see `public/THIRD_PARTY_NOTICES.txt`.
+IBM Corp., with Reserved Font Name "Plex" (`Source/pdf-export/fonts/LICENSE.txt`). Other
+bundled libraries: see `Source/public/THIRD_PARTY_NOTICES.txt`.
 
-The Ko-fi button image (`public/ko-fi/support_me_on_kofi_blue.png`) is
+The Ko-fi button image (`Source/public/ko-fi/support_me_on_kofi_blue.png`) is
 Ko-fi's official "Support me on Ko-fi" button, used unchanged. The Ko-fi
 name, logo and button are trademarks of Ko-fi. The image is **not**
 covered by this project's MIT license.

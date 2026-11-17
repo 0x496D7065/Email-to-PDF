@@ -35,7 +35,7 @@ const htmlSinkPattern = `/^(${htmlSinks.join('|')})$/`;
 
 // AST selectors for 'no-restricted-syntax' (README.md, rule R4). A named
 // list because flat config REPLACES a rule's options in each block that sets
-// it: the src/ block below repeats these and adds its own.
+// it: the Source/ block below repeats these and adds its own.
 const restrictedSyntax = [
     // The same names written as el['innerHTML'] (computed access) or as an
     // object key, e.g. Object.assign(el, { innerHTML: x }).
@@ -48,7 +48,7 @@ const restrictedSyntax = [
     // el.setAttribute('onclick', ...) / ('srcdoc', ...) when the name is
     // written as a literal or a template literal (`on${x}`: its first
     // text part is checked). Names built at run time are caught by
-    // src/ui/dom.ts (el / setSafeAttribute), which refuses them.
+    // Source/page/dom.ts (el / setSafeAttribute), which refuses them.
     ...[
         ['setAttribute', 0],
         ['setAttributeNS', 1],
@@ -63,7 +63,7 @@ const restrictedSyntax = [
 // The app runs in the browser only: node: modules are for tests and scripts.
 const nodeOnly = 'The app runs in the browser only; node: modules are for tests and scripts.';
 // import('node:fs') written as a string or a template literal. Static
-// imports are caught by 'no-restricted-imports' in the src/ block below.
+// imports are caught by 'no-restricted-imports' in the Source/ block below.
 const dynamicNodeImports = [
     { selector: 'ImportExpression[source.value=/^node:/]', message: nodeOnly },
     { selector: 'ImportExpression[source.quasis.0.value.cooked=/^node:/]', message: nodeOnly },
@@ -165,26 +165,26 @@ export default defineConfig(
         },
     },
     // The app runs in the browser only. e2e/support/node-fs.d.ts declares
-    // 'node:fs' for the browser tests, and tsconfig.json covers src/ and e2e/
+    // 'node:fs' for the browser tests, and tsconfig.json covers Source/ and e2e/
     // together, so typecheck alone would not stop app code importing it.
     // 'no-restricted-imports' sees static imports only, so dynamic import()
     // is caught by 'no-restricted-syntax', which must repeat the shared
-    // selectors (this block replaces that rule's options for src/).
+    // selectors (this block replaces that rule's options for Source/).
     {
-        files: ['src/**/*.ts'],
+        files: ['Source/**/*.ts'],
         rules: {
             'no-restricted-imports': ['error', { patterns: [{ group: ['node:*'], message: nodeOnly }] }],
             'no-restricted-syntax': ['error', ...restrictedSyntax, ...dynamicNodeImports],
         },
     },
-    // The service worker (src/sw/service-worker.ts) is the one shipped file
+    // The service worker (Source/offline-copy/service-worker.ts) is the one shipped file
     // allowed to call fetch(): a listed file of this site missing from its
     // copy is fetched from this site again, and nothing is stored (README.md,
     // "How the privacy model works"; the build check has the same single
     // exception, RULE_EXEMPTIONS in scripts/no-network-rules.mjs). Only bare
     // `fetch` is allowed there; every other entry of the list still applies.
     {
-        files: ['src/sw/service-worker.ts'],
+        files: ['Source/offline-copy/service-worker.ts'],
         rules: {
             'no-restricted-globals': [
                 'error',

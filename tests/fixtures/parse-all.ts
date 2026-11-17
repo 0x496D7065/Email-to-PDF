@@ -1,12 +1,12 @@
 // Parses every synthetic fixture (this folder) with the real .eml and .msg
 // adapters, in manifest order. Shared by the engine's fixture tests
-// (src/engine/*.fixtures.test.ts) so they all see the same parsed messages.
+// (Source/thread-analysis/*.fixtures.test.ts) so they all see the same parsed messages.
 // Test-only: never imported by the app.
 
-import { createEmlParser } from '../../src/parsing/eml';
-import type { HtmlToTextResult } from '../../src/parsing/html-to-text';
-import { createMsgParser } from '../../src/parsing/msg';
-import type { NormalizedMessage } from '../../src/parsing/types';
+import { createEmlParser } from '../../Source/email-reading/eml';
+import type { HtmlToTextResult } from '../../Source/email-reading/html-to-text';
+import { createMsgParser } from '../../Source/email-reading/msg';
+import type { NormalizedMessage } from '../../Source/email-reading/types';
 import { FIXTURES } from './manifest';
 import { buildMsg } from './msg/builder';
 import { MSG_SPECS } from './msg/specs';

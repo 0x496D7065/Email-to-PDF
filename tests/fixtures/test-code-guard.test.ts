@@ -1,7 +1,7 @@
 // Privacy safety net for the TEST CODE (README.md, rule R7: test data is
 // synthetic only). synthetic-guard.test.ts checks everything under
 // tests/fixtures/; this file checks the code of all the other tests:
-//   src/**/*.test.ts, e2e/** (specs and support files),
+//   Source/**/*.test.ts, e2e/** (specs and support files),
 //   tests/** outside tests/fixtures/ (e.g. tests/support/), scripts/**/*.test.*
 // (the same folders as vitest's test.include in vite.config.ts and
 // Playwright's testDir; the first test below checks a file from each).
@@ -17,7 +17,7 @@
 //   3. a time-zone name (`Area/Location`) that is not in the short list of
 //      neutral zones the tests use (ALLOWED_TIME_ZONES in guard-rules.ts).
 // The only accepted exceptions are the exact strings in guard-exemptions.ts.
-// App code (src/ files that are not tests) is not scanned here; the build
+// App code (Source/ files that are not tests) is not scanned here; the build
 // check (scripts/check-no-network.mjs) covers its URLs.
 //
 // Files are read with Vite's import.meta.glob + "?raw"; a glob starting
@@ -35,7 +35,7 @@ import {
 } from './guard-rules';
 
 /** Test code as text, keyed by its path from the repository root with a leading "/", e.g. "/e2e/clear.spec.ts". */
-const code = import.meta.glob<string>(['/src/**/*.test.ts', '/e2e/**/*', '/tests/**/*', '!/tests/fixtures/**', '/scripts/**/*.test.*'], {
+const code = import.meta.glob<string>(['/Source/**/*.test.ts', '/e2e/**/*', '/tests/**/*', '!/tests/fixtures/**', '/scripts/**/*.test.*'], {
     query: '?raw',
     import: 'default',
     eager: true,
@@ -49,12 +49,12 @@ describe('test code guard', () =>
 {
     it('finds the test code in every scanned folder, and no app code or fixture', () =>
     {
-        for (const path of ['/src/ui/app.test.ts', '/e2e/no-network.spec.ts', '/e2e/support/watch.ts', '/tests/support/pdf-reader.ts', '/scripts/no-network-rules.test.ts'])
+        for (const path of ['/Source/page/app.test.ts', '/e2e/no-network.spec.ts', '/e2e/support/watch.ts', '/tests/support/pdf-reader.ts', '/scripts/no-network-rules.test.ts'])
         {
             expect(codePaths, path).toContain(path);
         }
-        expect(codePaths.filter((p) => p.startsWith('/src/')).length).toBeGreaterThan(50);
-        expect(codePaths.filter((p) => p.startsWith('/src/') && !p.endsWith('.test.ts'))).toEqual([]);
+        expect(codePaths.filter((p) => p.startsWith('/Source/')).length).toBeGreaterThan(50);
+        expect(codePaths.filter((p) => p.startsWith('/Source/') && !p.endsWith('.test.ts'))).toEqual([]);
         expect(codePaths.filter((p) => p.startsWith('/tests/fixtures/'))).toEqual([]);
     });
 
@@ -92,7 +92,7 @@ describe('guard exemptions', () =>
             return;
         }
         expect(exemptionsFor(first.file)).toContain(first.text);
-        expect(exemptionsFor('src/ui/app.test.ts')).toEqual([]);
+        expect(exemptionsFor('Source/page/app.test.ts')).toEqual([]);
         expect(exemptionsFor(EXEMPTIONS_FILE)).toEqual(GUARD_EXEMPTIONS.map((e) => e.text));
     });
 });
@@ -164,14 +164,14 @@ describe('test code guard rules (self-test)', () =>
     it('accepts generic placeholders and paths that are not home folders', () =>
     {
         const clean = [
-            '/home/dev/proj/src/fonts/A.woff',
+            '/home/dev/proj/Source/pdf-export/fonts/A.woff',
             'C:\\Users\\user\\x',
             'C:/Users/Example/x',
             '/home/test.',
             'C:\\Users\\<name>\\x',
             '%USERPROFILE%\\x',
             '/home/${user}/x',
-            'src/users/someone',
+            'Source/users/someone',
             'a/b/users/x',
             'https://example.test/users/someone',
             'https://example.test/c/users/someone',

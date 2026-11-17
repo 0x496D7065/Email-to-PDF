@@ -15,7 +15,7 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true,
-    // Lets vite.config.ts import "./src/security/headers.ts" with its extension,
+    // Lets vite.config.ts import "./Source/security-headers/headers.ts" with its extension,
     // which Vite's future native config loader requires. Safe: tsc never emits.
     "allowImportingTsExtensions": true
   },
@@ -23,6 +23,6 @@
   // types. The .mjs files themselves are not type-checked (no allowJs).
   // e2e/ and playwright.config.ts: browser tests, type-checked but never shipped.
   // tests/: synthetic fixtures, their .msg builder and guard tests (never shipped).
-  "include": ["src", "scripts", "e2e", "tests", "vite.config.ts", "playwright.config.ts"],
+  "include": ["Source", "scripts", "e2e", "tests", "vite.config.ts", "playwright.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

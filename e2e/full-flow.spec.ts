@@ -42,7 +42,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type FileChooser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
-import { en } from '../src/ui/i18n/en.ts';
+import { en } from '../Source/page/translations/en.ts';
 import { FIXTURES, type FixtureExpectation } from '../tests/fixtures/manifest.ts';
 import type * as Builder from '../tests/fixtures/msg/builder.ts';
 import type * as Specs from '../tests/fixtures/msg/specs.ts';

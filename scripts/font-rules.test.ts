@@ -22,8 +22,8 @@ const fakeFont = (seed: number, length = 300): Uint8Array => Uint8Array.from({ l
 const fontA = fakeFont(1);
 const fontB = fakeFont(2, 200);
 const fonts = [
-    { file: 'src/fonts/A.woff', sha256: sha256Hex(fontA) },
-    { file: 'src/fonts/B.woff', sha256: sha256Hex(fontB) },
+    { file: 'Source/pdf-export/fonts/A.woff', sha256: sha256Hex(fontA) },
+    { file: 'Source/pdf-export/fonts/B.woff', sha256: sha256Hex(fontB) },
 ];
 
 /** The shape the build gives the font chunk. */
@@ -144,7 +144,7 @@ describe('checkNumberArrays', () =>
         modified[150] = (modified[150] ?? 0) ^ 1;
         const problems = checkNumberArrays([{ path: CHUNK, text: chunkText(modified, fontB) }], fonts);
         expect(problems.some((p) => p.includes('matches no committed font'))).toBe(true);
-        expect(problems.some((p) => p.includes('src/fonts/A.woff must be in the font chunk exactly once, found 0'))).toBe(true);
+        expect(problems.some((p) => p.includes('Source/pdf-export/fonts/A.woff must be in the font chunk exactly once, found 0'))).toBe(true);
     });
 
     it('rejects code hidden as a byte array in the chunk', () =>
@@ -184,10 +184,10 @@ describe('checkNumberArrays', () =>
     it('rejects a missing or a duplicated font', () =>
     {
         expect(checkNumberArrays([{ path: CHUNK, text: chunkText(fontA) }], fonts)).toEqual([
-            expect.stringMatching(/src\/fonts\/B\.woff must be in the font chunk exactly once, found 0/),
+            expect.stringMatching(/Source\/pdf-export\/fonts\/B\.woff must be in the font chunk exactly once, found 0/),
         ]);
         expect(checkNumberArrays([{ path: CHUNK, text: chunkText(fontA, fontB, fontB) }], fonts)).toEqual([
-            expect.stringMatching(/src\/fonts\/B\.woff must be in the font chunk exactly once, found 2/),
+            expect.stringMatching(/Source\/pdf-export\/fonts\/B\.woff must be in the font chunk exactly once, found 2/),
         ]);
     });
 
@@ -245,38 +245,38 @@ describe('checkSourceFonts', () =>
 {
     it('accepts the exact committed files', () =>
     {
-        expect(checkSourceFonts([{ path: 'src/fonts/A.woff', bytes: fontA }, { path: 'src/fonts/B.woff', bytes: fontB }], fonts)).toEqual([]);
+        expect(checkSourceFonts([{ path: 'Source/pdf-export/fonts/A.woff', bytes: fontA }, { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB }], fonts)).toEqual([]);
     });
 
     it('rejects a modified, an unlisted or a missing font file', () =>
     {
         const modified = Uint8Array.from(fontA);
         modified[0] = 0;
-        expect(checkSourceFonts([{ path: 'src/fonts/A.woff', bytes: modified }, { path: 'src/fonts/B.woff', bytes: fontB }], fonts)).toEqual([
-            expect.stringMatching(/^src\/fonts\/A\.woff: SHA-256 .* must not be modified/),
+        expect(checkSourceFonts([{ path: 'Source/pdf-export/fonts/A.woff', bytes: modified }, { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB }], fonts)).toEqual([
+            expect.stringMatching(/^Source\/pdf-export\/fonts\/A\.woff: SHA-256 .* must not be modified/),
         ]);
         expect(
             checkSourceFonts(
-                [{ path: 'src/fonts/A.woff', bytes: fontA }, { path: 'src/fonts/B.woff', bytes: fontB }, { path: 'src/ui/x.ttf', bytes: fontA }],
+                [{ path: 'Source/pdf-export/fonts/A.woff', bytes: fontA }, { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB }, { path: 'Source/page/x.ttf', bytes: fontA }],
                 fonts,
             ),
-        ).toEqual([expect.stringMatching(/^src\/ui\/x\.ttf: font file not listed/)]);
-        expect(checkSourceFonts([{ path: 'src/fonts/A.woff', bytes: fontA }], fonts)).toEqual([expect.stringMatching(/B\.woff: font file is missing/)]);
+        ).toEqual([expect.stringMatching(/^Source\/page\/x\.ttf: font file not listed/)]);
+        expect(checkSourceFonts([{ path: 'Source/pdf-export/fonts/A.woff', bytes: fontA }], fonts)).toEqual([expect.stringMatching(/B\.woff: font file is missing/)]);
     });
 
     it('rejects a pinned font file in the wrong folder, even with the right bytes', () =>
     {
         const files = [
-            { path: 'src/fonts/A.woff', bytes: fontA },
-            { path: 'src/fonts/B.woff', bytes: fontB },
-            { path: 'src/ui/B.woff', bytes: fontB },
+            { path: 'Source/pdf-export/fonts/A.woff', bytes: fontA },
+            { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB },
+            { path: 'Source/page/B.woff', bytes: fontB },
         ];
-        expect(checkSourceFonts(files, fonts)).toEqual([expect.stringMatching(/^src\/ui\/B\.woff: font file not listed/)]);
+        expect(checkSourceFonts(files, fonts)).toEqual([expect.stringMatching(/^Source\/page\/B\.woff: font file not listed/)]);
         const real = PDF_FONT_FILES.map((f) => ({ path: f.file, bytes: new Uint8Array(0) }));
-        const moved = real.map((f) => (f.path === 'src/fonts/IBMPlexSans-Bold.woff' ? { ...f, path: 'src/ui/IBMPlexSans-Bold.woff' } : f));
+        const moved = real.map((f) => (f.path === 'Source/pdf-export/fonts/IBMPlexSans-Bold.woff' ? { ...f, path: 'Source/page/IBMPlexSans-Bold.woff' } : f));
         const problems = checkSourceFonts(moved);
-        expect(problems).toContainEqual(expect.stringMatching(/^src\/ui\/IBMPlexSans-Bold\.woff: font file not listed/));
-        expect(problems).toContainEqual(expect.stringMatching(/^src\/fonts\/IBMPlexSans-Bold\.woff: font file is missing/));
+        expect(problems).toContainEqual(expect.stringMatching(/^Source\/page\/IBMPlexSans-Bold\.woff: font file not listed/));
+        expect(problems).toContainEqual(expect.stringMatching(/^Source\/pdf-export\/fonts\/IBMPlexSans-Bold\.woff: font file is missing/));
     });
 
     it('recognises font file names', () =>
@@ -294,26 +294,26 @@ describe('checkSourceFonts', () =>
 
 describe('isBytesImportAllowed (the ?bytes plugin of vite.config.ts)', () =>
 {
-    it('accepts a .woff file directly in the project src/fonts/ folder (POSIX and Windows)', () =>
+    it('accepts a .woff file directly in the project Source/pdf-export/fonts/ folder (POSIX and Windows)', () =>
     {
-        expect(isBytesImportAllowed('/home/dev/proj/src/fonts/A.woff', '/home/dev/proj/src/fonts/')).toBe(true);
-        expect(isBytesImportAllowed('/home/dev/proj/src/fonts/A.woff', '/home/dev/proj/src/fonts')).toBe(true);
-        expect(isBytesImportAllowed('D:\\proj\\src\\fonts\\A.woff', 'D:/proj/src/fonts/')).toBe(true);
-        expect(isBytesImportAllowed('d:/proj/src/fonts/A.woff', 'D:/proj/src/fonts/')).toBe(true);
+        expect(isBytesImportAllowed('/home/dev/proj/Source/pdf-export/fonts/A.woff', '/home/dev/proj/Source/pdf-export/fonts/')).toBe(true);
+        expect(isBytesImportAllowed('/home/dev/proj/Source/pdf-export/fonts/A.woff', '/home/dev/proj/Source/pdf-export/fonts')).toBe(true);
+        expect(isBytesImportAllowed('D:\\proj\\Source\\pdf-export\\fonts\\A.woff', 'D:/proj/Source/pdf-export/fonts/')).toBe(true);
+        expect(isBytesImportAllowed('d:/proj/Source/pdf-export/fonts/A.woff', 'D:/proj/Source/pdf-export/fonts/')).toBe(true);
     });
 
     it('rejects other folders, other projects, sub-folders and other file types', () =>
     {
-        const dir = '/home/dev/proj/src/fonts/';
+        const dir = '/home/dev/proj/Source/pdf-export/fonts/';
         for (const file of [
-            '/home/dev/proj/node_modules/x/src/fonts/A.woff',
-            '/home/dev/other/src/fonts/A.woff',
-            '/home/dev/proj/src/fonts-x/A.woff',
-            '/home/dev/proj/src/fonts/sub/A.woff',
-            '/home/dev/proj/src/fonts/../ui/A.woff',
-            '/home/dev/proj/src/fonts/A.woff2',
-            '/home/dev/proj/src/fonts/A.ttf',
-            '/home/dev/proj/src/ui/A.woff',
+            '/home/dev/proj/node_modules/x/Source/pdf-export/fonts/A.woff',
+            '/home/dev/other/Source/pdf-export/fonts/A.woff',
+            '/home/dev/proj/Source/pdf-export/fonts-x/A.woff',
+            '/home/dev/proj/Source/pdf-export/fonts/sub/A.woff',
+            '/home/dev/proj/Source/pdf-export/fonts/../../page/A.woff',
+            '/home/dev/proj/Source/pdf-export/fonts/A.woff2',
+            '/home/dev/proj/Source/pdf-export/fonts/A.ttf',
+            '/home/dev/proj/Source/page/A.woff',
         ])
         {
             expect(isBytesImportAllowed(file, dir), file).toBe(false);
@@ -326,10 +326,10 @@ describe('the pinned fonts', () =>
     it('are the four official IBM Plex files, with the SHA-256 of the official release', () =>
     {
         expect(PDF_FONT_FILES).toEqual([
-            { file: 'src/fonts/IBMPlexSans-Regular.woff', sha256: 'b731cf56514a4bd711ab2f9acf641f9311707f4386772eb306d25c2b29b73b1a' },
-            { file: 'src/fonts/IBMPlexSans-Bold.woff', sha256: '5c8bcd6be12df67acd529819b92f36febeff4df059a9603c4ecd578f01cf4062' },
-            { file: 'src/fonts/IBMPlexSans-Italic.woff', sha256: 'ed06e0a2cfa973492c7ee61e5f1bf3be7db4d3d5c1551c889ec458ba2972db99' },
-            { file: 'src/fonts/IBMPlexMono-Regular.woff', sha256: '3a0d6e1587e8dc784be5a75e1c55b1a5533919b04072a29c750bb29cfe4a4b74' },
+            { file: 'Source/pdf-export/fonts/IBMPlexSans-Regular.woff', sha256: 'b731cf56514a4bd711ab2f9acf641f9311707f4386772eb306d25c2b29b73b1a' },
+            { file: 'Source/pdf-export/fonts/IBMPlexSans-Bold.woff', sha256: '5c8bcd6be12df67acd529819b92f36febeff4df059a9603c4ecd578f01cf4062' },
+            { file: 'Source/pdf-export/fonts/IBMPlexSans-Italic.woff', sha256: 'ed06e0a2cfa973492c7ee61e5f1bf3be7db4d3d5c1551c889ec458ba2972db99' },
+            { file: 'Source/pdf-export/fonts/IBMPlexMono-Regular.woff', sha256: '3a0d6e1587e8dc784be5a75e1c55b1a5533919b04072a29c750bb29cfe4a4b74' },
         ]);
     });
 });

@@ -1,7 +1,7 @@
 // Pure checks for the bundled PDF fonts, part of the build check
 // (README.md, rule R3). check-no-network.mjs does the file reading.
 //
-// The fonts (src/fonts/*.woff, official IBM Plex files) are built into one
+// The fonts (Source/pdf-export/fonts/*.woff, official IBM Plex files) are built into one
 // JS chunk as plain number arrays: `new Uint8Array([119,79,70,70,...])`
 // (see the `?bytes` plugin in vite.config.ts). A long number array is as
 // opaque to the text rules as a base64 string, so it could hide code. Hence:
@@ -21,19 +21,19 @@ import { createHash } from 'node:crypto';
  */
 export const PDF_FONT_FILES = [
     {
-        file: 'src/fonts/IBMPlexSans-Regular.woff',
+        file: 'Source/pdf-export/fonts/IBMPlexSans-Regular.woff',
         sha256: 'b731cf56514a4bd711ab2f9acf641f9311707f4386772eb306d25c2b29b73b1a',
     },
     {
-        file: 'src/fonts/IBMPlexSans-Bold.woff',
+        file: 'Source/pdf-export/fonts/IBMPlexSans-Bold.woff',
         sha256: '5c8bcd6be12df67acd529819b92f36febeff4df059a9603c4ecd578f01cf4062',
     },
     {
-        file: 'src/fonts/IBMPlexSans-Italic.woff',
+        file: 'Source/pdf-export/fonts/IBMPlexSans-Italic.woff',
         sha256: 'ed06e0a2cfa973492c7ee61e5f1bf3be7db4d3d5c1551c889ec458ba2972db99',
     },
     {
-        file: 'src/fonts/IBMPlexMono-Regular.woff',
+        file: 'Source/pdf-export/fonts/IBMPlexMono-Regular.woff',
         sha256: '3a0d6e1587e8dc784be5a75e1c55b1a5533919b04072a29c750bb29cfe4a4b74',
     },
 ];
@@ -54,7 +54,7 @@ export const NUMBER_ARRAY_MIN_LENGTH = 64;
  */
 export const FONT_CHUNK_MAX_OTHER_TEXT = 1000;
 
-/** File extensions treated as font files in src/. */
+/** File extensions treated as font files in Source/. */
 const FONT_EXTENSIONS = /\.(?:woff2?|ttf|otf|eot)$/i;
 
 /** SHA-256 of `bytes`, as lowercase hex. */
@@ -254,9 +254,9 @@ export function checkFontChunkLoadedAtStartup(html, files)
 }
 
 /**
- * Checks the font files of src/: each must be one of `fonts` with its exact
+ * Checks the font files of Source/: each must be one of `fonts` with its exact
  * SHA-256, and each of `fonts` must be present.
- * @param {{ path: string, bytes: Uint8Array }[]} files  src/ files whose name
+ * @param {{ path: string, bytes: Uint8Array }[]} files  Source/ files whose name
  *   has a font extension (see isFontFile); path relative to the project root.
  * @param {{ file: string, sha256: string }[]} [fonts]
  * @returns {string[]}  Problems (empty = OK).
@@ -288,12 +288,12 @@ export function checkSourceFonts(files, fonts = PDF_FONT_FILES)
 
 /**
  * May the `?bytes` plugin of vite.config.ts load this file? Only a .woff
- * file directly inside `fontsDir` (this project's absolute src/fonts/
- * folder), so not e.g. node_modules/x/src/fonts/ or another project's.
+ * file directly inside `fontsDir` (this project's absolute Source/pdf-export/fonts/
+ * folder), so not e.g. node_modules/x/Source/pdf-export/fonts/ or another project's.
  * Back slashes (Windows) count as forward slashes; on Windows the drive
  * letter is compared without regard to case.
  * @param {string} file  Absolute path of the imported file (without `?bytes`).
- * @param {string} fontsDir  Absolute path of src/fonts/, with or without a trailing slash.
+ * @param {string} fontsDir  Absolute path of Source/pdf-export/fonts/, with or without a trailing slash.
  */
 export function isBytesImportAllowed(file, fontsDir)
 {

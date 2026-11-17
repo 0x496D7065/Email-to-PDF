@@ -1,6 +1,6 @@
 // A small, independent PDF reader for the tests only (never imported by the
 // app, no dependency). It reads exactly the subset our writer
-// (src/pdf/writer/) emits, strictly: the header, the classic
+// (Source/pdf-export/pdf-writer/) emits, strictly: the header, the classic
 // cross-reference table and trailer, every object at its xref offset (the
 // offset must point exactly at "N 0 obj"), streams whose /Length must match
 // (followed by "endstream"), FlateDecode streams inflated with the platform

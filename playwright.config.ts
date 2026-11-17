@@ -16,7 +16,7 @@ export default defineConfig({
     reporter: 'list',
     retries: 0,
     // serviceWorkers 'block': the built site registers a service worker (the
-    // offline copy of its own files, src/sw/), which stores those files in
+    // offline copy of its own files, Source/offline-copy/), which stores those files in
     // the background right after the page loads. Every spec checks that
     // nothing at all is requested after the page's own files, so the service
     // worker is kept out of them (Playwright's block makes register() do
@@ -25,7 +25,7 @@ export default defineConfig({
     // (e2e/offline-reload.spec.ts).
     //
     // locale 'en-US': the browser's preferred language is pinned, so the page
-    // (which starts in the browser's language when it ships it, src/main.ts)
+    // (which starts in the browser's language when it ships it, Source/main.ts)
     // never follows the language of the machine running the tests.
     use: { baseURL: BASE_URL, serviceWorkers: 'block', locale: 'en-US' },
     // The three browser engines. WebKit is Safari's engine, not Safari itself.

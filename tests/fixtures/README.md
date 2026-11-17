@@ -71,12 +71,12 @@ only inside `tests/fixtures/`. Do not widen it.
 every other test, so no real-looking data can hide in an inline test email
 either:
 
-- `src/**/*.test.ts`, everything in `e2e/` (specs and support files),
+- `Source/**/*.test.ts`, everything in `e2e/` (specs and support files),
   everything in `tests/` outside this folder (e.g. `tests/support/`), and
   `scripts/**/*.test.*`. App code that is not a test is not scanned here (the
   build check covers its web addresses).
 - Shared test data and helpers belong in `tests/support/`: helper modules
-  in `src/` that are not `*.test.ts` files are not scanned.
+  in `Source/` that are not `*.test.ts` files are not scanned.
 - Hosts, email addresses, URLs and IP addresses: the same rules and
   decoding as above. One difference: in code, an identifier followed by
   `.at` or `.info` (the array method `at(-1)`, an `info` property) is read

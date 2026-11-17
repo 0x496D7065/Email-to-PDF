@@ -362,7 +362,7 @@ const PLACEHOLDER_USER_NAMES: ReadonlySet<string> = new Set(['dev', 'user', 'use
  * Git Bash and `/mnt/c` of WSL), then `Users` or `home` (any case) between
  * separators, then the folder name. Separators may be `/`, `\`, an escaped
  * `\\` or a JSON-escaped `\/`. The root must start the path (no letter,
- * digit, dot, `~` or `-` just before), so `src/users/x`, `a/b/users/x` or
+ * digit, dot, `~` or `-` just before), so `Source/users/x`, `a/b/users/x` or
  * the path of a URL like `https://example.test/users/x` is not a home folder.
  * Flags a name after `/home/`, `C:\Users\` (also with `\\` or `/`),
  * `/c/Users/` or `/mnt/c/Users/`; `/home/dev`, `C:\Users\<name>` and

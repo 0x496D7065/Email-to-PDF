@@ -3,9 +3,9 @@
 // (e2e/download.spec.ts; Node returns a Buffer, which is a Uint8Array). The
 // project has no Node type package, and the tests run in Node through
 // Playwright, so this states just that function. Test-only: tsconfig.json
-// also covers src/, so this declaration would let app code type-check an
+// also covers Source/, so this declaration would let app code type-check an
 // import of node:fs; the no-restricted-imports and no-restricted-syntax
-// rules for src/ in eslint.config.js refuse any node: import there, static
+// rules for Source/ in eslint.config.js refuse any node: import there, static
 // or import().
 // readdirSync lists the built files of dist/ (e2e/offline-reload.spec.ts:
 // the service worker's precache list must be exactly those).

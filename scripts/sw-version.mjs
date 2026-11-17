@@ -1,9 +1,9 @@
-// The service worker's cache version (src/sw/): one function shared by the
+// The service worker's cache version (Source/offline-copy/): one function shared by the
 // build, which writes the version into dist/sw.js (vite.config.ts, through
-// src/sw/precache-list.ts), and by the build check, which computes it again
+// Source/offline-copy/precache-list.ts), and by the build check, which computes it again
 // from dist/ and fails if dist/sw.js holds another one
 // (check-no-network.mjs). Plain JavaScript so the build check can run it
-// without a TypeScript runner; unit tested in src/sw/precache-list.test.ts.
+// without a TypeScript runner; unit tested in Source/offline-copy/precache-list.test.ts.
 import { TextEncoder } from 'node:util';
 import { sha256Hex } from './font-rules.mjs';
 

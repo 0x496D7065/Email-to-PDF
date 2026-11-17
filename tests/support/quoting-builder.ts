@@ -1,6 +1,6 @@
 // Test support (task 8.13b-3, review round 3, finding M2): random small
 // conversations in which emails QUOTE each other, for the "collapse, never
-// delete" property tests (src/pdf/model.quoting.property.test.ts) and for
+// delete" property tests (Source/pdf-export/model.quoting.property.test.ts) and for
 // comparing two versions of the tool on the same inputs.
 //
 // Each case is a few emails (2 to 7). Each one has a sentence of its own
@@ -23,7 +23,7 @@
 // quotes). Message-IDs always set, so copies of one email are merged.
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
-import type { NormalizedMessage } from '../../src/parsing/types';
+import type { NormalizedMessage } from '../../Source/email-reading/types';
 import { buildThread, formatQuotedDate, wallTimeOf, type Person, type QuoteStyle, type ThreadMessage, type Zone } from './thread-builder';
 import { ALICE, BOB, CAROL, DAVE, ERIN, KOLKATA, LAGOS, TOKYO, UTC } from './thread-cases';
 

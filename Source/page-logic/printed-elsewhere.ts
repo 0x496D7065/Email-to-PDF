@@ -1,0 +1,82 @@
+// What the preview says about the no-repeat rule of the PDF (user decision
+// 2026-11-06, task 8.10; preview labels task 8.11): with "Print full
+// original text" off, a part of an email's text that the PDF prints as an
+// email of its own (a rebuilt email in the PDF, or the real file a rebuilt
+// one is linked to) is left out of that email in the PDF. The preview labels
+// such a part "Not in this email in the PDF: printed as email #N"
+// (Source/page/preview.ts, pdfLabelText) instead of the plan's own label. A
+// forwarded part whose rebuilt email the reader unticked (task 8.13a, Q2)
+// is left out too, labelled "Not in the PDF: forwarded email whose rebuilt
+// email is unticked". A piece the plan leaves out that the PDF prints after
+// all because it is printed nowhere else (the PRINTED SOMEWHERE check of
+// Source/pdf-export/model.ts, NoRepeat.restored; task 8.13b-3, review round 3) comes
+// back kept, so its label says "In the PDF".
+//
+// It decides nothing on its own: it calls the PDF model's own functions
+// (Source/pdf-export/model.ts: noRepeat, which buildPdfDocument calls too, and
+// pdfRanges, which cuts the plan with the same call the PDF makes) on the
+// same input the PDF step gets (Source/page/page.ts, pdfInput: the included
+// emails, their plans, the policy, the rebuilt emails chosen and those
+// unticked). So the
+// parts labelled are exactly the parts the PDF leaves out, and the email
+// named is the one it prints them as.
+//
+// Pure function, no DOM (README.md, rule R7). Nothing is stored.
+
+import type { EngineResult } from '../thread-analysis/engine';
+import type { MessagePlan, OutputPolicy } from '../thread-analysis/output-plan';
+import { noRepeat, pdfRanges, type PdfRange } from '../pdf-export/model';
+
+/** The PDF step's input, as Source/page/page.ts (pdfInput) gives it. */
+export interface PrintedElsewhereInput
+{
+    readonly result: EngineResult;
+    /** List positions of the included emails, in list order. */
+    readonly positions: readonly number[];
+    /** One plan per position, same order. */
+    readonly plans: readonly MessagePlan[];
+    readonly policy: OutputPolicy;
+    /** Ids of the rebuilt emails chosen (Source/page/review.ts, includedRebuilt; ignored under "Print full original text"). */
+    readonly rebuilt: readonly number[];
+    /** True when "Rebuild conversation from replies" is off (Source/pdf-export/model.ts, BuildPdfInput.rebuildingOff). Absent: false. */
+    readonly rebuildingOff?: boolean;
+    /** Ids of the rebuilt emails the reader unticked (Source/page/review.ts, untickedRebuilt; Source/pdf-export/model.ts, BuildPdfInput.unticked). Absent: none. */
+    readonly unticked?: readonly number[];
+}
+
+/**
+ * Per list position, the ranges of its body as the PDF prints them
+ * (Source/pdf-export/model.ts, pdfRanges): only the emails the no-repeat rule leaves
+ * something out of, or that get a piece back (NoRepeat.restored); an email
+ * not in the map is printed as its plan says.
+ * Empty under "Print full original text" (every email is printed whole).
+ */
+export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number, readonly PdfRange[]>
+{
+    const out = new Map<number, readonly PdfRange[]>();
+    if (input.policy.unfoldEverything)
+    {
+        return out;
+    }
+    const { order, parts, restored } = noRepeat(input);
+    for (const slot of order.slots)
+    {
+        if (slot.kind !== 'email')
+        {
+            continue;
+        }
+        const list = parts.get(slot.position);
+        const back = restored.get(slot.position);
+        const message = input.result.messages[slot.position]?.message;
+        if ((list === undefined && back === undefined) || message === undefined)
+        {
+            continue;
+        }
+        const ranges = pdfRanges(message.bodyText, input.plans[slot.plan], input.policy, list ?? [], back);
+        if (ranges !== null)
+        {
+            out.set(slot.position, ranges);
+        }
+    }
+    return out;
+}

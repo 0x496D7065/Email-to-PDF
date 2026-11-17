@@ -6,7 +6,7 @@
 // these values; the engine (Milestone 3) uses `thread`, `duplicateGroup` and
 // `tags` for ordering, de-duplication and folding tests.
 //
-// Conventions (same as src/parsing/types.ts):
+// Conventions (same as Source/email-reading/types.ts):
 // - ids (messageId, inReplyTo, references) are WITHOUT < >.
 // - `date.utcMs` is null when the date is missing or unparseable.
 // - `subject` is null when the Subject header is MISSING (an empty
@@ -26,7 +26,7 @@
 //   the sender's offset, so `zoneKnown` is true and `offsetMinutes` is not
 //   asserted (left undefined) for .msg entries.
 
-import type { ParseWarning } from '../../src/parsing/types';
+import type { ParseWarning } from '../../Source/email-reading/types';
 
 export interface ExpectedAddress
 {

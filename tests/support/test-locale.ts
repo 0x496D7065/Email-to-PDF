@@ -1,5 +1,5 @@
 // A synthetic, test-only language for the language-switching tests: every
-// English string of src/ui/i18n/en.ts with each ASCII letter swapped for an
+// English string of Source/page/translations/en.ts with each ASCII letter swapped for an
 // accented look-alike and the whole text in brackets, e.g. "Add your emails"
 // -> "[Àďď ýöüŕ éɱàîļš]". Placeholders ({count}, {name}...) are kept as they
 // are, so t() fills them in exactly like in English. After a switch, any
@@ -9,12 +9,12 @@
 //
 // Never bundled: only test files import this, and they add it to the
 // catalog with vi.mock, e.g.
-//   vi.mock('./i18n/catalog', async (importOriginal) =>
+//   vi.mock('./translations/catalog', async (importOriginal) =>
 //     withTestLocales(await importOriginal(), ['xx']));
 // so the shipped page has English only.
 
-import { en } from '../../src/ui/i18n/en';
-import type { Messages } from '../../src/ui/i18n/index';
+import { en } from '../../Source/page/translations/en';
+import type { Messages } from '../../Source/page/translations/index';
 
 /** The code of the synthetic language (not a real language). */
 export const TEST_LOCALE = 'xx';
@@ -68,7 +68,7 @@ export function testLanguageName(locale: string): string
     return `[Pseudo ${locale}]`;
 }
 
-/** The shape of src/ui/i18n/catalog.ts. */
+/** The shape of Source/page/translations/catalog.ts. */
 interface Catalog
 {
     readonly CATALOG: Readonly<Record<string, Messages>>;

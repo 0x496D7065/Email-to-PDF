@@ -2,8 +2,8 @@
 // dropped file is parsed in its own Web Worker with a time limit, and broken,
 // huge or hostile files give a clear per-file result without ever crashing
 // the batch or the page. The engine then organizes the results in its own
-// worker (src/pipeline/engine-worker.ts), also with a time limit; processFiles
-// (src/pipeline/process-files.ts) chains it all from browser File objects.
+// worker (Source/worker-pipeline/engine-worker.ts), also with a time limit; processFiles
+// (Source/worker-pipeline/process-files.ts) chains it all from browser File objects.
 // Runs in Chromium, Firefox and WebKit against the site served by
 // `vite preview` (see playwright.config.ts).
 //
@@ -46,7 +46,7 @@
 import { expect, test, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { build, type Plugin, type Rolldown } from 'vite';
 import { decodeJsEscapes, findEmbeddedViolations, findViolations } from '../scripts/no-network-rules.mjs';
-import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../src/security/headers.ts';
+import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../Source/security-headers/headers.ts';
 import type * as Entry from './support/parse-entry.ts';
 // The page's CSP reports are filtered with untoleratedReports: in Chromium
 // only, the inline reports DOMParser makes while it PARSES handlers and

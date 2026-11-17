@@ -1,17 +1,17 @@
 // TEST-ONLY entry point for e2e/parse-files.spec.ts. Never part of the site:
-// index.html and src/main.ts do not import it, so `vite build` (dist/) never
+// Source/index.html and Source/main.ts do not import it, so `vite build` (dist/) never
 // contains it. The spec bundles it in memory with the project's own Vite
-// config, so the parse worker (src/parsing/parse-worker.ts), the engine
-// worker (src/pipeline/engine-worker.ts) and the PDF worker
-// (src/pipeline/pdf-worker.ts) are inlined and started from blob:
+// config, so the parse worker (Source/email-reading/parse-worker.ts), the engine
+// worker (Source/worker-pipeline/engine-worker.ts) and the PDF worker
+// (Source/worker-pipeline/pdf-worker.ts) are inlined and started from blob:
 // URLs exactly as in the production build, and serves the bundle on the
 // site's own origin with the site's real security headers.
 
 import { buildMsg } from '../../tests/fixtures/msg/builder';
 import { MSG_SPECS } from '../../tests/fixtures/msg/specs';
-import { connectWorker, type WorkerFactory } from '../../src/parsing/worker-runner';
-import type { ToEngineWorker } from '../../src/pipeline/engine-protocol';
-import type { EngineWorkerFactory } from '../../src/pipeline/engine-runner';
+import { connectWorker, type WorkerFactory } from '../../Source/email-reading/worker-runner';
+import type { ToEngineWorker } from '../../Source/worker-pipeline/engine-protocol';
+import type { EngineWorkerFactory } from '../../Source/worker-pipeline/engine-runner';
 
 export {
     MAX_FILE_BYTES,
@@ -19,20 +19,20 @@ export {
     FILE_TOO_LARGE_DETAIL,
     parseFiles,
     parseFilesWith,
-} from '../../src/parsing/parse-files';
-export { htmlToTextWithDomParser } from '../../src/parsing/html-dom';
-export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../src/parsing/worker-runner';
-export type { InputFile, ParseResult } from '../../src/parsing/types';
-export { processFiles, processFilesWith, type ProcessProgress, type ProcessResult } from '../../src/pipeline/process-files';
+} from '../../Source/email-reading/parse-files';
+export { htmlToTextWithDomParser } from '../../Source/email-reading/html-dom';
+export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../Source/email-reading/worker-runner';
+export type { InputFile, ParseResult } from '../../Source/email-reading/types';
+export { processFiles, processFilesWith, type ProcessProgress, type ProcessResult } from '../../Source/worker-pipeline/process-files';
 export {
     createBrowserEngineWorker,
     ENGINE_FAILED_DETAIL,
     ENGINE_TIMEOUT_DETAIL,
     ENGINE_TIMEOUT_MS,
     runEngineInWorker,
-} from '../../src/pipeline/engine-runner';
-// Only to start an idle PDF worker for the CSP checks (src/pipeline/pdf-worker.ts).
-export { createBrowserPdfWorker } from '../../src/pipeline/pdf-runner';
+} from '../../Source/worker-pipeline/engine-runner';
+// Only to start an idle PDF worker for the CSP checks (Source/worker-pipeline/pdf-worker.ts).
+export { createBrowserPdfWorker } from '../../Source/worker-pipeline/pdf-runner';
 
 // Synthetic fixtures, inlined by Vite's `?raw` (the test runner has no file
 // system types).
