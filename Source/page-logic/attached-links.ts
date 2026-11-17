@@ -34,25 +34,14 @@
 // Pure functions, no DOM (README.md, rule R7). Never throws for a broken
 // entry: an entry that is not usable is skipped.
 
-import { attachedAt, type EngineAttached, type EngineAttachedPlace, type EngineResult } from '../thread-analysis/engine';
+import { attachedAt } from '../thread-analysis/engine';
+import type { AttachedLinks, UnreadAttachedCode } from '../../Header/preview-display';
+import type { EngineAttached, EngineAttachedPlace, EngineResult } from '../../Header/thread-analysis-result';
 
 /** The attachment type of an email inside an .eml file. */
 const RFC822 = 'message/rfc822';
 /** The parts that make an email a bounce or feedback report (as in Source/email-reading/eml.ts, REPORT_TYPES). */
 const REPORT_TYPES: ReadonlySet<string> = new Set(['message/delivery-status', 'message/feedback-report']);
-
-/** The unread-attached note of one email (see the top of this file). */
-export type UnreadAttachedCode = 'attached-unread' | 'attached-unread-inside';
-
-export interface AttachedLinks
-{
-    /** By list position: the list numbers (1-based) of the emails it is attached to, ascending, unique; [] if none. */
-    readonly attachedTo: readonly (readonly number[])[];
-    /** By list position: the list numbers of the emails attached to it, ascending, unique; [] if none. */
-    readonly attachedEmails: readonly (readonly number[])[];
-    /** By list position: its unread-attached note, or null. */
-    readonly unread: readonly (UnreadAttachedCode | null)[];
-}
 
 type LinkInput = Pick<EngineResult, 'messages' | 'positionByIndex' | 'attached' | 'counts'>;
 

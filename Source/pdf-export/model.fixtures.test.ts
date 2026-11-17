@@ -5,12 +5,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
-import { buildPdfDocument, type PdfDocument, type PdfEmail } from './model';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
+import { buildPdfDocument } from './model';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
+import type { OutputPolicy } from '../../Header/output-plan';
+import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */

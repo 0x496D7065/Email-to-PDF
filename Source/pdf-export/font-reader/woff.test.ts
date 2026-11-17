@@ -3,10 +3,11 @@
 // against an independent decompression in this test; damaged files are
 // built synthetically here (no real font data is modified on disk).
 import { describe, expect, it } from 'vitest';
-import { PDF_FONTS, type PdfFontName } from '../fonts';
+import { PDF_FONTS } from '../fonts';
 import { directoryChecksum, FontError, MAX_FONT_BYTES, pad4, tagName, TRUETYPE_FLAVOR } from './binary';
 import { checkSumAdjustment, readSfntDirectory, tableBytes } from './sfnt';
 import { unwrapWoff } from './woff';
+import type { PdfFontName } from '../../../Header/pdf-fonts';
 
 const names = Object.keys(PDF_FONTS) as PdfFontName[];
 

@@ -18,18 +18,14 @@
 // Other languages (French: fr.ts; Dutch: nl.ts) get a sibling file with the
 // same shape, typed as `Messages` (see index.ts), listed in catalog.ts.
 
-import type { DedupeWarningCode } from '../../thread-analysis/dedupe';
-import type { EngineWarningCode, ReconstructionWarningCode } from '../../thread-analysis/engine';
-import type { OrderReason } from '../../thread-analysis/order';
-import type { PlanReason } from '../../thread-analysis/output-plan';
-import type { FoldReason } from '../../thread-analysis/segments';
-import type { ParseErrorCode, ParseWarning } from '../../email-reading/types';
-import type { ProcessErrorCode } from '../../worker-pipeline/process-files';
-import type { UnreadAttachedCode } from '../../page-logic/attached-links';
-import type { AuthorSource } from '../../page-logic/display-author';
 import type { PdfNoteCode } from '../../page-logic/message-notes';
-import type { PdfStatus } from '../../page-logic/pdf-plan';
 import type { PdfError, PdfUnavailable } from '../pdf-job';
+import type { ProcessErrorCode } from '../../../Header/file-processing';
+import type { PlanReason } from '../../../Header/output-plan';
+import type { ParseErrorCode, ParseWarning } from '../../../Header/parsed-email';
+import type { PdfStatus } from '../../../Header/pdf-plan';
+import type { AuthorSource, UnreadAttachedCode } from '../../../Header/preview-display';
+import type { DedupeWarningCode, EngineWarningCode, FoldReason, OrderReason, ReconstructionWarningCode } from '../../../Header/thread-analysis-result';
 
 export const en = {
     app: {

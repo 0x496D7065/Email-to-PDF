@@ -2,10 +2,11 @@
 // FontDescriptor values, and the fsType embedding check.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseToUnicode } from '../../../Helper/Test/test-support/pdf-reader';
-import { type ParsedFont, readWoffFont } from '../font-reader/font';
+import { readWoffFont } from '../font-reader/font';
 import { PDF_FONTS } from '../fonts';
 import { checkEmbeddable, fontDescriptor, FontUsage, toUnicodeCmap, widthsArray } from './font-objects';
 import { PdfWriteError } from './syntax';
+import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 let sans: ParsedFont;
 let mono: ParsedFont;

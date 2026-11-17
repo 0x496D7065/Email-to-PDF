@@ -30,13 +30,15 @@ import { instantOf, type ThreadMessage } from '../../Helper/Test/test-support/th
 import { buildThread } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
-import type { NormalizedMessage } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
 import { headerLinesEnd, holdsOwnText, holdsQuotedText } from './model';
+import type { OutputPolicy } from '../../Header/output-plan';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 let fonts: PdfFonts;
 beforeAll(async () =>

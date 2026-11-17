@@ -6,8 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { primaryReason, runEngine } from '../thread-analysis/engine';
-import { buildSegments, FOLD_REASONS, type FoldRange, type Segment } from '../thread-analysis/segments';
-import { displayBlocks, MAX_ABSORBED_WHITESPACE, type DisplayBlock } from './display-blocks';
+import { buildSegments, FOLD_REASONS, type FoldRange } from '../thread-analysis/segments';
+import { displayBlocks, MAX_ABSORBED_WHITESPACE } from './display-blocks';
+import type { DisplayBlock } from '../../Header/pdf-plan';
+import type { Segment } from '../../Header/thread-analysis-result';
 
 const SHOWN = { unfoldAll: false };
 

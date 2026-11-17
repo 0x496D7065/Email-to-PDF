@@ -24,12 +24,11 @@
 // one, else it breaks between its lines (its link is then split in one area
 // per page). Pure (README.md, rule R7); email text only ever becomes glyphs
 // and copy text (rule R4).
-import type { PdfIndex } from '../model';
-import type { PdfLine } from '../text';
 import { linesHeight } from './blocks';
-import type { LayoutConfig } from './config';
 import type { PageBuilder } from './page-builder';
 import type { LaidLine, Typesetter } from './typesetter';
+import type { LayoutConfig } from '../../../Header/laid-out-document';
+import type { PdfIndex, PdfLine } from '../../../Header/pdf-document-model';
 
 /** The destination of the index heading (the "Index" bookmark). Never an email anchor ("email-N"). */
 export const INDEX_DESTINATION = 'index';

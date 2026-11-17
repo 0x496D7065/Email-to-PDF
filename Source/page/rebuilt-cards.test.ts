@@ -7,13 +7,15 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineRebuilt, type EngineResult } from '../thread-analysis/engine';
-import type { NormalizedMessage } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
 import { planPdfOrder } from '../pdf-export/model';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import { setLocale, t } from './translations';
 import { mountPreview, rebuiltAlsoText, rebuiltDateTexts, rebuiltNoteText, type Preview, type PreviewOptions } from './preview';
 import { createReview, messagesText, noteText, type Review, type ReviewOptions } from './review';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineRebuilt } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ data
 

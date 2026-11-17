@@ -20,15 +20,16 @@ import {
     readPdf,
 } from '../../../Helper/Test/test-support/pdf-reader';
 import { directoryChecksum } from '../font-reader/binary';
-import { type ParsedFont, parseFont, readWoffFont } from '../font-reader/font';
+import { parseFont, readWoffFont } from '../font-reader/font';
 import { readSfntDirectory } from '../font-reader/sfnt';
 import { unwrapWoff } from '../font-reader/woff';
-import { PDF_FONTS, type PdfFontName } from '../fonts';
+import { PDF_FONTS } from '../fonts';
 import { isDrawnAsNothing } from '../text';
-import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage, LaidOutTextRun, PdfFontSet } from './layout';
 import { MAX_OUTLINE_DEPTH, MAX_PAGES, OwnPdfWriter, writePdf } from './own-writer';
 import { MAX_OUTPUT_BYTES } from './pdf-file';
 import { PdfWriteError } from './syntax';
+import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage, LaidOutTextRun, PdfFontSet } from '../../../Header/laid-out-document';
+import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 const FONT_NAMES = Object.keys(PDF_FONTS) as PdfFontName[];
 const fonts = {} as Record<PdfFontName, ParsedFont>;

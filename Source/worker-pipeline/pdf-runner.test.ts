@@ -4,9 +4,9 @@
 // Helper/Test/browser-tests/download.spec.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkerEvents } from '../email-reading/worker-runner';
-import type { MakePdfRequest, ToPdfWorker } from './pdf-protocol';
-import { PDF_TIMEOUT_BASE_MS, PDF_TIMEOUT_PER_EMAIL_MS, pdfTimeoutMs, runPdfInWorker, type PdfOutcome, type PdfWorkerFactory } from './pdf-runner';
+import { PDF_TIMEOUT_BASE_MS, PDF_TIMEOUT_PER_EMAIL_MS, pdfTimeoutMs, runPdfInWorker, type PdfWorkerFactory } from './pdf-runner';
+import type { WorkerEvents } from '../../Header/parse-worker-messages';
+import type { MakePdfRequest, PdfOutcome, ToPdfWorker } from '../../Header/pdf-worker-messages';
 
 const TIMEOUT_MS = 1000;
 // The request's content does not matter to the runner: it only passes it on.

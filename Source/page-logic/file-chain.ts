@@ -13,7 +13,8 @@
 // Pure function, no DOM (README.md, rule R7). The names are untrusted text:
 // they are returned as they are, for the caller to show as text only.
 
-import { attachedAt, type EngineResult } from '../thread-analysis/engine';
+import { attachedAt } from '../thread-analysis/engine';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** Between the levels of an attached email's chain: "parent.eml › forwarded.eml". */
 export const FILE_CHAIN_SEPARATOR = ' › ';

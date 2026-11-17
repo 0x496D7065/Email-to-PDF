@@ -9,14 +9,15 @@ import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-bu
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../page-logic/rebuilt';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import { setLocale } from './translations';
 import { en } from './translations/en';
 import { fr } from './translations/fr';
 import { DEBOUNCE_MS, SLICE_MS, createPdfLabels, type PdfLabels } from './pdf-labels';
 import type { PreviewPdfPlans } from './preview';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.test' };

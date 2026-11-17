@@ -28,8 +28,8 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
-import type { EngineMessage } from '../thread-analysis/engine';
-import type { NormalizedMessage } from '../email-reading/types';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineMessage } from '../../Header/thread-analysis-result';
 
 /** The key of one copy: its file's SHA-256, plus "/" and its place in the file for an attached email ("<hash>/2.1"). */
 export function sourceKey(source: NormalizedMessage['source']): string

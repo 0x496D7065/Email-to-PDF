@@ -11,7 +11,7 @@ import { createEmlParser } from './eml';
 import { htmlToTextWithDomParser } from './html-dom';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
-import type { EmailParser } from './types';
+import type { EmailParser } from '../../Header/parsed-email';
 
 /** The parsers the page uses, one per supported file type. */
 export interface BrowserParsers

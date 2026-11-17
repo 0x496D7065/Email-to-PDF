@@ -12,14 +12,13 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
-import type { DedupeWarningCode } from '../thread-analysis/dedupe';
-import type { EngineMessage, EngineWarningCode, ReconstructionWarning, ReconstructionWarningCode } from '../thread-analysis/engine';
-import type { MessagePlan } from '../thread-analysis/output-plan';
 import { isDisplayableMs } from '../thread-analysis/time-format';
-import type { ParseWarning } from '../email-reading/types';
-import type { UnreadAttachedCode } from './attached-links';
 // Pure, no DOM: the PDF's own rule for which characters become a code.
 import { codedCharacterCount } from '../pdf-export/text';
+import type { MessagePlan } from '../../Header/output-plan';
+import type { ParseWarning } from '../../Header/parsed-email';
+import type { MessageNote, UnreadAttachedCode } from '../../Header/preview-display';
+import type { DedupeWarningCode, EngineMessage, EngineWarningCode, ReconstructionWarning, ReconstructionWarningCode } from '../../Header/thread-analysis-result';
 
 /**
  * Compile-time check that `List` names every member of `Union`: resolves to
@@ -97,32 +96,6 @@ export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fal
     }
     return null;
 }
-
-/** One note of one email. */
-export type MessageNote =
-    | { readonly kind: 'parse'; readonly code: ParseWarning }
-    // No usable date: placed after the dated emails, in file order; or, an
-    // attached email, just before the email it is attached to (task 8.13b-3, Q7).
-    | { readonly kind: 'order'; readonly code: 'file-order' | 'before-parent' }
-    | {
-        readonly kind: 'dedupe';
-        readonly code: DedupeWarningCode;
-        /** The other emails' numbers in the list (1-based), ascending; never this email. */
-        readonly related: readonly number[];
-        /**
-         * How many more FILES are involved but not listed (the engine caps its
-         * list). Files, not emails: several files can be one merged email,
-         * possibly one already listed, so this is never worded as emails.
-         */
-        readonly more: number;
-    }
-    | { readonly kind: 'engine'; readonly code: EngineWarningCode }
-    // Some of its characters will show in the PDF as codes such as "[U+0000]" (task 8.8: said here, not in the PDF).
-    | { readonly kind: 'chars'; readonly code: 'coded-characters' }
-    // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
-    | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode }
-    // An email sent as an attachment, in it or in an email inside it, could not be read (task 8.13b-4, P3; Source/page-logic/attached-links.ts).
-    | { readonly kind: 'attached'; readonly code: UnreadAttachedCode };
 
 /**
  * The list numbers (1-based) of the emails a warning points to: input

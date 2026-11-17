@@ -19,8 +19,8 @@ import {
     parseFilesWith,
     type JobRunner,
 } from './parse-files';
-import type { InputFile, ParseResult } from './types';
 import { DETACHED_DETAIL, type WorkerJob } from './worker-runner';
+import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 const fixtureFiles = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
 

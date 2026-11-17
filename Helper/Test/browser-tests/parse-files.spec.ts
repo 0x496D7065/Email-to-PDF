@@ -62,6 +62,8 @@ import {
     withoutSelectReports,
     workerCspReports as sharedWorkerCspReports,
 } from './support/watch.ts';
+import type { ProcessProgress, ProcessResult } from '../../../Header/file-processing.ts';
+import type { InputFile } from '../../../Header/parsed-email.ts';
 
 declare global
 {
@@ -393,7 +395,7 @@ test('a batch with broken, huge and unsupported files: one result per file, in o
     {
         const entry = (await import(url)) as typeof Entry;
         const text = (s: string): Uint8Array => new TextEncoder().encode(s);
-        const files: Entry.InputFile[] = [
+        const files: InputFile[] = [
             { name: 'plain.eml', bytes: text(entry.FIXTURE_PLAIN) },
             { name: 'good.msg', bytes: entry.goodMsg() },
             { name: 'looping.msg', bytes: entry.loopingMsg() },
@@ -483,7 +485,7 @@ test('a stuck worker is stopped at its time limit and a crashed one fails alone;
     {
         const entry = (await import(url)) as typeof Entry;
         const text = (s: string): Uint8Array => new TextEncoder().encode(s);
-        const files: Entry.InputFile[] = [
+        const files: InputFile[] = [
             { name: 'first.eml', bytes: text(entry.FIXTURE_PLAIN) },
             { name: 'hang.eml', bytes: text(entry.FIXTURE_PLAIN) },
             { name: 'crash.eml', bytes: text(entry.FIXTURE_PLAIN) },
@@ -579,7 +581,7 @@ test('processFiles: File objects in, organized messages out; every worker ends a
             file('order-3.eml', entry.FIXTURE_ORDER_3),
             new File([entry.goodMsg().slice()], 'good.msg'),
         ];
-        const progress: Entry.ProcessProgress[] = [];
+        const progress: ProcessProgress[] = [];
         const result = await entry.processFiles(files, { onProgress: (p) => progress.push(p) });
         if (!result.ok)
         {
@@ -655,7 +657,7 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
                 entry.runEngineInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('crash'), timeoutMs: entry.ENGINE_TIMEOUT_MS }),
             limits,
         });
-        const summary = (r: Entry.ProcessResult) => (r.ok ? { ok: true } : { ok: false, error: r.error, detail: r.detail, parsed: r.parsed.map((p) => p.ok) });
+        const summary = (r: ProcessResult) => (r.ok ? { ok: true } : { ok: false, error: r.error, detail: r.detail, parsed: r.parsed.map((p) => p.ok) });
         return { elapsedMs, hang: summary(hang), crash: summary(crash), timeoutDetail: entry.ENGINE_TIMEOUT_DETAIL, failedDetail: entry.ENGINE_FAILED_DETAIL };
     }, entryUrl);
 

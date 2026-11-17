@@ -5,7 +5,8 @@
 // with a mock for the whole file.
 
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkerSide, type FromWorker } from './worker-protocol';
+import { createWorkerSide } from './worker-protocol';
+import type { FromWorker } from '../../Header/parse-worker-messages';
 
 vi.mock('./deferred-html', () => ({
     parseWithDeferredHtml: () => Promise.reject(new TypeError('internal bug')),

@@ -10,9 +10,9 @@ import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { expectedFields, fieldDiffs } from '../../Helper/Test/test-support/quoted-header-truth';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import type { EmailAddress } from '../email-reading/types';
 import { headerLabelCounts, MAX_MAILBOXES, parseMailboxList, readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
 import { findReplyHeaders } from './reply-header';
+import type { EmailAddress } from '../../Header/parsed-email';
 
 /** The fields of every header findReplyHeaders finds in `body`. */
 function readAll(body: string, subject = ''): QuotedHeaderFields[]

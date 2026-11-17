@@ -28,7 +28,7 @@
 // says so. The original Date header text is not touched: it stays on
 // `message.date.original` (README.md, rule R6).
 
-import type { EmailDate } from '../email-reading/types';
+import type { EmailDate } from '../../Header/parsed-email';
 
 /** Language used when the caller gives none (real UI strings come with translations later). */
 export const DEFAULT_LOCALE = 'en';

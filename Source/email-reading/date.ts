@@ -14,7 +14,7 @@
 // follows it. Month names must stay English: a localized month ("okt")
 // is not RFC-valid, so such a header is reported as unparseable.
 
-import type { EmailDate } from './types';
+import type { EmailDate } from '../../Header/parsed-email';
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];

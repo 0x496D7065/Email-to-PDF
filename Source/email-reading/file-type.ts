@@ -23,10 +23,8 @@
 // - Any other name -> 'unsupported-type'.
 // The extension is compared without regard to case (".EML", ".Msg").
 
-import type { ParseErrorCode } from './types';
-
-/** The two formats the tool reads. */
-export type FileKind = 'eml' | 'msg';
+import type { FileKind } from '../../Header/parse-worker-messages';
+import type { ParseErrorCode } from '../../Header/parsed-email';
 
 /** Where a file goes: a parser, or a rejection with a short reason for the preview. */
 export type FileTypeDecision =

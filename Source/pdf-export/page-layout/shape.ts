@@ -34,8 +34,8 @@
 // No kerning, no ligatures, no bidi (Source/pdf-export/font-reader/font.ts). Pure (README.md,
 // rule R7).
 import { controlMarker, isDrawnAsNothing, SOFT_HYPHEN, ZERO_WIDTH_SPACE } from '../text';
-import type { TextStyle } from './config';
 import type { FontMetrics } from './font-metrics';
+import type { TextStyle } from '../../../Header/laid-out-document';
 
 /** Item kinds (bit flags). */
 export const SPACE = 1;

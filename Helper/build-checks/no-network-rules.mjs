@@ -130,7 +130,7 @@ export const RULES = [
  *     is ever stored at run time).
  * `distFile` is the built file (path relative to dist/), `sourceFile` its
  * source (path relative to the project root). Anywhere else, including
- * every other file of Source/ and dist/ (the page's scripts, the inlined
+ * every other file of Source/, Header/ and dist/ (the page's scripts, the inlined
  * workers), both rules still fail the build. Every other rule (XHR,
  * WebSocket, script loading, the other storage APIs, URLs, ...) still
  * applies to these two files too. Never add an entry without the user's

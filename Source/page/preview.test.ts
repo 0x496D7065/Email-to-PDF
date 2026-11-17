@@ -5,10 +5,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import type { DisplayBlock } from '../page-logic/display-blocks';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { signatureSources } from '../page-logic/pdf-plan';
@@ -34,6 +32,9 @@ import {
     type PreviewOptions,
     type PreviewPdfPlans,
 } from './preview';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { DisplayBlock } from '../../Header/pdf-plan';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ factory
 

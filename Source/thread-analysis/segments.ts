@@ -29,17 +29,7 @@
 // Pure functions: no DOM, no storage, inputs are never modified (README.md,
 // rule R7).
 
-/**
- * Why a part of a body is folded. Extensible: new detectors add a value here
- * (and to FOLD_REASONS below).
- * - 'quoted-overlap': text that also appears in another message of the
- *   thread (typically the history below a reply). `related` names it.
- * - 'quote-marker': lines starting with `>` (classic plain-text quoting).
- * - 'reply-header': a "On ... wrote:" / "Le ... a ecrit :" / "Op ... schreef"
- *   block, or an Outlook "From: / Sent: / To:" block, that introduces quoted text.
- * - 'signature': a signature or disclaimer block at the end of a message.
- */
-export type FoldReason = 'quoted-overlap' | 'quote-marker' | 'reply-header' | 'signature';
+import type { FoldReason, Segment } from '../../Header/thread-analysis-result';
 
 /** Every known reason, in the order used for sorting `Segment.reasons`. */
 export const FOLD_REASONS: readonly FoldReason[] = [
@@ -57,19 +47,6 @@ export interface FoldRange
     readonly reason: FoldReason;
     /** Optional link to another message, e.g. the index of the message whose text was quoted. */
     readonly related?: number;
-}
-
-/** One piece of the body: code units [start, end), shown or folded. */
-export interface Segment
-{
-    readonly start: number;
-    readonly end: number;
-    /** True exactly when `reasons` is not empty. */
-    readonly folded: boolean;
-    /** Why it is folded: sorted (FOLD_REASONS order), unique; empty when shown. */
-    readonly reasons: readonly FoldReason[];
-    /** Linked message indices from the folds covering it: sorted ascending, unique; empty when shown. */
-    readonly related: readonly number[];
 }
 
 /** One line of a text: [start, end) includes the line break, [start, contentEnd) excludes it. */

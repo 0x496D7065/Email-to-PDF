@@ -4,8 +4,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
-import { createEngineWorkerSide, isFromEngineWorker, isToEngineWorker, type FromEngineWorker } from './engine-protocol';
+import { createEngineWorkerSide, isFromEngineWorker, isToEngineWorker } from './engine-protocol';
+import type { FromEngineWorker } from '../../Header/engine-worker-messages';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
 const FAILED_FILE: ParseResult = { ok: false, fileName: 'notes.txt', sha256: null, error: 'unsupported-type', detail: 'not an email file' };
 

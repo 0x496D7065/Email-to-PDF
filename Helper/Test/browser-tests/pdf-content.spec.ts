@@ -67,7 +67,6 @@ import type * as FontModule from '../../../Source/pdf-export/font-reader/font.ts
 import type * as ConfigModule from '../../../Source/pdf-export/page-layout/config.ts';
 import type * as EmlModule from '../../../Source/email-reading/eml.ts';
 import type * as MsgModule from '../../../Source/email-reading/msg.ts';
-import type { EmailParser } from '../../../Source/email-reading/types.ts';
 import { en } from '../../../Source/page/translations/en.ts';
 import { FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../test-data/manifest.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
@@ -86,6 +85,7 @@ import {
     workersNamed,
     type Watch,
 } from './support/watch.ts';
+import type { EmailParser } from '../../../Header/parsed-email.ts';
 
 declare global
 {

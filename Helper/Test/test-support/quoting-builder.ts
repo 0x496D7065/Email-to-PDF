@@ -23,9 +23,9 @@
 // quotes). Message-IDs always set, so copies of one email are merged.
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
-import type { NormalizedMessage } from '../../../Source/email-reading/types';
 import { buildThread, formatQuotedDate, wallTimeOf, type Person, type QuoteStyle, type ThreadMessage, type Zone } from './thread-builder';
 import { ALICE, BOB, CAROL, DAVE, ERIN, KOLKATA, LAGOS, TOKYO, UTC } from './thread-cases';
+import type { NormalizedMessage } from '../../../Header/parsed-email';
 
 const PEOPLE: readonly Person[] = [ALICE, BOB, CAROL, DAVE, ERIN];
 const ZONES: readonly Zone[] = [UTC, LAGOS, TOKYO, KOLKATA];

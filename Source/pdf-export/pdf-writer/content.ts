@@ -7,8 +7,8 @@
 // (README.md, rule R7).
 import { copyLayerText } from './copy-text';
 import type { FontUsage } from './font-objects';
-import type { LaidOutColor, LaidOutPage, LaidOutTextRun } from './layout';
 import { fail, hex4, hexText, name, num } from './syntax';
+import type { LaidOutColor, LaidOutPage, LaidOutTextRun } from '../../../Header/laid-out-document';
 
 /** Largest font size accepted, in points. */
 export const MAX_FONT_SIZE = 1000;

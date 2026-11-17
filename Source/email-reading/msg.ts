@@ -35,17 +35,7 @@ import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
 import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
-import type {
-    AttachedMessage,
-    AttachmentInfo,
-    EmailAddress,
-    EmailDate,
-    EmailParser,
-    InputFile,
-    NormalizedMessage,
-    ParseResult,
-    ParseWarning,
-} from './types';
+import type { AttachedMessage, AttachmentInfo, EmailAddress, EmailDate, EmailParser, InputFile, NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
 
 // msgreader is a CommonJS package. Its default export is the class, but how a
 // CommonJS default export reaches an ES `import X from` differs by tool: in

@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import notices from '../public/THIRD_PARTY_NOTICES.txt?raw';
 import { PDF_FONT_FILES as PINNED } from '../../Helper/build-checks/font-rules.mjs';
 import license from './fonts/LICENSE.txt?raw';
-import { isWoff, PDF_FONT_FILES, PDF_FONTS, pdfFontsReady, type PdfFontName } from './fonts';
+import { isWoff, PDF_FONT_FILES, PDF_FONTS, pdfFontsReady } from './fonts';
+import type { PdfFontName } from '../../Header/pdf-fonts';
 
 const names = Object.keys(PDF_FONTS) as PdfFontName[];
 

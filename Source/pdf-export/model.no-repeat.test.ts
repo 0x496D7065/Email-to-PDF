@@ -18,9 +18,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy, type PlanRange } from '../thread-analysis/output-plan';
-import type { NormalizedMessage } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { hasNoPrintableText } from '../page-logic/no-text';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import {
@@ -38,11 +37,13 @@ import {
     printedElsewhereParts,
     withoutPrintedElsewhere,
     type BodyIntervals,
-    type PdfDocument,
-    type PdfEmail,
 } from './model';
 import { createPdfStrings } from './strings';
 import { bodyLines, lineText } from './text';
+import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-plan';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };

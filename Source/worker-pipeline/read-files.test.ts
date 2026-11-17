@@ -4,7 +4,8 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { BATCH_TOO_LARGE_DETAIL, FILE_TOO_LARGE_DETAIL, MAX_BATCH_BYTES, MAX_FILE_BYTES } from '../email-reading/parse-files';
-import { createFileReader, UNREADABLE_DETAIL, type FileLike } from './read-files';
+import { createFileReader, UNREADABLE_DETAIL } from './read-files';
+import type { FileLike } from '../../Header/file-processing';
 
 const LIMITS = { maxFileBytes: 10, maxBatchBytes: 25 };
 

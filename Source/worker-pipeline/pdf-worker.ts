@@ -18,7 +18,8 @@
 // (see pdf-protocol.ts), and the build check fails if font bytes ever end up
 // in the worker's code (Helper/build-checks/font-rules.mjs).
 
-import { createPdfWorkerSide, type FromPdfWorker } from './pdf-protocol';
+import { createPdfWorkerSide } from './pdf-protocol';
+import type { FromPdfWorker } from '../../Header/pdf-worker-messages';
 
 /**
  * The part of a dedicated worker's global scope used here (described by

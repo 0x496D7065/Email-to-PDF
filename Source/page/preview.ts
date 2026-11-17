@@ -132,25 +132,26 @@
 // to the toolbar (the "Print full original text" checkbox of
 // Source/page/pdf-labels.ts).
 
-import type { MergedCopy } from '../thread-analysis/dedupe';
-import type { EngineMessage, EngineRebuilt, EngineResult } from '../thread-analysis/engine';
-import type { PlanReason } from '../thread-analysis/output-plan';
 import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, isValidTimeZone, listTimeZones } from '../thread-analysis/time-format';
-import type { AttachmentInfo, EmailAddress, EmailDate } from '../email-reading/types';
-import type { ProcessResult } from '../worker-pipeline/process-files';
-import { attachedLinks, type AttachedLinks } from '../page-logic/attached-links';
+import { attachedLinks } from '../page-logic/attached-links';
 import { displayAuthor } from '../page-logic/display-author';
 import { fileChain } from '../page-logic/file-chain';
-import type { DisplayBlock } from '../page-logic/display-blocks';
 import { joinMailboxes, joinPlain } from '../page-logic/mailbox-list';
 import { pdfPlanNote, type PdfNoteCode } from '../page-logic/message-notes';
 import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../page-logic/no-text';
-import { pdfBlocks, printedAsEmailOfItsOwn, viewKey, type PdfBlock, type PdfLabel, type PdfView } from '../page-logic/pdf-plan';
-import { previewOrder, rebuiltCard, type PreviewSlot, type RebuiltCard, type RebuiltDate } from '../page-logic/rebuilt';
+import { pdfBlocks, printedAsEmailOfItsOwn, viewKey } from '../page-logic/pdf-plan';
+import { previewOrder, rebuiltCard } from '../page-logic/rebuilt';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
 import { getLocale, t, translator } from './translations';
 import { createStaticLabels } from './labels';
+import type { ProcessResult } from '../../Header/file-processing';
+import type { PlanReason } from '../../Header/output-plan';
+import type { AttachmentInfo, EmailAddress, EmailDate } from '../../Header/parsed-email';
+import type { DisplayBlock, PdfBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
+import type { AttachedLinks, PreviewSlot, RebuiltCard, RebuiltDate } from '../../Header/preview-display';
+import type { EngineRebuilt } from '../../Header/rebuilt-emails';
+import type { EngineMessage, EngineResult, MergedCopy } from '../../Header/thread-analysis-result';
 
 /** Emails built per chunk (at least one per chunk, see MAX_CHUNK_CHARS). */
 export const DEFAULT_CHUNK_SIZE = 40;

@@ -18,8 +18,11 @@
 //   3. a time-zone name (`Area/Location`) that is not in the short list of
 //      neutral zones the tests use (ALLOWED_TIME_ZONES in guard-rules.ts).
 // The only accepted exceptions are the exact strings in guard-exemptions.ts.
-// App code (Source/ files that are not tests) is not scanned here; the build
-// check (Helper/build-checks/check-no-network.mjs) covers its URLs.
+// Also scanned: Header/node-fs-for-browser-tests.d.ts, the test-only
+// declaration file that lives with the shared types. App code (Source/
+// files that are not tests) and the other shared types (Header/) are not
+// scanned here; the build check (Helper/build-checks/check-no-network.mjs)
+// covers their URLs.
 //
 // Files are read with Vite's import.meta.glob + "?raw"; a glob starting
 // with "/" is relative to the repository root.
@@ -38,7 +41,7 @@ import {
 /** Test code as text, keyed by its path from the repository root with a leading "/", e.g. "/Helper/Test/browser-tests/clear.spec.ts". */
 // Each Helper/ subfolder is listed by name: add any new Helper/ folder with
 // tests here (and in the vitest "include" list in vite.config.ts).
-const code = import.meta.glob<string>(['/Source/**/*.test.ts', '/Helper/Test/**/*', '!/Helper/Test/test-data/**', '/Helper/build-checks/**/*.test.*', '/Helper/lint-rules/**/*.test.*'], {
+const code = import.meta.glob<string>(['/Source/**/*.test.ts', '/Helper/Test/**/*', '!/Helper/Test/test-data/**', '/Helper/build-checks/**/*.test.*', '/Helper/lint-rules/**/*.test.*', '/Header/node-fs-for-browser-tests.d.ts'], {
     query: '?raw',
     import: 'default',
     eager: true,

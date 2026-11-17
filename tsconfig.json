@@ -25,6 +25,8 @@
   // - Helper/Test/browser-tests/ (and playwright.config.ts): browser tests, type-checked.
   // - Test/test-data/ and Test/test-support/: synthetic fixtures, their .msg
   //   builder, guard tests and shared test helpers.
-  "include": ["Source", "Helper", "vite.config.ts", "playwright.config.ts"],
+  // Header/: the shared type definitions (types only, erased at build time),
+  // including the .d.ts declarations for `?bytes` imports and node:fs.
+  "include": ["Source", "Header", "Helper", "vite.config.ts", "playwright.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

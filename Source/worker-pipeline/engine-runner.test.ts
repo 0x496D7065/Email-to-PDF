@@ -5,9 +5,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';
-import type { ParseResult } from '../email-reading/types';
-import type { WorkerEvents } from '../email-reading/worker-runner';
-import type { ToEngineWorker } from './engine-protocol';
 import {
     ENGINE_CANCELLED_DETAIL,
     ENGINE_FAILED_DETAIL,
@@ -17,6 +14,9 @@ import {
     type EngineOutcome,
     type EngineWorkerFactory,
 } from './engine-runner';
+import type { ToEngineWorker } from '../../Header/engine-worker-messages';
+import type { WorkerEvents } from '../../Header/parse-worker-messages';
+import type { ParseResult } from '../../Header/parsed-email';
 
 const TIMEOUT_MS = 1000;
 const RESULTS: ParseResult[] = [{ ok: false, fileName: 'notes.txt', sha256: null, error: 'unsupported-type', detail: 'not an email file' }];

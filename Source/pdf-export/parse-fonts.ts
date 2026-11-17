@@ -6,9 +6,9 @@
 // is erased by the build and pulls nothing in.
 //
 // No DOM, no network (README.md, rule R1), so it is worker-safe.
-import { type ParsedFont, readWoffFont } from './font-reader/font';
-import type { PdfFontName } from './fonts';
+import { readWoffFont } from './font-reader/font';
 import type { PdfFonts } from './generate';
+import type { ParsedFont, PdfFontName } from '../../Header/pdf-fonts';
 
 /** The font names in a fixed order (the result does not depend on key order). */
 export const PDF_FONT_NAMES: readonly PdfFontName[] = ['sans-regular', 'sans-bold', 'sans-italic', 'mono-regular'];

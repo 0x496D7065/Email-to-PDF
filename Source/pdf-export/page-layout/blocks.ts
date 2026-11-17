@@ -3,10 +3,9 @@
 // each wrapping within its column) and bulleted lists. Each is measured
 // first (so a caller can keep things together), then placed. Pure
 // (README.md, rule R7).
-import type { PdfFieldRow } from '../model';
-import type { PdfLine } from '../text';
 import type { PageBuilder } from './page-builder';
 import type { LaidLine } from './typesetter';
+import type { PdfFieldRow, PdfLine } from '../../../Header/pdf-document-model';
 
 /** A table row, wrapped: its label lines and its value lines. */
 export interface LaidRow

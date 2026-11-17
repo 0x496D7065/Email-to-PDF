@@ -41,9 +41,10 @@
 //
 // Pure functions, no DOM (README.md, rule R7). Nothing is stored.
 
-import type { EngineRebuilt, EngineResult } from '../thread-analysis/engine';
-import type { NormalizedMessage, ParseWarning } from '../email-reading/types';
 import { bodyLines } from '../pdf-export/text';
+import type { NormalizedMessage, ParseWarning } from '../../Header/parsed-email';
+import type { EngineRebuilt } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** The parser warnings that mean the text could not be read (in full): such an email is never left out (Q2). */
 export const UNREADABLE_BODY_WARNINGS: readonly ParseWarning[] = ['html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'];

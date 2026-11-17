@@ -3,7 +3,7 @@
 // table (other planes in a map), and every glyph's advance is kept in ems.
 // Widths are font units x size / unitsPerEm; no kerning, no shaping (see
 // Source/pdf-export/font-reader/font.ts). Pure (README.md, rule R7).
-import type { ParsedFont } from '../font-reader/font';
+import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 const UNKNOWN = -1;
 

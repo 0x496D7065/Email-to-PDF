@@ -80,11 +80,11 @@
 // []), the input is never modified (README.md, rule R7).
 
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import type { EmailAddress } from '../email-reading/types';
-import { hasWrittenZone, parseQuotedDate, type QuotedDate } from './quoted-date';
+import { hasWrittenZone, parseQuotedDate } from './quoted-date';
 import { isPlainName, readQuotedHeader } from './quoted-header';
 import { clean, findReplyHeaders, LABEL_HEAD_LENGTH, LABEL_PATTERN, LABEL_ROLE_OF, labelKey } from './reply-header';
 import { lineRanges } from './segments';
+import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
 
 /** A body longer than this (characters) is not read: no rebuilt message. */
 export const MAX_SOURCE_LENGTH = 10_000_000;
@@ -100,40 +100,6 @@ export const MAX_QUOTE_DEPTH = 100;
  * by the UI task; this constant names the change itself.
  */
 export const RECONSTRUCTED_FORM_NOTE = 'quote-marks-removed' as const;
-
-/** One earlier message rebuilt from quoted text. NOT a real message: it has no source file and no hash. */
-export interface ReconstructedMessage
-{
-    /** Offset of the header's first line in the source body (quote marks included). */
-    readonly start: number;
-    /** End of the header's own lines, line break included (readQuotedHeader). [start, headerEnd) is the raw header text. */
-    readonly headerEnd: number;
-    /** End of the message's part: the next rebuilt header's start, or the end of the quoted history. */
-    readonly end: number;
-    /** Number of ">" levels of the body (removed from each line of reconstructedText). */
-    readonly depth: number;
-    /** 1 = the message the source replied to or forwarded, 2 = the one before, ... */
-    readonly generation: number;
-    /** As findReplyHeaders reports it. */
-    readonly kind: 'reply' | 'forward';
-    readonly from: readonly EmailAddress[];
-    readonly to: readonly EmailAddress[];
-    readonly cc: readonly EmailAddress[];
-    /** null = the header holds no subject (attributions never do). */
-    readonly subject: string | null;
-    /** The date as written, or null. */
-    readonly dateText: string | null;
-    /** To / Cc lists that may go on past what was read (quoted-header.ts). */
-    readonly incomplete: readonly ('to' | 'cc')[];
-    /** The date read from dateText (null when there is none; wallMs null when unreadable). */
-    readonly date: QuotedDate | null;
-    /** True unless the date carries its own zone (an RFC 5322 or a written offset): then the moment is exact. */
-    readonly dateApproximate: boolean;
-    /** Body [headerEnd, end) with `depth` quote marks and their indentation removed per line (file comment, step 4). */
-    readonly reconstructedText: string;
-    /** depth > 0: the text differs from the source slice by its quote marks and their indentation (show RECONSTRUCTED_FORM_NOTE). */
-    readonly quoteMarksRemoved: boolean;
-}
 
 export interface ReconstructOptions
 {

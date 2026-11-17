@@ -45,12 +45,11 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
-import type { EngineMessage, EngineRebuilt, EngineResult, TimelineEntry } from '../thread-analysis/engine';
-import type { EmailAddress } from '../email-reading/types';
 import { selectionKeys } from './selection';
-
-/** One place in the preview list: a real email (its list position) or a rebuilt entry (its id). */
-export type PreviewSlot = { readonly kind: 'message'; readonly position: number } | { readonly kind: 'rebuilt'; readonly id: number };
+import type { EmailAddress } from '../../Header/parsed-email';
+import type { PreviewSlot, RebuiltCard, RebuiltDate, RebuiltInPdf, RebuiltSource } from '../../Header/preview-display';
+import type { EngineRebuilt, TimelineEntry } from '../../Header/rebuilt-emails';
+import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 /**
  * The preview's order: the engine's timeline. Defensive: if the timeline is
@@ -238,13 +237,6 @@ export function includedRebuilt(result: EngineResult, selection: RebuiltSelectio
     return rebuiltEntries(result).filter((r) => selection.isIncluded(r, result));
 }
 
-/** One place the text of a rebuilt entry was read: the entry itself or one of its copies, and the list position of the email quoting it. */
-export interface RebuiltSource
-{
-    readonly rebuilt: EngineRebuilt;
-    readonly position: number;
-}
-
 /**
  * Every place the quoted text of entry `r` was read: the entry first, then
  * its copies (link 'same-as', ascending id). A copy that does not point back
@@ -275,21 +267,6 @@ export function rebuiltSources(r: EngineRebuilt, result: Pick<EngineResult, 'pos
         }
     }
     return out;
-}
-
-/** Where a rebuilt entry in the PDF was taken from (rebuiltInPdf). */
-export interface RebuiltInPdf
-{
-    /** The copy shown: the entry's own when its email is in the PDF, else the copy from the first such email. */
-    readonly shown: RebuiltSource;
-    /** The number (as given by `numberOf`) of the email `shown` was taken from. The PDF never prints it (task 8.3). */
-    readonly number: number;
-    /**
-     * The numbers (as given by `numberOf`: the real-email rank from the PDF
-     * model, the list number from the preview) of the OTHER emails in the PDF
-     * quoting the same text, ascending, unique.
-     */
-    readonly also: readonly number[];
 }
 
 /** Options of rebuiltInPdf. */
@@ -352,17 +329,6 @@ export function rebuiltInPdf(
     return { shown: chosen.source, number: chosen.number, also: [...numbers].filter((n) => n !== chosen.number).sort((a, b) => a - b) };
 }
 
-/** A rebuilt message's date, as the card shows it. */
-export type RebuiltDate =
-    /** The quoted header has no date. */
-    | { readonly kind: 'none' }
-    /** A date text that could not be read: shown as written only. */
-    | { readonly kind: 'unreadable'; readonly text: string }
-    /** A date with a time: shown in the chosen zone, "about" when approximate. */
-    | { readonly kind: 'moment'; readonly utcMs: number; readonly approximate: boolean; readonly text: string }
-    /** A day without a time: shown as written (YYYY-MM-DD), never "about" (user decision Q2, task 7.7). */
-    | { readonly kind: 'day'; readonly day: string; readonly approximate: boolean; readonly text: string };
-
 /** The date of a rebuilt message (see RebuiltDate). */
 export function rebuiltDate(r: Pick<EngineRebuilt, 'rebuilt'>): RebuiltDate
 {
@@ -392,30 +358,6 @@ export function rebuiltDate(r: Pick<EngineRebuilt, 'rebuilt'>): RebuiltDate
 }
 
 const blank = (m: EmailAddress): boolean => m.name.trim() === '' && m.address.trim() === '';
-
-/** What a rebuilt card shows (no DOM; the words come from the strings module). */
-export interface RebuiltCard
-{
-    readonly id: number;
-    /** null: the quoted header has no subject (an "On ... wrote:" line never has one). */
-    readonly subject: string | null;
-    /** The sender's mailboxes, blank ones left out; [] = sender unknown. */
-    readonly from: readonly EmailAddress[];
-    readonly to: readonly EmailAddress[];
-    readonly cc: readonly EmailAddress[];
-    /** The To / Cc lists that may go on past what was read: "list may be incomplete". */
-    readonly toIncomplete: boolean;
-    readonly ccIncomplete: boolean;
-    readonly date: RebuiltDate;
-    /** The list number of the email it was taken from (null: unknown, not expected). */
-    readonly sourceNumber: number | null;
-    /** The other emails quoting the same text ("same quoted text also in email #K, #L"). */
-    readonly alsoNumbers: readonly number[];
-    /** Quote marks were removed from the text (the note says so). */
-    readonly quoteMarksRemoved: boolean;
-    /** The rebuilt text (shown as it is, as text). */
-    readonly text: string;
-}
 
 export function rebuiltCard(r: EngineRebuilt, result: Pick<EngineResult, 'positionByIndex'>): RebuiltCard
 {

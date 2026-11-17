@@ -1,5 +1,5 @@
 // The layout: the document model (Source/pdf-export/model.ts) in, the laid-out
-// document (Source/pdf-export/pdf-writer/layout.ts) out, ready for a PdfBackend's
+// document (Header/laid-out-document.ts) out, ready for a PdfBackend's
 // render(). Everything is placed here; the backend draws exactly that.
 //
 // Order of the pages: the cover (its blocks), then the index right below
@@ -61,16 +61,14 @@
 //
 // Pure: no DOM, no clock, no storage, worker-safe (README.md, rules R5,
 // R7). Email text only ever becomes glyphs and copy text (rule R4).
-import type { ParsedFont } from '../font-reader/font';
-import type { PdfFontName } from '../fonts';
-import type { PdfBlock, PdfDocument, PdfEmail } from '../model';
-import type { PdfStrings } from '../strings';
-import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage } from '../pdf-writer/layout';
 import { layItem, layRow, linesHeight, placeItem, placeRow, type LaidRow } from './blocks';
-import { DEFAULT_LAYOUT_CONFIG, type LayoutConfig, validateLayoutConfig } from './config';
+import { DEFAULT_LAYOUT_CONFIG, validateLayoutConfig } from './config';
 import { INDEX_DESTINATION, layIndex, placeIndex } from './index-table';
 import { PageBuilder, type PageInProgress } from './page-builder';
 import { Typesetter } from './typesetter';
+import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage, LayoutConfig } from '../../../Header/laid-out-document';
+import type { PdfBlock, PdfDocument, PdfEmail, PdfStrings } from '../../../Header/pdf-document-model';
+import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 /** The fixed texts the layout writes itself. */
 export type LayoutStrings = Pick<PdfStrings, 'producer' | 'pageFooter' | 'coverBookmark'>;

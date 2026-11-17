@@ -7,10 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import { FIXTURES } from '../../Helper/Test/test-data/manifest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
 import { normalizeBody } from './dedupe';
-import { primaryReason, runEngine, type EngineMessage, type EngineResult } from './engine';
-import { checkSegments, FOLD_REASONS, reconstruct, visibleView, type FoldReason } from './segments';
+import { primaryReason, runEngine } from './engine';
+import { checkSegments, FOLD_REASONS, reconstruct, visibleView } from './segments';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineMessage, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
 
 /** Whether every character of `snippet` (first occurrence) is folded, none is, or some are. */
 function state(m: EngineMessage, snippet: string): 'folded' | 'shown' | 'mixed'

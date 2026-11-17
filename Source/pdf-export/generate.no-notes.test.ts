@@ -25,9 +25,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../thread-analysis/output-plan';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { CATALOG } from '../page/translations/catalog';
 import { isPluralForms } from '../page/translations';
 import { rebuiltEntries } from '../page-logic/rebuilt';
@@ -35,6 +34,9 @@ import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
 import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
+import type { MessagePlan } from '../../Header/output-plan';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const LOCALES = ['en', 'fr', 'nl'] as const;
 type Locale = (typeof LOCALES)[number];

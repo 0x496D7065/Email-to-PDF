@@ -7,11 +7,12 @@
 // rule R7: synthetic data only).
 
 import { describe, expect, it } from 'vitest';
-import { runEngine, type EngineMessage, type EngineResult } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/engine';
 import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import type { ParseResult } from '../email-reading/types';
 import { attachedCount, attachedLinks } from './attached-links';
+import type { ParseResult } from '../../Header/parsed-email';
+import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });

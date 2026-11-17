@@ -7,13 +7,16 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineMessage } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type PlanRange } from '../thread-analysis/output-plan';
-import { buildSegments, type FoldRange, type FoldReason } from '../thread-analysis/segments';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
+import { buildSegments, type FoldRange } from '../thread-analysis/segments';
 import { displayBlocks } from './display-blocks';
-import type { PdfRange } from '../pdf-export/model';
-import { labelOf, mergeSamePrintedAs, pdfBlocks, pdfBreaks, printedAsEmailOfItsOwn, signatureSources, viewKey, type PdfBlock, type PdfLabel, type PdfView, type PrintedAs } from './pdf-plan';
+import { labelOf, mergeSamePrintedAs, pdfBlocks, pdfBreaks, printedAsEmailOfItsOwn, signatureSources, viewKey } from './pdf-plan';
+import type { MessagePlan, PlanRange } from '../../Header/output-plan';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { PdfRange, PrintedAs } from '../../Header/pdf-document-model';
+import type { PdfBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
+import type { EngineMessage, FoldReason } from '../../Header/thread-analysis-result';
 
 const plan = (ranges: PlanRange[], extra: Partial<MessagePlan> = {}): MessagePlan => ({
     ranges,

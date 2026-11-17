@@ -16,11 +16,13 @@
 // The worker is hidden behind a factory so this logic is unit tested with a
 // fake worker.
 
-import type { EngineResult } from '../thread-analysis/engine';
-import type { ParseResult } from '../email-reading/types';
-import { connectWorker, type WorkerEvents, type WorkerHandle } from '../email-reading/worker-runner';
-import { isFromEngineWorker, type ToEngineWorker } from './engine-protocol';
+import { connectWorker } from '../email-reading/worker-runner';
+import { isFromEngineWorker } from './engine-protocol';
 import EngineWorker from './engine-worker?worker&inline';
+import type { EngineFailure, ToEngineWorker } from '../../Header/engine-worker-messages';
+import type { WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
+import type { ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /**
  * Time limit for organizing one batch: 60 seconds. A normal batch takes well
@@ -35,9 +37,6 @@ export const ENGINE_TIMEOUT_MS = 60_000;
 export const ENGINE_TIMEOUT_DETAIL = 'organizing the messages took too long and was stopped';
 /** Detail when the engine worker failed. */
 export const ENGINE_FAILED_DETAIL = 'the messages could not be organized (internal error)';
-
-/** Why organizing a batch failed. */
-export type EngineFailure = 'engine-timeout' | 'engine-failed';
 
 /** The engine's result, or why there is none. */
 export type EngineOutcome =

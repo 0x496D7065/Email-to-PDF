@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';
-import type { NormalizedMessage, ParseWarning } from '../email-reading/types';
 import { hasNoPrintableText, pdfPositions, rebuiltHasNoPrintableText, UNREADABLE_BODY_WARNINGS } from './no-text';
+import type { NormalizedMessage, ParseWarning } from '../../Header/parsed-email';
 
 const rule = (bodyText: string, warnings: readonly ParseWarning[] = []): boolean => hasNoPrintableText({ bodyText, warnings: [...warnings] });
 

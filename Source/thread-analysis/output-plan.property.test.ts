@@ -18,13 +18,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
 import { runEngine } from './engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy, type PlanInput } from './output-plan';
+import { DEFAULT_OUTPUT_POLICY, planOutput, type PlanInput } from './output-plan';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
-import { buildSegments, FOLD_REASONS, type FoldRange, type Segment } from './segments';
+import { buildSegments, FOLD_REASONS, type FoldRange } from './segments';
 import { signatureBlockKey } from './signature';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
+import type { Segment } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number

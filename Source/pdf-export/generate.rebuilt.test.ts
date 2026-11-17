@@ -12,15 +12,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { type PdfValue, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import type { NormalizedMessage } from '../email-reading/types';
 import { translator } from '../page/translations';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import { generatePdf, type PdfFonts } from './generate';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
 import { loadPdfFonts } from './load-fonts';
 import { createPdfStrings } from './strings';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 let fonts: PdfFonts;
 let last: NormalizedMessage;

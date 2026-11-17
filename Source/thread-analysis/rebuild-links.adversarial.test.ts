@@ -8,11 +8,13 @@
 // rebuilt (the case is not empty). Synthetic data only (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine, type EngineRebuilt, type EngineResult } from './engine';
+import { runEngine } from './engine';
 import { comparableText } from './rebuild-links';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineRebuilt } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.test' };

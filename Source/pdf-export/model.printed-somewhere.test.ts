@@ -9,16 +9,18 @@
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from '../thread-analysis/engine';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import type { ParseResult } from '../email-reading/types';
 import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
-import { buildPdfDocument, noRepeat, type PdfDocument, type PdfEmail } from './model';
+import { buildPdfDocument, noRepeat } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
+import type { ParseResult } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });

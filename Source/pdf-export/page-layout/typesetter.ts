@@ -15,7 +15,7 @@
 // composed glyph: its NFC text; a placeholder: the characters of
 // "[U+XXXX]"); its copyText is the original text of its items (the backend
 // writes it as /ActualText when the glyphs say something else,
-// Source/pdf-export/pdf-writer/layout.ts). A stretch with no glyph at all (only group 2
+// Header/laid-out-document.ts). A stretch with no glyph at all (only group 2
 // characters, e.g. a line holding only an LRM or a ZWSP, or a ZWSP between
 // an emoji's codes and the end of the line) makes no run, so its copy text
 // is not written: nothing is seen there, and the copy layer would drop
@@ -23,14 +23,12 @@
 // "What you copy is what you see": a soft hyphen where the line breaks is
 // drawn as "-" and copies as "-"; elsewhere it is not drawn and is not in
 // the copy text either. Pure (README.md, rule R7).
-import type { ParsedFont } from '../font-reader/font';
-import type { PdfFontName } from '../fonts';
-import type { PdfLine, PdfRole } from '../text';
-import type { LaidOutTextRun } from '../pdf-writer/layout';
-import type { LayoutConfig, TextStyle } from './config';
 import { FontMetrics } from './font-metrics';
 import { breakLines, SHY_NONE } from './line-break';
 import { type ResolvedStyle, type ShapedText, Shaper, SOFT_HYPHEN_ITEM, type StyledText } from './shape';
+import type { LaidOutTextRun, LayoutConfig, TextStyle } from '../../../Header/laid-out-document';
+import type { PdfLine, PdfRole } from '../../../Header/pdf-document-model';
+import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 const ROLES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-value', 'body', 'muted', 'code'];
 const HYPHEN = 0x2d;

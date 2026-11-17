@@ -8,9 +8,10 @@
 // that gets the bytes another way (the PDF worker, which is handed them by
 // the page) uses parsePdfFonts (parse-fonts.ts) and never pulls the font
 // chunk in.
-import { PDF_FONTS, type PdfFontName } from './fonts';
+import { PDF_FONTS } from './fonts';
 import type { PdfFonts } from './generate';
 import { parsePdfFonts } from './parse-fonts';
+import type { PdfFontName } from '../../Header/pdf-fonts';
 
 /** Parses each WOFF file (default: the bundled ones). Rejects with a FontError for a broken file. */
 export function loadPdfFonts(files: Readonly<Record<PdfFontName, Uint8Array>> = PDF_FONTS): Promise<PdfFonts>

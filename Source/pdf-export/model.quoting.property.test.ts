@@ -27,14 +27,17 @@ import { describe, expect, it } from 'vitest';
 import { groupAsAttached } from '../../Helper/Test/test-support/attached-builder';
 import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { quotingCase, quotingSentence, type QuotingCase } from '../../Helper/Test/test-support/quoting-builder';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from '../thread-analysis/engine';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../page-logic/rebuilt';
-import { buildPdfDocument, noRepeat, type PdfEmail } from './model';
+import { buildPdfDocument, noRepeat } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { PdfEmail } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number

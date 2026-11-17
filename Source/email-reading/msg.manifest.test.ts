@@ -9,7 +9,7 @@ import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { createEmlParser } from './eml';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
-import type { NormalizedMessage } from './types';
+import type { NormalizedMessage } from '../../Header/parsed-email';
 
 // The real HTML-to-text converter needs the browser's DOMParser, which Node
 // does not have, and no DOM library is installed. So here the converter is a

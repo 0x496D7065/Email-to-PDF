@@ -1,10 +1,10 @@
 // Unit tests for the notes of an email (message-notes.ts). Synthetic data only.
 import { describe, expect, it } from 'vitest';
-import type { DedupeWarning } from '../thread-analysis/dedupe';
-import { runEngine, type EngineMessage } from '../thread-analysis/engine';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
 import { t } from '../page/translations';
 import { codedCharacters, DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { DedupeWarning, EngineMessage } from '../../Header/thread-analysis-result';
 
 let counter = 0;
 function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage

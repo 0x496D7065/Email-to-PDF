@@ -10,7 +10,7 @@
 // (seeded), for the property tests. Synthetic data only (README.md, rule R7).
 
 import { FORWARDED_SEPARATOR } from '../../../Source/email-reading/forwarded-block';
-import type { AttachedMessage, AttachedPlace, NormalizedMessage, ParseResult } from '../../../Source/email-reading/types';
+import type { AttachedMessage, AttachedPlace, NormalizedMessage, ParseResult } from '../../../Header/parsed-email';
 
 /** One email of the tree, with the emails attached inside it. */
 export interface AttachedNode

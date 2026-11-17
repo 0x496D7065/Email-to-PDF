@@ -8,16 +8,17 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import type { ParseResult } from '../email-reading/types';
 import { buildPdfDocument } from '../pdf-export/model';
 import { createPdfStrings } from '../pdf-export/strings';
 import { lineText } from '../pdf-export/text';
 import { setLocale, t } from './translations';
 import { alsoInText, attachedEmailsText, attachedToText, mountPreview, type Preview } from './preview';
+import type { ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });

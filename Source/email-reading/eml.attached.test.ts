@@ -8,7 +8,7 @@ import { createEmlParser } from './eml';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';
-import type { AttachedMessage, NormalizedMessage, ParseResult } from './types';
+import type { AttachedMessage, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 const crlf = (...lines: string[]): string => lines.join('\r\n');

@@ -63,33 +63,10 @@
 
 import { parseEmailDate } from '../email-reading/date';
 import { DATE_LANGUAGES } from './date-words';
+import type { QuotedDate } from '../../Header/rebuilt-emails';
 
 /** Longer text is not read at all (a real quote header date is under 60 characters). */
 export const MAX_QUOTED_DATE_LENGTH = 200;
-
-/**
- * How `estimatedUtcMs` was obtained.
- * - 'rfc-zone': an RFC 5322 date with its zone (exact).
- * - 'written-zone': another form with a written offset, e.g. "GMT+9" (exact).
- * - 'source-offset': no zone written; read in the dropped email's zone (approximate).
- * - 'none': no zone written and the dropped email's zone unknown, or the
- *   zone written as "-0000" (UTC, local zone unknown): wall time taken as
- *   UTC (approximate). Also the basis of an unreadable date.
- */
-export type QuotedDateBasis = 'rfc-zone' | 'written-zone' | 'source-offset' | 'none';
-
-export interface QuotedDate
-{
-    /** The date text as given. */
-    readonly text: string;
-    /** The wall-clock time as written, as if it were UTC (milliseconds); null = unreadable. */
-    readonly wallMs: number | null;
-    /** 'minute' when a time is written, 'day' for a date alone (wallMs is then midnight); null = unreadable. */
-    readonly precision: 'minute' | 'day' | null;
-    /** Best estimate of the true moment (milliseconds since the epoch, UTC); null = unreadable. */
-    readonly estimatedUtcMs: number | null;
-    readonly basis: QuotedDateBasis;
-}
 
 /** True when the moment comes from a zone written in the date itself, not from an assumption. */
 export function hasWrittenZone(date: QuotedDate): boolean

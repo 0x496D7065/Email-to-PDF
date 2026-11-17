@@ -40,16 +40,19 @@ import { describe, expect, it } from 'vitest';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan } from '../thread-analysis/output-plan';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
 import { hasNoPrintableText, pdfPositions } from '../page-logic/no-text';
 import { rebuiltEntries } from '../page-logic/rebuilt';
-import type { ReconstructedMessage } from '../thread-analysis/reconstruct';
-import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PdfDocument, type PdfEmail, type PrintedPart } from './model';
+import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PrintedPart } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
+import type { MessagePlan } from '../../Header/output-plan';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
+import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number

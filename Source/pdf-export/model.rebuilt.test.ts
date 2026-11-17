@@ -10,15 +10,18 @@
 // without a time, no sender, a list read short).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineRebuilt, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
-import type { QuotedDate } from '../thread-analysis/quoted-date';
-import type { NormalizedMessage } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../page/translations';
 import { previewOrder, rebuiltEntries } from '../page-logic/rebuilt';
-import { buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder, type PdfBlock, type PdfDocument, type PdfEmail } from './model';
-import { createPdfStrings, type PdfStrings } from './strings';
-import { bodyLines, lineText, type PdfLine } from './text';
+import { buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder } from './model';
+import { createPdfStrings } from './strings';
+import { bodyLines, lineText } from './text';
+import type { OutputPolicy } from '../../Header/output-plan';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { PdfBlock, PdfDocument, PdfEmail, PdfLine, PdfStrings } from '../../Header/pdf-document-model';
+import type { EngineRebuilt, QuotedDate } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 let fixtures: Map<string, NormalizedMessage>;
 beforeAll(async () =>

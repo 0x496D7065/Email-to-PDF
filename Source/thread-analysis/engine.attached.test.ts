@@ -10,10 +10,11 @@ import { createEmlParser } from '../email-reading/eml';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { createMsgParser } from '../email-reading/msg';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
-import { attachedAt, DEFAULT_PARTS, runEngine, type EngineMessage, type EngineResult } from './engine';
+import { attachedAt, DEFAULT_PARTS, runEngine } from './engine';
 import type { OverlapInput } from './overlap';
 import { checkSegments, reconstruct } from './segments';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });

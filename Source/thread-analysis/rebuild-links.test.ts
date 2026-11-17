@@ -5,7 +5,6 @@
 // cases that must NOT link in rebuild-links.adversarial.test.ts.
 
 import { describe, expect, it } from 'vitest';
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
 import {
     ambiguousReadings,
     comparableText,
@@ -28,10 +27,9 @@ import {
     nameWordsOf,
     wordsOf,
     type LinkSource,
-    type TimelineEntry,
 } from './rebuild-links';
-import type { QuotedDate } from './quoted-date';
-import type { ReconstructedMessage } from './reconstruct';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
+import type { QuotedDate, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };

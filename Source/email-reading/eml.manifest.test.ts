@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { FIXTURES, type FixtureExpectation } from '../../Helper/Test/test-data/manifest';
 import { createEmlParser } from './eml';
-import type { NormalizedMessage } from './types';
+import type { NormalizedMessage } from '../../Header/parsed-email';
 
 const files = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', {
     query: '?raw',

@@ -1,3 +1,7 @@
+// Header: the parsed email. Shared types only, no code (README.md, "Where
+// things are"). email-reading/ produces it; thread-analysis/, page-logic/,
+// page/, pdf-export/ and worker-pipeline/ read it.
+//
 // The normalized message structure: the one shape every parser produces.
 //
 // Every parser (.eml, .msg, later maybe .mbox) turns its file into exactly

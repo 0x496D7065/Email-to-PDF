@@ -1,7 +1,7 @@
 // Unit tests for the include/exclude choices (selection.ts). Synthetic data only.
 import { describe, expect, it } from 'vitest';
-import type { EngineMessage } from '../thread-analysis/engine';
 import { createSelection, includedPositions, selectionKeys } from './selection';
+import type { EngineMessage } from '../../Header/thread-analysis-result';
 
 /** A minimal kept email: only what selection.ts reads (its file hash and its merged copies' hashes). */
 function kept(sha256: string, merged: readonly string[] = []): EngineMessage

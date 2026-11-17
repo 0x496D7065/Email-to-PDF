@@ -17,18 +17,21 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type OutputPolicy } from '../thread-analysis/output-plan';
-import type { NormalizedMessage, ParseResult, ParseWarning } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedLinks } from '../page-logic/attached-links';
 import { hasNoPrintableText, pdfPositions } from '../page-logic/no-text';
 import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../page-logic/rebuilt';
 import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
-import { buildPdfDocument, planPdfOrder, type PdfDocument, type PdfEmail } from './model';
+import { buildPdfDocument, planPdfOrder } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
+import type { OutputPolicy } from '../../Header/output-plan';
+import type { NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };

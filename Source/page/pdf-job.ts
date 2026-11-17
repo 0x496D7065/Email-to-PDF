@@ -23,8 +23,7 @@
 // - Nothing here touches the email text: the bytes go from the worker into
 //   the Blob, and nothing else keeps them.
 
-import type { MakePdfRequest } from '../worker-pipeline/pdf-protocol';
-import type { PdfFailure, PdfOutcome } from '../worker-pipeline/pdf-runner';
+import type { MakePdfRequest, PdfFailure, PdfOutcome } from '../../Header/pdf-worker-messages';
 
 /** A failure the page explains ('cancelled' never reaches the page: a stopped job is dropped). */
 export type PdfError = Exclude<PdfFailure, 'cancelled'>;

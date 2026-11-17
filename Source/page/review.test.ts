@@ -6,13 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { runEngine, type EngineMessage, type EngineResult } from '../thread-analysis/engine';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS, type MessageNote } from '../page-logic/message-notes';
+import { runEngine } from '../thread-analysis/engine';
+import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS } from '../page-logic/message-notes';
 import { SAFE_TAGS } from './dom';
 import { setLocale, t } from './translations';
 import { headingId, mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, filesText, includedText, messagesText, noteText, relatedText, type Review, type ReviewOptions } from './review';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { MessageNote } from '../../Header/preview-display';
+import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ factory
 

@@ -20,7 +20,6 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import type { NormalizedMessage } from '../email-reading/types';
 import { CATALOG } from '../page/translations/catalog';
 import { isPluralForms, type Messages } from '../page/translations';
 import { rebuiltEntries } from '../page-logic/rebuilt';
@@ -28,6 +27,7 @@ import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
 import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
+import type { NormalizedMessage } from '../../Header/parsed-email';
 
 const LOCALES = ['en', 'fr', 'nl'] as const;
 type Locale = (typeof LOCALES)[number];

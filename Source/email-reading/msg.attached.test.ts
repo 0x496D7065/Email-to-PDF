@@ -12,8 +12,8 @@ import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser, resultFromFields } from './msg';
-import type { AttachedMessage, ParseResult } from './types';
 import { isFromWorker } from './worker-protocol';
+import type { AttachedMessage, ParseResult } from '../../Header/parsed-email';
 
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
 const parser = createMsgParser({ htmlToText: stub });

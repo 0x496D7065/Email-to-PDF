@@ -9,12 +9,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
-import { convertHtmlList, MISMATCH_DETAIL, parseWithDeferredHtml, type ConversionOutcome } from './deferred-html';
+import { convertHtmlList, MISMATCH_DETAIL, parseWithDeferredHtml } from './deferred-html';
 import { createEmlParser } from './eml';
-import type { FileKind } from './file-type';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
-import type { InputFile, ParseResult } from './types';
+import type { ConversionOutcome, FileKind } from '../../Header/parse-worker-messages';
+import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 const fixtureFiles = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
 

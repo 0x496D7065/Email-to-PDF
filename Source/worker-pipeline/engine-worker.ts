@@ -20,7 +20,8 @@
 // `connect-src 'none'` applies here too. The build check scans this code
 // inside the page's script (Helper/build-checks/check-no-network.mjs).
 
-import { createEngineWorkerSide, type FromEngineWorker } from './engine-protocol';
+import { createEngineWorkerSide } from './engine-protocol';
+import type { FromEngineWorker } from '../../Header/engine-worker-messages';
 
 /**
  * The part of a dedicated worker's global scope used here (described by

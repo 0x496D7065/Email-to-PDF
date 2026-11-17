@@ -22,8 +22,8 @@ import {
     TAB_WIDTH,
     ZERO_WIDTH_SPACE,
     type KeptRange,
-    type PdfLine,
 } from './text';
+import type { PdfLine } from '../../Header/pdf-document-model';
 
 const linesText = (lines: readonly PdfLine[]): string => lines.map(lineText).join('\n');
 const cp = (codePoint: number): string => String.fromCodePoint(codePoint);

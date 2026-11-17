@@ -5,8 +5,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HtmlToTextResult } from './html-to-text';
-import type { ParseResult } from './types';
-import type { ToWorker } from './worker-protocol';
 import {
     CANCELLED_DETAIL,
     DETACHED_DETAIL,
@@ -15,10 +13,11 @@ import {
     TIMEOUT_DETAIL,
     WORKER_FAILED_DETAIL,
     WORKER_START_DETAIL,
-    type WorkerEvents,
     type WorkerFactory,
     type WorkerJob,
 } from './worker-runner';
+import type { ToWorker, WorkerEvents } from '../../Header/parse-worker-messages';
+import type { ParseResult } from '../../Header/parsed-email';
 
 const SHA = 'a'.repeat(64);
 const TIMEOUT_MS = 1000;

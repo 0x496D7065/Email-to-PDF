@@ -3,10 +3,11 @@
 // engine.property.test.ts; the run over the fixtures in engine.fixtures.test.ts.
 
 import { describe, expect, it } from 'vitest';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import type { DedupeResult } from './dedupe';
-import { DEFAULT_PARTS, primaryReason, runEngine, type EngineMessage, type EngineParts, type EngineResult } from './engine';
-import { checkSegments, reconstruct, type FoldRange, type FoldReason, type Segment } from './segments';
+import { DEFAULT_PARTS, primaryReason, runEngine, type EngineParts } from './engine';
+import { checkSegments, reconstruct, type FoldRange } from './segments';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineMessage, EngineResult, FoldReason, Segment } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ factory
 

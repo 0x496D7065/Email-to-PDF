@@ -9,18 +9,20 @@ import { buildThread } from '../../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../../thread-analysis/output-plan';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../../email-reading/types';
 import { rebuiltEntries } from '../../page-logic/rebuilt';
-import { type ParsedFont, readWoffFont } from '../font-reader/font';
-import { PDF_FONTS, type PdfFontName } from '../fonts';
-import { buildPdfDocument, emailAnchor, type PdfBlock, type PdfDocument, type PdfEmail, type PdfFieldRow } from '../model';
+import { readWoffFont } from '../font-reader/font';
+import { PDF_FONTS } from '../fonts';
+import { buildPdfDocument, emailAnchor } from '../model';
 import { createPdfStrings } from '../strings';
 import { lineText, TAB_WIDTH } from '../text';
 import { OwnPdfWriter } from '../pdf-writer';
-import type { LaidOutDocument, LaidOutTextRun } from '../pdf-writer/layout';
-import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, type LayoutConfig, MAX_DIGIT_EM, SHORT_DATE_EM, type TextStyle } from './config';
+import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, MAX_DIGIT_EM, SHORT_DATE_EM } from './config';
 import { bodyIndentWidth, layoutPdf, type PdfLayout } from './pdf-layout';
 import { Typesetter } from './typesetter';
+import type { LaidOutDocument, LaidOutTextRun, LayoutConfig, TextStyle } from '../../../Header/laid-out-document';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../../Header/parsed-email';
+import type { PdfBlock, PdfDocument, PdfEmail, PdfFieldRow } from '../../../Header/pdf-document-model';
+import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 const fonts = {} as Record<PdfFontName, ParsedFont>;
 beforeAll(async () =>

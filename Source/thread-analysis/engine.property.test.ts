@@ -22,10 +22,11 @@
 // Synthetic data only: reserved names and *.test / *.invalid addresses.
 
 import { describe, expect, it } from 'vitest';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import { normalizeBody, type DuplicateRule } from './dedupe';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult, type EngineStage } from './engine';
-import { checkSegments, FOLD_REASONS, reconstruct, visibleView, type FoldReason } from './segments';
+import { normalizeBody } from './dedupe';
+import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineStage } from './engine';
+import { checkSegments, FOLD_REASONS, reconstruct, visibleView } from './segments';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { DuplicateRule, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------- generator
 

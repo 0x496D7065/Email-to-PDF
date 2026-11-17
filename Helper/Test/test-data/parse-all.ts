@@ -6,10 +6,10 @@
 import { createEmlParser } from '../../../Source/email-reading/eml';
 import type { HtmlToTextResult } from '../../../Source/email-reading/html-to-text';
 import { createMsgParser } from '../../../Source/email-reading/msg';
-import type { NormalizedMessage } from '../../../Source/email-reading/types';
 import { FIXTURES } from './manifest';
 import { buildMsg } from './msg/builder';
 import { MSG_SPECS } from './msg/specs';
+import type { NormalizedMessage } from '../../../Header/parsed-email';
 
 // Node has no DOMParser, so HTML bodies go through a stub (as in the adapter
 // manifest tests). It only affects the HTML-only fixtures. The stub is NOT a

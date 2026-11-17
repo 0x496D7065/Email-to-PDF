@@ -37,18 +37,12 @@
 
 import { findCfbDamage } from './cfb-check';
 import { createEmlParser } from './eml';
-import type { FileKind } from './file-type';
 import { sha256Hex } from './hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
-import type { EmailParser, InputFile, ParseResult } from './types';
-
-/** One HTML body converted on the page, or why it could not be. */
-export type ConversionOutcome =
-    | { readonly ok: true; readonly text: string; readonly truncated: boolean }
-    /** `reason` is the converter's own reason, without the "HTML body could not be converted: " prefix. */
-    | { readonly ok: false; readonly reason: string };
+import type { ConversionOutcome, FileKind } from '../../Header/parse-worker-messages';
+import type { EmailParser, InputFile, ParseResult } from '../../Header/parsed-email';
 
 /** Sends HTML strings to the page and waits for their conversions, in the same order. */
 export type ConvertOnPage = (htmls: readonly string[]) => Promise<readonly ConversionOutcome[]>;

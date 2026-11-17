@@ -1,10 +1,9 @@
 // The page builder: a cursor going down the text area of the current page,
 // a new page when the next thing does not fit, and the pieces each page
-// holds (text runs, rules, links). Coordinates as in Source/pdf-export/pdf-writer/layout.ts:
+// holds (text runs, rules, links). Coordinates as in Header/laid-out-document.ts:
 // points, origin top-left, y downward. Pure (README.md, rule R7).
-import type { LaidOutDestination, LaidOutFill, LaidOutLine, LaidOutLink, LaidOutTextRun } from '../pdf-writer/layout';
-import type { LayoutConfig } from './config';
 import type { LaidLine, Typesetter } from './typesetter';
+import type { LaidOutDestination, LaidOutFill, LaidOutLine, LaidOutLink, LaidOutTextRun, LayoutConfig } from '../../../Header/laid-out-document';
 
 /** A page while it is being filled. */
 export interface PageInProgress

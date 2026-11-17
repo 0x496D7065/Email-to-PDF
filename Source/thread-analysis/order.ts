@@ -29,6 +29,7 @@
 // never modified. The entries in the result are the same objects as in the input.
 
 import { isDisplayableMs } from './time-format';
+import type { OrderReason } from '../../Header/thread-analysis-result';
 
 /** The smallest shape `orderMessages` needs: a date and an input position. */
 export interface Orderable
@@ -37,16 +38,6 @@ export interface Orderable
     /** Position in the original input (for KeptMessage: the representative's position). */
     readonly index: number;
 }
-
-/** Why an entry is where it is. */
-export type OrderReason =
-    | 'by-date' // placed by its date (utcMs)
-    | 'file-order' // no usable date: placed after all dated messages, in input order
-    // No usable date, and attached inside another email: placed just before the
-    // email it is attached to (user decision 2026-11-10, Q7, task 8.13b-3). Set
-    // by the engine (Source/thread-analysis/engine.ts, placeUndatedAttached), never by
-    // orderMessages.
-    | 'before-parent';
 
 /** One entry of the ordered list. */
 export interface OrderedEntry<T>

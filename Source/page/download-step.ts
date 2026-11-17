@@ -31,13 +31,12 @@
 // Only our own words are shown, with textContent (README.md, rule R4).
 // Nothing is stored (README.md, rule R5).
 
-import type { MakePdfRequest, PdfFontBytes, PdfJobInput } from '../worker-pipeline/pdf-protocol';
-import type { PdfOutcome } from '../worker-pipeline/pdf-runner';
 import type { ListenerTarget } from './add-files';
 import type { AppShell } from './app';
 import { el, setBlobHref, setSafeAttribute } from './dom';
 import { t } from './translations';
 import { createPdfJob, type PdfJob, type PdfJobState, type PdfUnavailable } from './pdf-job';
+import type { MakePdfRequest, PdfFontBytes, PdfJobInput, PdfOutcome } from '../../Header/pdf-worker-messages';
 
 export interface DownloadStepOptions
 {

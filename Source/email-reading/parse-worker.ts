@@ -19,7 +19,8 @@
 // scans this code inside the page's script, after undoing the string
 // escapes (Helper/build-checks/check-no-network.mjs).
 
-import { createWorkerSide, type FromWorker } from './worker-protocol';
+import { createWorkerSide } from './worker-protocol';
+import type { FromWorker } from '../../Header/parse-worker-messages';
 
 /**
  * The part of a dedicated worker's global scope used here. The project's

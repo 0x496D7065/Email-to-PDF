@@ -3,9 +3,9 @@
 // Synthetic data only (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import type { EngineAttached, EngineResult } from '../thread-analysis/engine';
 import { FILE_CHAIN_SEPARATOR as PDF_SEPARATOR } from '../pdf-export/model';
 import { FILE_CHAIN_SEPARATOR, fileChain, type FileChainWords } from './file-chain';
+import type { EngineAttached, EngineResult } from '../../Header/thread-analysis-result';
 
 const words: FileChainWords = { noFileName: '(no name)', attachedNoName: (n) => `(attached ${String(n)})` };
 

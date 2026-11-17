@@ -15,6 +15,7 @@
 //   - Source/ (every file, Source/index.html included, except Source/public/,
 //     which is copied into dist/ as is and scanned there): catches problems
 //     early, in the code you write.
+//   - Header/ (every file): the shared type definitions, scanned like Source/.
 //   - dist/ (every file, including _headers): the code that is actually
 //     published. This is the real guarantee, because it also covers code
 //     added by Vite or by any future dependency.
@@ -82,8 +83,10 @@ if (!existsSync(dist))
 // Source/public/ is skipped here: Vite copies those files into dist/ as they
 // are, and they are scanned there byte for byte (with the dist/ rules).
 // Source/index.html is scanned here like any other Source/ file.
+// Header/ (the shared type definitions) is scanned as source too: it holds
+// types only, but a comment or a string type could still hold a URL.
 const publicDir = join(root, 'Source', 'public');
-const srcFiles = listFiles(join(root, 'Source')).filter((path) => !path.endsWith('.test.ts') && !path.startsWith(publicDir + sep));
+const srcFiles = [...listFiles(join(root, 'Source')), ...listFiles(join(root, 'Header'))].filter((path) => !path.endsWith('.test.ts') && !path.startsWith(publicDir + sep));
 const fontFiles = srcFiles.filter((path) => isFontFile(path));
 const sourceFiles = srcFiles.filter((path) => !isFontFile(path));
 const distFiles = listFiles(dist);

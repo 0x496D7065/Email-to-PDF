@@ -54,63 +54,8 @@
 // milliseconds). Callers should run it off the main thread or behind a time
 // or size limit.
 
-import type { NormalizedMessage } from '../email-reading/types';
-
-/** Which rule proved that a merged copy is the same message as the kept one. */
-export type DuplicateRule = 'message-id' | 'author-date-body';
-
-/** Why the engine did NOT merge messages that look alike. Shown in the preview. */
-export type DedupeWarningCode =
-    // Another message has the same Message-ID but a different body, subject,
-    // attachment names or From list, or only one of them has a body-missing
-    // parser warning (rule 4). Merging would lose text, so both are kept.
-    | 'same-id-different-content'
-    // Another message has the same Message-ID and content, but the dates are
-    // more than DATE_TOLERANCE_MS apart; or one copy has no date and the dated
-    // copy lacks other header data the undated one has (e.g. a Bcc line), so
-    // keeping either would lose the date or that data.
-    | 'duplicate-date-differs'
-    // Another message is identical except that neither copy's To/Cc/Bcc covers
-    // the other's (e.g. Carol is in Cc in one copy and in Bcc in the other).
-    | 'duplicate-recipients-differ'
-    // Another message is identical except for the "sent on behalf of" sender
-    // (both have one, and they differ), or the copy with more recipients is
-    // the one without a sender, so no single copy holds all the header data.
-    | 'duplicate-sender-differs'
-    // Another message is identical except for the threading headers: the
-    // In-Reply-To ids differ, neither References list holds the other, or the
-    // copy with more threading data lacks other header data.
-    | 'duplicate-threading-differs'
-    // This message is a duplicate of a message in another group, but not of
-    // every member of that group, so it could not join it (see `dedupe`).
-    | 'possible-duplicate-not-merged';
-
-/** One engine warning, with the other messages it is about. */
-export interface DedupeWarning
-{
-    readonly code: DedupeWarningCode;
-    /**
-     * Input positions of the other messages involved, ascending, without
-     * repeats: at most MAX_RELATED of them, the lowest positions first.
-     */
-    readonly related: readonly number[];
-    /**
-     * How many other messages are involved in total (at least `related.length`),
-     * so the preview can say "and N more" when the list was cut.
-     */
-    readonly relatedTotal: number;
-}
-
-/** One copy that was merged into a kept message. */
-export interface MergedCopy
-{
-    /** The copy's file name, SHA-256 and format, for the PDF cover page. */
-    readonly source: NormalizedMessage['source'];
-    /** Position of the copy in the input array. */
-    readonly index: number;
-    /** Which rule matched between this copy and the kept message. */
-    readonly rule: DuplicateRule;
-}
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { DedupeWarning, DedupeWarningCode, DuplicateRule, MergedCopy } from '../../Header/thread-analysis-result';
 
 /** One message that stays in the output. */
 export interface KeptMessage

@@ -31,7 +31,9 @@
 // Pure functions, no DOM (README.md, rule R7).
 
 import { primaryReason } from '../thread-analysis/engine';
-import { checkSegments, FOLD_REASONS, type FoldReason, type Segment } from '../thread-analysis/segments';
+import { checkSegments, FOLD_REASONS } from '../thread-analysis/segments';
+import type { DisplayBlock } from '../../Header/pdf-plan';
+import type { FoldReason, Segment } from '../../Header/thread-analysis-result';
 
 /**
  * Longest whitespace-only shown segment absorbed between two folded ones: 8
@@ -39,28 +41,6 @@ import { checkSegments, FOLD_REASONS, type FoldReason, type Segment } from '../t
  * plus stray spaces. Longer gaps stay visible.
  */
 export const MAX_ABSORBED_WHITESPACE = 8;
-
-/** One block for the preview / PDF. The text is always present, even when folded. */
-export interface DisplayBlock
-{
-    /** Offsets in the body: [start, end). Also a stable key (e.g. for expand toggles). */
-    readonly start: number;
-    readonly end: number;
-    readonly text: string;
-    readonly folded: boolean;
-    /** Union of the reasons of the folded segments in this block, in FOLD_REASONS order; [] when shown. */
-    readonly reasons: readonly FoldReason[];
-    /** Union of their linked message indices, ascending; [] when shown. */
-    readonly related: readonly number[];
-    /**
-     * What to call the block ("signature", "quoted text", ...): the reason
-     * covering the most characters (see the rules at the top of this file);
-     * null when shown.
-     */
-    readonly label: FoldReason | null;
-    /** True when the preview should show this block collapsed (folded and not "unfold all"). */
-    readonly collapsed: boolean;
-}
 
 /** A segment, or a part of one cut at a break. */
 interface Part

@@ -6,7 +6,6 @@
 // only checked loosely.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EmailDate } from '../email-reading/types';
 import {
     browserTimeZone,
     FALLBACK_ZONE,
@@ -20,6 +19,7 @@ import {
     listTimeZones,
     type ZonedDateTime,
 } from './time-format';
+import type { EmailDate } from '../../Header/parsed-email';
 
 const T = (iso: string): number => Date.parse(iso);
 

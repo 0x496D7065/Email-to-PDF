@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import type { EmailAddress } from '../email-reading/types';
 import { displayAuthor } from './display-author';
+import type { EmailAddress } from '../../Header/parsed-email';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.test' };

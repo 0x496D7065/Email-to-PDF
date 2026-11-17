@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';
-import type { FileLike } from '../worker-pipeline/read-files';
+import { runEngine } from '../thread-analysis/engine';
 import type { ListenerTarget } from './add-files';
 import { t } from './translations';
 import { focusedControlWasRemoved, mountPage, showResultInStep2, type Page } from './page';
+import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ synthetic data
 

@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest';
 import { formatQuotedDate, QUOTE_STYLES, type Zone } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { DATE_LANGUAGES } from './date-words';
-import { hasWrittenZone, MAX_QUOTED_DATE_LENGTH, parseQuotedDate, type QuotedDate } from './quoted-date';
+import { hasWrittenZone, MAX_QUOTED_DATE_LENGTH, parseQuotedDate } from './quoted-date';
+import type { QuotedDate } from '../../Header/rebuilt-emails';
 
 /** Milliseconds of a UTC calendar time (month 1-12). */
 const utc = (y: number, mo: number, d: number, h = 0, mi = 0, s = 0): number => Date.UTC(y, mo - 1, d, h, mi, s);

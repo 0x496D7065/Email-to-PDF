@@ -5,12 +5,14 @@
 // generated conversations in rebuild-links.measure.test.ts.
 
 import { describe, expect, it } from 'vitest';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import { buildThread } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from './engine';
-import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, type ReconstructedMessage } from './reconstruct';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from './engine';
+import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages } from './reconstruct';
 import { reconstruct } from './segments';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 

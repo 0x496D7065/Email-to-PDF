@@ -51,13 +51,15 @@
 // live in this page; reset() ("Clear everything") unticks the checkbox and
 // drops every plan.
 
-import type { EngineMessage, EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutputSteps, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';
-import { signatureSources, type PdfView, type PlannedEmail } from '../page-logic/pdf-plan';
+import { DEFAULT_OUTPUT_POLICY, planOutputSteps } from '../thread-analysis/output-plan';
+import { signatureSources } from '../page-logic/pdf-plan';
 import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
 import { el } from './dom';
 import { createStaticLabels } from './labels';
 import type { PreviewPdfPlans } from './preview';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { PdfView, PlannedEmail } from '../../Header/pdf-plan';
+import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 /** Pause after a change before the plans are worked out (ms). */
 export const DEBOUNCE_MS = 150;

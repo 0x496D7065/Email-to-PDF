@@ -110,184 +110,19 @@
 // Pure function: no DOM, no storage, no clock; the input array and the
 // messages in it are never modified (README.md, rule R7).
 
-import type { NormalizedMessage, ParseErrorCode, ParseResult, ParseWarning } from '../email-reading/types';
-import { dedupe, keepsHeaderData, type DedupeResult, type DedupeWarning, type MergedCopy } from './dedupe';
-import { orderMessages, type OrderReason } from './order';
+import { dedupe, keepsHeaderData, type DedupeResult } from './dedupe';
+import { orderMessages } from './order';
 import { detectQuotedOverlap } from './overlap';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
 import { mapOffsets } from './same-text-offsets';
-import { buildSegments, checkSegments, reconstruct, type FoldRange, type FoldReason, type Segment } from './segments';
+import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 import { detectSignatures, senderKeyOf } from './signature';
-import { linkRebuilt, type EngineRebuilt, type LinkSource, type TimelineEntry } from './rebuild-links';
-import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks, type ReconstructedMessage } from './reconstruct';
-
-export type { EngineRebuilt, RealMatch, RebuiltLink, RebuiltPlacement, TimelineEntry } from './rebuild-links';
-
-/**
- * Something that went wrong while rebuilding messages from the quoted text
- * of one kept message (step 6). Kept apart from EngineWarningCode: the real
- * message itself is not affected (its segments are the same), and the
- * preview does not show these yet (task 7.6).
- * - 'reconstruct-failed': rebuilding threw or returned something invalid,
- *   so nothing was rebuilt from this message (or, if linking failed, from
- *   any message).
- * - 'reconstruct-limit': the body is longer than MAX_SOURCE_LENGTH (nothing
- *   rebuilt) or MAX_RECONSTRUCTED messages were rebuilt (there may be more).
- */
-export type ReconstructionWarningCode = 'reconstruct-failed' | 'reconstruct-limit';
-
-export interface ReconstructionWarning
-{
-    /** Input position of the kept message (EngineMessage.index). */
-    readonly index: number;
-    readonly code: ReconstructionWarningCode;
-}
-
-/** Something the engine itself had to work around for one message. */
-export type EngineWarningCode =
-    // A fold detector threw an error for this message; its folds were skipped
-    // (the other detectors' folds still apply).
-    | 'detector-failed'
-    // The folds could not be turned into a valid cover of the body (or building
-    // the segments threw), so all of them were dropped and the whole body is
-    // shown unfolded.
-    | 'folding-disabled'
-    // De-duplication threw or returned an inconsistent result, so no message
-    // was merged (every message is kept on its own).
-    | 'dedupe-failed';
-
-/** One kept message, ready for the preview. */
-export interface EngineMessage
-{
-    /** The kept copy, unchanged (same object as in the input). */
-    readonly message: NormalizedMessage;
-    /** Its position in the input of `runEngine`. */
-    readonly index: number;
-    /**
-     * Placed by its date; or, date missing or unusable, after all dated
-     * messages by file order, or (an attached email) just before the email it
-     * is attached to ('before-parent').
-     */
-    readonly order: OrderReason;
-    /** Merged copies (see dedupe.ts), `index` = position in the input of `runEngine`. */
-    readonly duplicates: readonly MergedCopy[];
-    /** Why look-alike messages were NOT merged (see dedupe.ts), `related` = input positions. */
-    readonly dedupeWarnings: readonly DedupeWarning[];
-    /** The parser's warnings (same array as `message.warnings`), here for convenience. */
-    readonly parserWarnings: readonly ParseWarning[];
-    /** See EngineWarningCode; sorted, unique; usually empty. */
-    readonly engineWarnings: readonly EngineWarningCode[];
-    /** Cover of `message.bodyText`, shown or folded (see segments.ts). [] for an empty body. */
-    readonly segments: readonly Segment[];
-}
-
-/** A file that could not be read. */
-export interface FailedFile
-{
-    /** Its position in the input of `runEngine`. */
-    readonly index: number;
-    readonly fileName: string;
-    readonly sha256: string | null;
-    readonly error: ParseErrorCode;
-    readonly detail: string;
-}
-
-/** The numbers the preview shows. */
-export interface EngineCounts
-{
-    /** Every file given to the engine, read or failed (preview: "N files, M could not be read"). */
-    readonly filesGiven: number;
-    /** Messages read successfully, duplicates and attached emails (task 8.13b-3) included. */
-    readonly messagesFound: number;
-    /** Copies merged into another message (messagesFound - messages.length). */
-    readonly duplicatesMerged: number;
-    /** Files that could not be read (listed in `failed`). */
-    readonly filesFailed: number;
-    /** Kept messages with no usable date (placed by file order, or before their parent). */
-    readonly undated: number;
-    /** Kept messages with at least one folded segment. */
-    readonly withFolds: number;
-}
-
-/** The whole engine output: plain, structured-clone-safe data. */
-export interface EngineResult
-{
-    /** Kept messages, in chronological order. */
-    readonly messages: readonly EngineMessage[];
-    /** Failed files, in input order. */
-    readonly failed: readonly FailedFile[];
-    readonly counts: EngineCounts;
-    /**
-     * For each input position: the position in `messages` of the kept message
-     * that holds it (the message itself, or the one it was merged into); null
-     * for a failed file. Use it to resolve `index` and `related` numbers.
-     */
-    readonly positionByIndex: readonly (number | null)[];
-    /**
-     * Messages rebuilt from quoted text (step 6), by source (in `messages`
-     * order), newest first; each says whether it is linked to a real message,
-     * the same as another rebuilt one, or its own timeline entry. The preview
-     * shows the entries (Source/page-logic/rebuilt.ts), and so does the PDF
-     * (Source/pdf-export/model.ts, the ones the reader chose).
-     */
-    readonly reconstructed: readonly EngineRebuilt[];
-    /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (rebuild-links.ts). */
-    readonly timeline: readonly TimelineEntry[];
-    /** Problems while rebuilding, in `messages` order. Usually empty. */
-    readonly reconstructionWarnings: readonly ReconstructionWarning[];
-    /**
-     * Every email attached inside a dropped file that the engine read as a
-     * message of its own (task 8.13b-3), by input position: entry k has
-     * index `counts.filesGiven + k`. No key at all when there are none, so
-     * the result for files without attached emails is what it always was.
-     */
-    readonly attached?: readonly EngineAttached[];
-}
-
-/** Where one attached email's printed block sits in the body of an email holding it (AttachedPlace, with input positions). */
-export interface EngineAttachedPlace
-{
-    /**
-     * Input position of the email whose bodyText holds the block: its parent,
-     * or the parent's parent, ...; or, when that one was merged into another
-     * copy (dedupe.ts), the kept copy, with the offsets found again in its
-     * body (task 8.13b-3, review round 4, S1: settleAttached). When they
-     * cannot be found for certain there, the place stays on the merged copy
-     * (then no kept message has this index, and the PDF leaves the kept
-     * body as its plan says).
-     */
-    readonly holderIndex: number;
-    /** `bodyText.slice(start, end)` of the message at `holderIndex` (that very message object) is the whole block. */
-    readonly start: number;
-    readonly end: number;
-}
-
-/** One email attached inside a dropped file (ParseResult.attached), as the engine numbers it. */
-export interface EngineAttached
-{
-    /** Its input position (see Indices at the top). */
-    readonly index: number;
-    /** Input position of the email it is attached to: its file's own email, or another attached email of that file. */
-    readonly parentIndex: number;
-    /** Input position of the dropped file it came from (that file's own email). */
-    readonly fileIndex: number;
-    /** AttachedMessage.path: its attachment number at each level, from the file's own email down. */
-    readonly path: readonly number[];
-    /** The attachment name at each level of `path` (AttachedMessage.name of it and of each attached email above it), '' when none. */
-    readonly names: readonly string[];
-    /** AttachedMessage.places that are valid ranges of their holder's body, nearest holder first; [] when its text is in no body. */
-    readonly places: readonly EngineAttachedPlace[];
-    /**
-     * Whether the header rows of the kept copy holding it show every header
-     * datum its own copy has: true when it is kept itself, or when the copy it
-     * was merged into keeps its header data with the same date (dedupe.ts,
-     * keepsHeaderData). False when a dropped file's copy was kept although
-     * this copy held more (a Bcc line, a date: D2, task 8.13b-3 review round
-     * 4); then its block's header lines stay printed in the emails holding it.
-     */
-    readonly keptShowsHeader: boolean;
-}
+import { linkRebuilt, type LinkSource } from './rebuild-links';
+import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineRebuilt, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
+import type { DedupeWarning, EngineAttached, EngineAttachedPlace, EngineMessage, EngineResult, EngineWarningCode, FailedFile, FoldReason, MergedCopy, OrderReason, ReconstructionWarning, Segment } from '../../Header/thread-analysis-result';
 
 /** The EngineAttached entry of input position `index`, or undefined (a file's own email, or no such entry). */
 export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, index: number): EngineAttached | undefined

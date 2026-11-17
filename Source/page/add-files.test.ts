@@ -2,10 +2,6 @@
 // (Helper/Test/test-support/fake-dom.ts) and a fake processFiles. The real page, real
 // files and real workers are checked in Chromium by Helper/Test/browser-tests/add-files.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EngineResult } from '../thread-analysis/engine';
-import type { ParseErrorCode, ParseResult } from '../email-reading/types';
-import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';
-import type { FileLike } from '../worker-pipeline/read-files';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
 import {
     carriesFiles,
@@ -21,6 +17,9 @@ import {
 } from './add-files';
 import { mountApp, type AppShell } from './app';
 import { t } from './translations';
+import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
+import type { ParseErrorCode, ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 // --- Helpers ----------------------------------------------------------------
 

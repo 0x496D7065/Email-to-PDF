@@ -4,9 +4,8 @@
 // late outcome ignored (job ids), the signal aborted on every stop, and the
 // URL revoked on every way out of 'ready'.
 import { describe, expect, it } from 'vitest';
-import type { MakePdfRequest } from '../worker-pipeline/pdf-protocol';
-import type { PdfOutcome } from '../worker-pipeline/pdf-runner';
 import { createPdfJob, type PdfJobOptions, type PdfJobState } from './pdf-job';
+import type { MakePdfRequest, PdfOutcome } from '../../Header/pdf-worker-messages';
 
 // The request's content does not matter here: the fake run never reads it.
 const REQUEST = { type: 'make' } as unknown as MakePdfRequest;

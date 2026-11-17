@@ -9,17 +9,16 @@ import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { createMsgParser } from '../email-reading/msg';
 import { FILE_TOO_LARGE_DETAIL, parseFilesWith } from '../email-reading/parse-files';
-import type { InputFile, ParseResult } from '../email-reading/types';
 import { ENGINE_TIMEOUT_DETAIL, type EngineOutcome } from './engine-runner';
 import {
     CANCELLED_BATCH_DETAIL,
     processFilesWith,
     UNEXPECTED_BATCH_DETAIL,
     UNEXPECTED_FILE_DETAIL,
-    type ProcessProgress,
     type ProcessSteps,
 } from './process-files';
-import type { FileLike } from './read-files';
+import type { FileLike, ProcessProgress } from '../../Header/file-processing';
+import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 const fixtures = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
 

@@ -8,10 +8,11 @@ import { describe, expect, it } from 'vitest';
 import { readPdf } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
 import { PDF_FONTS } from '../pdf-export/fonts';
-import type { GeneratedPdf } from '../pdf-export/generate';
-import { createPdfWorkerSide, isFromPdfWorker, isToPdfWorker, makePdf, ownBuffer, type FromPdfWorker, type MakePdfRequest, type PdfJobInput } from './pdf-protocol';
+import { createPdfWorkerSide, isFromPdfWorker, isToPdfWorker, makePdf, ownBuffer } from './pdf-protocol';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { GeneratedPdf } from '../../Header/pdf-document-model';
+import type { FromPdfWorker, MakePdfRequest, PdfJobInput } from '../../Header/pdf-worker-messages';
 
 function make(k: number): NormalizedMessage
 {

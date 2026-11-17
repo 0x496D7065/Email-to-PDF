@@ -103,30 +103,10 @@
 // Pure functions, no DOM (README.md, rule R7). Email text stays plain data:
 // it is never read as markup or code (README.md, rule R4).
 
+import type { PdfLine, PdfRole, PdfRun } from '../../Header/pdf-document-model';
+
 /** Spaces per tab (transform b). */
 export const TAB_WIDTH = 4;
-
-/**
- * The semantic role of a piece of text. No sizes, no fonts: the renderer
- * decides how each role looks.
- * - 'title': the document title; 'heading': a section or email heading;
- * - 'field-label' / 'field-value': a header row ("From" / "Alice <a@x.test>");
- * - 'body': email text; 'muted': secondary text (notes, "(no subject)");
- * - 'code': the visible code of a replaced character ("[U+0007]", transform
- *   c): the renderer shows it greyed and may give it the original character
- *   as ActualText; text that merely looks like a code stays in its own role.
- */
-export type PdfRole = 'title' | 'heading' | 'field-label' | 'field-value' | 'body' | 'muted' | 'code';
-
-/** A run of text with one role. `text` never contains a line break and is never empty. */
-export interface PdfRun
-{
-    readonly role: PdfRole;
-    readonly text: string;
-}
-
-/** One line: its runs in order. [] is an empty line. The renderer wraps a long line. */
-export type PdfLine = readonly PdfRun[];
 
 /** Group 3 of the contract: drawn as a hyphen only at a line break. */
 export const SOFT_HYPHEN = 0x00ad;

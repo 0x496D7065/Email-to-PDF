@@ -2,7 +2,6 @@
 // Synthetic text only; non-ASCII characters are written as \u escapes.
 
 import { describe, expect, it } from 'vitest';
-import type { NormalizedMessage } from '../email-reading/types';
 import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
 import {
     MAX_SIGNATURE_LINES,
@@ -12,6 +11,7 @@ import {
     senderKeyOf,
     type SignatureInput,
 } from './signature';
+import type { NormalizedMessage } from '../../Header/parsed-email';
 
 const BOB = 'bob@furniture.example.test';
 const ALICE = 'alice@example.test';

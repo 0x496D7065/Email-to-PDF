@@ -84,10 +84,7 @@
 // made again by itself. Nothing about the language is stored, and "Clear
 // everything" keeps it.
 
-import type { EngineResult } from '../thread-analysis/engine';
 import { PDF_FONTS } from '../pdf-export/fonts';
-import type { ProcessResult } from '../worker-pipeline/process-files';
-import type { PdfJobInput } from '../worker-pipeline/pdf-protocol';
 import { pdfPositions } from '../page-logic/no-text';
 import { createBrowserPdfWorker, pdfTimeoutMs, runPdfInWorker } from '../worker-pipeline/pdf-runner';
 import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files';
@@ -98,6 +95,9 @@ import { createPdfLabels, type PdfLabels, type PdfLabelsOptions } from './pdf-la
 import type { PdfUnavailable } from './pdf-job';
 import { mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, type Review } from './review';
+import type { ProcessResult } from '../../Header/file-processing';
+import type { PdfJobInput } from '../../Header/pdf-worker-messages';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 export interface PageOptions
 {

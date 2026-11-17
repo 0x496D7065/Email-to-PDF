@@ -107,9 +107,9 @@
 // Pure functions: no DOM, no storage, inputs are never modified (README.md,
 // rule R7).
 
-import type { NormalizedMessage } from '../email-reading/types';
 import { authorKey } from './dedupe';
 import { lineRanges, type FoldRange, type LineRange } from './segments';
+import type { NormalizedMessage } from '../../Header/parsed-email';
 
 /**
  * Longest fold of the delimiter rule, in lines, the "-- " line and blank

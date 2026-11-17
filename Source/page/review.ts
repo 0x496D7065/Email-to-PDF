@@ -99,10 +99,8 @@
 // in the PDF" line instead of the rebuilt one (rebuiltAnnouncement), so an
 // older rebuilt line never stays in the status line.
 
-import type { EngineCounts, EngineMessage, EngineRebuilt, EngineResult, ReconstructionWarning } from '../thread-analysis/engine';
-import type { ProcessResult } from '../worker-pipeline/process-files';
-import { attachedCount, attachedLinks, type UnreadAttachedCode } from '../page-logic/attached-links';
-import { messageNotes, type MessageNote } from '../page-logic/message-notes';
+import { attachedCount, attachedLinks } from '../page-logic/attached-links';
+import { messageNotes } from '../page-logic/message-notes';
 import { pdfPositions, rebuiltHasNoPrintableText } from '../page-logic/no-text';
 import { createRebuiltSelection, rebuiltEntries, rebuiltInPdf } from '../page-logic/rebuilt';
 import { createSelection } from '../page-logic/selection';
@@ -110,6 +108,10 @@ import { el, setSafeAttribute } from './dom';
 import { t } from './translations';
 import { createStaticLabels } from './labels';
 import { headingId, joinList, messageNumberText, rebuiltHeadingId } from './preview';
+import type { ProcessResult } from '../../Header/file-processing';
+import type { MessageNote, UnreadAttachedCode } from '../../Header/preview-display';
+import type { EngineRebuilt } from '../../Header/rebuilt-emails';
+import type { EngineCounts, EngineMessage, EngineResult, ReconstructionWarning } from '../../Header/thread-analysis-result';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (no DOM; unit tested directly).
@@ -117,7 +119,7 @@ import { headingId, joinList, messageNumberText, rebuiltHeadingId } from './prev
 /**
  * "See emails #3, #5." for a note about look-alike emails, plus "2 more files
  * are involved." when the engine cut its list; '' if none. `more` counts
- * files, not emails (see MessageNote in Source/page-logic/message-notes.ts).
+ * files, not emails (see MessageNote in Header/preview-display.ts).
  */
 export function relatedText(numbers: readonly number[], more: number): string
 {

@@ -8,14 +8,15 @@
 // the caller (loadPdfFonts, load-fonts.ts) and passed in. Email text is
 // only ever written as text in the PDF (rule R4); the plans decide what is
 // left out (rule R6, the exception for the PDF), nothing here changes that.
-import type { EngineResult } from '../thread-analysis/engine';
-import type { MessagePlan, OutputPolicy } from '../thread-analysis/output-plan';
-import type { ParsedFont } from './font-reader/font';
-import type { PdfFontName } from './fonts';
-import { type LayoutConfig, layoutPdf } from './page-layout';
+import { layoutPdf } from './page-layout';
 import { buildPdfDocument } from './model';
-import { createPdfStrings, type PdfStrings } from './strings';
-import { OwnPdfWriter, type PdfBackend } from './pdf-writer';
+import { createPdfStrings } from './strings';
+import { OwnPdfWriter } from './pdf-writer';
+import type { LayoutConfig, PdfBackend } from '../../Header/laid-out-document';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { GeneratedPdf, PdfStrings } from '../../Header/pdf-document-model';
+import type { ParsedFont, PdfFontName } from '../../Header/pdf-fonts';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** The four parsed PDF fonts (loadPdfFonts). */
 export type PdfFonts = Readonly<Record<PdfFontName, ParsedFont>>;
@@ -47,15 +48,6 @@ export interface GeneratePdfInput
     readonly config?: LayoutConfig;
     /** The backend (default: our own writer). */
     readonly backend?: PdfBackend;
-}
-
-export interface GeneratedPdf
-{
-    readonly bytes: Uint8Array;
-    /** "correspondence-YYYY-MM-DD.pdf" in English: the generation date in the chosen zone, the name in the PDF's language. */
-    readonly fileName: string;
-    /** How many pages the PDF has (for the page's "ready" message). */
-    readonly pageCount: number;
 }
 
 /**

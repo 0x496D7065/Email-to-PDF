@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEmlParser } from './eml';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';
-import type { EmailParser, NormalizedMessage, ParseResult } from './types';
+import type { EmailParser, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
 // decodeWords is wrapped in a spy that calls the real function, so that one
 // test can simulate a library that leaves a line break in a decoded header.

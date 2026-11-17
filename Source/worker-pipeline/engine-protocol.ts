@@ -13,32 +13,10 @@
 // 7.5: `reconstructed`, `timeline`, `reconstructionWarnings`).
 // Nothing is stored anywhere (README.md, rule R5).
 
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import type { ParseResult } from '../email-reading/types';
-
-export interface EngineRequest
-{
-    readonly type: 'run';
-    readonly results: readonly ParseResult[];
-}
-
-/** Page -> engine worker. */
-export type ToEngineWorker = EngineRequest;
-
-export interface EngineResultMessage
-{
-    readonly type: 'result';
-    readonly result: EngineResult;
-}
-
-/** The engine threw (a bug, not a bad file); no details are sent. */
-export interface EngineFailedMessage
-{
-    readonly type: 'failed';
-}
-
-/** Engine worker -> page. */
-export type FromEngineWorker = EngineResultMessage | EngineFailedMessage;
+import { runEngine } from '../thread-analysis/engine';
+import type { FromEngineWorker, ToEngineWorker } from '../../Header/engine-worker-messages';
+import type { ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 function isRecord(value: unknown): value is Record<string, unknown>
 {

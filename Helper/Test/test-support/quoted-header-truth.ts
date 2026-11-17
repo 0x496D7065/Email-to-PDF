@@ -2,9 +2,9 @@
 // with the ground truth of the thread builder (thread-builder.ts). Shared by
 // the reader's tests and the reconstruction measurement. Test-only.
 
-import type { EmailAddress } from '../../../Source/email-reading/types';
 import type { QuotedHeaderFields } from '../../../Source/thread-analysis/quoted-header';
 import type { ExpectedHeader, Person } from './thread-builder';
+import type { EmailAddress } from '../../../Header/parsed-email';
 
 /** People as a header writes them: the address only when it is written (Outlook names-only blocks and Thunderbird attributions have none). */
 function expectedBoxes(people: readonly Person[], written: string | undefined): EmailAddress[]

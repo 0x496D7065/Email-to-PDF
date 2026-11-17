@@ -13,9 +13,8 @@ import {
     splitsSurrogatePair,
     visibleView,
     type FoldRange,
-    type FoldReason,
-    type Segment,
 } from './segments';
+import type { FoldReason, Segment } from '../../Header/thread-analysis-result';
 
 const EMOJI = '\ud83d\ude00'; // one emoji = two UTF-16 code units
 const THUMB = '\ud83d\udc4d';

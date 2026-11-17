@@ -29,7 +29,6 @@
 import { detectFileType } from './file-type';
 import { sha256Hex } from './hash';
 import { htmlToTextWithDomParser } from './html-dom';
-import type { InputFile, ParseErrorCode, ParseResult } from './types';
 import {
     coversWholeBuffer,
     createBrowserWorker,
@@ -38,6 +37,8 @@ import {
     runInWorker,
     type WorkerJob,
 } from './worker-runner';
+import type { Limits } from '../../Header/parse-worker-messages';
+import type { InputFile, ParseErrorCode, ParseResult } from '../../Header/parsed-email';
 
 /**
  * Largest single file read: 50 MiB. Common providers cap a message at 20 to
@@ -69,13 +70,6 @@ const UNEXPECTED_DETAIL = 'could not be read (unexpected error)';
 
 /** Parses one checked, hashed file (in a worker in the browser). */
 export type JobRunner = (job: WorkerJob) => Promise<ParseResult>;
-
-/** The limits, injectable so tests do not need 500 MB of data. */
-export interface Limits
-{
-    readonly maxFileBytes: number;
-    readonly maxBatchBytes: number;
-}
 
 const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
 

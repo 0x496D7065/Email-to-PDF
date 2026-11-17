@@ -3,14 +3,17 @@
 // output plan, as the app does.
 
 import { describe, expect, it } from 'vitest';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { sizeText } from '../page/preview';
-import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput, type PdfDocument, type PdfEmail } from './model';
+import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput } from './model';
 import { createPdfStrings } from './strings';
-import { lineText, type PdfLine } from './text';
+import { lineText } from './text';
 import { copyLayerText } from './pdf-writer/copy-text';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail, PdfLine } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };

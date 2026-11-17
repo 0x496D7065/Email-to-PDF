@@ -1,6 +1,6 @@
 // Small pure helpers on mailboxes, shared by the .eml and .msg adapters.
 
-import type { EmailAddress } from './types';
+import type { EmailAddress } from '../../Header/parsed-email';
 
 /**
  * The actual sender to keep next to the From mailboxes, or undefined if it

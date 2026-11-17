@@ -5,8 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineMessage } from './engine';
-import { planOutput, type MessagePlan } from './output-plan';
+import { runEngine } from './engine';
+import { planOutput } from './output-plan';
+import type { MessagePlan } from '../../Header/output-plan';
+import type { EngineMessage } from '../../Header/thread-analysis-result';
 
 function keptText(m: EngineMessage, p: MessagePlan): string
 {

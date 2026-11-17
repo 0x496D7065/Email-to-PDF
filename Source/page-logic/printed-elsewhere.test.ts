@@ -11,16 +11,20 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import { DEFAULT_OUTPUT_POLICY, planOutput, type MessagePlan, type OutputPolicy } from '../thread-analysis/output-plan';
+import { runEngine } from '../thread-analysis/engine';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
-import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere, type PdfDocument, type PdfEmail } from '../pdf-export/model';
+import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/model';
 import { createPdfStrings } from '../pdf-export/strings';
 import { bodyLines, lineText } from '../pdf-export/text';
-import { pdfBlocks, signatureSources, type PdfView, type PrintedAs } from './pdf-plan';
+import { pdfBlocks, signatureSources } from './pdf-plan';
 import { printedElsewhereRanges } from './printed-elsewhere';
 import { rebuiltEntries } from './rebuilt';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail, PrintedAs } from '../../Header/pdf-document-model';
+import type { PdfView } from '../../Header/pdf-plan';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 

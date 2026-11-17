@@ -13,9 +13,10 @@ import { createEmlParser } from './eml';
 import { sha256Hex } from './hash';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg';
-import type { ParseResult } from './types';
-import { createWorkerSide, isFromWorker, isToWorker, type FromWorker } from './worker-protocol';
+import { createWorkerSide, isFromWorker, isToWorker } from './worker-protocol';
 import { runInWorker, type WorkerFactory } from './worker-runner';
+import type { FromWorker } from '../../Header/parse-worker-messages';
+import type { ParseResult } from '../../Header/parsed-email';
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 

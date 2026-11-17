@@ -12,9 +12,7 @@ import plexMonoRegular from './fonts/IBMPlexMono-Regular.woff?bytes';
 import plexSansBold from './fonts/IBMPlexSans-Bold.woff?bytes';
 import plexSansItalic from './fonts/IBMPlexSans-Italic.woff?bytes';
 import plexSansRegular from './fonts/IBMPlexSans-Regular.woff?bytes';
-
-/** The four font styles the PDF uses. */
-export type PdfFontName = 'sans-regular' | 'sans-bold' | 'sans-italic' | 'mono-regular';
+import type { PdfFontName } from '../../Header/pdf-fonts';
 
 /** Each PDF font's WOFF file, as bytes. Never modify them (Reserved Font Name "Plex"). */
 export const PDF_FONTS: Readonly<Record<PdfFontName, Uint8Array<ArrayBuffer>>> = {

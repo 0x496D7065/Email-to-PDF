@@ -14,16 +14,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../Helper/Test/test-support/fake-dom';
 import { testLanguageName, TEST_LOCALE } from '../../Helper/Test/test-support/test-locale';
-import { runEngine, type EngineResult } from '../thread-analysis/engine';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
-import type { ProcessOptions, ProcessResult } from '../worker-pipeline/process-files';
-import type { MakePdfRequest, PdfFontBytes } from '../worker-pipeline/pdf-protocol';
-import type { PdfOutcome } from '../worker-pipeline/pdf-runner';
-import type { FileLike } from '../worker-pipeline/read-files';
+import { runEngine } from '../thread-analysis/engine';
 import type { ListenerTarget } from './add-files';
 import { en } from './translations/en';
 import { getLocale, isPluralForms, setLocale, SUPPORTED_LOCALES, t } from './translations';
 import { mountPage, type Page } from './page';
+import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { MakePdfRequest, PdfFontBytes, PdfOutcome } from '../../Header/pdf-worker-messages';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 vi.mock('./translations/catalog', async (importOriginal) =>
 {

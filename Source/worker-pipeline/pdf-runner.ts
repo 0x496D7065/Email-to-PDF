@@ -17,9 +17,11 @@
 // The worker is hidden behind a factory so this logic is unit tested with a
 // fake worker.
 
-import { connectWorker, type WorkerEvents, type WorkerHandle } from '../email-reading/worker-runner';
-import { isFromPdfWorker, type MakePdfRequest, type ToPdfWorker } from './pdf-protocol';
+import { connectWorker } from '../email-reading/worker-runner';
+import { isFromPdfWorker } from './pdf-protocol';
 import PdfWorker from './pdf-worker?worker&inline';
+import type { WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
+import type { MakePdfRequest, PdfFailure, PdfOutcome, ToPdfWorker } from '../../Header/pdf-worker-messages';
 
 /**
  * Time limit for one PDF: 2 minutes plus 50 ms per email. A PDF of 2000
@@ -36,14 +38,6 @@ export function pdfTimeoutMs(emails: number): number
 {
     return PDF_TIMEOUT_BASE_MS + PDF_TIMEOUT_PER_EMAIL_MS * Math.max(0, emails);
 }
-
-/** Why there is no PDF. */
-export type PdfFailure = 'timeout' | 'tool-error' | 'not-started' | 'cancelled';
-
-/** The PDF, or why there is none. */
-export type PdfOutcome =
-    | { readonly ok: true; readonly bytes: Uint8Array; readonly fileName: string; readonly pageCount: number }
-    | { readonly ok: false; readonly error: PdfFailure };
 
 /** Starts a PDF worker and connects its events. May throw (then the outcome is 'not-started'). */
 export type PdfWorkerFactory = (events: WorkerEvents) => WorkerHandle<ToPdfWorker>;

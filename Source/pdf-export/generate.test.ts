@@ -9,14 +9,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import type { EmailAddress, NormalizedMessage, ParseResult } from '../email-reading/types';
 import { type GeneratePdfInput, generatePdf, type PdfFonts } from './generate';
 import { COVER_DESTINATION, DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_DESTINATION, layoutPdf, MAX_FRONT_PASSES, type PdfLayout, settlePageCount } from './page-layout';
 import { loadPdfFonts } from './load-fonts';
-import { buildPdfDocument, MAX_BOOKMARK_LENGTH, type PdfDocument } from './model';
+import { buildPdfDocument, MAX_BOOKMARK_LENGTH } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
 import { OwnPdfWriter } from './pdf-writer';
+import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { PdfDocument } from '../../Header/pdf-document-model';
 
 let fonts: PdfFonts;
 beforeAll(async () =>

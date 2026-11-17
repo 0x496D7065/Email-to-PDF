@@ -117,7 +117,7 @@
 // before task 8.10; the user unticks that rebuilt email or adds the file).
 // ATTACHED EMAILS (task 8.13b-3, user decisions 2026-11-10): an email
 // attached inside a dropped file is a real email of the engine's list
-// (Source/thread-analysis/engine.ts, EngineAttached), so it gets its own slot, number,
+// (Header/thread-analysis-result.ts, EngineAttached), so it gets its own slot, number,
 // index entry and page like any other (Q1, Q2: its own tick). Its File row
 // names the file and each attachment down to it ("parent.eml ›
 // forwarded.eml", fileRowLine, Q5). With "Print full original text" off,
@@ -262,176 +262,27 @@
 // transform makes new strings. Pure function, no DOM, no clock (the caller
 // passes `generatedAt`), README.md, rule R7.
 
-import type { EngineAttached, EngineMessage, EngineRebuilt, EngineResult } from '../thread-analysis/engine';
-import type { MessagePlan, OutputPolicy, PlanRange } from '../thread-analysis/output-plan';
 import { headerLabelCounts } from '../thread-analysis/quoted-header';
-import type { ReconstructedMessage } from '../thread-analysis/reconstruct';
 import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-analysis/rebuild-links';
 import { mapOffsets } from '../thread-analysis/same-text-offsets';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../thread-analysis/time-format';
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
 import { displayAuthor } from '../page-logic/display-author';
 import { FILE_CHAIN_SEPARATOR, fileChain } from '../page-logic/file-chain';
 import { joinMailboxes } from '../page-logic/mailbox-list';
 import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../page-logic/no-text';
-import { previewOrder, rebuiltDate, rebuiltInPdf, type RebuiltInPdf } from '../page-logic/rebuilt';
+import { previewOrder, rebuiltDate, rebuiltInPdf } from '../page-logic/rebuilt';
 import { printedText } from './printed-check';
-import type { PdfStrings } from './strings';
-import { bodyLines, inlineRuns, joinKeptLines, lineText, type PdfLine, type PdfRole } from './text';
+import { bodyLines, inlineRuns, joinKeptLines, lineText } from './text';
 // Pure and backend-neutral (it only reads Source/pdf-export/text.ts): the bookmark cut follows the same rule as the copy layer.
 import { copyLayerCutIndex } from './pdf-writer/copy-text';
-
-export type { PdfLine, PdfRole, PdfRun } from './text';
+import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-plan';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
+import type { PdfBlock, PdfDocument, PdfEmail, PdfFieldRow, PdfIndexEntry, PdfLine, PdfParticipant, PdfRange, PdfRole, PdfStrings, PrintedAs } from '../../Header/pdf-document-model';
+import type { RebuiltInPdf } from '../../Header/preview-display';
+import type { EngineRebuilt, ReconstructedMessage } from '../../Header/rebuilt-emails';
+import type { EngineAttached, EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 // ---------------------------------------------------------------- the shape
-
-/** A header row: a label and its value, one or more lines. */
-export interface PdfFieldRow
-{
-    readonly label: string;
-    readonly value: readonly PdfLine[];
-}
-
-/**
- * A piece of free-form content (the cover). The renderer lays out each kind
- * its own way; every text is in runs with a semantic role.
- * - 'heading': level 1 = the document title (role 'title'), level 2 = a section;
- * - 'fields': label/value rows (a small two-column table);
- * - 'paragraph': one line of text, wrapped;
- * - 'list': items, each one or more lines (each line wrapped on its own).
- */
-export type PdfBlock =
-    | { readonly kind: 'heading'; readonly level: 1 | 2; readonly line: PdfLine }
-    | { readonly kind: 'fields'; readonly rows: readonly PdfFieldRow[] }
-    | { readonly kind: 'paragraph'; readonly line: PdfLine }
-    | { readonly kind: 'list'; readonly items: readonly (readonly PdfLine[])[] };
-
-/** A distinct person of the included emails (From, Sender, To, Cc). */
-export interface PdfParticipant
-{
-    readonly name: string;
-    readonly address: string;
-}
-
-export interface PdfCover
-{
-    /** What the cover shows, in order. */
-    readonly blocks: readonly PdfBlock[];
-    /** The data behind it. Texts here are as found (not sanitized); the blocks hold the display form. */
-    readonly dateRange: { readonly first: string; readonly last: string } | null;
-    readonly undated: number;
-    /** Every email in the PDF, rebuilt ones included (task 8.3); not those left out for having no text (task 8.14). */
-    readonly emailCount: number;
-    readonly generated: string;
-    readonly participants: readonly PdfParticipant[];
-}
-
-/** One line of the index. The renderer adds the page of `anchor`. */
-export interface PdfIndexEntry
-{
-    /** The email's PDF number (1..n over every email in the PDF, rebuilt ones included). */
-    readonly number: number;
-    /** True for an email rebuilt from quoted text (data only: the PDF never shows it, task 8.3). */
-    readonly rebuilt: boolean;
-    readonly anchor: string;
-    readonly date: PdfLine;
-    readonly from: PdfLine;
-    readonly subject: PdfLine;
-    readonly attachments: number;
-    /** One line per attachment, the same lines as the email's own list (PdfEmail.attachments.items). */
-    readonly attachmentLines: readonly PdfLine[];
-    /** The email's bookmark title: one line, at most MAX_BOOKMARK_LENGTH characters (bookmarkTitle). */
-    readonly bookmark: string;
-}
-
-export interface PdfIndex
-{
-    readonly heading: string;
-    readonly columns: PdfStrings['columns'];
-    readonly entries: readonly PdfIndexEntry[];
-}
-
-/** Facts about one email the renderer may want (all false / 0 usually). */
-export interface PdfEmailFlags
-{
-    /** No usable date: shown with the "no date" text. */
-    readonly undated: boolean;
-    /** The sender's time zone is not known (the time may be off by hours). */
-    readonly zoneUnknown: boolean;
-    /** Plan rule 4: nothing would have been left, so the whole body is shown. */
-    readonly keptAllBecauseEmpty: boolean;
-    /** The plan failed, was missing or invalid: the whole body is shown. */
-    readonly planFallback: boolean;
-    /** Some text was converted from HTML (the layout may differ from what the sender saw). */
-    readonly htmlConverted: boolean;
-    /** Control or broken characters of this email shown as codes (Source/pdf-export/text.ts, group 1). */
-    readonly controlChars: number;
-    /** The no-repeat rule left out text of this body that the PDF prints as emails of their own (task 8.10; data only). */
-    readonly printedElsewhere: boolean;
-}
-
-/** Where a rebuilt email in the PDF comes from (data only: the PDF never shows it, task 8.3). */
-export interface PdfRebuiltInfo
-{
-    /** The entry's id in `result.reconstructed` (link 'entry'). */
-    readonly id: number;
-    /** The id of the copy shown: the entry, or a copy read from an email in the PDF (rebuiltInPdf). */
-    readonly shownId: number;
-    /** The list position of the email it was taken from (in the PDF). */
-    readonly sourcePosition: number;
-    /**
-     * How many blocks of original header lines were moved to the top of its
-     * text (task 8.13a, Q4: the quoted header lines its header rows cannot
-     * show; NoRepeat.moved). 0 usually.
-     */
-    readonly movedHeaders: number;
-}
-
-export interface PdfEmail
-{
-    /** 1..n over every email in the PDF, in PDF order, rebuilt ones included (task 8.3). */
-    readonly number: number;
-    /** For links from the index (resolved by the renderer): emailAnchor(number). */
-    readonly anchor: string;
-    /** Its position in the engine's list (`result.messages`); null for a rebuilt email (see `rebuilt`). */
-    readonly position: number | null;
-    /** "Email 3", for a rebuilt email too. */
-    readonly heading: string;
-    /** null for a real email. */
-    readonly rebuilt: PdfRebuiltInfo | null;
-    /**
-     * From, Sent by, To, Cc, Bcc (each when present), Date, Subject, File. A
-     * rebuilt email: From, To, Cc (each when present), Date, Subject (no File
-     * row: it has no file).
-     */
-    readonly fields: readonly PdfFieldRow[];
-    /** Lines above the text (role 'muted'): only the "(no text)" placeholder of an empty text (task 8.8: the PDF has no notes; task 8.14: see NO-TEXT EMAILS at the top). */
-    readonly notes: readonly PdfLine[];
-    /** The text: one entry per line, [] for an empty line (see Source/pdf-export/text.ts). */
-    readonly body: readonly PdfLine[];
-    /** One line per attachment (listed only, never opened); null when there is none. */
-    readonly attachments: { readonly label: string; readonly items: readonly PdfLine[] } | null;
-    readonly flags: PdfEmailFlags;
-}
-
-export interface PdfDocument
-{
-    readonly title: string;
-    /** Suggested file name (pdfFileName). */
-    readonly fileName: string;
-    /** The zone the dates are shown in, as Intl names it ("UTC" after a fallback). */
-    readonly timeZone: string;
-    /** True when the asked-for zone was not valid and UTC was used (data only: the cover names just the zone used, task 8.8). */
-    readonly zoneFallback: boolean;
-    readonly cover: PdfCover;
-    readonly index: PdfIndex;
-    /** The real and the rebuilt emails, in PDF order (see planPdfOrder). */
-    readonly emails: readonly PdfEmail[];
-    /** For each list position of `result.messages`: its PDF number (counted over every email in the PDF), or null when it is not in the PDF. */
-    readonly pdfNumberByPosition: readonly (number | null)[];
-    /** Control or broken characters of the emails shown as codes, in total. */
-    readonly controlChars: number;
-}
 
 export interface BuildPdfInput
 {
@@ -752,7 +603,7 @@ const NOWHERE: BodyIntervals = [];
 /**
  * The header rows the PDF prints for a place left out: a rebuilt copy's (its
  * fields as read), or a real file's. `strong` (a real file only): the link
- * to that file has a strong date match (rebuild-links.ts, RealMatch.strong,
+ * to that file has a strong date match (Header/rebuilt-emails.ts, RealMatch.strong,
  * and not an ambiguous date): the quoted date, even without a zone of its
  * own, is that file's moment (user decision 2026-11-07, S4).
  */
@@ -1092,26 +943,6 @@ export function printedElsewhere(
     return out;
 }
 
-/**
- * Why the PDF leaves a part out of a body (the no-repeat rule, task 8.10),
- * for the preview's labels (task 8.11): it prints it as a rebuilt email in
- * the PDF (`id`: its entry in `result.reconstructed`, the one with a slot)
- * or as a real email in the PDF (`position`: its list position), `number`
- * being its PDF number (1..n over every email in the PDF); or (kind
- * 'unticked', task 8.13a, Q2) it does not print it at all: a forwarded part
- * whose rebuilt email (entry `id`) the reader unticked (BuildPdfInput.unticked);
- * or (kind 'unticked-attached', task 8.13b-3, Q3) the printed block of an
- * attached email whose kept copy (list position `position`) is not in the PDF.
- * The printed block of an attached email that IS in the PDF is kind 'email'.
- */
-export type PrintedAs =
-    | { readonly kind: 'rebuilt'; readonly id: number; readonly number: number }
-    | { readonly kind: 'email'; readonly position: number; readonly number: number }
-    | { readonly kind: 'unticked'; readonly id: number }
-    // The printed block of an attached email whose kept copy (list position
-    // `position`) the reader unticked: not printed anywhere (task 8.13b-3, Q3).
-    | { readonly kind: 'unticked-attached'; readonly position: number };
-
 /** A part [start, end) of one body that the PDF prints as the email `printedAs` (printedElsewhereParts). */
 export interface PrintedPart
 {
@@ -1378,7 +1209,7 @@ function blockBodyStart(body: string, start: number, end: number): { readonly at
  * holder ONLY these; everything else of the block stays where the holder's
  * plan prints it (printed twice rather than nowhere).
  * - The forwarded separator and header lines (the block up to its first
- *   blank line, Source/email-reading/types.ts AttachedPlace): printed as the email,
+ *   blank line, Header/parsed-email.ts AttachedPlace): printed as the email,
  *   whose header rows show them, when those rows show all of its header
  *   data (EngineAttached.keptShowsHeader: not so when a dropped file's copy
  *   with less header data was kept, D2); otherwise they stay.
@@ -1550,7 +1381,7 @@ function attachedBlockParts(
                 continue;
             }
             const m = result.messages[holder];
-            // The offsets are those of that very body (engine.ts, EngineAttachedPlace).
+            // The offsets are those of that very body (Header/thread-analysis-result.ts, EngineAttachedPlace).
             if (m === undefined || m.index !== p.holderIndex)
             {
                 continue;
@@ -1939,13 +1770,6 @@ export function withoutPrintedElsewhere(
     }
     const cut = cutPrintedElsewhere(body, ranges, parts);
     return { ranges: cut.ranges, leftOut: cut.leftOut };
-}
-
-/** A range of a body as the PDF prints it: a plan range, or a piece of one the no-repeat rule left out (`printedAs`: where the PDF prints it). */
-export interface PdfRange extends PlanRange
-{
-    /** Set only on a piece the no-repeat rule left out (then `keep` is false): the email the PDF prints it as. */
-    readonly printedAs: PrintedAs | null;
 }
 
 /**

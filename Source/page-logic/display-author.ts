@@ -4,18 +4,8 @@
 // already-organized data is presented, they detect nothing. Pure functions,
 // no DOM (README.md, rule R7), so they are unit tested in Node.
 
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
-
-/** Where the shown author comes from. */
-export type AuthorSource =
-    // The From mailboxes (the usual case).
-    | 'from'
-    // No usable From, but the message names the mailbox that actually sent it
-    // (Sender header / .msg sender): shown instead, so the reader still sees who
-    // sent it. The preview may label it, e.g. "sent by".
-    | 'sender'
-    // Neither: the preview shows an "unknown sender" marker.
-    | 'none';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
+import type { AuthorSource } from '../../Header/preview-display';
 
 export interface DisplayAuthor
 {

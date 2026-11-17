@@ -1,7 +1,6 @@
 // Tests for de-duplication (README.md, rules R6 and R7). Synthetic data only.
 
 import { describe, expect, it } from 'vitest';
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
 import {
     authorKey,
     DATE_TOLERANCE_MS,
@@ -14,6 +13,7 @@ import {
     type DedupeResult,
     type KeptMessage,
 } from './dedupe';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 
 // ------------------------------------------------------------------ factory
 

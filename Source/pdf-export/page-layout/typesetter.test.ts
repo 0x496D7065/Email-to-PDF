@@ -2,13 +2,15 @@
 // with the real IBM Plex fonts. Synthetic text only. Special characters are
 // written as braced escapes, so this file stays ASCII.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { type ParsedFont, readWoffFont } from '../font-reader/font';
-import { PDF_FONTS, type PdfFontName } from '../fonts';
-import { type PdfLine, type PdfRole, sanitizeRuns } from '../text';
-import type { LaidOutTextRun } from '../pdf-writer/layout';
+import { readWoffFont } from '../font-reader/font';
+import { PDF_FONTS } from '../fonts';
+import { sanitizeRuns } from '../text';
 import { DEFAULT_LAYOUT_CONFIG } from './config';
 import { SPACE } from './shape';
 import { type LaidLine, Typesetter } from './typesetter';
+import type { LaidOutTextRun } from '../../../Header/laid-out-document';
+import type { PdfLine, PdfRole } from '../../../Header/pdf-document-model';
+import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 const fonts = {} as Record<PdfFontName, ParsedFont>;
 beforeAll(async () =>

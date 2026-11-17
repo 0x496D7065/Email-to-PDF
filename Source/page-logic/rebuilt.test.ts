@@ -4,9 +4,7 @@
 // reach the rare cases (no sender, a list read short, a bad timeline).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine, type EngineRebuilt, type EngineResult } from '../thread-analysis/engine';
-import type { QuotedDate } from '../thread-analysis/quoted-date';
-import type { NormalizedMessage } from '../email-reading/types';
+import { runEngine } from '../thread-analysis/engine';
 import {
     alsoNumbers,
     createRebuiltSelection,
@@ -20,6 +18,9 @@ import {
     rebuiltSources,
     sourceNumber,
 } from './rebuilt';
+import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineRebuilt, QuotedDate } from '../../Header/rebuilt-emails';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 let fixtures: Map<string, NormalizedMessage>;
 

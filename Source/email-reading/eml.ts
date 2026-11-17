@@ -37,18 +37,7 @@ import type { HtmlToTextResult } from './html-to-text';
 import { parseIdList, parseSingleId } from './ids';
 import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
-import type {
-    AttachedMessage,
-    AttachedPlace,
-    AttachmentInfo,
-    EmailAddress,
-    EmailDate,
-    EmailParser,
-    InputFile,
-    NormalizedMessage,
-    ParseResult,
-    ParseWarning,
-} from './types';
+import type { AttachedMessage, AttachedPlace, AttachmentInfo, EmailAddress, EmailDate, EmailParser, InputFile, NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
 
 /** What the .eml adapter needs from outside. */
 export interface EmlParserOptions

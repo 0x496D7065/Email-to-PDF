@@ -532,7 +532,7 @@ microphone, location, and so on). The single source of all of these is
 ### R3: Automated checks in the build and CI
 
 - `npm run build` ends with `Helper/build-checks/check-no-network.mjs`, which scans
-  `Source/` (with `Source/index.html`) and the whole built site (`dist/`). It fails on a
+  `Source/` (with `Source/index.html`), `Header/` and the whole built site (`dist/`). It fails on a
   network API, a browser storage API, an HTML injection API in the build
   (`innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`), test
   code in the build, missing or wrong security headers, a missing or stale
@@ -898,7 +898,7 @@ tests need Playwright's browsers, installed by a repo script (below).
 
 | Folder | What is in it |
 | --- | --- |
-| `Source/` | The site itself: `index.html`, `main.ts` (the page's entry), `bytes-import.d.ts` (the type declaration for the `?bytes` font imports; it moves to `Header/` later) and the folders below. |
+| `Source/` | The site itself: `index.html`, `main.ts` (the page's entry) and the folders below. |
 | `Source/email-reading/` | Reading `.eml` and `.msg` files into messages (in a worker). |
 | `Source/thread-analysis/` | Duplicates, order, quoted history, signatures, earlier emails rebuilt from quotes. |
 | `Source/pdf-export/` | The PDF: its content, `font-reader/`, `page-layout/`, `pdf-writer/` and the bundled `fonts/`. |
@@ -909,6 +909,7 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `Source/security-headers/` | The Content Security Policy and other security headers. |
 | `Source/library-shims/` | Small browser replacements for library dependencies. |
 | `Source/public/` | Files copied into the site as they are (third-party notices, Ko-fi button). |
+| `Header/` | The shared type definitions: the data shapes several `Source/` folders agree on (the parsed email, the worker messages, the analysis result, the PDF model, ...), and the `.d.ts` declarations (`?bytes` font imports, `node:fs` for the browser tests). TypeScript has no real header files, so this is the closest thing: types only, no code, erased at build time (a lint rule enforces it). Types used inside one folder only stay next to their code. |
 | `Helper/` | Everything that is not the site: build checks, lint rules and tests. Never shipped. |
 | `Helper/build-checks/` | The no-network build check (font, URL and service-worker version rules). |
 | `Helper/lint-rules/` | The project's own lint rules. |

@@ -51,50 +51,13 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
-import type { MessagePlan, PlanRange, PlanReason } from '../thread-analysis/output-plan';
-import { FOLD_REASONS, type Segment } from '../thread-analysis/segments';
+import { FOLD_REASONS } from '../thread-analysis/segments';
 import { senderKeyOf, signatureBlockKey } from '../thread-analysis/signature';
-import type { NormalizedMessage } from '../email-reading/types';
-import type { PdfRange, PrintedAs } from '../pdf-export/model';
-import { displayBlocks, type DisplayBlock } from './display-blocks';
-
-export type { PrintedAs } from '../pdf-export/model';
-
-/** 'partly': a block with kept and left-out text (never produced by pdfBlocks; a safe default). */
-export type PdfStatus = 'in' | 'out' | 'partly';
-
-/** What the preview says about one block. */
-export interface PdfLabel
-{
-    readonly status: PdfStatus;
-    /** The plan's reasons for the block's text, in order, unique. */
-    readonly reasons: readonly PlanReason[];
-    /**
-     * For repeated signatures: the list numbers (1-based) of the emails where
-     * they are first kept, distinct, in increasing order (a block can hold
-     * more than one repeated signature). Empty if none is known.
-     */
-    readonly signaturesFrom: readonly number[];
-    /**
-     * Status 'out' only: the block is left out because the PDF prints it as
-     * this email (the no-repeat rule, see the top). Absent or null otherwise.
-     */
-    readonly printedAs?: PrintedAs | null;
-}
-
-/** One email's plan, as the preview needs it. */
-export interface PdfView
-{
-    readonly plan: MessagePlan;
-    /** Start of a 'repeated-signature' range -> the list number (1-based) of the email where that signature is kept. */
-    readonly signatureFrom: ReadonlyMap<number, number>;
-    /**
-     * The body's ranges as the PDF prints them, when the no-repeat rule
-     * leaves something out of it (Source/page-logic/printed-elsewhere.ts); they
-     * replace `plan.ranges` for the labels. Absent: the plan's ranges.
-     */
-    readonly pdfRanges?: readonly PdfRange[];
-}
+import { displayBlocks } from './display-blocks';
+import type { MessagePlan, PlanRange } from '../../Header/output-plan';
+import type { PrintedAs } from '../../Header/pdf-document-model';
+import type { DisplayBlock, PdfBlock, PdfLabel, PdfStatus, PdfView, PlannedEmail } from '../../Header/pdf-plan';
+import type { Segment } from '../../Header/thread-analysis-result';
 
 /** A range for the labels: a plan range, or a PDF range (with `printedAs`). */
 type LabelRange = PlanRange & { readonly printedAs?: PrintedAs | null };
@@ -146,13 +109,6 @@ export function printedAsEmailOfItsOwn(view: Pick<PdfView, 'pdfRanges'> | null, 
     return (view?.pdfRanges ?? []).some(
         (r) => r.printedAs != null && r.printedAs.kind !== 'unticked' && r.printedAs.kind !== 'unticked-attached' && hasNonSpace(body, r.start, r.end),
     );
-}
-
-/** A display block and its label (null: a shown block, fully in the PDF, or no plan). */
-export interface PdfBlock
-{
-    readonly block: DisplayBlock;
-    readonly label: PdfLabel | null;
 }
 
 /** True if text[start, end) has a character that is not white space. */
@@ -306,14 +262,6 @@ export function mergeSamePrintedAs(blocks: readonly PdfBlock[]): PdfBlock[]
         out[out.length - 1] = { block, label };
     }
     return out;
-}
-
-/** One included email, for signatureSources. */
-export interface PlannedEmail
-{
-    readonly message: NormalizedMessage;
-    /** Its position (0-based) in the preview list. */
-    readonly position: number;
 }
 
 /**

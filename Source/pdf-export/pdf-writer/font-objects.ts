@@ -3,9 +3,9 @@
 // 2-byte glyph id) and /CIDToGIDMap /Identity. Also builds the font's /W
 // widths (only the glyphs used) and its ToUnicode CMap (the copy layer, see
 // copy-text.ts). Pure apart from deflate (README.md, rule R7).
-import type { ParsedFont } from '../font-reader/font';
 import { copyLayerText } from './copy-text';
 import { fail, hex4, int, name, num, utf16Hex } from './syntax';
+import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 /** fsType bit 1: "restricted license embedding", the font must not be embedded. */
 const FS_TYPE_RESTRICTED = 0x0002;

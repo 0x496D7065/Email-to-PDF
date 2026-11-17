@@ -49,14 +49,14 @@
 // failed file's reason is rewritten in place, so its "Technical details"
 // stays open or closed and keeps the focus.
 
-import type { FailedFile } from '../thread-analysis/engine';
-import { processFiles, UNEXPECTED_BATCH_DETAIL, type ProcessOptions, type ProcessProgress, type ProcessResult } from '../worker-pipeline/process-files';
-import type { FileLike } from '../worker-pipeline/read-files';
+import { processFiles, UNEXPECTED_BATCH_DETAIL } from '../worker-pipeline/process-files';
 import { attachedCount } from '../page-logic/attached-links';
 import type { AppShell } from './app';
 import { el, setSafeAttribute } from './dom';
 import { t } from './translations';
 import { createStaticLabels } from './labels';
+import type { FileLike, ProcessOptions, ProcessProgress, ProcessResult } from '../../Header/file-processing';
+import type { FailedFile } from '../../Header/thread-analysis-result';
 
 /** The file types the chooser offers (drops are checked by the parsers anyway). */
 export const ACCEPTED_TYPES = '.eml,.msg';

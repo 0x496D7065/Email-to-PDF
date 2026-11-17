@@ -17,16 +17,10 @@
 //
 // The bytes stay in memory only (README.md, rule R5).
 
-import { BATCH_TOO_LARGE_DETAIL, FILE_TOO_LARGE_DETAIL, MAX_BATCH_BYTES, MAX_FILE_BYTES, type Limits } from '../email-reading/parse-files';
-import type { InputFile, ParseResult } from '../email-reading/types';
-
-/** The part of a browser File used here (a real File fits; tests use fakes). */
-export interface FileLike
-{
-    readonly name: string;
-    readonly size: number;
-    arrayBuffer(): Promise<ArrayBuffer>;
-}
+import { BATCH_TOO_LARGE_DETAIL, FILE_TOO_LARGE_DETAIL, MAX_BATCH_BYTES, MAX_FILE_BYTES } from '../email-reading/parse-files';
+import type { FileLike } from '../../Header/file-processing';
+import type { Limits } from '../../Header/parse-worker-messages';
+import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 /** One file after reading: its bytes, or a failed result for the preview. */
 export type ReadOutcome =

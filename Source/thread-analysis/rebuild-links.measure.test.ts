@@ -14,10 +14,11 @@
 // Synthetic data only (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import type { NormalizedMessage, ParseResult } from '../email-reading/types';
 import { buildThread, instantOf, isForwardStyle, QUOTE_STYLES, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { ALICE, BOB, CAROL, chain, DAVE, ERIN, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { DEFAULT_PARTS, runEngine, type EngineResult } from './engine';
+import { DEFAULT_PARTS, runEngine } from './engine';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** Message `i` of a conversation as a real dropped file (its body quotes the ones before it). */
 export function realFile(messages: readonly ThreadMessage[], i: number, tag: string): NormalizedMessage

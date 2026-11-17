@@ -28,11 +28,11 @@
 // (timeouts, error events, message order) is unit tested with a fake worker.
 
 import { convertHtmlList } from './deferred-html';
-import type { FileKind } from './file-type';
 import type { HtmlToTextResult } from './html-to-text';
-import type { ParseResult } from './types';
 import ParseWorker from './parse-worker?worker&inline';
-import { isFromWorker, type ToWorker } from './worker-protocol';
+import { isFromWorker } from './worker-protocol';
+import type { FileKind, ToWorker, WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
+import type { ParseResult } from '../../Header/parsed-email';
 
 /** Detail of a file whose worker was stopped at the time limit ('timeout'). */
 export const TIMEOUT_DETAIL = 'took too long to read (stopped)';
@@ -63,26 +63,6 @@ export function isDetached(bytes: Uint8Array): boolean
 {
     const buffer: unknown = bytes.buffer;
     return buffer instanceof ArrayBuffer && 'detached' in buffer && buffer.detached === true;
-}
-
-/**
- * What the page needs from a worker. `M` is the type of the messages the
- * page sends: parse requests here, engine requests for the engine worker
- * (Source/worker-pipeline/engine-runner.ts), which reuses connectWorker below.
- */
-export interface WorkerHandle<M = ToWorker>
-{
-    send(message: M, transfer: Transferable[]): void;
-    terminate(): void;
-}
-
-/** What the worker reports back to the page. */
-export interface WorkerEvents
-{
-    /** A message from the worker (still unchecked). */
-    message(data: unknown): void;
-    /** An 'error' or 'messageerror' event. */
-    failure(): void;
 }
 
 /** Starts a worker and connects its events. May throw (then the file fails, not the batch). */

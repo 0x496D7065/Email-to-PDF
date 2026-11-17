@@ -4,12 +4,13 @@
 // same caution as English where it matters, and characters the PDF fonts
 // can draw. Pure data checks plus the bundled fonts: no DOM.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readWoffFont, type ParsedFont } from '../../pdf-export/font-reader/font';
-import { PDF_FONTS, type PdfFontName } from '../../pdf-export/fonts';
+import { readWoffFont } from '../../pdf-export/font-reader/font';
+import { PDF_FONTS } from '../../pdf-export/fonts';
 import { createPdfStrings } from '../../pdf-export/strings';
 import { en } from './en';
 import { fr } from './fr';
 import { isPluralForms, type Messages, pickLocale, placeholdersIn, translator } from './index';
+import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 // Type check: fr has every key of en, and nothing else (an object literal
 // typed as Messages rejects a missing and an extra key alike; see index.ts).

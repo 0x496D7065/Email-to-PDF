@@ -69,6 +69,26 @@ const dynamicNodeImports = [
     { selector: 'ImportExpression[source.quasis.0.value.cooked=/^node:/]', message: nodeOnly },
 ];
 
+// Header/ holds types only (see the Header/ block below): every declaration
+// that would exist at run time is refused, with `import type` / `export type`
+// for everything that is imported or re-exported.
+const headerOnly = 'Header/ holds types only (interface, type, import type, export type); runtime code stays in Source/.';
+const headerTypesOnly = [
+    { selector: 'VariableDeclaration', message: `${headerOnly} No const/let/var.` },
+    { selector: ':matches(FunctionDeclaration, TSDeclareFunction)', message: `${headerOnly} No function.` },
+    { selector: ':matches(ClassDeclaration, ClassExpression)', message: `${headerOnly} No class.` },
+    { selector: 'TSEnumDeclaration', message: `${headerOnly} No enum (use a union of string literals).` },
+    { selector: 'ExportDefaultDeclaration', message: `${headerOnly} No export default.` },
+    {
+        selector: `Program > :matches(ExpressionStatement, ExportAllDeclaration[exportKind!='type'], ImportDeclaration[importKind!='type'], ExportNamedDeclaration[exportKind!='type']:not([declaration]), TSModuleDeclaration, TSImportEqualsDeclaration, TSExportAssignment)`,
+        message: `${headerOnly} Use import type / export type.`,
+    },
+    // typeof import('...') is not seen by no-restricted-imports, so it could
+    // reach into Source/: refused outright, an import type does the same job.
+    { selector: 'TSImportType', message: `${headerOnly} Use import type from ./name.` },
+];
+const headerImports = 'A Header/ file imports only other Header/ files (./name), never Source/, Helper/ or a package.';
+
 const forbiddenGlobals = {
     fetch: network,
     XMLHttpRequest: network,
@@ -164,7 +184,7 @@ export default defineConfig(
             'no-new-func': 'error',
         },
     },
-    // The app runs in the browser only. Helper/Test/browser-tests/support/node-fs.d.ts declares
+    // The app runs in the browser only. Header/node-fs-for-browser-tests.d.ts declares
     // 'node:fs' for the browser tests, and tsconfig.json covers Source/ and Helper/Test/browser-tests/
     // together, so typecheck alone would not stop app code importing it.
     // 'no-restricted-imports' sees static imports only, so dynamic import()
@@ -175,6 +195,24 @@ export default defineConfig(
         rules: {
             'no-restricted-imports': ['error', { patterns: [{ group: ['node:*'], message: nodeOnly }] }],
             'no-restricted-syntax': ['error', ...restrictedSyntax, ...dynamicNodeImports],
+        },
+    },
+    // Header/ (README.md, "Where things are"): TypeScript has no real header
+    // files, so Header/ holds the shared type definitions that several Source/
+    // folders agree on, plus the .d.ts declarations. Types only, erased at
+    // build time: no runtime code (it stays in Source/), and a Header file
+    // imports only other Header files, with `import type`.
+    {
+        files: ['Header/**/*.ts'],
+        ignores: ['Header/**/*.d.ts'],
+        rules: {
+            'no-restricted-syntax': ['error', ...restrictedSyntax, ...dynamicNodeImports, ...headerTypesOnly],
+        },
+    },
+    {
+        files: ['Header/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [{ regex: String.raw`^(?!\./[\w.-]+$)`, message: headerImports }] }],
         },
     },
     // The service worker (Source/offline-copy/service-worker.ts) is the one shipped file

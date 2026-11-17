@@ -10,8 +10,8 @@
 import { buildMsg } from '../../test-data/msg/builder';
 import { MSG_SPECS } from '../../test-data/msg/specs';
 import { connectWorker, type WorkerFactory } from '../../../../Source/email-reading/worker-runner';
-import type { ToEngineWorker } from '../../../../Source/worker-pipeline/engine-protocol';
 import type { EngineWorkerFactory } from '../../../../Source/worker-pipeline/engine-runner';
+import type { ToEngineWorker } from '../../../../Header/engine-worker-messages';
 
 export {
     MAX_FILE_BYTES,
@@ -22,8 +22,7 @@ export {
 } from '../../../../Source/email-reading/parse-files';
 export { htmlToTextWithDomParser } from '../../../../Source/email-reading/html-dom';
 export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../../../Source/email-reading/worker-runner';
-export type { InputFile, ParseResult } from '../../../../Source/email-reading/types';
-export { processFiles, processFilesWith, type ProcessProgress, type ProcessResult } from '../../../../Source/worker-pipeline/process-files';
+export { processFiles, processFilesWith } from '../../../../Source/worker-pipeline/process-files';
 export {
     createBrowserEngineWorker,
     ENGINE_FAILED_DETAIL,

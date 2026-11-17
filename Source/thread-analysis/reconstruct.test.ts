@@ -5,7 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import { NEGATIVE_CASES, THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks, type ReconstructedMessage } from './reconstruct';
+import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct';
+import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
 
 const rebuild = (body: string, subject = 'Re: Office desks', sourceOffsetMinutes: number | null = 0): ReconstructedMessage[] =>
     reconstructQuotedMessages(body, { subject, sourceOffsetMinutes });

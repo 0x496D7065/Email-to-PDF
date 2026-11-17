@@ -14,48 +14,9 @@
 // worker, not copied. Nothing here is stored anywhere: everything lives in
 // memory until the worker is terminated (README.md, rule R5).
 
-import { parseWithDeferredHtml, type ConversionOutcome } from './deferred-html';
-import type { FileKind } from './file-type';
+import { parseWithDeferredHtml } from './deferred-html';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
-import type { ParseResult } from './types';
-
-export interface ParseRequest
-{
-    readonly type: 'parse';
-    readonly name: string;
-    readonly kind: FileKind;
-    readonly bytes: Uint8Array;
-}
-
-export interface ConversionsReply
-{
-    readonly type: 'conversions';
-    readonly outcomes: readonly ConversionOutcome[];
-}
-
-/** Page -> worker. */
-export type ToWorker = ParseRequest | ConversionsReply;
-
-export interface HtmlRequest
-{
-    readonly type: 'html';
-    readonly htmls: readonly string[];
-}
-
-export interface ResultMessage
-{
-    readonly type: 'result';
-    readonly result: ParseResult;
-}
-
-/** The worker hit an error it could not turn into a result (a bug, not a bad file). */
-export interface FailedMessage
-{
-    readonly type: 'failed';
-}
-
-/** Worker -> page. */
-export type FromWorker = HtmlRequest | ResultMessage | FailedMessage;
+import type { ConversionOutcome, FromWorker, ParseRequest, ToWorker } from '../../Header/parse-worker-messages';
 
 function isRecord(value: unknown): value is Record<string, unknown>
 {
@@ -96,7 +57,7 @@ export function isFromWorker(data: unknown): data is FromWorker
 
 /**
  * Checks the attached-email fields of a result (ParseResult.attached,
- * source.attachedPath, AttachmentInfo.attachedIndex, see types.ts) strictly,
+ * source.attachedPath, AttachmentInfo.attachedIndex, see Header/parsed-email.ts) strictly,
  * so later steps can index with them without checking again:
  * - a failed result has no `attached`; a successful one has a message with
  *   an attachments list and a source, and its source has no attachedPath;

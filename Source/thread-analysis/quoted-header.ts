@@ -127,7 +127,6 @@
 // Pure function: no DOM, no storage, never throws, the input is never
 // modified (README.md, rule R7).
 
-import type { EmailAddress } from '../email-reading/types';
 import { OUTLOOK_RULE, REPLY_LANGUAGES } from './reply-patterns';
 import {
     ATTRIBUTION_MAX_LENGTH,
@@ -142,6 +141,7 @@ import {
     type FoundHeader,
     type Role,
 } from './reply-header';
+import type { EmailAddress } from '../../Header/parsed-email';
 
 /** The fields a quoted email's header holds (see the file comment). */
 export interface QuotedHeaderFields

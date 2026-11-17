@@ -12,10 +12,10 @@ import MsgReader, { type FieldsData } from '@kenjiuno/msgreader';
 import PostalMime, { type Address } from 'postal-mime';
 import { describe, expect, it } from 'vitest';
 import { parseEmailDate } from '../../../Source/email-reading/date';
-import type { ParseWarning } from '../../../Source/email-reading/types';
 import { FIXTURES, type ExpectedAddress, type FixtureExpectation } from './manifest';
 import { buildMsgView } from './msg/builder';
 import { MSG_SPECS } from './msg/specs';
+import type { ParseWarning } from '../../../Header/parsed-email';
 
 const files = import.meta.glob<string>('./eml/*.eml', { query: '?raw', import: 'default', eager: true });
 

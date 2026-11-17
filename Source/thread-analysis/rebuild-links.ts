@@ -188,11 +188,11 @@
 // sets are built once per text; a text test is one string comparison
 // (plus a signature block search, linear in the text).
 
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
 import { isPlainName } from './quoted-header';
-import { hasWrittenZone, parseQuotedDate, type QuotedDate } from './quoted-date';
-import type { ReconstructedMessage } from './reconstruct';
+import { hasWrittenZone, parseQuotedDate } from './quoted-date';
 import { LABEL_HEAD_LENGTH, LABEL_PATTERN, LABEL_ROLE_OF, labelKey } from './reply-header';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineRebuilt, QuotedDate, RealMatch, RebuiltPlacement, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
 
 /** Dates further apart than this never match (26 h; the zone ranges of the file comment, 1b, are narrower still). */
 export const MATCH_WINDOW_MS = 26 * 60 * 60_000;
@@ -241,63 +241,6 @@ export interface LinkSource
  * 'zone' (a zone offset apart), 'strict' (a day only, or an ambiguous date).
  */
 export type DateAgreement = 'exact' | 'strong' | 'zone' | 'strict';
-
-/** Why a link to a real message was made. */
-export interface RealMatch
-{
-    /** Share of the rebuilt text's words in the words compared with the real message's own text (file comment, 1c). */
-    readonly coverage: number;
-    /** Share of the real message's own text's words in the words compared. */
-    readonly reverseCoverage: number;
-    /** Real date minus the rebuilt (estimated) date, milliseconds. */
-    readonly dateDiffMs: number;
-    /** The dates agree 'exact' or 'strong' (the 50% thresholds applied). */
-    readonly strong: boolean;
-    /** The quoted date is ambiguous (day and month could be swapped); one of its readings agreed (ambiguousReadings). */
-    readonly ambiguousDate: boolean;
-}
-
-/**
- * - 'real': corresponds to a real dropped message (`realIndex`): no entry.
- * - 'same-as': the same quoted text as rebuilt message `sameAs` (an entry): no entry.
- * - 'entry': its own timeline entry.
- */
-export type RebuiltLink = 'real' | 'same-as' | 'entry';
-
-/** One message rebuilt from quoted text, with its links. Plain data. */
-export interface EngineRebuilt
-{
-    /** Its position in EngineResult.reconstructed. */
-    readonly id: number;
-    /** Input position of the email whose body quotes it (offsets in `rebuilt` are into that body). */
-    readonly sourceIndex: number;
-    /** As reconstructQuotedMessages returned it (incomplete fields, date, text, offsets). */
-    readonly rebuilt: ReconstructedMessage;
-    readonly link: RebuiltLink;
-    /** link 'real': input position of the real message. */
-    readonly realIndex: number | null;
-    /** link 'real': the evidence. */
-    readonly match: RealMatch | null;
-    /** link 'same-as': id of the entry with the same quoted text. */
-    readonly sameAs: number | null;
-    /** link 'entry': ids of the other copies of the same quoted text, ascending. */
-    readonly copies: readonly number[];
-    /** link 'entry': input positions of the other emails that quote the same text, ascending, unique. */
-    readonly alsoQuotedIn: readonly number[];
-}
-
-/**
- * Where a rebuilt entry was placed: by its own date, at its quoter's date
- * because its own estimate was later, or just before its quoter (no
- * readable date).
- */
-export type RebuiltPlacement = 'by-date' | 'capped-by-quoter' | 'after-quoted' | 'before-quoter';
-
-export type TimelineEntry =
-    /** A real message: `position` in EngineResult.messages. */
-    | { readonly kind: 'message'; readonly position: number }
-    /** A rebuilt message: `id` in EngineResult.reconstructed (always link 'entry'). */
-    | { readonly kind: 'rebuilt'; readonly id: number; readonly placement: RebuiltPlacement };
 
 export interface RebuildLinks
 {

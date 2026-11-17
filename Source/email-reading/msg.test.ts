@@ -11,7 +11,7 @@ import { sha256Hex } from './hash';
 import { HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser, errorDetail, resultFromFields } from './msg';
-import type { NormalizedMessage, ParseResult } from './types';
+import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
 /** A stub, NOT a converter: it only shows that the HTML path was taken. */
 const stubHtmlToText = (html: string): HtmlToTextResult => ({ text: `[stub] ${html.length}`, truncated: false });

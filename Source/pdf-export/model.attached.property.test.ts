@@ -20,16 +20,18 @@
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineResult } from '../thread-analysis/engine';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import type { ParseResult } from '../email-reading/types';
 import { rebuiltEntries } from '../page-logic/rebuilt';
-import { buildPdfDocument, type PdfDocument, type PdfEmail } from './model';
+import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
+import type { ParseResult } from '../../Header/parsed-email';
+import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number

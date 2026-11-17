@@ -9,7 +9,7 @@ import { runEngine } from '../thread-analysis/engine';
 import { parseFiles } from '../email-reading/parse-files';
 import { ENGINE_TIMEOUT_MS, runEngineInWorker } from './engine-runner';
 import { processFiles } from './process-files';
-import type { FileLike } from './read-files';
+import type { FileLike } from '../../Header/file-processing';
 
 // The two workers are replaced by spies (no worker in Node); everything
 // else in the modules stays real.

@@ -1,4 +1,4 @@
-// Our own PDF backend: writes a laid-out document (layout.ts) as a PDF 1.7
+// Our own PDF backend: writes a laid-out document (Header/laid-out-document.ts) as a PDF 1.7
 // file. Objects plus a classic cross-reference table (pdf-file.ts); content
 // streams and font files deflated; the four Plex fonts embedded whole when
 // used (font-objects.ts); internal links, named destinations and bookmarks
@@ -9,14 +9,14 @@
 // text only ever becomes hex string data. No network (rule R1), nothing
 // stored (rule R5), no dates, no author: the Info dictionary holds only
 // /Title and /Producer.
-import type { PdfFontName } from '../fonts';
 import { copyLayerText } from './copy-text';
 import { pageContent } from './content';
 import { deflate } from './deflate';
 import { checkEmbeddable, cidFont, fontDescriptor, FontUsage, toUnicodeCmap, type0Font, widthsArray } from './font-objects';
-import type { LaidOutDocument, LaidOutOutlineItem, LaidOutTextRun, PdfBackend, PdfFontSet } from './layout';
 import { MAX_OUTPUT_BYTES, PdfFile } from './pdf-file';
 import { ascii, fail, hexText, int, name, num, PdfWriteError } from './syntax';
+import type { LaidOutDocument, LaidOutOutlineItem, LaidOutTextRun, PdfBackend, PdfFontSet } from '../../../Header/laid-out-document';
+import type { PdfFontName } from '../../../Header/pdf-fonts';
 
 /** Most pages in one PDF. */
 export const MAX_PAGES = 100_000;

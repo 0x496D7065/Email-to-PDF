@@ -23,9 +23,10 @@
 //
 // Pure function, no DOM (README.md, rule R7). Nothing is stored.
 
-import type { EngineResult } from '../thread-analysis/engine';
-import type { MessagePlan, OutputPolicy } from '../thread-analysis/output-plan';
-import { noRepeat, pdfRanges, type PdfRange } from '../pdf-export/model';
+import { noRepeat, pdfRanges } from '../pdf-export/model';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
+import type { PdfRange } from '../../Header/pdf-document-model';
+import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** The PDF step's input, as Source/page/page.ts (pdfInput) gives it. */
 export interface PrintedElsewhereInput

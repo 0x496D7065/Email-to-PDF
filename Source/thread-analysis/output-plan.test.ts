@@ -5,22 +5,21 @@
 
 import { describe, expect, it } from 'vitest';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import type { EmailAddress, NormalizedMessage } from '../email-reading/types';
-import { runEngine, type EngineMessage } from './engine';
+import { runEngine } from './engine';
 import {
     DEFAULT_OUTPUT_POLICY,
     normalizeLine,
     planOutput,
     quotedChain,
-    type MessagePlan,
-    type OutputPolicy,
     type PlanInput,
-    type PlanReason,
     type QuoteContext,
     wordLines,
 } from './output-plan';
 import { detectReplyHeaders } from './reply-header';
 import { buildSegments, type FoldRange } from './segments';
+import type { MessagePlan, OutputPolicy, PlanReason } from '../../Header/output-plan';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
+import type { EngineMessage } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
