@@ -4,3 +4,6 @@
 
 # Milestone 9.6 A1: 4-space indentation and braces on their own lines
 ca8d7ee2a53dae6d983c23802c148bf0ef0af05d
+
+# Milestone 9.6 A2: braces around every if, else and loop body
+053b6c83f984e319082570ef9ed30b9657ff0e9f
