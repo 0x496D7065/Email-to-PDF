@@ -32,26 +32,26 @@ const DATE_WARNINGS = ['missing-date', 'unparseable-date', 'unknown-time-zone'] 
 
 /** Every parser warning, in the order shown: date notes first, then the rest. */
 export const PARSE_WARNINGS = [
-  ...DATE_WARNINGS,
-  'html-body-unreadable',
-  'html-body-truncated',
-  'rtf-only-body',
-  'text-encoding-uncertain',
-  'html-converted-body',
-  'forwarded-message-not-expanded',
-  'no-body',
-  'missing-message-id',
+    ...DATE_WARNINGS,
+    'html-body-unreadable',
+    'html-body-truncated',
+    'rtf-only-body',
+    'text-encoding-uncertain',
+    'html-converted-body',
+    'forwarded-message-not-expanded',
+    'no-body',
+    'missing-message-id',
 ] as const satisfies readonly ParseWarning[];
 const parseWarningsComplete: Complete<ParseWarning, typeof PARSE_WARNINGS> = true;
 
 /** Every de-duplication warning, in the order shown. */
 export const DEDUPE_WARNINGS = [
-  'same-id-different-content',
-  'possible-duplicate-not-merged',
-  'duplicate-date-differs',
-  'duplicate-recipients-differ',
-  'duplicate-sender-differs',
-  'duplicate-threading-differs',
+    'same-id-different-content',
+    'possible-duplicate-not-merged',
+    'duplicate-date-differs',
+    'duplicate-recipients-differ',
+    'duplicate-sender-differs',
+    'duplicate-threading-differs',
 ] as const satisfies readonly DedupeWarningCode[];
 const dedupeWarningsComplete: Complete<DedupeWarningCode, typeof DEDUPE_WARNINGS> = true;
 
@@ -85,50 +85,53 @@ export type PdfNoteCode = (typeof PDF_NOTES)[number];
  * of this email out because it prints them as emails of their own (the
  * preview's view of the email has such parts, src/ui-model/pdf-plan.ts).
  */
-export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>, printedElsewhere = false): PdfNoteCode | null {
-  if (plan.fallback) return 'pdf-fallback';
-  if (plan.keptAllBecauseEmpty) return printedElsewhere ? 'pdf-kept-all-empty-elsewhere' : 'pdf-kept-all-empty';
-  return null;
+export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>, printedElsewhere = false): PdfNoteCode | null
+{
+    if (plan.fallback) return 'pdf-fallback';
+    if (plan.keptAllBecauseEmpty) return printedElsewhere ? 'pdf-kept-all-empty-elsewhere' : 'pdf-kept-all-empty';
+    return null;
 }
 
 /** One note of one email. */
 export type MessageNote =
-  | { readonly kind: 'parse'; readonly code: ParseWarning }
-  // No usable date: placed after the dated emails, in file order; or, an
-  // attached email, just before the email it is attached to (task 8.13b-3, Q7).
-  | { readonly kind: 'order'; readonly code: 'file-order' | 'before-parent' }
-  | {
-      readonly kind: 'dedupe';
-      readonly code: DedupeWarningCode;
-      /** The other emails' numbers in the list (1-based), ascending; never this email. */
-      readonly related: readonly number[];
-      /**
-       * How many more FILES are involved but not listed (the engine caps its
-       * list). Files, not emails: several files can be one merged email,
-       * possibly one already listed, so this is never worded as emails.
-       */
-      readonly more: number;
+    | { readonly kind: 'parse'; readonly code: ParseWarning }
+    // No usable date: placed after the dated emails, in file order; or, an
+    // attached email, just before the email it is attached to (task 8.13b-3, Q7).
+    | { readonly kind: 'order'; readonly code: 'file-order' | 'before-parent' }
+    | {
+        readonly kind: 'dedupe';
+        readonly code: DedupeWarningCode;
+        /** The other emails' numbers in the list (1-based), ascending; never this email. */
+        readonly related: readonly number[];
+        /**
+         * How many more FILES are involved but not listed (the engine caps its
+         * list). Files, not emails: several files can be one merged email,
+         * possibly one already listed, so this is never worded as emails.
+         */
+        readonly more: number;
     }
-  | { readonly kind: 'engine'; readonly code: EngineWarningCode }
-  // Some of its characters will show in the PDF as codes such as "[U+0000]" (task 8.8: said here, not in the PDF).
-  | { readonly kind: 'chars'; readonly code: 'coded-characters' }
-  // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
-  | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode }
-  // An email sent as an attachment, in it or in an email inside it, could not be read (task 8.13b-4, P3; src/ui-model/attached-links.ts).
-  | { readonly kind: 'attached'; readonly code: UnreadAttachedCode };
+    | { readonly kind: 'engine'; readonly code: EngineWarningCode }
+    // Some of its characters will show in the PDF as codes such as "[U+0000]" (task 8.8: said here, not in the PDF).
+    | { readonly kind: 'chars'; readonly code: 'coded-characters' }
+    // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
+    | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode }
+    // An email sent as an attachment, in it or in an email inside it, could not be read (task 8.13b-4, P3; src/ui-model/attached-links.ts).
+    | { readonly kind: 'attached'; readonly code: UnreadAttachedCode };
 
 /**
  * The list numbers (1-based) of the emails a warning points to: input
  * positions turned into list positions with `positionByIndex`, without this
  * email itself, failed files or unknown positions; ascending, unique.
  */
-export function relatedListNumbers(related: readonly number[], ownPosition: number, positionByIndex: readonly (number | null)[]): number[] {
-  const numbers = new Set<number>();
-  for (const index of related) {
-    const position = positionByIndex[index];
-    if (typeof position === 'number' && position !== ownPosition) numbers.add(position + 1);
-  }
-  return [...numbers].sort((a, b) => a - b);
+export function relatedListNumbers(related: readonly number[], ownPosition: number, positionByIndex: readonly (number | null)[]): number[]
+{
+    const numbers = new Set<number>();
+    for (const index of related)
+    {
+        const position = positionByIndex[index];
+        if (typeof position === 'number' && position !== ownPosition) numbers.add(position + 1);
+    }
+    return [...numbers].sort((a, b) => a - b);
 }
 
 /**
@@ -139,15 +142,17 @@ export function relatedListNumbers(related: readonly number[], ownPosition: numb
  * written when that date could not be read, and its whole text (the parts
  * the PDF leaves out included: the count does not depend on the plan).
  */
-export function codedCharacters(m: EngineMessage): number {
-  const message = m.message;
-  const texts: string[] = [message.subject, message.bodyText, message.source.fileName, ...m.duplicates.map((d) => d.source.fileName)];
-  for (const box of [...message.from, ...message.to, ...message.cc, ...message.bcc, ...(message.sender === undefined ? [] : [message.sender])]) {
-    texts.push(box.name, box.address);
-  }
-  for (const a of message.attachments) texts.push(a.fileName, a.mimeType);
-  if (!isDisplayableMs(message.date.utcMs)) texts.push(message.date.original);
-  return texts.reduce((n, text) => n + (typeof text === 'string' ? codedCharacterCount(text) : 0), 0);
+export function codedCharacters(m: EngineMessage): number
+{
+    const message = m.message;
+    const texts: string[] = [message.subject, message.bodyText, message.source.fileName, ...m.duplicates.map((d) => d.source.fileName)];
+    for (const box of [...message.from, ...message.to, ...message.cc, ...message.bcc, ...(message.sender === undefined ? [] : [message.sender])])
+    {
+        texts.push(box.name, box.address);
+    }
+    for (const a of message.attachments) texts.push(a.fileName, a.mimeType);
+    if (!isDisplayableMs(message.date.utcMs)) texts.push(message.date.original);
+    return texts.reduce((n, text) => n + (typeof text === 'string' ? codedCharacterCount(text) : 0), 0);
 }
 
 /**
@@ -159,37 +164,41 @@ export function codedCharacters(m: EngineMessage): number {
  * parser's notes (the "only listed as an attachment" one among them).
  */
 export function messageNotes(
-  m: EngineMessage,
-  position: number,
-  positionByIndex: readonly (number | null)[],
-  rebuildWarnings: readonly ReconstructionWarning[] = [],
-  unreadAttached: UnreadAttachedCode | null = null,
-): MessageNote[] {
-  const notes: MessageNote[] = [];
-  const parse = new Set<ParseWarning>(m.parserWarnings);
-  for (const code of PARSE_WARNINGS) {
-    if (parse.has(code)) notes.push({ kind: 'parse', code });
-    // The "placed at the end" (or "placed before the email it is attached to") note right after the date notes.
-    if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && (m.order === 'file-order' || m.order === 'before-parent')) notes.push({ kind: 'order', code: m.order });
-  }
-  if (unreadAttached !== null) notes.push({ kind: 'attached', code: unreadAttached });
-  for (const code of DEDUPE_WARNINGS) {
-    for (const w of m.dedupeWarnings) {
-      if (w.code !== code) continue;
-      // relatedTotal counts input files (src/engine/dedupe.ts), like `related`.
-      const total = Number.isInteger(w.relatedTotal) ? w.relatedTotal : w.related.length;
-      notes.push({
-        kind: 'dedupe',
-        code,
-        related: relatedListNumbers(w.related, position, positionByIndex),
-        more: Math.max(0, total - w.related.length),
-      });
+    m: EngineMessage,
+    position: number,
+    positionByIndex: readonly (number | null)[],
+    rebuildWarnings: readonly ReconstructionWarning[] = [],
+    unreadAttached: UnreadAttachedCode | null = null,
+): MessageNote[]
+{
+    const notes: MessageNote[] = [];
+    const parse = new Set<ParseWarning>(m.parserWarnings);
+    for (const code of PARSE_WARNINGS)
+    {
+        if (parse.has(code)) notes.push({ kind: 'parse', code });
+        // The "placed at the end" (or "placed before the email it is attached to") note right after the date notes.
+        if (code === DATE_WARNINGS[DATE_WARNINGS.length - 1] && (m.order === 'file-order' || m.order === 'before-parent')) notes.push({ kind: 'order', code: m.order });
     }
-  }
-  if (codedCharacters(m) > 0) notes.push({ kind: 'chars', code: 'coded-characters' });
-  const engine = new Set<EngineWarningCode>(m.engineWarnings);
-  for (const code of ENGINE_WARNINGS) if (engine.has(code)) notes.push({ kind: 'engine', code });
-  const rebuild = new Set<ReconstructionWarningCode>(rebuildWarnings.filter((w) => w.index === m.index).map((w) => w.code));
-  for (const code of REBUILD_WARNINGS) if (rebuild.has(code)) notes.push({ kind: 'rebuild', code });
-  return notes;
+    if (unreadAttached !== null) notes.push({ kind: 'attached', code: unreadAttached });
+    for (const code of DEDUPE_WARNINGS)
+    {
+        for (const w of m.dedupeWarnings)
+        {
+            if (w.code !== code) continue;
+            // relatedTotal counts input files (src/engine/dedupe.ts), like `related`.
+            const total = Number.isInteger(w.relatedTotal) ? w.relatedTotal : w.related.length;
+            notes.push({
+                kind: 'dedupe',
+                code,
+                related: relatedListNumbers(w.related, position, positionByIndex),
+                more: Math.max(0, total - w.related.length),
+            });
+        }
+    }
+    if (codedCharacters(m) > 0) notes.push({ kind: 'chars', code: 'coded-characters' });
+    const engine = new Set<EngineWarningCode>(m.engineWarnings);
+    for (const code of ENGINE_WARNINGS) if (engine.has(code)) notes.push({ kind: 'engine', code });
+    const rebuild = new Set<ReconstructionWarningCode>(rebuildWarnings.filter((w) => w.index === m.index).map((w) => w.code));
+    for (const code of REBUILD_WARNINGS) if (rebuild.has(code)) notes.push({ kind: 'rebuild', code });
+    return notes;
 }

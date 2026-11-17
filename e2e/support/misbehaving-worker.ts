@@ -12,18 +12,21 @@
 //   the page sees as the worker's 'error' event.
 
 interface WorkerScope {
-  onmessage: ((event: MessageEvent<unknown>) => void) | null;
+    onmessage: ((event: MessageEvent<unknown>) => void) | null;
 }
 
 const scope = self as unknown as WorkerScope;
 
-scope.onmessage = (event) => {
-  const data = event.data as { name?: unknown };
-  const name = typeof data.name === 'string' ? data.name : '';
-  if (name.includes('hang')) {
-    for (;;) {
-      // Never returns: the page must terminate this worker.
+scope.onmessage = (event) =>
+{
+    const data = event.data as { name?: unknown };
+    const name = typeof data.name === 'string' ? data.name : '';
+    if (name.includes('hang'))
+    {
+        for (;;)
+        {
+            // Never returns: the page must terminate this worker.
+        }
     }
-  }
-  throw new Error('synthetic worker crash');
+    throw new Error('synthetic worker crash');
 };

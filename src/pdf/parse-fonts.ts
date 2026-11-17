@@ -14,11 +14,13 @@ import type { PdfFonts } from './generate';
 export const PDF_FONT_NAMES: readonly PdfFontName[] = ['sans-regular', 'sans-bold', 'sans-italic', 'mono-regular'];
 
 /** Parses each WOFF file. Rejects with a FontError for a broken file. */
-export async function parsePdfFonts(files: Readonly<Record<PdfFontName, Uint8Array>>): Promise<PdfFonts> {
-  const parsed = await Promise.all(PDF_FONT_NAMES.map((name) => readWoffFont(files[name])));
-  const fonts = {} as Record<PdfFontName, ParsedFont>;
-  PDF_FONT_NAMES.forEach((name, k) => {
-    fonts[name] = parsed[k]!;
-  });
-  return fonts;
+export async function parsePdfFonts(files: Readonly<Record<PdfFontName, Uint8Array>>): Promise<PdfFonts>
+{
+    const parsed = await Promise.all(PDF_FONT_NAMES.map((name) => readWoffFont(files[name])));
+    const fonts = {} as Record<PdfFontName, ParsedFont>;
+    PDF_FONT_NAMES.forEach((name, k) =>
+    {
+        fonts[name] = parsed[k]!;
+    });
+    return fonts;
 }

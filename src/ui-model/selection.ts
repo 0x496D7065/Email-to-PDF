@@ -32,46 +32,53 @@ import type { EngineMessage } from '../engine/engine';
 import type { NormalizedMessage } from '../parsing/types';
 
 /** The key of one copy: its file's SHA-256, plus "/" and its place in the file for an attached email ("<hash>/2.1"). */
-export function sourceKey(source: NormalizedMessage['source']): string {
-  const path = source.attachedPath;
-  return Array.isArray(path) && path.length > 0 ? `${source.sha256}/${path.join('.')}` : source.sha256;
+export function sourceKey(source: NormalizedMessage['source']): string
+{
+    const path = source.attachedPath;
+    return Array.isArray(path) && path.length > 0 ? `${source.sha256}/${path.join('.')}` : source.sha256;
 }
 
 /** The keys of one email: its copy's key (sourceKey), then those of the copies merged into it (unique). */
-export function selectionKeys(m: EngineMessage): string[] {
-  const keys = [sourceKey(m.message.source), ...m.duplicates.map((d) => sourceKey(d.source))];
-  return [...new Set(keys)];
+export function selectionKeys(m: EngineMessage): string[]
+{
+    const keys = [sourceKey(m.message.source), ...m.duplicates.map((d) => sourceKey(d.source))];
+    return [...new Set(keys)];
 }
 
 /** The include/exclude choices (memory only). */
 export interface Selection {
-  /** True unless the reader left this email out. */
-  isIncluded(m: EngineMessage): boolean;
-  /** Records the reader's choice for this email. */
-  setIncluded(m: EngineMessage, included: boolean): void;
-  /** Forgets every choice: every email is included again. */
-  clear(): void;
+    /** True unless the reader left this email out. */
+    isIncluded(m: EngineMessage): boolean;
+    /** Records the reader's choice for this email. */
+    setIncluded(m: EngineMessage, included: boolean): void;
+    /** Forgets every choice: every email is included again. */
+    clear(): void;
 }
 
-export function createSelection(): Selection {
-  const excluded = new Set<string>();
-  return {
-    isIncluded: (m) => !selectionKeys(m).some((key) => excluded.has(key)),
-    setIncluded(m, included) {
-      for (const key of selectionKeys(m)) {
-        if (included) excluded.delete(key);
-        else excluded.add(key);
-      }
-    },
-    clear: () => excluded.clear(),
-  };
+export function createSelection(): Selection
+{
+    const excluded = new Set<string>();
+    return {
+        isIncluded: (m) => !selectionKeys(m).some((key) => excluded.has(key)),
+        setIncluded(m, included)
+        {
+            for (const key of selectionKeys(m))
+            {
+                if (included) excluded.delete(key);
+                else excluded.add(key);
+            }
+        },
+        clear: () => excluded.clear(),
+    };
 }
 
 /** The list positions (0-based, chronological) of the included emails, ascending. */
-export function includedPositions(messages: readonly EngineMessage[], selection: Selection): number[] {
-  const positions: number[] = [];
-  messages.forEach((m, position) => {
-    if (selection.isIncluded(m)) positions.push(position);
-  });
-  return positions;
+export function includedPositions(messages: readonly EngineMessage[], selection: Selection): number[]
+{
+    const positions: number[] = [];
+    messages.forEach((m, position) =>
+    {
+        if (selection.isIncluded(m)) positions.push(position);
+    });
+    return positions;
 }

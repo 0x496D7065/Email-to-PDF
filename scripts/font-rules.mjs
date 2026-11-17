@@ -20,22 +20,22 @@ import { createHash } from 'node:crypto';
  * must never be modified or renamed.
  */
 export const PDF_FONT_FILES = [
-  {
-    file: 'src/fonts/IBMPlexSans-Regular.woff',
-    sha256: 'b731cf56514a4bd711ab2f9acf641f9311707f4386772eb306d25c2b29b73b1a',
-  },
-  {
-    file: 'src/fonts/IBMPlexSans-Bold.woff',
-    sha256: '5c8bcd6be12df67acd529819b92f36febeff4df059a9603c4ecd578f01cf4062',
-  },
-  {
-    file: 'src/fonts/IBMPlexSans-Italic.woff',
-    sha256: 'ed06e0a2cfa973492c7ee61e5f1bf3be7db4d3d5c1551c889ec458ba2972db99',
-  },
-  {
-    file: 'src/fonts/IBMPlexMono-Regular.woff',
-    sha256: '3a0d6e1587e8dc784be5a75e1c55b1a5533919b04072a29c750bb29cfe4a4b74',
-  },
+    {
+        file: 'src/fonts/IBMPlexSans-Regular.woff',
+        sha256: 'b731cf56514a4bd711ab2f9acf641f9311707f4386772eb306d25c2b29b73b1a',
+    },
+    {
+        file: 'src/fonts/IBMPlexSans-Bold.woff',
+        sha256: '5c8bcd6be12df67acd529819b92f36febeff4df059a9603c4ecd578f01cf4062',
+    },
+    {
+        file: 'src/fonts/IBMPlexSans-Italic.woff',
+        sha256: 'ed06e0a2cfa973492c7ee61e5f1bf3be7db4d3d5c1551c889ec458ba2972db99',
+    },
+    {
+        file: 'src/fonts/IBMPlexMono-Regular.woff',
+        sha256: '3a0d6e1587e8dc784be5a75e1c55b1a5533919b04072a29c750bb29cfe4a4b74',
+    },
 ];
 
 /** The font chunk in dist/ (path relative to dist/). Named in vite.config.ts. */
@@ -58,8 +58,9 @@ export const FONT_CHUNK_MAX_OTHER_TEXT = 1000;
 const FONT_EXTENSIONS = /\.(?:woff2?|ttf|otf|eot)$/i;
 
 /** SHA-256 of `bytes`, as lowercase hex. */
-export function sha256Hex(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
+export function sha256Hex(bytes)
+{
+    return createHash('sha256').update(bytes).digest('hex');
 }
 
 // What this guard does and does not do: it makes it harder to hide code in
@@ -85,16 +86,18 @@ const NUMBER_RUN = new RegExp(String.raw`(?<![\w$.])${NUM}(?:\s*,\s*(?:${NUM})?)
  * plain number (so it never counts as a byte), otherwise the number.
  * @param {string} part
  */
-function numberValue(part) {
-  let s = part.trim().replace(/_/g, '');
-  if (s === '') return NaN;
-  let sign = 1;
-  if (s[0] === '-' || s[0] === '+') {
-    if (s[0] === '-') sign = -1;
-    s = s.slice(1);
-  }
-  if (s.endsWith('n')) s = s.slice(0, -1);
-  return sign * Number(s);
+function numberValue(part)
+{
+    let s = part.trim().replace(/_/g, '');
+    if (s === '') return NaN;
+    let sign = 1;
+    if (s[0] === '-' || s[0] === '+')
+    {
+        if (s[0] === '-') sign = -1;
+        s = s.slice(1);
+    }
+    if (s.endsWith('n')) s = s.slice(0, -1);
+    return sign * Number(s);
 }
 
 /**
@@ -105,19 +108,21 @@ function numberValue(part) {
  * @returns {{ line: number, start: number, end: number, values: number[] }[]}
  *   line is 1-based; start/end are offsets in `text`; a hole is NaN.
  */
-export function findNumberArrays(text, minLength = NUMBER_ARRAY_MIN_LENGTH) {
-  const found = [];
-  for (const m of text.matchAll(NUMBER_RUN)) {
-    // Cheap pre-filter: a run of minLength numbers has minLength - 1 commas.
-    let commas = 0;
-    for (let i = 0; i < m[0].length && commas < minLength - 1; i += 1) if (m[0].charCodeAt(i) === 44) commas += 1;
-    if (commas < minLength - 1) continue;
-    const values = m[0].split(',').map(numberValue);
-    let line = 1;
-    for (let i = 0; i < m.index; i += 1) if (text.charCodeAt(i) === 10) line += 1;
-    found.push({ line, start: m.index, end: m.index + m[0].length, values });
-  }
-  return found;
+export function findNumberArrays(text, minLength = NUMBER_ARRAY_MIN_LENGTH)
+{
+    const found = [];
+    for (const m of text.matchAll(NUMBER_RUN))
+    {
+        // Cheap pre-filter: a run of minLength numbers has minLength - 1 commas.
+        let commas = 0;
+        for (let i = 0; i < m[0].length && commas < minLength - 1; i += 1) if (m[0].charCodeAt(i) === 44) commas += 1;
+        if (commas < minLength - 1) continue;
+        const values = m[0].split(',').map(numberValue);
+        let line = 1;
+        for (let i = 0; i < m.index; i += 1) if (text.charCodeAt(i) === 10) line += 1;
+        found.push({ line, start: m.index, end: m.index + m[0].length, values });
+    }
+    return found;
 }
 
 /**
@@ -127,52 +132,63 @@ export function findNumberArrays(text, minLength = NUMBER_ARRAY_MIN_LENGTH) {
  * @param {number} [minLength]
  * @returns {string[]}  Problems (empty = OK).
  */
-export function checkNumberArrays(files, fonts = PDF_FONT_FILES, minLength = NUMBER_ARRAY_MIN_LENGTH) {
-  const problems = [];
-  const fontChunks = files.filter((f) => FONT_CHUNK_PATTERN.test(f.path));
-  if (fontChunks.length !== 1) {
-    problems.push(`expected exactly one font chunk (dist/assets/pdf-fonts-*.js), found ${fontChunks.length} (README.md, rule R3)`);
-  }
-  const seen = new Map(fonts.map((font) => [font.sha256, 0]));
-  for (const { path, text } of files) {
-    const arrays = findNumberArrays(text, minLength);
-    if (!FONT_CHUNK_PATTERN.test(path)) {
-      for (const a of arrays) {
-        problems.push(
-          `dist/${path}:${a.line}: a ${a.values.length}-number array outside the font chunk: data hidden this way escapes every other check (README.md, rule R3)`,
-        );
-      }
-      continue;
+export function checkNumberArrays(files, fonts = PDF_FONT_FILES, minLength = NUMBER_ARRAY_MIN_LENGTH)
+{
+    const problems = [];
+    const fontChunks = files.filter((f) => FONT_CHUNK_PATTERN.test(f.path));
+    if (fontChunks.length !== 1)
+    {
+        problems.push(`expected exactly one font chunk (dist/assets/pdf-fonts-*.js), found ${fontChunks.length} (README.md, rule R3)`);
     }
-    let otherText = text.length;
-    for (const a of arrays) {
-      otherText -= a.end - a.start;
-      if (!a.values.every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
-        problems.push(`dist/${path}:${a.line}: a number array in the font chunk holds values that are not bytes (README.md, rule R3)`);
-        continue;
-      }
-      const hash = sha256Hex(Uint8Array.from(a.values));
-      if (!seen.has(hash)) {
-        problems.push(
-          `dist/${path}:${a.line}: a ${a.values.length}-byte array in the font chunk matches no committed font (SHA-256 ${hash}) (README.md, rule R3)`,
-        );
-        continue;
-      }
-      seen.set(hash, (seen.get(hash) ?? 0) + 1);
+    const seen = new Map(fonts.map((font) => [font.sha256, 0]));
+    for (const { path, text } of files)
+    {
+        const arrays = findNumberArrays(text, minLength);
+        if (!FONT_CHUNK_PATTERN.test(path))
+        {
+            for (const a of arrays)
+            {
+                problems.push(
+                    `dist/${path}:${a.line}: a ${a.values.length}-number array outside the font chunk: data hidden this way escapes every other check (README.md, rule R3)`,
+                );
+            }
+            continue;
+        }
+        let otherText = text.length;
+        for (const a of arrays)
+        {
+            otherText -= a.end - a.start;
+            if (!a.values.every((v) => Number.isInteger(v) && v >= 0 && v <= 255))
+            {
+                problems.push(`dist/${path}:${a.line}: a number array in the font chunk holds values that are not bytes (README.md, rule R3)`);
+                continue;
+            }
+            const hash = sha256Hex(Uint8Array.from(a.values));
+            if (!seen.has(hash))
+            {
+                problems.push(
+                    `dist/${path}:${a.line}: a ${a.values.length}-byte array in the font chunk matches no committed font (SHA-256 ${hash}) (README.md, rule R3)`,
+                );
+                continue;
+            }
+            seen.set(hash, (seen.get(hash) ?? 0) + 1);
+        }
+        if (otherText > FONT_CHUNK_MAX_OTHER_TEXT)
+        {
+            problems.push(
+                `dist/${path}: ${otherText} characters besides the font arrays (at most ${FONT_CHUNK_MAX_OTHER_TEXT}): the font chunk must hold the fonts only (README.md, rule R3)`,
+            );
+        }
     }
-    if (otherText > FONT_CHUNK_MAX_OTHER_TEXT) {
-      problems.push(
-        `dist/${path}: ${otherText} characters besides the font arrays (at most ${FONT_CHUNK_MAX_OTHER_TEXT}): the font chunk must hold the fonts only (README.md, rule R3)`,
-      );
+    if (fontChunks.length === 1)
+    {
+        for (const font of fonts)
+        {
+            const count = seen.get(font.sha256) ?? 0;
+            if (count !== 1) problems.push(`${font.file} must be in the font chunk exactly once, found ${count} time(s) (README.md, rule R3)`);
+        }
     }
-  }
-  if (fontChunks.length === 1) {
-    for (const font of fonts) {
-      const count = seen.get(font.sha256) ?? 0;
-      if (count !== 1) problems.push(`${font.file} must be in the font chunk exactly once, found ${count} time(s) (README.md, rule R3)`);
-    }
-  }
-  return problems;
+    return problems;
 }
 
 /**
@@ -184,22 +200,24 @@ export function checkNumberArrays(files, fonts = PDF_FONT_FILES, minLength = NUM
  * @param {{ path: string, text: string }[]} files  dist/ files, as for checkNumberArrays.
  * @returns {string[]}  Problems (empty = OK).
  */
-export function checkFontChunkLoadedAtStartup(html, files) {
-  const entry = /<script type="module"[^>]*\ssrc="\/([^"]+)"/.exec(html)?.[1];
-  const entryFile = files.find((f) => f.path === entry);
-  if (entryFile === undefined) return ['dist/index.html: no entry <script type="module" src=...> found (README.md, rule R3)'];
-  const chunk = files.find((f) => FONT_CHUNK_PATTERN.test(f.path));
-  if (chunk === undefined) return []; // reported by checkNumberArrays
-  const name = chunk.path.slice('assets/'.length).replace(/[.]/g, '\\.');
-  // `import"./x.js"` or `import{a as b}from"./x.js"`, never `import("./x.js")`.
-  // This is only a text check on the minified output, not a real parse. The
-  // offline browser test (e2e/add-files.spec.ts) backs it up: it sees the
-  // font chunk being requested while the page loads.
-  const staticImport = new RegExp(String.raw`(?<![\w$.])import\s*(?:[\w$\s{},*]+from\s*)?["']\./${name}["']`);
-  if (!staticImport.test(entryFile.text)) {
-    return [`dist/${entryFile.path}: the entry script does not statically import dist/${chunk.path}, so the fonts would not load with the page (README.md, rule R3)`];
-  }
-  return [];
+export function checkFontChunkLoadedAtStartup(html, files)
+{
+    const entry = /<script type="module"[^>]*\ssrc="\/([^"]+)"/.exec(html)?.[1];
+    const entryFile = files.find((f) => f.path === entry);
+    if (entryFile === undefined) return ['dist/index.html: no entry <script type="module" src=...> found (README.md, rule R3)'];
+    const chunk = files.find((f) => FONT_CHUNK_PATTERN.test(f.path));
+    if (chunk === undefined) return []; // reported by checkNumberArrays
+    const name = chunk.path.slice('assets/'.length).replace(/[.]/g, '\\.');
+    // `import"./x.js"` or `import{a as b}from"./x.js"`, never `import("./x.js")`.
+    // This is only a text check on the minified output, not a real parse. The
+    // offline browser test (e2e/add-files.spec.ts) backs it up: it sees the
+    // font chunk being requested while the page loads.
+    const staticImport = new RegExp(String.raw`(?<![\w$.])import\s*(?:[\w$\s{},*]+from\s*)?["']\./${name}["']`);
+    if (!staticImport.test(entryFile.text))
+    {
+        return [`dist/${entryFile.path}: the entry script does not statically import dist/${chunk.path}, so the fonts would not load with the page (README.md, rule R3)`];
+    }
+    return [];
 }
 
 /**
@@ -210,20 +228,26 @@ export function checkFontChunkLoadedAtStartup(html, files) {
  * @param {{ file: string, sha256: string }[]} [fonts]
  * @returns {string[]}  Problems (empty = OK).
  */
-export function checkSourceFonts(files, fonts = PDF_FONT_FILES) {
-  const problems = [];
-  for (const { path, bytes } of files) {
-    const font = fonts.find((f) => f.file === path);
-    if (font === undefined) {
-      problems.push(`${path}: font file not listed in scripts/font-rules.mjs (README.md, rule R3)`);
-    } else if (sha256Hex(bytes) !== font.sha256) {
-      problems.push(`${path}: SHA-256 ${sha256Hex(bytes)} is not the official file's ${font.sha256}; the font must not be modified (README.md, rule R3)`);
+export function checkSourceFonts(files, fonts = PDF_FONT_FILES)
+{
+    const problems = [];
+    for (const { path, bytes } of files)
+    {
+        const font = fonts.find((f) => f.file === path);
+        if (font === undefined)
+        {
+            problems.push(`${path}: font file not listed in scripts/font-rules.mjs (README.md, rule R3)`);
+        }
+        else if (sha256Hex(bytes) !== font.sha256)
+        {
+            problems.push(`${path}: SHA-256 ${sha256Hex(bytes)} is not the official file's ${font.sha256}; the font must not be modified (README.md, rule R3)`);
+        }
     }
-  }
-  for (const font of fonts) {
-    if (!files.some((f) => f.path === font.file)) problems.push(`${font.file}: font file is missing (README.md, rule R3)`);
-  }
-  return problems;
+    for (const font of fonts)
+    {
+        if (!files.some((f) => f.path === font.file)) problems.push(`${font.file}: font file is missing (README.md, rule R3)`);
+    }
+    return problems;
 }
 
 /**
@@ -235,14 +259,16 @@ export function checkSourceFonts(files, fonts = PDF_FONT_FILES) {
  * @param {string} file  Absolute path of the imported file (without `?bytes`).
  * @param {string} fontsDir  Absolute path of src/fonts/, with or without a trailing slash.
  */
-export function isBytesImportAllowed(file, fontsDir) {
-  const norm = (p) => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `${d.toLowerCase()}:`);
-  const dir = norm(fontsDir).replace(/\/*$/, '/');
-  const f = norm(file);
-  return f.startsWith(dir) && /^[^/]+\.woff$/.test(f.slice(dir.length));
+export function isBytesImportAllowed(file, fontsDir)
+{
+    const norm = (p) => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `${d.toLowerCase()}:`);
+    const dir = norm(fontsDir).replace(/\/*$/, '/');
+    const f = norm(file);
+    return f.startsWith(dir) && /^[^/]+\.woff$/.test(f.slice(dir.length));
 }
 
 /** Is this file name a font file (checked by hash, not scanned as text)? */
-export function isFontFile(path) {
-  return FONT_EXTENSIONS.test(path);
+export function isFontFile(path)
+{
+    return FONT_EXTENSIONS.test(path);
 }

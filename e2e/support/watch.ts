@@ -37,25 +37,25 @@ import { expect, type BrowserContext, type Page, type Request, type Worker } fro
 
 /** What watchWorkers records about the workers of a page. */
 export interface WorkerWatch {
-  /** Every worker the page started, and those that ended. */
-  readonly workers: Worker[];
-  readonly closedWorkers: Worker[];
-  /** Worker CSP reports, as "securitypolicyviolation directive blockedURI | worker name" (every browser) or, from CDP in Chromium only, "source level | text". */
-  readonly workerLog: string[];
-  /** Worker URL -> the name it was started with. */
-  readonly workerNames: Map<string, string>;
-  /**
-   * URL of each worker started WITHOUT the prelude (not from a JavaScript
-   * Blob): its CSP reports reach no detector outside Chromium, so
-   * workerCspReports fails while there is any (fail closed).
-   */
-  readonly unwrappedWorkers: string[];
+    /** Every worker the page started, and those that ended. */
+    readonly workers: Worker[];
+    readonly closedWorkers: Worker[];
+    /** Worker CSP reports, as "securitypolicyviolation directive blockedURI | worker name" (every browser) or, from CDP in Chromium only, "source level | text". */
+    readonly workerLog: string[];
+    /** Worker URL -> the name it was started with. */
+    readonly workerNames: Map<string, string>;
+    /**
+     * URL of each worker started WITHOUT the prelude (not from a JavaScript
+     * Blob): its CSP reports reach no detector outside Chromium, so
+     * workerCspReports fails while there is any (fail closed).
+     */
+    readonly unwrappedWorkers: string[];
 }
 
 export interface Watch extends WorkerWatch {
-  /** URL of every request of the context, in order (WebKit's in-memory blob reads left out, see isWebKitBlobRead). */
-  readonly requests: string[];
-  readonly websockets: string[];
+    /** URL of every request of the context, in order (WebKit's in-memory blob reads left out, see isWebKitBlobRead). */
+    readonly requests: string[];
+    readonly websockets: string[];
 }
 
 /**
@@ -66,15 +66,16 @@ export interface Watch extends WorkerWatch {
  * never reaches the network. Exactly that shape is set apart: a GET, of type
  * 'xhr', to `blob:<site origin>/<uuid>`. Any other request still counts.
  */
-export function isWebKitBlobRead(request: Request, origin: string): boolean {
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-  const url = request.url();
-  return (
-    request.method() === 'GET' &&
-    request.resourceType() === 'xhr' &&
-    url.startsWith(`blob:${origin}/`) &&
-    uuid.test(url.slice(`blob:${origin}/`.length))
-  );
+export function isWebKitBlobRead(request: Request, origin: string): boolean
+{
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const url = request.url();
+    return (
+        request.method() === 'GET' &&
+        request.resourceType() === 'xhr' &&
+        url.startsWith(`blob:${origin}/`) &&
+        uuid.test(url.slice(`blob:${origin}/`.length))
+    );
 }
 
 /** The name of the browser engine of `context` ('chromium', 'firefox' or 'webkit'). */
@@ -105,103 +106,119 @@ const WORKER_PRELUDE = `(() => {
 })();
 `;
 
-declare global {
-  interface Window {
-    __e2eWorkerStarted: (url: string, name: string, wrapped: boolean) => Promise<void>;
-    __e2eWorkerReport: (line: string) => Promise<void>;
-  }
+declare global
+{
+    interface Window {
+        __e2eWorkerStarted: (url: string, name: string, wrapped: boolean) => Promise<void>;
+        __e2eWorkerReport: (line: string) => Promise<void>;
+    }
 }
 
 /** Follows every worker of `page` into `sink`. Call before the page is opened. */
-export async function watchWorkers(context: BrowserContext, page: Page, sink: WorkerWatch): Promise<void> {
-  page.on('worker', (worker) => {
-    sink.workers.push(worker);
-    worker.on('close', () => sink.closedWorkers.push(worker));
-  });
-  await page.exposeFunction('__e2eWorkerStarted', (url: string, name: string, wrapped: boolean) => {
-    sink.workerNames.set(url, name);
-    if (!wrapped) sink.unwrappedWorkers.push(url);
-  });
-  await page.exposeFunction('__e2eWorkerReport', (line: string) => {
-    sink.workerLog.push(line);
-  });
-  await page.addInitScript(
-    ({ channelName, prelude }) => {
-      // The worker scripts the page turns into blob: URLs (Vite's inline
-      // workers); other blobs (the PDF) are left alone. A worker started any
-      // other way runs without the prelude and is reported as not wrapped.
-      const scripts = new Map<string, Blob>();
-      const createObjectURL = URL.createObjectURL.bind(URL);
-      URL.createObjectURL = (object: Blob | MediaSource): string => {
-        const url = createObjectURL(object);
-        if (object instanceof Blob && /javascript/.test(object.type)) scripts.set(url, object);
-        return url;
-      };
-      window.Worker = new Proxy(window.Worker, {
-        construct(target, args: ConstructorParameters<typeof Worker>, newTarget) {
-          const [url, options] = args;
-          const script = scripts.get(String(url));
-          const start = script ? createObjectURL(new Blob([prelude, script], { type: script.type })) : url;
-          const worker = Reflect.construct(target, [start, options], newTarget) as Worker;
-          // Async binding: the test sees this start a moment later, so it checks after the work is done.
-          void window.__e2eWorkerStarted(String(start), options?.name ?? '', script !== undefined);
-          return worker;
+export async function watchWorkers(context: BrowserContext, page: Page, sink: WorkerWatch): Promise<void>
+{
+    page.on('worker', (worker) =>
+    {
+        sink.workers.push(worker);
+        worker.on('close', () => sink.closedWorkers.push(worker));
+    });
+    await page.exposeFunction('__e2eWorkerStarted', (url: string, name: string, wrapped: boolean) =>
+    {
+        sink.workerNames.set(url, name);
+        if (!wrapped) sink.unwrappedWorkers.push(url);
+    });
+    await page.exposeFunction('__e2eWorkerReport', (line: string) =>
+    {
+        sink.workerLog.push(line);
+    });
+    await page.addInitScript(
+        ({ channelName, prelude }) =>
+        {
+            // The worker scripts the page turns into blob: URLs (Vite's inline
+            // workers); other blobs (the PDF) are left alone. A worker started any
+            // other way runs without the prelude and is reported as not wrapped.
+            const scripts = new Map<string, Blob>();
+            const createObjectURL = URL.createObjectURL.bind(URL);
+            URL.createObjectURL = (object: Blob | MediaSource): string =>
+            {
+                const url = createObjectURL(object);
+                if (object instanceof Blob && /javascript/.test(object.type)) scripts.set(url, object);
+                return url;
+            };
+            window.Worker = new Proxy(window.Worker, {
+                construct(target, args: ConstructorParameters<typeof Worker>, newTarget)
+                {
+                    const [url, options] = args;
+                    const script = scripts.get(String(url));
+                    const start = script ? createObjectURL(new Blob([prelude, script], { type: script.type })) : url;
+                    const worker = Reflect.construct(target, [start, options], newTarget) as Worker;
+                    // Async binding: the test sees this start a moment later, so it checks after the work is done.
+                    void window.__e2eWorkerStarted(String(start), options?.name ?? '', script !== undefined);
+                    return worker;
+                },
+            });
+            const channel = new BroadcastChannel(channelName);
+            channel.onmessage = (event: MessageEvent<unknown>) =>
+            {
+                void window.__e2eWorkerReport(String(event.data));
+            };
         },
-      });
-      const channel = new BroadcastChannel(channelName);
-      channel.onmessage = (event: MessageEvent<unknown>) => {
-        void window.__e2eWorkerReport(String(event.data));
-      };
-    },
-    { channelName: REPORT_CHANNEL, prelude: WORKER_PRELUDE },
-  );
+        { channelName: REPORT_CHANNEL, prelude: WORKER_PRELUDE },
+    );
 
-  if (engineOf(context) !== 'chromium') return;
-  // Chromium only: auto-attach to each new worker paused before its script
-  // runs (waitForDebuggerOnStart), enable its Log domain, then let it run, so
-  // no entry can be missed. `flatten: false` routes the worker's messages
-  // through this one session (Target.sendMessageToTarget).
-  const cdp = await context.newCDPSession(page);
-  let nextId = 0;
-  cdp.on('Target.attachedToTarget', ({ sessionId, targetInfo }) => {
-    const send = (method: string): void => {
-      void cdp
-        .send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: ++nextId, method, params: {} }) })
-        .catch(() => undefined); // the worker may already be gone
-    };
-    if (targetInfo.type === 'worker') send('Log.enable');
-    send('Runtime.runIfWaitingForDebugger');
-  });
-  cdp.on('Target.receivedMessageFromTarget', ({ message }) => {
-    const parsed = JSON.parse(message) as { method?: string; params?: { entry?: { source: string; level: string; text: string } } };
-    const entry = parsed.params?.entry;
-    if (parsed.method === 'Log.entryAdded' && entry !== undefined) sink.workerLog.push(`${entry.source} ${entry.level} | ${entry.text}`);
-  });
-  await cdp.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: false });
+    if (engineOf(context) !== 'chromium') return;
+    // Chromium only: auto-attach to each new worker paused before its script
+    // runs (waitForDebuggerOnStart), enable its Log domain, then let it run, so
+    // no entry can be missed. `flatten: false` routes the worker's messages
+    // through this one session (Target.sendMessageToTarget).
+    const cdp = await context.newCDPSession(page);
+    let nextId = 0;
+    cdp.on('Target.attachedToTarget', ({ sessionId, targetInfo }) =>
+    {
+        const send = (method: string): void =>
+        {
+            void cdp
+                .send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: ++nextId, method, params: {} }) })
+                .catch(() => undefined); // the worker may already be gone
+        };
+        if (targetInfo.type === 'worker') send('Log.enable');
+        send('Runtime.runIfWaitingForDebugger');
+    });
+    cdp.on('Target.receivedMessageFromTarget', ({ message }) =>
+    {
+        const parsed = JSON.parse(message) as { method?: string; params?: { entry?: { source: string; level: string; text: string } } };
+        const entry = parsed.params?.entry;
+        if (parsed.method === 'Log.entryAdded' && entry !== undefined) sink.workerLog.push(`${entry.source} ${entry.level} | ${entry.text}`);
+    });
+    await cdp.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: false });
 }
 
 /** Starts watching. Call before the page is opened. `origin` is the preview server's origin. */
-export async function watchPage(context: BrowserContext, page: Page, origin: string): Promise<Watch> {
-  const watch: Watch = { requests: [], websockets: [], workers: [], closedWorkers: [], workerLog: [], workerNames: new Map(), unwrappedWorkers: [] };
+export async function watchPage(context: BrowserContext, page: Page, origin: string): Promise<Watch>
+{
+    const watch: Watch = { requests: [], websockets: [], workers: [], closedWorkers: [], workerLog: [], workerNames: new Map(), unwrappedWorkers: [] };
 
-  const webkit = engineOf(context) === 'webkit';
-  context.on('request', (request) => {
-    if (!(webkit && isWebKitBlobRead(request, origin))) watch.requests.push(request.url());
-  });
-  await context.route('**/*', (route) =>
-    new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
-  );
-  await context.routeWebSocket(/.*/, async (ws) => {
-    watch.websockets.push(ws.url());
-    await ws.close();
-  });
-  await watchWorkers(context, page, watch);
-  return watch;
+    const webkit = engineOf(context) === 'webkit';
+    context.on('request', (request) =>
+    {
+        if (!(webkit && isWebKitBlobRead(request, origin))) watch.requests.push(request.url());
+    });
+    await context.route('**/*', (route) =>
+        new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
+    );
+    await context.routeWebSocket(/.*/, async (ws) =>
+    {
+        watch.websockets.push(ws.url());
+        await ws.close();
+    });
+    await watchWorkers(context, page, watch);
+    return watch;
 }
 
 /** The workers in `list` that were started with this name. */
-export function workersNamed(watch: WorkerWatch, list: readonly Worker[], name: 'parse-worker' | 'engine-worker' | 'pdf-worker'): Worker[] {
-  return list.filter((worker) => watch.workerNames.get(worker.url()) === name);
+export function workersNamed(watch: WorkerWatch, list: readonly Worker[], name: 'parse-worker' | 'engine-worker' | 'pdf-worker'): Worker[]
+{
+    return list.filter((worker) => watch.workerNames.get(worker.url()) === name);
 }
 
 /**
@@ -214,13 +231,14 @@ export function workersNamed(watch: WorkerWatch, list: readonly Worker[], name: 
  * (e2e/parse-files.spec.ts only). Starts and reports reach the test through
  * async bindings, so call this after the work is done.
  */
-export function workerCspReports(watch: WorkerWatch, exempt: ReadonlySet<string> = new Set()): string[] {
-  const label = (url: string): string => `${url} | ${watch.workerNames.get(url) ?? '(no name)'}`;
-  expect(watch.unwrappedWorkers.filter((url) => !exempt.has(url)).map(label), 'workers started without the CSP report relay').toEqual([]);
-  expect(watch.workerLog.filter((line) => line.startsWith('nested-worker ')), 'workers started from inside a worker').toEqual([]);
-  const unseen = watch.workers.map((worker) => worker.url()).filter((url) => !watch.workerNames.has(url));
-  expect(unseen, 'workers not started through the watched Worker constructor').toEqual([]);
-  return watch.workerLog.filter((line) => /^securitypolicyviolation |Content Security Policy|Refused to/i.test(line));
+export function workerCspReports(watch: WorkerWatch, exempt: ReadonlySet<string> = new Set()): string[]
+{
+    const label = (url: string): string => `${url} | ${watch.workerNames.get(url) ?? '(no name)'}`;
+    expect(watch.unwrappedWorkers.filter((url) => !exempt.has(url)).map(label), 'workers started without the CSP report relay').toEqual([]);
+    expect(watch.workerLog.filter((line) => line.startsWith('nested-worker ')), 'workers started from inside a worker').toEqual([]);
+    const unseen = watch.workers.map((worker) => worker.url()).filter((url) => !watch.workerNames.has(url));
+    expect(unseen, 'workers not started through the watched Worker constructor').toEqual([]);
+    return watch.workerLog.filter((line) => /^securitypolicyviolation |Content Security Policy|Refused to/i.test(line));
 }
 
 // DOMParser's parse-time CSP reports. A spec that shows email HTML records
@@ -241,7 +259,7 @@ const PARSE_TIME_DIRECTIVES: ReadonlySet<string> = new Set(['script-src-attr', '
  * is an inline handler or style in the LIVE page, and is never tolerated.
  */
 export const isParseTimeReport = (record: string): boolean =>
-  PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
+    PARSE_TIME_DIRECTIVES.has(record.split(' ')[0] ?? '') && record.endsWith(' inline parse');
 
 /**
  * One more parse-time report a spec tolerates, as an exact record, never as
@@ -257,14 +275,16 @@ export type ExactParseTimeReport = `${'base-uri' | 'media-src'} https://${string
  * input (seen with the hostile HTML of e2e/html-to-text.spec.ts). So they are
  * tolerated in Chromium only; in another browser every report counts.
  */
-export function untoleratedReports(browserName: string, records: readonly string[], isTolerated: (record: string) => boolean = isParseTimeReport): string[] {
-  return records.filter((record) => browserName !== 'chromium' || !isTolerated(record));
+export function untoleratedReports(browserName: string, records: readonly string[], isTolerated: (record: string) => boolean = isParseTimeReport): string[]
+{
+    return records.filter((record) => browserName !== 'chromium' || !isTolerated(record));
 }
 
 /** isParseTimeReport, plus exactly the records in `exact` (compared whole). */
-export function parseTimeReportFilter(exact: ReadonlySet<ExactParseTimeReport>): (record: string) => boolean {
-  const records: ReadonlySet<string> = exact;
-  return (record) => isParseTimeReport(record) || records.has(record);
+export function parseTimeReportFilter(exact: ReadonlySet<ExactParseTimeReport>): (record: string) => boolean
+{
+    const records: ReadonlySet<string> = exact;
+    return (record) => isParseTimeReport(record) || records.has(record);
 }
 
 /**
@@ -274,14 +294,14 @@ export function parseTimeReportFilter(exact: ReadonlySet<ExactParseTimeReport>):
  * console error fails the test.
  */
 export const PARSE_TIME_CONSOLE: readonly { readonly line: RegExp; readonly directives: readonly string[] }[] = [
-  {
-    line: /^console: Executing inline event handler violates the following Content Security Policy directive 'script-src 'self''\./,
-    directives: ['script-src-attr'],
-  },
-  {
-    line: /^console: Applying inline style violates the following Content Security Policy directive 'style-src 'self''\./,
-    directives: ['style-src-elem', 'style-src-attr'],
-  },
+    {
+        line: /^console: Executing inline event handler violates the following Content Security Policy directive 'script-src 'self''\./,
+        directives: ['script-src-attr'],
+    },
+    {
+        line: /^console: Applying inline style violates the following Content Security Policy directive 'style-src 'self''\./,
+        directives: ['style-src-elem', 'style-src-attr'],
+    },
 ];
 
 // WebKit and <select>. WebKit builds every <select> element with an inner
@@ -300,20 +320,22 @@ export const SELECT_REPORT = 'style-src-attr inline select';
 
 /** WebKit's console line for each of those reports (as a spec records it, "console: ..."). */
 export const WEBKIT_SELECT_CONSOLE =
-  "console: Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy.";
+    "console: Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy.";
 
 /**
  * `records` without the <select> reports, after checking there are exactly
  * `policies` of them in WebKit (2: header and <meta>) and none in another
  * browser. For a page loaded once since the recorder started.
  */
-export function withoutSelectReports(browserName: string, records: readonly string[], policies = 2): string[] {
-  expect(records.filter((r) => r === SELECT_REPORT), 'WebKit <select> reports').toHaveLength(browserName === 'webkit' ? policies : 0);
-  return records.filter((r) => r !== SELECT_REPORT);
+export function withoutSelectReports(browserName: string, records: readonly string[], policies = 2): string[]
+{
+    expect(records.filter((r) => r === SELECT_REPORT), 'WebKit <select> reports').toHaveLength(browserName === 'webkit' ? policies : 0);
+    return records.filter((r) => r !== SELECT_REPORT);
 }
 
 /** Same for the console lines (`problems`), with `loads` page loads recorded. */
-export function withoutSelectConsole(browserName: string, problems: readonly string[], policies = 2, loads = 1): string[] {
-  expect(problems.filter((p) => p === WEBKIT_SELECT_CONSOLE), 'WebKit <select> console lines').toHaveLength(browserName === 'webkit' ? policies * loads : 0);
-  return problems.filter((p) => p !== WEBKIT_SELECT_CONSOLE);
+export function withoutSelectConsole(browserName: string, problems: readonly string[], policies = 2, loads = 1): string[]
+{
+    expect(problems.filter((p) => p === WEBKIT_SELECT_CONSOLE), 'WebKit <select> console lines').toHaveLength(browserName === 'webkit' ? policies * loads : 0);
+    return problems.filter((p) => p !== WEBKIT_SELECT_CONSOLE);
 }

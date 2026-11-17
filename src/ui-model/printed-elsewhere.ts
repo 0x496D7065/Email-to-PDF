@@ -29,18 +29,18 @@ import { noRepeat, pdfRanges, type PdfRange } from '../pdf/model';
 
 /** The PDF step's input, as src/ui/page.ts (pdfInput) gives it. */
 export interface PrintedElsewhereInput {
-  readonly result: EngineResult;
-  /** List positions of the included emails, in list order. */
-  readonly positions: readonly number[];
-  /** One plan per position, same order. */
-  readonly plans: readonly MessagePlan[];
-  readonly policy: OutputPolicy;
-  /** Ids of the rebuilt emails chosen (src/ui/review.ts, includedRebuilt; ignored under "Print full original text"). */
-  readonly rebuilt: readonly number[];
-  /** True when "Rebuild conversation from replies" is off (src/pdf/model.ts, BuildPdfInput.rebuildingOff). Absent: false. */
-  readonly rebuildingOff?: boolean;
-  /** Ids of the rebuilt emails the reader unticked (src/ui/review.ts, untickedRebuilt; src/pdf/model.ts, BuildPdfInput.unticked). Absent: none. */
-  readonly unticked?: readonly number[];
+    readonly result: EngineResult;
+    /** List positions of the included emails, in list order. */
+    readonly positions: readonly number[];
+    /** One plan per position, same order. */
+    readonly plans: readonly MessagePlan[];
+    readonly policy: OutputPolicy;
+    /** Ids of the rebuilt emails chosen (src/ui/review.ts, includedRebuilt; ignored under "Print full original text"). */
+    readonly rebuilt: readonly number[];
+    /** True when "Rebuild conversation from replies" is off (src/pdf/model.ts, BuildPdfInput.rebuildingOff). Absent: false. */
+    readonly rebuildingOff?: boolean;
+    /** Ids of the rebuilt emails the reader unticked (src/ui/review.ts, untickedRebuilt; src/pdf/model.ts, BuildPdfInput.unticked). Absent: none. */
+    readonly unticked?: readonly number[];
 }
 
 /**
@@ -50,18 +50,20 @@ export interface PrintedElsewhereInput {
  * not in the map is printed as its plan says.
  * Empty under "Print full original text" (every email is printed whole).
  */
-export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number, readonly PdfRange[]> {
-  const out = new Map<number, readonly PdfRange[]>();
-  if (input.policy.unfoldEverything) return out;
-  const { order, parts, restored } = noRepeat(input);
-  for (const slot of order.slots) {
-    if (slot.kind !== 'email') continue;
-    const list = parts.get(slot.position);
-    const back = restored.get(slot.position);
-    const message = input.result.messages[slot.position]?.message;
-    if ((list === undefined && back === undefined) || message === undefined) continue;
-    const ranges = pdfRanges(message.bodyText, input.plans[slot.plan], input.policy, list ?? [], back);
-    if (ranges !== null) out.set(slot.position, ranges);
-  }
-  return out;
+export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number, readonly PdfRange[]>
+{
+    const out = new Map<number, readonly PdfRange[]>();
+    if (input.policy.unfoldEverything) return out;
+    const { order, parts, restored } = noRepeat(input);
+    for (const slot of order.slots)
+    {
+        if (slot.kind !== 'email') continue;
+        const list = parts.get(slot.position);
+        const back = restored.get(slot.position);
+        const message = input.result.messages[slot.position]?.message;
+        if ((list === undefined && back === undefined) || message === undefined) continue;
+        const ranges = pdfRanges(message.bodyText, input.plans[slot.plan], input.policy, list ?? [], back);
+        if (ranges !== null) out.set(slot.position, ranges);
+    }
+    return out;
 }

@@ -30,8 +30,9 @@ const BUILT_LITERAL = /"\{\\"version\\":(?:[^"\\]|\\")*\}"/g;
  * dist/sw.js) becomes "". So the version can be computed from either
  * form, and the same code gives the same version before and after.
  */
-function withoutManifest(swCode) {
-  return swCode.replace(PLACEHOLDER_LITERAL, '""').replace(BUILT_LITERAL, '""');
+function withoutManifest(swCode)
+{
+    return swCode.replace(PLACEHOLDER_LITERAL, '""').replace(BUILT_LITERAL, '""');
 }
 
 /**
@@ -48,26 +49,29 @@ function withoutManifest(swCode) {
  * header-only change (no file changed) must still give a new sw.js, or a
  * returning visitor would keep the old headers.
  */
-export function manifestVersion(files, swCode, headersFile) {
-  const lines = [];
-  for (const { path, bytes } of [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) {
-    lines.push(`${path} ${sha256Hex(bytes)}`);
-  }
-  lines.push(`sw.js ${sha256Hex(new TextEncoder().encode(withoutManifest(swCode)))}`);
-  lines.push(`_headers ${sha256Hex(typeof headersFile === 'string' ? new TextEncoder().encode(headersFile) : headersFile)}`);
-  return sha256Hex(new TextEncoder().encode(lines.join('\n'))).slice(0, VERSION_LENGTH);
+export function manifestVersion(files, swCode, headersFile)
+{
+    const lines = [];
+    for (const { path, bytes } of [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)))
+    {
+        lines.push(`${path} ${sha256Hex(bytes)}`);
+    }
+    lines.push(`sw.js ${sha256Hex(new TextEncoder().encode(withoutManifest(swCode)))}`);
+    lines.push(`_headers ${sha256Hex(typeof headersFile === 'string' ? new TextEncoder().encode(headersFile) : headersFile)}`);
+    return sha256Hex(new TextEncoder().encode(lines.join('\n'))).slice(0, VERSION_LENGTH);
 }
 
 /**
  * The precache list written into a built sw.js: { version, paths }.
  * Throws unless it is there exactly once, in the expected shape.
  */
-export function readBuiltManifest(swJs) {
-  const found = swJs.match(BUILT_LITERAL) ?? [];
-  if (found.length !== 1) throw new Error(`sw.js must hold the precache list exactly once (found ${String(found.length)})`);
-  const value = JSON.parse(JSON.parse(found[0]));
-  const { version, paths } = value;
-  if (typeof version !== 'string' || !/^[0-9a-f]+$/.test(version)) throw new Error('sw.js: the precache list has a bad version');
-  if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string')) throw new Error('sw.js: the precache list has bad paths');
-  return { version, paths };
+export function readBuiltManifest(swJs)
+{
+    const found = swJs.match(BUILT_LITERAL) ?? [];
+    if (found.length !== 1) throw new Error(`sw.js must hold the precache list exactly once (found ${String(found.length)})`);
+    const value = JSON.parse(JSON.parse(found[0]));
+    const { version, paths } = value;
+    if (typeof version !== 'string' || !/^[0-9a-f]+$/.test(version)) throw new Error('sw.js: the precache list has a bad version');
+    if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string')) throw new Error('sw.js: the precache list has bad paths');
+    return { version, paths };
 }

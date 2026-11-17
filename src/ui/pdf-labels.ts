@@ -66,278 +66,311 @@ export const SLICE_MS = 12;
 
 /** The PDF plans of the included emails, as the PDF step needs them. */
 export interface PdfPlans {
-  readonly result: EngineResult;
-  readonly policy: OutputPolicy;
-  /** List positions of the included emails, in list order (a position without an email is not in it). */
-  readonly positions: readonly number[];
-  /** One plan per position, same order. */
-  readonly plans: readonly MessagePlan[];
+    readonly result: EngineResult;
+    readonly policy: OutputPolicy;
+    /** List positions of the included emails, in list order (a position without an email is not in it). */
+    readonly positions: readonly number[];
+    /** One plan per position, same order. */
+    readonly plans: readonly MessagePlan[];
 }
 
 export interface PdfLabelsOptions {
-  /** The included emails' list positions, in list order (src/ui/review.ts). */
-  readonly includedPositions: () => readonly number[];
-  /** Hands the plans to the preview (null: hide the labels). */
-  readonly setPdfPlans: (plans: PreviewPdfPlans | null) => void;
-  /** Tells the preview the plans could not be made. */
-  readonly failed: () => void;
-  /** Runs a task later (default: setTimeout). Returns a handle for `cancel`. */
-  readonly schedule?: (task: () => void, delayMs: number) => unknown;
-  readonly cancel?: (handle: unknown) => void;
-  /** A clock in ms (default: performance.now). */
-  readonly now?: () => number;
-  /** Called after the user ticked or unticked the checkbox (src/ui/page.ts: a PDF made before is dropped). */
-  readonly onPolicyChange?: () => void;
-  /**
-   * Ids of the rebuilt emails the PDF gets (src/ui/review.ts,
-   * includedRebuilt), for the no-repeat labels (see the top). Default: none.
-   */
-  readonly includedRebuilt?: () => readonly number[];
-  /**
-   * True while "Rebuild conversation from replies" is off (src/ui/review.ts,
-   * rebuiltShown false): no rebuilt email counts as unticked, so no
-   * forwarded part is left out for it (task 8.13a, Q2). Default: false.
-   */
-  readonly rebuildingOff?: () => boolean;
-  /**
-   * Ids of the rebuilt emails whose card the reader unticked
-   * (src/ui/review.ts, untickedRebuilt), the same as the PDF step gets: only
-   * their forwarded parts are left out (task 8.13a review round 2). Default:
-   * none (an entry merely not chosen is never taken for unticked).
-   */
-  readonly untickedRebuilt?: () => readonly number[];
+    /** The included emails' list positions, in list order (src/ui/review.ts). */
+    readonly includedPositions: () => readonly number[];
+    /** Hands the plans to the preview (null: hide the labels). */
+    readonly setPdfPlans: (plans: PreviewPdfPlans | null) => void;
+    /** Tells the preview the plans could not be made. */
+    readonly failed: () => void;
+    /** Runs a task later (default: setTimeout). Returns a handle for `cancel`. */
+    readonly schedule?: (task: () => void, delayMs: number) => unknown;
+    readonly cancel?: (handle: unknown) => void;
+    /** A clock in ms (default: performance.now). */
+    readonly now?: () => number;
+    /** Called after the user ticked or unticked the checkbox (src/ui/page.ts: a PDF made before is dropped). */
+    readonly onPolicyChange?: () => void;
+    /**
+     * Ids of the rebuilt emails the PDF gets (src/ui/review.ts,
+     * includedRebuilt), for the no-repeat labels (see the top). Default: none.
+     */
+    readonly includedRebuilt?: () => readonly number[];
+    /**
+     * True while "Rebuild conversation from replies" is off (src/ui/review.ts,
+     * rebuiltShown false): no rebuilt email counts as unticked, so no
+     * forwarded part is left out for it (task 8.13a, Q2). Default: false.
+     */
+    readonly rebuildingOff?: () => boolean;
+    /**
+     * Ids of the rebuilt emails whose card the reader unticked
+     * (src/ui/review.ts, untickedRebuilt), the same as the PDF step gets: only
+     * their forwarded parts are left out (task 8.13a review round 2). Default:
+     * none (an entry merely not chosen is never taken for unticked).
+     */
+    readonly untickedRebuilt?: () => readonly number[];
 }
 
 export interface PdfLabels {
-  /** The checkbox field and its note, for the preview's toolbar. */
-  readonly element: HTMLDivElement;
-  /** A new result is shown (null: none). */
-  show(result: EngineResult | null): void;
-  /** The included emails may have changed: works the plans out again if needed. */
-  refresh(): void;
-  /** For "Clear everything": unticks the checkbox, cancels the work, drops the plans. */
-  reset(): void;
-  /** The policy the PDF must use. */
-  getPdfPolicy(): OutputPolicy;
-  /** The plans of the current inputs, or null while they are being worked out (or there are none). */
-  currentPlans(): PdfPlans | null;
-  /** Writes the checkbox's label and note again in the page language (the plans do not depend on it). */
-  relabel(): void;
-  /** The rebuilt emails chosen changed: the plans in use go to the preview again with the new no-repeat cut (see the top). */
-  rebuiltChanged(): void;
+    /** The checkbox field and its note, for the preview's toolbar. */
+    readonly element: HTMLDivElement;
+    /** A new result is shown (null: none). */
+    show(result: EngineResult | null): void;
+    /** The included emails may have changed: works the plans out again if needed. */
+    refresh(): void;
+    /** For "Clear everything": unticks the checkbox, cancels the work, drops the plans. */
+    reset(): void;
+    /** The policy the PDF must use. */
+    getPdfPolicy(): OutputPolicy;
+    /** The plans of the current inputs, or null while they are being worked out (or there are none). */
+    currentPlans(): PdfPlans | null;
+    /** Writes the checkbox's label and note again in the page language (the plans do not depend on it). */
+    relabel(): void;
+    /** The rebuilt emails chosen changed: the plans in use go to the preview again with the new no-repeat cut (see the top). */
+    rebuiltChanged(): void;
 }
 
 /** The input of one planning: everything the plans depend on. */
 interface Inputs {
-  readonly result: EngineResult;
-  readonly policy: OutputPolicy;
-  readonly positions: readonly number[];
-  readonly key: string;
+    readonly result: EngineResult;
+    readonly policy: OutputPolicy;
+    readonly positions: readonly number[];
+    readonly key: string;
 }
 
-export function createPdfLabels(options: PdfLabelsOptions): PdfLabels {
-  const schedule = options.schedule ?? ((task: () => void, delayMs: number): unknown => setTimeout(task, delayMs));
-  const cancel = options.cancel ?? ((handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>));
-  const now = options.now ?? ((): number => performance.now());
+export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
+{
+    const schedule = options.schedule ?? ((task: () => void, delayMs: number): unknown => setTimeout(task, delayMs));
+    const cancel = options.cancel ?? ((handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>));
+    const now = options.now ?? ((): number => performance.now());
 
-  // --- State (memory only, README.md, rule R5) ------------------------------
-  let result: EngineResult | null = null;
-  // The last plans made, and whether they match the current inputs.
-  let made: { readonly inputs: Inputs; readonly plans: PdfPlans; readonly preview: PreviewPdfPlans } | null = null;
-  let upToDate = false;
-  // The planning waiting or in progress.
-  let job: { readonly inputs: Inputs; handle: unknown } | null = null;
+    // --- State (memory only, README.md, rule R5) ------------------------------
+    let result: EngineResult | null = null;
+    // The last plans made, and whether they match the current inputs.
+    let made: { readonly inputs: Inputs; readonly plans: PdfPlans; readonly preview: PreviewPdfPlans } | null = null;
+    let upToDate = false;
+    // The planning waiting or in progress.
+    let job: { readonly inputs: Inputs; handle: unknown } | null = null;
 
-  const labels = createStaticLabels();
-  const checkbox = el('input', { attrs: { type: 'checkbox', id: 'pdf-everything', 'aria-describedby': 'pdf-everything-note' } });
-  const element = el('div', {
-    attrs: { class: 'field field-everything' },
-    children: [
-      el('div', {
-        attrs: { class: 'field-checkbox' },
-        children: [checkbox, labels.text(el('label', { attrs: { for: 'pdf-everything' } }), 'pdf.everything')],
-      }),
-      labels.text(el('p', { attrs: { id: 'pdf-everything-note', class: 'field-note' } }), 'pdf.everythingNote'),
-    ],
-  });
-
-  function policy(): OutputPolicy {
-    return Object.freeze({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: checkbox.checked });
-  }
-
-  function inputsNow(r: EngineResult): Inputs {
-    const p = policy();
-    const positions = [...options.includedPositions()];
-    const key = `${p.appQuotedHistory}|${p.signatures}|${p.unfoldEverything ? 'all' : ''}|${positions.join(',')}`;
-    return { result: r, policy: p, positions, key };
-  }
-
-  function stopJob(): void {
-    if (job !== null) cancel(job.handle);
-    job = null;
-  }
-
-  /**
-   * The plans for the preview and for the PDF step. `planned` and `plans`
-   * are in the same order (plans[k] is the plan of planned[k]); if their
-   * lengths differ (a bug), nothing is shown rather than a label of another
-   * email.
-   */
-  function finish(inputs: Inputs, planned: readonly PlannedEmail[], plans: MessagePlan[]): void {
-    if (plans.length !== planned.length) {
-      options.failed();
-      return;
-    }
-    const sources = signatureSources(planned, plans);
-    const views = new Map<number, PdfView>();
-    planned.forEach(({ position }, k) => {
-      const plan = plans[k];
-      if (plan !== undefined) views.set(position, { plan, signatureFrom: sources.get(position) ?? new Map() });
+    const labels = createStaticLabels();
+    const checkbox = el('input', { attrs: { type: 'checkbox', id: 'pdf-everything', 'aria-describedby': 'pdf-everything-note' } });
+    const element = el('div', {
+        attrs: { class: 'field field-everything' },
+        children: [
+            el('div', {
+                attrs: { class: 'field-checkbox' },
+                children: [checkbox, labels.text(el('label', { attrs: { for: 'pdf-everything' } }), 'pdf.everything')],
+            }),
+            labels.text(el('p', { attrs: { id: 'pdf-everything-note', class: 'field-note' } }), 'pdf.everythingNote'),
+        ],
     });
-    const preview: PreviewPdfPlans = { result: inputs.result, views };
-    const positions = planned.map((e) => e.position);
-    made = { inputs, plans: { result: inputs.result, policy: inputs.policy, positions, plans }, preview };
-    upToDate = true;
-    handOver(made);
-  }
 
-  /**
-   * The views of `m` with the no-repeat cut of the PDF (see the top): the
-   * same input as the PDF step (src/ui/page.ts, pdfInput), with the rebuilt
-   * emails chosen now.
-   */
-  function withCut(m: NonNullable<typeof made>): PreviewPdfPlans {
-    if (m.plans.policy.unfoldEverything) return m.preview;
-    const rebuilt = [...(options.includedRebuilt?.() ?? [])];
-    const unticked = [...(options.untickedRebuilt?.() ?? [])];
-    const cut = printedElsewhereRanges({ ...m.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
-    if (cut.size === 0) return m.preview;
-    const views = new Map(m.preview.views);
-    for (const [position, pdfRanges] of cut) {
-      const view = views.get(position);
-      if (view !== undefined) views.set(position, { ...view, pdfRanges });
+    function policy(): OutputPolicy
+    {
+        return Object.freeze({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: checkbox.checked });
     }
-    return { result: m.preview.result, views };
-  }
 
-  /** Hands the plans of `m` to the preview, with the no-repeat cut; if that cannot be worked out, the labels fail (never a wrong one). */
-  function handOver(m: NonNullable<typeof made>): void {
-    let preview: PreviewPdfPlans;
-    try {
-      preview = withCut(m);
-    } catch {
-      options.failed();
-      return;
+    function inputsNow(r: EngineResult): Inputs
+    {
+        const p = policy();
+        const positions = [...options.includedPositions()];
+        const key = `${p.appQuotedHistory}|${p.signatures}|${p.unfoldEverything ? 'all' : ''}|${positions.join(',')}`;
+        return { result: r, policy: p, positions, key };
     }
-    options.setPdfPlans(preview);
-  }
 
-  /** Works the plans out for `inputs`, in slices, after the pause. */
-  function start(inputs: Inputs): void {
-    stopJob();
-    // The included emails that exist (a position without an email, a bug, is
-    // skipped here once): the plans are made from this list and matched back
-    // to it in the same order, so plans[k] always belongs to planned[k].
-    const planned: PlannedEmail[] = [];
-    const messages: EngineMessage[] = [];
-    for (const position of inputs.positions) {
-      const m = inputs.result.messages[position];
-      if (m === undefined) continue;
-      planned.push({ message: m.message, position });
-      messages.push(m);
-    }
-    let steps: Generator<MessagePlan, void, undefined> | null = null;
-    const plans: MessagePlan[] = [];
-    const mine = { inputs, handle: null as unknown };
-    const slice = (): void => {
-      if (job !== mine) return; // cancelled or replaced meanwhile
-      try {
-        steps ??= planOutputSteps(messages, inputs.policy);
-        const until = now() + SLICE_MS;
-        for (;;) {
-          const step = steps.next();
-          if (step.done === true) break;
-          plans.push(step.value);
-          if (now() >= until) {
-            mine.handle = schedule(slice, 0);
-            return;
-          }
-        }
-      } catch {
-        // Not expected (planOutput keeps a bad email whole instead of throwing).
+    function stopJob(): void
+    {
+        if (job !== null) cancel(job.handle);
         job = null;
-        options.failed();
-        return;
-      }
-      job = null;
-      // Defensive: the inputs changed without a refresh(): start again.
-      if (result !== inputs.result || inputsNow(inputs.result).key !== inputs.key) {
-        refresh();
-        return;
-      }
-      finish(inputs, planned, plans);
-    };
-    job = mine;
-    mine.handle = schedule(slice, DEBOUNCE_MS);
-  }
-
-  function refresh(): void {
-    if (result === null) {
-      stopJob();
-      upToDate = false;
-      options.setPdfPlans(null);
-      return;
     }
-    const inputs = inputsNow(result);
-    if (made !== null && made.inputs.result === result && made.inputs.key === inputs.key) {
-      // Back to the inputs of the plans already made (an email ticked back): shown again at once.
-      stopJob();
-      if (!upToDate) {
+
+    /**
+     * The plans for the preview and for the PDF step. `planned` and `plans`
+     * are in the same order (plans[k] is the plan of planned[k]); if their
+     * lengths differ (a bug), nothing is shown rather than a label of another
+     * email.
+     */
+    function finish(inputs: Inputs, planned: readonly PlannedEmail[], plans: MessagePlan[]): void
+    {
+        if (plans.length !== planned.length)
+        {
+            options.failed();
+            return;
+        }
+        const sources = signatureSources(planned, plans);
+        const views = new Map<number, PdfView>();
+        planned.forEach(({ position }, k) =>
+        {
+            const plan = plans[k];
+            if (plan !== undefined) views.set(position, { plan, signatureFrom: sources.get(position) ?? new Map() });
+        });
+        const preview: PreviewPdfPlans = { result: inputs.result, views };
+        const positions = planned.map((e) => e.position);
+        made = { inputs, plans: { result: inputs.result, policy: inputs.policy, positions, plans }, preview };
         upToDate = true;
-        // The rebuilt emails chosen may have changed meanwhile: the cut is worked out again.
         handOver(made);
-      }
-      return;
     }
-    if (job !== null && job.inputs.result === result && job.inputs.key === inputs.key) return; // already on its way
-    upToDate = false;
-    options.setPdfPlans(null);
-    start(inputs);
-  }
 
-  checkbox.addEventListener('change', () => {
-    refresh();
-    try {
-      options.onPolicyChange?.();
-    } catch {
-      // The labels follow the checkbox either way.
+    /**
+     * The views of `m` with the no-repeat cut of the PDF (see the top): the
+     * same input as the PDF step (src/ui/page.ts, pdfInput), with the rebuilt
+     * emails chosen now.
+     */
+    function withCut(m: NonNullable<typeof made>): PreviewPdfPlans
+    {
+        if (m.plans.policy.unfoldEverything) return m.preview;
+        const rebuilt = [...(options.includedRebuilt?.() ?? [])];
+        const unticked = [...(options.untickedRebuilt?.() ?? [])];
+        const cut = printedElsewhereRanges({ ...m.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
+        if (cut.size === 0) return m.preview;
+        const views = new Map(m.preview.views);
+        for (const [position, pdfRanges] of cut)
+        {
+            const view = views.get(position);
+            if (view !== undefined) views.set(position, { ...view, pdfRanges });
+        }
+        return { result: m.preview.result, views };
     }
-  });
 
-  return {
-    element,
-    show(next) {
-      if (next === result) return;
-      result = next;
-      made = null;
-      upToDate = false;
-      refresh();
-    },
-    refresh,
-    reset() {
-      stopJob();
-      result = null;
-      made = null;
-      upToDate = false;
-      checkbox.checked = false;
-      options.setPdfPlans(null);
-    },
-    getPdfPolicy: policy,
-    currentPlans: () => (upToDate && made !== null && made.inputs.result === result ? made.plans : null),
-    relabel: () => labels.relabel(),
-    rebuiltChanged() {
-      // Only plans in use go again; plans on their way get the new choice when they are handed over.
-      if (upToDate && made !== null && made.inputs.result === result) handOver(made);
-    },
-  };
+    /** Hands the plans of `m` to the preview, with the no-repeat cut; if that cannot be worked out, the labels fail (never a wrong one). */
+    function handOver(m: NonNullable<typeof made>): void
+    {
+        let preview: PreviewPdfPlans;
+        try
+        {
+            preview = withCut(m);
+        }
+        catch
+        {
+            options.failed();
+            return;
+        }
+        options.setPdfPlans(preview);
+    }
+
+    /** Works the plans out for `inputs`, in slices, after the pause. */
+    function start(inputs: Inputs): void
+    {
+        stopJob();
+        // The included emails that exist (a position without an email, a bug, is
+        // skipped here once): the plans are made from this list and matched back
+        // to it in the same order, so plans[k] always belongs to planned[k].
+        const planned: PlannedEmail[] = [];
+        const messages: EngineMessage[] = [];
+        for (const position of inputs.positions)
+        {
+            const m = inputs.result.messages[position];
+            if (m === undefined) continue;
+            planned.push({ message: m.message, position });
+            messages.push(m);
+        }
+        let steps: Generator<MessagePlan, void, undefined> | null = null;
+        const plans: MessagePlan[] = [];
+        const mine = { inputs, handle: null as unknown };
+        const slice = (): void =>
+        {
+            if (job !== mine) return; // cancelled or replaced meanwhile
+            try
+            {
+                steps ??= planOutputSteps(messages, inputs.policy);
+                const until = now() + SLICE_MS;
+                for (;;)
+                {
+                    const step = steps.next();
+                    if (step.done === true) break;
+                    plans.push(step.value);
+                    if (now() >= until)
+                    {
+                        mine.handle = schedule(slice, 0);
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+                // Not expected (planOutput keeps a bad email whole instead of throwing).
+                job = null;
+                options.failed();
+                return;
+            }
+            job = null;
+            // Defensive: the inputs changed without a refresh(): start again.
+            if (result !== inputs.result || inputsNow(inputs.result).key !== inputs.key)
+            {
+                refresh();
+                return;
+            }
+            finish(inputs, planned, plans);
+        };
+        job = mine;
+        mine.handle = schedule(slice, DEBOUNCE_MS);
+    }
+
+    function refresh(): void
+    {
+        if (result === null)
+        {
+            stopJob();
+            upToDate = false;
+            options.setPdfPlans(null);
+            return;
+        }
+        const inputs = inputsNow(result);
+        if (made !== null && made.inputs.result === result && made.inputs.key === inputs.key)
+        {
+            // Back to the inputs of the plans already made (an email ticked back): shown again at once.
+            stopJob();
+            if (!upToDate)
+            {
+                upToDate = true;
+                // The rebuilt emails chosen may have changed meanwhile: the cut is worked out again.
+                handOver(made);
+            }
+            return;
+        }
+        if (job !== null && job.inputs.result === result && job.inputs.key === inputs.key) return; // already on its way
+        upToDate = false;
+        options.setPdfPlans(null);
+        start(inputs);
+    }
+
+    checkbox.addEventListener('change', () =>
+    {
+        refresh();
+        try
+        {
+            options.onPolicyChange?.();
+        }
+        catch
+        {
+            // The labels follow the checkbox either way.
+        }
+    });
+
+    return {
+        element,
+        show(next)
+        {
+            if (next === result) return;
+            result = next;
+            made = null;
+            upToDate = false;
+            refresh();
+        },
+        refresh,
+        reset()
+        {
+            stopJob();
+            result = null;
+            made = null;
+            upToDate = false;
+            checkbox.checked = false;
+            options.setPdfPlans(null);
+        },
+        getPdfPolicy: policy,
+        currentPlans: () => (upToDate && made !== null && made.inputs.result === result ? made.plans : null),
+        relabel: () => labels.relabel(),
+        rebuiltChanged()
+        {
+            // Only plans in use go again; plans on their way get the new choice when they are handed over.
+            if (upToDate && made !== null && made.inputs.result === result) handOver(made);
+        },
+    };
 }

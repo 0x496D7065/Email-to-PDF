@@ -7,9 +7,9 @@ import { createEmlParser } from './eml';
 import type { NormalizedMessage } from './types';
 
 const files = import.meta.glob<string>('../../tests/fixtures/eml/*.eml', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
+    query: '?raw',
+    import: 'default',
+    eager: true,
 });
 
 // The real HTML-to-text converter needs the browser's DOMParser, which Node
@@ -23,7 +23,7 @@ const STUB_PREFIX = '[stub html-to-text]';
 /** Every HTML string handed to the stub; the stub's output names the index. */
 const htmlCalls: string[] = [];
 const parser = createEmlParser({
-  htmlToText: (html) => ({ text: `${STUB_PREFIX} #${String(htmlCalls.push(html) - 1)}`, truncated: false }),
+    htmlToText: (html) => ({ text: `${STUB_PREFIX} #${String(htmlCalls.push(html) - 1)}`, truncated: false }),
 });
 
 // Fixtures whose body is HTML-only: their converted text is checked in the
@@ -33,62 +33,67 @@ const BODY_CHECKS_NEED_HTML_TO_TEXT = new Set(['eml/50-html-only.eml']);
 
 const emlFixtures = FIXTURES.filter((f) => f.kind === 'eml');
 
-async function parseFixture(id: string): Promise<NormalizedMessage> {
-  const raw = files[`../../tests/fixtures/${id}`];
-  if (raw === undefined) throw new Error(`missing file for ${id}`);
-  // Fixtures are 7-bit ASCII (checked by the privacy guard), so this gives the exact file bytes.
-  const result = await parser.parse({ name: id, bytes: new TextEncoder().encode(raw) });
-  if (!result.ok) throw new Error(`${id} failed to parse: ${result.detail}`);
-  return result.message;
+async function parseFixture(id: string): Promise<NormalizedMessage>
+{
+    const raw = files[`../../tests/fixtures/${id}`];
+    if (raw === undefined) throw new Error(`missing file for ${id}`);
+    // Fixtures are 7-bit ASCII (checked by the privacy guard), so this gives the exact file bytes.
+    const result = await parser.parse({ name: id, bytes: new TextEncoder().encode(raw) });
+    if (!result.ok) throw new Error(`${id} failed to parse: ${result.detail}`);
+    return result.message;
 }
 
-describe('.eml adapter matches the manifest', () => {
-  it('covers all 34 .eml fixtures', () => {
-    expect(emlFixtures).toHaveLength(34);
-    expect(Object.keys(files)).toHaveLength(34);
-  });
+describe('.eml adapter matches the manifest', () =>
+{
+    it('covers all 34 .eml fixtures', () =>
+    {
+        expect(emlFixtures).toHaveLength(34);
+        expect(Object.keys(files)).toHaveLength(34);
+    });
 
-  it.each(emlFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) => {
-    const message = await parseFixture(id);
+    it.each(emlFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) =>
+    {
+        const message = await parseFixture(id);
 
-    expect(message.messageId).toBe(expected.messageId);
-    expect(message.inReplyTo).toBe(expected.inReplyTo);
-    expect(message.references).toEqual(expected.references);
+        expect(message.messageId).toBe(expected.messageId);
+        expect(message.inReplyTo).toBe(expected.inReplyTo);
+        expect(message.references).toEqual(expected.references);
 
-    expect(message.date.utcMs).toBe(expected.date.utcMs);
-    expect(message.date.zoneKnown).toBe(expected.date.zoneKnown);
-    if (expected.date.offsetMinutes !== undefined) expect(message.date.offsetMinutes).toBe(expected.date.offsetMinutes);
+        expect(message.date.utcMs).toBe(expected.date.utcMs);
+        expect(message.date.zoneKnown).toBe(expected.date.zoneKnown);
+        if (expected.date.offsetMinutes !== undefined) expect(message.date.offsetMinutes).toBe(expected.date.offsetMinutes);
 
-    expect(message.from).toEqual(expected.from);
-    expect(message.to).toEqual(expected.to);
-    expect(message.cc).toEqual(expected.cc);
-    expect(message.bcc).toEqual(expected.bcc);
-    // `sender` is either a mailbox or no key at all, never `sender: undefined`.
-    expect('sender' in message).toBe(expected.sender !== undefined);
-    expect(message.sender).toEqual(expected.sender);
-    // The manifest writes a MISSING Subject header as null (fixture 75); the
-    // adapter stores it as '' (NormalizedMessage keeps `subject: string`).
-    expect(message.subject).toBe(expected.subject ?? '');
+        expect(message.from).toEqual(expected.from);
+        expect(message.to).toEqual(expected.to);
+        expect(message.cc).toEqual(expected.cc);
+        expect(message.bcc).toEqual(expected.bcc);
+        // `sender` is either a mailbox or no key at all, never `sender: undefined`.
+        expect('sender' in message).toBe(expected.sender !== undefined);
+        expect(message.sender).toEqual(expected.sender);
+        // The manifest writes a MISSING Subject header as null (fixture 75); the
+        // adapter stores it as '' (NormalizedMessage keeps `subject: string`).
+        expect(message.subject).toBe(expected.subject ?? '');
 
-    expect(message.attachments).toEqual(expected.attachments);
-    expect([...message.warnings].sort()).toEqual([...expected.warnings].sort());
+        expect(message.attachments).toEqual(expected.attachments);
+        expect([...message.warnings].sort()).toEqual([...expected.warnings].sort());
 
-    expect(message.source.fileName).toBe(id);
-    expect(message.source.kind).toBe('eml');
-    expect(message.source.sha256).toMatch(/^[0-9a-f]{64}$/);
+        expect(message.source.fileName).toBe(id);
+        expect(message.source.kind).toBe('eml');
+        expect(message.source.sha256).toMatch(/^[0-9a-f]{64}$/);
 
-    if (BODY_CHECKS_NEED_HTML_TO_TEXT.has(id)) {
-      // The stub was used, and was handed the DECODED HTML (quoted-printable
-      // undone, soft line breaks joined), which holds the visible snippets.
-      // The converted text itself is checked in e2e/html-to-text.spec.ts.
-      expect(message.bodyText.startsWith(STUB_PREFIX)).toBe(true);
-      const html = htmlCalls[Number(message.bodyText.slice(STUB_PREFIX.length + 2))] ?? '';
-      expect(html).toContain('<p>Dear Alice,</p>');
-      expect(html).not.toContain('=3D'); // quoted-printable was decoded
-      for (const snippet of expected.bodyContains) expect(html).toContain(snippet);
-      return;
-    }
-    for (const snippet of expected.bodyContains) expect(message.bodyText).toContain(snippet);
-    for (const snippet of expected.bodyExcludes ?? []) expect(message.bodyText).not.toContain(snippet);
-  });
+        if (BODY_CHECKS_NEED_HTML_TO_TEXT.has(id))
+        {
+            // The stub was used, and was handed the DECODED HTML (quoted-printable
+            // undone, soft line breaks joined), which holds the visible snippets.
+            // The converted text itself is checked in e2e/html-to-text.spec.ts.
+            expect(message.bodyText.startsWith(STUB_PREFIX)).toBe(true);
+            const html = htmlCalls[Number(message.bodyText.slice(STUB_PREFIX.length + 2))] ?? '';
+            expect(html).toContain('<p>Dear Alice,</p>');
+            expect(html).not.toContain('=3D'); // quoted-printable was decoded
+            for (const snippet of expected.bodyContains) expect(html).toContain(snippet);
+            return;
+        }
+        for (const snippet of expected.bodyContains) expect(message.bodyText).toContain(snippet);
+        for (const snippet of expected.bodyExcludes ?? []) expect(message.bodyText).not.toContain(snippet);
+    });
 });

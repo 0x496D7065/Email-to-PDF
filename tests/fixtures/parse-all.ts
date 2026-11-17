@@ -19,29 +19,34 @@ const emlParser = createEmlParser({ htmlToText });
 const msgParser = createMsgParser({ htmlToText });
 
 const emlFiles = import.meta.glob<string>('./eml/*.eml', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
+    query: '?raw',
+    import: 'default',
+    eager: true,
 });
 
 /** Parses every fixture, in manifest order. Each message's file name is its manifest id. */
-export async function parseAllFixtures(): Promise<NormalizedMessage[]> {
-  const messages: NormalizedMessage[] = [];
-  for (const f of FIXTURES) {
-    let bytes: Uint8Array;
-    if (f.kind === 'eml') {
-      const raw = emlFiles[`./${f.id}`];
-      if (raw === undefined) throw new Error(`missing file for ${f.id}`);
-      bytes = new TextEncoder().encode(raw); // fixtures are 7-bit ASCII
-    } else {
-      const spec = MSG_SPECS.find((s) => s.id === f.id);
-      if (spec === undefined) throw new Error(`missing spec for ${f.id}`);
-      bytes = buildMsg(spec);
+export async function parseAllFixtures(): Promise<NormalizedMessage[]>
+{
+    const messages: NormalizedMessage[] = [];
+    for (const f of FIXTURES)
+    {
+        let bytes: Uint8Array;
+        if (f.kind === 'eml')
+        {
+            const raw = emlFiles[`./${f.id}`];
+            if (raw === undefined) throw new Error(`missing file for ${f.id}`);
+            bytes = new TextEncoder().encode(raw); // fixtures are 7-bit ASCII
+        }
+        else
+        {
+            const spec = MSG_SPECS.find((s) => s.id === f.id);
+            if (spec === undefined) throw new Error(`missing spec for ${f.id}`);
+            bytes = buildMsg(spec);
+        }
+        const parser = f.kind === 'eml' ? emlParser : msgParser;
+        const result = await parser.parse({ name: f.id, bytes });
+        if (!result.ok) throw new Error(`${f.id} failed to parse: ${result.detail}`);
+        messages.push(result.message);
     }
-    const parser = f.kind === 'eml' ? emlParser : msgParser;
-    const result = await parser.parse({ name: f.id, bytes });
-    if (!result.ok) throw new Error(`${f.id} failed to parse: ${result.detail}`);
-    messages.push(result.message);
-  }
-  return messages;
+    return messages;
 }

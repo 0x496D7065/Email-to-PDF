@@ -23,48 +23,54 @@ const LOWER = 'àƀçďéƒğĥîĵķļɱñöþʠŕšţüṽŵẋýž';
 const UPPER = 'ÀƁÇĎÉƑĞĤÎĴĶĻṀÑÖÞǪŔŠŢÜṼŴẊÝŽ';
 
 /** One letter's look-alike (anything that is not an ASCII letter is kept). */
-function swap(ch: string): string {
-  const code = ch.charCodeAt(0);
-  if (code >= 97 && code <= 122) return LOWER[code - 97] ?? ch;
-  if (code >= 65 && code <= 90) return UPPER[code - 65] ?? ch;
-  return ch;
+function swap(ch: string): string
+{
+    const code = ch.charCodeAt(0);
+    if (code >= 97 && code <= 122) return LOWER[code - 97] ?? ch;
+    if (code >= 65 && code <= 90) return UPPER[code - 65] ?? ch;
+    return ch;
 }
 
 /** "[...]" with every letter swapped, placeholders kept. */
-export function pseudo(text: string): string {
-  const parts = text.split(/(\{\w+\})/);
-  return `[${parts.map((part) => (/^\{\w+\}$/.test(part) ? part : Array.from(part, swap).join(''))).join('')}]`;
+export function pseudo(text: string): string
+{
+    const parts = text.split(/(\{\w+\})/);
+    return `[${parts.map((part) => (/^\{\w+\}$/.test(part) ? part : Array.from(part, swap).join(''))).join('')}]`;
 }
 
 /** Same shape as en: strings and plural forms rewritten with pseudo(). */
-function rewrite(value: unknown, path: string): unknown {
-  if (typeof value === 'string') return path === 'app.name' ? value : pseudo(value);
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, inner]) => [key, rewrite(inner, path === '' ? key : `${path}.${key}`)]),
-  );
+function rewrite(value: unknown, path: string): unknown
+{
+    if (typeof value === 'string') return path === 'app.name' ? value : pseudo(value);
+    return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, inner]) => [key, rewrite(inner, path === '' ? key : `${path}.${key}`)]),
+    );
 }
 
 /** The synthetic language's strings. */
-export function testMessages(): Messages {
-  return rewrite(en, '') as Messages;
+export function testMessages(): Messages
+{
+    return rewrite(en, '') as Messages;
 }
 
 /** Its name in the picker (in brackets, so it is never taken for a real language's name). */
-export function testLanguageName(locale: string): string {
-  return `[Pseudo ${locale}]`;
+export function testLanguageName(locale: string): string
+{
+    return `[Pseudo ${locale}]`;
 }
 
 /** The shape of src/ui/i18n/catalog.ts. */
 interface Catalog {
-  readonly CATALOG: Readonly<Record<string, Messages>>;
-  readonly LANGUAGE_NAMES: Readonly<Record<string, string>>;
+    readonly CATALOG: Readonly<Record<string, Messages>>;
+    readonly LANGUAGE_NAMES: Readonly<Record<string, string>>;
 }
 
 /** The real catalog plus the synthetic language under each code of `locales` (for vi.mock). */
-export function withTestLocales(real: Catalog, locales: readonly string[] = [TEST_LOCALE]): Catalog {
-  const messages = testMessages();
-  return {
-    CATALOG: { ...real.CATALOG, ...Object.fromEntries(locales.map((code) => [code, messages])) },
-    LANGUAGE_NAMES: { ...real.LANGUAGE_NAMES, ...Object.fromEntries(locales.map((code) => [code, testLanguageName(code)])) },
-  };
+export function withTestLocales(real: Catalog, locales: readonly string[] = [TEST_LOCALE]): Catalog
+{
+    const messages = testMessages();
+    return {
+        CATALOG: { ...real.CATALOG, ...Object.fromEntries(locales.map((code) => [code, messages])) },
+        LANGUAGE_NAMES: { ...real.LANGUAGE_NAMES, ...Object.fromEntries(locales.map((code) => [code, testLanguageName(code)])) },
+    };
 }

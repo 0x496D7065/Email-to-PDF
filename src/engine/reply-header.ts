@@ -125,13 +125,15 @@ export type Role = keyof HeaderLabels;
 const ROLES: readonly Role[] = ['from', 'sent', 'to', 'cc', 'bcc', 'subject'];
 
 /** Escapes a plain word for use inside a regular expression. */
-function escapeRegExp(word: string): string {
-  return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function escapeRegExp(word: string): string
+{
+    return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Lower case + NFC: the key used to compare labels. */
-export function labelKey(word: string): string {
-  return word.normalize('NFC').toLowerCase();
+export function labelKey(word: string): string
+{
+    return word.normalize('NFC').toLowerCase();
 }
 
 // Built once from the data file. Patterns are recompiled case-insensitive
@@ -140,9 +142,9 @@ const ci = (re: RegExp): RegExp => new RegExp(re.source, 'iu');
 
 /** Attribution patterns per language, compiled (same order as REPLY_LANGUAGES). Also read by quoted-header.ts. */
 export const LANGUAGES: readonly { readonly code: string; readonly opener: RegExp; readonly endings: readonly RegExp[] }[] = REPLY_LANGUAGES.map((lang) => ({
-  code: lang.code,
-  opener: ci(lang.attribution.opener),
-  endings: lang.attribution.endings.map(ci),
+    code: lang.code,
+    opener: ci(lang.attribution.opener),
+    endings: lang.attribution.endings.map(ci),
 }));
 
 export const SEPARATORS: readonly RegExp[] = REPLY_LANGUAGES.flatMap((lang) => lang.separators.map(ci));
@@ -152,29 +154,32 @@ export const FORWARD_MARKERS: readonly RegExp[] = REPLY_LANGUAGES.flatMap((lang)
 const LABEL_ROLES = new Map<string, Role>();
 /** Read-only view of LABEL_ROLES, for quoted-header.ts. */
 export const LABEL_ROLE_OF: ReadonlyMap<string, Role> = LABEL_ROLES;
-for (const lang of REPLY_LANGUAGES) {
-  for (const role of ROLES) {
-    for (const word of lang.labels[role]) {
-      if (!LABEL_ROLES.has(labelKey(word))) LABEL_ROLES.set(labelKey(word), role);
+for (const lang of REPLY_LANGUAGES)
+{
+    for (const role of ROLES)
+    {
+        for (const word of lang.labels[role])
+        {
+            if (!LABEL_ROLES.has(labelKey(word))) LABEL_ROLES.set(labelKey(word), role);
+        }
     }
-  }
 }
 
 // "Label:" at the start of a cleaned line, with optional stars around the
 // label and one optional space before the colon ("De :", "*From:*").
 // Longest words first, so "Aan" is tried before "A".
 export const LABEL_PATTERN = new RegExp(
-  `^\\*?(${[...LABEL_ROLES.keys()]
-    .sort((a, b) => b.length - a.length)
-    .map(escapeRegExp)
-    .join('|')}) ?\\*? ?:`,
-  'iu',
+    `^\\*?(${[...LABEL_ROLES.keys()]
+        .sort((a, b) => b.length - a.length)
+        .map(escapeRegExp)
+        .join('|')}) ?\\*? ?:`,
+    'iu',
 );
 
 // Leading tags added by mail gateways ("[EXT] FW: ...") are skipped.
 const FORWARD_SUBJECT = new RegExp(
-  `^\\s*(?:\\[[^\\]]*\\]\\s*)*(?:${REPLY_LANGUAGES.flatMap((lang) => lang.forwardSubjectPrefixes).map(escapeRegExp).join('|')})\\s*:`,
-  'iu',
+    `^\\s*(?:\\[[^\\]]*\\]\\s*)*(?:${REPLY_LANGUAGES.flatMap((lang) => lang.forwardSubjectPrefixes).map(escapeRegExp).join('|')})\\s*:`,
+    'iu',
 );
 
 /** A 4-digit year or an hh:mm time: what a real Sent/Date value holds. */
@@ -184,36 +189,40 @@ const DATE_EVIDENCE = /(?<!\d)\d{4}(?!\d)|(?<!\d)\d{1,2}:\d{2}(?!\d)/u;
 const ATTRIBUTION_EVIDENCE = /[\d@<]/u;
 
 /** True when `subject` starts with a forward prefix ("Fwd:", "TR:", ...), after optional "[...]" tags. */
-export function isForwardSubject(subject: unknown): boolean {
-  return typeof subject === 'string' && FORWARD_SUBJECT.test(subject);
+export function isForwardSubject(subject: unknown): boolean
+{
+    return typeof subject === 'string' && FORWARD_SUBJECT.test(subject);
 }
 
 /** What one line is, for this detector. */
 interface LineInfo {
-  readonly range: LineRange;
-  /** First non-space character is ">". */
-  readonly marked: boolean;
-  /** Nothing but whitespace after the markers (a blank line or a bare ">"). */
-  readonly gap: boolean;
-  /** Offset of the first character after the markers and spaces. */
-  readonly textStart: number;
+    readonly range: LineRange;
+    /** First non-space character is ">". */
+    readonly marked: boolean;
+    /** Nothing but whitespace after the markers (a blank line or a bare ">"). */
+    readonly gap: boolean;
+    /** Offset of the first character after the markers and spaces. */
+    readonly textStart: number;
 }
 
-function isSpace(ch: string): boolean {
-  return /\s/.test(ch);
+function isSpace(ch: string): boolean
+{
+    return /\s/.test(ch);
 }
 
-function readLine(text: string, range: LineRange): LineInfo {
-  let i = range.start;
-  while (i < range.contentEnd && isSpace(text.charAt(i))) i++;
-  const marked = i < range.contentEnd && text.charAt(i) === '>';
-  while (i < range.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i)))) i++;
-  return { range, marked, gap: i === range.contentEnd, textStart: i };
+function readLine(text: string, range: LineRange): LineInfo
+{
+    let i = range.start;
+    while (i < range.contentEnd && isSpace(text.charAt(i))) i++;
+    const marked = i < range.contentEnd && text.charAt(i) === '>';
+    while (i < range.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i)))) i++;
+    return { range, marked, gap: i === range.contentEnd, textStart: i };
 }
 
 /** The cleaned copy of text[from, to) (see the header comment, rule 1). */
-export function clean(text: string, from: number, to: number): string {
-  return text.slice(from, to).replace(/\s+/g, ' ').trim().normalize('NFC');
+export function clean(text: string, from: number, to: number): string
+{
+    return text.slice(from, to).replace(/\s+/g, ' ').trim().normalize('NFC');
 }
 
 /**
@@ -232,11 +241,11 @@ export function clean(text: string, from: number, to: number): string {
  *   attribution with no ">" block after it).
  */
 export interface FoundHeader {
-  readonly start: number;
-  readonly end: number;
-  readonly headEnd: number;
-  readonly kind: 'reply' | 'forward';
-  readonly marked: boolean;
+    readonly start: number;
+    readonly end: number;
+    readonly headEnd: number;
+    readonly kind: 'reply' | 'forward';
+    readonly marked: boolean;
 }
 
 /**
@@ -245,8 +254,9 @@ export interface FoundHeader {
  * `subject` is the message subject, used only to recognize a forward.
  * Never throws: a non-string body gives [].
  */
-export function detectReplyHeaders(bodyText: string, subject?: string): FoldRange[] {
-  return findReplyHeaders(bodyText, subject).map((h) => ({ start: h.start, end: h.end, reason: 'reply-header' }));
+export function detectReplyHeaders(bodyText: string, subject?: string): FoldRange[]
+{
+    return findReplyHeaders(bodyText, subject).map((h) => ({ start: h.start, end: h.end, reason: 'reply-header' }));
 }
 
 /**
@@ -256,210 +266,243 @@ export function detectReplyHeaders(bodyText: string, subject?: string): FoldRang
  * forwarded content from quoted history. Never throws: a non-string body
  * gives [].
  */
-export function findReplyHeaders(bodyText: string, subject?: string): FoundHeader[] {
-  if (typeof (bodyText as unknown) !== 'string') return [];
-  const text = bodyText;
-  const lines = lineRanges(text).map((range) => readLine(text, range));
-  const n = lines.length;
-  const folds: FoundHeader[] = [];
-  const fold = (start: number, end: number, headEnd: number, kind: FoundHeader['kind'], marked: boolean): void => {
-    if (start < end) folds.push({ start, end, headEnd: Math.min(headEnd, end), kind, marked });
-  };
-  const at = (i: number): LineInfo => {
-    const line = lines[i];
-    if (line === undefined) throw new Error('line index out of range'); // never happens: callers check bounds
-    return line;
-  };
+export function findReplyHeaders(bodyText: string, subject?: string): FoundHeader[]
+{
+    if (typeof (bodyText as unknown) !== 'string') return [];
+    const text = bodyText;
+    const lines = lineRanges(text).map((range) => readLine(text, range));
+    const n = lines.length;
+    const folds: FoundHeader[] = [];
+    const fold = (start: number, end: number, headEnd: number, kind: FoundHeader['kind'], marked: boolean): void =>
+    {
+        if (start < end) folds.push({ start, end, headEnd: Math.min(headEnd, end), kind, marked });
+    };
+    const at = (i: number): LineInfo =>
+    {
+        const line = lines[i];
+        if (line === undefined) throw new Error('line index out of range'); // never happens: callers check bounds
+        return line;
+    };
 
-  // runEnd[i]: for a marked line, the last marked line of its ">" block.
-  // nextTool[i]: the first line >= i that starts an adapter forwarded block (or n).
-  const runEnd = new Array<number>(n).fill(-1);
-  const nextTool = new Array<number>(n + 1).fill(n);
-  const isTool = lines.map(
-    (line) => !line.marked && text.slice(line.range.start, line.range.contentEnd) === FORWARDED_SEPARATOR,
-  );
-  let lastMarked = -1;
-  for (let i = n - 1; i >= 0; i--) {
-    const line = at(i);
-    if (line.marked) {
-      if (lastMarked < 0) lastMarked = i;
-      runEnd[i] = lastMarked;
-    } else if (!line.gap) {
-      lastMarked = -1; // a line with other text ends the block
-    }
-    nextTool[i] = isTool[i] ? i : (nextTool[i + 1] ?? n);
-  }
-
-  /** The role of line i's label, or null when it does not start with a label. */
-  const roleOf = (i: number): Role | null => {
-    const line = at(i);
-    if (line.gap) return null;
-    const head = clean(text, line.textStart, Math.min(line.range.contentEnd, line.textStart + LABEL_HEAD_LENGTH));
-    const match = LABEL_PATTERN.exec(head);
-    return match?.[1] === undefined ? null : (LABEL_ROLES.get(labelKey(match[1])) ?? null);
-  };
-
-  /** The cleaned text of line i, or null when it is too long to be `limit` characters once cleaned. */
-  const cleanedLine = (i: number, limit: number): string | null => {
-    const line = at(i);
-    // Whitespace runs shrink when cleaned; four times the limit is a generous bound.
-    if (line.range.contentEnd - line.textStart > limit * 4) return null;
-    const cleaned = clean(text, line.textStart, line.range.contentEnd);
-    return cleaned.length <= limit ? cleaned : null;
-  };
-
-  /** The end offset of a reply fold whose block starts at line `first`. */
-  const replyEnd = (first: number, lastHeader: number): number => {
-    const line = at(first);
-    if (line.marked) return at(Math.max(runEnd[first] ?? first, lastHeader)).range.end;
-    const tool = nextTool[lastHeader + 1] ?? n;
-    return tool < n ? at(tool).range.start : text.length;
-  };
-
-  /** Whether label line i (of the given role) holds an address or a date (rule 3, no intro). */
-  const hasEvidence = (i: number, role: Role): boolean => {
-    // Only this line is read (never text.indexOf over the rest of the body).
-    const value = text.slice(at(i).textStart, at(i).range.contentEnd);
-    if (role === 'sent') return DATE_EVIDENCE.test(value);
-    // Bcc counts exactly like Cc (it was one role with it before the field reader needed them apart).
-    if (role === 'from' || role === 'to' || role === 'cc' || role === 'bcc') return value.includes('@');
-    return false;
-  };
-
-  let forwardSubjectPending = isForwardSubject(subject);
-  // End (exclusive) of the last run of label lines found NOT to be a block:
-  // a From line before it is inside that run and is not scanned again.
-  let labelRunEnd = 0;
-  let i = 0;
-  while (i < n) {
-    const line = at(i);
-    if (line.gap) {
-      i++;
-      continue;
+    // runEnd[i]: for a marked line, the last marked line of its ">" block.
+    // nextTool[i]: the first line >= i that starts an adapter forwarded block (or n).
+    const runEnd = new Array<number>(n).fill(-1);
+    const nextTool = new Array<number>(n + 1).fill(n);
+    const isTool = lines.map(
+        (line) => !line.marked && text.slice(line.range.start, line.range.contentEnd) === FORWARDED_SEPARATOR,
+    );
+    let lastMarked = -1;
+    for (let i = n - 1; i >= 0; i--)
+    {
+        const line = at(i);
+        if (line.marked)
+        {
+            if (lastMarked < 0) lastMarked = i;
+            runEnd[i] = lastMarked;
+        }
+        else if (!line.gap)
+        {
+            lastMarked = -1; // a line with other text ends the block
+        }
+        nextTool[i] = isTool[i] ? i : (nextTool[i + 1] ?? n);
     }
 
-    // Rule 5: the adapter's own forwarded block. Skip the separator and its
-    // label lines, written in a fixed order, each at most once.
-    if (isTool[i]) {
-      let j = i + 1;
-      let next = 0;
-      while (j < n) {
-        const content = text.slice(at(j).range.start, at(j).range.contentEnd);
-        const k = FORWARDED_HEADER_LABELS.findIndex((label, idx) => idx >= next && content.startsWith(`${label}: `));
-        if (k < 0) break;
-        next = k + 1;
-        j++;
-      }
-      i = j;
-      continue;
-    }
+    /** The role of line i's label, or null when it does not start with a label. */
+    const roleOf = (i: number): Role | null =>
+    {
+        const line = at(i);
+        if (line.gap) return null;
+        const head = clean(text, line.textStart, Math.min(line.range.contentEnd, line.textStart + LABEL_HEAD_LENGTH));
+        const match = LABEL_PATTERN.exec(head);
+        return match?.[1] === undefined ? null : (LABEL_ROLES.get(labelKey(match[1])) ?? null);
+    };
 
-    // Intro line (separator, forward marker, underscores), then a From label?
-    const introText = cleanedLine(i, MAX_INTRO_LENGTH);
-    const isSeparator = introText !== null && SEPARATORS.some((re) => re.test(introText));
-    const isForwardMarker = introText !== null && FORWARD_MARKERS.some((re) => re.test(introText));
-    const isRule = introText !== null && OUTLOOK_RULE.test(introText);
-    let intro = -1;
-    let first = i;
-    if (isSeparator || isForwardMarker || isRule) {
-      let k = i + 1;
-      while (k < n && k <= i + MAX_GAP_LINES && at(k).gap) k++;
-      if (k < n && at(k).marked === line.marked && roleOf(k) === 'from') {
-        intro = i;
-        first = k;
-      } else {
-        // Rule 4, last part: a separator or marker alone folds alone; a row
-        // of underscores alone stays shown.
-        if (!isRule) fold(line.range.start, line.range.end, line.range.end, isForwardMarker ? 'forward' : 'reply', line.marked);
+    /** The cleaned text of line i, or null when it is too long to be `limit` characters once cleaned. */
+    const cleanedLine = (i: number, limit: number): string | null =>
+    {
+        const line = at(i);
+        // Whitespace runs shrink when cleaned; four times the limit is a generous bound.
+        if (line.range.contentEnd - line.textStart > limit * 4) return null;
+        const cleaned = clean(text, line.textStart, line.range.contentEnd);
+        return cleaned.length <= limit ? cleaned : null;
+    };
+
+    /** The end offset of a reply fold whose block starts at line `first`. */
+    const replyEnd = (first: number, lastHeader: number): number =>
+    {
+        const line = at(first);
+        if (line.marked) return at(Math.max(runEnd[first] ?? first, lastHeader)).range.end;
+        const tool = nextTool[lastHeader + 1] ?? n;
+        return tool < n ? at(tool).range.start : text.length;
+    };
+
+    /** Whether label line i (of the given role) holds an address or a date (rule 3, no intro). */
+    const hasEvidence = (i: number, role: Role): boolean =>
+    {
+        // Only this line is read (never text.indexOf over the rest of the body).
+        const value = text.slice(at(i).textStart, at(i).range.contentEnd);
+        if (role === 'sent') return DATE_EVIDENCE.test(value);
+        // Bcc counts exactly like Cc (it was one role with it before the field reader needed them apart).
+        if (role === 'from' || role === 'to' || role === 'cc' || role === 'bcc') return value.includes('@');
+        return false;
+    };
+
+    let forwardSubjectPending = isForwardSubject(subject);
+    // End (exclusive) of the last run of label lines found NOT to be a block:
+    // a From line before it is inside that run and is not scanned again.
+    let labelRunEnd = 0;
+    let i = 0;
+    while (i < n)
+    {
+        const line = at(i);
+        if (line.gap)
+        {
+            i++;
+            continue;
+        }
+
+        // Rule 5: the adapter's own forwarded block. Skip the separator and its
+        // label lines, written in a fixed order, each at most once.
+        if (isTool[i])
+        {
+            let j = i + 1;
+            let next = 0;
+            while (j < n)
+            {
+                const content = text.slice(at(j).range.start, at(j).range.contentEnd);
+                const k = FORWARDED_HEADER_LABELS.findIndex((label, idx) => idx >= next && content.startsWith(`${label}: `));
+                if (k < 0) break;
+                next = k + 1;
+                j++;
+            }
+            i = j;
+            continue;
+        }
+
+        // Intro line (separator, forward marker, underscores), then a From label?
+        const introText = cleanedLine(i, MAX_INTRO_LENGTH);
+        const isSeparator = introText !== null && SEPARATORS.some((re) => re.test(introText));
+        const isForwardMarker = introText !== null && FORWARD_MARKERS.some((re) => re.test(introText));
+        const isRule = introText !== null && OUTLOOK_RULE.test(introText);
+        let intro = -1;
+        let first = i;
+        if (isSeparator || isForwardMarker || isRule)
+        {
+            let k = i + 1;
+            while (k < n && k <= i + MAX_GAP_LINES && at(k).gap) k++;
+            if (k < n && at(k).marked === line.marked && roleOf(k) === 'from')
+            {
+                intro = i;
+                first = k;
+            }
+            else
+            {
+                // Rule 4, last part: a separator or marker alone folds alone; a row
+                // of underscores alone stays shown.
+                if (!isRule) fold(line.range.start, line.range.end, line.range.end, isForwardMarker ? 'forward' : 'reply', line.marked);
+                i++;
+                continue;
+            }
+        }
+
+        // Header block starting at `first`?
+        if (first >= labelRunEnd && roleOf(first) === 'from')
+        {
+            const marked = at(first).marked;
+            const roles = new Set<Role>();
+            let evidence = false;
+            let j = first;
+            while (j < n && at(j).marked === marked)
+            {
+                const role = roleOf(j);
+                if (role === null) break;
+                roles.add(role);
+                if (!evidence && intro < 0) evidence = hasEvidence(j, role);
+                j++;
+            }
+            const last = j - 1; // last label line
+            const shaped = j - first >= MIN_HEADER_LINES && roles.has('sent') && (roles.has('to') || roles.has('subject'));
+            // Without an intro, the values must look like a real header (rule 3).
+            const isBlock = shaped && (intro >= 0 || evidence);
+            // An "original message" separator plus a From label is enough (rule 4).
+            if (isBlock || (intro >= 0 && isSeparator))
+            {
+                const start = at(intro >= 0 ? intro : first).range.start;
+                let forward = intro >= 0 && isForwardMarker;
+                if (!marked && forwardSubjectPending)
+                {
+                    forward = true;
+                    forwardSubjectPending = false;
+                }
+                fold(start, forward ? at(last).range.end : replyEnd(first, last), at(last).range.end, forward ? 'forward' : 'reply', marked);
+                i = j;
+                continue;
+            }
+            if (intro >= 0)
+            {
+                // A forward marker with a short label list: still header lines only.
+                if (isForwardMarker) fold(line.range.start, at(last).range.end, at(last).range.end, 'forward', line.marked);
+                i = j;
+                continue;
+            }
+            // Not a block: line i may still be an attribution (below), but no
+            // later line of this run is tested as a block start again (linear cost).
+            labelRunEnd = j;
+        }
+
+        // Attribution (rule 2).
+        const one = cleanedLine(i, ATTRIBUTION_MAX_LENGTH);
+        let lastLine = -1;
+        let strong = false;
+        let attribution = '';
+        if (one !== null)
+        {
+            for (const lang of LANGUAGES)
+            {
+                if (!lang.endings.some((re) => re.test(one))) continue;
+                lastLine = i;
+                attribution = one;
+                if (lang.opener.test(one)) strong = true;
+            }
+            if (lastLine < 0 && i + 1 < n && !at(i + 1).gap && at(i + 1).marked === line.marked)
+            {
+                // Wrapped over two lines: only with an opener on the first line.
+                const two = cleanedLine(i + 1, ATTRIBUTION_MAX_LENGTH);
+                const joined = two === null ? '' : `${one} ${two}`;
+                if (two !== null && joined.length <= ATTRIBUTION_MAX_LENGTH)
+                {
+                    const wrapped = LANGUAGES.some((lang) => lang.opener.test(one) && lang.endings.some((re) => re.test(joined)));
+                    if (wrapped)
+                    {
+                        lastLine = i + 1;
+                        attribution = joined;
+                        strong = true;
+                    }
+                }
+            }
+        }
+        if (lastLine >= 0)
+        {
+            // The ">" block that follows, if any.
+            let blockEnd = -1;
+            if (at(lastLine).marked)
+            {
+                const end = runEnd[lastLine] ?? lastLine;
+                if (end > lastLine) blockEnd = end;
+            }
+            else
+            {
+                let k = lastLine + 1;
+                while (k < n && at(k).gap && !at(k).marked) k++;
+                if (k < n && at(k).marked) blockEnd = runEnd[k] ?? k;
+            }
+            if (blockEnd >= 0) fold(line.range.start, at(blockEnd).range.end, at(lastLine).range.end, 'reply', line.marked);
+            else if (strong && ATTRIBUTION_EVIDENCE.test(attribution)) fold(line.range.start, at(lastLine).range.end, at(lastLine).range.end, 'reply', line.marked);
+            i = lastLine + 1;
+            continue;
+        }
         i++;
-        continue;
-      }
     }
 
-    // Header block starting at `first`?
-    if (first >= labelRunEnd && roleOf(first) === 'from') {
-      const marked = at(first).marked;
-      const roles = new Set<Role>();
-      let evidence = false;
-      let j = first;
-      while (j < n && at(j).marked === marked) {
-        const role = roleOf(j);
-        if (role === null) break;
-        roles.add(role);
-        if (!evidence && intro < 0) evidence = hasEvidence(j, role);
-        j++;
-      }
-      const last = j - 1; // last label line
-      const shaped = j - first >= MIN_HEADER_LINES && roles.has('sent') && (roles.has('to') || roles.has('subject'));
-      // Without an intro, the values must look like a real header (rule 3).
-      const isBlock = shaped && (intro >= 0 || evidence);
-      // An "original message" separator plus a From label is enough (rule 4).
-      if (isBlock || (intro >= 0 && isSeparator)) {
-        const start = at(intro >= 0 ? intro : first).range.start;
-        let forward = intro >= 0 && isForwardMarker;
-        if (!marked && forwardSubjectPending) {
-          forward = true;
-          forwardSubjectPending = false;
-        }
-        fold(start, forward ? at(last).range.end : replyEnd(first, last), at(last).range.end, forward ? 'forward' : 'reply', marked);
-        i = j;
-        continue;
-      }
-      if (intro >= 0) {
-        // A forward marker with a short label list: still header lines only.
-        if (isForwardMarker) fold(line.range.start, at(last).range.end, at(last).range.end, 'forward', line.marked);
-        i = j;
-        continue;
-      }
-      // Not a block: line i may still be an attribution (below), but no
-      // later line of this run is tested as a block start again (linear cost).
-      labelRunEnd = j;
-    }
-
-    // Attribution (rule 2).
-    const one = cleanedLine(i, ATTRIBUTION_MAX_LENGTH);
-    let lastLine = -1;
-    let strong = false;
-    let attribution = '';
-    if (one !== null) {
-      for (const lang of LANGUAGES) {
-        if (!lang.endings.some((re) => re.test(one))) continue;
-        lastLine = i;
-        attribution = one;
-        if (lang.opener.test(one)) strong = true;
-      }
-      if (lastLine < 0 && i + 1 < n && !at(i + 1).gap && at(i + 1).marked === line.marked) {
-        // Wrapped over two lines: only with an opener on the first line.
-        const two = cleanedLine(i + 1, ATTRIBUTION_MAX_LENGTH);
-        const joined = two === null ? '' : `${one} ${two}`;
-        if (two !== null && joined.length <= ATTRIBUTION_MAX_LENGTH) {
-          const wrapped = LANGUAGES.some((lang) => lang.opener.test(one) && lang.endings.some((re) => re.test(joined)));
-          if (wrapped) {
-            lastLine = i + 1;
-            attribution = joined;
-            strong = true;
-          }
-        }
-      }
-    }
-    if (lastLine >= 0) {
-      // The ">" block that follows, if any.
-      let blockEnd = -1;
-      if (at(lastLine).marked) {
-        const end = runEnd[lastLine] ?? lastLine;
-        if (end > lastLine) blockEnd = end;
-      } else {
-        let k = lastLine + 1;
-        while (k < n && at(k).gap && !at(k).marked) k++;
-        if (k < n && at(k).marked) blockEnd = runEnd[k] ?? k;
-      }
-      if (blockEnd >= 0) fold(line.range.start, at(blockEnd).range.end, at(lastLine).range.end, 'reply', line.marked);
-      else if (strong && ATTRIBUTION_EVIDENCE.test(attribution)) fold(line.range.start, at(lastLine).range.end, at(lastLine).range.end, 'reply', line.marked);
-      i = lastLine + 1;
-      continue;
-    }
-    i++;
-  }
-
-  return folds.sort((a, b) => a.start - b.start || a.end - b.end);
+    return folds.sort((a, b) => a.start - b.start || a.end - b.end);
 }

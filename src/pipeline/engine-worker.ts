@@ -28,8 +28,8 @@ import { createEngineWorkerSide, type FromEngineWorker } from './engine-protocol
  * worker's; same approach as src/parsing/parse-worker.ts).
  */
 interface WorkerScope {
-  onmessage: ((event: MessageEvent<unknown>) => void) | null;
-  postMessage(message: FromEngineWorker): void;
+    onmessage: ((event: MessageEvent<unknown>) => void) | null;
+    postMessage(message: FromEngineWorker): void;
 }
 
 const scope = self as unknown as WorkerScope;

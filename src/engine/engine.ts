@@ -138,154 +138,155 @@ export type { EngineRebuilt, RealMatch, RebuiltLink, RebuiltPlacement, TimelineE
 export type ReconstructionWarningCode = 'reconstruct-failed' | 'reconstruct-limit';
 
 export interface ReconstructionWarning {
-  /** Input position of the kept message (EngineMessage.index). */
-  readonly index: number;
-  readonly code: ReconstructionWarningCode;
+    /** Input position of the kept message (EngineMessage.index). */
+    readonly index: number;
+    readonly code: ReconstructionWarningCode;
 }
 
 /** Something the engine itself had to work around for one message. */
 export type EngineWarningCode =
-  // A fold detector threw an error for this message; its folds were skipped
-  // (the other detectors' folds still apply).
-  | 'detector-failed'
-  // The folds could not be turned into a valid cover of the body (or building
-  // the segments threw), so all of them were dropped and the whole body is
-  // shown unfolded.
-  | 'folding-disabled'
-  // De-duplication threw or returned an inconsistent result, so no message
-  // was merged (every message is kept on its own).
-  | 'dedupe-failed';
+    // A fold detector threw an error for this message; its folds were skipped
+    // (the other detectors' folds still apply).
+    | 'detector-failed'
+    // The folds could not be turned into a valid cover of the body (or building
+    // the segments threw), so all of them were dropped and the whole body is
+    // shown unfolded.
+    | 'folding-disabled'
+    // De-duplication threw or returned an inconsistent result, so no message
+    // was merged (every message is kept on its own).
+    | 'dedupe-failed';
 
 /** One kept message, ready for the preview. */
 export interface EngineMessage {
-  /** The kept copy, unchanged (same object as in the input). */
-  readonly message: NormalizedMessage;
-  /** Its position in the input of `runEngine`. */
-  readonly index: number;
-  /**
-   * Placed by its date; or, date missing or unusable, after all dated
-   * messages by file order, or (an attached email) just before the email it
-   * is attached to ('before-parent').
-   */
-  readonly order: OrderReason;
-  /** Merged copies (see dedupe.ts), `index` = position in the input of `runEngine`. */
-  readonly duplicates: readonly MergedCopy[];
-  /** Why look-alike messages were NOT merged (see dedupe.ts), `related` = input positions. */
-  readonly dedupeWarnings: readonly DedupeWarning[];
-  /** The parser's warnings (same array as `message.warnings`), here for convenience. */
-  readonly parserWarnings: readonly ParseWarning[];
-  /** See EngineWarningCode; sorted, unique; usually empty. */
-  readonly engineWarnings: readonly EngineWarningCode[];
-  /** Cover of `message.bodyText`, shown or folded (see segments.ts). [] for an empty body. */
-  readonly segments: readonly Segment[];
+    /** The kept copy, unchanged (same object as in the input). */
+    readonly message: NormalizedMessage;
+    /** Its position in the input of `runEngine`. */
+    readonly index: number;
+    /**
+     * Placed by its date; or, date missing or unusable, after all dated
+     * messages by file order, or (an attached email) just before the email it
+     * is attached to ('before-parent').
+     */
+    readonly order: OrderReason;
+    /** Merged copies (see dedupe.ts), `index` = position in the input of `runEngine`. */
+    readonly duplicates: readonly MergedCopy[];
+    /** Why look-alike messages were NOT merged (see dedupe.ts), `related` = input positions. */
+    readonly dedupeWarnings: readonly DedupeWarning[];
+    /** The parser's warnings (same array as `message.warnings`), here for convenience. */
+    readonly parserWarnings: readonly ParseWarning[];
+    /** See EngineWarningCode; sorted, unique; usually empty. */
+    readonly engineWarnings: readonly EngineWarningCode[];
+    /** Cover of `message.bodyText`, shown or folded (see segments.ts). [] for an empty body. */
+    readonly segments: readonly Segment[];
 }
 
 /** A file that could not be read. */
 export interface FailedFile {
-  /** Its position in the input of `runEngine`. */
-  readonly index: number;
-  readonly fileName: string;
-  readonly sha256: string | null;
-  readonly error: ParseErrorCode;
-  readonly detail: string;
+    /** Its position in the input of `runEngine`. */
+    readonly index: number;
+    readonly fileName: string;
+    readonly sha256: string | null;
+    readonly error: ParseErrorCode;
+    readonly detail: string;
 }
 
 /** The numbers the preview shows. */
 export interface EngineCounts {
-  /** Every file given to the engine, read or failed (preview: "N files, M could not be read"). */
-  readonly filesGiven: number;
-  /** Messages read successfully, duplicates and attached emails (task 8.13b-3) included. */
-  readonly messagesFound: number;
-  /** Copies merged into another message (messagesFound - messages.length). */
-  readonly duplicatesMerged: number;
-  /** Files that could not be read (listed in `failed`). */
-  readonly filesFailed: number;
-  /** Kept messages with no usable date (placed by file order, or before their parent). */
-  readonly undated: number;
-  /** Kept messages with at least one folded segment. */
-  readonly withFolds: number;
+    /** Every file given to the engine, read or failed (preview: "N files, M could not be read"). */
+    readonly filesGiven: number;
+    /** Messages read successfully, duplicates and attached emails (task 8.13b-3) included. */
+    readonly messagesFound: number;
+    /** Copies merged into another message (messagesFound - messages.length). */
+    readonly duplicatesMerged: number;
+    /** Files that could not be read (listed in `failed`). */
+    readonly filesFailed: number;
+    /** Kept messages with no usable date (placed by file order, or before their parent). */
+    readonly undated: number;
+    /** Kept messages with at least one folded segment. */
+    readonly withFolds: number;
 }
 
 /** The whole engine output: plain, structured-clone-safe data. */
 export interface EngineResult {
-  /** Kept messages, in chronological order. */
-  readonly messages: readonly EngineMessage[];
-  /** Failed files, in input order. */
-  readonly failed: readonly FailedFile[];
-  readonly counts: EngineCounts;
-  /**
-   * For each input position: the position in `messages` of the kept message
-   * that holds it (the message itself, or the one it was merged into); null
-   * for a failed file. Use it to resolve `index` and `related` numbers.
-   */
-  readonly positionByIndex: readonly (number | null)[];
-  /**
-   * Messages rebuilt from quoted text (step 6), by source (in `messages`
-   * order), newest first; each says whether it is linked to a real message,
-   * the same as another rebuilt one, or its own timeline entry. The preview
-   * shows the entries (src/ui-model/rebuilt.ts), and so does the PDF
-   * (src/pdf/model.ts, the ones the reader chose).
-   */
-  readonly reconstructed: readonly EngineRebuilt[];
-  /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (rebuild-links.ts). */
-  readonly timeline: readonly TimelineEntry[];
-  /** Problems while rebuilding, in `messages` order. Usually empty. */
-  readonly reconstructionWarnings: readonly ReconstructionWarning[];
-  /**
-   * Every email attached inside a dropped file that the engine read as a
-   * message of its own (task 8.13b-3), by input position: entry k has
-   * index `counts.filesGiven + k`. No key at all when there are none, so
-   * the result for files without attached emails is what it always was.
-   */
-  readonly attached?: readonly EngineAttached[];
+    /** Kept messages, in chronological order. */
+    readonly messages: readonly EngineMessage[];
+    /** Failed files, in input order. */
+    readonly failed: readonly FailedFile[];
+    readonly counts: EngineCounts;
+    /**
+     * For each input position: the position in `messages` of the kept message
+     * that holds it (the message itself, or the one it was merged into); null
+     * for a failed file. Use it to resolve `index` and `related` numbers.
+     */
+    readonly positionByIndex: readonly (number | null)[];
+    /**
+     * Messages rebuilt from quoted text (step 6), by source (in `messages`
+     * order), newest first; each says whether it is linked to a real message,
+     * the same as another rebuilt one, or its own timeline entry. The preview
+     * shows the entries (src/ui-model/rebuilt.ts), and so does the PDF
+     * (src/pdf/model.ts, the ones the reader chose).
+     */
+    readonly reconstructed: readonly EngineRebuilt[];
+    /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (rebuild-links.ts). */
+    readonly timeline: readonly TimelineEntry[];
+    /** Problems while rebuilding, in `messages` order. Usually empty. */
+    readonly reconstructionWarnings: readonly ReconstructionWarning[];
+    /**
+     * Every email attached inside a dropped file that the engine read as a
+     * message of its own (task 8.13b-3), by input position: entry k has
+     * index `counts.filesGiven + k`. No key at all when there are none, so
+     * the result for files without attached emails is what it always was.
+     */
+    readonly attached?: readonly EngineAttached[];
 }
 
 /** Where one attached email's printed block sits in the body of an email holding it (AttachedPlace, with input positions). */
 export interface EngineAttachedPlace {
-  /**
-   * Input position of the email whose bodyText holds the block: its parent,
-   * or the parent's parent, ...; or, when that one was merged into another
-   * copy (dedupe.ts), the kept copy, with the offsets found again in its
-   * body (task 8.13b-3, review round 4, S1: settleAttached). When they
-   * cannot be found for certain there, the place stays on the merged copy
-   * (then no kept message has this index, and the PDF leaves the kept
-   * body as its plan says).
-   */
-  readonly holderIndex: number;
-  /** `bodyText.slice(start, end)` of the message at `holderIndex` (that very message object) is the whole block. */
-  readonly start: number;
-  readonly end: number;
+    /**
+     * Input position of the email whose bodyText holds the block: its parent,
+     * or the parent's parent, ...; or, when that one was merged into another
+     * copy (dedupe.ts), the kept copy, with the offsets found again in its
+     * body (task 8.13b-3, review round 4, S1: settleAttached). When they
+     * cannot be found for certain there, the place stays on the merged copy
+     * (then no kept message has this index, and the PDF leaves the kept
+     * body as its plan says).
+     */
+    readonly holderIndex: number;
+    /** `bodyText.slice(start, end)` of the message at `holderIndex` (that very message object) is the whole block. */
+    readonly start: number;
+    readonly end: number;
 }
 
 /** One email attached inside a dropped file (ParseResult.attached), as the engine numbers it. */
 export interface EngineAttached {
-  /** Its input position (see Indices at the top). */
-  readonly index: number;
-  /** Input position of the email it is attached to: its file's own email, or another attached email of that file. */
-  readonly parentIndex: number;
-  /** Input position of the dropped file it came from (that file's own email). */
-  readonly fileIndex: number;
-  /** AttachedMessage.path: its attachment number at each level, from the file's own email down. */
-  readonly path: readonly number[];
-  /** The attachment name at each level of `path` (AttachedMessage.name of it and of each attached email above it), '' when none. */
-  readonly names: readonly string[];
-  /** AttachedMessage.places that are valid ranges of their holder's body, nearest holder first; [] when its text is in no body. */
-  readonly places: readonly EngineAttachedPlace[];
-  /**
-   * Whether the header rows of the kept copy holding it show every header
-   * datum its own copy has: true when it is kept itself, or when the copy it
-   * was merged into keeps its header data with the same date (dedupe.ts,
-   * keepsHeaderData). False when a dropped file's copy was kept although
-   * this copy held more (a Bcc line, a date: D2, task 8.13b-3 review round
-   * 4); then its block's header lines stay printed in the emails holding it.
-   */
-  readonly keptShowsHeader: boolean;
+    /** Its input position (see Indices at the top). */
+    readonly index: number;
+    /** Input position of the email it is attached to: its file's own email, or another attached email of that file. */
+    readonly parentIndex: number;
+    /** Input position of the dropped file it came from (that file's own email). */
+    readonly fileIndex: number;
+    /** AttachedMessage.path: its attachment number at each level, from the file's own email down. */
+    readonly path: readonly number[];
+    /** The attachment name at each level of `path` (AttachedMessage.name of it and of each attached email above it), '' when none. */
+    readonly names: readonly string[];
+    /** AttachedMessage.places that are valid ranges of their holder's body, nearest holder first; [] when its text is in no body. */
+    readonly places: readonly EngineAttachedPlace[];
+    /**
+     * Whether the header rows of the kept copy holding it show every header
+     * datum its own copy has: true when it is kept itself, or when the copy it
+     * was merged into keeps its header data with the same date (dedupe.ts,
+     * keepsHeaderData). False when a dropped file's copy was kept although
+     * this copy held more (a Bcc line, a date: D2, task 8.13b-3 review round
+     * 4); then its block's header lines stay printed in the emails holding it.
+     */
+    readonly keptShowsHeader: boolean;
 }
 
 /** The EngineAttached entry of input position `index`, or undefined (a file's own email, or no such entry). */
-export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, index: number): EngineAttached | undefined {
-  const entry = result.attached?.[index - result.counts.filesGiven];
-  return entry !== undefined && entry.index === index ? entry : undefined;
+export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, index: number): EngineAttached | undefined
+{
+    const entry = result.attached?.[index - result.counts.filesGiven];
+    return entry !== undefined && entry.index === index ? entry : undefined;
 }
 
 /**
@@ -294,39 +295,39 @@ export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, in
  * and use `onStage` to time each stage (the engine itself reads no clock).
  */
 export interface EngineParts {
-  readonly detectQuotedOverlap: typeof detectQuotedOverlap;
-  readonly detectQuoteMarkers: typeof detectQuoteMarkers;
-  readonly detectReplyHeaders: typeof detectReplyHeaders;
-  readonly detectSignatures: typeof detectSignatures;
-  readonly buildSegments: typeof buildSegments;
-  /** Optional, default: dedupe.ts. */
-  readonly dedupe?: typeof dedupe;
-  /** Optional, default: reconstruct.ts. */
-  readonly reconstructQuotedMessages?: typeof reconstructQuotedMessages;
-  /** Optional, default: rebuild-links.ts. */
-  readonly linkRebuilt?: typeof linkRebuilt;
-  /** Called when a stage starts ('dedupe', 'order', ...) and with 'done' at the end. */
-  readonly onStage?: (stage: EngineStage) => void;
+    readonly detectQuotedOverlap: typeof detectQuotedOverlap;
+    readonly detectQuoteMarkers: typeof detectQuoteMarkers;
+    readonly detectReplyHeaders: typeof detectReplyHeaders;
+    readonly detectSignatures: typeof detectSignatures;
+    readonly buildSegments: typeof buildSegments;
+    /** Optional, default: dedupe.ts. */
+    readonly dedupe?: typeof dedupe;
+    /** Optional, default: reconstruct.ts. */
+    readonly reconstructQuotedMessages?: typeof reconstructQuotedMessages;
+    /** Optional, default: rebuild-links.ts. */
+    readonly linkRebuilt?: typeof linkRebuilt;
+    /** Called when a stage starts ('dedupe', 'order', ...) and with 'done' at the end. */
+    readonly onStage?: (stage: EngineStage) => void;
 }
 
 export type EngineStage =
-  | 'dedupe'
-  | 'order'
-  | 'overlap'
-  | 'quote-markers'
-  | 'reply-headers'
-  | 'signatures'
-  | 'segments'
-  | 'reconstruct'
-  | 'link-rebuilt'
-  | 'done';
+    | 'dedupe'
+    | 'order'
+    | 'overlap'
+    | 'quote-markers'
+    | 'reply-headers'
+    | 'signatures'
+    | 'segments'
+    | 'reconstruct'
+    | 'link-rebuilt'
+    | 'done';
 
 export const DEFAULT_PARTS: EngineParts = Object.freeze({
-  detectQuotedOverlap,
-  detectQuoteMarkers,
-  detectReplyHeaders,
-  detectSignatures,
-  buildSegments,
+    detectQuotedOverlap,
+    detectQuoteMarkers,
+    detectReplyHeaders,
+    detectSignatures,
+    buildSegments,
 });
 
 /**
@@ -340,37 +341,43 @@ export const DEFAULT_PARTS: EngineParts = Object.freeze({
  *   message the text came from).
  * null when there is no reason (a shown segment).
  */
-export function primaryReason(reasons: readonly FoldReason[]): FoldReason | null {
-  for (const r of LABEL_PRECEDENCE) if (reasons.includes(r)) return r;
-  return null;
+export function primaryReason(reasons: readonly FoldReason[]): FoldReason | null
+{
+    for (const r of LABEL_PRECEDENCE) if (reasons.includes(r)) return r;
+    return null;
 }
 
 const LABEL_PRECEDENCE: readonly FoldReason[] = ['signature', 'reply-header', 'quote-marker', 'quoted-overlap'];
 
 /** A kept message while the pipeline runs. */
 interface Work {
-  readonly message: NormalizedMessage;
-  readonly index: number;
-  readonly order: OrderReason;
-  readonly duplicates: readonly MergedCopy[];
-  readonly dedupeWarnings: readonly DedupeWarning[];
-  readonly folds: FoldRange[];
-  readonly warnings: Set<EngineWarningCode>;
+    readonly message: NormalizedMessage;
+    readonly index: number;
+    readonly order: OrderReason;
+    readonly duplicates: readonly MergedCopy[];
+    readonly dedupeWarnings: readonly DedupeWarning[];
+    readonly folds: FoldRange[];
+    readonly warnings: Set<EngineWarningCode>;
 }
 
 /** Runs `detect`; if it throws, marks every message in `targets` and returns null. */
-function guarded<T>(targets: readonly Work[], detect: () => T): T | null {
-  try {
-    return detect();
-  } catch {
-    for (const w of targets) w.warnings.add('detector-failed');
-    return null;
-  }
+function guarded<T>(targets: readonly Work[], detect: () => T): T | null
+{
+    try
+    {
+        return detect();
+    }
+    catch
+    {
+        for (const w of targets) w.warnings.add('detector-failed');
+        return null;
+    }
 }
 
 /** A runtime check of one fold entry: an object (buildSegments then ignores a bad range in it). */
-function isFoldObject(f: unknown): f is FoldRange {
-  return typeof f === 'object' && f !== null;
+function isFoldObject(f: unknown): f is FoldRange
+{
+    return typeof f === 'object' && f !== null;
 }
 
 /**
@@ -380,21 +387,25 @@ function isFoldObject(f: unknown): f is FoldRange {
  * array marks that message; folds that are not objects are ignored. Appended
  * one by one: a spread into push overflows the stack for very long lists.
  */
-function addFolds(work: readonly Work[], result: unknown): void {
-  if (result === null) return; // the detector threw; guarded() already warned
-  if (!Array.isArray(result)) {
-    for (const w of work) w.warnings.add('detector-failed');
-    return;
-  }
-  const lists: readonly unknown[] = result;
-  work.forEach((w, k) => {
-    const folds = lists[k];
-    if (!Array.isArray(folds)) {
-      w.warnings.add('detector-failed');
-      return;
+function addFolds(work: readonly Work[], result: unknown): void
+{
+    if (result === null) return; // the detector threw; guarded() already warned
+    if (!Array.isArray(result))
+    {
+        for (const w of work) w.warnings.add('detector-failed');
+        return;
     }
-    for (const f of folds as readonly unknown[]) if (isFoldObject(f)) w.folds.push(f);
-  });
+    const lists: readonly unknown[] = result;
+    work.forEach((w, k) =>
+    {
+        const folds = lists[k];
+        if (!Array.isArray(folds))
+        {
+            w.warnings.add('detector-failed');
+            return;
+        }
+        for (const f of folds as readonly unknown[]) if (isFoldObject(f)) w.folds.push(f);
+    });
 }
 
 /**
@@ -403,28 +414,32 @@ function addFolds(work: readonly Work[], result: unknown): void {
  * Everything, including reading the folds (a getter could throw), happens
  * inside guarded(), and nothing is added unless the whole list was read.
  */
-function addMessageFolds(w: Work, detect: () => unknown): number {
-  const length = w.message.bodyText.length;
-  const outcome = guarded([w], () => {
-    const result = detect();
-    if (!Array.isArray(result)) return null;
-    const folds: FoldRange[] = [];
-    let firstStart = length;
-    for (const f of result as readonly unknown[]) {
-      if (!isFoldObject(f)) continue;
-      const start: unknown = f.start;
-      if (typeof start === 'number' && Number.isInteger(start) && start >= 0 && start < firstStart) firstStart = start;
-      folds.push(f);
+function addMessageFolds(w: Work, detect: () => unknown): number
+{
+    const length = w.message.bodyText.length;
+    const outcome = guarded([w], () =>
+    {
+        const result = detect();
+        if (!Array.isArray(result)) return null;
+        const folds: FoldRange[] = [];
+        let firstStart = length;
+        for (const f of result as readonly unknown[])
+        {
+            if (!isFoldObject(f)) continue;
+            const start: unknown = f.start;
+            if (typeof start === 'number' && Number.isInteger(start) && start >= 0 && start < firstStart) firstStart = start;
+            folds.push(f);
+        }
+        return { folds, firstStart };
+    });
+    if (outcome === null)
+    {
+        // Threw (already warned) or not a list: warn in both cases (a Set, so once).
+        w.warnings.add('detector-failed');
+        return length;
     }
-    return { folds, firstStart };
-  });
-  if (outcome === null) {
-    // Threw (already warned) or not a list: warn in both cases (a Set, so once).
-    w.warnings.add('detector-failed');
-    return length;
-  }
-  for (const f of outcome.folds) w.folds.push(f);
-  return outcome.firstStart;
+    for (const f of outcome.folds) w.folds.push(f);
+    return outcome.firstStart;
 }
 
 /**
@@ -434,44 +449,51 @@ function addMessageFolds(w: Work, detect: () => unknown): number {
  * message's source, every `related` number is a valid position, and
  * mergedCount matches. Every list must be a real array (the caller maps them).
  */
-function isValidDedupe(result: DedupeResult, messages: readonly NormalizedMessage[]): boolean {
-  const count = messages.length;
-  const seen = new Uint8Array(count);
-  const valid = (i: unknown): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < count;
-  const mark = (i: unknown): boolean => {
-    if (!valid(i) || seen[i] === 1) return false;
-    seen[i] = 1;
-    return true;
-  };
-  // A plain boolean check: Array.isArray as a type guard would turn the lists into any[].
-  const isList = (v: unknown): boolean => Array.isArray(v);
-  if (!isList(result.kept)) return false;
-  let merged = 0;
-  for (const k of result.kept) {
-    if (!mark(k.index)) return false;
-    if (k.message !== messages[k.index]) return false;
-    if (!isList(k.duplicates) || !isList(k.warnings)) return false;
-    for (const d of k.duplicates) {
-      if (!mark(d.index)) return false;
-      if (d.source !== messages[d.index]!.source) return false;
-      merged++;
+function isValidDedupe(result: DedupeResult, messages: readonly NormalizedMessage[]): boolean
+{
+    const count = messages.length;
+    const seen = new Uint8Array(count);
+    const valid = (i: unknown): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < count;
+    const mark = (i: unknown): boolean =>
+    {
+        if (!valid(i) || seen[i] === 1) return false;
+        seen[i] = 1;
+        return true;
+    };
+    // A plain boolean check: Array.isArray as a type guard would turn the lists into any[].
+    const isList = (v: unknown): boolean => Array.isArray(v);
+    if (!isList(result.kept)) return false;
+    let merged = 0;
+    for (const k of result.kept)
+    {
+        if (!mark(k.index)) return false;
+        if (k.message !== messages[k.index]) return false;
+        if (!isList(k.duplicates) || !isList(k.warnings)) return false;
+        for (const d of k.duplicates)
+        {
+            if (!mark(d.index)) return false;
+            if (d.source !== messages[d.index]!.source) return false;
+            merged++;
+        }
+        for (const w of k.warnings)
+        {
+            if (!isList(w.related)) return false;
+            for (const r of w.related) if (!valid(r)) return false;
+        }
     }
-    for (const w of k.warnings) {
-      if (!isList(w.related)) return false;
-      for (const r of w.related) if (!valid(r)) return false;
-    }
-  }
-  return merged === result.mergedCount && result.kept.length + merged === count;
+    return merged === result.mergedCount && result.kept.length + merged === count;
 }
 
 /** Every message kept on its own (the fallback when de-duplication fails). */
-function noDedupe(messages: readonly NormalizedMessage[]): DedupeResult {
-  return { kept: messages.map((message, index) => ({ message, index, duplicates: [], warnings: [] })), mergedCount: 0 };
+function noDedupe(messages: readonly NormalizedMessage[]): DedupeResult
+{
+    return { kept: messages.map((message, index) => ({ message, index, duplicates: [], warnings: [] })), mergedCount: 0 };
 }
 
 /** One segment showing the whole body (or none for an empty body). */
-function wholeBody(body: string): Segment[] {
-  return body.length === 0 ? [] : [{ start: 0, end: body.length, folded: false, reasons: [], related: [] }];
+function wholeBody(body: string): Segment[]
+{
+    return body.length === 0 ? [] : [{ start: 0, end: body.length, folded: false, reasons: [], related: [] }];
 }
 
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
@@ -479,16 +501,18 @@ const isNumOrNull = (v: unknown): v is number | null => v === null || (typeof v 
 const isStrOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
 
 /** A plain copy of a mailbox list, or null if it is not one. */
-function mailboxes(v: unknown): ReconstructedMessage['from'] | null {
-  if (!Array.isArray(v)) return null;
-  const out: { name: string; address: string }[] = [];
-  for (const m of v as readonly unknown[]) {
-    if (typeof m !== 'object' || m === null) return null;
-    const { name, address } = m as Record<string, unknown>;
-    if (typeof name !== 'string' || typeof address !== 'string') return null;
-    out.push({ name, address });
-  }
-  return out;
+function mailboxes(v: unknown): ReconstructedMessage['from'] | null
+{
+    if (!Array.isArray(v)) return null;
+    const out: { name: string; address: string }[] = [];
+    for (const m of v as readonly unknown[])
+    {
+        if (typeof m !== 'object' || m === null) return null;
+        const { name, address } = m as Record<string, unknown>;
+        if (typeof name !== 'string' || typeof address !== 'string') return null;
+        out.push({ name, address });
+    }
+    return out;
 }
 
 /**
@@ -498,95 +522,109 @@ function mailboxes(v: unknown): ReconstructedMessage['from'] | null {
  * [headerEnd, end) with `depth` quote marks removed (checked by recomputing
  * it). The engine never trusts the part blindly (README.md, rule R6).
  */
-function validRebuilt(body: string, v: unknown, minStart: number, generation: number): ReconstructedMessage | null {
-  if (typeof v !== 'object' || v === null) return null;
-  const r = v as Record<string, unknown>;
-  const { start, headerEnd, end, depth, kind, subject, dateText, date, dateApproximate, reconstructedText, quoteMarksRemoved } = r;
-  if (!isInt(start) || !isInt(headerEnd) || !isInt(end) || !isInt(depth)) return null;
-  if (start < minStart || headerEnd <= start || end < headerEnd || end > body.length) return null;
-  if (r.generation !== generation || depth < 0 || depth > MAX_QUOTE_DEPTH) return null;
-  if ((kind !== 'reply' && kind !== 'forward') || !isStrOrNull(subject) || !isStrOrNull(dateText)) return null;
-  if (typeof dateApproximate !== 'boolean' || quoteMarksRemoved !== depth > 0 || typeof reconstructedText !== 'string') return null;
-  const from = mailboxes(r.from);
-  const to = mailboxes(r.to);
-  const cc = mailboxes(r.cc);
-  if (from === null || to === null || cc === null || !Array.isArray(r.incomplete)) return null;
-  const incomplete = (r.incomplete as readonly unknown[]).filter((x): x is 'to' | 'cc' => x === 'to' || x === 'cc');
-  if (incomplete.length !== r.incomplete.length) return null;
-  let quotedDate: ReconstructedMessage['date'] = null;
-  if (date !== null) {
-    if (typeof date !== 'object') return null;
-    const d = date as Record<string, unknown>;
-    const basis = d.basis;
-    if (typeof d.text !== 'string' || !isNumOrNull(d.wallMs) || !isNumOrNull(d.estimatedUtcMs)) return null;
-    if (d.precision !== 'minute' && d.precision !== 'day' && d.precision !== null) return null;
-    if (basis !== 'rfc-zone' && basis !== 'written-zone' && basis !== 'source-offset' && basis !== 'none') return null;
-    quotedDate = { text: d.text, wallMs: d.wallMs, precision: d.precision, estimatedUtcMs: d.estimatedUtcMs, basis };
-  }
-  if (reconstructedText !== removeQuoteMarks(body, headerEnd, end, depth)) return null;
-  return {
-    start,
-    headerEnd,
-    end,
-    depth,
-    generation,
-    kind,
-    from,
-    to,
-    cc,
-    subject,
-    dateText,
-    incomplete,
-    date: quotedDate,
-    dateApproximate,
-    reconstructedText,
-    quoteMarksRemoved,
-  };
+function validRebuilt(body: string, v: unknown, minStart: number, generation: number): ReconstructedMessage | null
+{
+    if (typeof v !== 'object' || v === null) return null;
+    const r = v as Record<string, unknown>;
+    const { start, headerEnd, end, depth, kind, subject, dateText, date, dateApproximate, reconstructedText, quoteMarksRemoved } = r;
+    if (!isInt(start) || !isInt(headerEnd) || !isInt(end) || !isInt(depth)) return null;
+    if (start < minStart || headerEnd <= start || end < headerEnd || end > body.length) return null;
+    if (r.generation !== generation || depth < 0 || depth > MAX_QUOTE_DEPTH) return null;
+    if ((kind !== 'reply' && kind !== 'forward') || !isStrOrNull(subject) || !isStrOrNull(dateText)) return null;
+    if (typeof dateApproximate !== 'boolean' || quoteMarksRemoved !== depth > 0 || typeof reconstructedText !== 'string') return null;
+    const from = mailboxes(r.from);
+    const to = mailboxes(r.to);
+    const cc = mailboxes(r.cc);
+    if (from === null || to === null || cc === null || !Array.isArray(r.incomplete)) return null;
+    const incomplete = (r.incomplete as readonly unknown[]).filter((x): x is 'to' | 'cc' => x === 'to' || x === 'cc');
+    if (incomplete.length !== r.incomplete.length) return null;
+    let quotedDate: ReconstructedMessage['date'] = null;
+    if (date !== null)
+    {
+        if (typeof date !== 'object') return null;
+        const d = date as Record<string, unknown>;
+        const basis = d.basis;
+        if (typeof d.text !== 'string' || !isNumOrNull(d.wallMs) || !isNumOrNull(d.estimatedUtcMs)) return null;
+        if (d.precision !== 'minute' && d.precision !== 'day' && d.precision !== null) return null;
+        if (basis !== 'rfc-zone' && basis !== 'written-zone' && basis !== 'source-offset' && basis !== 'none') return null;
+        quotedDate = { text: d.text, wallMs: d.wallMs, precision: d.precision, estimatedUtcMs: d.estimatedUtcMs, basis };
+    }
+    if (reconstructedText !== removeQuoteMarks(body, headerEnd, end, depth)) return null;
+    return {
+        start,
+        headerEnd,
+        end,
+        depth,
+        generation,
+        kind,
+        from,
+        to,
+        cc,
+        subject,
+        dateText,
+        incomplete,
+        date: quotedDate,
+        dateApproximate,
+        reconstructedText,
+        quoteMarksRemoved,
+    };
 }
 
 /** Rebuilds from one message (step 6), with the safety net; adds its warnings to `warnings`. */
 function rebuildFrom(
-  w: { readonly message: NormalizedMessage; readonly index: number },
-  rebuild: typeof reconstructQuotedMessages,
-  warnings: ReconstructionWarning[],
-): ReconstructedMessage[] {
-  const body = w.message.bodyText;
-  if (body.length > MAX_SOURCE_LENGTH) {
-    warnings.push({ index: w.index, code: 'reconstruct-limit' });
-    return [];
-  }
-  let raw: unknown;
-  try {
-    raw = rebuild(body, { subject: w.message.subject, sourceOffsetMinutes: w.message.date.offsetMinutes });
-  } catch {
-    warnings.push({ index: w.index, code: 'reconstruct-failed' });
-    return [];
-  }
-  const out: ReconstructedMessage[] = [];
-  let ok = Array.isArray(raw) && raw.length <= MAX_RECONSTRUCTED;
-  if (ok) {
-    try {
-      let minStart = 0;
-      for (const v of raw as readonly unknown[]) {
-        const r = validRebuilt(body, v, minStart, out.length + 1);
-        if (r === null) {
-          ok = false;
-          break;
-        }
-        out.push(r);
-        minStart = r.end;
-      }
-    } catch {
-      ok = false; // a getter that throws
+    w: { readonly message: NormalizedMessage; readonly index: number },
+    rebuild: typeof reconstructQuotedMessages,
+    warnings: ReconstructionWarning[],
+): ReconstructedMessage[]
+{
+    const body = w.message.bodyText;
+    if (body.length > MAX_SOURCE_LENGTH)
+    {
+        warnings.push({ index: w.index, code: 'reconstruct-limit' });
+        return [];
     }
-  }
-  if (!ok) {
-    // Keep nothing: a later entry being wrong casts doubt on the chain.
-    warnings.push({ index: w.index, code: 'reconstruct-failed' });
-    return [];
-  }
-  if (out.length >= MAX_RECONSTRUCTED) warnings.push({ index: w.index, code: 'reconstruct-limit' });
-  return out;
+    let raw: unknown;
+    try
+    {
+        raw = rebuild(body, { subject: w.message.subject, sourceOffsetMinutes: w.message.date.offsetMinutes });
+    }
+    catch
+    {
+        warnings.push({ index: w.index, code: 'reconstruct-failed' });
+        return [];
+    }
+    const out: ReconstructedMessage[] = [];
+    let ok = Array.isArray(raw) && raw.length <= MAX_RECONSTRUCTED;
+    if (ok)
+    {
+        try
+        {
+            let minStart = 0;
+            for (const v of raw as readonly unknown[])
+            {
+                const r = validRebuilt(body, v, minStart, out.length + 1);
+                if (r === null)
+                {
+                    ok = false;
+                    break;
+                }
+                out.push(r);
+                minStart = r.end;
+            }
+        }
+        catch
+        {
+            ok = false; // a getter that throws
+        }
+    }
+    if (!ok)
+    {
+        // Keep nothing: a later entry being wrong casts doubt on the chain.
+        warnings.push({ index: w.index, code: 'reconstruct-failed' });
+        return [];
+    }
+    if (out.length >= MAX_RECONSTRUCTED) warnings.push({ index: w.index, code: 'reconstruct-limit' });
+    return out;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
@@ -601,76 +639,85 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * is not the next email up, is dropped (its block then stays printed in that
  * body). A result whose list cannot be read at all gives none. Never throws.
  */
-function readAttached(results: readonly ParseResult[]): { readonly messages: NormalizedMessage[]; readonly entries: EngineAttached[] } {
-  const messages: NormalizedMessage[] = [];
-  const entries: EngineAttached[] = [];
-  const base = results.length;
-  results.forEach((r, fileIndex) => {
-    if (!r.ok || r.attached === undefined) return;
-    const fileMessages: NormalizedMessage[] = [];
-    const fileEntries: EngineAttached[] = [];
-    try {
-      const list: unknown = r.attached;
-      if (!Array.isArray(list)) return;
-      // Per entry of the file's list: its place in fileEntries (undefined when
-      // skipped), and its parent in the file's numbering (-1: the file's own email).
-      const kept: (number | undefined)[] = [];
-      const parents: number[] = [];
-      const entryOf = (k: number): EngineAttached | undefined => fileEntries[kept[k] ?? -1];
-      // The body text of entry `holder` of the file's list (-1: the file's own email); undefined when skipped.
-      const bodyOf = (holder: number): string | undefined => {
-        if (holder === -1) return r.message.bodyText;
-        const at = kept[holder];
-        return at === undefined ? undefined : fileMessages[at]?.bodyText;
-      };
-      (list as readonly unknown[]).forEach((raw, k) => {
-        kept.push(undefined);
-        parents.push(-1);
-        if (!isRecord(raw) || !isRecord(raw.message) || typeof raw.message.bodyText !== 'string') return;
-        const { parent, path, places, name } = raw;
-        if (!isInt(parent) || parent < -1 || parent >= k) return;
-        const parentEntry = parent === -1 ? null : entryOf(parent);
-        if (parentEntry === undefined) return; // its parent was skipped
-        const parentPath = parentEntry?.path ?? [];
-        if (!Array.isArray(path) || path.length !== parentPath.length + 1) return;
-        const ownPath = (path as readonly unknown[]).filter(isInt);
-        if (ownPath.length !== path.length || ownPath.some((n, i) => n < 1 || (i < parentPath.length && n !== parentPath[i]))) return;
-        const index = base + entries.length + fileEntries.length;
-        // Places: nearest holder first (its parent, then the parent's parent, ...); stop at the first one out of line.
-        const okPlaces: EngineAttachedPlace[] = [];
-        let holder = parent;
-        for (const p of Array.isArray(places) ? (places as readonly unknown[]) : []) {
-          if (!isRecord(p) || p.holder !== holder) break;
-          const holderEntry = holder === -1 ? null : entryOf(holder);
-          const body = bodyOf(holder);
-          const { start, end } = p;
-          if (holderEntry !== undefined && typeof body === 'string' && isInt(start) && isInt(end) && start >= 0 && start < end && end <= body.length) {
-            okPlaces.push({ holderIndex: holderEntry === null ? fileIndex : holderEntry.index, start, end });
-          }
-          if (holder === -1) break;
-          holder = parents[holder] ?? -1;
+function readAttached(results: readonly ParseResult[]): { readonly messages: NormalizedMessage[]; readonly entries: EngineAttached[] }
+{
+    const messages: NormalizedMessage[] = [];
+    const entries: EngineAttached[] = [];
+    const base = results.length;
+    results.forEach((r, fileIndex) =>
+    {
+        if (!r.ok || r.attached === undefined) return;
+        const fileMessages: NormalizedMessage[] = [];
+        const fileEntries: EngineAttached[] = [];
+        try
+        {
+            const list: unknown = r.attached;
+            if (!Array.isArray(list)) return;
+            // Per entry of the file's list: its place in fileEntries (undefined when
+            // skipped), and its parent in the file's numbering (-1: the file's own email).
+            const kept: (number | undefined)[] = [];
+            const parents: number[] = [];
+            const entryOf = (k: number): EngineAttached | undefined => fileEntries[kept[k] ?? -1];
+            // The body text of entry `holder` of the file's list (-1: the file's own email); undefined when skipped.
+            const bodyOf = (holder: number): string | undefined =>
+            {
+                if (holder === -1) return r.message.bodyText;
+                const at = kept[holder];
+                return at === undefined ? undefined : fileMessages[at]?.bodyText;
+            };
+            (list as readonly unknown[]).forEach((raw, k) =>
+            {
+                kept.push(undefined);
+                parents.push(-1);
+                if (!isRecord(raw) || !isRecord(raw.message) || typeof raw.message.bodyText !== 'string') return;
+                const { parent, path, places, name } = raw;
+                if (!isInt(parent) || parent < -1 || parent >= k) return;
+                const parentEntry = parent === -1 ? null : entryOf(parent);
+                if (parentEntry === undefined) return; // its parent was skipped
+                const parentPath = parentEntry?.path ?? [];
+                if (!Array.isArray(path) || path.length !== parentPath.length + 1) return;
+                const ownPath = (path as readonly unknown[]).filter(isInt);
+                if (ownPath.length !== path.length || ownPath.some((n, i) => n < 1 || (i < parentPath.length && n !== parentPath[i]))) return;
+                const index = base + entries.length + fileEntries.length;
+                // Places: nearest holder first (its parent, then the parent's parent, ...); stop at the first one out of line.
+                const okPlaces: EngineAttachedPlace[] = [];
+                let holder = parent;
+                for (const p of Array.isArray(places) ? (places as readonly unknown[]) : [])
+                {
+                    if (!isRecord(p) || p.holder !== holder) break;
+                    const holderEntry = holder === -1 ? null : entryOf(holder);
+                    const body = bodyOf(holder);
+                    const { start, end } = p;
+                    if (holderEntry !== undefined && typeof body === 'string' && isInt(start) && isInt(end) && start >= 0 && start < end && end <= body.length)
+                    {
+                        okPlaces.push({ holderIndex: holderEntry === null ? fileIndex : holderEntry.index, start, end });
+                    }
+                    if (holder === -1) break;
+                    holder = parents[holder] ?? -1;
+                }
+                kept[k] = fileEntries.length;
+                parents[k] = parent;
+                fileMessages.push(raw.message as unknown as NormalizedMessage);
+                fileEntries.push({
+                    index,
+                    parentIndex: parentEntry === null ? fileIndex : parentEntry.index,
+                    fileIndex,
+                    path: ownPath,
+                    names: [...(parentEntry?.names ?? []), typeof name === 'string' ? name : ''],
+                    places: okPlaces,
+                    // Known once de-duplication ran (settleAttached).
+                    keptShowsHeader: true,
+                });
+            });
         }
-        kept[k] = fileEntries.length;
-        parents[k] = parent;
-        fileMessages.push(raw.message as unknown as NormalizedMessage);
-        fileEntries.push({
-          index,
-          parentIndex: parentEntry === null ? fileIndex : parentEntry.index,
-          fileIndex,
-          path: ownPath,
-          names: [...(parentEntry?.names ?? []), typeof name === 'string' ? name : ''],
-          places: okPlaces,
-          // Known once de-duplication ran (settleAttached).
-          keptShowsHeader: true,
-        });
-      });
-    } catch {
-      return; // a list that cannot be read: none of this file's attached emails
-    }
-    for (const m of fileMessages) messages.push(m);
-    for (const e of fileEntries) entries.push(e);
-  });
-  return { messages, entries };
+        catch
+        {
+            return; // a list that cannot be read: none of this file's attached emails
+        }
+        for (const m of fileMessages) messages.push(m);
+        for (const e of fileEntries) entries.push(e);
+    });
+    return { messages, entries };
 }
 
 /**
@@ -689,38 +736,45 @@ function readAttached(results: readonly ParseResult[]): { readonly messages: Nor
  * keptShowsHeader false (its header lines then stay where they are printed).
  */
 function settleAttached(
-  read: { readonly messages: readonly NormalizedMessage[]; readonly entries: readonly EngineAttached[] },
-  parsed: readonly NormalizedMessage[],
-  inputPosition: readonly number[],
-  keptIndexOf: (index: number) => number | undefined,
-): EngineAttached[] {
-  const messageAt = new Map<number, NormalizedMessage>();
-  inputPosition.forEach((index, k) => {
-    const m = parsed[k];
-    if (m !== undefined) messageAt.set(index, m);
-  });
-  return read.entries.map((e) => {
-    try {
-      const own = messageAt.get(e.index);
-      const keptIndex = keptIndexOf(e.index);
-      const kept = keptIndex === undefined ? undefined : messageAt.get(keptIndex);
-      const keptShowsHeader = keptIndex === e.index || (own !== undefined && kept !== undefined && keepsHeaderData(kept, own));
-      const places = e.places.map((p): EngineAttachedPlace => {
-        const holderKept = keptIndexOf(p.holderIndex);
-        if (holderKept === undefined || holderKept === p.holderIndex) return p;
-        const from = messageAt.get(p.holderIndex)?.bodyText;
-        const to = messageAt.get(holderKept)?.bodyText;
-        if (typeof from !== 'string' || typeof to !== 'string') return p;
-        const mapped = mapOffsets(from, to, [p.start, p.end]);
-        if (mapped === null) return p;
-        const [start, end] = mapped as [number, number];
-        return start < end ? { holderIndex: holderKept, start, end } : p;
-      });
-      return { ...e, places, keptShowsHeader };
-    } catch {
-      return { ...e, keptShowsHeader: false };
-    }
-  });
+    read: { readonly messages: readonly NormalizedMessage[]; readonly entries: readonly EngineAttached[] },
+    parsed: readonly NormalizedMessage[],
+    inputPosition: readonly number[],
+    keptIndexOf: (index: number) => number | undefined,
+): EngineAttached[]
+{
+    const messageAt = new Map<number, NormalizedMessage>();
+    inputPosition.forEach((index, k) =>
+    {
+        const m = parsed[k];
+        if (m !== undefined) messageAt.set(index, m);
+    });
+    return read.entries.map((e) =>
+    {
+        try
+        {
+            const own = messageAt.get(e.index);
+            const keptIndex = keptIndexOf(e.index);
+            const kept = keptIndex === undefined ? undefined : messageAt.get(keptIndex);
+            const keptShowsHeader = keptIndex === e.index || (own !== undefined && kept !== undefined && keepsHeaderData(kept, own));
+            const places = e.places.map((p): EngineAttachedPlace =>
+            {
+                const holderKept = keptIndexOf(p.holderIndex);
+                if (holderKept === undefined || holderKept === p.holderIndex) return p;
+                const from = messageAt.get(p.holderIndex)?.bodyText;
+                const to = messageAt.get(holderKept)?.bodyText;
+                if (typeof from !== 'string' || typeof to !== 'string') return p;
+                const mapped = mapOffsets(from, to, [p.start, p.end]);
+                if (mapped === null) return p;
+                const [start, end] = mapped as [number, number];
+                return start < end ? { holderIndex: holderKept, start, end } : p;
+            });
+            return { ...e, places, keptShowsHeader };
+        }
+        catch
+        {
+            return { ...e, keptShowsHeader: false };
+        }
+    });
 }
 
 /**
@@ -738,60 +792,68 @@ function settleAttached(
  * once.
  */
 function placeUndatedAttached<T extends { readonly index: number }>(
-  ordered: readonly { readonly item: T; readonly order: OrderReason }[],
-  parentOf: (index: number) => number | undefined,
-  keptIndexOf: (index: number) => number | undefined,
-): { readonly item: T; readonly order: OrderReason }[] {
-  const at = new Map<number, number>();
-  ordered.forEach((e, i) => at.set(e.item.index, i));
-  // Entry -> the entry it goes before.
-  const before = new Map<number, number>();
-  ordered.forEach((e, i) => {
-    if (e.order !== 'file-order') return;
-    const parent = parentOf(e.item.index);
-    if (parent === undefined) return;
-    const kept = keptIndexOf(parent);
-    const j = kept === undefined ? undefined : at.get(kept);
-    if (j !== undefined && j !== i) before.set(i, j);
-  });
-  if (before.size === 0) return [...ordered];
-  // Cycles (not expected): an entry whose chain comes back to itself, or leads INTO such a cycle
-  // further on, is dropped from the map. It then stays where orderMessages put it (at the end,
-  // 'file-order') and, as a root of the walk below, is still listed exactly once there.
-  for (const i of [...before.keys()]) {
-    const seen = new Set<number>([i]);
-    let j = before.get(i);
-    while (j !== undefined && before.has(j) && !seen.has(j)) {
-      seen.add(j);
-      j = before.get(j);
+    ordered: readonly { readonly item: T; readonly order: OrderReason }[],
+    parentOf: (index: number) => number | undefined,
+    keptIndexOf: (index: number) => number | undefined,
+): { readonly item: T; readonly order: OrderReason }[]
+{
+    const at = new Map<number, number>();
+    ordered.forEach((e, i) => at.set(e.item.index, i));
+    // Entry -> the entry it goes before.
+    const before = new Map<number, number>();
+    ordered.forEach((e, i) =>
+    {
+        if (e.order !== 'file-order') return;
+        const parent = parentOf(e.item.index);
+        if (parent === undefined) return;
+        const kept = keptIndexOf(parent);
+        const j = kept === undefined ? undefined : at.get(kept);
+        if (j !== undefined && j !== i) before.set(i, j);
+    });
+    if (before.size === 0) return [...ordered];
+    // Cycles (not expected): an entry whose chain comes back to itself, or leads INTO such a cycle
+    // further on, is dropped from the map. It then stays where orderMessages put it (at the end,
+    // 'file-order') and, as a root of the walk below, is still listed exactly once there.
+    for (const i of [...before.keys()])
+    {
+        const seen = new Set<number>([i]);
+        let j = before.get(i);
+        while (j !== undefined && before.has(j) && !seen.has(j))
+        {
+            seen.add(j);
+            j = before.get(j);
+        }
+        if (j !== undefined && seen.has(j)) before.delete(i);
     }
-    if (j !== undefined && seen.has(j)) before.delete(i);
-  }
-  const children = new Map<number, number[]>();
-  for (const [i, j] of before) {
-    let list = children.get(j);
-    if (list === undefined) children.set(j, (list = []));
-    list.push(i);
-  }
-  for (const list of children.values()) list.sort((a, b) => a - b);
-  const out: { readonly item: T; readonly order: OrderReason }[] = [];
-  // Iterative: an entry's children first (each with its own children first), then the entry.
-  for (let root = 0; root < ordered.length; root++) {
-    if (before.has(root)) continue;
-    const stack: { i: number; next: number }[] = [{ i: root, next: 0 }];
-    while (stack.length > 0) {
-      const top = stack[stack.length - 1]!;
-      const kids = children.get(top.i) ?? [];
-      if (top.next < kids.length) {
-        stack.push({ i: kids[top.next++]!, next: 0 });
-        continue;
-      }
-      stack.pop();
-      const e = ordered[top.i]!;
-      out.push(before.has(top.i) ? { item: e.item, order: 'before-parent' } : e);
+    const children = new Map<number, number[]>();
+    for (const [i, j] of before)
+    {
+        let list = children.get(j);
+        if (list === undefined) children.set(j, (list = []));
+        list.push(i);
     }
-  }
-  return out;
+    for (const list of children.values()) list.sort((a, b) => a - b);
+    const out: { readonly item: T; readonly order: OrderReason }[] = [];
+    // Iterative: an entry's children first (each with its own children first), then the entry.
+    for (let root = 0; root < ordered.length; root++)
+    {
+        if (before.has(root)) continue;
+        const stack: { i: number; next: number }[] = [{ i: root, next: 0 }];
+        while (stack.length > 0)
+        {
+            const top = stack[stack.length - 1]!;
+            const kids = children.get(top.i) ?? [];
+            if (top.next < kids.length)
+            {
+                stack.push({ i: kids[top.next++]!, next: 0 });
+                continue;
+            }
+            stack.pop();
+            const e = ordered[top.i]!;
+            out.push(before.has(top.i) ? { item: e.item, order: 'before-parent' } : e);
+        }
+    }
+    return out;
 }
 
 /**
@@ -805,28 +867,32 @@ function placeUndatedAttached<T extends { readonly index: number }>(
  * are always earlier entries). No entry for a message that holds none.
  */
 function heldByKept(
-  entries: readonly EngineAttached[],
-  byIndex: ReadonlyMap<number, EngineAttached>,
-  keptIndexOf: (index: number) => number | undefined,
-): Map<number, Set<number>> {
-  const out = new Map<number, Set<number>>();
-  for (const e of entries) {
-    const held = keptIndexOf(e.index);
-    if (held === undefined) continue;
-    const seen = new Set<number>([e.index]);
-    let up: number | undefined = e.parentIndex;
-    while (up !== undefined && !seen.has(up)) {
-      seen.add(up);
-      const holder = keptIndexOf(up);
-      if (holder !== undefined && holder !== held) {
-        let set = out.get(holder);
-        if (set === undefined) out.set(holder, (set = new Set<number>()));
-        set.add(held);
-      }
-      up = byIndex.get(up)?.parentIndex;
+    entries: readonly EngineAttached[],
+    byIndex: ReadonlyMap<number, EngineAttached>,
+    keptIndexOf: (index: number) => number | undefined,
+): Map<number, Set<number>>
+{
+    const out = new Map<number, Set<number>>();
+    for (const e of entries)
+    {
+        const held = keptIndexOf(e.index);
+        if (held === undefined) continue;
+        const seen = new Set<number>([e.index]);
+        let up: number | undefined = e.parentIndex;
+        while (up !== undefined && !seen.has(up))
+        {
+            seen.add(up);
+            const holder = keptIndexOf(up);
+            if (holder !== undefined && holder !== held)
+            {
+                let set = out.get(holder);
+                if (set === undefined) out.set(holder, (set = new Set<number>()));
+                set.add(held);
+            }
+            up = byIndex.get(up)?.parentIndex;
+        }
     }
-  }
-  return out;
+    return out;
 }
 
 /**
@@ -834,193 +900,214 @@ function heldByKept(
  * `results`: one parse result per dropped file, in drop order.
  * `parts`: tests only (see EngineParts).
  */
-export function runEngine(results: readonly ParseResult[], parts: EngineParts = DEFAULT_PARTS): EngineResult {
-  // 1. Split. `inputPosition[i]` = input position of the i-th parsed message.
-  const parsed: NormalizedMessage[] = [];
-  const inputPosition: number[] = [];
-  const failed: FailedFile[] = [];
-  results.forEach((r, index) => {
-    if (r.ok) {
-      parsed.push(r.message);
-      inputPosition.push(index);
-    } else {
-      failed.push({ index, fileName: r.fileName, sha256: r.sha256, error: r.error, detail: r.detail });
+export function runEngine(results: readonly ParseResult[], parts: EngineParts = DEFAULT_PARTS): EngineResult
+{
+    // 1. Split. `inputPosition[i]` = input position of the i-th parsed message.
+    const parsed: NormalizedMessage[] = [];
+    const inputPosition: number[] = [];
+    const failed: FailedFile[] = [];
+    results.forEach((r, index) =>
+    {
+        if (r.ok)
+        {
+            parsed.push(r.message);
+            inputPosition.push(index);
+        }
+        else
+        {
+            failed.push({ index, fileName: r.fileName, sha256: r.sha256, error: r.error, detail: r.detail });
+        }
+    });
+    // The attached emails, after every file's own email (see ATTACHED EMAILS at the top).
+    const firstAttached = parsed.length;
+    const read = readAttached(results);
+    read.messages.forEach((m, k) =>
+    {
+        parsed.push(m);
+        inputPosition.push(read.entries[k]!.index);
+    });
+    const attachedByIndex = new Map<number, EngineAttached>();
+    for (const e of read.entries) attachedByIndex.set(e.index, e);
+    const inputCount = results.length + read.entries.length;
+
+    // 2. De-duplicate (checked by isValidDedupe; the fallback merges nothing).
+    // A dropped file's copy always wins over an attached one (D2, dedupe.ts).
+    parts.onStage?.('dedupe');
+    let deduped: DedupeResult;
+    let dedupeFailed = false;
+    try
+    {
+        deduped = (parts.dedupe ?? dedupe)(parsed, { firstAttached });
+        if (!isValidDedupe(deduped, parsed)) throw new Error('invalid dedupe result');
     }
-  });
-  // The attached emails, after every file's own email (see ATTACHED EMAILS at the top).
-  const firstAttached = parsed.length;
-  const read = readAttached(results);
-  read.messages.forEach((m, k) => {
-    parsed.push(m);
-    inputPosition.push(read.entries[k]!.index);
-  });
-  const attachedByIndex = new Map<number, EngineAttached>();
-  for (const e of read.entries) attachedByIndex.set(e.index, e);
-  const inputCount = results.length + read.entries.length;
+    catch
+    {
+        deduped = noDedupe(parsed);
+        dedupeFailed = true;
+    }
+    // dedupe numbers messages by their place in `parsed`; the result uses input
+    // positions. isValidDedupe checked that every number passed here is in
+    // 0..parsed.length-1, and inputPosition has exactly parsed.length entries,
+    // so the lookup always hits. The `?? -1` is only for the type checker; if it
+    // ever happened, -1 is never a valid position, so it could not silently
+    // point at another file.
+    const toInput = (i: number): number => inputPosition[i] ?? -1;
+    const kept = deduped.kept.map((k) => ({
+        message: k.message,
+        index: toInput(k.index),
+        duplicates: k.duplicates.map((d) => ({ ...d, index: toInput(d.index) })),
+        dedupeWarnings: k.warnings.map((w) => ({ ...w, related: w.related.map(toInput) })),
+    }));
 
-  // 2. De-duplicate (checked by isValidDedupe; the fallback merges nothing).
-  // A dropped file's copy always wins over an attached one (D2, dedupe.ts).
-  parts.onStage?.('dedupe');
-  let deduped: DedupeResult;
-  let dedupeFailed = false;
-  try {
-    deduped = (parts.dedupe ?? dedupe)(parsed, { firstAttached });
-    if (!isValidDedupe(deduped, parsed)) throw new Error('invalid dedupe result');
-  } catch {
-    deduped = noDedupe(parsed);
-    dedupeFailed = true;
-  }
-  // dedupe numbers messages by their place in `parsed`; the result uses input
-  // positions. isValidDedupe checked that every number passed here is in
-  // 0..parsed.length-1, and inputPosition has exactly parsed.length entries,
-  // so the lookup always hits. The `?? -1` is only for the type checker; if it
-  // ever happened, -1 is never a valid position, so it could not silently
-  // point at another file.
-  const toInput = (i: number): number => inputPosition[i] ?? -1;
-  const kept = deduped.kept.map((k) => ({
-    message: k.message,
-    index: toInput(k.index),
-    duplicates: k.duplicates.map((d) => ({ ...d, index: toInput(d.index) })),
-    dedupeWarnings: k.warnings.map((w) => ({ ...w, related: w.related.map(toInput) })),
-  }));
+    // 3. Order (undated attached emails just before their parent, Q7).
+    parts.onStage?.('order');
+    const keptOf = new Map<number, number>(); // input position -> input position of the kept message holding it
+    for (const k of kept)
+    {
+        keptOf.set(k.index, k.index);
+        for (const d of k.duplicates) keptOf.set(d.index, k.index);
+    }
+    const attached = settleAttached(read, parsed, inputPosition, (index) => keptOf.get(index));
+    const ordered = placeUndatedAttached(
+        orderMessages(kept),
+        (index) => attachedByIndex.get(index)?.parentIndex,
+        (index) => keptOf.get(index),
+    );
+    const work: Work[] = ordered.map(({ item, order }) => ({
+        ...item,
+        order,
+        folds: [],
+        warnings: new Set<EngineWarningCode>(dedupeFailed ? ['dedupe-failed'] : []),
+    }));
 
-  // 3. Order (undated attached emails just before their parent, Q7).
-  parts.onStage?.('order');
-  const keptOf = new Map<number, number>(); // input position -> input position of the kept message holding it
-  for (const k of kept) {
-    keptOf.set(k.index, k.index);
-    for (const d of k.duplicates) keptOf.set(d.index, k.index);
-  }
-  const attached = settleAttached(read, parsed, inputPosition, (index) => keptOf.get(index));
-  const ordered = placeUndatedAttached(
-    orderMessages(kept),
-    (index) => attachedByIndex.get(index)?.parentIndex,
-    (index) => keptOf.get(index),
-  );
-  const work: Work[] = ordered.map(({ item, order }) => ({
-    ...item,
-    order,
-    folds: [],
-    warnings: new Set<EngineWarningCode>(dedupeFailed ? ['dedupe-failed'] : []),
-  }));
+    // 4a. Overlap, over the ordered set (it needs chronological order). A holder
+    // always quotes the emails it holds (heldByKept), so their text is never
+    // folded as quoted from it.
+    parts.onStage?.('overlap');
+    const holds = heldByKept(attached, attachedByIndex, (index) => keptOf.get(index));
+    addFolds(
+        work,
+        guarded(work, () =>
+            parts.detectQuotedOverlap(
+                work.map((w) =>
+                {
+                    const held = holds.get(w.index);
+                    return {
+                        bodyText: w.message.bodyText,
+                        messageId: w.message.messageId,
+                        inReplyTo: w.message.inReplyTo,
+                        references: w.message.references,
+                        index: w.index,
+                        ...(held === undefined ? {} : { holds: [...held] }),
+                    };
+                }),
+            ),
+        ),
+    );
 
-  // 4a. Overlap, over the ordered set (it needs chronological order). A holder
-  // always quotes the emails it holds (heldByKept), so their text is never
-  // folded as quoted from it.
-  parts.onStage?.('overlap');
-  const holds = heldByKept(attached, attachedByIndex, (index) => keptOf.get(index));
-  addFolds(
-    work,
-    guarded(work, () =>
-      parts.detectQuotedOverlap(
-        work.map((w) => {
-          const held = holds.get(w.index);
-          return {
-            bodyText: w.message.bodyText,
-            messageId: w.message.messageId,
-            inReplyTo: w.message.inReplyTo,
-            references: w.message.references,
+    // 4b. Per-message detectors. Their fold starts also give `ownTextEnd` for 4c.
+    parts.onStage?.('quote-markers');
+    const ownTextEnd = work.map((w) => addMessageFolds(w, () => parts.detectQuoteMarkers(w.message.bodyText)));
+    parts.onStage?.('reply-headers');
+    work.forEach((w, k) =>
+    {
+        const first = addMessageFolds(w, () => parts.detectReplyHeaders(w.message.bodyText, w.message.subject));
+        ownTextEnd[k] = Math.min(ownTextEnd[k] ?? first, first);
+    });
+
+    // 4c. Signatures (overlap folds deliberately not part of ownTextEnd, see the top).
+    parts.onStage?.('signatures');
+    addFolds(
+        work,
+        guarded(work, () =>
+            parts.detectSignatures(
+                work.map((w, k) => ({ bodyText: w.message.bodyText, senderKey: senderKeyOf(w.message), ownTextEnd: ownTextEnd[k] })),
+            ),
+        ),
+    );
+
+    // 5. Segments, with the safety net.
+    parts.onStage?.('segments');
+    const messages: EngineMessage[] = work.map((w) =>
+    {
+        const body = w.message.bodyText;
+        let segments: Segment[];
+        try
+        {
+            segments = parts.buildSegments(body, w.folds);
+            // Both checks: checkSegments looks at the shape, reconstruct at the text itself.
+            if (checkSegments(body, segments).length > 0 || reconstruct(body, segments) !== body) throw new Error('invalid segments');
+        }
+        catch
+        {
+            segments = wholeBody(body);
+            w.warnings.add('folding-disabled');
+        }
+        return {
+            message: w.message,
             index: w.index,
-            ...(held === undefined ? {} : { holds: [...held] }),
-          };
-        }),
-      ),
-    ),
-  );
+            order: w.order,
+            duplicates: w.duplicates,
+            dedupeWarnings: w.dedupeWarnings,
+            parserWarnings: w.message.warnings,
+            engineWarnings: [...w.warnings].sort(),
+            segments,
+        };
+    });
 
-  // 4b. Per-message detectors. Their fold starts also give `ownTextEnd` for 4c.
-  parts.onStage?.('quote-markers');
-  const ownTextEnd = work.map((w) => addMessageFolds(w, () => parts.detectQuoteMarkers(w.message.bodyText)));
-  parts.onStage?.('reply-headers');
-  work.forEach((w, k) => {
-    const first = addMessageFolds(w, () => parts.detectReplyHeaders(w.message.bodyText, w.message.subject));
-    ownTextEnd[k] = Math.min(ownTextEnd[k] ?? first, first);
-  });
+    const positionByIndex: (number | null)[] = new Array<number | null>(inputCount).fill(null);
+    messages.forEach((m, position) =>
+    {
+        positionByIndex[m.index] = position;
+        for (const d of m.duplicates) positionByIndex[d.index] = position;
+    });
 
-  // 4c. Signatures (overlap folds deliberately not part of ownTextEnd, see the top).
-  parts.onStage?.('signatures');
-  addFolds(
-    work,
-    guarded(work, () =>
-      parts.detectSignatures(
-        work.map((w, k) => ({ bodyText: w.message.bodyText, senderKey: senderKeyOf(w.message), ownTextEnd: ownTextEnd[k] })),
-      ),
-    ),
-  );
-
-  // 5. Segments, with the safety net.
-  parts.onStage?.('segments');
-  const messages: EngineMessage[] = work.map((w) => {
-    const body = w.message.bodyText;
-    let segments: Segment[];
-    try {
-      segments = parts.buildSegments(body, w.folds);
-      // Both checks: checkSegments looks at the shape, reconstruct at the text itself.
-      if (checkSegments(body, segments).length > 0 || reconstruct(body, segments) !== body) throw new Error('invalid segments');
-    } catch {
-      segments = wholeBody(body);
-      w.warnings.add('folding-disabled');
+    // 6. Rebuild, link, timeline (the real messages above are final already).
+    parts.onStage?.('reconstruct');
+    const reconstructionWarnings: ReconstructionWarning[] = [];
+    const rebuild = parts.reconstructQuotedMessages ?? reconstructQuotedMessages;
+    const sources: LinkSource[] = work.map((w, k) =>
+    {
+        const rebuilt = rebuildFrom(w, rebuild, reconstructionWarnings);
+        // Its own text ends at its first quoted part: the first rebuilt message, or the first quote fold.
+        const ownEnd = Math.min(rebuilt[0]?.start ?? w.message.bodyText.length, ownTextEnd[k] ?? w.message.bodyText.length);
+        return { index: w.index, message: w.message, utcMs: w.order === 'by-date' ? w.message.date.utcMs : null, ownEnd, rebuilt };
+    });
+    parts.onStage?.('link-rebuilt');
+    let reconstructed: readonly EngineRebuilt[];
+    let timeline: readonly TimelineEntry[];
+    try
+    {
+        ({ reconstructed, timeline } = (parts.linkRebuilt ?? linkRebuilt)(sources));
+        if (!isValidTimeline(timeline, reconstructed, messages.length)) throw new Error('invalid timeline');
     }
+    catch
+    {
+        reconstructed = [];
+        timeline = messages.map((_, position) => ({ kind: 'message', position }));
+        reconstructionWarnings.length = 0;
+        for (const w of work) reconstructionWarnings.push({ index: w.index, code: 'reconstruct-failed' });
+    }
+
+    parts.onStage?.('done');
     return {
-      message: w.message,
-      index: w.index,
-      order: w.order,
-      duplicates: w.duplicates,
-      dedupeWarnings: w.dedupeWarnings,
-      parserWarnings: w.message.warnings,
-      engineWarnings: [...w.warnings].sort(),
-      segments,
+        messages,
+        failed,
+        counts: {
+            filesGiven: results.length,
+            messagesFound: parsed.length,
+            duplicatesMerged: deduped.mergedCount,
+            filesFailed: failed.length,
+            undated: messages.filter((m) => m.order !== 'by-date').length,
+            withFolds: messages.filter((m) => m.segments.some((s) => s.folded)).length,
+        },
+        positionByIndex,
+        reconstructed,
+        timeline,
+        reconstructionWarnings,
+        // No key when there are none: the result for files without attached emails is unchanged.
+        ...(attached.length === 0 ? {} : { attached }),
     };
-  });
-
-  const positionByIndex: (number | null)[] = new Array<number | null>(inputCount).fill(null);
-  messages.forEach((m, position) => {
-    positionByIndex[m.index] = position;
-    for (const d of m.duplicates) positionByIndex[d.index] = position;
-  });
-
-  // 6. Rebuild, link, timeline (the real messages above are final already).
-  parts.onStage?.('reconstruct');
-  const reconstructionWarnings: ReconstructionWarning[] = [];
-  const rebuild = parts.reconstructQuotedMessages ?? reconstructQuotedMessages;
-  const sources: LinkSource[] = work.map((w, k) => {
-    const rebuilt = rebuildFrom(w, rebuild, reconstructionWarnings);
-    // Its own text ends at its first quoted part: the first rebuilt message, or the first quote fold.
-    const ownEnd = Math.min(rebuilt[0]?.start ?? w.message.bodyText.length, ownTextEnd[k] ?? w.message.bodyText.length);
-    return { index: w.index, message: w.message, utcMs: w.order === 'by-date' ? w.message.date.utcMs : null, ownEnd, rebuilt };
-  });
-  parts.onStage?.('link-rebuilt');
-  let reconstructed: readonly EngineRebuilt[];
-  let timeline: readonly TimelineEntry[];
-  try {
-    ({ reconstructed, timeline } = (parts.linkRebuilt ?? linkRebuilt)(sources));
-    if (!isValidTimeline(timeline, reconstructed, messages.length)) throw new Error('invalid timeline');
-  } catch {
-    reconstructed = [];
-    timeline = messages.map((_, position) => ({ kind: 'message', position }));
-    reconstructionWarnings.length = 0;
-    for (const w of work) reconstructionWarnings.push({ index: w.index, code: 'reconstruct-failed' });
-  }
-
-  parts.onStage?.('done');
-  return {
-    messages,
-    failed,
-    counts: {
-      filesGiven: results.length,
-      messagesFound: parsed.length,
-      duplicatesMerged: deduped.mergedCount,
-      filesFailed: failed.length,
-      undated: messages.filter((m) => m.order !== 'by-date').length,
-      withFolds: messages.filter((m) => m.segments.some((s) => s.folded)).length,
-    },
-    positionByIndex,
-    reconstructed,
-    timeline,
-    reconstructionWarnings,
-    // No key when there are none: the result for files without attached emails is unchanged.
-    ...(attached.length === 0 ? {} : { attached }),
-  };
 }
 
 /**
@@ -1030,21 +1117,26 @@ export function runEngine(results: readonly ParseResult[], parts: EngineParts = 
  * linking never removes or reorders a real message. Called inside a try: an
  * entry that is not an object throws, which counts as invalid.
  */
-function isValidTimeline(timeline: readonly TimelineEntry[], reconstructed: readonly EngineRebuilt[], count: number): boolean {
-  // A plain boolean check: Array.isArray as a type guard would turn the lists into any[].
-  const isList = (v: unknown): boolean => Array.isArray(v);
-  if (!isList(timeline) || !isList(reconstructed)) return false;
-  if (!reconstructed.every((r, id) => r.id === id)) return false;
-  let next = 0;
-  const seen = new Set<number>();
-  for (const e of timeline) {
-    if (e.kind === 'message') {
-      if (e.position !== next) return false;
-      next++;
-    } else {
-      if (e.kind !== 'rebuilt' || seen.has(e.id) || reconstructed[e.id]?.link !== 'entry') return false;
-      seen.add(e.id);
+function isValidTimeline(timeline: readonly TimelineEntry[], reconstructed: readonly EngineRebuilt[], count: number): boolean
+{
+    // A plain boolean check: Array.isArray as a type guard would turn the lists into any[].
+    const isList = (v: unknown): boolean => Array.isArray(v);
+    if (!isList(timeline) || !isList(reconstructed)) return false;
+    if (!reconstructed.every((r, id) => r.id === id)) return false;
+    let next = 0;
+    const seen = new Set<number>();
+    for (const e of timeline)
+    {
+        if (e.kind === 'message')
+        {
+            if (e.position !== next) return false;
+            next++;
+        }
+        else
+        {
+            if (e.kind !== 'rebuilt' || seen.has(e.id) || reconstructed[e.id]?.link !== 'entry') return false;
+            seen.add(e.id);
+        }
     }
-  }
-  return next === count && seen.size === reconstructed.filter((r) => r.link === 'entry').length;
+    return next === count && seen.size === reconstructed.filter((r) => r.link === 'entry').length;
 }

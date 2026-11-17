@@ -12,11 +12,13 @@
 export const MAILBOX_SEPARATOR = ', ';
 
 /** "a, b, c": the texts as given, '' for none. */
-export function joinPlain(items: readonly string[]): string {
-  return items.join(MAILBOX_SEPARATOR);
+export function joinPlain(items: readonly string[]): string
+{
+    return items.join(MAILBOX_SEPARATOR);
 }
 
 /** "Alice <a@x.test>, Bob <b@x.test>, Carol <c@x.test>": the texts as given, '' for none. */
-export function joinMailboxes(items: readonly string[]): string {
-  return joinPlain(items);
+export function joinMailboxes(items: readonly string[]): string
+{
+    return joinPlain(items);
 }

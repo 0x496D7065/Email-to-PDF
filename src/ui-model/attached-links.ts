@@ -45,102 +45,113 @@ const REPORT_TYPES: ReadonlySet<string> = new Set(['message/delivery-status', 'm
 export type UnreadAttachedCode = 'attached-unread' | 'attached-unread-inside';
 
 export interface AttachedLinks {
-  /** By list position: the list numbers (1-based) of the emails it is attached to, ascending, unique; [] if none. */
-  readonly attachedTo: readonly (readonly number[])[];
-  /** By list position: the list numbers of the emails attached to it, ascending, unique; [] if none. */
-  readonly attachedEmails: readonly (readonly number[])[];
-  /** By list position: its unread-attached note, or null. */
-  readonly unread: readonly (UnreadAttachedCode | null)[];
+    /** By list position: the list numbers (1-based) of the emails it is attached to, ascending, unique; [] if none. */
+    readonly attachedTo: readonly (readonly number[])[];
+    /** By list position: the list numbers of the emails attached to it, ascending, unique; [] if none. */
+    readonly attachedEmails: readonly (readonly number[])[];
+    /** By list position: its unread-attached note, or null. */
+    readonly unread: readonly (UnreadAttachedCode | null)[];
 }
 
 type LinkInput = Pick<EngineResult, 'messages' | 'positionByIndex' | 'attached' | 'counts'>;
 
 /** A list position from an input position, or null (unknown, a failed file). */
-function positionOf(result: LinkInput, index: number): number | null {
-  const position = result.positionByIndex[index];
-  return typeof position === 'number' && Number.isInteger(position) && position >= 0 && position < result.messages.length ? position : null;
+function positionOf(result: LinkInput, index: number): number | null
+{
+    const position = result.positionByIndex[index];
+    return typeof position === 'number' && Number.isInteger(position) && position >= 0 && position < result.messages.length ? position : null;
 }
 
 /** The numbers of a set, ascending. */
-function sorted(set: ReadonlySet<number> | undefined): number[] {
-  return set === undefined ? [] : [...set].sort((a, b) => a - b);
+function sorted(set: ReadonlySet<number> | undefined): number[]
+{
+    return set === undefined ? [] : [...set].sort((a, b) => a - b);
 }
 
 /** True if the email at `position` holds an email sent as an attachment that was not read (see the top of this file). */
-function holdsUnread(result: LinkInput, position: number, readAsFile: ReadonlyMap<number, number>): boolean {
-  const m = result.messages[position];
-  if (m === undefined) return false;
-  const message = m.message;
-  if (message.source.kind !== 'eml' || message.warnings.includes('forwarded-message-not-expanded')) return false;
-  // Its own attachments only: those of an email printed inside it carry attachedIndex.
-  const own = message.attachments.filter((a) => a.attachedIndex === undefined);
-  if (own.some((a) => REPORT_TYPES.has(a.mimeType))) return false;
-  const listed = own.filter((a) => a.mimeType === RFC822).length;
-  return listed > (readAsFile.get(m.index) ?? 0);
+function holdsUnread(result: LinkInput, position: number, readAsFile: ReadonlyMap<number, number>): boolean
+{
+    const m = result.messages[position];
+    if (m === undefined) return false;
+    const message = m.message;
+    if (message.source.kind !== 'eml' || message.warnings.includes('forwarded-message-not-expanded')) return false;
+    // Its own attachments only: those of an email printed inside it carry attachedIndex.
+    const own = message.attachments.filter((a) => a.attachedIndex === undefined);
+    if (own.some((a) => REPORT_TYPES.has(a.mimeType))) return false;
+    const listed = own.filter((a) => a.mimeType === RFC822).length;
+    return listed > (readAsFile.get(m.index) ?? 0);
 }
 
 /** Every attached entry that can be used (an object with whole-number positions and a places list). */
-function usableEntries(result: LinkInput): EngineAttached[] {
-  const list: unknown = result.attached;
-  if (!Array.isArray(list)) return [];
-  return (list as readonly unknown[]).filter(
-    (e): e is EngineAttached =>
-      typeof e === 'object' &&
-      e !== null &&
-      Number.isInteger((e as EngineAttached).index) &&
-      Number.isInteger((e as EngineAttached).parentIndex) &&
-      Array.isArray((e as EngineAttached).places),
-  );
+function usableEntries(result: LinkInput): EngineAttached[]
+{
+    const list: unknown = result.attached;
+    if (!Array.isArray(list)) return [];
+    return (list as readonly unknown[]).filter(
+        (e): e is EngineAttached =>
+            typeof e === 'object' &&
+            e !== null &&
+            Number.isInteger((e as EngineAttached).index) &&
+            Number.isInteger((e as EngineAttached).parentIndex) &&
+            Array.isArray((e as EngineAttached).places),
+    );
 }
 
 /** The links and notes of a result (see the top of this file). */
-export function attachedLinks(result: LinkInput): AttachedLinks {
-  const count = result.messages.length;
-  const to = new Map<number, Set<number>>();
-  const held = new Map<number, Set<number>>();
-  const add = (map: Map<number, Set<number>>, position: number, number: number): void => {
-    let set = map.get(position);
-    if (set === undefined) map.set(position, (set = new Set()));
-    set.add(number);
-  };
-  const entries = usableEntries(result);
-  // How many emails each email (by input position) holds as files, read as emails of their own.
-  const readAsFile = new Map<number, number>();
-  for (const e of entries) {
-    if (e.places.length === 0) readAsFile.set(e.parentIndex, (readAsFile.get(e.parentIndex) ?? 0) + 1);
-    const child = positionOf(result, e.index);
-    const holder = positionOf(result, e.parentIndex);
-    if (child === null || holder === null || child === holder) continue;
-    add(to, child, holder + 1);
-    add(held, holder, child + 1);
-  }
-
-  // The holder note first, for every email: it wins over the "inside" note.
-  const unread: (UnreadAttachedCode | null)[] = Array.from({ length: count }, (_, p) => (holdsUnread(result, p, readAsFile) ? 'attached-unread' : null));
-  for (let position = 0; position < count; position++) {
-    if (unread[position] !== 'attached-unread') continue;
-    // The emails that print it inline: the places of every copy of it (the
-    // kept one and the copies merged into it), at every level.
-    const m = result.messages[position];
-    const copies = m === undefined ? [] : [m.index, ...m.duplicates.map((d) => d.index)];
-    for (const index of copies) {
-      const places: unknown = attachedAt(result, index)?.places;
-      if (!Array.isArray(places)) continue;
-      for (const place of places as readonly EngineAttachedPlace[]) {
-        const holder = positionOf(result, place.holderIndex);
-        if (holder !== null && unread[holder] === null) unread[holder] = 'attached-unread-inside';
-      }
+export function attachedLinks(result: LinkInput): AttachedLinks
+{
+    const count = result.messages.length;
+    const to = new Map<number, Set<number>>();
+    const held = new Map<number, Set<number>>();
+    const add = (map: Map<number, Set<number>>, position: number, number: number): void =>
+    {
+        let set = map.get(position);
+        if (set === undefined) map.set(position, (set = new Set()));
+        set.add(number);
+    };
+    const entries = usableEntries(result);
+    // How many emails each email (by input position) holds as files, read as emails of their own.
+    const readAsFile = new Map<number, number>();
+    for (const e of entries)
+    {
+        if (e.places.length === 0) readAsFile.set(e.parentIndex, (readAsFile.get(e.parentIndex) ?? 0) + 1);
+        const child = positionOf(result, e.index);
+        const holder = positionOf(result, e.parentIndex);
+        if (child === null || holder === null || child === holder) continue;
+        add(to, child, holder + 1);
+        add(held, holder, child + 1);
     }
-  }
 
-  return {
-    attachedTo: Array.from({ length: count }, (_, p) => sorted(to.get(p))),
-    attachedEmails: Array.from({ length: count }, (_, p) => sorted(held.get(p))),
-    unread,
-  };
+    // The holder note first, for every email: it wins over the "inside" note.
+    const unread: (UnreadAttachedCode | null)[] = Array.from({ length: count }, (_, p) => (holdsUnread(result, p, readAsFile) ? 'attached-unread' : null));
+    for (let position = 0; position < count; position++)
+    {
+        if (unread[position] !== 'attached-unread') continue;
+        // The emails that print it inline: the places of every copy of it (the
+        // kept one and the copies merged into it), at every level.
+        const m = result.messages[position];
+        const copies = m === undefined ? [] : [m.index, ...m.duplicates.map((d) => d.index)];
+        for (const index of copies)
+        {
+            const places: unknown = attachedAt(result, index)?.places;
+            if (!Array.isArray(places)) continue;
+            for (const place of places as readonly EngineAttachedPlace[])
+            {
+                const holder = positionOf(result, place.holderIndex);
+                if (holder !== null && unread[holder] === null) unread[holder] = 'attached-unread-inside';
+            }
+        }
+    }
+
+    return {
+        attachedTo: Array.from({ length: count }, (_, p) => sorted(to.get(p))),
+        attachedEmails: Array.from({ length: count }, (_, p) => sorted(held.get(p))),
+        unread,
+    };
 }
 
 /** How many emails were found attached inside other emails (task 8.13b-4, P4): every one read as an email of its own, merged copies included. */
-export function attachedCount(result: Pick<EngineResult, 'attached'>): number {
-  return Array.isArray(result.attached) ? result.attached.length : 0;
+export function attachedCount(result: Pick<EngineResult, 'attached'>): number
+{
+    return Array.isArray(result.attached) ? result.attached.length : 0;
 }

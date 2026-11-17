@@ -151,11 +151,11 @@ export const MAX_TRAILING_LINES = 3;
 
 /** What the detector needs from each message. */
 export interface SignatureInput {
-  readonly bodyText: string;
-  /** Lower-cased sender address (see `senderKeyOf`); '' when unknown. */
-  readonly senderKey: string;
-  /** Offset where the sender's own text ends (start of the quoted history). Default: body length. */
-  readonly ownTextEnd?: number;
+    readonly bodyText: string;
+    /** Lower-cased sender address (see `senderKeyOf`); '' when unknown. */
+    readonly senderKey: string;
+    /** Offset where the sender's own text ends (start of the quoted history). Default: body length. */
+    readonly ownTextEnd?: number;
 }
 
 /**
@@ -163,36 +163,39 @@ export interface SignatureInput {
  * first From mailbox (as `authorKey` in dedupe.ts), or of `sender` when From
  * has none. '' when there is no address at all.
  */
-export function senderKeyOf(message: NormalizedMessage): string {
-  const key = authorKey(message);
-  if (key !== '') return key;
-  // authorKey only falls back to `sender` when From is empty. A From mailbox
-  // without an address (a bare display name) gives '' there; Sender, when
-  // present, still names the author, so it is used rather than leaving the
-  // message out of the frequency rule.
-  return message.sender?.address.toLowerCase() ?? '';
+export function senderKeyOf(message: NormalizedMessage): string
+{
+    const key = authorKey(message);
+    if (key !== '') return key;
+    // authorKey only falls back to `sender` when From is empty. A From mailbox
+    // without an address (a bare display name) gives '' there; Sender, when
+    // present, still names the author, so it is used rather than leaving the
+    // message out of the frequency rule.
+    return message.sender?.address.toLowerCase() ?? '';
 }
 
 /** Messages of one sender a pair must occur in: max(2, ceil(30% of them)). */
-export function minRepeat(senderMessages: number): number {
-  return Math.max(2, Math.ceil(MIN_REPEAT_SHARE * senderMessages));
+export function minRepeat(senderMessages: number): number
+{
+    return Math.max(2, Math.ceil(MIN_REPEAT_SHARE * senderMessages));
 }
 
 /** One message, prepared: its own lines and the normalized text of each. */
 interface Prepared {
-  readonly body: string;
-  readonly senderKey: string;
-  readonly ownTextEnd: number;
-  readonly lines: readonly LineRange[];
-  /** Indices (into `lines`) of the non-blank own lines, in order. */
-  readonly nonBlank: readonly number[];
-  /** Normalized text of each entry of `nonBlank`. */
-  readonly keys: readonly string[];
+    readonly body: string;
+    readonly senderKey: string;
+    readonly ownTextEnd: number;
+    readonly lines: readonly LineRange[];
+    /** Indices (into `lines`) of the non-blank own lines, in order. */
+    readonly nonBlank: readonly number[];
+    /** Normalized text of each entry of `nonBlank`. */
+    readonly keys: readonly string[];
 }
 
 /** NFC, whitespace runs (nbsp, tabs included) made one space, trimmed. */
-function normalizeLine(raw: string): string {
-  return raw.normalize('NFC').replace(/\s+/g, ' ').trim();
+function normalizeLine(raw: string): string
+{
+    return raw.normalize('NFC').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -201,139 +204,153 @@ function normalizeLine(raw: string): string {
  * "the same signature" when their keys are equal. Used by the PDF output
  * plan (output-plan.ts) to recognize a repeated signature.
  */
-export function signatureBlockKey(text: string): string {
-  const keys: string[] = [];
-  for (const line of lineRanges(text)) {
-    const key = normalizeLine(text.slice(line.start, line.contentEnd));
-    if (key !== '') keys.push(key);
-  }
-  return keys.join('\n');
+export function signatureBlockKey(text: string): string
+{
+    const keys: string[] = [];
+    for (const line of lineRanges(text))
+    {
+        const key = normalizeLine(text.slice(line.start, line.contentEnd));
+        if (key !== '') keys.push(key);
+    }
+    return keys.join('\n');
 }
 
-function prepare(input: SignatureInput): Prepared | null {
-  if (typeof (input as unknown) !== 'object' || (input as unknown) === null) return null;
-  const body: unknown = input.bodyText;
-  if (typeof body !== 'string') return null;
-  const rawKey: unknown = input.senderKey;
-  // Lower-cased again defensively: callers may build the key themselves
-  // rather than through senderKeyOf, and "Bob@" and "bob@" are one sender.
-  const senderKey = typeof rawKey === 'string' ? rawKey.toLowerCase() : '';
-  const rawEnd: unknown = input.ownTextEnd;
-  const ownTextEnd =
-    typeof rawEnd === 'number' && !Number.isNaN(rawEnd) ? Math.min(Math.max(rawEnd, 0), body.length) : body.length;
-  const lines = lineRanges(body);
-  // Lines are contiguous, so the own lines (ending before ownTextEnd) are a prefix.
-  let ownCount = 0;
-  while (ownCount < lines.length && (lines[ownCount]?.contentEnd ?? Infinity) <= ownTextEnd) ownCount++;
-  const nonBlank: number[] = [];
-  const keys: string[] = [];
-  for (let i = 0; i < ownCount; i++) {
-    const line = lines[i];
-    if (line === undefined) continue;
-    const key = normalizeLine(body.slice(line.start, line.contentEnd));
-    if (key === '') continue;
-    nonBlank.push(i);
-    keys.push(key);
-  }
-  return { body, senderKey, ownTextEnd, lines, nonBlank, keys };
+function prepare(input: SignatureInput): Prepared | null
+{
+    if (typeof (input as unknown) !== 'object' || (input as unknown) === null) return null;
+    const body: unknown = input.bodyText;
+    if (typeof body !== 'string') return null;
+    const rawKey: unknown = input.senderKey;
+    // Lower-cased again defensively: callers may build the key themselves
+    // rather than through senderKeyOf, and "Bob@" and "bob@" are one sender.
+    const senderKey = typeof rawKey === 'string' ? rawKey.toLowerCase() : '';
+    const rawEnd: unknown = input.ownTextEnd;
+    const ownTextEnd =
+        typeof rawEnd === 'number' && !Number.isNaN(rawEnd) ? Math.min(Math.max(rawEnd, 0), body.length) : body.length;
+    const lines = lineRanges(body);
+    // Lines are contiguous, so the own lines (ending before ownTextEnd) are a prefix.
+    let ownCount = 0;
+    while (ownCount < lines.length && (lines[ownCount]?.contentEnd ?? Infinity) <= ownTextEnd) ownCount++;
+    const nonBlank: number[] = [];
+    const keys: string[] = [];
+    for (let i = 0; i < ownCount; i++)
+    {
+        const line = lines[i];
+        if (line === undefined) continue;
+        const key = normalizeLine(body.slice(line.start, line.contentEnd));
+        if (key === '') continue;
+        nonBlank.push(i);
+        keys.push(key);
+    }
+    return { body, senderKey, ownTextEnd, lines, nonBlank, keys };
 }
 
 /** "--" then at least one space, tab or nbsp, nothing else: the RFC 3676 delimiter. */
 const STRONG_DELIMITER = /^--[ \t\u00A0]+$/;
 
 /** The fold for lines [first, last] (line breaks included), never past ownTextEnd. */
-function foldFor(p: Prepared, first: number, last: number): FoldRange | null {
-  const start = p.lines[first]?.start;
-  const lineEnd = p.lines[last]?.end;
-  if (start === undefined || lineEnd === undefined) return null;
-  const end = Math.min(lineEnd, p.ownTextEnd);
-  return end > start ? { start, end, reason: 'signature' } : null;
+function foldFor(p: Prepared, first: number, last: number): FoldRange | null
+{
+    const start = p.lines[first]?.start;
+    const lineEnd = p.lines[last]?.end;
+    if (start === undefined || lineEnd === undefined) return null;
+    const end = Math.min(lineEnd, p.ownTextEnd);
+    return end > start ? { start, end, reason: 'signature' } : null;
 }
 
 /** Rule 1: folds starting at a "-- " (or short "--") line. */
-function delimiterFolds(p: Prepared): FoldRange[] {
-  const folds: FoldRange[] = [];
-  const lastNonBlank = p.nonBlank[p.nonBlank.length - 1];
-  if (lastNonBlank === undefined) return folds;
-  // k starts at 1: a delimiter on the first non-blank own line is not one
-  // (SAFETY a: some own text must come before a signature).
-  for (let k = 1; k < p.nonBlank.length; k++) {
-    const i = p.nonBlank[k] ?? 0;
-    const line = p.lines[i];
-    if (line === undefined) continue;
-    const content = p.body.slice(line.start, line.contentEnd);
-    const strong = STRONG_DELIMITER.test(content);
-    if (!strong && content !== '--') continue;
-    if (lastNonBlank === i) continue; // nothing after the delimiter
-    const remaining = lastNonBlank - i + 1;
-    if (!strong && remaining > MAX_SIGNATURE_LINES) continue; // "--" inside prose
-    // Cap, then step back to the last non-blank line within the cap, so
-    // blank lines after the signature stay shown.
-    const capped = Math.min(lastNonBlank, i + MAX_SIGNATURE_LINES - 1);
-    let end = k;
-    while (end + 1 < p.nonBlank.length && (p.nonBlank[end + 1] ?? Infinity) <= capped) end++;
-    const fold = foldFor(p, i, p.nonBlank[end] ?? i);
-    if (fold !== null) folds.push(fold);
-  }
-  return folds;
+function delimiterFolds(p: Prepared): FoldRange[]
+{
+    const folds: FoldRange[] = [];
+    const lastNonBlank = p.nonBlank[p.nonBlank.length - 1];
+    if (lastNonBlank === undefined) return folds;
+    // k starts at 1: a delimiter on the first non-blank own line is not one
+    // (SAFETY a: some own text must come before a signature).
+    for (let k = 1; k < p.nonBlank.length; k++)
+    {
+        const i = p.nonBlank[k] ?? 0;
+        const line = p.lines[i];
+        if (line === undefined) continue;
+        const content = p.body.slice(line.start, line.contentEnd);
+        const strong = STRONG_DELIMITER.test(content);
+        if (!strong && content !== '--') continue;
+        if (lastNonBlank === i) continue; // nothing after the delimiter
+        const remaining = lastNonBlank - i + 1;
+        if (!strong && remaining > MAX_SIGNATURE_LINES) continue; // "--" inside prose
+        // Cap, then step back to the last non-blank line within the cap, so
+        // blank lines after the signature stay shown.
+        const capped = Math.min(lastNonBlank, i + MAX_SIGNATURE_LINES - 1);
+        let end = k;
+        while (end + 1 < p.nonBlank.length && (p.nonBlank[end + 1] ?? Infinity) <= capped) end++;
+        const fold = foldFor(p, i, p.nonBlank[end] ?? i);
+        if (fold !== null) folds.push(fold);
+    }
+    return folds;
 }
 
 /** Key of a pair of normalized lines. A normalized line never holds "\n" (whitespace was collapsed), so the key is unambiguous. */
-function pairKey(a: string, b: string): string {
-  return `${a}\n${b}`;
+function pairKey(a: string, b: string): string
+{
+    return `${a}\n${b}`;
 }
 
 /** The pairs of one message, each once. */
-function pairsOf(p: Prepared): Set<string> {
-  const set = new Set<string>();
-  for (let k = 0; k + 1 < p.keys.length; k++) set.add(pairKey(p.keys[k] ?? '', p.keys[k + 1] ?? ''));
-  return set;
+function pairsOf(p: Prepared): Set<string>
+{
+    const set = new Set<string>();
+    for (let k = 0; k + 1 < p.keys.length; k++) set.add(pairKey(p.keys[k] ?? '', p.keys[k + 1] ?? ''));
+    return set;
 }
 
 /** A chain of repeated pairs: entries [from, to] of `nonBlank` (both included). */
 interface Block {
-  readonly from: number;
-  readonly to: number;
+    readonly from: number;
+    readonly to: number;
 }
 
 /** Rule 2 for one message, given which of its pairs are repeated. */
-function frequencyFolds(p: Prepared, repeated: (key: string) => boolean): FoldRange[] {
-  // Maximal chains of repeated pairs.
-  const chains: Block[] = [];
-  let k = 0;
-  while (k + 1 < p.keys.length) {
-    if (!repeated(pairKey(p.keys[k] ?? '', p.keys[k + 1] ?? ''))) {
-      k++;
-      continue;
+function frequencyFolds(p: Prepared, repeated: (key: string) => boolean): FoldRange[]
+{
+    // Maximal chains of repeated pairs.
+    const chains: Block[] = [];
+    let k = 0;
+    while (k + 1 < p.keys.length)
+    {
+        if (!repeated(pairKey(p.keys[k] ?? '', p.keys[k + 1] ?? '')))
+        {
+            k++;
+            continue;
+        }
+        const from = k;
+        while (k + 1 < p.keys.length && repeated(pairKey(p.keys[k] ?? '', p.keys[k + 1] ?? ''))) k++;
+        chains.push({ from, to: k });
     }
-    const from = k;
-    while (k + 1 < p.keys.length && repeated(pairKey(p.keys[k] ?? '', p.keys[k + 1] ?? ''))) k++;
-    chains.push({ from, to: k });
-  }
-  // Size guard. MIN_BLOCK_LINES needs no test: a chain holds at least one
-  // pair, so at least 2 lines.
-  const blocks = chains.filter((b) => {
-    let chars = 0;
-    for (let j = b.from; j <= b.to; j++) chars += (p.keys[j] ?? '').replace(/ /g, '').length;
-    return chars >= MIN_BLOCK_CHARS;
-  });
-  // Position guard. `otherAfter[j]` = non-blank lines from entry j to the end
-  // that are not in any block.
-  const inBlock = new Array<boolean>(p.keys.length).fill(false);
-  for (const b of blocks) for (let j = b.from; j <= b.to; j++) inBlock[j] = true;
-  const otherAfter = new Array<number>(p.keys.length + 1).fill(0);
-  for (let j = p.keys.length - 1; j >= 0; j--) otherAfter[j] = (otherAfter[j + 1] ?? 0) + (inBlock[j] ? 0 : 1);
-  const folds: FoldRange[] = [];
-  for (const b of blocks) {
-    if (b.from === 0) continue; // SAFETY a: some own text must come before it
-    const after = otherAfter[b.to + 1] ?? 0;
-    const nearEnd = b.to + 1 > END_PART * p.keys.length;
-    const fewAfter = after <= MAX_TRAILING_LINES && after <= b.from; // b.from = own non-blank lines before it
-    if (!nearEnd || !fewAfter) continue;
-    const fold = foldFor(p, p.nonBlank[b.from] ?? 0, p.nonBlank[b.to] ?? 0);
-    if (fold !== null) folds.push(fold);
-  }
-  return folds;
+    // Size guard. MIN_BLOCK_LINES needs no test: a chain holds at least one
+    // pair, so at least 2 lines.
+    const blocks = chains.filter((b) =>
+    {
+        let chars = 0;
+        for (let j = b.from; j <= b.to; j++) chars += (p.keys[j] ?? '').replace(/ /g, '').length;
+        return chars >= MIN_BLOCK_CHARS;
+    });
+    // Position guard. `otherAfter[j]` = non-blank lines from entry j to the end
+    // that are not in any block.
+    const inBlock = new Array<boolean>(p.keys.length).fill(false);
+    for (const b of blocks) for (let j = b.from; j <= b.to; j++) inBlock[j] = true;
+    const otherAfter = new Array<number>(p.keys.length + 1).fill(0);
+    for (let j = p.keys.length - 1; j >= 0; j--) otherAfter[j] = (otherAfter[j + 1] ?? 0) + (inBlock[j] ? 0 : 1);
+    const folds: FoldRange[] = [];
+    for (const b of blocks)
+    {
+        if (b.from === 0) continue; // SAFETY a: some own text must come before it
+        const after = otherAfter[b.to + 1] ?? 0;
+        const nearEnd = b.to + 1 > END_PART * p.keys.length;
+        const fewAfter = after <= MAX_TRAILING_LINES && after <= b.from; // b.from = own non-blank lines before it
+        if (!nearEnd || !fewAfter) continue;
+        const fold = foldFor(p, p.nonBlank[b.from] ?? 0, p.nonBlank[b.to] ?? 0);
+        if (fold !== null) folds.push(fold);
+    }
+    return folds;
 }
 
 /**
@@ -343,38 +360,43 @@ function frequencyFolds(p: Prepared, repeated: (key: string) => boolean): FoldRa
  * for a message does not depend on the order of the input. Never throws:
  * bad entries get [].
  */
-export function detectSignatures(messages: readonly SignatureInput[]): FoldRange[][] {
-  if (!Array.isArray(messages)) return [];
-  const prepared = messages.map((m: SignatureInput) => prepare(m));
+export function detectSignatures(messages: readonly SignatureInput[]): FoldRange[][]
+{
+    if (!Array.isArray(messages)) return [];
+    const prepared = messages.map((m: SignatureInput) => prepare(m));
 
-  // Per sender: how many messages, and in how many of them each pair occurs.
-  const senders = new Map<string, { messages: number; pairs: Map<string, number> }>();
-  const pairSets = prepared.map((p) => (p !== null && p.senderKey !== '' ? pairsOf(p) : null));
-  prepared.forEach((p, i) => {
-    if (p === null || p.senderKey === '') return;
-    let entry = senders.get(p.senderKey);
-    if (entry === undefined) {
-      entry = { messages: 0, pairs: new Map() };
-      senders.set(p.senderKey, entry);
-    }
-    entry.messages++;
-    for (const key of pairSets[i] ?? []) entry.pairs.set(key, (entry.pairs.get(key) ?? 0) + 1);
-  });
+    // Per sender: how many messages, and in how many of them each pair occurs.
+    const senders = new Map<string, { messages: number; pairs: Map<string, number> }>();
+    const pairSets = prepared.map((p) => (p !== null && p.senderKey !== '' ? pairsOf(p) : null));
+    prepared.forEach((p, i) =>
+    {
+        if (p === null || p.senderKey === '') return;
+        let entry = senders.get(p.senderKey);
+        if (entry === undefined)
+        {
+            entry = { messages: 0, pairs: new Map() };
+            senders.set(p.senderKey, entry);
+        }
+        entry.messages++;
+        for (const key of pairSets[i] ?? []) entry.pairs.set(key, (entry.pairs.get(key) ?? 0) + 1);
+    });
 
-  return prepared.map((p) => {
-    if (p === null) return [];
-    let delimiter = delimiterFolds(p);
-    let frequency: FoldRange[] = [];
-    const entry = p.senderKey === '' ? undefined : senders.get(p.senderKey);
-    if (entry !== undefined && entry.messages >= MIN_MESSAGES_PER_SENDER) {
-      const needed = minRepeat(entry.messages);
-      frequency = frequencyFolds(p, (key) => (entry.pairs.get(key) ?? 0) >= needed);
-    }
-    // SAFETY b: at least one non-blank own line stays outside all folds.
-    if (coversAllOwnText(p, [...delimiter, ...frequency])) frequency = [];
-    if (coversAllOwnText(p, delimiter)) delimiter = [];
-    return [...delimiter, ...frequency].sort((a, b) => a.start - b.start || a.end - b.end);
-  });
+    return prepared.map((p) =>
+    {
+        if (p === null) return [];
+        let delimiter = delimiterFolds(p);
+        let frequency: FoldRange[] = [];
+        const entry = p.senderKey === '' ? undefined : senders.get(p.senderKey);
+        if (entry !== undefined && entry.messages >= MIN_MESSAGES_PER_SENDER)
+        {
+            const needed = minRepeat(entry.messages);
+            frequency = frequencyFolds(p, (key) => (entry.pairs.get(key) ?? 0) >= needed);
+        }
+        // SAFETY b: at least one non-blank own line stays outside all folds.
+        if (coversAllOwnText(p, [...delimiter, ...frequency])) frequency = [];
+        if (coversAllOwnText(p, delimiter)) delimiter = [];
+        return [...delimiter, ...frequency].sort((a, b) => a.start - b.start || a.end - b.end);
+    });
 }
 
 /**
@@ -382,21 +404,24 @@ export function detectSignatures(messages: readonly SignatureInput[]): FoldRange
  * `folds` (always false without own text). Folds are merged after sorting
  * and the lines walked once, so the cost is O(lines + folds log folds).
  */
-function coversAllOwnText(p: Prepared, folds: readonly FoldRange[]): boolean {
-  if (p.nonBlank.length === 0 || folds.length === 0) return false;
-  const merged: { start: number; end: number }[] = [];
-  for (const f of [...folds].sort((a, b) => a.start - b.start)) {
-    const last = merged[merged.length - 1];
-    if (last !== undefined && f.start <= last.end) last.end = Math.max(last.end, f.end);
-    else merged.push({ start: f.start, end: f.end });
-  }
-  let m = 0;
-  for (const i of p.nonBlank) {
-    const line = p.lines[i];
-    if (line === undefined) return false;
-    while (m < merged.length && (merged[m]?.end ?? 0) < line.contentEnd) m++;
-    const span = merged[m];
-    if (span === undefined || span.start > line.start) return false;
-  }
-  return true;
+function coversAllOwnText(p: Prepared, folds: readonly FoldRange[]): boolean
+{
+    if (p.nonBlank.length === 0 || folds.length === 0) return false;
+    const merged: { start: number; end: number }[] = [];
+    for (const f of [...folds].sort((a, b) => a.start - b.start))
+    {
+        const last = merged[merged.length - 1];
+        if (last !== undefined && f.start <= last.end) last.end = Math.max(last.end, f.end);
+        else merged.push({ start: f.start, end: f.end });
+    }
+    let m = 0;
+    for (const i of p.nonBlank)
+    {
+        const line = p.lines[i];
+        if (line === undefined) return false;
+        while (m < merged.length && (merged[m]?.end ?? 0) < line.contentEnd) m++;
+        const span = merged[m];
+        if (span === undefined || span.start > line.start) return false;
+    }
+    return true;
 }

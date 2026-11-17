@@ -32,8 +32,9 @@ export const PDF_TIMEOUT_BASE_MS = 120_000;
 export const PDF_TIMEOUT_PER_EMAIL_MS = 50;
 
 /** The time limit for a PDF of `emails` emails (see PDF_TIMEOUT_BASE_MS). */
-export function pdfTimeoutMs(emails: number): number {
-  return PDF_TIMEOUT_BASE_MS + PDF_TIMEOUT_PER_EMAIL_MS * Math.max(0, emails);
+export function pdfTimeoutMs(emails: number): number
+{
+    return PDF_TIMEOUT_BASE_MS + PDF_TIMEOUT_PER_EMAIL_MS * Math.max(0, emails);
 }
 
 /** Why there is no PDF. */
@@ -41,75 +42,91 @@ export type PdfFailure = 'timeout' | 'tool-error' | 'not-started' | 'cancelled';
 
 /** The PDF, or why there is none. */
 export type PdfOutcome =
-  | { readonly ok: true; readonly bytes: Uint8Array; readonly fileName: string; readonly pageCount: number }
-  | { readonly ok: false; readonly error: PdfFailure };
+    | { readonly ok: true; readonly bytes: Uint8Array; readonly fileName: string; readonly pageCount: number }
+    | { readonly ok: false; readonly error: PdfFailure };
 
 /** Starts a PDF worker and connects its events. May throw (then the outcome is 'not-started'). */
 export type PdfWorkerFactory = (events: WorkerEvents) => WorkerHandle<ToPdfWorker>;
 
 export interface PdfRunOptions {
-  readonly createWorker: PdfWorkerFactory;
-  readonly timeoutMs: number;
-  /** Stops the run: the worker is terminated at once ('cancelled'). Already aborted: no worker is started. */
-  readonly signal?: AbortSignal;
+    readonly createWorker: PdfWorkerFactory;
+    readonly timeoutMs: number;
+    /** Stops the run: the worker is terminated at once ('cancelled'). Already aborted: no worker is started. */
+    readonly signal?: AbortSignal;
 }
 
 /** Makes one PDF in its own worker. Never throws and never rejects. */
-export function runPdfInWorker(request: MakePdfRequest, options: PdfRunOptions): Promise<PdfOutcome> {
-  return new Promise((resolve) => {
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let worker: WorkerHandle<ToPdfWorker> | undefined;
-    const { signal } = options;
+export function runPdfInWorker(request: MakePdfRequest, options: PdfRunOptions): Promise<PdfOutcome>
+{
+    return new Promise((resolve) =>
+    {
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let worker: WorkerHandle<ToPdfWorker> | undefined;
+        const { signal } = options;
 
-    const finish = (outcome: PdfOutcome): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      // Terminated in every case: a finished worker holds a copy of every
-      // email, a stuck one holds the CPU.
-      try {
-        worker?.terminate();
-      } catch {
-        // Nothing more to do: the outcome is what matters.
-      }
-      resolve(outcome);
-    };
-    const fail = (error: PdfFailure): void => finish({ ok: false, error });
-    // A function declaration (hoisted): finish() above removes it.
-    function onAbort(): void {
-      fail('cancelled');
-    }
-    if (signal?.aborted === true) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener('abort', onAbort, { once: true });
+        const finish = (outcome: PdfOutcome): void =>
+        {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            // Terminated in every case: a finished worker holds a copy of every
+            // email, a stuck one holds the CPU.
+            try
+            {
+                worker?.terminate();
+            }
+            catch
+            {
+                // Nothing more to do: the outcome is what matters.
+            }
+            resolve(outcome);
+        };
+        const fail = (error: PdfFailure): void => finish({ ok: false, error });
+        // A function declaration (hoisted): finish() above removes it.
+        function onAbort(): void
+        {
+            fail('cancelled');
+        }
+        if (signal?.aborted === true)
+        {
+            onAbort();
+            return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
 
-    const onMessage = (data: unknown): void => {
-      if (settled) return;
-      if (!isFromPdfWorker(data) || data.type === 'failed') {
-        fail('tool-error');
-        return;
-      }
-      finish({ ok: true, bytes: data.bytes, fileName: data.fileName, pageCount: data.pageCount });
-    };
+        const onMessage = (data: unknown): void =>
+        {
+            if (settled) return;
+            if (!isFromPdfWorker(data) || data.type === 'failed')
+            {
+                fail('tool-error');
+                return;
+            }
+            finish({ ok: true, bytes: data.bytes, fileName: data.fileName, pageCount: data.pageCount });
+        };
 
-    try {
-      worker = options.createWorker({ message: onMessage, failure: () => fail('tool-error') });
-    } catch {
-      fail('not-started');
-      return;
-    }
-    try {
-      timer = setTimeout(() => fail('timeout'), options.timeoutMs);
-      // Copied, not moved: the page keeps its input and its font bytes.
-      worker.send(request, []);
-    } catch {
-      fail('tool-error');
-    }
-  });
+        try
+        {
+            worker = options.createWorker({ message: onMessage, failure: () => fail('tool-error') });
+        }
+        catch
+        {
+            fail('not-started');
+            return;
+        }
+        try
+        {
+            timer = setTimeout(() => fail('timeout'), options.timeoutMs);
+            // Copied, not moved: the page keeps its input and its font bytes.
+            worker.send(request, []);
+        }
+        catch
+        {
+            fail('tool-error');
+        }
+    });
 }
 
 /**
@@ -120,4 +137,4 @@ export function runPdfInWorker(request: MakePdfRequest, options: PdfRunOptions):
  * the blob: URLs of the workers are cleaned up.
  */
 export const createBrowserPdfWorker: PdfWorkerFactory = (events) =>
-  connectWorker<ToPdfWorker>(new PdfWorker({ name: 'pdf-worker' }), events);
+    connectWorker<ToPdfWorker>(new PdfWorker({ name: 'pdf-worker' }), events);

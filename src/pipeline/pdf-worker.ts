@@ -26,12 +26,13 @@ import { createPdfWorkerSide, type FromPdfWorker } from './pdf-protocol';
  * worker's; same approach as src/pipeline/engine-worker.ts).
  */
 interface WorkerScope {
-  onmessage: ((event: MessageEvent<unknown>) => void) | null;
-  postMessage(message: FromPdfWorker, transfer: Transferable[]): void;
+    onmessage: ((event: MessageEvent<unknown>) => void) | null;
+    postMessage(message: FromPdfWorker, transfer: Transferable[]): void;
 }
 
 const scope = self as unknown as WorkerScope;
 const handle = createPdfWorkerSide((message, transfer) => scope.postMessage(message, transfer));
-scope.onmessage = (event) => {
-  void handle(event.data);
+scope.onmessage = (event) =>
+{
+    void handle(event.data);
 };

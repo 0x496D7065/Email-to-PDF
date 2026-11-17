@@ -19,57 +19,57 @@
 
 /** Tags the page may create. Add a tag here only if it cannot run code or load anything. */
 export const SAFE_TAGS = [
-  'a',
-  'button',
-  'details',
-  'div',
-  'dd',
-  'dl',
-  'dt',
-  'em',
-  'fieldset',
-  'footer',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'header',
-  'input',
-  'label',
-  'legend',
-  'li',
-  'main',
-  'nav',
-  'ol',
-  'option',
-  'output',
-  'p',
-  'pre',
-  'progress',
-  'section',
-  'select',
-  'small',
-  'span',
-  'strong',
-  'summary',
-  'time',
-  'ul',
+    'a',
+    'button',
+    'details',
+    'div',
+    'dd',
+    'dl',
+    'dt',
+    'em',
+    'fieldset',
+    'footer',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'header',
+    'input',
+    'label',
+    'legend',
+    'li',
+    'main',
+    'nav',
+    'ol',
+    'option',
+    'output',
+    'p',
+    'pre',
+    'progress',
+    'section',
+    'select',
+    'small',
+    'span',
+    'strong',
+    'summary',
+    'time',
+    'ul',
 ] as const;
 export type SafeTag = (typeof SAFE_TAGS)[number];
 
 /** Attributes that take a URL. Only href and src are allowed, and only with safe values. */
 const URL_ATTRIBUTES = new Set([
-  'action',
-  'background',
-  'cite',
-  'data',
-  'formaction',
-  'href',
-  'manifest',
-  'ping',
-  'poster',
-  'src',
-  'srcset',
+    'action',
+    'background',
+    'cite',
+    'data',
+    'formaction',
+    'href',
+    'manifest',
+    'ping',
+    'poster',
+    'src',
+    'srcset',
 ]);
 const ALLOWED_URL_ATTRIBUTES = new Set(['href', 'src']);
 // Inline styles are blocked by the CSP anyway (README.md, rule R2).
@@ -88,22 +88,25 @@ const RELATIVE_URL = /^[A-Za-z0-9._~/-]+(?:[?#][A-Za-z0-9._~/?#=&%-]*)?$/;
 const FRAGMENT = /^#[^\s\\]*$/;
 
 /** True if the text holds a control character (code 0-31 or 127). */
-function hasControlCharacter(text: string): boolean {
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    if (code < 0x20 || code === 0x7f) return true;
-  }
-  return false;
+function hasControlCharacter(text: string): boolean
+{
+    for (let i = 0; i < text.length; i++)
+    {
+        const code = text.charCodeAt(i);
+        if (code < 0x20 || code === 0x7f) return true;
+    }
+    return false;
 }
 
 /**
  * Is `value` a safe URL for href/src? Only '#fragment' or a relative path on
  * the same site (never starting with //, which would be another site).
  */
-export function isSafeUrl(value: string): boolean {
-  if (hasControlCharacter(value)) return false;
-  if (value.startsWith('#')) return FRAGMENT.test(value);
-  return !value.startsWith('//') && RELATIVE_URL.test(value);
+export function isSafeUrl(value: string): boolean
+{
+    if (hasControlCharacter(value)) return false;
+    if (value.startsWith('#')) return FRAGMENT.test(value);
+    return !value.startsWith('//') && RELATIVE_URL.test(value);
 }
 
 /**
@@ -113,10 +116,11 @@ export function isSafeUrl(value: string): boolean {
  * finished PDF), never at the network. `origin` is the page's own
  * (location.origin); an opaque origin ("null") is refused.
  */
-export function isOwnBlobUrl(value: string, origin: string): boolean {
-  if (hasControlCharacter(value) || origin === '' || origin === 'null') return false;
-  const prefix = `blob:${origin}/`;
-  return value.startsWith(prefix) && /^[0-9A-Fa-f-]+$/.test(value.slice(prefix.length));
+export function isOwnBlobUrl(value: string, origin: string): boolean
+{
+    if (hasControlCharacter(value) || origin === '' || origin === 'null') return false;
+    const prefix = `blob:${origin}/`;
+    return value.startsWith(prefix) && /^[0-9A-Fa-f-]+$/.test(value.slice(prefix.length));
 }
 
 /**
@@ -125,9 +129,10 @@ export function isOwnBlobUrl(value: string, origin: string): boolean {
  * (see isOwnBlobUrl). Throws for anything else. el() and setSafeAttribute
  * keep refusing every blob: URL.
  */
-export function setBlobHref(link: HTMLAnchorElement, url: string, origin: string): void {
-  if (!isOwnBlobUrl(url, origin)) throw new Error('setBlobHref(): href may only hold a blob: URL made by this page');
-  link.setAttribute('href', url);
+export function setBlobHref(link: HTMLAnchorElement, url: string, origin: string): void
+{
+    if (!isOwnBlobUrl(url, origin)) throw new Error('setBlobHref(): href may only hold a blob: URL made by this page');
+    link.setAttribute('href', url);
 }
 
 /**
@@ -162,64 +167,69 @@ export const DONATION_IMAGE = { src: 'ko-fi/support_me_on_kofi_blue.png', width:
  * Built with createElement like el(); <img> stays out of SAFE_TAGS, so this
  * is the only image the page can ever make.
  */
-export function donationLink(id: string): { readonly link: HTMLAnchorElement; readonly image: HTMLImageElement } {
-  const link = document.createElement('a');
-  link.setAttribute('href', DONATION_URL);
-  setSafeAttribute(link, 'id', id);
-  setSafeAttribute(link, 'class', 'donate');
-  setSafeAttribute(link, 'target', '_blank');
-  setSafeAttribute(link, 'rel', 'noopener noreferrer');
-  const image = document.createElement('img');
-  setSafeAttribute(image, 'class', 'donate-image');
-  setSafeAttribute(image, 'src', DONATION_IMAGE.src);
-  setSafeAttribute(image, 'width', String(DONATION_IMAGE.width));
-  setSafeAttribute(image, 'height', String(DONATION_IMAGE.height));
-  link.append(image);
-  return { link, image };
+export function donationLink(id: string): { readonly link: HTMLAnchorElement; readonly image: HTMLImageElement }
+{
+    const link = document.createElement('a');
+    link.setAttribute('href', DONATION_URL);
+    setSafeAttribute(link, 'id', id);
+    setSafeAttribute(link, 'class', 'donate');
+    setSafeAttribute(link, 'target', '_blank');
+    setSafeAttribute(link, 'rel', 'noopener noreferrer');
+    const image = document.createElement('img');
+    setSafeAttribute(image, 'class', 'donate-image');
+    setSafeAttribute(image, 'src', DONATION_IMAGE.src);
+    setSafeAttribute(image, 'width', String(DONATION_IMAGE.width));
+    setSafeAttribute(image, 'height', String(DONATION_IMAGE.height));
+    link.append(image);
+    return { link, image };
 }
 
 /**
  * Why setting this attribute is refused, or null if it is fine.
  * Pure function, unit tested without a DOM.
  */
-export function attributeProblem(name: string, value: string): string | null {
-  if (!ATTRIBUTE_NAME.test(name)) return `attribute name "${name}" is not allowed`;
-  if (name.startsWith('on')) return `event handler attribute "${name}" is not allowed (use addEventListener)`;
-  if (FORBIDDEN_ATTRIBUTES.has(name)) return `attribute "${name}" is not allowed`;
-  // Every src-something except src itself: srcset, and the frame attribute
-  // that holds a whole HTML document. Matched by prefix so that word never
-  // appears in the built code, where the build check bans it outright.
-  if (name.startsWith('src') && name !== 'src') return `attribute "${name}" is not allowed`;
-  if (URL_ATTRIBUTES.has(name)) {
-    if (!ALLOWED_URL_ATTRIBUTES.has(name)) return `URL attribute "${name}" is not allowed`;
-    if (!isSafeUrl(value)) return `"${name}" may only hold a #fragment or a relative same-site path`;
-  }
-  return null;
+export function attributeProblem(name: string, value: string): string | null
+{
+    if (!ATTRIBUTE_NAME.test(name)) return `attribute name "${name}" is not allowed`;
+    if (name.startsWith('on')) return `event handler attribute "${name}" is not allowed (use addEventListener)`;
+    if (FORBIDDEN_ATTRIBUTES.has(name)) return `attribute "${name}" is not allowed`;
+    // Every src-something except src itself: srcset, and the frame attribute
+    // that holds a whole HTML document. Matched by prefix so that word never
+    // appears in the built code, where the build check bans it outright.
+    if (name.startsWith('src') && name !== 'src') return `attribute "${name}" is not allowed`;
+    if (URL_ATTRIBUTES.has(name))
+    {
+        if (!ALLOWED_URL_ATTRIBUTES.has(name)) return `URL attribute "${name}" is not allowed`;
+        if (!isSafeUrl(value)) return `"${name}" may only hold a #fragment or a relative same-site path`;
+    }
+    return null;
 }
 
 /** Attribute values: a string, or true (present, empty) / false (left out), e.g. { disabled: true }. */
 export type AttributeValue = string | boolean;
 
 export interface ElementOptions {
-  readonly attrs?: Readonly<Record<string, AttributeValue>>;
-  /** Set with textContent: always shown as text, never read as HTML. */
-  readonly text?: string;
-  /** Appended in order. A string becomes a text node (never HTML). */
-  readonly children?: readonly (Node | string)[];
+    readonly attrs?: Readonly<Record<string, AttributeValue>>;
+    /** Set with textContent: always shown as text, never read as HTML. */
+    readonly text?: string;
+    /** Appended in order. A string becomes a text node (never HTML). */
+    readonly children?: readonly (Node | string)[];
 }
 
 /** Sets one attribute after checking it (see attributeProblem). Throws if refused. */
-export function setSafeAttribute(element: Element, name: string, value: AttributeValue): void {
-  if (value === false) {
-    // Removing is harmless, but an odd name is still a bug in our code.
-    if (!ATTRIBUTE_NAME.test(name)) throw new Error(`el(): attribute name "${name}" is not allowed`);
-    element.removeAttribute(name);
-    return;
-  }
-  const text = value === true ? '' : value;
-  const problem = attributeProblem(name, text);
-  if (problem !== null) throw new Error(`el(): ${problem}`);
-  element.setAttribute(name, text);
+export function setSafeAttribute(element: Element, name: string, value: AttributeValue): void
+{
+    if (value === false)
+    {
+        // Removing is harmless, but an odd name is still a bug in our code.
+        if (!ATTRIBUTE_NAME.test(name)) throw new Error(`el(): attribute name "${name}" is not allowed`);
+        element.removeAttribute(name);
+        return;
+    }
+    const text = value === true ? '' : value;
+    const problem = attributeProblem(name, text);
+    if (problem !== null) throw new Error(`el(): ${problem}`);
+    element.setAttribute(name, text);
 }
 
 /**
@@ -227,12 +237,13 @@ export function setSafeAttribute(element: Element, name: string, value: Attribut
  * tag or attribute that is not allowed: that is a bug in our code, and it
  * should be found by the tests, not hidden.
  */
-export function el<K extends SafeTag>(tag: K, options: ElementOptions = {}): HTMLElementTagNameMap[K] {
-  // Checked at run time too, in case a tag arrives through an `as` cast.
-  if (!(SAFE_TAGS as readonly string[]).includes(tag)) throw new Error(`el(): tag "${tag}" is not allowed`);
-  const element = document.createElement(tag);
-  for (const [name, value] of Object.entries(options.attrs ?? {})) setSafeAttribute(element, name, value);
-  if (options.text !== undefined) element.textContent = options.text;
-  if (options.children !== undefined) element.append(...options.children);
-  return element;
+export function el<K extends SafeTag>(tag: K, options: ElementOptions = {}): HTMLElementTagNameMap[K]
+{
+    // Checked at run time too, in case a tag arrives through an `as` cast.
+    if (!(SAFE_TAGS as readonly string[]).includes(tag)) throw new Error(`el(): tag "${tag}" is not allowed`);
+    const element = document.createElement(tag);
+    for (const [name, value] of Object.entries(options.attrs ?? {})) setSafeAttribute(element, name, value);
+    if (options.text !== undefined) element.textContent = options.text;
+    if (options.children !== undefined) element.append(...options.children);
+    return element;
 }

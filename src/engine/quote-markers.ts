@@ -58,19 +58,21 @@ export const MIN_MARKED_LINES = 2;
 type LineKind = 'blank' | 'marked-text' | 'marked-bare' | 'other';
 
 /** True for whitespace, including tab, nbsp and the byte-order mark U+FEFF. */
-function isSpace(ch: string): boolean {
-  return /\s/.test(ch);
+function isSpace(ch: string): boolean
+{
+    return /\s/.test(ch);
 }
 
 /** Classifies the content of one line (line break excluded). */
-function classify(text: string, line: LineRange): LineKind {
-  let i = line.start;
-  while (i < line.contentEnd && isSpace(text.charAt(i))) i++;
-  if (i === line.contentEnd) return 'blank';
-  if (text.charAt(i) !== '>') return 'other';
-  // Skip the markers and the spaces between them ("> > ", ">>", ">\t>").
-  while (i < line.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i)))) i++;
-  return i === line.contentEnd ? 'marked-bare' : 'marked-text';
+function classify(text: string, line: LineRange): LineKind
+{
+    let i = line.start;
+    while (i < line.contentEnd && isSpace(text.charAt(i))) i++;
+    if (i === line.contentEnd) return 'blank';
+    if (text.charAt(i) !== '>') return 'other';
+    // Skip the markers and the spaces between them ("> > ", ">>", ">\t>").
+    while (i < line.contentEnd && (text.charAt(i) === '>' || isSpace(text.charAt(i)))) i++;
+    return i === line.contentEnd ? 'marked-bare' : 'marked-text';
 }
 
 /**
@@ -78,42 +80,50 @@ function classify(text: string, line: LineRange): LineKind {
  * per block (reason 'quote-marker', no `related`), sorted by position.
  * Never throws: a non-string input gives [].
  */
-export function detectQuoteMarkers(bodyText: string): FoldRange[] {
-  if (typeof (bodyText as unknown) !== 'string') return [];
-  const lines = lineRanges(bodyText);
-  const kinds = lines.map((line) => classify(bodyText, line));
-  const folds: FoldRange[] = [];
+export function detectQuoteMarkers(bodyText: string): FoldRange[]
+{
+    if (typeof (bodyText as unknown) !== 'string') return [];
+    const lines = lineRanges(bodyText);
+    const kinds = lines.map((line) => classify(bodyText, line));
+    const folds: FoldRange[] = [];
 
-  let i = 0;
-  while (i < lines.length) {
-    if (kinds[i] !== 'marked-text' && kinds[i] !== 'marked-bare') {
-      i++;
-      continue;
+    let i = 0;
+    while (i < lines.length)
+    {
+        if (kinds[i] !== 'marked-text' && kinds[i] !== 'marked-bare')
+        {
+            i++;
+            continue;
+        }
+        // A block starts at line i. `last` is its last marked line so far; blank
+        // lines after it only join when another marked line follows.
+        const first = i;
+        let last = i;
+        let withText = 0;
+        let j = i;
+        while (j < lines.length)
+        {
+            const kind = kinds[j];
+            if (kind === 'marked-text' || kind === 'marked-bare')
+            {
+                if (kind === 'marked-text') withText++;
+                last = j;
+            }
+            else if (kind !== 'blank')
+            {
+                break; // a line with other text ends the block
+            }
+            j++;
+        }
+        if (withText >= MIN_MARKED_LINES)
+        {
+            const start = lines[first]?.start ?? 0;
+            const end = lines[last]?.end ?? bodyText.length;
+            folds.push({ start, end, reason: 'quote-marker' });
+        }
+        // Go on after the last marked line: trailing blank lines are not part
+        // of this block and cannot start a new one.
+        i = last + 1;
     }
-    // A block starts at line i. `last` is its last marked line so far; blank
-    // lines after it only join when another marked line follows.
-    const first = i;
-    let last = i;
-    let withText = 0;
-    let j = i;
-    while (j < lines.length) {
-      const kind = kinds[j];
-      if (kind === 'marked-text' || kind === 'marked-bare') {
-        if (kind === 'marked-text') withText++;
-        last = j;
-      } else if (kind !== 'blank') {
-        break; // a line with other text ends the block
-      }
-      j++;
-    }
-    if (withText >= MIN_MARKED_LINES) {
-      const start = lines[first]?.start ?? 0;
-      const end = lines[last]?.end ?? bodyText.length;
-      folds.push({ start, end, reason: 'quote-marker' });
-    }
-    // Go on after the last marked line: trailing blank lines are not part
-    // of this block and cannot start a new one.
-    i = last + 1;
-  }
-  return folds;
+    return folds;
 }

@@ -49,8 +49,9 @@ import { bodyLines } from '../pdf/text';
 export const UNREADABLE_BODY_WARNINGS: readonly ParseWarning[] = ['html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'];
 
 /** True when `text` is a string the PDF would show as an empty text (bodyLines gives no line). */
-function isEmptyText(text: unknown): boolean {
-  return typeof text === 'string' && bodyLines(text).lines.length === 0;
+function isEmptyText(text: unknown): boolean
+{
+    return typeof text === 'string' && bodyLines(text).lines.length === 0;
 }
 
 /**
@@ -58,17 +59,19 @@ function isEmptyText(text: unknown): boolean {
  * top of this file): its body has no printable text and no warning says its
  * text could not be read.
  */
-export function hasNoPrintableText(m: Pick<NormalizedMessage, 'bodyText' | 'warnings'>): boolean {
-  if (!isEmptyText(m.bodyText)) return false;
-  // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
-  const isList: boolean = Array.isArray(m.warnings);
-  if (!isList) return false;
-  return !m.warnings.some((w) => UNREADABLE_BODY_WARNINGS.includes(w));
+export function hasNoPrintableText(m: Pick<NormalizedMessage, 'bodyText' | 'warnings'>): boolean
+{
+    if (!isEmptyText(m.bodyText)) return false;
+    // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+    const isList: boolean = Array.isArray(m.warnings);
+    if (!isList) return false;
+    return !m.warnings.some((w) => UNREADABLE_BODY_WARNINGS.includes(w));
 }
 
 /** True when the PDF leaves this rebuilt email out because its rebuilt text has no text (Q4). */
-export function rebuiltHasNoPrintableText(r: Pick<EngineRebuilt, 'rebuilt'>): boolean {
-  return isEmptyText(r.rebuilt?.reconstructedText);
+export function rebuiltHasNoPrintableText(r: Pick<EngineRebuilt, 'rebuilt'>): boolean
+{
+    return isEmptyText(r.rebuilt?.reconstructedText);
 }
 
 /**
@@ -76,9 +79,11 @@ export function rebuiltHasNoPrintableText(r: Pick<EngineRebuilt, 'rebuilt'>): bo
  * given order) less the emails left out because they have no text, and less
  * any position without an email.
  */
-export function pdfPositions(result: Pick<EngineResult, 'messages'>, positions: readonly number[]): number[] {
-  return positions.filter((p) => {
-    const m = result.messages[p];
-    return m !== undefined && !hasNoPrintableText(m.message);
-  });
+export function pdfPositions(result: Pick<EngineResult, 'messages'>, positions: readonly number[]): number[]
+{
+    return positions.filter((p) =>
+    {
+        const m = result.messages[p];
+        return m !== undefined && !hasNoPrintableText(m.message);
+    });
 }

@@ -13,6 +13,7 @@ import type { PdfFonts } from './generate';
 import { parsePdfFonts } from './parse-fonts';
 
 /** Parses each WOFF file (default: the bundled ones). Rejects with a FontError for a broken file. */
-export function loadPdfFonts(files: Readonly<Record<PdfFontName, Uint8Array>> = PDF_FONTS): Promise<PdfFonts> {
-  return parsePdfFonts(files);
+export function loadPdfFonts(files: Readonly<Record<PdfFontName, Uint8Array>> = PDF_FONTS): Promise<PdfFonts>
+{
+    return parsePdfFonts(files);
 }

@@ -20,21 +20,21 @@ export const FILE_CHAIN_SEPARATOR = ' › ';
 
 /** The tool's own words in a chain, in the language shown. */
 export interface FileChainWords {
-  /** For a file without a name: "(file without a name)". */
-  readonly noFileName: string;
-  /** For an attachment without a name, by its number at that level: "(attached email 2)". */
-  attachedNoName(number: number): string;
+    /** For a file without a name: "(file without a name)". */
+    readonly noFileName: string;
+    /** For an attachment without a name, by its number at that level: "(attached email 2)". */
+    attachedNoName(number: number): string;
 }
 
 /** One copy's chain. */
 export interface FileChain {
-  readonly text: string;
-  /**
-   * True when `text` is only the tool's own words (a file's own email, the
-   * file without a name): the PDF draws it as such, never through its
-   * character check. False when it holds names read from the files.
-   */
-  readonly ownWords: boolean;
+    readonly text: string;
+    /**
+     * True when `text` is only the tool's own words (a file's own email, the
+     * file without a name): the PDF draws it as such, never through its
+     * character check. False when it holds names read from the files.
+     */
+    readonly ownWords: boolean;
 }
 
 /**
@@ -42,10 +42,11 @@ export interface FileChain {
  * copy), whose file is named `fileName` (NormalizedMessage.source.fileName;
  * blank: "(file without a name)").
  */
-export function fileChain(result: Pick<EngineResult, 'attached' | 'counts'>, index: number, fileName: string, words: FileChainWords): FileChain {
-  const file = fileName.trim() === '' ? null : fileName;
-  const attached = attachedAt(result, index);
-  if (attached === undefined) return file === null ? { text: words.noFileName, ownWords: true } : { text: file, ownWords: false };
-  const levels = attached.names.map((name, k) => (name.trim() === '' ? words.attachedNoName(attached.path[k] ?? k + 1) : name));
-  return { text: [file ?? words.noFileName, ...levels].join(FILE_CHAIN_SEPARATOR), ownWords: false };
+export function fileChain(result: Pick<EngineResult, 'attached' | 'counts'>, index: number, fileName: string, words: FileChainWords): FileChain
+{
+    const file = fileName.trim() === '' ? null : fileName;
+    const attached = attachedAt(result, index);
+    if (attached === undefined) return file === null ? { text: words.noFileName, ownWords: true } : { text: file, ownWords: false };
+    const levels = attached.names.map((name, k) => (name.trim() === '' ? words.attachedNoName(attached.path[k] ?? k + 1) : name));
+    return { text: [file ?? words.noFileName, ...levels].join(FILE_CHAIN_SEPARATOR), ownWords: false };
 }

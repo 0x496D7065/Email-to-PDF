@@ -55,21 +55,25 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = join(root, 'dist');
 
 /** All files under `dir`, recursively. */
-function listFiles(dir) {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    return statSync(path).isDirectory() ? listFiles(path) : [path];
-  });
+function listFiles(dir)
+{
+    return readdirSync(dir).flatMap((name) =>
+    {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? listFiles(path) : [path];
+    });
 }
 
 /** Path relative to the project root, with forward slashes for readability. */
-function display(path) {
-  return relative(root, path).split(sep).join('/');
+function display(path)
+{
+    return relative(root, path).split(sep).join('/');
 }
 
-if (!existsSync(dist)) {
-  console.error('check-no-network: dist/ does not exist. Run "npm run build" first.');
-  process.exit(1);
+if (!existsSync(dist))
+{
+    console.error('check-no-network: dist/ does not exist. Run "npm run build" first.');
+    process.exit(1);
 }
 
 // Font files (src/fonts/*.woff) are binary: they are not scanned as text but
@@ -85,36 +89,41 @@ const errors = [];
 const distTexts = [];
 
 for (const [files, isDist] of [
-  [sourceFiles, false],
-  [distFiles, true],
-]) {
-  for (const path of files) {
-    // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
-    // used by the per-file URL allowlist. For source files: the path from
-    // the project root (e.g. 'src/fonts/LICENSE.txt'), same purpose.
-    const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
-    const sourceFile = isDist ? undefined : display(path);
-    const text = readFileSync(path, 'utf8');
-    if (isDist) distTexts.push({ path: distFile, text });
-    // Source only: no long number array at all (the fonts are .woff files
-    // there; in dist/ they are checked by checkNumberArrays below).
-    if (!isDist) {
-      for (const array of findNumberArrays(text)) {
-        errors.push(`${display(path)}:${array.line}: a ${array.values.length}-number array: data hidden this way escapes every other check (README.md, rule R3)`);
-      }
+    [sourceFiles, false],
+    [distFiles, true],
+])
+{
+    for (const path of files)
+    {
+        // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
+        // used by the per-file URL allowlist. For source files: the path from
+        // the project root (e.g. 'src/fonts/LICENSE.txt'), same purpose.
+        const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
+        const sourceFile = isDist ? undefined : display(path);
+        const text = readFileSync(path, 'utf8');
+        if (isDist) distTexts.push({ path: distFile, text });
+        // Source only: no long number array at all (the fonts are .woff files
+        // there; in dist/ they are checked by checkNumberArrays below).
+        if (!isDist)
+        {
+            for (const array of findNumberArrays(text))
+            {
+                errors.push(`${display(path)}:${array.line}: a ${array.values.length}-number array: data hidden this way escapes every other check (README.md, rule R3)`);
+            }
+        }
+        const findings = findViolations(text, { isDist, distFile, sourceFile });
+        // dist/ only: code embedded in strings (the inlined workers, see the top).
+        if (isDist) findings.push(...findEmbeddedViolations(text, { isDist, distFile }));
+        // dist/ only: a long base64 literal would hide code from both scans above
+        // (e.g. if a future Vite inlined workers as base64): fail so a person looks.
+        if (isDist) findings.push(...findOpaquePayloads(text));
+        for (const { line, match, reason } of findings)
+        {
+            // Minified lines can be huge; cap what we print.
+            const shown = match.length > 80 ? `${match.slice(0, 80)}...` : match;
+            errors.push(`${display(path)}:${line}: "${shown}" -> ${reason}`);
+        }
     }
-    const findings = findViolations(text, { isDist, distFile, sourceFile });
-    // dist/ only: code embedded in strings (the inlined workers, see the top).
-    if (isDist) findings.push(...findEmbeddedViolations(text, { isDist, distFile }));
-    // dist/ only: a long base64 literal would hide code from both scans above
-    // (e.g. if a future Vite inlined workers as base64): fail so a person looks.
-    if (isDist) findings.push(...findOpaquePayloads(text));
-    for (const { line, match, reason } of findings) {
-      // Minified lines can be huge; cap what we print.
-      const shown = match.length > 80 ? `${match.slice(0, 80)}...` : match;
-      errors.push(`${display(path)}:${line}: "${shown}" -> ${reason}`);
-    }
-  }
 }
 
 // The bundled PDF fonts (scripts/font-rules.mjs): the committed files are the
@@ -122,24 +131,28 @@ for (const [files, isDist] of [
 // exactly those fonts, and the page loads that chunk at startup.
 errors.push(...checkSourceFonts(fontFiles.map((path) => ({ path: display(path), bytes: readFileSync(path) }))));
 errors.push(...checkNumberArrays(distTexts));
-if (existsSync(join(dist, 'index.html'))) {
-  errors.push(...checkFontChunkLoadedAtStartup(readFileSync(join(dist, 'index.html'), 'utf8'), distTexts));
+if (existsSync(join(dist, 'index.html')))
+{
+    errors.push(...checkFontChunkLoadedAtStartup(readFileSync(join(dist, 'index.html'), 'utf8'), distTexts));
 }
 
 // Structural checks on the built security headers.
 const indexHtml = join(dist, 'index.html');
 const headersFile = join(dist, '_headers');
 for (const [path, check] of [
-  [indexHtml, checkBuiltHtml],
-  [headersFile, checkHeadersFile],
-]) {
-  if (!existsSync(path)) {
-    errors.push(`${display(path)}: file is missing (README.md, rule R2)`);
-    continue;
-  }
-  for (const problem of check(readFileSync(path, 'utf8'))) {
-    errors.push(`${display(path)}: ${problem}`);
-  }
+    [indexHtml, checkBuiltHtml],
+    [headersFile, checkHeadersFile],
+])
+{
+    if (!existsSync(path))
+    {
+        errors.push(`${display(path)}: file is missing (README.md, rule R2)`);
+        continue;
+    }
+    for (const problem of check(readFileSync(path, 'utf8')))
+    {
+        errors.push(`${display(path)}: ${problem}`);
+    }
 }
 
 // The service worker script must be there: dist/_headers has a rule for it
@@ -150,22 +163,27 @@ if (!existsSync(join(dist, 'sw.js'))) errors.push('dist/sw.js: file is missing (
 // manifestVersion the build uses, scripts/sw-version.mjs). A build that
 // left a file or the real headers out of the version fails here, because
 // returning visitors would then keep an old copy.
-else {
-  try {
-    const swJs = readFileSync(join(dist, 'sw.js'), 'utf8');
-    const { version, paths } = readBuiltManifest(swJs);
-    const files = paths.map((path) => ({ path, bytes: readFileSync(join(dist, path === '/' ? 'index.html' : path.slice(1))) }));
-    const expected = manifestVersion(files, swJs, readFileSync(headersFile));
-    if (version !== expected) errors.push(`dist/sw.js: version ${version} is not the one computed from dist/ (${expected}): the build left something out of it`);
-  } catch (error) {
-    errors.push(`dist/sw.js: its version cannot be checked: ${error instanceof Error ? error.message : String(error)}`);
-  }
+else
+{
+    try
+    {
+        const swJs = readFileSync(join(dist, 'sw.js'), 'utf8');
+        const { version, paths } = readBuiltManifest(swJs);
+        const files = paths.map((path) => ({ path, bytes: readFileSync(join(dist, path === '/' ? 'index.html' : path.slice(1))) }));
+        const expected = manifestVersion(files, swJs, readFileSync(headersFile));
+        if (version !== expected) errors.push(`dist/sw.js: version ${version} is not the one computed from dist/ (${expected}): the build left something out of it`);
+    }
+    catch (error)
+    {
+        errors.push(`dist/sw.js: its version cannot be checked: ${error instanceof Error ? error.message : String(error)}`);
+    }
 }
 
 const scanned = sourceFiles.length + distFiles.length;
-if (errors.length > 0) {
-  console.error(`check-no-network: FAILED with ${errors.length} problem(s):`);
-  for (const error of errors) console.error(`  ${error}`);
-  process.exit(1);
+if (errors.length > 0)
+{
+    console.error(`check-no-network: FAILED with ${errors.length} problem(s):`);
+    for (const error of errors) console.error(`  ${error}`);
+    process.exit(1);
 }
 console.log(`check-no-network: OK (${scanned} files scanned, ${fontFiles.length} fonts verified, security headers present).`);

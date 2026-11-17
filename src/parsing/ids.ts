@@ -13,14 +13,16 @@ const BRACKETED_ID = /<([^<>]*)>/g;
  * Otherwise (sloppy clients that drop the brackets) the value is split on
  * whitespace. Empty ids are skipped.
  */
-export function parseIdList(value: string | null | undefined): string[] {
-  if (value === null || value === undefined) return [];
-  const bracketed = [...value.matchAll(BRACKETED_ID)].map((match) => (match[1] ?? '').trim());
-  const ids = bracketed.length > 0 ? bracketed : value.split(/\s+/);
-  return ids.filter((id) => id !== '');
+export function parseIdList(value: string | null | undefined): string[]
+{
+    if (value === null || value === undefined) return [];
+    const bracketed = [...value.matchAll(BRACKETED_ID)].map((match) => (match[1] ?? '').trim());
+    const ids = bracketed.length > 0 ? bracketed : value.split(/\s+/);
+    return ids.filter((id) => id !== '');
 }
 
 /** The first id in a header value (Message-ID, In-Reply-To), or null if there is none. */
-export function parseSingleId(value: string | null | undefined): string | null {
-  return parseIdList(value)[0] ?? null;
+export function parseSingleId(value: string | null | undefined): string | null
+{
+    return parseIdList(value)[0] ?? null;
 }

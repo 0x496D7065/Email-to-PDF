@@ -41,78 +41,91 @@ export type EngineFailure = 'engine-timeout' | 'engine-failed';
 
 /** The engine's result, or why there is none. */
 export type EngineOutcome =
-  | { readonly ok: true; readonly result: EngineResult }
-  | { readonly ok: false; readonly error: EngineFailure; readonly detail: string };
+    | { readonly ok: true; readonly result: EngineResult }
+    | { readonly ok: false; readonly error: EngineFailure; readonly detail: string };
 
 /** Starts an engine worker and connects its events. May throw (then the batch fails, nothing else). */
 export type EngineWorkerFactory = (events: WorkerEvents) => WorkerHandle<ToEngineWorker>;
 
 export interface EngineRunOptions {
-  readonly createWorker: EngineWorkerFactory;
-  readonly timeoutMs: number;
-  /**
-   * Stops the run ("Clear everything"): the worker is terminated at once and
-   * the outcome is 'engine-failed' with ENGINE_CANCELLED_DETAIL (the page
-   * throws it away). Already aborted: no worker is started.
-   */
-  readonly signal?: AbortSignal;
+    readonly createWorker: EngineWorkerFactory;
+    readonly timeoutMs: number;
+    /**
+     * Stops the run ("Clear everything"): the worker is terminated at once and
+     * the outcome is 'engine-failed' with ENGINE_CANCELLED_DETAIL (the page
+     * throws it away). Already aborted: no worker is started.
+     */
+    readonly signal?: AbortSignal;
 }
 
 /** Detail when the page cancelled the run. Never shown (see EngineRunOptions.signal). */
 export const ENGINE_CANCELLED_DETAIL = 'stopped because the page was cleared';
 
 /** Runs the engine on `results` in its own worker. Never throws and never rejects. */
-export function runEngineInWorker(results: readonly ParseResult[], options: EngineRunOptions): Promise<EngineOutcome> {
-  return new Promise((resolve) => {
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let worker: WorkerHandle<ToEngineWorker> | undefined;
-    const { signal } = options;
+export function runEngineInWorker(results: readonly ParseResult[], options: EngineRunOptions): Promise<EngineOutcome>
+{
+    return new Promise((resolve) =>
+    {
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let worker: WorkerHandle<ToEngineWorker> | undefined;
+        const { signal } = options;
 
-    const finish = (outcome: EngineOutcome): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      // Terminated in every case: a finished worker holds a copy of every
-      // message, a stuck one holds the CPU.
-      try {
-        worker?.terminate();
-      } catch {
-        // Nothing more to do: the outcome is what matters.
-      }
-      resolve(outcome);
-    };
-    const fail = (error: EngineFailure): void =>
-      finish({ ok: false, error, detail: error === 'engine-timeout' ? ENGINE_TIMEOUT_DETAIL : ENGINE_FAILED_DETAIL });
-    // A function declaration (hoisted): finish() above removes it.
-    function onAbort(): void {
-      finish({ ok: false, error: 'engine-failed', detail: ENGINE_CANCELLED_DETAIL });
-    }
-    if (signal?.aborted === true) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener('abort', onAbort, { once: true });
+        const finish = (outcome: EngineOutcome): void =>
+        {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            // Terminated in every case: a finished worker holds a copy of every
+            // message, a stuck one holds the CPU.
+            try
+            {
+                worker?.terminate();
+            }
+            catch
+            {
+                // Nothing more to do: the outcome is what matters.
+            }
+            resolve(outcome);
+        };
+        const fail = (error: EngineFailure): void =>
+            finish({ ok: false, error, detail: error === 'engine-timeout' ? ENGINE_TIMEOUT_DETAIL : ENGINE_FAILED_DETAIL });
+        // A function declaration (hoisted): finish() above removes it.
+        function onAbort(): void
+        {
+            finish({ ok: false, error: 'engine-failed', detail: ENGINE_CANCELLED_DETAIL });
+        }
+        if (signal?.aborted === true)
+        {
+            onAbort();
+            return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
 
-    const onMessage = (data: unknown): void => {
-      if (settled) return;
-      if (!isFromEngineWorker(data) || data.type === 'failed') {
-        fail('engine-failed');
-        return;
-      }
-      finish({ ok: true, result: data.result });
-    };
+        const onMessage = (data: unknown): void =>
+        {
+            if (settled) return;
+            if (!isFromEngineWorker(data) || data.type === 'failed')
+            {
+                fail('engine-failed');
+                return;
+            }
+            finish({ ok: true, result: data.result });
+        };
 
-    try {
-      worker = options.createWorker({ message: onMessage, failure: () => fail('engine-failed') });
-      timer = setTimeout(() => fail('engine-timeout'), options.timeoutMs);
-      // Copied, not moved: the parse results are plain objects (no buffers).
-      worker.send({ type: 'run', results }, []);
-    } catch {
-      fail('engine-failed');
-    }
-  });
+        try
+        {
+            worker = options.createWorker({ message: onMessage, failure: () => fail('engine-failed') });
+            timer = setTimeout(() => fail('engine-timeout'), options.timeoutMs);
+            // Copied, not moved: the parse results are plain objects (no buffers).
+            worker.send({ type: 'run', results }, []);
+        }
+        catch
+        {
+            fail('engine-failed');
+        }
+    });
 }
 
 /**
@@ -125,4 +138,4 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
  * leak into the next.
  */
 export const createBrowserEngineWorker: EngineWorkerFactory = (events) =>
-  connectWorker<ToEngineWorker>(new EngineWorker({ name: 'engine-worker' }), events);
+    connectWorker<ToEngineWorker>(new EngineWorker({ name: 'engine-worker' }), events);

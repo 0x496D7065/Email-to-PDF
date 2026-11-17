@@ -22,15 +22,15 @@ import type { InputFile, ParseResult } from '../parsing/types';
 
 /** The part of a browser File used here (a real File fits; tests use fakes). */
 export interface FileLike {
-  readonly name: string;
-  readonly size: number;
-  arrayBuffer(): Promise<ArrayBuffer>;
+    readonly name: string;
+    readonly size: number;
+    arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 /** One file after reading: its bytes, or a failed result for the preview. */
 export type ReadOutcome =
-  | { readonly ok: true; readonly input: InputFile }
-  | { readonly ok: false; readonly result: ParseResult };
+    | { readonly ok: true; readonly input: InputFile }
+    | { readonly ok: false; readonly result: ParseResult };
 
 /**
  * Detail for a file the browser could not read (moved, deleted or changed
@@ -45,45 +45,53 @@ const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MA
  * Returns a reader for one batch: call it once per file, in order. It keeps
  * the running total for the batch limit. Never rejects.
  */
-export function createFileReader(limits: Limits = DEFAULT_LIMITS): (file: FileLike) => Promise<ReadOutcome> {
-  let acceptedBytes = 0;
-  return async (file) => {
-    const name = typeof file.name === 'string' ? file.name : '';
-    const failed = (error: 'too-large' | 'unreadable', detail: string): ReadOutcome => ({
-      ok: false,
-      // sha256 null: the file was never read, so it has no hash.
-      result: { ok: false, fileName: name, sha256: null, error, detail },
-    });
-    const size: unknown = file.size;
-    if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return failed('unreadable', UNREADABLE_DETAIL);
-    if (size > limits.maxFileBytes) return failed('too-large', FILE_TOO_LARGE_DETAIL);
-    if (acceptedBytes + size > limits.maxBatchBytes) return failed('too-large', BATCH_TOO_LARGE_DETAIL);
+export function createFileReader(limits: Limits = DEFAULT_LIMITS): (file: FileLike) => Promise<ReadOutcome>
+{
+    let acceptedBytes = 0;
+    return async (file) =>
+    {
+        const name = typeof file.name === 'string' ? file.name : '';
+        const failed = (error: 'too-large' | 'unreadable', detail: string): ReadOutcome => ({
+            ok: false,
+            // sha256 null: the file was never read, so it has no hash.
+            result: { ok: false, fileName: name, sha256: null, error, detail },
+        });
+        const size: unknown = file.size;
+        if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return failed('unreadable', UNREADABLE_DETAIL);
+        if (size > limits.maxFileBytes) return failed('too-large', FILE_TOO_LARGE_DETAIL);
+        if (acceptedBytes + size > limits.maxBatchBytes) return failed('too-large', BATCH_TOO_LARGE_DETAIL);
 
-    // Reserved before waiting, so the total is right even if calls overlap.
-    acceptedBytes += size;
-    let buffer: unknown;
-    try {
-      buffer = await file.arrayBuffer();
-    } catch {
-      buffer = null;
-    }
-    if (!(buffer instanceof ArrayBuffer)) {
-      acceptedBytes -= size;
-      return failed('unreadable', UNREADABLE_DETAIL);
-    }
-    // The file may have changed on disk since its size was taken: the limits
-    // are checked again on what was actually read, and the reservation is
-    // replaced by the real length only if the file is accepted.
-    const total = acceptedBytes - size + buffer.byteLength;
-    if (buffer.byteLength > limits.maxFileBytes) {
-      acceptedBytes -= size;
-      return failed('too-large', FILE_TOO_LARGE_DETAIL);
-    }
-    if (total > limits.maxBatchBytes) {
-      acceptedBytes -= size;
-      return failed('too-large', BATCH_TOO_LARGE_DETAIL);
-    }
-    acceptedBytes = total;
-    return { ok: true, input: { name, bytes: new Uint8Array(buffer) } };
-  };
+        // Reserved before waiting, so the total is right even if calls overlap.
+        acceptedBytes += size;
+        let buffer: unknown;
+        try
+        {
+            buffer = await file.arrayBuffer();
+        }
+        catch
+        {
+            buffer = null;
+        }
+        if (!(buffer instanceof ArrayBuffer))
+        {
+            acceptedBytes -= size;
+            return failed('unreadable', UNREADABLE_DETAIL);
+        }
+        // The file may have changed on disk since its size was taken: the limits
+        // are checked again on what was actually read, and the reservation is
+        // replaced by the real length only if the file is accepted.
+        const total = acceptedBytes - size + buffer.byteLength;
+        if (buffer.byteLength > limits.maxFileBytes)
+        {
+            acceptedBytes -= size;
+            return failed('too-large', FILE_TOO_LARGE_DETAIL);
+        }
+        if (total > limits.maxBatchBytes)
+        {
+            acceptedBytes -= size;
+            return failed('too-large', BATCH_TOO_LARGE_DETAIL);
+        }
+        acceptedBytes = total;
+        return { ok: true, input: { name, bytes: new Uint8Array(buffer) } };
+    };
 }

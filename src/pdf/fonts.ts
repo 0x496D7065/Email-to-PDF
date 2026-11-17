@@ -18,18 +18,18 @@ export type PdfFontName = 'sans-regular' | 'sans-bold' | 'sans-italic' | 'mono-r
 
 /** Each PDF font's WOFF file, as bytes. Never modify them (Reserved Font Name "Plex"). */
 export const PDF_FONTS: Readonly<Record<PdfFontName, Uint8Array<ArrayBuffer>>> = {
-  'sans-regular': plexSansRegular,
-  'sans-bold': plexSansBold,
-  'sans-italic': plexSansItalic,
-  'mono-regular': plexMonoRegular,
+    'sans-regular': plexSansRegular,
+    'sans-bold': plexSansBold,
+    'sans-italic': plexSansItalic,
+    'mono-regular': plexMonoRegular,
 };
 
 /** The original file name of each font (for the PDF and the tests). */
 export const PDF_FONT_FILES: Readonly<Record<PdfFontName, string>> = {
-  'sans-regular': 'IBMPlexSans-Regular.woff',
-  'sans-bold': 'IBMPlexSans-Bold.woff',
-  'sans-italic': 'IBMPlexSans-Italic.woff',
-  'mono-regular': 'IBMPlexMono-Regular.woff',
+    'sans-regular': 'IBMPlexSans-Regular.woff',
+    'sans-bold': 'IBMPlexSans-Bold.woff',
+    'sans-italic': 'IBMPlexSans-Italic.woff',
+    'mono-regular': 'IBMPlexMono-Regular.woff',
 };
 
 /**
@@ -37,13 +37,15 @@ export const PDF_FONT_FILES: Readonly<Record<PdfFontName, string>> = {
  * the signature "wOFF" and states the file's total length (bytes 8 to 11,
  * big-endian), which must match.
  */
-export function isWoff(bytes: Uint8Array): boolean {
-  if (bytes.length < 44) return false; // a WOFF header is 44 bytes
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return view.getUint32(0) === 0x774f4646 && view.getUint32(8) === bytes.length;
+export function isWoff(bytes: Uint8Array): boolean
+{
+    if (bytes.length < 44) return false; // a WOFF header is 44 bytes
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return view.getUint32(0) === 0x774f4646 && view.getUint32(8) === bytes.length;
 }
 
 /** True when every PDF font is present and a complete WOFF file. */
-export function pdfFontsReady(fonts: Readonly<Record<PdfFontName, Uint8Array>> = PDF_FONTS): boolean {
-  return Object.values(fonts).every(isWoff);
+export function pdfFontsReady(fonts: Readonly<Record<PdfFontName, Uint8Array>> = PDF_FONTS): boolean
+{
+    return Object.values(fonts).every(isWoff);
 }

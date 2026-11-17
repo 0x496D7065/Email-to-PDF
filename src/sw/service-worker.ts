@@ -35,18 +35,18 @@ import { cacheNameFor, isOldCacheOfOurs, parseManifest, precachedPathFor } from 
  * are described by hand (as in src/parsing/parse-worker.ts).
  */
 interface ExtendableEvent extends Event {
-  waitUntil(promise: Promise<unknown>): void;
+    waitUntil(promise: Promise<unknown>): void;
 }
 interface FetchEvent extends ExtendableEvent {
-  readonly request: Request;
-  respondWith(response: Promise<Response>): void;
+    readonly request: Request;
+    respondWith(response: Promise<Response>): void;
 }
 interface ServiceWorkerScope {
-  readonly location: { readonly origin: string };
-  readonly clients: { claim(): Promise<void> };
-  skipWaiting(): Promise<void>;
-  addEventListener(type: 'install' | 'activate', listener: (event: ExtendableEvent) => void): void;
-  addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
+    readonly location: { readonly origin: string };
+    readonly clients: { claim(): Promise<void> };
+    skipWaiting(): Promise<void>;
+    addEventListener(type: 'install' | 'activate', listener: (event: ExtendableEvent) => void): void;
+    addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
 }
 
 const scope = self as unknown as ServiceWorkerScope;
@@ -59,18 +59,21 @@ const CACHE = cacheNameFor(MANIFEST.version);
 const PATHS: ReadonlySet<string> = new Set(MANIFEST.paths);
 
 /** Stores every listed file. All or nothing: one failed file fails the install. */
-async function storeOwnFiles(): Promise<void> {
-  const cache = await caches.open(CACHE);
-  // cache: 'reload': straight from the site, not from the browser's HTTP
-  // cache, so the copy matches this version of the list.
-  await cache.addAll(MANIFEST.paths.map((path) => new Request(path, { cache: 'reload' })));
+async function storeOwnFiles(): Promise<void>
+{
+    const cache = await caches.open(CACHE);
+    // cache: 'reload': straight from the site, not from the browser's HTTP
+    // cache, so the copy matches this version of the list.
+    await cache.addAll(MANIFEST.paths.map((path) => new Request(path, { cache: 'reload' })));
 }
 
 /** Deletes the caches of older versions of this service worker. */
-async function deleteOldCopies(): Promise<void> {
-  for (const name of await caches.keys()) {
-    if (isOldCacheOfOurs(name, CACHE)) await caches.delete(name);
-  }
+async function deleteOldCopies(): Promise<void>
+{
+    for (const name of await caches.keys())
+    {
+        if (isOldCacheOfOurs(name, CACHE)) await caches.delete(name);
+    }
 }
 
 /**
@@ -80,23 +83,27 @@ async function deleteOldCopies(): Promise<void> {
  * caches.open, which would create the cache if it is gone): answering a
  * request never creates anything.
  */
-async function answer(path: string, request: Request): Promise<Response> {
-  const copy = await caches.match(path, { cacheName: CACHE });
-  return copy ?? fetch(request);
+async function answer(path: string, request: Request): Promise<Response>
+{
+    const copy = await caches.match(path, { cacheName: CACHE });
+    return copy ?? fetch(request);
 }
 
-scope.addEventListener('install', (event) => {
-  // A new version takes over at once: the page loads all its files when it
-  // opens, so an open page never needs a file of the old version later.
-  event.waitUntil(storeOwnFiles().then(() => scope.skipWaiting()));
+scope.addEventListener('install', (event) =>
+{
+    // A new version takes over at once: the page loads all its files when it
+    // opens, so an open page never needs a file of the old version later.
+    event.waitUntil(storeOwnFiles().then(() => scope.skipWaiting()));
 });
 
-scope.addEventListener('activate', (event) => {
-  event.waitUntil(deleteOldCopies().then(() => scope.clients.claim()));
+scope.addEventListener('activate', (event) =>
+{
+    event.waitUntil(deleteOldCopies().then(() => scope.clients.claim()));
 });
 
-scope.addEventListener('fetch', (event) => {
-  const path = precachedPathFor(event.request, scope.location.origin, PATHS);
-  if (path === null) return;
-  event.respondWith(answer(path, event.request));
+scope.addEventListener('fetch', (event) =>
+{
+    const path = precachedPathFor(event.request, scope.location.origin, PATHS);
+    if (path === null) return;
+    event.respondWith(answer(path, event.request));
 });

@@ -22,10 +22,10 @@ export type LaidOutColor = { readonly gray: number } | { readonly rgb: readonly 
 
 /** A rectangle: top-left corner and size, in points (y downward). */
 export interface LaidOutRect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
 }
 
 /**
@@ -48,40 +48,40 @@ export interface LaidOutRect {
  * Both are passed through copyLayerText (copy-text.ts) by the backend.
  */
 export interface LaidOutTextRun {
-  readonly font: PdfFontName;
-  /** Font size in points. */
-  readonly size: number;
-  /** Start of the baseline. */
-  readonly x: number;
-  readonly y: number;
-  readonly color: LaidOutColor;
-  readonly glyphs: readonly number[];
-  /** Same length as `glyphs`. */
-  readonly glyphText: readonly string[];
-  readonly copyText: string;
-  readonly actualText?: string;
+    readonly font: PdfFontName;
+    /** Font size in points. */
+    readonly size: number;
+    /** Start of the baseline. */
+    readonly x: number;
+    readonly y: number;
+    readonly color: LaidOutColor;
+    readonly glyphs: readonly number[];
+    /** Same length as `glyphs`. */
+    readonly glyphText: readonly string[];
+    readonly copyText: string;
+    readonly actualText?: string;
 }
 
 /** A filled rectangle (grey bars, backgrounds). */
 export interface LaidOutFill extends LaidOutRect {
-  readonly color: LaidOutColor;
+    readonly color: LaidOutColor;
 }
 
 /** A straight line (rules). */
 export interface LaidOutLine {
-  readonly x1: number;
-  readonly y1: number;
-  readonly x2: number;
-  readonly y2: number;
-  /** Line width in points. */
-  readonly width: number;
-  readonly color: LaidOutColor;
+    readonly x1: number;
+    readonly y1: number;
+    readonly x2: number;
+    readonly y2: number;
+    /** Line width in points. */
+    readonly width: number;
+    readonly color: LaidOutColor;
 }
 
 /** A clickable area that jumps to a named destination (internal only: no URLs). */
 export interface LaidOutLink {
-  readonly rect: LaidOutRect;
-  readonly destination: string;
+    readonly rect: LaidOutRect;
+    readonly destination: string;
 }
 
 /**
@@ -89,10 +89,10 @@ export interface LaidOutLink {
  * is always on top of grey bars.
  */
 export interface LaidOutPage {
-  readonly fills: readonly LaidOutFill[];
-  readonly lines: readonly LaidOutLine[];
-  readonly text: readonly LaidOutTextRun[];
-  readonly links: readonly LaidOutLink[];
+    readonly fills: readonly LaidOutFill[];
+    readonly lines: readonly LaidOutLine[];
+    readonly text: readonly LaidOutTextRun[];
+    readonly links: readonly LaidOutLink[];
 }
 
 /**
@@ -101,9 +101,9 @@ export interface LaidOutPage {
  * Names are made by our code, never from email data: only A-Z a-z 0-9 . _ -
  */
 export interface LaidOutDestination {
-  readonly name: string;
-  readonly page: number;
-  readonly y: number;
+    readonly name: string;
+    readonly page: number;
+    readonly y: number;
 }
 
 /**
@@ -113,11 +113,11 @@ export interface LaidOutDestination {
  * copyLayerText turns any left into U+FFFD.
  */
 export interface LaidOutOutlineItem {
-  readonly title: string;
-  readonly destination: string;
-  readonly children: readonly LaidOutOutlineItem[];
-  /** Shown expanded when the file opens (default: collapsed). */
-  readonly open?: boolean;
+    readonly title: string;
+    readonly destination: string;
+    readonly children: readonly LaidOutOutlineItem[];
+    /** Shown expanded when the file opens (default: collapsed). */
+    readonly open?: boolean;
 }
 
 /**
@@ -125,18 +125,18 @@ export interface LaidOutOutlineItem {
  * else on purpose (no dates, no author, no keywords).
  */
 export interface LaidOutInfo {
-  readonly title: string;
-  readonly producer: string;
+    readonly title: string;
+    readonly producer: string;
 }
 
 /** The whole laid-out document: the input of a PdfBackend. */
 export interface LaidOutDocument {
-  /** Size of every page, in points. */
-  readonly pageSize: { readonly width: number; readonly height: number };
-  readonly pages: readonly LaidOutPage[];
-  readonly destinations: readonly LaidOutDestination[];
-  readonly outline: readonly LaidOutOutlineItem[];
-  readonly info: LaidOutInfo;
+    /** Size of every page, in points. */
+    readonly pageSize: { readonly width: number; readonly height: number };
+    readonly pages: readonly LaidOutPage[];
+    readonly destinations: readonly LaidOutDestination[];
+    readonly outline: readonly LaidOutOutlineItem[];
+    readonly info: LaidOutInfo;
 }
 
 /** The parsed fonts a backend may embed (only the ones the document uses are). */
@@ -148,5 +148,5 @@ export type PdfFontSet = Readonly<Partial<Record<PdfFontName, ParsedFont>>>;
  * property, a backstop against document.write, README.md, rule R4.)
  */
 export interface PdfBackend {
-  render(doc: LaidOutDocument, fonts: PdfFontSet): Promise<Uint8Array>;
+    render(doc: LaidOutDocument, fonts: PdfFontSet): Promise<Uint8Array>;
 }

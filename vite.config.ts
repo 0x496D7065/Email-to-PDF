@@ -12,28 +12,31 @@ import { injectManifest, manifestVersion, precachePaths, SW_FILE_NAME } from './
 // and uses a WebSocket for hot reload. Our strict CSP blocks both, so applying
 // it in dev would break the dev server. `apply: 'build'` keeps dev working
 // while everything we actually publish (dist/) is strict.
-function securityHeaders(): Plugin {
-  return {
-    name: 'security-headers',
-    apply: 'build',
-    // Fallback for hosts that cannot send HTTP headers: <meta> tags placed
-    // right after <meta charset> (which must stay first), so the CSP is active
-    // before any script or stylesheet tag is read.
-    transformIndexHtml(html) {
-      const charset = '<meta charset="UTF-8" />';
-      if (!html.includes(charset)) throw new Error(`index.html must contain ${charset}`);
-      const tags =
-        `
+function securityHeaders(): Plugin
+{
+    return {
+        name: 'security-headers',
+        apply: 'build',
+        // Fallback for hosts that cannot send HTTP headers: <meta> tags placed
+        // right after <meta charset> (which must stay first), so the CSP is active
+        // before any script or stylesheet tag is read.
+        transformIndexHtml(html)
+        {
+            const charset = '<meta charset="UTF-8" />';
+            if (!html.includes(charset)) throw new Error(`index.html must contain ${charset}`);
+            const tags =
+                `
     <meta http-equiv="Content-Security-Policy" content="${cspForMeta()}" />` +
-        `
+                `
     <meta name="referrer" content="${REFERRER_POLICY}" />`;
-      return html.replace(charset, charset + tags);
-    },
-    // The real HTTP headers on Cloudflare Pages: write dist/_headers.
-    generateBundle() {
-      this.emitFile({ type: 'asset', fileName: '_headers', source: cloudflareHeadersFile() });
-    },
-  };
+            return html.replace(charset, charset + tags);
+        },
+        // The real HTTP headers on Cloudflare Pages: write dist/_headers.
+        generateBundle()
+        {
+            this.emitFile({ type: 'asset', fileName: '_headers', source: cloudflareHeadersFile() });
+        },
+    };
 }
 
 // `npm run preview` serves the BUILT site (dist/) with the same HTTP headers
@@ -42,22 +45,25 @@ function securityHeaders(): Plugin {
 // service worker's own CSP on /sw.js (securityHeadersFor). Preview only:
 // `npm run dev` stays without CSP (see securityHeaders() above for why).
 // The headers are set before the files are served, on every answer.
-function previewHeaders(): Plugin {
-  return {
-    name: 'preview-security-headers',
-    apply: (_config, env) => env.isPreview === true,
-    configurePreviewServer(server) {
-      server.middlewares.use((req, res, next) => {
-        // Node's request and response, described by hand: the project does
-        // not install Node's type definitions (see iconvLiteShim below).
-        const url = (req as unknown as { url?: string }).url ?? '/';
-        const response = res as unknown as { setHeader(name: string, value: string): void };
-        const pathname = url.split(/[?#]/, 1)[0] ?? '/';
-        for (const [name, value] of Object.entries(securityHeadersFor(pathname))) response.setHeader(name, value);
-        next();
-      });
-    },
-  };
+function previewHeaders(): Plugin
+{
+    return {
+        name: 'preview-security-headers',
+        apply: (_config, env) => env.isPreview === true,
+        configurePreviewServer(server)
+        {
+            server.middlewares.use((req, res, next) =>
+            {
+                // Node's request and response, described by hand: the project does
+                // not install Node's type definitions (see iconvLiteShim below).
+                const url = (req as unknown as { url?: string }).url ?? '/';
+                const response = res as unknown as { setHeader(name: string, value: string): void };
+                const pathname = url.split(/[?#]/, 1)[0] ?? '/';
+                for (const [name, value] of Object.entries(securityHeadersFor(pathname))) response.setHeader(name, value);
+                next();
+            });
+        },
+    };
 }
 
 // The service worker (src/sw/): the offline copy of the site's own files,
@@ -74,68 +80,77 @@ function previewHeaders(): Plugin {
 // own in-memory builds of a test entry (e2e/parse-files.spec.ts,
 // e2e/html-to-text.spec.ts) have no page and get no service worker.
 const swEntry = decodeURIComponent(new URL('./src/sw/service-worker.ts', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
-function offlineCopy(): Plugin {
-  let base = '/';
-  let publicDir = '';
-  let site = false;
-  return {
-    name: 'offline-copy',
-    apply: 'build',
-    configResolved(config) {
-      base = config.base;
-      publicDir = config.build.copyPublicDir ? config.publicDir : '';
-      site = config.build.lib === false && config.build.rolldownOptions.input === undefined;
-    },
-    buildStart() {
-      if (site) this.emitFile({ type: 'chunk', id: swEntry, fileName: SW_FILE_NAME });
-    },
-    // 'post': after every other plugin has written its files (index.html, _headers).
-    generateBundle: {
-      order: 'post',
-      async handler(_options, bundle) {
-        if (!site) return;
-        const sw = bundle[SW_FILE_NAME];
-        if (sw?.type !== 'chunk') throw new Error(`offline-copy: ${SW_FILE_NAME} was not built`);
-        // A classic script: nothing imported from or shared with the page's code.
-        if (sw.imports.length > 0 || sw.dynamicImports.length > 0 || sw.exports.length > 0) {
-          throw new Error(`offline-copy: ${SW_FILE_NAME} must not import or export anything`);
-        }
-        const files = new Map<string, Uint8Array>();
-        for (const [fileName, output] of Object.entries(bundle)) {
-          if (fileName === SW_FILE_NAME) continue;
-          const content = output.type === 'chunk' ? output.code : output.source;
-          files.set(fileName, typeof content === 'string' ? new TextEncoder().encode(content) : content);
-        }
-        // public/ is copied into dist/ as is, outside the bundle.
-        if (publicDir !== '') {
-          const walk = async (dir: string, prefix: string): Promise<void> => {
-            for (const entry of await this.fs.readdir(dir, { withFileTypes: true })) {
-              const path = `${dir}/${entry.name}`;
-              if (entry.isDirectory()) await walk(path, `${prefix}${entry.name}/`);
-              else if (files.has(`${prefix}${entry.name}`)) throw new Error(`offline-copy: ${prefix}${entry.name} is both built and in public/`);
-              else files.set(`${prefix}${entry.name}`, await this.fs.readFile(path));
-            }
-          };
-          if (await this.fs.stat(publicDir).then(() => true, () => false)) await walk(publicDir, '');
-        }
-        const paths = precachePaths([...files.keys()], base);
-        const pathOf = (fileName: string): string => (fileName === 'index.html' ? base : `${base}${fileName}`);
-        const listed = [...files].filter(([fileName]) => paths.includes(pathOf(fileName)));
-        // _headers is not stored, but the copy of "/" keeps the headers it
-        // was served with: a header change must change the version too.
-        const headersFile = files.get('_headers');
-        if (headersFile === undefined) throw new Error('offline-copy: _headers was not built');
-        // The build check computes this version again from dist/ and fails
-        // if sw.js holds another one (scripts/check-no-network.mjs).
-        const version = manifestVersion(
-          listed.map(([fileName, bytes]) => ({ path: pathOf(fileName), bytes })),
-          sw.code,
-          headersFile,
-        );
-        sw.code = injectManifest(sw.code, { version, paths });
-      },
-    },
-  };
+function offlineCopy(): Plugin
+{
+    let base = '/';
+    let publicDir = '';
+    let site = false;
+    return {
+        name: 'offline-copy',
+        apply: 'build',
+        configResolved(config)
+        {
+            base = config.base;
+            publicDir = config.build.copyPublicDir ? config.publicDir : '';
+            site = config.build.lib === false && config.build.rolldownOptions.input === undefined;
+        },
+        buildStart()
+        {
+            if (site) this.emitFile({ type: 'chunk', id: swEntry, fileName: SW_FILE_NAME });
+        },
+        // 'post': after every other plugin has written its files (index.html, _headers).
+        generateBundle: {
+            order: 'post',
+            async handler(_options, bundle)
+            {
+                if (!site) return;
+                const sw = bundle[SW_FILE_NAME];
+                if (sw?.type !== 'chunk') throw new Error(`offline-copy: ${SW_FILE_NAME} was not built`);
+                // A classic script: nothing imported from or shared with the page's code.
+                if (sw.imports.length > 0 || sw.dynamicImports.length > 0 || sw.exports.length > 0)
+                {
+                    throw new Error(`offline-copy: ${SW_FILE_NAME} must not import or export anything`);
+                }
+                const files = new Map<string, Uint8Array>();
+                for (const [fileName, output] of Object.entries(bundle))
+                {
+                    if (fileName === SW_FILE_NAME) continue;
+                    const content = output.type === 'chunk' ? output.code : output.source;
+                    files.set(fileName, typeof content === 'string' ? new TextEncoder().encode(content) : content);
+                }
+                // public/ is copied into dist/ as is, outside the bundle.
+                if (publicDir !== '')
+                {
+                    const walk = async (dir: string, prefix: string): Promise<void> =>
+                    {
+                        for (const entry of await this.fs.readdir(dir, { withFileTypes: true }))
+                        {
+                            const path = `${dir}/${entry.name}`;
+                            if (entry.isDirectory()) await walk(path, `${prefix}${entry.name}/`);
+                            else if (files.has(`${prefix}${entry.name}`)) throw new Error(`offline-copy: ${prefix}${entry.name} is both built and in public/`);
+                            else files.set(`${prefix}${entry.name}`, await this.fs.readFile(path));
+                        }
+                    };
+                    if (await this.fs.stat(publicDir).then(() => true, () => false)) await walk(publicDir, '');
+                }
+                const paths = precachePaths([...files.keys()], base);
+                const pathOf = (fileName: string): string => (fileName === 'index.html' ? base : `${base}${fileName}`);
+                const listed = [...files].filter(([fileName]) => paths.includes(pathOf(fileName)));
+                // _headers is not stored, but the copy of "/" keeps the headers it
+                // was served with: a header change must change the version too.
+                const headersFile = files.get('_headers');
+                if (headersFile === undefined) throw new Error('offline-copy: _headers was not built');
+                // The build check computes this version again from dist/ and fails
+                // if sw.js holds another one (scripts/check-no-network.mjs).
+                const version = manifestVersion(
+                    listed.map(([fileName, bytes]) => ({ path: pathOf(fileName), bytes })),
+                    sw.code,
+                    headersFile,
+                );
+                sw.code = injectManifest(sw.code, { version, paths });
+            },
+        },
+    };
 }
 
 // `import bytes from './X.woff?bytes'` gives the file's exact bytes as a
@@ -152,22 +167,25 @@ function offlineCopy(): Plugin {
 // `enforce: 'pre'` runs this before Vite's own asset handling of .woff files.
 const BYTES_SUFFIX = '?bytes';
 const fontsDir = decodeURIComponent(new URL('./src/fonts/', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
-function bytesImport(): Plugin {
-  return {
-    name: 'bytes-import',
-    enforce: 'pre',
-    async load(id) {
-      if (!id.endsWith(BYTES_SUFFIX)) return null;
-      const file = id.slice(0, -BYTES_SUFFIX.length);
-      if (!isBytesImportAllowed(file, fontsDir)) {
-        throw new Error(`${BYTES_SUFFIX} is only for the .woff files in src/fonts/, not ${file}`);
-      }
-      this.addWatchFile(file);
-      const bytes = await this.fs.readFile(file);
-      // moduleSideEffects: false: a font nobody imports is left out.
-      return { code: `export default new Uint8Array([${bytes.join(',')}]);\n`, moduleSideEffects: false };
-    },
-  };
+function bytesImport(): Plugin
+{
+    return {
+        name: 'bytes-import',
+        enforce: 'pre',
+        async load(id)
+        {
+            if (!id.endsWith(BYTES_SUFFIX)) return null;
+            const file = id.slice(0, -BYTES_SUFFIX.length);
+            if (!isBytesImportAllowed(file, fontsDir))
+            {
+                throw new Error(`${BYTES_SUFFIX} is only for the .woff files in src/fonts/, not ${file}`);
+            }
+            this.addWatchFile(file);
+            const bytes = await this.fs.readFile(file);
+            // moduleSideEffects: false: a font nobody imports is left out.
+            return { code: `export default new Uint8Array([${bytes.join(',')}]);\n`, moduleSideEffects: false };
+        },
+    };
 }
 
 // Absolute path of the iconv-lite shim (see resolve.alias below). It must be
@@ -179,73 +197,73 @@ const shimUrl = new URL('./src/shims/iconv-lite.ts', import.meta.url);
 const iconvLiteShim = decodeURIComponent(shimUrl.pathname).replace(/^\/([A-Za-z]:)/, '$1');
 
 export default defineConfig({
-  plugins: [bytesImport(), securityHeaders(), previewHeaders(), offlineCopy()],
-  // The inlined workers are bundled separately and do NOT get the plugins
-  // above. Without bytesImport() there, a worker importing a font by
-  // mistake would get the font's asset URL as a string (and a .woff file
-  // in dist/), which no build check sees. With it, the bytes would be a
-  // long number array inside the page's script, outside the font chunk,
-  // and the build check fails (scripts/font-rules.mjs). The PDF worker
-  // gets the font bytes from the page instead (src/pipeline/pdf-protocol.ts).
-  worker: { plugins: () => [bytesImport()] },
-  resolve: {
-    // @kenjiuno/msgreader (the .msg parser) requires 'iconv-lite', which needs
-    // Node's Buffer and crashes in the browser. Every import of exactly
-    // 'iconv-lite' is redirected to a tiny browser version built on
-    // TextDecoder (see the comments in that file). Top-level `resolve`
-    // applies to both `vite build` and Vitest.
-    alias: [{ find: /^iconv-lite$/, replacement: iconvLiteShim }],
-  },
-  build: {
-    // Vite normally injects a small "modulepreload" polyfill that calls fetch().
-    // Every browser we target supports modulepreload natively, and README.md, rule R1
-    // forbids network APIs in the shipped code, so we turn the polyfill off.
-    modulePreload: { polyfill: false },
-    // The font chunk (below) is about 1.2 MB of numbers, which is expected;
-    // the limit (in kB) is raised just above it so a warning still means
-    // something unexpected grew.
-    chunkSizeWarningLimit: 1300,
-    rolldownOptions: {
-      output: {
-        // The PDF fonts (the `?bytes` modules, about 1.2 MB of numbers) get a
-        // chunk of their own, assets/pdf-fonts-[hash].js: the main script
-        // stays small, and the build check knows the one file where long
-        // number arrays are allowed (scripts/font-rules.mjs). The page entry
-        // imports it statically (src/main.ts), so the browser loads it with
-        // the page, as a normal script under `script-src 'self'`.
-        // This option applies to the page only; the inlined workers are
-        // built separately and never import the fonts.
-        codeSplitting: {
-          groups: [{ name: 'pdf-fonts', test: (id) => id.endsWith(BYTES_SUFFIX) }],
+    plugins: [bytesImport(), securityHeaders(), previewHeaders(), offlineCopy()],
+    // The inlined workers are bundled separately and do NOT get the plugins
+    // above. Without bytesImport() there, a worker importing a font by
+    // mistake would get the font's asset URL as a string (and a .woff file
+    // in dist/), which no build check sees. With it, the bytes would be a
+    // long number array inside the page's script, outside the font chunk,
+    // and the build check fails (scripts/font-rules.mjs). The PDF worker
+    // gets the font bytes from the page instead (src/pipeline/pdf-protocol.ts).
+    worker: { plugins: () => [bytesImport()] },
+    resolve: {
+        // @kenjiuno/msgreader (the .msg parser) requires 'iconv-lite', which needs
+        // Node's Buffer and crashes in the browser. Every import of exactly
+        // 'iconv-lite' is redirected to a tiny browser version built on
+        // TextDecoder (see the comments in that file). Top-level `resolve`
+        // applies to both `vite build` and Vitest.
+        alias: [{ find: /^iconv-lite$/, replacement: iconvLiteShim }],
+    },
+    build: {
+        // Vite normally injects a small "modulepreload" polyfill that calls fetch().
+        // Every browser we target supports modulepreload natively, and README.md, rule R1
+        // forbids network APIs in the shipped code, so we turn the polyfill off.
+        modulePreload: { polyfill: false },
+        // The font chunk (below) is about 1.2 MB of numbers, which is expected;
+        // the limit (in kB) is raised just above it so a warning still means
+        // something unexpected grew.
+        chunkSizeWarningLimit: 1300,
+        rolldownOptions: {
+            output: {
+                // The PDF fonts (the `?bytes` modules, about 1.2 MB of numbers) get a
+                // chunk of their own, assets/pdf-fonts-[hash].js: the main script
+                // stays small, and the build check knows the one file where long
+                // number arrays are allowed (scripts/font-rules.mjs). The page entry
+                // imports it statically (src/main.ts), so the browser loads it with
+                // the page, as a normal script under `script-src 'self'`.
+                // This option applies to the page only; the inlined workers are
+                // built separately and never import the fonts.
+                codeSplitting: {
+                    groups: [{ name: 'pdf-fonts', test: (id) => id.endsWith(BYTES_SUFFIX) }],
+                },
+            },
         },
-      },
     },
-  },
-  // The security headers of `npm run preview` are set by previewHeaders()
-  // above (per path, so /sw.js gets its own CSP), not by `preview.headers`.
-  test: {
-    // Unit tests sit next to the code they test, e.g. src/lib/foo.test.ts.
-    // They run in Node (no browser DOM): detection and parsing logic is kept
-    // as pure functions (README.md, rule R7). The production build never
-    // includes them because nothing in index.html/main.ts imports them.
-    // scripts/ holds the self-test of the "no network" build check.
-    // tests/ holds the synthetic fixture set and its privacy guard test.
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/**/*.test.ts'],
-    environment: 'node',
-    // Vitest's persistent transform cache (node_modules/.vitest-cache) does
-    // not notice NEW files matched by import.meta.glob, so the privacy guard
-    // (tests/fixtures/synthetic-guard.test.ts) could silently skip a newly
-    // added fixture on a developer machine. Off: always transform fresh.
-    fsModuleCache: false,
-    // Vitest normally hands packages from node_modules straight to Node, whose
-    // require('iconv-lite') would skip the alias above and load the real
-    // package. Pre-bundling msgreader (like `vite build` does) applies the
-    // alias, so the tests run the same shim as the shipped site.
-    // lib/DataStream is listed too because a test imports it directly.
-    deps: {
-      optimizer: {
-        ssr: { enabled: true, include: ['@kenjiuno/msgreader', '@kenjiuno/msgreader/lib/DataStream'] },
-      },
+    // The security headers of `npm run preview` are set by previewHeaders()
+    // above (per path, so /sw.js gets its own CSP), not by `preview.headers`.
+    test: {
+        // Unit tests sit next to the code they test, e.g. src/lib/foo.test.ts.
+        // They run in Node (no browser DOM): detection and parsing logic is kept
+        // as pure functions (README.md, rule R7). The production build never
+        // includes them because nothing in index.html/main.ts imports them.
+        // scripts/ holds the self-test of the "no network" build check.
+        // tests/ holds the synthetic fixture set and its privacy guard test.
+        include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/**/*.test.ts'],
+        environment: 'node',
+        // Vitest's persistent transform cache (node_modules/.vitest-cache) does
+        // not notice NEW files matched by import.meta.glob, so the privacy guard
+        // (tests/fixtures/synthetic-guard.test.ts) could silently skip a newly
+        // added fixture on a developer machine. Off: always transform fresh.
+        fsModuleCache: false,
+        // Vitest normally hands packages from node_modules straight to Node, whose
+        // require('iconv-lite') would skip the alias above and load the real
+        // package. Pre-bundling msgreader (like `vite build` does) applies the
+        // alias, so the tests run the same shim as the shipped site.
+        // lib/DataStream is listed too because a test imports it directly.
+        deps: {
+            optimizer: {
+                ssr: { enabled: true, include: ['@kenjiuno/msgreader', '@kenjiuno/msgreader/lib/DataStream'] },
+            },
+        },
     },
-  },
 });

@@ -14,22 +14,22 @@ import type { ToEngineWorker } from '../../src/pipeline/engine-protocol';
 import type { EngineWorkerFactory } from '../../src/pipeline/engine-runner';
 
 export {
-  MAX_FILE_BYTES,
-  PARSE_TIMEOUT_MS,
-  FILE_TOO_LARGE_DETAIL,
-  parseFiles,
-  parseFilesWith,
+    MAX_FILE_BYTES,
+    PARSE_TIMEOUT_MS,
+    FILE_TOO_LARGE_DETAIL,
+    parseFiles,
+    parseFilesWith,
 } from '../../src/parsing/parse-files';
 export { htmlToTextWithDomParser } from '../../src/parsing/html-dom';
 export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../src/parsing/worker-runner';
 export type { InputFile, ParseResult } from '../../src/parsing/types';
 export { processFiles, processFilesWith, type ProcessProgress, type ProcessResult } from '../../src/pipeline/process-files';
 export {
-  createBrowserEngineWorker,
-  ENGINE_FAILED_DETAIL,
-  ENGINE_TIMEOUT_DETAIL,
-  ENGINE_TIMEOUT_MS,
-  runEngineInWorker,
+    createBrowserEngineWorker,
+    ENGINE_FAILED_DETAIL,
+    ENGINE_TIMEOUT_DETAIL,
+    ENGINE_TIMEOUT_MS,
+    runEngineInWorker,
 } from '../../src/pipeline/engine-runner';
 // Only to start an idle PDF worker for the CSP checks (src/pipeline/pdf-worker.ts).
 export { createBrowserPdfWorker } from '../../src/pipeline/pdf-runner';
@@ -47,10 +47,11 @@ export { default as FIXTURE_ORDER_3 } from '../../tests/fixtures/eml/12-order-3-
 export { default as FIXTURE_ORDER_2_COPY } from '../../tests/fixtures/eml/30-dup-order-2-copy.eml?raw';
 
 /** A well-formed synthetic .msg (the first spec of the fixture set). */
-export function goodMsg(): Uint8Array {
-  const spec = MSG_SPECS[0];
-  if (spec === undefined) throw new Error('no .msg spec');
-  return buildMsg(spec);
+export function goodMsg(): Uint8Array
+{
+    const spec = MSG_SPECS[0];
+    if (spec === undefined) throw new Error('no .msg spec');
+    return buildMsg(spec);
 }
 
 /**
@@ -58,34 +59,37 @@ export function goodMsg(): Uint8Array {
  * kind of file that makes msgreader loop forever. The Compound File check
  * (cfb-check.ts) must reject it before msgreader reads it.
  */
-export function loopingMsg(): Uint8Array {
-  const bytes = goodMsg();
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const sectorSize = 512; // the builder writes version 3 files
-  const firstDirectorySector = view.getUint32(0x30, true);
-  const firstFatSector = view.getUint32(0x4c, true);
-  view.setUint32((firstFatSector + 1) * sectorSize + 4 * firstDirectorySector, firstDirectorySector, true);
-  return bytes;
+export function loopingMsg(): Uint8Array
+{
+    const bytes = goodMsg();
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const sectorSize = 512; // the builder writes version 3 files
+    const firstDirectorySector = view.getUint32(0x30, true);
+    const firstFatSector = view.getUint32(0x4c, true);
+    view.setUint32((firstFatSector + 1) * sectorSize + 4 * firstDirectorySector, firstDirectorySector, true);
+    return bytes;
 }
 
 /** A worker that hangs or crashes (misbehaving-worker.ts), wired like the real one. */
 export const createMisbehavingWorker: WorkerFactory = (events) =>
-  connectWorker(new Worker(new URL('./misbehaving-worker.ts', import.meta.url), { type: 'module' }), events);
+    connectWorker(new Worker(new URL('./misbehaving-worker.ts', import.meta.url), { type: 'module' }), events);
 
 /**
  * The misbehaving test worker standing in for the engine worker. The engine
  * request carries no file name, so `mode` is sent as the name the
  * misbehaving worker reads: 'hang' spins forever, anything else crashes.
  */
-export function createMisbehavingEngineWorker(mode: 'hang' | 'crash'): EngineWorkerFactory {
-  return (events) => {
-    const handle = connectWorker<{ readonly name: string }>(
-      new Worker(new URL('./misbehaving-worker.ts', import.meta.url), { type: 'module' }),
-      events,
-    );
-    return {
-      send: (_message: ToEngineWorker, transfer) => handle.send({ name: mode }, transfer),
-      terminate: () => handle.terminate(),
+export function createMisbehavingEngineWorker(mode: 'hang' | 'crash'): EngineWorkerFactory
+{
+    return (events) =>
+    {
+        const handle = connectWorker<{ readonly name: string }>(
+            new Worker(new URL('./misbehaving-worker.ts', import.meta.url), { type: 'module' }),
+            events,
+        );
+        return {
+            send: (_message: ToEngineWorker, transfer) => handle.send({ name: mode }, transfer),
+            terminate: () => handle.terminate(),
+        };
     };
-  };
 }

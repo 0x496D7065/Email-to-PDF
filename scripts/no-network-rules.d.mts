@@ -2,12 +2,12 @@
 // import that plain-JS module under strict type checking. Keep in sync with it.
 
 export interface Finding {
-  /** 1-based line number. */
-  line: number;
-  /** The exact text that matched. */
-  match: string;
-  /** Which rule was broken, with the README.md rule reference. */
-  reason: string;
+    /** 1-based line number. */
+    line: number;
+    /** The exact text that matched. */
+    match: string;
+    /** Which rule was broken, with the README.md rule reference. */
+    reason: string;
 }
 
 export const URL_ALLOWLIST: readonly string[];
@@ -31,11 +31,11 @@ export function isRuleExempt(rule: { id?: string }, isDist: boolean, distFile: s
 export function normalizeUrl(raw: string): string;
 
 export interface ScanOptions {
-  isDist: boolean;
-  /** dist/ files only: path relative to dist/. */
-  distFile?: string;
-  /** Source files only: path relative to the project root. */
-  sourceFile?: string;
+    isDist: boolean;
+    /** dist/ files only: path relative to dist/. */
+    distFile?: string;
+    /** Source files only: path relative to the project root. */
+    sourceFile?: string;
 }
 
 export function findViolations(text: string, options: ScanOptions): Finding[];

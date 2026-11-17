@@ -16,50 +16,56 @@ import { setSafeAttribute } from './dom';
 import { t, type MessageArgs, type MessageKey } from './i18n';
 
 interface LabelRecord {
-  readonly element: Element;
-  /** null: the element's text; else the attribute's name. */
-  readonly attribute: string | null;
-  readonly key: MessageKey;
-  readonly params: Readonly<Record<string, string | number>> | undefined;
+    readonly element: Element;
+    /** null: the element's text; else the attribute's name. */
+    readonly attribute: string | null;
+    readonly key: MessageKey;
+    readonly params: Readonly<Record<string, string | number>> | undefined;
 }
 
 /** A module's fixed words: set once, written again by relabel(). */
 export interface StaticLabels {
-  /** Sets `element`'s text to t(key, params) now and on each relabel(). Returns the element. */
-  text<E extends Element, K extends MessageKey>(element: E, key: K, ...args: MessageArgs<K>): E;
-  /** Sets the attribute `name` of `element` to t(key, params) now and on each relabel(). Returns the element. */
-  attr<E extends Element, K extends MessageKey>(element: E, name: string, key: K, ...args: MessageArgs<K>): E;
-  /** Writes every recorded text again, in the page language now. */
-  relabel(): void;
+    /** Sets `element`'s text to t(key, params) now and on each relabel(). Returns the element. */
+    text<E extends Element, K extends MessageKey>(element: E, key: K, ...args: MessageArgs<K>): E;
+    /** Sets the attribute `name` of `element` to t(key, params) now and on each relabel(). Returns the element. */
+    attr<E extends Element, K extends MessageKey>(element: E, name: string, key: K, ...args: MessageArgs<K>): E;
+    /** Writes every recorded text again, in the page language now. */
+    relabel(): void;
 }
 
 /** Untyped call of t(), for a key and params already checked when they were recorded. */
 const textOf = (record: LabelRecord): string =>
-  (t as (key: MessageKey, params?: Readonly<Record<string, string | number>>) => string)(record.key, record.params);
+    (t as (key: MessageKey, params?: Readonly<Record<string, string | number>>) => string)(record.key, record.params);
 
-function apply(record: LabelRecord): void {
-  const text = textOf(record);
-  if (record.attribute === null) record.element.textContent = text;
-  else setSafeAttribute(record.element, record.attribute, text);
+function apply(record: LabelRecord): void
+{
+    const text = textOf(record);
+    if (record.attribute === null) record.element.textContent = text;
+    else setSafeAttribute(record.element, record.attribute, text);
 }
 
-export function createStaticLabels(): StaticLabels {
-  const records: LabelRecord[] = [];
-  const add = (record: LabelRecord): void => {
-    apply(record);
-    records.push(record);
-  };
-  return {
-    text(element, key, ...args) {
-      add({ element, attribute: null, key, params: args[0] });
-      return element;
-    },
-    attr(element, name, key, ...args) {
-      add({ element, attribute: name, key, params: args[0] });
-      return element;
-    },
-    relabel() {
-      for (const record of records) apply(record);
-    },
-  };
+export function createStaticLabels(): StaticLabels
+{
+    const records: LabelRecord[] = [];
+    const add = (record: LabelRecord): void =>
+    {
+        apply(record);
+        records.push(record);
+    };
+    return {
+        text(element, key, ...args)
+        {
+            add({ element, attribute: null, key, params: args[0] });
+            return element;
+        },
+        attr(element, name, key, ...args)
+        {
+            add({ element, attribute: name, key, params: args[0] });
+            return element;
+        },
+        relabel()
+        {
+            for (const record of records) apply(record);
+        },
+    };
 }

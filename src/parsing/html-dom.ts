@@ -30,7 +30,8 @@ import { htmlTreeToText, type HtmlToTextLimits, type HtmlToTextResult } from './
  * Converts an HTML string to plain text in the browser, without rendering it.
  * `truncated` tells whether the text was cut at the output limit.
  */
-export function htmlToTextWithDomParser(html: string, limits?: HtmlToTextLimits): HtmlToTextResult {
-  const parsed = new DOMParser().parseFromString(html, 'text/html');
-  return htmlTreeToText(parsed, limits);
+export function htmlToTextWithDomParser(html: string, limits?: HtmlToTextLimits): HtmlToTextResult
+{
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    return htmlTreeToText(parsed, limits);
 }

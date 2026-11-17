@@ -59,9 +59,10 @@ export const CANCELLED_DETAIL = 'stopped because the page was cleared';
  * browser has it; elsewhere this is false and callers use their own record
  * of what they handed over (see parse-files.ts).
  */
-export function isDetached(bytes: Uint8Array): boolean {
-  const buffer: unknown = bytes.buffer;
-  return buffer instanceof ArrayBuffer && 'detached' in buffer && buffer.detached === true;
+export function isDetached(bytes: Uint8Array): boolean
+{
+    const buffer: unknown = bytes.buffer;
+    return buffer instanceof ArrayBuffer && 'detached' in buffer && buffer.detached === true;
 }
 
 /**
@@ -70,16 +71,16 @@ export function isDetached(bytes: Uint8Array): boolean {
  * (src/pipeline/engine-runner.ts), which reuses connectWorker below.
  */
 export interface WorkerHandle<M = ToWorker> {
-  send(message: M, transfer: Transferable[]): void;
-  terminate(): void;
+    send(message: M, transfer: Transferable[]): void;
+    terminate(): void;
 }
 
 /** What the worker reports back to the page. */
 export interface WorkerEvents {
-  /** A message from the worker (still unchecked). */
-  message(data: unknown): void;
-  /** An 'error' or 'messageerror' event. */
-  failure(): void;
+    /** A message from the worker (still unchecked). */
+    message(data: unknown): void;
+    /** An 'error' or 'messageerror' event. */
+    failure(): void;
 }
 
 /** Starts a worker and connects its events. May throw (then the file fails, not the batch). */
@@ -87,112 +88,134 @@ export type WorkerFactory = (events: WorkerEvents) => WorkerHandle;
 
 /** One file, checked and hashed by the dispatcher (parse-files.ts), ready for a worker. */
 export interface WorkerJob {
-  readonly name: string;
-  readonly kind: FileKind;
-  /** MOVED to the worker: after the call this array is empty (detached), unless it was a view into a larger buffer. */
-  readonly bytes: Uint8Array;
-  /** SHA-256 of `bytes`, for results the worker could not produce (timeout, failure). */
-  readonly sha256: string;
+    readonly name: string;
+    readonly kind: FileKind;
+    /** MOVED to the worker: after the call this array is empty (detached), unless it was a view into a larger buffer. */
+    readonly bytes: Uint8Array;
+    /** SHA-256 of `bytes`, for results the worker could not produce (timeout, failure). */
+    readonly sha256: string;
 }
 
 export interface RunOptions {
-  readonly createWorker: WorkerFactory;
-  /** The real converter, run on the page (htmlToTextWithDomParser in the browser). */
-  readonly htmlToText: (html: string) => HtmlToTextResult;
-  /**
-   * Time limit for each stretch of work inside the worker: the parse, and
-   * (if HTML had to be converted) the second parse. The time the page spends
-   * converting HTML is not counted: the page cannot be stopped anyway.
-   */
-  readonly timeoutMs: number;
-  /**
-   * Stops the parse ("Clear everything"): the worker is terminated at once
-   * and the result is a 'tool-error' with CANCELLED_DETAIL. Anything the
-   * worker sends afterwards is ignored. Already aborted: no worker is started.
-   */
-  readonly signal?: AbortSignal;
+    readonly createWorker: WorkerFactory;
+    /** The real converter, run on the page (htmlToTextWithDomParser in the browser). */
+    readonly htmlToText: (html: string) => HtmlToTextResult;
+    /**
+     * Time limit for each stretch of work inside the worker: the parse, and
+     * (if HTML had to be converted) the second parse. The time the page spends
+     * converting HTML is not counted: the page cannot be stopped anyway.
+     */
+    readonly timeoutMs: number;
+    /**
+     * Stops the parse ("Clear everything"): the worker is terminated at once
+     * and the result is a 'tool-error' with CANCELLED_DETAIL. Anything the
+     * worker sends afterwards is ignored. Already aborted: no worker is started.
+     */
+    readonly signal?: AbortSignal;
 }
 
 /** Parses one file in its own worker. Never throws and never rejects. */
-export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseResult> {
-  return new Promise((resolve) => {
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let worker: WorkerHandle | undefined;
-    const { signal } = options;
+export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseResult>
+{
+    return new Promise((resolve) =>
+    {
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let worker: WorkerHandle | undefined;
+        const { signal } = options;
 
-    const finish = (result: ParseResult): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      // Terminated in every case: a finished worker holds the file's data,
-      // a stuck one holds the CPU.
-      try {
-        worker?.terminate();
-      } catch {
-        // Nothing more to do: the result is what matters.
-      }
-      resolve(result);
-    };
-    const fail = (error: 'timeout' | 'tool-error', detail: string): void =>
-      finish({ ok: false, error, detail, fileName: job.name, sha256: job.sha256 });
-    const toolError = (detail: string = WORKER_FAILED_DETAIL): void => fail('tool-error', detail);
-    // A function declaration (hoisted): finish() above removes it.
-    function onAbort(): void {
-      toolError(CANCELLED_DETAIL);
-    }
-    const startClock = (): void => {
-      clearTimeout(timer);
-      timer = setTimeout(() => fail('timeout', TIMEOUT_DETAIL), options.timeoutMs);
-    };
+        const finish = (result: ParseResult): void =>
+        {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            // Terminated in every case: a finished worker holds the file's data,
+            // a stuck one holds the CPU.
+            try
+            {
+                worker?.terminate();
+            }
+            catch
+            {
+                // Nothing more to do: the result is what matters.
+            }
+            resolve(result);
+        };
+        const fail = (error: 'timeout' | 'tool-error', detail: string): void =>
+            finish({ ok: false, error, detail, fileName: job.name, sha256: job.sha256 });
+        const toolError = (detail: string = WORKER_FAILED_DETAIL): void => fail('tool-error', detail);
+        // A function declaration (hoisted): finish() above removes it.
+        function onAbort(): void
+        {
+            toolError(CANCELLED_DETAIL);
+        }
+        const startClock = (): void =>
+        {
+            clearTimeout(timer);
+            timer = setTimeout(() => fail('timeout', TIMEOUT_DETAIL), options.timeoutMs);
+        };
 
-    const onMessage = (data: unknown): void => {
-      if (settled) return;
-      if (!isFromWorker(data) || data.type === 'failed') {
-        toolError();
-        return;
-      }
-      if (data.type === 'result') {
-        finish(data.result);
-        return;
-      }
-      // The worker waits for HTML conversions: the clock stops while the page works.
-      clearTimeout(timer);
-      const outcomes = convertHtmlList(data.htmls, options.htmlToText);
-      startClock();
-      try {
-        worker?.send({ type: 'conversions', outcomes }, []);
-      } catch {
-        toolError();
-      }
-    };
+        const onMessage = (data: unknown): void =>
+        {
+            if (settled) return;
+            if (!isFromWorker(data) || data.type === 'failed')
+            {
+                toolError();
+                return;
+            }
+            if (data.type === 'result')
+            {
+                finish(data.result);
+                return;
+            }
+            // The worker waits for HTML conversions: the clock stops while the page works.
+            clearTimeout(timer);
+            const outcomes = convertHtmlList(data.htmls, options.htmlToText);
+            startClock();
+            try
+            {
+                worker?.send({ type: 'conversions', outcomes }, []);
+            }
+            catch
+            {
+                toolError();
+            }
+        };
 
-    if (signal?.aborted === true) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener('abort', onAbort, { once: true });
-    if (isDetached(job.bytes)) {
-      // Nothing left to send; say so instead of "the file is empty" or a
-      // worker failure, which would read like a damaged file.
-      toolError(DETACHED_DETAIL);
-      return;
-    }
-    try {
-      worker = options.createWorker({ message: onMessage, failure: () => toolError() });
-    } catch {
-      toolError(WORKER_START_DETAIL);
-      return;
-    }
-    try {
-      const bytes = ownedCopy(job.bytes);
-      startClock();
-      worker.send({ type: 'parse', name: job.name, kind: job.kind, bytes }, [bytes.buffer]);
-    } catch {
-      toolError();
-    }
-  });
+        if (signal?.aborted === true)
+        {
+            onAbort();
+            return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (isDetached(job.bytes))
+        {
+            // Nothing left to send; say so instead of "the file is empty" or a
+            // worker failure, which would read like a damaged file.
+            toolError(DETACHED_DETAIL);
+            return;
+        }
+        try
+        {
+            worker = options.createWorker({ message: onMessage, failure: () => toolError() });
+        }
+        catch
+        {
+            toolError(WORKER_START_DETAIL);
+            return;
+        }
+        try
+        {
+            const bytes = ownedCopy(job.bytes);
+            startClock();
+            worker.send({ type: 'parse', name: job.name, kind: job.kind, bytes }, [bytes.buffer]);
+        }
+        catch
+        {
+            toolError();
+        }
+    });
 }
 
 /**
@@ -201,18 +224,20 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
  * caller's array becomes empty). A view into a larger buffer is copied first,
  * so the rest of that buffer is never moved away from its owner.
  */
-function ownedCopy(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  if (coversWholeBuffer(bytes)) return new Uint8Array(bytes.buffer);
-  return bytes.slice();
+function ownedCopy(bytes: Uint8Array): Uint8Array<ArrayBuffer>
+{
+    if (coversWholeBuffer(bytes)) return new Uint8Array(bytes.buffer);
+    return bytes.slice();
 }
 
 /**
  * True when these bytes will be MOVED to the worker (not copied): a view
  * that covers the whole of a plain ArrayBuffer.
  */
-export function coversWholeBuffer(bytes: Uint8Array): bytes is Uint8Array<ArrayBuffer> {
-  const { buffer } = bytes;
-  return buffer instanceof ArrayBuffer && bytes.byteOffset === 0 && bytes.byteLength === buffer.byteLength;
+export function coversWholeBuffer(bytes: Uint8Array): bytes is Uint8Array<ArrayBuffer>
+{
+    const { buffer } = bytes;
+    return buffer instanceof ArrayBuffer && bytes.byteOffset === 0 && bytes.byteLength === buffer.byteLength;
 }
 
 /**
@@ -243,20 +268,22 @@ export function coversWholeBuffer(bytes: Uint8Array): bytes is Uint8Array<ArrayB
  * file.
  */
 export const createBrowserWorker: WorkerFactory = (events) =>
-  // The name shows in DevTools (and lets the browser tests tell workers apart).
-  connectWorker(new ParseWorker({ name: 'parse-worker' }), events);
+    // The name shows in DevTools (and lets the browser tests tell workers apart).
+    connectWorker(new ParseWorker({ name: 'parse-worker' }), events);
 
 /** Connects a started browser Worker to `events` and wraps it as a WorkerHandle. */
-export function connectWorker<M = ToWorker>(worker: Worker, events: WorkerEvents): WorkerHandle<M> {
-  worker.addEventListener('message', (event: MessageEvent<unknown>) => events.message(event.data));
-  worker.addEventListener('error', (event) => {
-    // Handled here: keeps the browser from also reporting it as an uncaught error.
-    event.preventDefault();
-    events.failure();
-  });
-  worker.addEventListener('messageerror', () => events.failure());
-  return {
-    send: (message, transfer) => worker.postMessage(message, transfer),
-    terminate: () => worker.terminate(),
-  };
+export function connectWorker<M = ToWorker>(worker: Worker, events: WorkerEvents): WorkerHandle<M>
+{
+    worker.addEventListener('message', (event: MessageEvent<unknown>) => events.message(event.data));
+    worker.addEventListener('error', (event) =>
+    {
+        // Handled here: keeps the browser from also reporting it as an uncaught error.
+        event.preventDefault();
+        events.failure();
+    });
+    worker.addEventListener('messageerror', () => events.failure());
+    return {
+        send: (message, transfer) => worker.postMessage(message, transfer),
+        terminate: () => worker.terminate(),
+    };
 }

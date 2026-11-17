@@ -17,38 +17,40 @@ import { runEngine, type EngineResult } from '../engine/engine';
 import type { ParseResult } from '../parsing/types';
 
 export interface EngineRequest {
-  readonly type: 'run';
-  readonly results: readonly ParseResult[];
+    readonly type: 'run';
+    readonly results: readonly ParseResult[];
 }
 
 /** Page -> engine worker. */
 export type ToEngineWorker = EngineRequest;
 
 export interface EngineResultMessage {
-  readonly type: 'result';
-  readonly result: EngineResult;
+    readonly type: 'result';
+    readonly result: EngineResult;
 }
 
 /** The engine threw (a bug, not a bad file); no details are sent. */
 export interface EngineFailedMessage {
-  readonly type: 'failed';
+    readonly type: 'failed';
 }
 
 /** Engine worker -> page. */
 export type FromEngineWorker = EngineResultMessage | EngineFailedMessage;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function isRecord(value: unknown): value is Record<string, unknown>
+{
+    return typeof value === 'object' && value !== null;
 }
 
 /** True if `data` is a well-formed page -> engine worker message. */
-export function isToEngineWorker(data: unknown): data is ToEngineWorker {
-  return (
-    isRecord(data) &&
-    data.type === 'run' &&
-    Array.isArray(data.results) &&
-    (data.results as readonly unknown[]).every((r) => isRecord(r) && typeof r.ok === 'boolean')
-  );
+export function isToEngineWorker(data: unknown): data is ToEngineWorker
+{
+    return (
+        isRecord(data) &&
+        data.type === 'run' &&
+        Array.isArray(data.results) &&
+        (data.results as readonly unknown[]).every((r) => isRecord(r) && typeof r.ok === 'boolean')
+    );
 }
 
 /**
@@ -58,20 +60,21 @@ export function isToEngineWorker(data: unknown): data is ToEngineWorker {
  * the worker runs our own code, so this guards against bugs and stray
  * messages, not against a hostile worker.
  */
-export function isFromEngineWorker(data: unknown): data is FromEngineWorker {
-  if (!isRecord(data)) return false;
-  if (data.type === 'failed') return true;
-  if (data.type !== 'result' || !isRecord(data.result)) return false;
-  const { messages, failed, counts, positionByIndex, reconstructed, timeline, reconstructionWarnings } = data.result;
-  return (
-    Array.isArray(messages) &&
-    Array.isArray(failed) &&
-    isRecord(counts) &&
-    Array.isArray(positionByIndex) &&
-    Array.isArray(reconstructed) &&
-    Array.isArray(timeline) &&
-    Array.isArray(reconstructionWarnings)
-  );
+export function isFromEngineWorker(data: unknown): data is FromEngineWorker
+{
+    if (!isRecord(data)) return false;
+    if (data.type === 'failed') return true;
+    if (data.type !== 'result' || !isRecord(data.result)) return false;
+    const { messages, failed, counts, positionByIndex, reconstructed, timeline, reconstructionWarnings } = data.result;
+    return (
+        Array.isArray(messages) &&
+        Array.isArray(failed) &&
+        isRecord(counts) &&
+        Array.isArray(positionByIndex) &&
+        Array.isArray(reconstructed) &&
+        Array.isArray(timeline) &&
+        Array.isArray(reconstructionWarnings)
+    );
 }
 
 /**
@@ -81,28 +84,36 @@ export function isFromEngineWorker(data: unknown): data is FromEngineWorker {
  * unit tests without a browser.
  */
 export function createEngineWorkerSide(
-  post: (message: FromEngineWorker) => void,
-  run: (results: readonly ParseResult[]) => EngineResult = runEngine,
-): (data: unknown) => void {
-  let started = false;
-  return (data) => {
-    if (!isToEngineWorker(data)) return;
-    // One batch per worker: a second request is ignored.
-    if (started) return;
-    started = true;
-    let result: EngineResult;
-    try {
-      result = run(data.results);
-    } catch {
-      post({ type: 'failed' });
-      return;
-    }
-    try {
-      post({ type: 'result', result });
-    } catch {
-      // The result could not be copied to the page (should never happen:
-      // it is plain data). Say so instead of leaving the page waiting.
-      post({ type: 'failed' });
-    }
-  };
+    post: (message: FromEngineWorker) => void,
+    run: (results: readonly ParseResult[]) => EngineResult = runEngine,
+): (data: unknown) => void
+{
+    let started = false;
+    return (data) =>
+    {
+        if (!isToEngineWorker(data)) return;
+        // One batch per worker: a second request is ignored.
+        if (started) return;
+        started = true;
+        let result: EngineResult;
+        try
+        {
+            result = run(data.results);
+        }
+        catch
+        {
+            post({ type: 'failed' });
+            return;
+        }
+        try
+        {
+            post({ type: 'result', result });
+        }
+        catch
+        {
+            // The result could not be copied to the page (should never happen:
+            // it is plain data). Say so instead of leaving the page waiting.
+            post({ type: 'failed' });
+        }
+    };
 }

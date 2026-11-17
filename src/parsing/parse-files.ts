@@ -31,12 +31,12 @@ import { sha256Hex } from './hash';
 import { htmlToTextWithDomParser } from './html-dom';
 import type { InputFile, ParseErrorCode, ParseResult } from './types';
 import {
-  coversWholeBuffer,
-  createBrowserWorker,
-  DETACHED_DETAIL,
-  isDetached,
-  runInWorker,
-  type WorkerJob,
+    coversWholeBuffer,
+    createBrowserWorker,
+    DETACHED_DETAIL,
+    isDetached,
+    runInWorker,
+    type WorkerJob,
 } from './worker-runner';
 
 /**
@@ -72,8 +72,8 @@ export type JobRunner = (job: WorkerJob) => Promise<ParseResult>;
 
 /** The limits, injectable so tests do not need 500 MB of data. */
 export interface Limits {
-  readonly maxFileBytes: number;
-  readonly maxBatchBytes: number;
+    readonly maxFileBytes: number;
+    readonly maxBatchBytes: number;
 }
 
 const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
@@ -90,71 +90,81 @@ const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MA
  * `signal` cancels the parse ("Clear everything", see runInWorker): the
  * running worker is terminated and no new one is started.
  */
-export function parseFiles(files: readonly InputFile[], signal?: AbortSignal): Promise<ParseResult[]> {
-  return parseFilesWith(files, (job) =>
-    runInWorker(job, {
-      createWorker: createBrowserWorker,
-      // Wrapped so that the converter is always called with the default limits.
-      htmlToText: (html) => htmlToTextWithDomParser(html),
-      timeoutMs: PARSE_TIMEOUT_MS,
-      ...(signal === undefined ? {} : { signal }),
-    }),
-  );
+export function parseFiles(files: readonly InputFile[], signal?: AbortSignal): Promise<ParseResult[]>
+{
+    return parseFilesWith(files, (job) =>
+        runInWorker(job, {
+            createWorker: createBrowserWorker,
+            // Wrapped so that the converter is always called with the default limits.
+            htmlToText: (html) => htmlToTextWithDomParser(html),
+            timeoutMs: PARSE_TIMEOUT_MS,
+            ...(signal === undefined ? {} : { signal }),
+        }),
+    );
 }
 
 /** The dispatcher with the parsing step injected (unit tests use a fake). Never rejects. */
 export async function parseFilesWith(
-  files: readonly InputFile[],
-  runJob: JobRunner,
-  limits: Limits = DEFAULT_LIMITS,
-): Promise<ParseResult[]> {
-  const results: ParseResult[] = [];
-  let acceptedBytes = 0;
-  // Buffers already moved away by runJob (whole-buffer views only). A
-  // later file on one of these that now reads as empty was given twice (same
-  // array, or two views of one buffer): reported as such, not as an empty
-  // file. Works even where ArrayBuffer.prototype.detached does not exist.
-  const handedOver = new WeakSet<ArrayBufferLike>();
-  for (const file of files) {
-    const failure = (error: ParseErrorCode, detail: string, sha256: string | null): ParseResult => ({
-      ok: false,
-      fileName: file.name,
-      sha256,
-      error,
-      detail,
-    });
-    let sha256: string | null = null;
-    try {
-      const size = file.bytes.byteLength;
-      if (isDetached(file.bytes) || (size === 0 && handedOver.has(file.bytes.buffer))) {
-        results.push(failure('tool-error', DETACHED_DETAIL, null));
-        continue;
-      }
-      if (size > limits.maxFileBytes) {
-        results.push(failure('too-large', FILE_TOO_LARGE_DETAIL, null));
-        continue;
-      }
-      const decision = detectFileType(file.name, file.bytes);
-      if ('error' in decision) {
-        results.push(failure(decision.error, decision.detail, await sha256Hex(file.bytes)));
-        continue;
-      }
-      if (acceptedBytes + size > limits.maxBatchBytes) {
-        results.push(failure('too-large', BATCH_TOO_LARGE_DETAIL, null));
-        continue;
-      }
-      acceptedBytes += size;
-      sha256 = await sha256Hex(file.bytes);
-      // Only a buffer that is moved is recorded: a view into a larger buffer
-      // is copied, so later views of that buffer still hold their bytes.
-      if (coversWholeBuffer(file.bytes)) handedOver.add(file.bytes.buffer);
-      results.push(await runJob({ name: file.name, kind: decision.kind, bytes: file.bytes, sha256 }));
-    } catch {
-      // Not expected (runInWorker never rejects); one file's bug must not
-      // stop the batch. A bug in the tool, so never called a damaged file.
-      results.push(failure('tool-error', UNEXPECTED_DETAIL, sha256));
+    files: readonly InputFile[],
+    runJob: JobRunner,
+    limits: Limits = DEFAULT_LIMITS,
+): Promise<ParseResult[]>
+{
+    const results: ParseResult[] = [];
+    let acceptedBytes = 0;
+    // Buffers already moved away by runJob (whole-buffer views only). A
+    // later file on one of these that now reads as empty was given twice (same
+    // array, or two views of one buffer): reported as such, not as an empty
+    // file. Works even where ArrayBuffer.prototype.detached does not exist.
+    const handedOver = new WeakSet<ArrayBufferLike>();
+    for (const file of files)
+    {
+        const failure = (error: ParseErrorCode, detail: string, sha256: string | null): ParseResult => ({
+            ok: false,
+            fileName: file.name,
+            sha256,
+            error,
+            detail,
+        });
+        let sha256: string | null = null;
+        try
+        {
+            const size = file.bytes.byteLength;
+            if (isDetached(file.bytes) || (size === 0 && handedOver.has(file.bytes.buffer)))
+            {
+                results.push(failure('tool-error', DETACHED_DETAIL, null));
+                continue;
+            }
+            if (size > limits.maxFileBytes)
+            {
+                results.push(failure('too-large', FILE_TOO_LARGE_DETAIL, null));
+                continue;
+            }
+            const decision = detectFileType(file.name, file.bytes);
+            if ('error' in decision)
+            {
+                results.push(failure(decision.error, decision.detail, await sha256Hex(file.bytes)));
+                continue;
+            }
+            if (acceptedBytes + size > limits.maxBatchBytes)
+            {
+                results.push(failure('too-large', BATCH_TOO_LARGE_DETAIL, null));
+                continue;
+            }
+            acceptedBytes += size;
+            sha256 = await sha256Hex(file.bytes);
+            // Only a buffer that is moved is recorded: a view into a larger buffer
+            // is copied, so later views of that buffer still hold their bytes.
+            if (coversWholeBuffer(file.bytes)) handedOver.add(file.bytes.buffer);
+            results.push(await runJob({ name: file.name, kind: decision.kind, bytes: file.bytes, sha256 }));
+        }
+        catch
+        {
+            // Not expected (runInWorker never rejects); one file's bug must not
+            // stop the batch. A bug in the tool, so never called a damaged file.
+            results.push(failure('tool-error', UNEXPECTED_DETAIL, sha256));
+        }
     }
-  }
-  return results;
+    return results;
 }
 

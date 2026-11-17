@@ -12,6 +12,7 @@
  * R6). The SHA-256 of a message is taken from the file bytes, not from this
  * text, so it does not change.
  */
-export function toLfLineEndings(text: string): string {
-  return text.replace(/\r\n?/g, '\n');
+export function toLfLineEndings(text: string): string
+{
+    return text.replace(/\r\n?/g, '\n');
 }

@@ -15,11 +15,13 @@ import type { EmailAddress } from './types';
  * An empty `from` never matches, so a sender with no From is kept: it is
  * then the only author information in the file.
  */
-export function senderIfDifferent(sender: EmailAddress | undefined, from: readonly EmailAddress[]): EmailAddress | undefined {
-  if (sender === undefined || (sender.name === '' && sender.address === '')) return undefined;
-  if (sender.address !== '') {
-    const address = sender.address.toLowerCase();
-    return from.some((f) => f.address.toLowerCase() === address) ? undefined : sender;
-  }
-  return from.some((f) => f.name === sender.name) ? undefined : sender;
+export function senderIfDifferent(sender: EmailAddress | undefined, from: readonly EmailAddress[]): EmailAddress | undefined
+{
+    if (sender === undefined || (sender.name === '' && sender.address === '')) return undefined;
+    if (sender.address !== '')
+    {
+        const address = sender.address.toLowerCase();
+        return from.some((f) => f.address.toLowerCase() === address) ? undefined : sender;
+    }
+    return from.some((f) => f.name === sender.name) ? undefined : sender;
 }

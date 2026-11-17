@@ -8,14 +8,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWorkerSide, type FromWorker } from './worker-protocol';
 
 vi.mock('./deferred-html', () => ({
-  parseWithDeferredHtml: () => Promise.reject(new TypeError('internal bug')),
+    parseWithDeferredHtml: () => Promise.reject(new TypeError('internal bug')),
 }));
 
-describe('createWorkerSide when parsing rejects', () => {
-  it("posts { type: 'failed' } without any error text", async () => {
-    const posted: FromWorker[] = [];
-    const handle = createWorkerSide((message) => posted.push(message));
-    handle({ type: 'parse', name: 'a.eml', kind: 'eml', bytes: new Uint8Array([0x41]) });
-    await vi.waitFor(() => expect(posted).toEqual([{ type: 'failed' }]));
-  });
+describe('createWorkerSide when parsing rejects', () =>
+{
+    it("posts { type: 'failed' } without any error text", async () =>
+    {
+        const posted: FromWorker[] = [];
+        const handle = createWorkerSide((message) => posted.push(message));
+        handle({ type: 'parse', name: 'a.eml', kind: 'eml', bytes: new Uint8Array([0x41]) });
+        await vi.waitFor(() => expect(posted).toEqual([{ type: 'failed' }]));
+    });
 });

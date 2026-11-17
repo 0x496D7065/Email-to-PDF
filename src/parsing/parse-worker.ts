@@ -27,8 +27,8 @@ import { createWorkerSide, type FromWorker } from './worker-protocol';
  * global is described by hand instead of mixing both type libraries.
  */
 interface WorkerScope {
-  onmessage: ((event: MessageEvent<unknown>) => void) | null;
-  postMessage(message: FromWorker): void;
+    onmessage: ((event: MessageEvent<unknown>) => void) | null;
+    postMessage(message: FromWorker): void;
 }
 
 const scope = self as unknown as WorkerScope;

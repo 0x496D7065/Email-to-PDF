@@ -23,97 +23,97 @@
 // \u00e0 = a grave, \u00e9 = e acute, \u00fb = u circumflex.
 
 export interface DateLanguage {
-  /** Language code, for readers and tests only. */
-  readonly code: string;
-  /** Twelve entries, January first: every way the month is written. */
-  readonly months: readonly (readonly string[])[];
-  /** Seven entries, SUNDAY first (like Date.getUTCDay): every way the weekday is written. */
-  readonly weekdays: readonly (readonly string[])[];
-  /** Small words between the date and the time ("at", "\u00e0", "om"); skipped. */
-  readonly connectors: readonly string[];
+    /** Language code, for readers and tests only. */
+    readonly code: string;
+    /** Twelve entries, January first: every way the month is written. */
+    readonly months: readonly (readonly string[])[];
+    /** Seven entries, SUNDAY first (like Date.getUTCDay): every way the weekday is written. */
+    readonly weekdays: readonly (readonly string[])[];
+    /** Small words between the date and the time ("at", "\u00e0", "om"); skipped. */
+    readonly connectors: readonly string[];
 }
 
 export const DATE_LANGUAGES: readonly DateLanguage[] = [
-  {
-    code: 'en',
-    months: [
-      ['january', 'jan'],
-      ['february', 'feb'],
-      ['march', 'mar'],
-      ['april', 'apr'],
-      ['may'],
-      ['june', 'jun'],
-      ['july', 'jul'],
-      ['august', 'aug'],
-      ['september', 'sep', 'sept'],
-      ['october', 'oct'],
-      ['november', 'nov'],
-      ['december', 'dec'],
-    ],
-    weekdays: [
-      ['sunday', 'sun'],
-      ['monday', 'mon'],
-      ['tuesday', 'tue', 'tues'],
-      ['wednesday', 'wed'],
-      ['thursday', 'thu', 'thur', 'thurs'],
-      ['friday', 'fri'],
-      ['saturday', 'sat'],
-    ],
-    connectors: ['at'],
-  },
-  {
-    code: 'fr',
-    months: [
-      ['janvier', 'janv'],
-      ['f\u00e9vrier', 'f\u00e9vr', 'f\u00e9v', 'fevrier', 'fevr', 'fev'],
-      ['mars'],
-      ['avril', 'avr'],
-      ['mai'],
-      ['juin'],
-      ['juillet', 'juil'],
-      ['ao\u00fbt', 'aout'],
-      ['septembre', 'sept'],
-      ['octobre', 'oct'],
-      ['novembre', 'nov'],
-      ['d\u00e9cembre', 'd\u00e9c', 'decembre', 'dec'],
-    ],
-    weekdays: [
-      ['dimanche', 'dim'],
-      ['lundi', 'lun'],
-      ['mardi', 'mar'],
-      ['mercredi', 'mer'],
-      ['jeudi', 'jeu'],
-      ['vendredi', 'ven'],
-      ['samedi', 'sam'],
-    ],
-    // "a" is "\u00e0" that lost its accent in a plain-text copy.
-    connectors: ['\u00e0', 'a'],
-  },
-  {
-    code: 'nl',
-    months: [
-      ['januari', 'jan'],
-      ['februari', 'feb'],
-      ['maart', 'mrt'],
-      ['april', 'apr'],
-      ['mei'],
-      ['juni', 'jun'],
-      ['juli', 'jul'],
-      ['augustus', 'aug'],
-      ['september', 'sep', 'sept'],
-      ['oktober', 'okt'],
-      ['november', 'nov'],
-      ['december', 'dec'],
-    ],
-    weekdays: [
-      ['zondag', 'zo'],
-      ['maandag', 'ma'],
-      ['dinsdag', 'di'],
-      ['woensdag', 'wo'],
-      ['donderdag', 'do'],
-      ['vrijdag', 'vr'],
-      ['zaterdag', 'za'],
-    ],
-    connectors: ['om'],
-  },
+    {
+        code: 'en',
+        months: [
+            ['january', 'jan'],
+            ['february', 'feb'],
+            ['march', 'mar'],
+            ['april', 'apr'],
+            ['may'],
+            ['june', 'jun'],
+            ['july', 'jul'],
+            ['august', 'aug'],
+            ['september', 'sep', 'sept'],
+            ['october', 'oct'],
+            ['november', 'nov'],
+            ['december', 'dec'],
+        ],
+        weekdays: [
+            ['sunday', 'sun'],
+            ['monday', 'mon'],
+            ['tuesday', 'tue', 'tues'],
+            ['wednesday', 'wed'],
+            ['thursday', 'thu', 'thur', 'thurs'],
+            ['friday', 'fri'],
+            ['saturday', 'sat'],
+        ],
+        connectors: ['at'],
+    },
+    {
+        code: 'fr',
+        months: [
+            ['janvier', 'janv'],
+            ['f\u00e9vrier', 'f\u00e9vr', 'f\u00e9v', 'fevrier', 'fevr', 'fev'],
+            ['mars'],
+            ['avril', 'avr'],
+            ['mai'],
+            ['juin'],
+            ['juillet', 'juil'],
+            ['ao\u00fbt', 'aout'],
+            ['septembre', 'sept'],
+            ['octobre', 'oct'],
+            ['novembre', 'nov'],
+            ['d\u00e9cembre', 'd\u00e9c', 'decembre', 'dec'],
+        ],
+        weekdays: [
+            ['dimanche', 'dim'],
+            ['lundi', 'lun'],
+            ['mardi', 'mar'],
+            ['mercredi', 'mer'],
+            ['jeudi', 'jeu'],
+            ['vendredi', 'ven'],
+            ['samedi', 'sam'],
+        ],
+        // "a" is "\u00e0" that lost its accent in a plain-text copy.
+        connectors: ['\u00e0', 'a'],
+    },
+    {
+        code: 'nl',
+        months: [
+            ['januari', 'jan'],
+            ['februari', 'feb'],
+            ['maart', 'mrt'],
+            ['april', 'apr'],
+            ['mei'],
+            ['juni', 'jun'],
+            ['juli', 'jul'],
+            ['augustus', 'aug'],
+            ['september', 'sep', 'sept'],
+            ['oktober', 'okt'],
+            ['november', 'nov'],
+            ['december', 'dec'],
+        ],
+        weekdays: [
+            ['zondag', 'zo'],
+            ['maandag', 'ma'],
+            ['dinsdag', 'di'],
+            ['woensdag', 'wo'],
+            ['donderdag', 'do'],
+            ['vrijdag', 'vr'],
+            ['zaterdag', 'za'],
+        ],
+        connectors: ['om'],
+    },
 ];

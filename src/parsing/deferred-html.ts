@@ -46,9 +46,9 @@ import type { EmailParser, InputFile, ParseResult } from './types';
 
 /** One HTML body converted on the page, or why it could not be. */
 export type ConversionOutcome =
-  | { readonly ok: true; readonly text: string; readonly truncated: boolean }
-  /** `reason` is the converter's own reason, without the "HTML body could not be converted: " prefix. */
-  | { readonly ok: false; readonly reason: string };
+    | { readonly ok: true; readonly text: string; readonly truncated: boolean }
+    /** `reason` is the converter's own reason, without the "HTML body could not be converted: " prefix. */
+    | { readonly ok: false; readonly reason: string };
 
 /** Sends HTML strings to the page and waits for their conversions, in the same order. */
 export type ConvertOnPage = (htmls: readonly string[]) => Promise<readonly ConversionOutcome[]>;
@@ -56,8 +56,9 @@ export type ConvertOnPage = (htmls: readonly string[]) => Promise<readonly Conve
 /** Detail of a file whose page answer did not match what was recorded (a bug, never a bad file). */
 export const MISMATCH_DETAIL = 'HTML body could not be converted: the converted text did not come back from the page';
 
-function parserFor(kind: FileKind, htmlToText: (html: string) => HtmlToTextResult): EmailParser {
-  return kind === 'eml' ? createEmlParser({ htmlToText }) : createMsgParser({ htmlToText });
+function parserFor(kind: FileKind, htmlToText: (html: string) => HtmlToTextResult): EmailParser
+{
+    return kind === 'eml' ? createEmlParser({ htmlToText }) : createMsgParser({ htmlToText });
 }
 
 /**
@@ -66,47 +67,54 @@ function parserFor(kind: FileKind, htmlToText: (html: string) => HtmlToTextResul
  * through the Compound File check (cfb-check.ts). Never throws for a bad
  * file: like the adapters, any failure becomes a 'corrupt' result.
  */
-export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, convertOnPage: ConvertOnPage): Promise<ParseResult> {
-  if (kind === 'msg') {
-    const damage = findCfbDamage(file.bytes);
-    if (damage !== null) {
-      return { ok: false, error: 'corrupt', detail: damage, fileName: file.name, sha256: await sha256Hex(file.bytes) };
+export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, convertOnPage: ConvertOnPage): Promise<ParseResult>
+{
+    if (kind === 'msg')
+    {
+        const damage = findCfbDamage(file.bytes);
+        if (damage !== null)
+        {
+            return { ok: false, error: 'corrupt', detail: damage, fileName: file.name, sha256: await sha256Hex(file.bytes) };
+        }
     }
-  }
 
-  const recorded: string[] = [];
-  const recording = (html: string): HtmlToTextResult => {
-    recorded.push(html);
-    return { text: '', truncated: false };
-  };
-  const first = await parserFor(kind, recording).parse(file);
-  if (recorded.length === 0) return first;
+    const recorded: string[] = [];
+    const recording = (html: string): HtmlToTextResult =>
+    {
+        recorded.push(html);
+        return { text: '', truncated: false };
+    };
+    const first = await parserFor(kind, recording).parse(file);
+    if (recorded.length === 0) return first;
 
-  // Pass 3 runs even if pass 1 failed: a converter failure on the page must
-  // win over a later problem in the file, exactly as with a direct converter.
-  const outcomes = await convertOnPage(recorded);
-  let next = 0;
-  let mismatch = false;
-  const replaying = (html: string): HtmlToTextResult => {
-    const outcome = outcomes[next];
-    if (mismatch || outcome === undefined || recorded[next] !== html) {
-      // Once out of step, every later answer is suspect too.
-      mismatch = true;
-      throw new Error('mismatch');
+    // Pass 3 runs even if pass 1 failed: a converter failure on the page must
+    // win over a later problem in the file, exactly as with a direct converter.
+    const outcomes = await convertOnPage(recorded);
+    let next = 0;
+    let mismatch = false;
+    const replaying = (html: string): HtmlToTextResult =>
+    {
+        const outcome = outcomes[next];
+        if (mismatch || outcome === undefined || recorded[next] !== html)
+        {
+            // Once out of step, every later answer is suspect too.
+            mismatch = true;
+            throw new Error('mismatch');
+        }
+        next++;
+        // The adapter turns this into its 'html-body-unreadable' warning, exactly
+        // as it does when a direct converter throws.
+        if (!outcome.ok) throw new Error(outcome.reason);
+        return { text: outcome.text, truncated: outcome.truncated };
+    };
+    const result = await parserFor(kind, replaying).parse(file);
+    // The adapter would have read a mismatch as one unreadable part; it is not
+    // (see the top of this file), so the file fails instead.
+    if (mismatch)
+    {
+        return { ok: false, error: 'corrupt', detail: MISMATCH_DETAIL, fileName: file.name, sha256: await sha256Hex(file.bytes) };
     }
-    next++;
-    // The adapter turns this into its 'html-body-unreadable' warning, exactly
-    // as it does when a direct converter throws.
-    if (!outcome.ok) throw new Error(outcome.reason);
-    return { text: outcome.text, truncated: outcome.truncated };
-  };
-  const result = await parserFor(kind, replaying).parse(file);
-  // The adapter would have read a mismatch as one unreadable part; it is not
-  // (see the top of this file), so the file fails instead.
-  if (mismatch) {
-    return { ok: false, error: 'corrupt', detail: MISMATCH_DETAIL, fileName: file.name, sha256: await sha256Hex(file.bytes) };
-  }
-  return result;
+    return result;
 }
 
 /**
@@ -117,17 +125,22 @@ export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, con
  * call. A failure does not stop the list: the adapter leaves that one part
  * out and goes on with the next ones, so every string gets an outcome.
  */
-export function convertHtmlList(htmls: readonly string[], htmlToText: (html: string) => HtmlToTextResult): ConversionOutcome[] {
-  const outcomes: ConversionOutcome[] = [];
-  for (const html of htmls) {
-    try {
-      const { text, truncated } = convertHtmlBody(htmlToText, html);
-      outcomes.push({ ok: true, text, truncated });
-    } catch (error) {
-      const reason =
-        error instanceof HtmlConversionError ? error.reason : error instanceof Error ? error.message : String(error);
-      outcomes.push({ ok: false, reason });
+export function convertHtmlList(htmls: readonly string[], htmlToText: (html: string) => HtmlToTextResult): ConversionOutcome[]
+{
+    const outcomes: ConversionOutcome[] = [];
+    for (const html of htmls)
+    {
+        try
+        {
+            const { text, truncated } = convertHtmlBody(htmlToText, html);
+            outcomes.push({ ok: true, text, truncated });
+        }
+        catch (error)
+        {
+            const reason =
+                error instanceof HtmlConversionError ? error.reason : error instanceof Error ? error.message : String(error);
+            outcomes.push({ ok: false, reason });
+        }
     }
-  }
-  return outcomes;
+    return outcomes;
 }

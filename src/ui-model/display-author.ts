@@ -8,24 +8,25 @@ import type { EmailAddress, NormalizedMessage } from '../parsing/types';
 
 /** Where the shown author comes from. */
 export type AuthorSource =
-  // The From mailboxes (the usual case).
-  | 'from'
-  // No usable From, but the message names the mailbox that actually sent it
-  // (Sender header / .msg sender): shown instead, so the reader still sees who
-  // sent it. The preview may label it, e.g. "sent by".
-  | 'sender'
-  // Neither: the preview shows an "unknown sender" marker.
-  | 'none';
+    // The From mailboxes (the usual case).
+    | 'from'
+    // No usable From, but the message names the mailbox that actually sent it
+    // (Sender header / .msg sender): shown instead, so the reader still sees who
+    // sent it. The preview may label it, e.g. "sent by".
+    | 'sender'
+    // Neither: the preview shows an "unknown sender" marker.
+    | 'none';
 
 export interface DisplayAuthor {
-  readonly source: AuthorSource;
-  /** The mailboxes to show: non-empty for 'from' and 'sender', [] for 'none'. */
-  readonly mailboxes: readonly EmailAddress[];
+    readonly source: AuthorSource;
+    /** The mailboxes to show: non-empty for 'from' and 'sender', [] for 'none'. */
+    readonly mailboxes: readonly EmailAddress[];
 }
 
 /** True if a mailbox has neither a name nor an address worth showing. */
-function isBlank(mailbox: EmailAddress): boolean {
-  return mailbox.name.trim() === '' && mailbox.address.trim() === '';
+function isBlank(mailbox: EmailAddress): boolean
+{
+    return mailbox.name.trim() === '' && mailbox.address.trim() === '';
 }
 
 /**
@@ -34,9 +35,10 @@ function isBlank(mailbox: EmailAddress): boolean {
  * Blank From entries (no name, no address) carry nothing to show and are
  * skipped. The message itself is never changed.
  */
-export function displayAuthor(message: Pick<NormalizedMessage, 'from' | 'sender'>): DisplayAuthor {
-  const from = message.from.filter((m) => !isBlank(m));
-  if (from.length > 0) return { source: 'from', mailboxes: from };
-  if (message.sender !== undefined && !isBlank(message.sender)) return { source: 'sender', mailboxes: [message.sender] };
-  return { source: 'none', mailboxes: [] };
+export function displayAuthor(message: Pick<NormalizedMessage, 'from' | 'sender'>): DisplayAuthor
+{
+    const from = message.from.filter((m) => !isBlank(m));
+    if (from.length > 0) return { source: 'from', mailboxes: from };
+    if (message.sender !== undefined && !isBlank(message.sender)) return { source: 'sender', mailboxes: [message.sender] };
+    return { source: 'none', mailboxes: [] };
 }

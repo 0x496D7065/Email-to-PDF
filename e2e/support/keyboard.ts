@@ -11,6 +11,7 @@
  * tests run). On macOS, Firefox (like Safari and WebKit) skips links by
  * default unless the reader changes the system or browser setting.
  */
-export function tabSkipsLinks(browserName: string): boolean {
-  return browserName === 'webkit';
+export function tabSkipsLinks(browserName: string): boolean
+{
+    return browserName === 'webkit';
 }

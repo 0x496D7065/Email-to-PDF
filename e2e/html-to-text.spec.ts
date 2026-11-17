@@ -55,21 +55,22 @@ import { build, type Rolldown } from 'vite';
 import { FIXTURES } from '../tests/fixtures/manifest.ts';
 import type * as Entry from './support/html-entry.ts';
 import {
-  engineOf,
-  isWebKitBlobRead,
-  parseTimeReportFilter,
-  untoleratedReports,
-  withoutSelectReports,
-  type ExactParseTimeReport,
+    engineOf,
+    isWebKitBlobRead,
+    parseTimeReportFilter,
+    untoleratedReports,
+    withoutSelectReports,
+    type ExactParseTimeReport,
 } from './support/watch.ts';
 
-declare global {
-  interface Window {
-    /** "directive blockedURI parse|live" of each CSP violation (separate from no-network.spec.ts's list). */
-    __e2eViolations: string[];
-    /** Pushed to by code in the hostile HTML: must stay empty. */
-    __e2eFlags: string[];
-  }
+declare global
+{
+    interface Window {
+        /** "directive blockedURI parse|live" of each CSP violation (separate from no-network.spec.ts's list). */
+        __e2eViolations: string[];
+        /** Pushed to by code in the hostile HTML: must stay empty. */
+        __e2eFlags: string[];
+    }
 }
 
 /** Project root as a file path ("file:///C:/x/" -> "C:/x/"), as in vite.config.ts. */
@@ -85,8 +86,8 @@ const BUNDLE_PATH = '/__e2e__/';
  * run proves no request for the track is ever made.
  */
 const PARSE_TIME_REPORTS: ReadonlySet<ExactParseTimeReport> = new Set([
-  'base-uri https://base.invalid/ parse',
-  'media-src https://track.invalid/t.vtt parse',
+    'base-uri https://base.invalid/ parse',
+    'media-src https://track.invalid/t.vtt parse',
 ] as const);
 
 /**
@@ -100,27 +101,29 @@ const isParseTimeReport = parseTimeReportFilter(PARSE_TIME_REPORTS);
 const bundle = new Map<string, string>();
 let entryFile = '';
 
-test.beforeAll(async () => {
-  test.setTimeout(120_000);
-  const output = await build({
-    root: ROOT,
-    configFile: `${ROOT}vite.config.ts`,
-    mode: 'production',
-    logLevel: 'warn',
-    build: {
-      write: false, // in memory only: dist/ is never touched
-      emptyOutDir: false,
-      copyPublicDir: false,
-      lib: { entry: `${ROOT}e2e/support/html-entry.ts`, formats: ['es'], fileName: 'html-entry' },
-    },
-  });
-  const outputs = (Array.isArray(output) ? output : [output]) as Rolldown.RolldownOutput[];
-  for (const item of outputs.flatMap((o) => o.output)) {
-    if (item.type !== 'chunk') continue;
-    bundle.set(item.fileName, item.code);
-    if (item.isEntry) entryFile = item.fileName;
-  }
-  expect(entryFile).not.toBe('');
+test.beforeAll(async () =>
+{
+    test.setTimeout(120_000);
+    const output = await build({
+        root: ROOT,
+        configFile: `${ROOT}vite.config.ts`,
+        mode: 'production',
+        logLevel: 'warn',
+        build: {
+            write: false, // in memory only: dist/ is never touched
+            emptyOutDir: false,
+            copyPublicDir: false,
+            lib: { entry: `${ROOT}e2e/support/html-entry.ts`, formats: ['es'], fileName: 'html-entry' },
+        },
+    });
+    const outputs = (Array.isArray(output) ? output : [output]) as Rolldown.RolldownOutput[];
+    for (const item of outputs.flatMap((o) => o.output))
+    {
+        if (item.type !== 'chunk') continue;
+        bundle.set(item.fileName, item.code);
+        if (item.isEntry) entryFile = item.fileName;
+    }
+    expect(entryFile).not.toBe('');
 });
 
 let origin = '';
@@ -131,114 +134,131 @@ let websockets: string[] = [];
 let dialogs: string[] = [];
 
 /** Records every request (WebKit's in-memory blob reads aside, see isWebKitBlobRead); aborts anything that leaves the preview server (safety net). */
-async function watchNetwork(context: BrowserContext): Promise<void> {
-  const webkit = engineOf(context) === 'webkit';
-  context.on('request', (request) => {
-    if (!(webkit && isWebKitBlobRead(request, origin))) requestUrls.push(request.url());
-  });
-  await context.route('**/*', (route) =>
-    new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
-  );
-  await context.routeWebSocket(/.*/, async (ws) => {
-    websockets.push(ws.url());
-    await ws.close();
-  });
+async function watchNetwork(context: BrowserContext): Promise<void>
+{
+    const webkit = engineOf(context) === 'webkit';
+    context.on('request', (request) =>
+    {
+        if (!(webkit && isWebKitBlobRead(request, origin))) requestUrls.push(request.url());
+    });
+    await context.route('**/*', (route) =>
+        new URL(route.request().url()).origin === origin ? route.continue() : route.abort('blockedbyclient'),
+    );
+    await context.routeWebSocket(/.*/, async (ws) =>
+    {
+        websockets.push(ws.url());
+        await ws.close();
+    });
 }
 
 /** Serves the in-memory test bundle on the site's own origin. */
-async function serveBundle(page: Page): Promise<void> {
-  await page.route(`**${BUNDLE_PATH}*`, async (route) => {
-    const name = new URL(route.request().url()).pathname.slice(BUNDLE_PATH.length);
-    const code = bundle.get(name);
-    await (code === undefined ? route.fulfill({ status: 404 }) : route.fulfill({ body: code, contentType: 'text/javascript' }));
-  });
+async function serveBundle(page: Page): Promise<void>
+{
+    await page.route(`**${BUNDLE_PATH}*`, async (route) =>
+    {
+        const name = new URL(route.request().url()).pathname.slice(BUNDLE_PATH.length);
+        const code = bundle.get(name);
+        await (code === undefined ? route.fulfill({ status: 404 }) : route.fulfill({ body: code, contentType: 'text/javascript' }));
+    });
 }
 
 /** Serves the page with NO CSP at all: header removed and <meta> CSP tag removed. */
-async function removeCsp(page: Page): Promise<void> {
-  await page.route(
-    (url) => url.origin === origin && url.pathname === '/',
-    async (route) => {
-      const response = await route.fetch();
-      const headers = { ...response.headers() };
-      delete headers['content-security-policy'];
-      const body = (await response.text()).replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
-      if (body.includes('Content-Security-Policy')) throw new Error('meta CSP not removed');
-      await route.fulfill({ response, headers, body });
-    },
-  );
+async function removeCsp(page: Page): Promise<void>
+{
+    await page.route(
+        (url) => url.origin === origin && url.pathname === '/',
+        async (route) =>
+        {
+            const response = await route.fetch();
+            const headers = { ...response.headers() };
+            delete headers['content-security-policy'];
+            const body = (await response.text()).replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '');
+            if (body.includes('Content-Security-Policy')) throw new Error('meta CSP not removed');
+            await route.fulfill({ response, headers, body });
+        },
+    );
 }
 
-test.beforeEach(async ({ context, page, baseURL }) => {
-  origin = new URL(baseURL ?? '').origin;
-  requestUrls = [];
-  loadedAt = 0;
-  websockets = [];
-  dialogs = [];
-  await watchNetwork(context);
-  await serveBundle(page);
-  page.on('dialog', (dialog) => {
-    dialogs.push(dialog.message());
-    void dialog.dismiss();
-  });
-  await page.addInitScript(() => {
-    window.__e2eViolations = [];
-    window.__e2eFlags = [];
-    // An inline report made while DOMParser parses is fired at the document;
-    // an inline one about the live page at the element concerned (see the header).
-    document.addEventListener('securitypolicyviolation', (event) => {
-      // "select": WebKit's report about a <select> (see withoutSelectReports).
-      const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
-      window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
+test.beforeEach(async ({ context, page, baseURL }) =>
+{
+    origin = new URL(baseURL ?? '').origin;
+    requestUrls = [];
+    loadedAt = 0;
+    websockets = [];
+    dialogs = [];
+    await watchNetwork(context);
+    await serveBundle(page);
+    page.on('dialog', (dialog) =>
+    {
+        dialogs.push(dialog.message());
+        void dialog.dismiss();
     });
-  });
+    await page.addInitScript(() =>
+    {
+        window.__e2eViolations = [];
+        window.__e2eFlags = [];
+        // An inline report made while DOMParser parses is fired at the document;
+        // an inline one about the live page at the element concerned (see the header).
+        document.addEventListener('securitypolicyviolation', (event) =>
+        {
+            // "select": WebKit's report about a <select> (see withoutSelectReports).
+            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
+        });
+    });
 });
 
 /** How many CSPs the page was opened with (header and <meta>: 2; none: 0). */
 let cspPolicies = 2;
 
 /** Opens the site, with or without its CSP, and notes where its own requests end. */
-async function open(page: Page, csp: 'with-csp' | 'without-csp'): Promise<void> {
-  if (csp === 'without-csp') await removeCsp(page);
-  cspPolicies = csp === 'with-csp' ? 2 : 0;
-  await page.goto('/', { waitUntil: 'networkidle' });
-  loadedAt = requestUrls.length;
-  if (csp === 'without-csp') {
-    expect(await page.locator('meta[http-equiv="Content-Security-Policy"]').count()).toBe(0);
-  }
+async function open(page: Page, csp: 'with-csp' | 'without-csp'): Promise<void>
+{
+    if (csp === 'without-csp') await removeCsp(page);
+    cspPolicies = csp === 'with-csp' ? 2 : 0;
+    await page.goto('/', { waitUntil: 'networkidle' });
+    loadedAt = requestUrls.length;
+    if (csp === 'without-csp')
+    {
+        expect(await page.locator('meta[http-equiv="Content-Security-Policy"]').count()).toBe(0);
+    }
 }
 
 /** Requests made since the page loaded, except the test bundle itself. */
-function requestsAfterLoad(): string[] {
-  return requestUrls.slice(loadedAt).filter((url) => !(new URL(url).origin === origin && new URL(url).pathname.startsWith(BUNDLE_PATH)));
+function requestsAfterLoad(): string[]
+{
+    return requestUrls.slice(loadedAt).filter((url) => !(new URL(url).origin === origin && new URL(url).pathname.startsWith(BUNDLE_PATH)));
 }
 
 /**
  * Asserts nothing ran and nothing was loaded. Waits a moment first, so that
  * an image load or an event handler would have had time to happen.
  */
-async function expectNothingHappened(page: Page): Promise<void> {
-  await page.waitForTimeout(1000);
-  expect(await page.evaluate(() => window.__e2eFlags)).toEqual([]);
-  expect(dialogs).toEqual([]);
-  expect(await page.title()).toBe('Email to PDF');
-  expect(page.url()).toBe(`${origin}/`);
-  expect(requestsAfterLoad()).toEqual([]);
-  expect(websockets).toEqual([]);
-  const browserName = engineOf(page.context());
-  const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), cspPolicies);
-  expect(untoleratedReports(browserName, violations, isParseTimeReport)).toEqual([]);
+async function expectNothingHappened(page: Page): Promise<void>
+{
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => window.__e2eFlags)).toEqual([]);
+    expect(dialogs).toEqual([]);
+    expect(await page.title()).toBe('Email to PDF');
+    expect(page.url()).toBe(`${origin}/`);
+    expect(requestsAfterLoad()).toEqual([]);
+    expect(websockets).toEqual([]);
+    const browserName = engineOf(page.context());
+    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), cspPolicies);
+    expect(untoleratedReports(browserName, violations, isParseTimeReport)).toEqual([]);
 }
 
 /** Converts `html` in the page with the production DOMParser converter (default limits unless given). */
-function convertInPage(page: Page, html: string, limits?: Entry.HtmlToTextLimits): Promise<Entry.HtmlToTextResult> {
-  return page.evaluate(
-    async ({ url, html, limits }) => {
-      const entry = (await import(url)) as typeof Entry;
-      return entry.htmlToTextWithDomParser(html, limits);
-    },
-    { url: `${BUNDLE_PATH}${entryFile}`, html, limits },
-  );
+function convertInPage(page: Page, html: string, limits?: Entry.HtmlToTextLimits): Promise<Entry.HtmlToTextResult>
+{
+    return page.evaluate(
+        async ({ url, html, limits }) =>
+        {
+            const entry = (await import(url)) as typeof Entry;
+            return entry.htmlToTextWithDomParser(html, limits);
+        },
+        { url: `${BUNDLE_PATH}${entryFile}`, html, limits },
+    );
 }
 
 /**
@@ -289,137 +309,150 @@ body { background: url('https://bg.invalid/b.png'); font-family: RemoteFont; }</
 
 /** Visible and fallback text kept; script code, handlers, URLs and the email's own CSP never appear. */
 const HOSTILE_TEXT = [
-  'Visible text',
-  '',
-  'pixel Picture alt Object fallback Video fallback Audio fallback SVG text',
-  '',
-  'Noscript fallback',
-  '',
-  'Marquee text',
-  'Cell one | Cell two',
-  'Image button',
-  'Sum',
-  'Details',
-  'Link text',
-  'Send Submit form',
+    'Visible text',
+    '',
+    'pixel Picture alt Object fallback Video fallback Audio fallback SVG text',
+    '',
+    'Noscript fallback',
+    '',
+    'Marquee text',
+    'Cell one | Cell two',
+    'Image button',
+    'Sum',
+    'Details',
+    'Link text',
+    'Send Submit form',
 ].join('\n');
 
-for (const csp of ['with-csp', 'without-csp'] as const) {
-  test.describe(csp, () => {
-    test('fixture 50 (HTML-only .eml) converts to the expected text, with nothing run or loaded', async ({ page }) => {
-      await open(page, csp);
-      const expected = FIXTURES.find((f) => f.id === 'eml/50-html-only.eml');
-      expect(expected).toBeDefined();
-      if (expected === undefined) return;
+for (const csp of ['with-csp', 'without-csp'] as const)
+{
+    test.describe(csp, () =>
+    {
+        test('fixture 50 (HTML-only .eml) converts to the expected text, with nothing run or loaded', async ({ page }) =>
+        {
+            await open(page, csp);
+            const expected = FIXTURES.find((f) => f.id === 'eml/50-html-only.eml');
+            expect(expected).toBeDefined();
+            if (expected === undefined) return;
 
-      const result = await page.evaluate(
-        async ({ url, name }) => {
-          const entry = (await import(url)) as typeof Entry;
-          const parsers = entry.createBrowserParsers();
-          return parsers.eml.parse({ name, bytes: new TextEncoder().encode(entry.FIXTURE_50) });
-        },
-        { url: `${BUNDLE_PATH}${entryFile}`, name: expected.id },
-      );
+            const result = await page.evaluate(
+                async ({ url, name }) =>
+                {
+                    const entry = (await import(url)) as typeof Entry;
+                    const parsers = entry.createBrowserParsers();
+                    return parsers.eml.parse({ name, bytes: new TextEncoder().encode(entry.FIXTURE_50) });
+                },
+                { url: `${BUNDLE_PATH}${entryFile}`, name: expected.id },
+            );
 
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      const { bodyText, warnings } = result.message;
-      for (const snippet of expected.bodyContains) expect(bodyText).toContain(snippet);
-      for (const snippet of expected.bodyExcludes ?? []) expect(bodyText).not.toContain(snippet);
-      expect([...warnings].sort()).toEqual([...expected.warnings].sort());
-      // The whole text: CSS is ignored, so the "display: none" preheader is
-      // kept (never silently lost); entities are decoded; links keep their
-      // visible text only; the tracking pixels have no alt text.
-      expect(bodyText).toBe(
-        [
-          'Hidden preheader text',
-          'Dear Alice,',
-          'Spring offer on office chairs: order before 31 March and get 10\u00a0% off. Caf\u00e9 tables & meeting chairs included.',
-          'Book a visit',
-          'Sample Furniture \u2013 unsubscribe',
-        ].join('\n\n'),
-      );
+            expect(result.ok).toBe(true);
+            if (!result.ok) return;
+            const { bodyText, warnings } = result.message;
+            for (const snippet of expected.bodyContains) expect(bodyText).toContain(snippet);
+            for (const snippet of expected.bodyExcludes ?? []) expect(bodyText).not.toContain(snippet);
+            expect([...warnings].sort()).toEqual([...expected.warnings].sort());
+            // The whole text: CSS is ignored, so the "display: none" preheader is
+            // kept (never silently lost); entities are decoded; links keep their
+            // visible text only; the tracking pixels have no alt text.
+            expect(bodyText).toBe(
+                [
+                    'Hidden preheader text',
+                    'Dear Alice,',
+                    'Spring offer on office chairs: order before 31 March and get 10\u00a0% off. Caf\u00e9 tables & meeting chairs included.',
+                    'Book a visit',
+                    'Sample Furniture \u2013 unsubscribe',
+                ].join('\n\n'),
+            );
 
-      await expectNothingHappened(page);
+            await expectNothingHappened(page);
+        });
+
+        test('hostile HTML: no script runs, nothing loads, only visible and fallback text comes out', async ({ page }) =>
+        {
+            await open(page, csp);
+            const result = await convertInPage(page, HOSTILE_HTML);
+            expect(result).toEqual({ text: HOSTILE_TEXT, truncated: false });
+            await expectNothingHappened(page);
+        });
+
+        test('hostile HTML cut at a small output limit: truncated is reported, the note is in the text, nothing runs', async ({ page }) =>
+        {
+            await open(page, csp);
+            const result = await convertInPage(page, HOSTILE_HTML, { maxDepth: 500, maxOutputLength: 40 });
+            expect(result.truncated).toBe(true);
+            expect(result.text.startsWith('Visible text\n\npixel Picture alt')).toBe(true);
+            expect(result.text.endsWith('[Text cut here: this HTML body is longer than 40 characters. The full text stays in the original email file.]')).toBe(true);
+            await expectNothingHappened(page);
+        });
     });
-
-    test('hostile HTML: no script runs, nothing loads, only visible and fallback text comes out', async ({ page }) => {
-      await open(page, csp);
-      const result = await convertInPage(page, HOSTILE_HTML);
-      expect(result).toEqual({ text: HOSTILE_TEXT, truncated: false });
-      await expectNothingHappened(page);
-    });
-
-    test('hostile HTML cut at a small output limit: truncated is reported, the note is in the text, nothing runs', async ({ page }) => {
-      await open(page, csp);
-      const result = await convertInPage(page, HOSTILE_HTML, { maxDepth: 500, maxOutputLength: 40 });
-      expect(result.truncated).toBe(true);
-      expect(result.text.startsWith('Visible text\n\npixel Picture alt')).toBe(true);
-      expect(result.text.endsWith('[Text cut here: this HTML body is longer than 40 characters. The full text stays in the original email file.]')).toBe(true);
-      await expectNothingHappened(page);
-    });
-  });
 }
 
-test('deeply nested HTML converts without a crash and keeps its text', async ({ page }) => {
-  await open(page, 'with-csp');
-  const { text, truncated } = await convertInPage(page, `${'<div>'.repeat(20_000)}bottom${'</div>'.repeat(20_000)}<p>after</p>`);
-  expect(truncated).toBe(false);
-  expect(text).toContain('bottom');
-  expect(text).toContain('after');
-  await expectNothingHappened(page);
+test('deeply nested HTML converts without a crash and keeps its text', async ({ page }) =>
+{
+    await open(page, 'with-csp');
+    const { text, truncated } = await convertInPage(page, `${'<div>'.repeat(20_000)}bottom${'</div>'.repeat(20_000)}<p>after</p>`);
+    expect(truncated).toBe(false);
+    expect(text).toContain('bottom');
+    expect(text).toContain('after');
+    await expectNothingHappened(page);
 });
 
 // Positive controls: prove the checks above would notice a leak. Moving
 // parsed email nodes INTO the live page is exactly what the converter must
 // never do.
-test('control, with CSP: email images moved into the live page are blocked AND reported', async ({ page, browserName }) => {
-  await open(page, 'with-csp');
-  await page.evaluate((html) => {
-    const parsed = new DOMParser().parseFromString(html, 'text/html');
-    for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
-  }, HOSTILE_HTML);
-  // Two reports about the LIVE page: the blocked remote image, and the
-  // blocked inline handler of an image (fired at that element, so "live").
-  // Chromium fires a blocked load's report at the document wherever the
-  // element is, so the image's report says "parse": that label tells inline
-  // reports apart only, and img-src is never tolerated whatever its label.
-  const live = ['img-src https://tracker.invalid/p.png parse', 'script-src-attr inline live'];
-  await expect.poll(() => page.evaluate(() => window.__e2eViolations)).toEqual(expect.arrayContaining(live));
-  // The filter of expectNothingHappened rejects both.
-  expect(untoleratedReports(browserName, await page.evaluate(() => window.__e2eViolations), isParseTimeReport)).toEqual(expect.arrayContaining(live));
-  // Chromium lists the blocked image as a (failed) request; Firefox and
-  // WebKit stop it before it becomes a request at all.
-  if (browserName === 'chromium') expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
-  else expect(requestsAfterLoad()).not.toContain('https://tracker.invalid/p.png');
+test('control, with CSP: email images moved into the live page are blocked AND reported', async ({ page, browserName }) =>
+{
+    await open(page, 'with-csp');
+    await page.evaluate((html) =>
+    {
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
+    }, HOSTILE_HTML);
+    // Two reports about the LIVE page: the blocked remote image, and the
+    // blocked inline handler of an image (fired at that element, so "live").
+    // Chromium fires a blocked load's report at the document wherever the
+    // element is, so the image's report says "parse": that label tells inline
+    // reports apart only, and img-src is never tolerated whatever its label.
+    const live = ['img-src https://tracker.invalid/p.png parse', 'script-src-attr inline live'];
+    await expect.poll(() => page.evaluate(() => window.__e2eViolations)).toEqual(expect.arrayContaining(live));
+    // The filter of expectNothingHappened rejects both.
+    expect(untoleratedReports(browserName, await page.evaluate(() => window.__e2eViolations), isParseTimeReport)).toEqual(expect.arrayContaining(live));
+    // Chromium lists the blocked image as a (failed) request; Firefox and
+    // WebKit stop it before it becomes a request at all.
+    if (browserName === 'chromium') expect(requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
+    else expect(requestsAfterLoad()).not.toContain('https://tracker.invalid/p.png');
 });
 
-test('control, without CSP: email images moved into the live page load and run their handlers', async ({ page }) => {
-  await open(page, 'without-csp');
-  await page.evaluate((html) => {
-    const parsed = new DOMParser().parseFromString(html, 'text/html');
-    for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
-  }, HOSTILE_HTML);
-  // The safety net aborts the remote request, but it is still seen; the
-  // data: image loads and the broken one fails, so both handlers run.
-  await expect.poll(() => requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
-  await expect.poll(() => page.evaluate(() => window.__e2eFlags.sort())).toEqual(['img-onerror', 'img-onload']);
+test('control, without CSP: email images moved into the live page load and run their handlers', async ({ page }) =>
+{
+    await open(page, 'without-csp');
+    await page.evaluate((html) =>
+    {
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        for (const img of Array.from(parsed.querySelectorAll('img'))) document.body.append(document.adoptNode(img));
+    }, HOSTILE_HTML);
+    // The safety net aborts the remote request, but it is still seen; the
+    // data: image loads and the broken one fails, so both handlers run.
+    await expect.poll(() => requestsAfterLoad()).toEqual(expect.arrayContaining(['https://tracker.invalid/p.png']));
+    await expect.poll(() => page.evaluate(() => window.__e2eFlags.sort())).toEqual(['img-onerror', 'img-onload']);
 });
 
-test('control, without CSP: an email <track> moved into the live page requests its URL', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'backs the Chromium-only media-src tolerance; Firefox and WebKit tolerate no parse-time report');
-  await open(page, 'without-csp');
-  await page.evaluate(() => {
-    const parsed = new DOMParser().parseFromString(
-      '<video id="e2e-track-control"><track default kind="captions" src="https://track.invalid/t.vtt"></video>',
-      'text/html',
-    );
-    const video = parsed.querySelector('video');
-    if (video) document.body.append(document.adoptNode(video));
-  });
-  // The safety net aborts the remote request, but it is still seen. This
-  // proves the request listener would catch a real track load, so tolerating
-  // the parse-time 'media-src https://track.invalid/t.vtt parse' report is safe.
-  await expect.poll(() => requestsAfterLoad()).toEqual(expect.arrayContaining(['https://track.invalid/t.vtt']));
-  await page.evaluate(() => document.getElementById('e2e-track-control')?.remove());
+test('control, without CSP: an email <track> moved into the live page requests its URL', async ({ page, browserName }) =>
+{
+    test.skip(browserName !== 'chromium', 'backs the Chromium-only media-src tolerance; Firefox and WebKit tolerate no parse-time report');
+    await open(page, 'without-csp');
+    await page.evaluate(() =>
+    {
+        const parsed = new DOMParser().parseFromString(
+            '<video id="e2e-track-control"><track default kind="captions" src="https://track.invalid/t.vtt"></video>',
+            'text/html',
+        );
+        const video = parsed.querySelector('video');
+        if (video) document.body.append(document.adoptNode(video));
+    });
+    // The safety net aborts the remote request, but it is still seen. This
+    // proves the request listener would catch a real track load, so tolerating
+    // the parse-time 'media-src https://track.invalid/t.vtt parse' report is safe.
+    await expect.poll(() => requestsAfterLoad()).toEqual(expect.arrayContaining(['https://track.invalid/t.vtt']));
+    await page.evaluate(() => document.getElementById('e2e-track-control')?.remove());
 });
