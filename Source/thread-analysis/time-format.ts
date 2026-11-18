@@ -1,7 +1,7 @@
 // Date and time display helpers. Pure functions with no page or DOM access,
 // so they can be unit tested in isolation (README.md, rule R7).
 //
-// Messages are sorted by their true UTC moment (see order.ts) and shown in a
+// Messages are sorted by their true UTC moment (see chronological-order.ts) and shown in a
 // time zone the user picks, by default the browser's own. Only the built-in
 // `Intl.DateTimeFormat` is used: no date library, nothing loaded from the
 // network (README.md, rule R1). The chosen zone is never saved anywhere
@@ -51,7 +51,7 @@ const ONE_DAY_MS = 86_400_000;
  * wall-clock time of a zone east or west of UTC no longer fits in a Date, so
  * its offset comes out as NaN or absurd. The one-day margin keeps the local
  * time inside 0001-9999 in every zone (real offsets stay well under 24 hours).
- * order.ts uses the same range, so a moment outside it is never sorted by date
+ * chronological-order.ts uses the same range, so a moment outside it is never sorted by date
  * yet shown as "no date".
  */
 export const MIN_DISPLAYABLE_MS = YEAR_1_START_MS + ONE_DAY_MS; // 0001-01-02T00:00:00.000Z

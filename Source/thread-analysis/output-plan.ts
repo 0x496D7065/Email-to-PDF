@@ -45,7 +45,7 @@
 // decideSignature, keepsKind), so a rule can be changed on its own.
 //
 // Input: the INCLUDED emails, in their final (PDF) order, each with its
-// engine segments (segments.ts) and its input position (`index`). The result
+// engine segments (fold-segments.ts) and its input position (`index`). The result
 // depends on that list (which emails are included, which one is the "first"
 // with a signature), so call it again whenever the selection changes. No
 // hidden state.
@@ -82,7 +82,7 @@
 //      pasted by the writer), overlap linked only to emails that are not
 //      included (that text would be nowhere in the PDF), overlap linked
 //      only to emails of the same sender (a resend, or a disclaimer the
-//      signature detector missed), a signature (overlap.ts also folds a
+//      signature detector missed), a signature (overlap-quote-detection.ts also folds a
 //      sender's repeated signature);
 //    - from s to ownEnd there is only folded text and whitespace (signature
 //      folds count as folded). So a quote followed by the writer's own,
@@ -117,7 +117,7 @@
 //      . BEFORE it (between the header lines and the first confirming
 //        piece): any 'quoted-overlap', and a piece that passes the LINE
 //        CHECK (linesInChain). That is the quoted email's own opening, too
-//        short for overlap.ts to match ("Hi Bob,", "Friday ok?": a match
+//        short for overlap-quote-detection.ts to match ("Hi Bob,", "Friday ok?": a match
 //        needs MIN_RUN_WORDS words in a row, and a line typed under it, or a
 //        nested header the mail app rewrote, cuts the run). The line check:
 //        take the piece's WORD LINES (wordLines: the lines with a letter, a
@@ -134,7 +134,7 @@
 //      a quoted line the mail app changed also keeps the whole email. A
 //      piece with no letter, digit or emoji ("--", "* * *") does not count:
 //      it proves nothing either way. An emoji counts (a "thumbs up" answer)
-//      although overlap.ts never matches one: an emoji-only line inside a
+//      although overlap-quote-detection.ts never matches one: an emoji-only line inside a
 //      quote lies between quoted lines and is folded with them.
 //    - confirmed and no own text (normal top-posting): rule 2 as usual, the
 //      quote is left out. Also left out then (accepted): text below the
@@ -146,7 +146,7 @@
 //      writer pastes between the header lines and the quote, repeating an
 //      earlier email of their own, is left out with the quote, even when
 //      that earlier email is not in the PDF (rare);
-//      (b) overlap.ts matches words, ignoring case and punctuation, so a
+//      (b) overlap-quote-detection.ts matches words, ignoring case and punctuation, so a
 //      one-word answer such as "OK" typed right under a quoted line that
 //      ends in "ok?" can be matched as part of the quote and left out.
 //    - not confirmed (the quoted email is not included, so nothing can check
@@ -157,8 +157,8 @@
 //    'signature' outside the tail and the forwarded part is one signature
 //    block. With 'first-per-sender', walking the emails in the given order, a
 //    block is left out only when the same block (signatureBlockKey, the
-//    normalization of signature.ts) was already KEPT in an earlier email of the
-//    same sender (senderKeyOf, as signature.ts). A changed signature is kept
+//    normalization of signature-detection.ts) was already KEPT in an earlier email of the
+//    same sender (senderKeyOf, as signature-detection.ts). A changed signature is kept
 //    once. Unknown sender (''): always kept. Signatures inside a left-out tail
 //    are left out with it and do not count as kept. (Cosmetic, not handled: a
 //    signature fold that includes the closing name can leave the "Thanks,"
@@ -184,8 +184,8 @@
 
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { findReplyHeaders, isForwardSubject, type FoundHeader } from './reply-header';
-import { checkSegments, lineRanges } from './segments';
-import { senderKeyOf, signatureBlockKey } from './signature';
+import { checkSegments, lineRanges } from './fold-segments';
+import { senderKeyOf, signatureBlockKey } from './signature-detection';
 import type { MessagePlan, OutputPolicy, PlanRange, PlanReason } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { FoldReason, Segment } from '../../Header/thread-analysis-result';
@@ -249,19 +249,19 @@ export function forwardBoundary(
     let ownEnd = bodyText.length;
     // a. Forward headers of the detector, sorted by start.
     let replyEnd = 0; // furthest end of an unmarked reply header seen so far
-    for (const h of headers)
+    for (const header of headers)
     {
-        if (h.marked)
+        if (header.marked)
         {
             continue;
         }
-        if (h.kind === 'reply')
+        if (header.kind === 'reply')
         {
-            replyEnd = Math.max(replyEnd, h.end);
+            replyEnd = Math.max(replyEnd, header.end);
         }
-        else if (h.start >= replyEnd)
+        else if (header.start >= replyEnd)
         {
-            ownEnd = h.start;
+            ownEnd = header.start;
             break;
         }
     }
@@ -302,16 +302,16 @@ function mergeIntervals(list: readonly (readonly [number, number])[]): [number, 
 {
     const sorted = list.filter(([a, b]) => a < b).sort((x, y) => x[0] - y[0]);
     const out: [number, number][] = [];
-    for (const [a, b] of sorted)
+    for (const [start, end] of sorted)
     {
         const last = out[out.length - 1];
-        if (last !== undefined && a <= last[1])
+        if (last !== undefined && start <= last[1])
         {
-            last[1] = Math.max(last[1], b);
+            last[1] = Math.max(last[1], end);
         }
         else
         {
-            out.push([a, b]);
+            out.push([start, end]);
         }
     }
     return out;
@@ -321,14 +321,14 @@ function mergeIntervals(list: readonly (readonly [number, number])[]): [number, 
 function insideFlags(pieces: readonly { start: number; end: number }[], intervals: readonly [number, number][]): boolean[]
 {
     let k = 0;
-    return pieces.map((p) =>
+    return pieces.map((piece) =>
     {
-        while (k < intervals.length && (intervals[k]?.[1] ?? 0) <= p.start)
+        while (k < intervals.length && (intervals[k]?.[1] ?? 0) <= piece.start)
         {
             k++;
         }
-        const iv = intervals[k];
-        return iv !== undefined && iv[0] <= p.start && p.end <= iv[1];
+        const interval = intervals[k];
+        return interval !== undefined && interval[0] <= piece.start && piece.end <= interval[1];
     });
 }
 
@@ -336,49 +336,49 @@ function insideFlags(pieces: readonly { start: number; end: number }[], interval
 export function toPieces(segments: readonly Segment[], ownEnd: number, headers: readonly FoundHeader[]): Piece[]
 {
     const cuts = new Set<number>([ownEnd]);
-    for (const h of headers)
+    for (const header of headers)
     {
-        cuts.add(h.start);
-        cuts.add(h.headEnd);
+        cuts.add(header.start);
+        cuts.add(header.headEnd);
     }
     const points = [...cuts].sort((a, b) => a - b);
     const raw: { start: number; end: number; folded: boolean; reasons: readonly FoldReason[]; related: readonly number[] }[] = [];
-    let c = 0;
-    for (const s of segments)
+    let pointIndex = 0;
+    for (const segment of segments)
     {
-        let from = s.start;
-        while (c < points.length && (points[c] ?? 0) <= from)
+        let from = segment.start;
+        while (pointIndex < points.length && (points[pointIndex] ?? 0) <= from)
         {
-            c++;
+            pointIndex++;
         }
-        while (c < points.length && (points[c] ?? 0) < s.end)
+        while (pointIndex < points.length && (points[pointIndex] ?? 0) < segment.end)
         {
-            const at = points[c] ?? s.end;
-            raw.push({ start: from, end: at, folded: s.folded, reasons: s.reasons, related: s.related });
-            from = at;
-            c++;
+            const cut = points[pointIndex] ?? segment.end;
+            raw.push({ start: from, end: cut, folded: segment.folded, reasons: segment.reasons, related: segment.related });
+            from = cut;
+            pointIndex++;
         }
-        raw.push({ start: from, end: s.end, folded: s.folded, reasons: s.reasons, related: s.related });
+        raw.push({ start: from, end: segment.end, folded: segment.folded, reasons: segment.reasons, related: segment.related });
     }
-    const lines = (keep: (h: FoundHeader) => boolean): [number, number][] =>
+    const lines = (keep: (header: FoundHeader) => boolean): [number, number][] =>
         mergeIntervals(headers.filter(keep).map((h) => [h.start, h.headEnd] as const));
     const reply = insideFlags(raw, lines((h) => h.kind === 'reply'));
-    const any = insideFlags(raw, lines(() => true));
-    return raw.map((p, i) => ({ ...p, replyHeaderLines: reply[i] === true, headerLines: any[i] === true }));
+    const anyHeader = insideFlags(raw, lines(() => true));
+    return raw.map((p, i) => ({ ...p, replyHeaderLines: reply[i] === true, headerLines: anyHeader[i] === true }));
 }
 
-function hasText(bodyText: string, p: { start: number; end: number }): boolean
+function hasText(bodyText: string, piece: { start: number; end: number }): boolean
 {
-    return /\S/.test(bodyText.slice(p.start, p.end));
+    return /\S/.test(bodyText.slice(piece.start, piece.end));
 }
 
-/** A letter, a digit (a word, as overlap.ts counts words) or an emoji / pictograph. */
+/** A letter, a digit (a word, as overlap-quote-detection.ts counts words) or an emoji / pictograph. */
 const WORD_OR_EMOJI = /[\p{L}\p{N}\p{Extended_Pictographic}]/u;
 
 /** Whether the piece has a letter, a digit or an emoji (rule 2b: something a writer may have typed). */
-function hasWord(bodyText: string, p: { start: number; end: number }): boolean
+function hasWord(bodyText: string, piece: { start: number; end: number }): boolean
 {
-    return WORD_OR_EMOJI.test(bodyText.slice(p.start, p.end));
+    return WORD_OR_EMOJI.test(bodyText.slice(piece.start, piece.end));
 }
 
 /**
@@ -446,7 +446,7 @@ export function lineIndex(bodies: ReadonlyMap<number, string>): {
 }
 
 /**
- * Rule 2b, the line check: whether the word lines of piece `p` occur, in the
+ * Rule 2b, the line check: whether the word lines of `piece` occur, in the
  * same order and with no other word line between them, as word lines of ONE
  * email of `chain`; with `atTop`, they must be that email's FIRST word lines.
  * Cost: the places of the piece's rarest word line, times its word lines at
@@ -454,23 +454,23 @@ export function lineIndex(bodies: ReadonlyMap<number, string>): {
  */
 function linesInChain(
     bodyText: string,
-    p: { start: number; end: number },
+    piece: { start: number; end: number },
     chain: ReadonlySet<number>,
     atTop: boolean,
-    ctx: QuoteContext,
+    context: QuoteContext,
 ): boolean
 {
-    const mine = wordLines(bodyText.slice(p.start, p.end));
+    const mine = wordLines(bodyText.slice(piece.start, piece.end));
     if (mine.length === 0)
     {
         return false; // not reached (the caller checks hasWord); when unsure, own text
     }
     // Anchor on the rarest line: every match goes through one of its places.
     let anchor = 0;
-    let places = ctx.linePlaces(mine[0] ?? '');
+    let places = context.linePlaces(mine[0] ?? '');
     for (let k = 1; k < mine.length && places.length > 0; k++)
     {
-        const list = ctx.linePlaces(mine[k] ?? '');
+        const list = context.linePlaces(mine[k] ?? '');
         if (list.length < places.length)
         {
             anchor = k;
@@ -484,7 +484,7 @@ function linesInChain(
         {
             continue;
         }
-        const theirs = ctx.wordLinesOf(email);
+        const theirs = context.wordLinesOf(email);
         if (from + mine.length > theirs.length)
         {
             continue;
@@ -507,18 +507,18 @@ function linesInChain(
  * QuoteContext.quotedLinks again and again, every INCLUDED email they quote.
  * Cost: at most once per included email.
  */
-export function quotedChain(start: readonly number[], ctx: QuoteContext): ReadonlySet<number>
+export function quotedChain(start: readonly number[], context: QuoteContext): ReadonlySet<number>
 {
-    const chain = new Set<number>(start.filter((r) => ctx.isIncluded(r)));
+    const chain = new Set<number>(start.filter((r) => context.isIncluded(r)));
     const queue = [...chain];
     for (let q = 0; q < queue.length; q++)
     {
-        for (const r of ctx.quotedLinks(queue[q] ?? -1))
+        for (const quoted of context.quotedLinks(queue[q] ?? -1))
         {
-            if (!chain.has(r) && ctx.isIncluded(r))
+            if (!chain.has(quoted) && context.isIncluded(quoted))
             {
-                chain.add(r);
-                queue.push(r);
+                chain.add(quoted);
+                queue.push(quoted);
             }
         }
     }
@@ -539,53 +539,53 @@ export function quoteBelowHeader(
     pieces: readonly Piece[],
     ownEnd: number,
     headers: readonly FoundHeader[],
-    ctx: QuoteContext,
+    context: QuoteContext,
 ): { readonly confirmed: boolean; readonly ownText: readonly number[] }
 {
-    const h = headers.find((x) => x.kind === 'reply' && !x.marked && x.start < ownEnd && x.headEnd < ownEnd && x.end >= ownEnd);
-    if (h === undefined)
+    const header = headers.find((x) => x.kind === 'reply' && !x.marked && x.start < ownEnd && x.headEnd < ownEnd && x.end >= ownEnd);
+    if (header === undefined)
     {
         return { confirmed: false, ownText: [] };
     }
     // The first confirming piece: text quoted from an included email of ANOTHER sender.
     const first = pieces.findIndex(
-        (p) =>
-            p.start >= h.headEnd &&
-            p.start < ownEnd &&
-            hasText(bodyText, p) &&
-            p.reasons.includes('quoted-overlap') &&
-            p.related.some((r) => ctx.isIncluded(r) && !ctx.sameSender(r)),
+        (piece) =>
+            piece.start >= header.headEnd &&
+            piece.start < ownEnd &&
+            hasText(bodyText, piece) &&
+            piece.reasons.includes('quoted-overlap') &&
+            piece.related.some((r) => context.isIncluded(r) && !context.sameSender(r)),
     );
     if (first < 0)
     {
         return { confirmed: false, ownText: [] };
     }
-    const quotedEmails = (pieces[first]?.related ?? []).filter((r) => ctx.isIncluded(r) && !ctx.sameSender(r));
-    const chain = quotedChain(quotedEmails, ctx);
+    const quotedEmails = (pieces[first]?.related ?? []).filter((r) => context.isIncluded(r) && !context.sameSender(r));
+    const chain = quotedChain(quotedEmails, context);
     const ownText: number[] = [];
     let atTop = true; // no piece of the region with a word or emoji yet
     for (let i = 0; i < pieces.length; i++)
     {
-        const p = pieces[i];
-        if (p === undefined || p.start >= ownEnd)
+        const piece = pieces[i];
+        if (piece === undefined || piece.start >= ownEnd)
         {
             break;
         }
-        if (i === first || p.start < h.headEnd)
+        if (i === first || piece.start < header.headEnd)
         {
             continue;
         }
-        if (!hasWord(bodyText, p))
+        if (!hasWord(bodyText, piece))
         {
             continue; // no word or emoji: proves nothing either way
         }
         const before = i < first; // between the header lines and the first confirming piece
         const covered =
-            p.headerLines ||
-            p.reasons.includes('quote-marker') ||
-            p.reasons.includes('signature') ||
-            (p.reasons.includes('quoted-overlap') && (before || p.related.some((r) => chain.has(r)))) ||
-            (before && linesInChain(bodyText, p, chain, atTop, ctx));
+            piece.headerLines ||
+            piece.reasons.includes('quote-marker') ||
+            piece.reasons.includes('signature') ||
+            (piece.reasons.includes('quoted-overlap') && (before || piece.related.some((r) => chain.has(r)))) ||
+            (before && linesInChain(bodyText, piece, chain, atTop, context));
         if (!covered)
         {
             ownText.push(i);
@@ -599,19 +599,19 @@ export function quoteBelowHeader(
 
 const QUOTE_REASONS: readonly FoldReason[] = ['reply-header', 'quote-marker', 'quoted-overlap'];
 
-/** Rule 2: whether piece `p` may start the tail. */
-function isTailStart(p: Piece, ctx: QuoteContext): boolean
+/** Rule 2: whether `piece` may start the tail. */
+function isTailStart(piece: Piece, context: QuoteContext): boolean
 {
-    if (p.replyHeaderLines)
+    if (piece.replyHeaderLines)
     {
         return true;
     }
-    const quoteReasons = p.reasons.filter((r) => QUOTE_REASONS.includes(r));
+    const quoteReasons = piece.reasons.filter((r) => QUOTE_REASONS.includes(r));
     if (quoteReasons.length !== 1 || quoteReasons[0] !== 'quoted-overlap')
     {
         return false;
     }
-    return p.related.some((r) => ctx.isIncluded(r) && !ctx.sameSender(r));
+    return piece.related.some((r) => context.isIncluded(r) && !context.sameSender(r));
 }
 
 /**
@@ -623,7 +623,7 @@ export function appQuoteTailStart(
     bodyText: string,
     pieces: readonly Piece[],
     ownEnd: number,
-    ctx: QuoteContext,
+    context: QuoteContext,
     ownText: readonly number[] = [],
 ): number | null
 {
@@ -639,24 +639,24 @@ export function appQuoteTailStart(
     let found: number | null = null;
     for (let i = last; i >= 0; i--)
     {
-        const p = pieces[i];
-        if (p === undefined)
+        const piece = pieces[i];
+        if (piece === undefined)
         {
             break;
         }
-        if (!p.folded)
+        if (!piece.folded)
         {
-            if (hasText(bodyText, p))
+            if (hasText(bodyText, piece))
             {
                 break; // the writer's own text: the tail cannot go above it
             }
             continue;
         }
-        if (p.reasons.includes('signature'))
+        if (piece.reasons.includes('signature'))
         {
             continue;
         }
-        if (isTailStart(p, ctx))
+        if (isTailStart(piece, context))
         {
             found = i;
         }
@@ -718,7 +718,7 @@ interface Classified
     readonly kind: 'text' | 'writer-quote' | 'forwarded' | 'app-quoted-history' | 'signature';
 }
 
-/** One email, classified (no policy; other emails only through `ctx`). */
+/** One email, classified (no policy; other emails only through `context`). */
 export interface ClassifiedMessage
 {
     readonly pieces: readonly Classified[];
@@ -730,36 +730,36 @@ export function classifyPieces(
     bodyText: string,
     subject: string,
     segments: readonly Segment[],
-    ctx: QuoteContext,
+    context: QuoteContext,
 ): ClassifiedMessage
 {
     const headers = findReplyHeaders(bodyText, subject);
     const { ownEnd, tailAllowed } = forwardBoundary(bodyText, subject, headers);
     const pieces = toPieces(segments, ownEnd, headers);
-    const below = quoteBelowHeader(bodyText, pieces, ownEnd, headers, ctx);
+    const below = quoteBelowHeader(bodyText, pieces, ownEnd, headers, context);
     const ownText = new Set(below.ownText);
-    const tailIndex = tailAllowed ? appQuoteTailStart(bodyText, pieces, ownEnd, ctx, below.ownText) : null;
+    const tailIndex = tailAllowed ? appQuoteTailStart(bodyText, pieces, ownEnd, context, below.ownText) : null;
     const tailStart = tailIndex === null ? null : (pieces[tailIndex]?.start ?? null);
-    const classified = pieces.map((p, i): Classified =>
+    const classified = pieces.map((piece, i): Classified =>
     {
         let kind: Classified['kind'];
-        if (p.start >= ownEnd)
+        if (piece.start >= ownEnd)
         {
             kind = 'forwarded';
         }
-        else if (!p.folded || ownText.has(i))
+        else if (!piece.folded || ownText.has(i))
         {
             kind = 'text';
         }
-        else if (tailStart !== null && p.start >= tailStart)
+        else if (tailStart !== null && piece.start >= tailStart)
         {
             kind = 'app-quoted-history';
         }
-        else if (p.reasons.includes('signature'))
+        else if (piece.reasons.includes('signature'))
         {
             kind = 'signature';
         }
-        else if (!hasText(bodyText, p))
+        else if (!hasText(bodyText, piece))
         {
             kind = 'text';
         }
@@ -767,7 +767,7 @@ export function classifyPieces(
         {
             kind = 'writer-quote';
         }
-        return { start: p.start, end: p.end, kind };
+        return { start: piece.start, end: piece.end, kind };
     });
     return { pieces: classified, tailStart };
 }
@@ -817,11 +817,11 @@ export function planOutput(messages: readonly PlanInput[], policy: OutputPolicy 
  */
 export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputPolicy = DEFAULT_OUTPUT_POLICY): Generator<MessagePlan, void, undefined>
 {
-    const senderKeys = messages.map((m) =>
+    const senderKeys = messages.map((input) =>
     {
         try
         {
-            return senderKeyOf(m.message);
+            return senderKeyOf(input.message);
         }
         catch
         {
@@ -845,24 +845,24 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
         lines ??= lineIndex(bodyByIndex);
         return lines.places.get(line) ?? [];
     };
-    messages.forEach((m, k) =>
+    messages.forEach((input, k) =>
     {
-        if (typeof m.index !== 'number')
+        if (typeof input.index !== 'number')
         {
             return;
         }
-        keyByIndex.set(m.index, senderKeys[k] ?? '');
-        bodyByIndex.set(m.index, m.message.bodyText);
+        keyByIndex.set(input.index, senderKeys[k] ?? '');
+        bodyByIndex.set(input.index, input.message.bodyText);
         const links = new Set<number>();
         try
         {
-            for (const s of m.segments)
+            for (const segment of input.segments)
             {
-                if (s.reasons.includes('quoted-overlap'))
+                if (segment.reasons.includes('quoted-overlap'))
                 {
-                    for (const r of s.related)
+                    for (const linked of segment.related)
                     {
-                        links.add(r);
+                        links.add(linked);
                     }
                 }
             }
@@ -871,26 +871,26 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
         {
             // Malformed segments: no links (that email is kept whole anyway, rule 5).
         }
-        linksByIndex.set(m.index, [...links]);
+        linksByIndex.set(input.index, [...links]);
     });
 
     // Sender key -> signature blocks (signatureBlockKey) kept so far.
     const keptSignatures = new Map<string, Set<string>>();
 
-    for (const [k, m] of messages.entries())
+    for (const [k, input] of messages.entries())
     {
-        yield planOne(m, k);
+        yield planOne(input, k);
     }
 
-    function planOne(m: PlanInput, k: number): MessagePlan
+    function planOne(input: PlanInput, k: number): MessagePlan
     {
-        const body = m.message.bodyText;
+        const body = input.message.bodyText;
         if (body.length === 0)
         {
             return wholeBody(body, false);
         }
         const sender = senderKeys[k] ?? '';
-        const ctx: QuoteContext = {
+        const context: QuoteContext = {
             isIncluded: (index) => keyByIndex.has(index),
             sameSender: (index) => sender !== '' && keyByIndex.get(index) === sender,
             quotedLinks: (index) => linksByIndex.get(index) ?? [],
@@ -900,11 +900,11 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
         let classified: ClassifiedMessage;
         try
         {
-            if (checkSegments(body, m.segments).length > 0)
+            if (checkSegments(body, input.segments).length > 0)
             {
                 return wholeBody(body, true);
             }
-            classified = classifyPieces(body, m.message.subject, m.segments, ctx);
+            classified = classifyPieces(body, input.message.subject, input.segments, context);
         }
         catch
         {
@@ -918,14 +918,14 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
         let i = 0;
         while (i < pieces.length)
         {
-            const p = pieces[i];
-            if (p === undefined)
+            const piece = pieces[i];
+            if (piece === undefined)
             {
                 break;
             }
-            if (p.kind !== 'signature')
+            if (piece.kind !== 'signature')
             {
-                push(ranges, { start: p.start, end: p.end, keep: keepsKind(policy, p.kind), reason: p.kind });
+                push(ranges, { start: piece.start, end: piece.end, keep: keepsKind(policy, piece.kind), reason: piece.kind });
                 i++;
                 continue;
             }
@@ -935,8 +935,8 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
             {
                 j++;
             }
-            const end = pieces[j]?.end ?? p.end;
-            const key = signatureBlockKey(body.slice(p.start, end));
+            const end = pieces[j]?.end ?? piece.end;
+            const key = signatureBlockKey(body.slice(piece.start, end));
             const alreadyKept = sender !== '' && (keptSignatures.get(sender)?.has(key) ?? false);
             const decision = decideSignature(policy, alreadyKept);
             if (decision.keep)
@@ -947,7 +947,7 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
             {
                 omittedSignatures++;
             }
-            push(ranges, { start: p.start, end, keep: decision.keep, reason: decision.reason });
+            push(ranges, { start: piece.start, end, keep: decision.keep, reason: decision.reason });
             i = j + 1;
         }
 
@@ -956,9 +956,9 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
         if (keptAllBecauseEmpty)
         {
             const all: PlanRange[] = [];
-            for (const r of ranges)
+            for (const range of ranges)
             {
-                push(all, { ...r, keep: true });
+                push(all, { ...range, keep: true });
             }
             ranges = all;
             omittedSignatures = 0; // a block left out was already kept earlier: nothing new to record

@@ -2,7 +2,7 @@
 // Synthetic text only; non-ASCII characters are written as \u escapes.
 
 import { describe, expect, it } from 'vitest';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
 import {
     MAX_SIGNATURE_LINES,
     MIN_BLOCK_CHARS,
@@ -10,7 +10,7 @@ import {
     minRepeat,
     senderKeyOf,
     type SignatureInput,
-} from './signature';
+} from './signature-detection';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 
 const BOB = 'bob@furniture.example.test';
@@ -26,15 +26,15 @@ function detect(inputs: readonly SignatureInput[]): FoldRange[][]
         const body = inputs[i]?.bodyText ?? '';
         const segments = buildSegments(body, folds);
         expect(checkSegments(body, segments)).toEqual([]);
-        expect(reconstruct(body, segments)).toBe(body);
-        for (const f of folds)
+        expect(joinSegments(body, segments)).toBe(body);
+        for (const fold of folds)
         {
-            expect(f.reason).toBe('signature');
-            expect(f.related).toBeUndefined();
-            expect(f.start).toBeLessThan(f.end);
+            expect(fold.reason).toBe('signature');
+            expect(fold.related).toBeUndefined();
+            expect(fold.start).toBeLessThan(fold.end);
             const own = inputs[i]?.ownTextEnd;
             const limit = typeof own === 'number' && !Number.isNaN(own) ? Math.min(own, body.length) : body.length;
-            expect(f.end).toBeLessThanOrEqual(limit);
+            expect(fold.end).toBeLessThanOrEqual(limit);
         }
     });
     return results;
@@ -55,13 +55,13 @@ function alone(body: string, ownTextEnd?: number): string[]
     return foldedText(body, detect([input])[0] ?? []);
 }
 
-const BOB_SIG = ['Met vriendelijke groeten,', 'Bob Sample', 'Sample Furniture (fictional company)'];
+const BOB_SIGNATURE = ['Met vriendelijke groeten,', 'Bob Sample', 'Sample Furniture (fictional company)'];
 const BOB_DISCLAIMER = [
     'DISCLAIMER: This e-mail and any attachments are confidential and intended',
     'solely for the addressee. If you have received it in error, please notify',
     'the sender and delete it.',
 ];
-const BOB_TAIL = [...BOB_SIG, '', ...BOB_DISCLAIMER].join('\n');
+const BOB_TAIL = [...BOB_SIGNATURE, '', ...BOB_DISCLAIMER].join('\n');
 
 /** A message by Bob: greeting, new text, then signature and disclaimer. */
 function bobMessage(text: string): string
@@ -74,8 +74,8 @@ describe('senderKeyOf', () =>
     const base = { from: [], sender: null } as unknown as NormalizedMessage;
     it('uses the first From address, lower-cased', () =>
     {
-        const m = { ...base, from: [{ name: 'Bob', address: 'Bob@Furniture.Example.TEST' }, { name: 'A', address: ALICE }] };
-        expect(senderKeyOf(m)).toBe(BOB);
+        const message = { ...base, from: [{ name: 'Bob', address: 'Bob@Furniture.Example.TEST' }, { name: 'A', address: ALICE }] };
+        expect(senderKeyOf(message)).toBe(BOB);
     });
     it('falls back to Sender, then to the empty string', () =>
     {
@@ -227,12 +227,12 @@ describe('detectSignatures: frequency rule', () =>
             { bodyText: bob1, senderKey: BOB },
         ]);
         expect(foldedText(ps, results[0] ?? [])).toEqual([`${BOB_TAIL}\n`]);
-        const long = `Hello,\n\nShort intro.\n\n${BOB_SIG.join('\n')}\n\nOne\nTwo\nThree\nFour\nFive\nSix\nSeven\n`;
-        const r2 = detect([
+        const long = `Hello,\n\nShort intro.\n\n${BOB_SIGNATURE.join('\n')}\n\nOne\nTwo\nThree\nFour\nFive\nSix\nSeven\n`;
+        const secondResult = detect([
             { bodyText: long, senderKey: BOB },
             { bodyText: bob1, senderKey: BOB },
         ]);
-        expect(r2[0]).toEqual([]);
+        expect(secondResult[0]).toEqual([]);
     });
 
     it('still matches across whitespace, nbsp and CRLF differences, and decomposed accents', () =>
@@ -244,8 +244,8 @@ describe('detectSignatures: frequency rule', () =>
         expect(foldedText(b, results[1] ?? [])).toEqual([tail2]);
         const c = 'Hi\nDone.\nCordialement,\nB\u00E9atrice Exemple, Head office\n';
         const d = 'Hi\nAlso done.\nCordialement,\nBe\u0301atrice Exemple, Head office\n';
-        const r2 = detect([c, d].map((t) => ({ bodyText: t, senderKey: 'b@example.test' })));
-        expect(r2[1]?.length).toBe(1);
+        const secondResult = detect([c, d].map((t) => ({ bodyText: t, senderKey: 'b@example.test' })));
+        expect(secondResult[1]?.length).toBe(1);
     });
 
     it('does not match after a slight wording or case change', () =>
@@ -284,11 +284,11 @@ describe('detectSignatures: frequency rule', () =>
         expect(results).toEqual([[], []]);
         // Signature above the quote: the fold stops at the quote start.
         const above = `Thanks.\n\n${BOB_TAIL}\n\n`;
-        const r2 = detect([
+        const secondResult = detect([
             { bodyText: bob1, senderKey: BOB },
             { bodyText: above + bob2, senderKey: BOB, ownTextEnd: above.length },
         ]);
-        expect(foldedText(above + bob2, r2[1] ?? [])).toEqual([`${BOB_TAIL}\n`]);
+        expect(foldedText(above + bob2, secondResult[1] ?? [])).toEqual([`${BOB_TAIL}\n`]);
     });
 });
 
@@ -429,12 +429,12 @@ describe('detectSignatures: general properties', () =>
                 }
             }
             paragraphs.push(line.join(' '));
-            const sig = `Best regards,\nPerson ${sender}\nExample Company, Department ${i % 5}\n\nDISCLAIMER: confidential message for ${sender} only.\nIf received in error, please delete it.`;
-            inputs.push({ bodyText: `Hello,\n\n${paragraphs.join('\n')}\n\n${i % 3 === 0 ? '-- \n' : ''}${sig}\n`, senderKey: sender });
+            const signature = `Best regards,\nPerson ${sender}\nExample Company, Department ${i % 5}\n\nDISCLAIMER: confidential message for ${sender} only.\nIf received in error, please delete it.`;
+            inputs.push({ bodyText: `Hello,\n\n${paragraphs.join('\n')}\n\n${i % 3 === 0 ? '-- \n' : ''}${signature}\n`, senderKey: sender });
         }
-        const t0 = performance.now();
+        const startTime = performance.now();
         const results = detectSignatures(inputs);
-        const ms = performance.now() - t0;
+        const ms = performance.now() - startTime;
         const totalKb = inputs.reduce((n, m) => n + m.bodyText.length, 0) / 1024;
         console.log(`signature detection: ${inputs.length} messages, ${totalKb.toFixed(0)} KB in ${ms.toFixed(1)} ms`);
         expect(results.every((f) => f.length > 0)).toBe(true);

@@ -5,7 +5,7 @@
 // only (README.md, rule R7).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { parseFiles } from '../email-reading/parse-files';
 import { ENGINE_TIMEOUT_MS, runEngineInWorker } from './engine-runner';
 import { processFiles } from './process-files';

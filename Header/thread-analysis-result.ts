@@ -1,6 +1,6 @@
 // Header: the thread analysis result (duplicates, order, folded parts,
 // warnings). Shared types only, no code (README.md, "Where things are").
-// thread-analysis/ (engine.ts, runEngine) produces EngineResult; it crosses
+// thread-analysis/ (analyze-thread.ts, runEngine) produces EngineResult; it crosses
 // the engine worker (engine-worker-messages.ts) and is read by web-page-logic/,
 // web-page/ and pdf-export/.
 
@@ -54,7 +54,7 @@ export interface EngineMessage
     readonly parserWarnings: readonly ParseWarning[];
     /** See EngineWarningCode; sorted, unique; usually empty. */
     readonly engineWarnings: readonly EngineWarningCode[];
-    /** Cover of `message.bodyText`, shown or folded (see segments.ts). [] for an empty body. */
+    /** Cover of `message.bodyText`, shown or folded (see fold-segments.ts). [] for an empty body. */
     readonly segments: readonly Segment[];
 }
 
@@ -159,7 +159,7 @@ export interface EngineResult
      * (Source/pdf-export/model.ts, the ones the reader chose).
      */
     readonly reconstructed: readonly EngineRebuilt[];
-    /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (rebuild-links.ts). */
+    /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (link-rebuilt-messages.ts). */
     readonly timeline: readonly TimelineEntry[];
     /** Problems while rebuilding, in `messages` order. Usually empty. */
     readonly reconstructionWarnings: readonly ReconstructionWarning[];
@@ -234,13 +234,13 @@ export type OrderReason =
     | 'file-order' // no usable date: placed after all dated messages, in input order
     // No usable date, and attached inside another email: placed just before the
     // email it is attached to (user decision 2026-11-10, Q7, task 8.13b-3). Set
-    // by the engine (Source/thread-analysis/engine.ts, placeUndatedAttached), never by
+    // by the engine (Source/thread-analysis/analyze-thread.ts, placeUndatedAttached), never by
     // orderMessages.
     | 'before-parent';
 
 /**
  * Why a part of a body is folded. Extensible: new detectors add a value here
- * (and to FOLD_REASONS in Source/thread-analysis/segments.ts).
+ * (and to FOLD_REASONS in Source/thread-analysis/fold-segments.ts).
  * - 'quoted-overlap': text that also appears in another message of the
  *   thread (typically the history below a reply). `related` names it.
  * - 'quote-marker': lines starting with `>` (classic plain-text quoting).

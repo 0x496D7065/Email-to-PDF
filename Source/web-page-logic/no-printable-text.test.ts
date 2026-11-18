@@ -2,7 +2,7 @@
 // the PDF leaves out because they have no text. Synthetic data only.
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { hasNoPrintableText, pdfPositions, rebuiltHasNoPrintableText, UNREADABLE_BODY_WARNINGS } from './no-printable-text';
 import type { NormalizedMessage, ParseWarning } from '../../Header/parsed-email';
 

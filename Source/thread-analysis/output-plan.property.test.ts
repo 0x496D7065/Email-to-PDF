@@ -18,12 +18,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import { runEngine } from './engine';
+import { runEngine } from './analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type PlanInput } from './output-plan';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
-import { buildSegments, FOLD_REASONS, type FoldRange } from './segments';
-import { signatureBlockKey } from './signature';
+import { buildSegments, FOLD_REASONS, type FoldRange } from './fold-segments';
+import { signatureBlockKey } from './signature-detection';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 import type { Segment } from '../../Header/thread-analysis-result';
@@ -130,9 +130,9 @@ function randomFolds(random: () => number, length: number): FoldRange[]
     const count = Math.floor(random() * 6);
     for (let i = 0; i < count; i++)
     {
-        const a = Math.floor(random() * (length + 2)) - 1;
-        const b = random() < 0.3 ? length : Math.floor(random() * (length + 2)) - 1;
-        const fold: FoldRange = { start: a, end: b, reason: pick(random, FOLD_REASONS) };
+        const foldStart = Math.floor(random() * (length + 2)) - 1;
+        const foldEnd = random() < 0.3 ? length : Math.floor(random() * (length + 2)) - 1;
+        const fold: FoldRange = { start: foldStart, end: foldEnd, reason: pick(random, FOLD_REASONS) };
         folds.push(random() < 0.7 ? { ...fold, related: Math.floor(random() * 12) } : fold);
     }
     return folds;
@@ -143,9 +143,9 @@ function deepFreeze<T>(value: T): T
     if (typeof value === 'object' && value !== null && !Object.isFrozen(value))
     {
         Object.freeze(value);
-        for (const v of Object.values(value))
+        for (const entry of Object.values(value))
         {
-            deepFreeze(v);
+            deepFreeze(entry);
         }
     }
     return value;
@@ -155,11 +155,11 @@ function deepFreeze<T>(value: T): T
 function mask(length: number, plan: MessagePlan): Uint8Array
 {
     const out = new Uint8Array(length);
-    for (const r of plan.ranges)
+    for (const range of plan.ranges)
     {
-        if (!r.keep)
+        if (!range.keep)
         {
-            out.fill(1, r.start, r.end);
+            out.fill(1, range.start, range.end);
         }
     }
     return out;
@@ -168,11 +168,11 @@ function mask(length: number, plan: MessagePlan): Uint8Array
 function foldedMask(length: number, segments: readonly Segment[]): Uint8Array
 {
     const out = new Uint8Array(length);
-    for (const s of segments)
+    for (const segment of segments)
     {
-        if (s.folded)
+        if (segment.folded)
         {
-            out.fill(1, s.start, s.end);
+            out.fill(1, segment.start, segment.end);
         }
     }
     return out;
@@ -181,55 +181,55 @@ function foldedMask(length: number, segments: readonly Segment[]): Uint8Array
 function checkPlans(inputs: readonly PlanInput[], plans: readonly MessagePlan[], policy: OutputPolicy, where: string): void
 {
     expect(plans.length, where).toBe(inputs.length);
-    plans.forEach((p, k) =>
+    plans.forEach((messagePlan, k) =>
     {
         const body = inputs[k]!.message.bodyText;
-        const at = `${where} message ${k}`;
+        const location = `${where} message ${k}`;
         let next = 0;
-        p.ranges.forEach((r, i) =>
+        messagePlan.ranges.forEach((range, i) =>
         {
-            expect(r.start, at).toBe(next);
-            expect(r.end, at).toBeGreaterThan(r.start);
-            const prev = p.ranges[i - 1];
+            expect(range.start, location).toBe(next);
+            expect(range.end, location).toBeGreaterThan(range.start);
+            const prev = messagePlan.ranges[i - 1];
             if (prev !== undefined)
             {
-                expect(prev.keep === r.keep && prev.reason === r.reason, `${at}: unmerged neighbours`).toBe(false);
+                expect(prev.keep === range.keep && prev.reason === range.reason, `${location}: unmerged neighbours`).toBe(false);
             }
-            if (!r.keep)
+            if (!range.keep)
             {
-                expect(['app-quoted-history', 'signature', 'repeated-signature'], at).toContain(r.reason);
+                expect(['app-quoted-history', 'signature', 'repeated-signature'], location).toContain(range.reason);
             }
-            next = r.end;
+            next = range.end;
         });
-        expect(next, at).toBe(body.length);
-        expect(p.ranges.map((r) => body.slice(r.start, r.end)).join(''), at).toBe(body);
+        expect(next, location).toBe(body.length);
+        expect(messagePlan.ranges.map((r) => body.slice(r.start, r.end)).join(''), location).toBe(body);
 
-        const left = mask(body.length, p);
+        const left = mask(body.length, messagePlan);
         const folded = foldedMask(body.length, inputs[k]!.segments);
-        if (!p.fallback)
+        if (!messagePlan.fallback)
         {
             for (let i = 0; i < body.length; i++)
             {
                 if (left[i] === 1 && folded[i] !== 1)
                 {
-                    expect.fail(`${at}: unfolded offset ${i} left out`);
+                    expect.fail(`${location}: unfolded offset ${i} left out`);
                 }
             }
         }
         if (policy.unfoldEverything)
         {
-            expect(left.includes(1), at).toBe(false);
+            expect(left.includes(1), location).toBe(false);
         }
 
         // Rule 4: an email with text always keeps some of it; when nothing else was left, everything is kept.
-        const keptText = p.ranges.some((r) => r.keep && /\S/.test(body.slice(r.start, r.end)));
+        const keptText = messagePlan.ranges.some((r) => r.keep && /\S/.test(body.slice(r.start, r.end)));
         if (/\S/.test(body))
         {
-            expect(keptText, at).toBe(true);
+            expect(keptText, location).toBe(true);
         }
-        if (p.keptAllBecauseEmpty)
+        if (messagePlan.keptAllBecauseEmpty)
         {
-            expect(left.includes(1), at).toBe(false);
+            expect(left.includes(1), location).toBe(false);
         }
     });
 }
@@ -322,12 +322,12 @@ function foldSet(seed: number): PlanInput[]
         if (random() < 0.5)
         {
             // A fixed signature, folded, at the start or the end: repeated signatures.
-            const sig = '-- \nBob Sample\nSample Furniture\n';
+            const signature = '-- \nBob Sample\nSample Furniture\n';
             // Mostly at the start: at the end it often lands in a forwarded part, which is always kept.
             const atStart = random() < 0.7;
-            const body = atStart ? `${sig}${message.bodyText}` : `${message.bodyText}\n${sig}`;
-            const start = atStart ? 0 : body.length - sig.length;
-            folds.push({ start, end: start + sig.length, reason: 'signature' });
+            const body = atStart ? `${signature}${message.bodyText}` : `${message.bodyText}\n${signature}`;
+            const start = atStart ? 0 : body.length - signature.length;
+            folds.push({ start, end: start + signature.length, reason: 'signature' });
             message = { ...message, bodyText: body };
         }
         inputs.push({ message, segments: buildSegments(message.bodyText, folds), index: k });
@@ -374,17 +374,17 @@ describe('planOutput: properties', () =>
         const seen = { tails: 0, signatures: 0, forwarded: 0 };
         const count = (inputs: readonly PlanInput[]): void =>
         {
-            for (const p of planOutput(inputs))
+            for (const messagePlan of planOutput(inputs))
             {
-                if (p.ranges.some((r) => !r.keep && r.reason === 'app-quoted-history'))
+                if (messagePlan.ranges.some((r) => !r.keep && r.reason === 'app-quoted-history'))
                 {
                     seen.tails++;
                 }
-                if (p.omittedSignatures > 0)
+                if (messagePlan.omittedSignatures > 0)
                 {
                     seen.signatures++;
                 }
-                if (p.ranges.some((r) => r.reason === 'forwarded'))
+                if (messagePlan.ranges.some((r) => r.reason === 'forwarded'))
                 {
                     seen.forwarded++;
                 }
@@ -429,11 +429,11 @@ describe('planOutput: speed', () =>
             const own = Array.from({ length: 5 }, () => `${pick(random, LINES.slice(0, 3))} ${k}`).join('\n');
             const quote = Array.from({ length: 30 }, () => pick(random, LINES.slice(0, 3))).join('\n');
             const body = `${own}\n\n-- \nBob Sample\nSample Furniture (fictional company)\n\n________________________________\nFrom: Alice Example <alice@example.test>\nSent: Monday, March 3, 2025 9:15 AM\nTo: Bob Sample <bob@furniture.example.test>\nSubject: Office\n\n${quote}\n> a\n> b\n`;
-            const sigStart = body.indexOf('-- ');
+            const signatureStart = body.indexOf('-- ');
             const folds: FoldRange[] = [
                 ...detectReplyHeaders(body),
                 ...detectQuoteMarkers(body),
-                { start: sigStart, end: body.indexOf('\n\n____', sigStart) + 1, reason: 'signature' },
+                { start: signatureStart, end: body.indexOf('\n\n____', signatureStart) + 1, reason: 'signature' },
             ];
             const message: NormalizedMessage = { ...randomMessage(random), from: SENDERS[k % 3]!, subject: 'RE: Office', bodyText: body };
             inputs.push({ message, segments: buildSegments(body, folds), index: k });
@@ -447,19 +447,19 @@ describe('planOutput: speed', () =>
         const large = batch(2000);
         const chars = large.reduce((n, m) => n + m.message.bodyText.length, 0);
         planOutput(small); // warm-up
-        const t0 = performance.now();
+        const startTime = performance.now();
         planOutput(small);
-        const t1 = performance.now();
+        const smallDone = performance.now();
         const plans = planOutput(large);
-        const t2 = performance.now();
+        const largeDone = performance.now();
         console.log(
-            `output plan speed: 500 emails ${(t1 - t0).toFixed(0)} ms; 2000 emails, ${(chars / 1e6).toFixed(2)} MB: ${(t2 - t1).toFixed(0)} ms`,
+            `output plan speed: 500 emails ${(smallDone - startTime).toFixed(0)} ms; 2000 emails, ${(chars / 1e6).toFixed(2)} MB: ${(largeDone - smallDone).toFixed(0)} ms`,
         );
         expect(chars).toBeGreaterThan(3_000_000);
         expect(plans.filter((p) => p.tailStart !== null)).toHaveLength(2000);
         expect(plans.reduce((n, p) => n + p.omittedSignatures, 0)).toBe(2000 - 3);
         // No absolute bound (it failed on a busy machine); only the ratio.
         // About linear: four times the emails, well under sixteen times the time.
-        expect(t2 - t1).toBeLessThan(10 * (t1 - t0) + 100);
+        expect(largeDone - smallDone).toBeLessThan(10 * (smallDone - startTime) + 100);
     });
 });

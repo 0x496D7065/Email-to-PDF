@@ -8,12 +8,12 @@ import {
     checkSegments,
     lineRanges,
     linesToRange,
-    reconstruct,
+    joinSegments,
     segmentText,
     splitsSurrogatePair,
     visibleView,
     type FoldRange,
-} from './segments';
+} from './fold-segments';
 import type { FoldReason, Segment } from '../../Header/thread-analysis-result';
 
 const EMOJI = '\ud83d\ude00'; // one emoji = two UTF-16 code units
@@ -48,11 +48,11 @@ describe('buildSegments: basic shape', () =>
     it('folds a middle range and keeps the text around it shown', () =>
     {
         const text = 'abcdefghij';
-        const segs = buildSegments(text, [fold(3, 7, 'quote-marker')]);
-        expect(brief(segs)).toEqual([[0, 3], [3, 7, 'quote-marker'], [7, 10]]);
-        expect(segs[1]!.folded).toBe(true);
-        expect(segmentText(text, segs[1]!)).toBe('defg');
-        expect(reconstruct(text, segs)).toBe(text);
+        const segments = buildSegments(text, [fold(3, 7, 'quote-marker')]);
+        expect(brief(segments)).toEqual([[0, 3], [3, 7, 'quote-marker'], [7, 10]]);
+        expect(segments[1]!.folded).toBe(true);
+        expect(segmentText(text, segments[1]!)).toBe('defg');
+        expect(joinSegments(text, segments)).toBe(text);
     });
 
     it('folds the whole text', () =>
@@ -65,8 +65,8 @@ describe('buildSegments: overlapping, nested and adjacent folds', () =>
 {
     it('splits overlapping folds and unions their reasons', () =>
     {
-        const segs = buildSegments('0123456789', [fold(2, 6, 'quote-marker'), fold(4, 8, 'signature')]);
-        expect(brief(segs)).toEqual([
+        const segments = buildSegments('0123456789', [fold(2, 6, 'quote-marker'), fold(4, 8, 'signature')]);
+        expect(brief(segments)).toEqual([
             [0, 2],
             [2, 4, 'quote-marker'],
             [4, 6, 'quote-marker', 'signature'],
@@ -77,8 +77,8 @@ describe('buildSegments: overlapping, nested and adjacent folds', () =>
 
     it('handles a nested fold', () =>
     {
-        const segs = buildSegments('0123456789', [fold(1, 9, 'quoted-overlap'), fold(3, 5, 'reply-header')]);
-        expect(brief(segs)).toEqual([
+        const segments = buildSegments('0123456789', [fold(1, 9, 'quoted-overlap'), fold(3, 5, 'reply-header')]);
+        expect(brief(segments)).toEqual([
             [0, 1],
             [1, 3, 'quoted-overlap'],
             [3, 5, 'quoted-overlap', 'reply-header'],
@@ -89,20 +89,20 @@ describe('buildSegments: overlapping, nested and adjacent folds', () =>
 
     it('merges adjacent folds with the same reason', () =>
     {
-        const segs = buildSegments('0123456789', [fold(2, 5, 'quote-marker'), fold(5, 8, 'quote-marker')]);
-        expect(brief(segs)).toEqual([[0, 2], [2, 8, 'quote-marker'], [8, 10]]);
+        const segments = buildSegments('0123456789', [fold(2, 5, 'quote-marker'), fold(5, 8, 'quote-marker')]);
+        expect(brief(segments)).toEqual([[0, 2], [2, 8, 'quote-marker'], [8, 10]]);
     });
 
     it('keeps adjacent folds with different reasons apart', () =>
     {
-        const segs = buildSegments('0123456789', [fold(2, 5, 'reply-header'), fold(5, 8, 'quote-marker')]);
-        expect(brief(segs)).toEqual([[0, 2], [2, 5, 'reply-header'], [5, 8, 'quote-marker'], [8, 10]]);
+        const segments = buildSegments('0123456789', [fold(2, 5, 'reply-header'), fold(5, 8, 'quote-marker')]);
+        expect(brief(segments)).toEqual([[0, 2], [2, 5, 'reply-header'], [5, 8, 'quote-marker'], [8, 10]]);
     });
 
     it('lists a reason once even if several folds give it', () =>
     {
-        const segs = buildSegments('0123456789', [fold(0, 6, 'signature'), fold(2, 10, 'signature')]);
-        expect(brief(segs)).toEqual([[0, 10, 'signature']]);
+        const segments = buildSegments('0123456789', [fold(0, 6, 'signature'), fold(2, 10, 'signature')]);
+        expect(brief(segments)).toEqual([[0, 10, 'signature']]);
     });
 
     it('sorts reasons in FOLD_REASONS order', () =>
@@ -113,12 +113,12 @@ describe('buildSegments: overlapping, nested and adjacent folds', () =>
 
     it('collects related message indices, sorted and unique', () =>
     {
-        const segs = buildSegments('0123456789', [
+        const segments = buildSegments('0123456789', [
             fold(0, 6, 'quoted-overlap', 3),
             fold(2, 10, 'quoted-overlap', 1),
             fold(4, 5, 'quoted-overlap', 3),
         ]);
-        expect(segs.map((s) => [s.start, s.end, s.related])).toEqual([
+        expect(segments.map((s) => [s.start, s.end, s.related])).toEqual([
             [0, 2, [3]],
             [2, 6, [1, 3]],
             [6, 10, [1]],
@@ -214,12 +214,12 @@ describe('buildSegments: invalid folds are cleaned or ignored, never thrown', ()
 
     it('keeps the fold but drops an invalid related index', () =>
     {
-        const segs = buildSegments(text, [
+        const segments = buildSegments(text, [
             fold(0, 3, 'quoted-overlap', -1),
             fold(0, 3, 'quoted-overlap', 1.5),
             fold(0, 3, 'quoted-overlap', NaN),
         ]);
-        expect(segs[0]).toEqual({ start: 0, end: 3, folded: true, reasons: ['quoted-overlap'], related: [] });
+        expect(segments[0]).toEqual({ start: 0, end: 3, folded: true, reasons: ['quoted-overlap'], related: [] });
     });
 });
 
@@ -237,16 +237,16 @@ describe('buildSegments: surrogate pairs (emoji) are never split', () =>
 
     it('moves a start inside an emoji backwards (the emoji is folded)', () =>
     {
-        const segs = buildSegments(text, [fold(2, 4, 'signature')]);
-        expect(brief(segs)).toEqual([[0, 1], [1, 4, 'signature']]);
-        expect(segmentText(text, segs[1]!)).toBe(`${EMOJI}b`);
+        const segments = buildSegments(text, [fold(2, 4, 'signature')]);
+        expect(brief(segments)).toEqual([[0, 1], [1, 4, 'signature']]);
+        expect(segmentText(text, segments[1]!)).toBe(`${EMOJI}b`);
     });
 
     it('moves an end inside an emoji forwards (the emoji is folded)', () =>
     {
-        const segs = buildSegments(text, [fold(0, 2, 'signature')]);
-        expect(brief(segs)).toEqual([[0, 3, 'signature'], [3, 4]]);
-        expect(segmentText(text, segs[0]!)).toBe(`a${EMOJI}`);
+        const segments = buildSegments(text, [fold(0, 2, 'signature')]);
+        expect(brief(segments)).toEqual([[0, 3, 'signature'], [3, 4]]);
+        expect(segmentText(text, segments[0]!)).toBe(`a${EMOJI}`);
     });
 
     it('folds a whole emoji when the fold is only its second half', () =>
@@ -312,8 +312,8 @@ describe('checkSegments', () =>
 
     it('reports a segment boundary inside an emoji', () =>
     {
-        const t = `a${EMOJI}b`;
-        expect(checkSegments(t, [shown(0, 2), folded(2, 4, ['signature'])])).not.toEqual([]);
+        const text = `a${EMOJI}b`;
+        expect(checkSegments(text, [shown(0, 2), folded(2, 4, ['signature'])])).not.toEqual([]);
     });
 
     it('reports inconsistent reasons, related and unmerged neighbours', () =>
@@ -370,8 +370,8 @@ describe('lineRanges and linesToRange', () =>
         {
             throw new Error('unreachable');
         }
-        const segs = buildSegments(text, [{ ...range, reason: 'quote-marker' }]);
-        expect(segs.map((s) => segmentText(text, s))).toEqual(['Hi\n', '> old\n> older\n', 'Bye']);
+        const segments = buildSegments(text, [{ ...range, reason: 'quote-marker' }]);
+        expect(segments.map((s) => segmentText(text, s))).toEqual(['Hi\n', '> old\n> older\n', 'Bye']);
     });
 
     it('returns null for invalid line numbers', () =>
@@ -388,11 +388,11 @@ describe('lineRanges and linesToRange', () =>
 describe('visibleView', () =>
 {
     const text = 'Thanks!\n> old text\n';
-    const segs = buildSegments(text, [{ start: 8, end: 19, reason: 'quote-marker' }]);
+    const segments = buildSegments(text, [{ start: 8, end: 19, reason: 'quote-marker' }]);
 
     it('keeps folded text, marked as collapsed', () =>
     {
-        expect(visibleView(text, segs, { unfoldAll: false })).toEqual([
+        expect(visibleView(text, segments, { unfoldAll: false })).toEqual([
             { start: 0, end: 8, text: 'Thanks!\n', folded: false, reasons: [], related: [], collapsed: false },
             {
                 start: 8,
@@ -414,15 +414,15 @@ describe('visibleView', () =>
             [0, 8, []],
             [8, 19, [2]],
         ]);
-        for (const b of view)
+        for (const block of view)
         {
-            expect(text.slice(b.start, b.end)).toBe(b.text);
+            expect(text.slice(block.start, block.end)).toBe(block.text);
         }
     });
 
     it('with unfoldAll, collapses nothing but still reports what is folded', () =>
     {
-        const view = visibleView(text, segs, { unfoldAll: true });
+        const view = visibleView(text, segments, { unfoldAll: true });
         expect(view.map((b) => [b.folded, b.collapsed])).toEqual([
             [false, false],
             [true, false],
@@ -472,17 +472,17 @@ function randomText(rand: () => number): string
 
 function randomOffset(rand: () => number, length: number): number
 {
-    const r = rand();
-    if (r < 0.03)
+    const roll = rand();
+    if (roll < 0.03)
     {
         return NaN;
     }
-    if (r < 0.05)
+    if (roll < 0.05)
     {
         return rand() < 0.5 ? Infinity : -Infinity;
     }
     const base = Math.floor(rand() * (length + 7)) - 3; // a little out of range on both sides
-    return r < 0.12 ? base + 0.5 : base;
+    return roll < 0.12 ? base + 0.5 : base;
 }
 
 function randomFolds(rand: () => number, length: number): FoldRange[]
@@ -496,8 +496,8 @@ function randomFolds(rand: () => number, length: number): FoldRange[]
         // Often build adjacent or nested ranges on purpose, from the previous fold.
         const prev = folds[folds.length - 1];
         const end = prev && rand() < 0.2 ? prev.start : randomOffset(rand, length);
-        const r = rand();
-        const related = r < 0.5 ? undefined : r < 0.9 ? Math.floor(rand() * 4) : [-1, 1.5, NaN][i % 3];
+        const roll = rand();
+        const related = roll < 0.5 ? undefined : roll < 0.9 ? Math.floor(rand() * 4) : [-1, 1.5, NaN][i % 3];
         folds.push(related === undefined ? { start, end, reason } : { start, end, reason, related });
     }
     return folds;
@@ -517,48 +517,48 @@ interface Expected
 }
 
 /** Local, independent copy of the "offset inside an emoji" check (not imported from the module). */
-const insidePair = (t: string, i: number): boolean =>
-    i > 0 && i < t.length && (t.charCodeAt(i - 1) & 0xfc00) === 0xd800 && (t.charCodeAt(i) & 0xfc00) === 0xdc00;
+const insidePair = (text: string, i: number): boolean =>
+    i > 0 && i < text.length && (text.charCodeAt(i - 1) & 0xfc00) === 0xd800 && (text.charCodeAt(i) & 0xfc00) === 0xdc00;
 
 function expectedCover(text: string, folds: readonly FoldRange[]): Expected
 {
     const reasons = Array.from({ length: text.length }, () => new Set<FoldReason>());
     const related = Array.from({ length: text.length }, () => new Set<number>());
     let snapped = 0;
-    for (const f of folds)
+    for (const fold of folds)
     {
-        if (Number.isNaN(f.start) || Number.isNaN(f.end))
+        if (Number.isNaN(fold.start) || Number.isNaN(fold.end))
         {
             continue;
         }
-        let s = Math.min(Math.max(Math.floor(f.start), 0), text.length);
-        let e = Math.min(Math.max(Math.ceil(f.end), 0), text.length);
-        if (s >= e)
+        let start = Math.min(Math.max(Math.floor(fold.start), 0), text.length);
+        let end = Math.min(Math.max(Math.ceil(fold.end), 0), text.length);
+        if (start >= end)
         {
             continue; // empty or reversed: ignored, before any snapping
         }
-        const rawS = s;
-        const rawE = e;
-        if (insidePair(text, s))
+        const rawStart = start;
+        const rawEnd = end;
+        if (insidePair(text, start))
         {
-            s--;
+            start--;
         }
-        if (insidePair(text, e))
+        if (insidePair(text, end))
         {
-            e++;
+            end++;
         }
         // Snapping moves a boundary by at most one unit, outwards.
-        expect(rawS - s).toBeLessThanOrEqual(1);
-        expect(e - rawE).toBeLessThanOrEqual(1);
-        if (s !== rawS || e !== rawE)
+        expect(rawStart - start).toBeLessThanOrEqual(1);
+        expect(end - rawEnd).toBeLessThanOrEqual(1);
+        if (start !== rawStart || end !== rawEnd)
         {
             snapped++;
         }
         const link =
-            f.related !== undefined && Number.isSafeInteger(f.related) && f.related >= 0 ? f.related : null;
-        for (let i = s; i < e; i++)
+            fold.related !== undefined && Number.isSafeInteger(fold.related) && fold.related >= 0 ? fold.related : null;
+        for (let i = start; i < end; i++)
         {
-            reasons[i]!.add(f.reason);
+            reasons[i]!.add(fold.reason);
             if (link !== null)
             {
                 related[i]!.add(link);
@@ -583,12 +583,12 @@ describe('property test: random texts and folds', () =>
             const snapshot = JSON.stringify(folds.map((f) => [f.start, f.end, f.reason, f.related]));
             const label = `case ${n}: ${JSON.stringify(text)} ${snapshot}`;
 
-            const segs = buildSegments(text, folds);
+            const segments = buildSegments(text, folds);
 
             // Valid cover, and the text comes back unchanged.
-            expect(checkSegments(text, segs), label).toEqual([]);
-            expect(reconstruct(text, segs), label).toBe(text);
-            expect(visibleView(text, segs, { unfoldAll: false }).map((b) => b.text).join(''), label).toBe(
+            expect(checkSegments(text, segments), label).toEqual([]);
+            expect(joinSegments(text, segments), label).toBe(text);
+            expect(visibleView(text, segments, { unfoldAll: false }).map((b) => b.text).join(''), label).toBe(
                 text,
             );
 
@@ -596,23 +596,23 @@ describe('property test: random texts and folds', () =>
             // (Linked message indices follow the same rule.)
             const expected = expectedCover(text, folds);
             snappedTotal += expected.snapped;
-            for (const s of segs)
+            for (const segment of segments)
             {
-                for (let i = s.start; i < s.end; i++)
+                for (let i = segment.start; i < segment.end; i++)
                 {
                     const want = FOLD_REASONS.filter((r) => expected.reasons[i]!.has(r));
-                    expect(s.reasons, `${label} offset ${i}`).toEqual(want);
-                    expect(s.folded, `${label} offset ${i}`).toBe(want.length > 0);
+                    expect(segment.reasons, `${label} offset ${i}`).toEqual(want);
+                    expect(segment.folded, `${label} offset ${i}`).toBe(want.length > 0);
                     const wantRelated = [...expected.related[i]!].sort((a, b) => a - b);
-                    expect(s.related, `${label} offset ${i}`).toEqual(wantRelated);
+                    expect(segment.related, `${label} offset ${i}`).toEqual(wantRelated);
                 }
             }
 
             // Same result whatever the fold order.
             const reversed = buildSegments(text, [...folds].reverse());
-            expect(reversed, label).toEqual(segs);
+            expect(reversed, label).toEqual(segments);
             const rotated = folds.length > 1 ? [...folds.slice(1), folds[0]!] : folds;
-            expect(buildSegments(text, rotated), label).toEqual(segs);
+            expect(buildSegments(text, rotated), label).toEqual(segments);
 
             // Inputs unchanged.
             expect(JSON.stringify(folds.map((f) => [f.start, f.end, f.reason, f.related])), label).toBe(

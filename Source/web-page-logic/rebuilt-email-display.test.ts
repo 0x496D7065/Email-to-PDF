@@ -4,7 +4,7 @@
 // reach the rare cases (no sender, a list read short, a bad timeline).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import {
     alsoNumbers,
     createRebuiltSelection,

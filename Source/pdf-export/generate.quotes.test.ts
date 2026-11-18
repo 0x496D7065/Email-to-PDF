@@ -18,7 +18,7 @@ import { quotePrefixProblems, referenceDisplayText } from '../../Helper/Test/tes
 import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { buildThread, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';

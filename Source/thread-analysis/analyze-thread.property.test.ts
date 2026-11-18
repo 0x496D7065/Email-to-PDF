@@ -23,8 +23,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { normalizeBody } from './dedupe';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineStage } from './engine';
-import { checkSegments, FOLD_REASONS, reconstruct, visibleView } from './segments';
+import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineStage } from './analyze-thread';
+import { checkSegments, FOLD_REASONS, joinSegments, visibleView } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { DuplicateRule, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
 
@@ -81,7 +81,7 @@ function freshText(random: () => number, serial: number, extra: number): string
     {
         const lines: string[] = [];
         const lineCount = 1 + Math.floor(random() * 3);
-        for (let l = 0; l < lineCount; l++)
+        for (let lineNumber = 0; lineNumber < lineCount; lineNumber++)
         {
             const words = Array.from({ length: 4 + Math.floor(random() * 10) }, () => pick(random, WORDS));
             lines.push(words.join(' '));
@@ -108,20 +108,20 @@ type QuoteStyle = 'none' | 'marker' | 'outlook' | 'outlook-fr' | 'bare';
 function quoteBlock(style: QuoteStyle, previous: string, author: Person, subject: string): string
 {
     const plain = previous.replace(/\r\n/g, '\n');
-    const addr = `${author.mailbox.name} <${author.mailbox.address}>`;
+    const address = `${author.mailbox.name} <${author.mailbox.address}>`;
     switch (style)
     {
         case 'none':
             return '';
         case 'marker':
-            return `\n\nOn Mon, 3 Mar 2025 at 14:02, ${addr} wrote:\n${plain
+            return `\n\nOn Mon, 3 Mar 2025 at 14:02, ${address} wrote:\n${plain
                 .split('\n')
                 .map((line) => (line === '' ? '>' : `> ${line}`))
                 .join('\n')}\n`;
         case 'outlook':
-            return `\n\n________________________________\nFrom: ${addr}\nSent: Monday, March 3, 2025 9:15 AM\nTo: Alice Example <alice@example.test>\nSubject: ${subject}\n\n${plain}`;
+            return `\n\n________________________________\nFrom: ${address}\nSent: Monday, March 3, 2025 9:15 AM\nTo: Alice Example <alice@example.test>\nSubject: ${subject}\n\n${plain}`;
         case 'outlook-fr':
-            return `\n\nDe : ${addr}\nEnvoy\u00E9 : lundi 3 mars 2025 09:15\n\u00C0 : Carol Test <carol@sample.invalid>\nObjet : ${subject}\n\n${plain}`;
+            return `\n\nDe : ${address}\nEnvoy\u00E9 : lundi 3 mars 2025 09:15\n\u00C0 : Carol Test <carol@sample.invalid>\nObjet : ${subject}\n\n${plain}`;
         case 'bare':
             // Quoted without markers or header: only the overlap detector can see it.
             return `\n\n${plain}`;
@@ -176,7 +176,7 @@ function makeBatch(seed: number, options: BatchOptions): Batch
     const entries: { result: ParseResult; copyOf: number | null; conflictOf?: number }[] = [];
     let serial = 0;
     const threadCount = options.fixedShape === true ? options.threads : 1 + Math.floor(random() * options.threads);
-    for (let t = 0; t < threadCount; t++)
+    for (let thread = 0; thread < threadCount; thread++)
     {
         const count = options.fixedShape === true ? options.maxMessages : 1 + Math.floor(random() * options.maxMessages);
         const ids: string[] = [];
@@ -187,7 +187,7 @@ function makeBatch(seed: number, options: BatchOptions): Batch
         {
             serial++;
             const author = pick(random, PEOPLE);
-            const subject = p === 0 ? `Thread ${t} about ${pick(random, WORDS)}` : `RE: Thread ${t}`;
+            const subject = p === 0 ? `Thread ${thread} about ${pick(random, WORDS)}` : `RE: Thread ${thread}`;
             let body: string;
             if (random() < options.emptyBody)
             {
@@ -205,7 +205,7 @@ function makeBatch(seed: number, options: BatchOptions): Batch
             }
             clock += 60_000 + Math.floor(random() * 5) * 3_600_000;
             const undated = random() < options.undated;
-            const messageId = `t${t}-m${p}-s${seed}@example.test`;
+            const messageId = `t${thread}-m${p}-s${seed}@example.test`;
             // Which kind of copy (if any) follows this message. 'author-date-body':
             // neither copy has a Message-ID, so only author + date + body can prove
             // they are the same (needs a date). 'conflict': same Message-ID, other body.
@@ -276,15 +276,15 @@ function makeBatch(seed: number, options: BatchOptions): Batch
     const results = order.map((old) => entries[old]!.result);
     const copies: [number, number][] = [];
     const conflicts: [number, number][] = [];
-    entries.forEach((e, old) =>
+    entries.forEach((entry, oldIndex) =>
     {
-        if (e.copyOf !== null)
+        if (entry.copyOf !== null)
         {
-            copies.push([newPosition.get(e.copyOf)!, newPosition.get(old)!]);
+            copies.push([newPosition.get(entry.copyOf)!, newPosition.get(oldIndex)!]);
         }
-        if (e.conflictOf !== undefined)
+        if (entry.conflictOf !== undefined)
         {
-            conflicts.push([newPosition.get(e.conflictOf)!, newPosition.get(old)!]);
+            conflicts.push([newPosition.get(entry.conflictOf)!, newPosition.get(oldIndex)!]);
         }
     });
     return { results, copies, conflicts };
@@ -303,30 +303,31 @@ function checkInvariants(
     // Failed files: every one listed, with its reason, in input order.
     const failedIndices = results.flatMap((r, i) => (r.ok ? [] : [i]));
     expect(out.failed.map((f) => f.index)).toEqual(failedIndices);
-    for (const f of out.failed)
+    for (const failure of out.failed)
     {
-        const r = results[f.index]!;
-        if (r.ok)
+        const result = results[failure.index]!;
+        if (result.ok)
         {
             throw new Error('listed as failed but parsed');
         }
-        expect(f).toEqual({ index: f.index, fileName: r.fileName, sha256: r.sha256, error: r.error, detail: r.detail });
+        expect(failure).toEqual(
+            { index: failure.index, fileName: result.fileName, sha256: result.sha256, error: result.error, detail: result.detail });
     }
 
     // Every parsed message: kept or a duplicate of a kept one, exactly once.
     const seen = new Map<number, number>();
-    out.messages.forEach((m, position) =>
+    out.messages.forEach((message, position) =>
     {
-        for (const i of [m.index, ...m.duplicates.map((d) => d.index)])
+        for (const i of [message.index, ...message.duplicates.map((d) => d.index)])
         {
             expect(seen.has(i), `input ${i} listed twice`).toBe(false);
             seen.set(i, position);
         }
     });
-    results.forEach((r, i) =>
+    results.forEach((result, i) =>
     {
-        expect(seen.get(i) ?? null).toBe(r.ok ? out.positionByIndex[i] : null);
-        if (r.ok)
+        expect(seen.get(i) ?? null).toBe(result.ok ? out.positionByIndex[i] : null);
+        if (result.ok)
         {
             expect(seen.has(i), `input ${i} lost`).toBe(true);
         }
@@ -346,37 +347,37 @@ function checkInvariants(
         }
     }
 
-    for (const m of out.messages)
+    for (const message of out.messages)
     {
-        const r = results[m.index]!;
-        expect(r.ok && r.message).toBe(m.message); // the same object, never a rewritten copy
-        const body = m.message.bodyText;
+        const result = results[message.index]!;
+        expect(result.ok && result.message).toBe(message.message); // the same object, never a rewritten copy
+        const body = message.message.bodyText;
         // The core rule: the body is fully recoverable from the output.
-        expect(checkSegments(body, m.segments)).toEqual([]);
-        expect(reconstruct(body, m.segments)).toBe(body);
-        const unfolded = visibleView(body, m.segments, { unfoldAll: true });
+        expect(checkSegments(body, message.segments)).toEqual([]);
+        expect(joinSegments(body, message.segments)).toBe(body);
+        const unfolded = visibleView(body, message.segments, { unfoldAll: true });
         expect(unfolded.map((b) => b.text).join('')).toBe(body);
         expect(unfolded.some((b) => b.collapsed)).toBe(false);
-        expect(visibleView(body, m.segments, { unfoldAll: false }).map((b) => b.text).join('')).toBe(body);
-        expect(m.engineWarnings).toEqual([]);
-        expect(m.parserWarnings).toBe(m.message.warnings);
-        for (const s of m.segments)
+        expect(visibleView(body, message.segments, { unfoldAll: false }).map((b) => b.text).join('')).toBe(body);
+        expect(message.engineWarnings).toEqual([]);
+        expect(message.parserWarnings).toBe(message.message.warnings);
+        for (const segment of message.segments)
         {
-            for (const rel of s.related)
+            for (const related of segment.related)
             {
-                expect(out.positionByIndex[rel]).not.toBeNull();
+                expect(out.positionByIndex[related]).not.toBeNull();
             }
         }
         // Merged copies: provably identical, so same normalized body.
-        for (const d of m.duplicates)
+        for (const duplicate of message.duplicates)
         {
-            const copy = results[d.index]!;
+            const copy = results[duplicate.index]!;
             if (!copy.ok)
             {
                 throw new Error('a failed file listed as a duplicate');
             }
             expect(normalizeBody(copy.message.bodyText)).toBe(normalizeBody(body));
-            expect(d.source).toBe(copy.message.source);
+            expect(duplicate.source).toBe(copy.message.source);
         }
     }
 
@@ -384,21 +385,21 @@ function checkInvariants(
     let lastMs = -Infinity;
     let lastUndated = -1;
     let undatedSeen = false;
-    for (const m of out.messages)
+    for (const message of out.messages)
     {
-        if (m.order === 'by-date')
+        if (message.order === 'by-date')
         {
             expect(undatedSeen).toBe(false);
-            expect(m.message.date.utcMs).not.toBeNull();
-            expect(m.message.date.utcMs!).toBeGreaterThanOrEqual(lastMs);
-            lastMs = m.message.date.utcMs!;
+            expect(message.message.date.utcMs).not.toBeNull();
+            expect(message.message.date.utcMs!).toBeGreaterThanOrEqual(lastMs);
+            lastMs = message.message.date.utcMs!;
         }
         else
         {
             undatedSeen = true;
-            expect(m.message.date.utcMs).toBeNull();
-            expect(m.index).toBeGreaterThan(lastUndated);
-            lastUndated = m.index;
+            expect(message.message.date.utcMs).toBeNull();
+            expect(message.index).toBeGreaterThan(lastUndated);
+            lastUndated = message.index;
         }
     }
 
@@ -416,7 +417,7 @@ function checkInvariants(
 /**
  * True if `text` is `slice` with only quote marks (">") and spacing
  * (whitespace other than line breaks) removed: an independent check of
- * reconstruct.ts step 4, letter by letter.
+ * reconstruct-quoted-messages.ts step 4, letter by letter.
  */
 function onlyMarksRemoved(slice: string, text: string): boolean
 {
@@ -462,43 +463,44 @@ function checkRebuilt(out: EngineResult, baseline?: EngineResult): void
     }
     const keptAt = (index: number | null): boolean => index !== null && out.messages[out.positionByIndex[index] ?? -1]?.index === index;
     const bySource = new Map<number, number[]>();
-    out.reconstructed.forEach((r, id) =>
+    out.reconstructed.forEach((rebuiltEntry, id) =>
     {
-        expect(r.id).toBe(id);
-        expect(keptAt(r.sourceIndex), `rebuilt ${id}: source`).toBe(true);
-        const body = out.messages[out.positionByIndex[r.sourceIndex]!]!.message.bodyText;
-        const { start, headerEnd, end, depth } = r.rebuilt;
+        expect(rebuiltEntry.id).toBe(id);
+        expect(keptAt(rebuiltEntry.sourceIndex), `rebuilt ${id}: source`).toBe(true);
+        const body = out.messages[out.positionByIndex[rebuiltEntry.sourceIndex]!]!.message.bodyText;
+        const { start, headerEnd, end, depth } = rebuiltEntry.rebuilt;
         expect(0 <= start && start < headerEnd && headerEnd <= end && end <= body.length, `rebuilt ${id}: offsets`).toBe(true);
         const slice = body.slice(headerEnd, end);
-        expect(onlyMarksRemoved(slice, r.rebuilt.reconstructedText), `rebuilt ${id}: text`).toBe(true);
+        expect(onlyMarksRemoved(slice, rebuiltEntry.rebuilt.reconstructedText), `rebuilt ${id}: text`).toBe(true);
         if (depth === 0)
         {
-            expect(r.rebuilt.reconstructedText).toBe(slice);
+            expect(rebuiltEntry.rebuilt.reconstructedText).toBe(slice);
         }
-        expect(r.rebuilt.quoteMarksRemoved).toBe(depth > 0);
-        const list = bySource.get(r.sourceIndex) ?? [];
+        expect(rebuiltEntry.rebuilt.quoteMarksRemoved).toBe(depth > 0);
+        const list = bySource.get(rebuiltEntry.sourceIndex) ?? [];
         list.push(id);
-        bySource.set(r.sourceIndex, list);
-        if (r.link === 'real')
+        bySource.set(rebuiltEntry.sourceIndex, list);
+        if (rebuiltEntry.link === 'real')
         {
-            expect(keptAt(r.realIndex), `rebuilt ${id}: real link`).toBe(true);
-            expect(r.realIndex).not.toBe(r.sourceIndex);
-            expect(r.match).not.toBeNull();
+            expect(keptAt(rebuiltEntry.realIndex), `rebuilt ${id}: real link`).toBe(true);
+            expect(rebuiltEntry.realIndex).not.toBe(rebuiltEntry.sourceIndex);
+            expect(rebuiltEntry.match).not.toBeNull();
         }
-        else if (r.link === 'same-as')
+        else if (rebuiltEntry.link === 'same-as')
         {
-            const entry = out.reconstructed[r.sameAs ?? -1];
+            const entry = out.reconstructed[rebuiltEntry.sameAs ?? -1];
             expect(entry?.link, `rebuilt ${id}: same-as`).toBe('entry');
             expect(entry?.copies).toContain(id);
-            expect(entry?.sourceIndex).not.toBe(r.sourceIndex);
+            expect(entry?.sourceIndex).not.toBe(rebuiltEntry.sourceIndex);
         }
         else
         {
-            for (const c of r.copies)
+            for (const copy of rebuiltEntry.copies)
             {
-                expect(out.reconstructed[c]?.sameAs).toBe(id);
+                expect(out.reconstructed[copy]?.sameAs).toBe(id);
             }
-            expect(r.alsoQuotedIn).toEqual([...new Set(r.copies.map((c) => out.reconstructed[c]!.sourceIndex))].sort((a, b) => a - b));
+            expect(rebuiltEntry.alsoQuotedIn)
+                .toEqual([...new Set(rebuiltEntry.copies.map((c) => out.reconstructed[c]!.sourceIndex))].sort((a, b) => a - b));
         }
     });
     // Per source: generations 1, 2, ... in body order, never overlapping.
@@ -507,10 +509,10 @@ function checkRebuilt(out: EngineResult, baseline?: EngineResult): void
         let end = 0;
         ids.forEach((id, k) =>
         {
-            const r = out.reconstructed[id]!.rebuilt;
-            expect(r.generation).toBe(k + 1);
-            expect(r.start).toBeGreaterThanOrEqual(end);
-            end = r.end;
+            const rebuilt = out.reconstructed[id]!.rebuilt;
+            expect(rebuilt.generation).toBe(k + 1);
+            expect(rebuilt.start).toBeGreaterThanOrEqual(end);
+            end = rebuilt.end;
         });
     }
     // Timeline: every kept message once, in order; exactly the entries, once each.
@@ -529,30 +531,30 @@ function wrongLinks(out: EngineResult): string[]
 {
     const serial = (text: string): string | null => /Note (\d+):/u.exec(text)?.[1] ?? null;
     const wrong: string[] = [];
-    for (const r of out.reconstructed)
+    for (const entry of out.reconstructed)
     {
-        const mine = serial(r.rebuilt.reconstructedText);
-        if (mine === null || r.link === 'entry')
+        const mine = serial(entry.rebuilt.reconstructedText);
+        if (mine === null || entry.link === 'entry')
         {
             continue;
         }
         const other =
-            r.link === 'real'
-                ? serial(out.messages[out.positionByIndex[r.realIndex!]!]!.message.bodyText)
-                : serial(out.reconstructed[r.sameAs!]!.rebuilt.reconstructedText);
+            entry.link === 'real'
+                ? serial(out.messages[out.positionByIndex[entry.realIndex!]!]!.message.bodyText)
+                : serial(out.reconstructed[entry.sameAs!]!.rebuilt.reconstructedText);
         if (other !== mine)
         {
-            wrong.push(`rebuilt ${r.id} (Note ${mine}) linked to Note ${other ?? '?'}`);
+            wrong.push(`rebuilt ${entry.id} (Note ${mine}) linked to Note ${other ?? '?'}`);
         }
     }
     return wrong;
 }
 
 /** First non-blank line of a body, with its offset. */
-function firstLine(body: string): { at: number; text: string } | null
+function firstLine(body: string): { offset: number; text: string } | null
 {
     const match = /[^\r\n]*\S[^\r\n]*/.exec(body);
-    return match === null ? null : { at: match.index, text: match[0] };
+    return match === null ? null : { offset: match.index, text: match[0] };
 }
 
 // ------------------------------------------------------------------ tests
@@ -586,36 +588,36 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
             checkRebuilt(out, seed % 5 === 0 ? runEngine(results, NO_REBUILD) : undefined);
             rebuilt += out.reconstructed.length;
             expect(wrongLinks(out), `seed ${seed}`).toEqual([]);
-            for (const r of out.reconstructed)
+            for (const entry of out.reconstructed)
             {
-                links.set(r.link, (links.get(r.link) ?? 0) + 1);
+                links.set(entry.link, (links.get(entry.link) ?? 0) + 1);
             }
             conflictCount += conflicts.length;
-            for (const m of out.messages)
+            for (const message of out.messages)
             {
-                for (const s of m.segments)
+                for (const segment of message.segments)
                 {
-                    for (const r of s.reasons)
+                    for (const reason of segment.reasons)
                     {
-                        reasonsSeen.set(r, (reasonsSeen.get(r) ?? 0) + 1);
+                        reasonsSeen.set(reason, (reasonsSeen.get(reason) ?? 0) + 1);
                     }
                 }
-                for (const d of m.duplicates)
+                for (const duplicate of message.duplicates)
                 {
-                    rulesSeen.set(d.rule, (rulesSeen.get(d.rule) ?? 0) + 1);
+                    rulesSeen.set(duplicate.rule, (rulesSeen.get(duplicate.rule) ?? 0) + 1);
                 }
             }
             // Heuristic, but holds for this generator: each message opens with its
             // own new text, and no detector folds it.
-            for (const m of out.messages)
+            for (const message of out.messages)
             {
-                const line = firstLine(m.message.bodyText);
+                const line = firstLine(message.message.bodyText);
                 if (line === null)
                 {
                     continue;
                 }
-                const covering = m.segments.filter((s) => s.start < line.at + line.text.length && s.end > line.at);
-                expect(covering.every((s) => !s.folded), `seed ${seed}: first line of input ${m.index} folded`).toBe(true);
+                const covering = message.segments.filter((s) => s.start < line.offset + line.text.length && s.end > line.offset);
+                expect(covering.every((s) => !s.folded), `seed ${seed}: first line of input ${message.index} folded`).toBe(true);
             }
             // The result is plain data: a structured clone is equal to it.
             expect(structuredClone(out)).toEqual(out);
@@ -662,9 +664,9 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
         const out = runEngine(empty.results);
         checkInvariants(empty.results, out, empty.copies, empty.conflicts);
         checkRebuilt(out, runEngine(empty.results, NO_REBUILD));
-        for (const m of out.messages)
+        for (const message of out.messages)
         {
-            expect(m.segments).toEqual([]);
+            expect(message.segments).toEqual([]);
         }
     });
 });
@@ -691,7 +693,7 @@ describe('runEngine: speed on a large batch', () =>
         const times = new Map<EngineStage, number>();
         let current: EngineStage | null = null;
         let since = 0;
-        const t0 = performance.now();
+        const startTime = performance.now();
         const out = runEngine(batch.results, {
             ...DEFAULT_PARTS,
             onStage: (stage) =>
@@ -705,7 +707,7 @@ describe('runEngine: speed on a large batch', () =>
                 since = now;
             },
         });
-        const total = performance.now() - t0;
+        const total = performance.now() - startTime;
         const row = [...times].map(([stage, ms]) => `${stage} ${ms.toFixed(0)} ms`).join(', ');
         console.log(
             `engine speed: ${batch.results.length} files, ${(chars / 1e6).toFixed(2)} MB of body text, ` +

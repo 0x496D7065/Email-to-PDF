@@ -3,7 +3,7 @@
 // worker is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { createEngineWorkerSide, isFromEngineWorker, isToEngineWorker } from './engine-protocol';
 import type { FromEngineWorker } from '../../Header/engine-worker-messages';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';

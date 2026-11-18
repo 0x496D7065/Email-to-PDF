@@ -5,12 +5,12 @@
 // where it is. The reviewer's cases, with emails attached inside files and
 // with plain files (a loss that existed before task 8.13b-3), each checked
 // in the PDF and in the preview's labels (the same calculation), with the
-// engine's own fix (overlap.ts, withHeldReferences) and without it.
+// engine's own fix (overlap-quote-detection.ts, withHeldReferences) and without it.
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
-import { detectQuotedOverlap } from '../thread-analysis/overlap';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';

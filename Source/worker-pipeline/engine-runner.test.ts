@@ -4,7 +4,7 @@
 // Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import {
     ENGINE_CANCELLED_DETAIL,
     ENGINE_FAILED_DETAIL,

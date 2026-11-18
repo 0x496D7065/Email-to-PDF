@@ -3,7 +3,7 @@
 // Idea: in plain-text mail, quoted lines start with ">" ("> text", nested
 // "> > text" or ">> text"). This works in every language and for quotes of
 // messages that are NOT in the batch, so it is the fallback after overlap
-// detection (overlap.ts), which stays the main quote detector. It only
+// detection (overlap-quote-detection.ts), which stays the main quote detector. It only
 // produces fold ranges (reason 'quote-marker'); it never changes or removes
 // text (README.md, rule R6: collapse, never delete).
 //
@@ -44,7 +44,7 @@
 // Pure function: no DOM, no storage, the input is never modified (README.md,
 // rule R7).
 
-import { lineRanges, type FoldRange, type LineRange } from './segments';
+import { lineRanges, type FoldRange, type LineRange } from './fold-segments';
 
 /**
  * A block needs at least this many marked lines with text to be folded.
@@ -58,9 +58,9 @@ export const MIN_MARKED_LINES = 2;
 type LineKind = 'blank' | 'marked-text' | 'marked-bare' | 'other';
 
 /** True for whitespace, including tab, nbsp and the byte-order mark U+FEFF. */
-function isSpace(ch: string): boolean
+function isSpace(character: string): boolean
 {
-    return /\s/.test(ch);
+    return /\s/.test(character);
 }
 
 /** Classifies the content of one line (line break excluded). */

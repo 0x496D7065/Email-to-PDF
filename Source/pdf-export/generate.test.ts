@@ -7,7 +7,7 @@
 // Special characters are written as braced escapes (ASCII file).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { type GeneratePdfInput, generatePdf, type PdfFonts } from './generate';
 import { COVER_DESTINATION, DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_DESTINATION, layoutPdf, MAX_FRONT_PASSES, type PdfLayout, settlePageCount } from './page-layout';

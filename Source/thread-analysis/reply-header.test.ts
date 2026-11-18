@@ -12,7 +12,7 @@ import {
     isForwardSubject,
     MIN_HEADER_LINES,
 } from './reply-header';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
 
 /** Joins lines with "\n" (no trailing line break). */
 const lines = (...l: string[]): string => l.join('\n');
@@ -24,15 +24,15 @@ function detect(body: string, subject?: string): FoldRange[]
     const folds = detectReplyHeaders(body, subject);
     expect(body).toBe(copy); // never modified
     expect(detectReplyHeaders(body, subject)).toEqual(folds); // deterministic
-    for (const f of folds)
+    for (const fold of folds)
     {
-        expect(f.reason).toBe('reply-header');
-        expect(f.related).toBeUndefined();
-        expect(f.start).toBeLessThan(f.end);
+        expect(fold.reason).toBe('reply-header');
+        expect(fold.related).toBeUndefined();
+        expect(fold.start).toBeLessThan(fold.end);
     }
     const segments = buildSegments(body, folds);
     expect(checkSegments(body, segments)).toEqual([]);
-    expect(reconstruct(body, segments)).toBe(body);
+    expect(joinSegments(body, segments)).toBe(body);
     return folds;
 }
 
@@ -47,12 +47,12 @@ function foldedTexts(body: string, subject?: string): string[]
 /** Everything from `snippet` (first occurrence) to the end of the body. */
 const fromHere = (body: string, snippet: string): string =>
 {
-    const at = body.indexOf(snippet);
-    if (at < 0)
+    const offset = body.indexOf(snippet);
+    if (offset < 0)
     {
         throw new Error(`snippet not found: ${snippet}`);
     }
-    return body.slice(at);
+    return body.slice(offset);
 };
 
 const QUOTE = ['> Hello Alice,', '>', '> The desks arrive on Thursday.', '> Bob'];
@@ -82,12 +82,12 @@ describe('detectReplyHeaders: attribution lines', () =>
         ['fr', 'Le lun. 3 mars 2025 \u00e0 14:02, Bob Sample <bob@example.test> a', '\u00e9crit :'],
         ['nl', 'Op ma 3 mrt 2025 om 14:02 schreef Bob Sample <', 'bob@example.test>:'],
     ];
-    for (const [lang, a, b] of wrapped)
+    for (const [lang, firstLine, secondLine] of wrapped)
     {
         it(`${lang}: an attribution wrapped over two lines folds both lines with the quote`, () =>
         {
-            const body = lines('New text on top.', '', a, b, ...QUOTE, '', 'More new text.');
-            expect(foldedTexts(body)).toEqual([`${lines(a, b, ...QUOTE)}\n`]);
+            const body = lines('New text on top.', '', firstLine, secondLine, ...QUOTE, '', 'More new text.');
+            expect(foldedTexts(body)).toEqual([`${lines(firstLine, secondLine, ...QUOTE)}\n`]);
         });
     }
 
@@ -274,34 +274,34 @@ describe('detectReplyHeaders: Outlook header blocks (replies fold to the end)', 
     {
         // Outlook's HTML: a rule, then bold labels separated by <br>, in a div.
         const text = (value: string): HtmlNode => ({ nodeType: 3, nodeName: '#text', nodeValue: value, childNodes: [] });
-        const el = (name: string, ...children: (HtmlNode | string)[]): HtmlNode => ({
+        const element = (name: string, ...children: (HtmlNode | string)[]): HtmlNode => ({
             nodeType: 1,
             nodeName: name.toUpperCase(),
             nodeValue: null,
             childNodes: children.map((c) => (typeof c === 'string' ? text(c) : c)),
             getAttribute: () => null,
         });
-        const label = (name: string, value: string): (HtmlNode | string)[] => [el('b', name), value, el('br')];
+        const label = (name: string, value: string): (HtmlNode | string)[] => [element('b', name), value, element('br')];
         const root: HtmlNode = {
             nodeType: 9,
             nodeName: '#document',
             nodeValue: null,
             childNodes: [
-                el(
+                element(
                     'body',
-                    el('p', 'Reply on top.'),
-                    el(
+                    element('p', 'Reply on top.'),
+                    element(
                         'div',
-                        el('hr'),
-                        el(
+                        element('hr'),
+                        element(
                             'p',
                             ...label('Van:', ' Alice Example <alice@example.test>'),
                             ...label('Verzonden:', '\u00a0woensdag 2 april 2025 14:15'),
                             ...label('Aan:', ' Bob Sample <bob@example.test>'),
-                            el('b', 'Onderwerp:'),
+                            element('b', 'Onderwerp:'),
                             ' Offerte',
                         ),
-                        el('p', 'Quoted text.'),
+                        element('p', 'Quoted text.'),
                     ),
                 ),
             ],
@@ -393,7 +393,7 @@ describe('detectReplyHeaders: Outlook header blocks (replies fold to the end)', 
             ['address in From', ['From: Alice Example <alice@example.test>', 'Date: Monday', 'To: the office']],
             ['mailto in To', ['From: Alice Example', 'Sent: Monday', 'To: Bob Sample [mailto:bob@example.test]', 'Subject: x']],
             ['address in Cc', ['Van: Alice', 'Verzonden: maandag', 'Cc: bob@example.test', 'Aan: Bob']],
-            // Blind-copy labels (their own `bcc` list in reply-patterns.ts) count exactly like Cc.
+            // Blind-copy labels (their own `bcc` list in reply-header-patterns.ts) count exactly like Cc.
             ['address in Bcc', ['From: Alice', 'Sent: Monday', 'Bcc: bob@example.test', 'To: Bob']],
             ['address in Cci', ['De : Alice', 'Envoy\u00e9 : lundi', 'Cci : bob@example.test', 'Objet : x']],
             ['address in BCC', ['Van: Alice', 'Verzonden: maandag', 'BCC: bob@example.test', 'Aan: Bob']],
@@ -552,7 +552,7 @@ describe('detectReplyHeaders: the .eml adapter\'s own forwarded block', () =>
     const crlf = (...l: string[]): string => l.join('\r\n');
 
     /** A synthetic outer message with one inline forwarded message (all headers the block can show). */
-    const eml = (subject: string, innerBody: string): Uint8Array =>
+    const emlFile = (subject: string, innerBody: string): Uint8Array =>
         new TextEncoder().encode(
             crlf(
                 'From: Alice Example <alice@example.test>',
@@ -587,7 +587,7 @@ describe('detectReplyHeaders: the .eml adapter\'s own forwarded block', () =>
 
     async function bodyOf(subject: string, innerBody: string): Promise<string>
     {
-        const result = await parser.parse({ name: 'forward.eml', bytes: eml(subject, innerBody) });
+        const result = await parser.parse({ name: 'forward.eml', bytes: emlFile(subject, innerBody) });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -689,9 +689,9 @@ describe('detectReplyHeaders: robustness', () =>
     {
         it(`${name}: handled in well under a second`, () =>
         {
-            const t = performance.now();
+            const startTime = performance.now();
             expect(detectReplyHeaders(body)).toEqual([]);
-            expect(performance.now() - t).toBeLessThan(1000);
+            expect(performance.now() - startTime).toBeLessThan(1000);
         });
     }
 });
@@ -757,7 +757,7 @@ describe('findReplyHeaders: kind, marked and headEnd (used by the PDF output pla
 
     it('a forward marker: forward, marked inside a ">" quote', () =>
     {
-        const fwd = lines(
+        const forward = lines(
             '---------- Forwarded message ---------',
             'From: Carol <carol@example.test>',
             'Date: Mon, 3 Mar 2025 at 10:00',
@@ -765,12 +765,12 @@ describe('findReplyHeaders: kind, marked and headEnd (used by the PDF output pla
             'To: Alice <alice@example.test>',
             '',
         );
-        const quotedFwd = fwd
+        const quotedForward = forward
             .split('\n')
             .map((l) => (l === '' ? l : `> ${l}`))
             .join('\n');
-        expect(describeAll(`See below.\n\n${fwd}In stock.\n`)).toEqual([[fwd, fwd, 'forward', false]]);
-        expect(describeAll(`See below.\n\n${quotedFwd}> In stock.\n`)).toEqual([[quotedFwd, quotedFwd, 'forward', true]]);
+        expect(describeAll(`See below.\n\n${forward}In stock.\n`)).toEqual([[forward, forward, 'forward', false]]);
+        expect(describeAll(`See below.\n\n${quotedForward}> In stock.\n`)).toEqual([[quotedForward, quotedForward, 'forward', true]]);
         // A lone forward marker (no header lines after it).
         expect(describeAll('See below.\n\n> ---------- Forwarded message ---------\n> In stock.\n')).toEqual([
             ['> ---------- Forwarded message ---------\n', '> ---------- Forwarded message ---------\n', 'forward', true],

@@ -31,7 +31,7 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readDests, readLinks, readPageRuns, readPdf, textLines, type PageRun, type ParsedPdf } from '../../Helper/Test/test-support/pdf-reader';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';

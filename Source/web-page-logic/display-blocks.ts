@@ -1,12 +1,12 @@
 // The blocks of one message body as the preview shows them: like
-// visibleView (Source/thread-analysis/segments.ts), but with folded parts grouped so the
+// visibleView (Source/thread-analysis/fold-segments.ts), but with folded parts grouped so the
 // reader gets ONE expandable block instead of a row of small fragments.
 //
 // Rules:
 // - Adjacent folded segments become one folded block. Its reasons and links
 //   are the union of theirs. Its label is the reason covering the most
 //   characters: each folded segment counts its whole length for ONE reason,
-//   the engine's primaryReason of its own reasons (Source/thread-analysis/engine.ts), so
+//   the engine's primaryReason of its own reasons (Source/thread-analysis/analyze-thread.ts), so
 //   a segment folded by several detectors is not counted twice; absorbed
 //   whitespace counts for nothing; a tie goes to the reason primaryReason
 //   prefers. (A short signature above a long quoted history is then called
@@ -30,8 +30,8 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
-import { primaryReason } from '../thread-analysis/engine';
-import { checkSegments, FOLD_REASONS } from '../thread-analysis/segments';
+import { primaryReason } from '../thread-analysis/analyze-thread';
+import { checkSegments, FOLD_REASONS } from '../thread-analysis/fold-segments';
 import type { DisplayBlock } from '../../Header/pdf-plan';
 import type { FoldReason, Segment } from '../../Header/thread-analysis-result';
 

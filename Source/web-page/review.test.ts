@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS } from '../web-page-logic/message-notes';
 import { SAFE_TAGS } from './safe-dom';
 import { setLocale, t } from './translations';

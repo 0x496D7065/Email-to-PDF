@@ -284,7 +284,7 @@ export function lineCount(text: string): number
 /**
  * The numbers (1-based, as shown in the list) of the other emails a folded
  * block repeats. `related` holds input positions; `positionByIndex` turns
- * them into list positions (see Source/thread-analysis/engine.ts). The email itself and
+ * them into list positions (see Source/thread-analysis/analyze-thread.ts). The email itself and
  * unknown positions are left out.
  */
 export function relatedNumbers(block: DisplayBlock, ownPosition: number, positionByIndex: readonly (number | null)[]): number[]

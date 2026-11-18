@@ -89,7 +89,7 @@
 // Pure function: no DOM, no storage, inputs are never modified (README.md,
 // rule R7).
 
-import { lineRanges, type FoldRange, type LineRange } from './segments';
+import { lineRanges, type FoldRange, type LineRange } from './fold-segments';
 
 /** Words per shingle (index key). Must be <= SHORT_MESSAGE_MIN_WORDS, or short messages could never match. */
 export const SHINGLE_WORDS = 4;
@@ -189,11 +189,11 @@ function referencedIds(message: OverlapInput): Set<string>
     return ids;
 }
 
-/** True when `m` lists `o`'s Message-ID in its In-Reply-To or References. */
-function points(refs: readonly Set<string>[], messages: readonly OverlapInput[], m: number, o: number): boolean
+/** True when the message at position `messagePosition` lists the Message-ID of the message at `otherPosition` in its In-Reply-To or References. */
+function points(refs: readonly Set<string>[], messages: readonly OverlapInput[], messagePosition: number, otherPosition: number): boolean
 {
-    const id = messages[o]?.messageId;
-    return typeof id === 'string' && id !== '' && (refs[m]?.has(id) ?? false);
+    const id = messages[otherPosition]?.messageId;
+    return typeof id === 'string' && id !== '' && (refs[messagePosition]?.has(id) ?? false);
 }
 
 /** The `holds` lists as sets (an entry that is not a number is ignored). */
@@ -203,11 +203,11 @@ function heldIndices(message: OverlapInput): Set<number>
     const list: unknown = message.holds;
     if (Array.isArray(list))
     {
-        for (const i of list as readonly unknown[])
+        for (const entry of list as readonly unknown[])
         {
-            if (typeof i === 'number')
+            if (typeof entry === 'number')
             {
-                out.add(i);
+                out.add(entry);
             }
         }
     }
@@ -226,18 +226,18 @@ function heldIndices(message: OverlapInput): Set<number>
  */
 function withHeldReferences(messages: readonly OverlapInput[], own: readonly Set<string>[], holds: readonly Set<number>[]): Set<string>[]
 {
-    const at = new Map<number, number>();
-    messages.forEach((m, k) =>
+    const positionOf = new Map<number, number>();
+    messages.forEach((message, k) =>
     {
-        const index = m?.index;
-        if (typeof index === 'number' && !at.has(index))
+        const index = message?.index;
+        if (typeof index === 'number' && !positionOf.has(index))
         {
-            at.set(index, k);
+            positionOf.set(index, k);
         }
     });
-    return own.map((ids, m) =>
+    return own.map((ids, messagePosition) =>
     {
-        const held = holds[m];
+        const held = holds[messagePosition];
         if (held === undefined || held.size === 0)
         {
             return ids;
@@ -245,12 +245,12 @@ function withHeldReferences(messages: readonly OverlapInput[], own: readonly Set
         const out = new Set(ids);
         for (const index of held)
         {
-            const k = at.get(index);
-            if (k === undefined || k === m)
+            const heldPosition = positionOf.get(index);
+            if (heldPosition === undefined || heldPosition === messagePosition)
             {
                 continue;
             }
-            for (const id of own[k] ?? [])
+            for (const id of own[heldPosition] ?? [])
             {
                 out.add(id);
             }
@@ -260,7 +260,7 @@ function withHeldReferences(messages: readonly OverlapInput[], own: readonly Set
 }
 
 /**
- * May message `m`'s text be folded because it matches message `o`?
+ * May the text of the message at position `messagePosition` be folded because it matches the message at `otherPosition`?
  * First, holding (task 8.13b-3, review round 2): if exactly one of them
  * holds the other (an attached email, at any depth), the holder is folded:
  * it quotes the email it holds, whatever the headers and the clocks say, so
@@ -271,32 +271,38 @@ function withHeldReferences(messages: readonly OverlapInput[], own: readonly Set
  * do, the later one (higher position). For any two different messages
  * exactly one direction is eligible.
  */
-function isEligible(refs: readonly Set<string>[], holds: readonly Set<number>[], messages: readonly OverlapInput[], m: number, o: number): boolean
+function isEligible(
+    refs: readonly Set<string>[],
+    holds: readonly Set<number>[],
+    messages: readonly OverlapInput[],
+    messagePosition: number,
+    otherPosition: number
+): boolean
 {
-    const mHoldsO = holds[m]?.has(messages[o]?.index ?? Number.NaN) ?? false;
-    const oHoldsM = holds[o]?.has(messages[m]?.index ?? Number.NaN) ?? false;
-    if (mHoldsO !== oHoldsM)
+    const messageHoldsOther = holds[messagePosition]?.has(messages[otherPosition]?.index ?? Number.NaN) ?? false;
+    const otherHoldsMessage = holds[otherPosition]?.has(messages[messagePosition]?.index ?? Number.NaN) ?? false;
+    if (messageHoldsOther !== otherHoldsMessage)
     {
-        return mHoldsO;
+        return messageHoldsOther;
     }
-    const mToO = points(refs, messages, m, o);
-    const oToM = points(refs, messages, o, m);
-    if (mToO !== oToM)
+    const messageRefersToOther = points(refs, messages, messagePosition, otherPosition);
+    const otherRefersToMessage = points(refs, messages, otherPosition, messagePosition);
+    if (messageRefersToOther !== otherRefersToMessage)
     {
-        return mToO;
+        return messageRefersToOther;
     }
-    return o < m;
+    return otherPosition < messagePosition;
 }
 
-/** A 32-bit hash of the SHINGLE_WORDS word ids starting at `at` (FNV-1a style). Collisions are checked later. */
-function shingleHash(ids: Int32Array, at: number): number
+/** A 32-bit hash of the SHINGLE_WORDS word ids starting at `start` (FNV-1a style). Collisions are checked later. */
+function shingleHash(ids: Int32Array, start: number): number
 {
-    let h = 0x811c9dc5;
-    for (let t = 0; t < SHINGLE_WORDS; t++)
+    let hash = 0x811c9dc5;
+    for (let offset = 0; offset < SHINGLE_WORDS; offset++)
     {
-        h = Math.imul(h ^ (ids[at + t] ?? 0), 0x01000193);
+        hash = Math.imul(hash ^ (ids[start + offset] ?? 0), 0x01000193);
     }
-    return h;
+    return hash;
 }
 
 /** A candidate match in message M: its words first..last (both included, positions in M's word list). */
@@ -317,14 +323,14 @@ const MARKER_ONLY_LINE = /^[\s>]*>[\s>]*$/;
 function wordLines(lines: readonly LineRange[], words: readonly Word[]): Int32Array
 {
     const lineOf = new Int32Array(words.length);
-    let at = 0;
-    words.forEach((w, k) =>
+    let currentLine = 0;
+    words.forEach((word, k) =>
     {
-        while (at + 1 < lines.length && (lines[at + 1]?.start ?? Infinity) <= w.start)
+        while (currentLine + 1 < lines.length && (lines[currentLine + 1]?.start ?? Infinity) <= word.start)
         {
-            at++;
+            currentLine++;
         }
-        lineOf[k] = at;
+        lineOf[k] = currentLine;
     });
     return lineOf;
 }
@@ -349,65 +355,65 @@ function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Arr
     // Words covered by at least one run (runs may overlap, see step 3), then
     // per line its number of words and of covered words.
     const covered = new Uint8Array(lineOf.length);
-    for (const r of runs)
+    for (const run of runs)
     {
-        covered.fill(1, r.first, r.last + 1);
+        covered.fill(1, run.first, run.last + 1);
     }
     const wordCount = new Int32Array(lineCount);
     const coveredCount = new Int32Array(lineCount);
-    lineOf.forEach((l, k) =>
+    lineOf.forEach((lineNumber, k) =>
     {
-        wordCount[l] = (wordCount[l] ?? 0) + 1;
-        coveredCount[l] = (coveredCount[l] ?? 0) + (covered[k] ?? 0);
+        wordCount[lineNumber] = (wordCount[lineNumber] ?? 0) + 1;
+        coveredCount[lineNumber] = (coveredCount[lineNumber] ?? 0) + (covered[k] ?? 0);
     });
     const full = (l: number): boolean => (wordCount[l] ?? 0) > 0 && coveredCount[l] === wordCount[l];
 
     // Rule a and b: shrink each run to its fully covered lines, then re-check it.
     const lineRelated: (number[] | undefined)[] = new Array<number[] | undefined>(lineCount);
-    for (const r of runs)
+    for (const run of runs)
     {
-        let a = lineOf[r.first] ?? 0;
-        let b = lineOf[r.last] ?? 0;
+        let firstLine = lineOf[run.first] ?? 0;
+        let lastLine = lineOf[run.last] ?? 0;
         // Only the first and last lines can be partly covered (the lines in
         // between hold only words of this run); word-less lines are skipped too.
-        while (a <= b && !full(a))
+        while (firstLine <= lastLine && !full(firstLine))
         {
-            a++;
+            firstLine++;
         }
-        while (b >= a && !full(b))
+        while (lastLine >= firstLine && !full(lastLine))
         {
-            b--;
+            lastLine--;
         }
-        if (a > b)
+        if (firstLine > lastLine)
         {
             continue;
         }
-        let lo = r.first;
-        let hi = r.last;
-        while ((lineOf[lo] ?? 0) < a)
+        let firstWord = run.first;
+        let lastWord = run.last;
+        while ((lineOf[firstWord] ?? 0) < firstLine)
         {
-            lo++;
+            firstWord++;
         }
-        while ((lineOf[hi] ?? 0) > b)
+        while ((lineOf[lastWord] ?? 0) > lastLine)
         {
-            hi--;
+            lastWord--;
         }
-        const kept = hi - lo + 1;
-        const accepted = kept >= MIN_RUN_WORDS || (r.wholeShortMessage && kept === r.last - r.first + 1);
+        const kept = lastWord - firstWord + 1;
+        const accepted = kept >= MIN_RUN_WORDS || (run.wholeShortMessage && kept === run.last - run.first + 1);
         if (!accepted)
         {
             continue;
         }
-        for (let l = a; l <= b; l++)
+        for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++)
         {
-            const list = lineRelated[l];
+            const list = lineRelated[lineNumber];
             if (list === undefined)
             {
-                lineRelated[l] = [r.related];
+                lineRelated[lineNumber] = [run.related];
             }
-            else if (!list.includes(r.related))
+            else if (!list.includes(run.related))
             {
-                list.push(r.related);
+                list.push(run.related);
             }
         }
     }
@@ -415,91 +421,91 @@ function runsToFolds(body: string, lines: readonly LineRange[], lineOf: Int32Arr
     // Rule c: word-less lines between two folded lines join them (linked like the line above).
     let lastFolded = -1;
     let gapHasWords = false;
-    for (let l = 0; l < lineCount; l++)
+    for (let lineNumber = 0; lineNumber < lineCount; lineNumber++)
     {
-        const list = lineRelated[l];
+        const list = lineRelated[lineNumber];
         if (list !== undefined)
         {
             const above = lineRelated[lastFolded];
             if (lastFolded >= 0 && !gapHasWords && above !== undefined)
             {
-                for (let g = lastFolded + 1; g < l; g++)
+                for (let gapLine = lastFolded + 1; gapLine < lineNumber; gapLine++)
                 {
-                    lineRelated[g] = [...above];
+                    lineRelated[gapLine] = [...above];
                 }
             }
-            lastFolded = l;
+            lastFolded = lineNumber;
             gapHasWords = false;
         }
-        else if ((wordCount[l] ?? 0) > 0)
+        else if ((wordCount[lineNumber] ?? 0) > 0)
         {
             gapHasWords = true;
         }
     }
 
     // Rule d: bare ">" lines directly above or below a folded block join it.
-    const markerOnly = (l: number): boolean =>
+    const markerOnly = (lineNumber: number): boolean =>
     {
-        const line = lines[l];
+        const line = lines[lineNumber];
         return (
             line !== undefined &&
-            (wordCount[l] ?? 0) === 0 &&
-            lineRelated[l] === undefined &&
+            (wordCount[lineNumber] ?? 0) === 0 &&
+            lineRelated[lineNumber] === undefined &&
             MARKER_ONLY_LINE.test(body.slice(line.start, line.contentEnd))
         );
     };
-    for (let l = 0; l < lineCount; l++)
+    for (let lineNumber = 0; lineNumber < lineCount; lineNumber++)
     {
-        const list = lineRelated[l];
+        const list = lineRelated[lineNumber];
         if (list === undefined)
         {
             continue;
         }
-        if (l === 0 || lineRelated[l - 1] === undefined)
+        if (lineNumber === 0 || lineRelated[lineNumber - 1] === undefined)
         {
-            for (let g = l - 1; g >= 0 && markerOnly(g); g--)
+            for (let aboveLine = lineNumber - 1; aboveLine >= 0 && markerOnly(aboveLine); aboveLine--)
             {
-                lineRelated[g] = [...list];
+                lineRelated[aboveLine] = [...list];
             }
         }
-        // Below. `l` moves past the lines added here, so the outer loop does not
+        // Below. `lineNumber` moves past the lines added here, so the outer loop does not
         // visit them again (they are marker-only: nothing more would join them).
-        while (l + 1 < lineCount && markerOnly(l + 1))
+        while (lineNumber + 1 < lineCount && markerOnly(lineNumber + 1))
         {
-            lineRelated[l + 1] = [...list];
-            l++;
+            lineRelated[lineNumber + 1] = [...list];
+            lineNumber++;
         }
     }
 
     // One range per related message and per block of consecutive lines.
-    const blocks = new Map<number, { a: number; b: number }[]>();
-    for (let l = 0; l < lineCount; l++)
+    const blocks = new Map<number, { firstLine: number; lastLine: number }[]>();
+    for (let lineNumber = 0; lineNumber < lineCount; lineNumber++)
     {
-        for (const related of lineRelated[l] ?? [])
+        for (const related of lineRelated[lineNumber] ?? [])
         {
             const list = blocks.get(related);
             const last = list?.[list.length - 1];
-            if (last && last.b === l - 1)
+            if (last && last.lastLine === lineNumber - 1)
             {
-                last.b = l;
+                last.lastLine = lineNumber;
             }
             else if (list)
             {
-                list.push({ a: l, b: l });
+                list.push({ firstLine: lineNumber, lastLine: lineNumber });
             }
             else
             {
-                blocks.set(related, [{ a: l, b: l }]);
+                blocks.set(related, [{ firstLine: lineNumber, lastLine: lineNumber }]);
             }
         }
     }
     const folds: FoldRange[] = [];
     for (const [related, list] of blocks)
     {
-        for (const { a, b } of list)
+        for (const { firstLine, lastLine } of list)
         {
-            const start = lines[a]?.start ?? 0;
-            const end = lines[b]?.end ?? body.length;
+            const start = lines[firstLine]?.start ?? 0;
+            const end = lines[lastLine]?.end ?? body.length;
             folds.push({ start, end, reason: 'quoted-overlap', related });
         }
     }
@@ -531,27 +537,27 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
     const vocabulary = new Map<string, number>();
     const first: number[] = [0];
     let total = 0;
-    for (const w of words)
+    for (const messageWords of words)
     {
-        total += w.length;
+        total += messageWords.length;
         first.push(total);
     }
     const ids = new Int32Array(total);
     const owner = new Int32Array(total);
-    words.forEach((ws, k) =>
+    words.forEach((messageWords, k) =>
     {
-        let at = first[k] ?? 0;
-        for (const w of ws)
+        let position = first[k] ?? 0;
+        for (const word of messageWords)
         {
-            let id = vocabulary.get(w.key);
+            let id = vocabulary.get(word.key);
             if (id === undefined)
             {
                 id = vocabulary.size;
-                vocabulary.set(w.key, id);
+                vocabulary.set(word.key, id);
             }
-            ids[at] = id;
-            owner[at] = k;
-            at++;
+            ids[position] = id;
+            owner[position] = k;
+            position++;
         }
     });
 
@@ -560,68 +566,68 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
     for (let k = 0; k < words.length; k++)
     {
         const end = first[k + 1] ?? 0;
-        for (let g = first[k] ?? 0; g + SHINGLE_WORDS <= end; g++)
+        for (let start = first[k] ?? 0; start + SHINGLE_WORDS <= end; start++)
         {
-            const h = shingleHash(ids, g);
-            const postings = index.get(h);
+            const hash = shingleHash(ids, start);
+            const postings = index.get(hash);
             if (postings === undefined)
             {
-                index.set(h, [g]);
+                index.set(hash, [start]);
             }
             else if (postings.length < MAX_POSTINGS)
             {
-                postings.push(g);
+                postings.push(start);
             }
         }
     }
 
-    return list.map((_, m): FoldRange[] =>
+    return list.map((_, messagePosition): FoldRange[] =>
     {
-        const mStart = first[m] ?? 0;
-        const mEnd = first[m + 1] ?? 0;
-        const body = bodies[m] ?? '';
+        const messageStart = first[messagePosition] ?? 0;
+        const messageEnd = first[messagePosition + 1] ?? 0;
+        const body = bodies[messagePosition] ?? '';
         const lines = lineRanges(body);
-        const lineOf = wordLines(lines, words[m] ?? []);
+        const lineOf = wordLines(lines, words[messagePosition] ?? []);
         const runs: Run[] = [];
         // A mid-line run starting before this (global) position causes no retry.
         // The walk always moves forward, so each word is a walk start at most
         // once; this floor bounds how often the same words are re-scanned while
         // extending matches (about twice).
-        let retryFloor = mStart;
+        let retryFloor = messageStart;
 
-        let i = mStart;
-        while (i + SHINGLE_WORDS <= mEnd)
+        let i = messageStart;
+        while (i + SHINGLE_WORDS <= messageEnd)
         {
-            let bestLen = 0;
+            let bestLength = 0;
             let bestOwner = -1;
             let bestWhole = false;
-            for (const g of index.get(shingleHash(ids, i)) ?? [])
+            for (const posting of index.get(shingleHash(ids, i)) ?? [])
             {
-                const o = owner[g] ?? -1;
-                if (o === m || o < 0 || !isEligible(refs, holds, list, m, o))
+                const otherPosition = owner[posting] ?? -1;
+                if (otherPosition === messagePosition || otherPosition < 0 || !isEligible(refs, holds, list, messagePosition, otherPosition))
                 {
                     continue;
                 }
-                const oStart = first[o] ?? 0;
-                const oEnd = first[o + 1] ?? 0;
-                // Longest run of equal words starting at i (in M) and g (in O).
-                const maxLen = Math.min(mEnd - i, oEnd - g);
-                let len = 0;
-                while (len < maxLen && ids[i + len] === ids[g + len])
+                const otherStart = first[otherPosition] ?? 0;
+                const otherEnd = first[otherPosition + 1] ?? 0;
+                // Longest run of equal words starting at word i (in M) and word `posting` (in O).
+                const maxLength = Math.min(messageEnd - i, otherEnd - posting);
+                let length = 0;
+                while (length < maxLength && ids[i + length] === ids[posting + length])
                 {
-                    len++;
+                    length++;
                 }
-                if (len < SHINGLE_WORDS)
+                if (length < SHINGLE_WORDS)
                 {
                     continue; // hash collision, not a real match
                 }
-                const wholeShortMessage = g === oStart && len === oEnd - oStart && len >= SHORT_MESSAGE_MIN_WORDS;
-                const accepted = len >= MIN_RUN_WORDS || wholeShortMessage;
+                const wholeShortMessage = posting === otherStart && length === otherEnd - otherStart && length >= SHORT_MESSAGE_MIN_WORDS;
+                const accepted = length >= MIN_RUN_WORDS || wholeShortMessage;
                 // Strictly longer wins, so on a tie the earliest posting (earliest message) stays.
-                if (accepted && len > bestLen)
+                if (accepted && length > bestLength)
                 {
-                    bestLen = len;
-                    bestOwner = o;
+                    bestLength = length;
+                    bestOwner = otherPosition;
                     bestWhole = wholeShortMessage;
                 }
             }
@@ -630,8 +636,8 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
                 i++;
                 continue;
             }
-            const firstWord = i - mStart;
-            const lastWord = firstWord + bestLen - 1;
+            const firstWord = i - messageStart;
+            const lastWord = firstWord + bestLength - 1;
             runs.push({
                 first: firstWord,
                 last: lastWord,
@@ -644,17 +650,17 @@ export function detectQuotedOverlap(messages: readonly OverlapInput[]): FoldRang
             {
                 // The line rule may shrink or drop this run: walk on from the first
                 // word of the next line, so a quote starting there is still found.
-                retryFloor = i + bestLen;
+                retryFloor = i + bestLength;
                 let next = firstWord + 1;
                 while (lineOf[next] === line)
                 {
                     next++;
                 }
-                i = mStart + next;
+                i = messageStart + next;
             }
             else
             {
-                i += bestLen;
+                i += bestLength;
             }
         }
 

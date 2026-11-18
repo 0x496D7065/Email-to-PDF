@@ -16,27 +16,27 @@ describe('dedupe over the parsed fixtures', () =>
 
         // Expected: one group per `duplicateGroup` value, every other fixture alone.
         const expected = new Map<string, string[]>();
-        for (const f of FIXTURES)
+        for (const fixture of FIXTURES)
         {
-            const key = f.duplicateGroup ?? `single:${f.id}`;
-            expected.set(key, [...(expected.get(key) ?? []), f.id]);
+            const key = fixture.duplicateGroup ?? `single:${fixture.id}`;
+            expected.set(key, [...(expected.get(key) ?? []), fixture.id]);
         }
         const actual = result.kept.map((k) => [k.message.source.fileName, ...k.duplicates.map((d) => d.source.fileName)].sort());
         expect(actual.sort()).toEqual([...expected.values()].map((ids) => ids.sort()).sort());
         expect(result.mergedCount).toBe(FIXTURES.length - expected.size);
 
         // No fixture triggers an engine warning.
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            expect(k.warnings).toEqual([]);
+            expect(keptEntry.warnings).toEqual([]);
         }
 
         // Every merged copy has the representative's normalized body.
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            for (const d of k.duplicates)
+            for (const duplicate of keptEntry.duplicates)
             {
-                expect(normalizeBody(messages[d.index]!.bodyText)).toBe(normalizeBody(k.message.bodyText));
+                expect(normalizeBody(messages[duplicate.index]!.bodyText)).toBe(normalizeBody(keptEntry.message.bodyText));
             }
         }
     });

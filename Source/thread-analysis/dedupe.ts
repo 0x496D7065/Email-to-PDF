@@ -38,7 +38,7 @@
 //    EXCEPTION, a dropped file against an attached copy (user decision
 //    2026-11-13, task 8.13b-3 review round 4, D2): when `firstAttached` is
 //    given, the messages from that position on are emails attached inside
-//    dropped files (Source/thread-analysis/engine.ts). In a group holding both, the
+//    dropped files (Source/thread-analysis/analyze-thread.ts). In a group holding both, the
 //    copy kept is always one of the dropped files' own emails (the one
 //    covering the other dropped copies), even when an attached copy holds
 //    strictly more header data (say a Bcc line or a date): those attached
@@ -170,9 +170,9 @@ export function authorKey(message: NormalizedMessage): string
 // ---------------------------------------------------------------- internals
 
 /** One mailbox as compared: its lower-cased address, or `name:<name>` if it has none. */
-function mailboxKey(m: { readonly name: string; readonly address: string }): string
+function mailboxKey(mailbox: { readonly name: string; readonly address: string }): string
 {
-    return m.address !== '' ? m.address.toLowerCase() : `name:${m.name}`;
+    return mailbox.address !== '' ? mailbox.address.toLowerCase() : `name:${mailbox.name}`;
 }
 
 /** Everything about one input message that the comparison needs, computed once. */
@@ -305,7 +305,7 @@ export interface DedupeOptions
 {
     /**
      * Input position of the first email attached inside a dropped file: every
-     * message from there on is one (Source/thread-analysis/engine.ts puts them after the
+     * message from there on is one (Source/thread-analysis/analyze-thread.ts puts them after the
      * files' own emails). Absent: none (every message is a dropped file's own
      * email). See the D2 exception at the top of this file.
      */
@@ -379,15 +379,15 @@ function isDuplicate(a: Prepared, b: Prepared): boolean
 /** Canonical order for grouping: by file hash, then name, then input position (see `dedupe`). */
 function canonicalOrder(a: Prepared, b: Prepared): number
 {
-    const sa = a.message.source;
-    const sb = b.message.source;
-    if (sa.sha256 !== sb.sha256)
+    const sourceA = a.message.source;
+    const sourceB = b.message.source;
+    if (sourceA.sha256 !== sourceB.sha256)
     {
-        return sa.sha256 < sb.sha256 ? -1 : 1;
+        return sourceA.sha256 < sourceB.sha256 ? -1 : 1;
     }
-    if (sa.fileName !== sb.fileName)
+    if (sourceA.fileName !== sourceB.fileName)
     {
-        return sa.fileName < sb.fileName ? -1 : 1;
+        return sourceA.fileName < sourceB.fileName ? -1 : 1;
     }
     return a.index - b.index;
 }
@@ -467,18 +467,18 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
     const useDate = (p: Prepared) => p.author !== '' && p.message.date.utcMs !== null;
     const all: Twins[] = [];
     const twinsByKey = new Map<string, Twins>();
-    for (const p of bucket)
+    for (const prepared of bucket)
     {
         // A signature is a JSON array, so it never starts with '#'.
-        const key = p.message.messageId !== null || useDate(p) ? p.signature : `#${String(p.index)}`;
+        const key = prepared.message.messageId !== null || useDate(prepared) ? prepared.signature : `#${String(prepared.index)}`;
         const twins = twinsByKey.get(key);
         if (twins !== undefined)
         {
-            twins.members.push(p);
+            twins.members.push(prepared);
         }
         else
         {
-            const created = { first: p, members: [p] };
+            const created = { first: prepared, members: [prepared] };
             twinsByKey.set(key, created);
             all.push(created);
         }
@@ -489,74 +489,74 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
     // Index by Message-ID and by date.
     const idIndex = new Map<string, Twins[]>();
     const dateIndex = new Map<number, Twins[]>();
-    for (const t of all)
+    for (const twin of all)
     {
-        if (t.first.message.messageId !== null)
+        if (twin.first.message.messageId !== null)
         {
-            pushTo(idIndex, t.first.message.messageId, t);
+            pushTo(idIndex, twin.first.message.messageId, twin);
         }
-        if (useDate(t.first))
+        if (useDate(twin.first))
         {
-            pushTo(dateIndex, t.first.message.date.utcMs!, t); // `!`: checked by useDate
+            pushTo(dateIndex, twin.first.message.date.utcMs!, twin); // `!`: checked by useDate
         }
     }
-    /** Calls `visit` once for every other Twins sharing t's Message-ID or date. */
-    const forEachCandidate = (t: Twins, visit: (u: Twins) => void): void =>
+    /** Calls `visit` once for every other Twins sharing twin's Message-ID or date. */
+    const forEachCandidate = (twin: Twins, visit: (other: Twins) => void): void =>
     {
-        const p = t.first;
-        const id = p.message.messageId;
+        const firstCopy = twin.first;
+        const id = firstCopy.message.messageId;
         if (id !== null)
         {
-            for (const u of idIndex.get(id)!)
+            for (const other of idIndex.get(id)!)
             {
-                if (u !== t)
+                if (other !== twin)
                 {
-                    visit(u);
+                    visit(other);
                 }
             }
         }
-        if (!useDate(p))
+        if (!useDate(firstCopy))
         {
             return;
         }
-        for (const u of dateIndex.get(p.message.date.utcMs!)!)
+        for (const other of dateIndex.get(firstCopy.message.date.utcMs!)!)
         {
-            if (u !== t && (id === null || u.first.message.messageId !== id))
+            if (other !== twin && (id === null || other.first.message.messageId !== id))
             {
-                visit(u); // skip those seen by id
+                visit(other); // skip those seen by id
             }
         }
     };
 
-    // 1. Groups, in canonical order. A group can only take t if all its
-    // members are duplicates of t, so only groups holding a candidate are
+    // 1. Groups, in canonical order. A group can only take twin if all its
+    // members are duplicates of twin, so only groups holding a candidate are
     // tried. All members of a Twins join together (see `Twins`).
     const groups: Twins[][] = [];
     const groupNumber = new Map<Twins, number>();
-    for (const t of all)
+    for (const twin of all)
     {
         const tried = new Set<number>();
-        forEachCandidate(t, (u) =>
+        forEachCandidate(twin, (other) =>
         {
-            const n = groupNumber.get(u);
-            if (n !== undefined)
+            const otherGroup = groupNumber.get(other);
+            if (otherGroup !== undefined)
             {
-                tried.add(n);
+                tried.add(otherGroup);
             }
         });
-        const n = [...tried].sort((x, y) => x - y).find((k) => groups[k]!.every((u) => isDuplicate(t.first, u.first)));
+        const fittingGroup = [...tried].sort((x, y) => x - y).find((k) => groups[k]!.every((u) => isDuplicate(twin.first, u.first)));
         let groupIndex: number;
-        if (n === undefined)
+        if (fittingGroup === undefined)
         {
             groupIndex = groups.length;
             groups.push([]);
         }
         else
         {
-            groupIndex = n;
+            groupIndex = fittingGroup;
         }
-        groups[groupIndex]!.push(t);
-        groupNumber.set(t, groupIndex);
+        groups[groupIndex]!.push(twin);
+        groupNumber.set(twin, groupIndex);
     }
 
     // 2. Warnings, one group at a time, so only one group's sets are in
@@ -566,15 +566,15 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
     return groups.map((twins, number) =>
     {
         const found = new Map<DedupeWarningCode, Set<Twins>>();
-        for (const t of twins)
+        for (const twin of twins)
         {
-            forEachCandidate(t, (u) =>
+            forEachCandidate(twin, (other) =>
             {
-                if (groupNumber.get(u) === number)
+                if (groupNumber.get(other) === number)
                 {
                     return;
                 }
-                const result = compareInBucket(t.first, u.first);
+                const result = compareInBucket(twin.first, other.first);
                 const code = 'rule' in result ? 'possible-duplicate-not-merged' : result.warning;
                 if (code === null)
                 {
@@ -583,11 +583,11 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
                 const set = found.get(code);
                 if (set === undefined)
                 {
-                    found.set(code, new Set([u]));
+                    found.set(code, new Set([other]));
                 }
                 else
                 {
-                    set.add(u);
+                    set.add(other);
                 }
             });
         }
@@ -595,9 +595,9 @@ function groupBucket(bucket: readonly Prepared[]): Group[]
         for (const [code, set] of found)
         {
             let total = 0;
-            for (const u of set)
+            for (const other of set)
             {
-                total += u.members.length;
+                total += other.members.length;
             }
             related.set(code, { total, first: lowest([...set].map((u) => lowestOf.get(u)!)) });
         }
@@ -636,9 +636,9 @@ export function dedupe(messages: readonly NormalizedMessage[], options: DedupeOp
 
     // Buckets, each listed in canonical order.
     const buckets = new Map<string, Prepared[]>();
-    for (const p of [...prepared].sort(canonicalOrder))
+    for (const entry of [...prepared].sort(canonicalOrder))
     {
-        pushTo(buckets, p.bucketKey, p);
+        pushTo(buckets, entry.bucketKey, entry);
     }
     const groups: Group[] = [];
     // Appended one by one: a spread into push overflows the stack for very long lists.
@@ -654,26 +654,26 @@ export function dedupe(messages: readonly NormalizedMessage[], options: DedupeOp
     const reps = groups.map((group) =>
     {
         const members = group.twins.flatMap((t) => t.members);
-        return { group, members, rep: pickRepresentative(members, firstAttached) };
+        return { group, members, representative: pickRepresentative(members, firstAttached) };
     });
-    reps.sort((a, b) => a.rep.index - b.rep.index);
+    reps.sort((a, b) => a.representative.index - b.representative.index);
 
     // One kept message per group, in the input order of its representative.
     const kept: KeptMessage[] = [];
     let mergedCount = 0;
-    for (const { group, members, rep } of reps)
+    for (const { group, members, representative } of reps)
     {
-        const others = members.filter((p) => p !== rep).sort((a, b) => a.index - b.index);
+        const others = members.filter((p) => p !== representative).sort((a, b) => a.index - b.index);
         const related = new Map(group.related);
-        const other = sameId(rep.bucketKey, members);
+        const other = sameId(representative.bucketKey, members);
         if (other.total > 0)
         {
             related.set('same-id-different-content', other);
         }
         kept.push({
-            message: rep.message,
-            index: rep.index,
-            duplicates: others.map((p) => ({ source: p.message.source, index: p.index, rule: ruleBetween(rep, p) })),
+            message: representative.message,
+            index: representative.index,
+            duplicates: others.map((p) => ({ source: p.message.source, index: p.index, rule: ruleBetween(representative, p) })),
             warnings: [...related]
                 .sort(([a], [b]) => (a < b ? -1 : 1))
                 .map(([code, r]) => ({ code, related: r.first, relatedTotal: r.total })),
@@ -693,9 +693,9 @@ function sameIdDifferentContent(prepared: readonly Prepared[]): (bucketKey: stri
 {
     /** Per Message-ID: its messages in input order, and how many are in each bucket. */
     const byId = new Map<string, { readonly list: Prepared[]; readonly perBucket: Map<string, number> }>();
-    for (const p of prepared)
+    for (const copy of prepared)
     {
-        const id = p.message.messageId;
+        const id = copy.message.messageId;
         if (id === null)
         {
             continue;
@@ -705,8 +705,8 @@ function sameIdDifferentContent(prepared: readonly Prepared[]): (bucketKey: stri
         {
             byId.set(id, (entry = { list: [], perBucket: new Map<string, number>() }));
         }
-        entry.list.push(p);
-        entry.perBucket.set(p.bucketKey, (entry.perBucket.get(p.bucketKey) ?? 0) + 1);
+        entry.list.push(copy);
+        entry.perBucket.set(copy.bucketKey, (entry.perBucket.get(copy.bucketKey) ?? 0) + 1);
     }
     /** Memo: Message-ID -> bucket key -> lowest MAX_RELATED positions outside that bucket. */
     const memo = new Map<string, Map<string, number[]>>();
@@ -736,15 +736,15 @@ function sameIdDifferentContent(prepared: readonly Prepared[]): (bucketKey: stri
             if (first === undefined)
             {
                 first = [];
-                for (const p of entry.list)
+                for (const copy of entry.list)
                 {
                     if (first.length === MAX_RELATED)
                     {
                         break;
                     }
-                    if (p.bucketKey !== bucketKey)
+                    if (copy.bucketKey !== bucketKey)
                     {
-                        first.push(p.index);
+                        first.push(copy.index);
                     }
                 }
                 perBucket.set(bucketKey, first);
@@ -770,11 +770,11 @@ function pickRepresentative(group: readonly Prepared[], firstAttached: number): 
     // In a valid group every pair is comparable, so one pass finds the top:
     // switch only to a copy that strictly covers the current best.
     let top = byIndex[0]!; // `!`: a group is never empty
-    for (const p of byIndex)
+    for (const copy of byIndex)
     {
-        if (covers(p, top) && !covers(top, p))
+        if (covers(copy, top) && !covers(top, copy))
         {
-            top = p;
+            top = copy;
         }
     }
     if (!byIndex.every((other) => covers(top, other)))

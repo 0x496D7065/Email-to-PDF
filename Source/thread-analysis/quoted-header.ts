@@ -12,9 +12,9 @@
 // 1. HEADER BLOCK (Outlook, Gmail / Apple / Outlook forwards). The first line
 //    of the header with a From label starts the block. Each label line gives
 //    one value (the labels and their roles come from reply-header.ts, so all
-//    languages of reply-patterns.ts are read the same way). The first value
+//    languages of reply-header-patterns.ts are read the same way). The first value
 //    of each role wins. Blind-copy lines (the `bcc` labels of
-//    reply-patterns.ts) are read past but never reported: they are not Cc.
+//    reply-header-patterns.ts) are read past but never reported: they are not Cc.
 //    A From value with more than one mailbox ("Bob <bob@x>, on behalf of
 //    Carol <carol@x>") gives no sender (from = []): who wrote is not clear.
 //    WRAPPED LISTS. Safety over coverage: a body line or a sender must never
@@ -57,7 +57,7 @@
 //    address, may be cut short and is left out ("Ivan" is not shown).
 // 2. ATTRIBUTION ("On <date>, <name> <addr> wrote:", "Le ... a ecrit :",
 //    "Op <date> schreef <name> <addr>:", one line or two). The language
-//    whose ending matches gives the parts (reply-patterns.ts, `parts`). The
+//    whose ending matches gives the parts (reply-header-patterns.ts, `parts`). The
 //    sender's address is the last address before the tail (rule 3 forms, or
 //    a bare address), a trailing comment ("<addr> (Legal)") left aside.
 //    Every address written in the attribution must be that same address
@@ -127,7 +127,7 @@
 // Pure function: no DOM, no storage, never throws, the input is never
 // modified (README.md, rule R7).
 
-import { OUTLOOK_RULE, REPLY_LANGUAGES } from './reply-patterns';
+import { OUTLOOK_RULE, REPLY_LANGUAGES } from './reply-header-patterns';
 import {
     ATTRIBUTION_MAX_LENGTH,
     clean,
@@ -340,56 +340,56 @@ function cleanName(raw: string): string
 /** The address in `raw`: "addr", or "mailto:addr" as `mailto` says; null when none. */
 function plainAddress(raw: string, mailto: 'allowed' | 'required' | 'refused'): string | null
 {
-    let s = raw.trim();
-    if (s.slice(0, 7).toLowerCase() === 'mailto:')
+    let value = raw.trim();
+    if (value.slice(0, 7).toLowerCase() === 'mailto:')
     {
         if (mailto === 'refused')
         {
             return null;
         }
-        s = s.slice(7).trim();
+        value = value.slice(7).trim();
     }
     else if (mailto === 'required')
     {
         return null;
     }
-    return BARE_ADDRESS.test(s) ? s : null;
+    return BARE_ADDRESS.test(value) ? value : null;
 }
 
 /**
- * The address written at the very end of `s` ("<addr>", "<mailto:addr>",
+ * The address written at the very end of `text` ("<addr>", "<mailto:addr>",
  * "<addr<mailto:addr>>", "[mailto:addr]": file comment, rule 3) and where
- * it starts; null when `s` does not end with one.
+ * it starts; null when `text` does not end with one.
  */
-function trailingAddress(s: string): { start: number; address: string } | null
+function trailingAddress(text: string): { start: number; address: string } | null
 {
-    if (s.endsWith('>>'))
+    if (text.endsWith('>>'))
     {
         // Outlook plain text: "Bob <bob@x.test<mailto:bob@x.test>>". Kept only when both agree.
-        const inner = s.lastIndexOf('<');
-        const outer = inner > 0 ? s.lastIndexOf('<', inner - 1) : -1;
+        const inner = text.lastIndexOf('<');
+        const outer = inner > 0 ? text.lastIndexOf('<', inner - 1) : -1;
         if (outer < 0)
         {
             return null;
         }
-        const shown = plainAddress(s.slice(outer + 1, inner), 'refused');
-        const link = plainAddress(s.slice(inner + 1, -2), 'required');
+        const shown = plainAddress(text.slice(outer + 1, inner), 'refused');
+        const link = plainAddress(text.slice(inner + 1, -2), 'required');
         if (shown === null || link === null || shown.toLowerCase() !== link.toLowerCase())
         {
             return null;
         }
         return { start: outer, address: shown };
     }
-    if (s.endsWith('>'))
+    if (text.endsWith('>'))
     {
-        const open = s.lastIndexOf('<');
-        const address = open < 0 ? null : plainAddress(s.slice(open + 1, -1), 'allowed');
+        const open = text.lastIndexOf('<');
+        const address = open < 0 ? null : plainAddress(text.slice(open + 1, -1), 'allowed');
         return address === null ? null : { start: open, address };
     }
-    if (s.endsWith(']'))
+    if (text.endsWith(']'))
     {
-        const open = s.lastIndexOf('[');
-        const address = open < 0 ? null : plainAddress(s.slice(open + 1, -1), 'required');
+        const open = text.lastIndexOf('[');
+        const address = open < 0 ? null : plainAddress(text.slice(open + 1, -1), 'required');
         return address === null ? null : { start: open, address };
     }
     return null;
@@ -398,10 +398,10 @@ function trailingAddress(s: string): { start: number; address: string } | null
 /** The address of one mailbox (trimmed text) and where it starts; null when it has none. */
 function mailboxAddress(item: string): { start: number; address: string } | null
 {
-    const at = trailingAddress(item);
-    if (at !== null)
+    const found = trailingAddress(item);
+    if (found !== null)
     {
-        return at;
+        return found;
     }
     const unquoted = item.replace(/^'(.*)'$/u, '$1');
     return BARE_ADDRESS.test(unquoted) ? { start: item.length, address: unquoted } : null;
@@ -420,18 +420,18 @@ function parseMailbox(raw: string): EmailAddress | null
     {
         return null;
     }
-    const at = mailboxAddress(item);
-    if (at === null)
+    const found = mailboxAddress(item);
+    if (found === null)
     {
         const name = cleanName(item);
         return name === '' ? null : { name, address: '' };
     }
-    const before = item.slice(0, at.start);
-    if (!onlyAddress(before, at.address))
+    const before = item.slice(0, found.start);
+    if (!onlyAddress(before, found.address))
     {
         return null;
     }
-    return { name: cleanName(before), address: at.address };
+    return { name: cleanName(before), address: found.address };
 }
 
 /**
@@ -458,16 +458,16 @@ function splitList(value: string): { items: string[]; open: boolean }
     };
     for (let i = 0; i <= value.length; i++)
     {
-        const ch = i < value.length ? value.charAt(i) : ';';
+        const character = i < value.length ? value.charAt(i) : ';';
         const top = !quoted && angle === 0 && square === 0 && paren === 0;
-        if (i === value.length || (top && (ch === ';' || ch === ',')))
+        if (i === value.length || (top && (character === ';' || character === ',')))
         {
             // A comma ends a mailbox only when that mailbox has an address. An
             // address is only read at the END of a mailbox ("<addr>", "[mailto:]")
             // or as the whole of it, so testing the last piece is enough (and keeps
             // the cost linear).
             const addressed = mailboxAddress(piece.trim()) !== null;
-            const ends = ch === ';' || i === value.length || addressed;
+            const ends = character === ';' || i === value.length || addressed;
             // A bare address is a mailbox of its own: what is pending before it is another one.
             if (pending !== '' && addressed && !/[>\]]$/u.test(piece.trim()))
             {
@@ -481,10 +481,10 @@ function splitList(value: string): { items: string[]; open: boolean }
             }
             continue;
         }
-        piece += ch;
+        piece += character;
         if (quoted)
         {
-            if (ch === '\\')
+            if (character === '\\')
             {
                 i++;
                 if (i < value.length)
@@ -492,36 +492,36 @@ function splitList(value: string): { items: string[]; open: boolean }
                     piece += value.charAt(i);
                 }
             }
-            else if (ch === '"')
+            else if (character === '"')
             {
                 quoted = false;
             }
         }
-        else if (ch === '"')
+        else if (character === '"')
         {
             quoted = true;
         }
-        else if (ch === '<')
+        else if (character === '<')
         {
             angle++;
         }
-        else if (ch === '>' && angle > 0)
+        else if (character === '>' && angle > 0)
         {
             angle--;
         }
-        else if (ch === '[')
+        else if (character === '[')
         {
             square++;
         }
-        else if (ch === ']' && square > 0)
+        else if (character === ']' && square > 0)
         {
             square--;
         }
-        else if (ch === '(')
+        else if (character === '(')
         {
             paren++;
         }
-        else if (ch === ')' && paren > 0)
+        else if (character === ')' && paren > 0)
         {
             paren--;
         }
@@ -634,16 +634,16 @@ function lastAddress(core: string): { start: number; address: string } | null
     return (withoutComment === null ? null : addressAtEnd(withoutComment)) ?? addressAtEnd(core);
 }
 
-/** The address at the very end of `s` (rule 3 forms or a bare address) and where it starts; null when none. */
-function addressAtEnd(s: string): { start: number; address: string } | null
+/** The address at the very end of `text` (rule 3 forms or a bare address) and where it starts; null when none. */
+function addressAtEnd(text: string): { start: number; address: string } | null
 {
-    const written = trailingAddress(s);
+    const written = trailingAddress(text);
     if (written !== null)
     {
         return written;
     }
-    const space = s.lastIndexOf(' ');
-    const token = s.slice(space + 1);
+    const space = text.lastIndexOf(' ');
+    const token = text.slice(space + 1);
     return BARE_ADDRESS.test(token) ? { start: space + 1, address: token } : null;
 }
 
@@ -691,16 +691,16 @@ function lastCommaOutsideQuotes(text: string): number
     let last = -1;
     for (let i = 0; i < text.length; i++)
     {
-        const ch = text.charAt(i);
-        if (ch === '\\' && quoted)
+        const character = text.charAt(i);
+        if (character === '\\' && quoted)
         {
             i++;
         }
-        else if (ch === '"')
+        else if (character === '"')
         {
             quoted = !quoted;
         }
-        else if (ch === ',' && !quoted)
+        else if (character === ',' && !quoted)
         {
             last = i;
         }
@@ -713,9 +713,9 @@ function lastTimeEnd(text: string): number
 {
     let end = -1;
     TIME.lastIndex = 0;
-    for (let m = TIME.exec(text); m !== null; m = TIME.exec(text))
+    for (let match = TIME.exec(text); match !== null; match = TIME.exec(text))
     {
-        end = m.index + m[0].length;
+        end = match.index + match[0].length;
     }
     return end;
 }
@@ -736,7 +736,7 @@ function attributionName(raw: string): string
  * an address a longer name such as "Carol Test - Equipe Livraisons" is
  * kept), every word starting with a lowercase letter a name particle (NAME_PARTICLES; "in" only before "'t"; "d'Arc"), not a
  * pronoun alone (PRONOUNS) and without "&" or "/". Exported for
- * reconstruct.ts (rule R1: a sender without an address counts as evidence
+ * reconstruct-quoted-messages.ts (rule R1: a sender without an address counts as evidence
  * only when its name is name-shaped).
  */
 export function isPlainName(name: string, addressed: boolean): boolean
@@ -752,11 +752,11 @@ export function isPlainName(name: string, addressed: boolean): boolean
         return false;
     }
     return words.every(
-        (w, i) =>
-            !LOWERCASE_START.test(w) ||
-            NAME_PARTICLES.has(w) ||
-            ELIDED_PARTICLE.test(w) ||
-            (w === 'in' && words[i + 1] === "'t"),
+        (word, i) =>
+            !LOWERCASE_START.test(word) ||
+            NAME_PARTICLES.has(word) ||
+            ELIDED_PARTICLE.test(word) ||
+            (word === 'in' && words[i + 1] === "'t"),
     );
 }
 
@@ -768,24 +768,24 @@ function splitDateName(before: string, verbs: readonly string[]): { date: string
     if (verbs.length > 0)
     {
         const padded = ` ${before.toLowerCase()} `;
-        let at = -1;
+        let verbStart = -1;
         let length = 0;
         for (const verb of verbs)
         {
-            const k = padded.lastIndexOf(` ${verb} `);
-            if (k > at)
+            const candidate = padded.lastIndexOf(` ${verb} `);
+            if (candidate > verbStart)
             {
-                at = k;
+                verbStart = candidate;
                 length = verb.length;
             }
         }
-        if (at < 0)
+        if (verbStart < 0)
         {
             return null;
         }
         // `padded` has one extra space in front: index k in padded is k - 1 in before.
-        date = before.slice(0, Math.max(0, at - 1)).trim();
-        name = before.slice(at + length).trim();
+        date = before.slice(0, Math.max(0, verbStart - 1)).trim();
+        name = before.slice(verbStart + length).trim();
     }
     else
     {
@@ -1009,27 +1009,27 @@ function readBlock(text: string, first: Line, headEnd: number): QuotedHeaderFiel
         }
         line = lineAt(text, lastEnd, lastEnd < headEnd ? headEnd - lastEnd : MAX_LINE_LENGTH);
     }
-    const list = (r: Role): EmailAddress[] =>
+    const list = (role: Role): EmailAddress[] =>
     {
-        const value = values.get(r);
+        const value = values.get(role);
         return value === undefined ? [] : parseMailboxList(value);
     };
     // A list that goes on unread with no separator at its end may end inside a
     // mailbox ("...; Ivan" / "Fixture; ..."): a last mailbox without an address
     // may be cut short, so it is left out (rule 1, INCOMPLETE LISTS).
-    const recipients = (r: 'to' | 'cc'): EmailAddress[] =>
+    const recipients = (field: 'to' | 'cc'): EmailAddress[] =>
     {
-        const boxes = list(r);
-        const cut = incomplete.includes(r) && !/[;,]$/u.test(values.get(r) ?? '') && boxes[boxes.length - 1]?.address === '';
+        const boxes = list(field);
+        const cut = incomplete.includes(field) && !/[;,]$/u.test(values.get(field) ?? '') && boxes[boxes.length - 1]?.address === '';
         return cut ? boxes.slice(0, -1) : boxes;
     };
     // A To / Cc value that holds text but yields no mailbox ("Bob <bob@x.test>
     // (Legal)"): flagged, so the list does not look empty (rule 3).
-    for (const r of ['to', 'cc'] as const)
+    for (const field of ['to', 'cc'] as const)
     {
-        if (!incomplete.includes(r) && /[\p{L}\p{N}@]/u.test(values.get(r) ?? '') && list(r).length === 0)
+        if (!incomplete.includes(field) && /[\p{L}\p{N}@]/u.test(values.get(field) ?? '') && list(field).length === 0)
         {
-            incomplete.push(r);
+            incomplete.push(field);
         }
     }
     const subject = values.get('subject');

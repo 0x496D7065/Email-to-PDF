@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { MIN_MARKED_LINES, detectQuoteMarkers } from './quote-markers';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
 
 /** Runs the detector and checks the result against the segment model. */
 function detect(body: string): FoldRange[]
@@ -11,19 +11,19 @@ function detect(body: string): FoldRange[]
     const folds = detectQuoteMarkers(body);
     const segments = buildSegments(body, folds);
     expect(checkSegments(body, segments)).toEqual([]);
-    expect(reconstruct(body, segments)).toBe(body);
-    for (const f of folds)
+    expect(joinSegments(body, segments)).toBe(body);
+    for (const fold of folds)
     {
-        expect(f.reason).toBe('quote-marker');
-        expect(f.related).toBeUndefined();
-        expect(f.start).toBeLessThan(f.end);
+        expect(fold.reason).toBe('quote-marker');
+        expect(fold.related).toBeUndefined();
+        expect(fold.start).toBeLessThan(fold.end);
     }
     // Sorted, not overlapping.
-    folds.forEach((f, k) =>
+    folds.forEach((fold, k) =>
     {
         if (k > 0)
         {
-            expect(f.start).toBeGreaterThanOrEqual(folds[k - 1]?.end ?? 0);
+            expect(fold.start).toBeGreaterThanOrEqual(folds[k - 1]?.end ?? 0);
         }
     });
     return folds;
@@ -175,10 +175,10 @@ describe('detectQuoteMarkers', () =>
     {
         const body = 'Reply\n> one\n> two\n';
         const copy = body.slice();
-        const a = detectQuoteMarkers(body);
-        const b = detectQuoteMarkers(body);
-        expect(a).toEqual(b);
-        expect(a).not.toBe(b);
+        const firstRun = detectQuoteMarkers(body);
+        const secondRun = detectQuoteMarkers(body);
+        expect(firstRun).toEqual(secondRun);
+        expect(firstRun).not.toBe(secondRun);
         expect(body).toBe(copy);
     });
 

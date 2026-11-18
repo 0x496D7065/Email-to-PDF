@@ -2,7 +2,7 @@
 // worker per batch). It only wires the worker's global scope to
 // createEngineWorkerSide (engine-protocol.ts), where the logic lives.
 //
-// Why a worker: the engine (Source/thread-analysis/engine.ts) is pure and normally takes
+// Why a worker: the engine (Source/thread-analysis/analyze-thread.ts) is pure and normally takes
 // well under a second, but de-duplication has a known worst case (thousands
 // of near-identical copies of one message make it quadratic) that can take
 // seconds on hostile or unusual input. On the page, that would freeze the

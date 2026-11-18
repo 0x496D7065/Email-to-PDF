@@ -17,7 +17,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedLinks } from '../web-page-logic/attached-links';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';

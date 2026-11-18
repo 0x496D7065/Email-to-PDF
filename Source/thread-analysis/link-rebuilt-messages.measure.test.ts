@@ -16,30 +16,30 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, isForwardStyle, QUOTE_STYLES, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { ALICE, BOB, CAROL, chain, DAVE, ERIN, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { DEFAULT_PARTS, runEngine } from './engine';
+import { DEFAULT_PARTS, runEngine } from './analyze-thread';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';
 
 /** Message `i` of a conversation as a real dropped file (its body quotes the ones before it). */
 export function realFile(messages: readonly ThreadMessage[], i: number, tag: string): NormalizedMessage
 {
-    const m = messages[i];
-    if (m === undefined)
+    const message = messages[i];
+    if (message === undefined)
     {
         throw new Error(`no message ${i}`);
     }
     const id = (k: number): string => `${tag}-${k}@example.test`;
-    const utcMs = instantOf(m.sent, m.zone);
+    const utcMs = instantOf(message.sent, message.zone);
     return {
         messageId: id(i),
         inReplyTo: i === 0 ? null : id(i - 1),
         references: Array.from({ length: i }, (_, k) => id(k)),
-        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true },
-        from: [m.from],
-        to: m.to,
-        cc: m.cc ?? [],
+        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: message.zone.offsetMinutes, zoneKnown: true },
+        from: [message.from],
+        to: message.to,
+        cc: message.cc ?? [],
         bcc: [],
-        subject: m.subject,
+        subject: message.subject,
         bodyText: buildThread(messages.slice(0, i + 1)).body,
         attachments: [],
         source: { fileName: `${tag}-${i}.eml`, sha256: (i + 1).toString(16).padStart(64, '0'), kind: 'eml' },
@@ -61,14 +61,14 @@ export interface Outcome
 }
 
 /** Drops the messages `dropped` (conversation indices, in that drop order) and reads the timeline. */
-export function runScenario(c: ThreadCase, dropped: readonly number[]): Outcome
+export function runScenario(threadCase: ThreadCase, dropped: readonly number[]): Outcome
 {
-    const messages = c.messages;
+    const messages = threadCase.messages;
     if (messages === undefined)
     {
-        throw new Error(`${c.id}: no messages`);
+        throw new Error(`${threadCase.id}: no messages`);
     }
-    const tag = c.id.replace(/[^a-z0-9]+/giu, '-');
+    const tag = threadCase.id.replace(/[^a-z0-9]+/giu, '-');
     const results: ParseResult[] = dropped.map((i) => ({ ok: true, message: realFile(messages, i, tag) }));
     const result = runEngine(results);
     const convOfInput = (index: number): number => dropped[index] ?? -1;
@@ -77,28 +77,28 @@ export function runScenario(c: ThreadCase, dropped: readonly number[]): Outcome
     dropped.forEach((i, input) => truthOf.set(input, new Map(buildThread(messages.slice(0, i + 1)).headers.map((h) => [h.start, h.index]))));
     const convOfRebuilt = (id: number): number =>
     {
-        const r = result.reconstructed[id];
-        return r === undefined ? -1 : (truthOf.get(r.sourceIndex)?.get(r.rebuilt.start) ?? -1);
+        const entry = result.reconstructed[id];
+        return entry === undefined ? -1 : (truthOf.get(entry.sourceIndex)?.get(entry.rebuilt.start) ?? -1);
     };
 
     const wrong: string[] = [];
     const expected = new Set<number>(dropped);
-    for (const r of result.reconstructed)
+    for (const entry of result.reconstructed)
     {
-        const conv = convOfRebuilt(r.id);
+        const conv = convOfRebuilt(entry.id);
         if (conv < 0)
         {
-            wrong.push(`rebuilt #${r.id} (from message ${convOfInput(r.sourceIndex)}) is at no true header`);
+            wrong.push(`rebuilt #${entry.id} (from message ${convOfInput(entry.sourceIndex)}) is at no true header`);
             continue;
         }
         expected.add(conv);
-        if (r.link === 'real' && convOfInput(r.realIndex ?? -1) !== conv)
+        if (entry.link === 'real' && convOfInput(entry.realIndex ?? -1) !== conv)
         {
-            wrong.push(`message ${conv} linked to real message ${convOfInput(r.realIndex ?? -1)}`);
+            wrong.push(`message ${conv} linked to real message ${convOfInput(entry.realIndex ?? -1)}`);
         }
-        if (r.link === 'same-as' && convOfRebuilt(r.sameAs ?? -1) !== conv)
+        if (entry.link === 'same-as' && convOfRebuilt(entry.sameAs ?? -1) !== conv)
         {
-            wrong.push(`message ${conv} merged with a copy of message ${convOfRebuilt(r.sameAs ?? -1)}`);
+            wrong.push(`message ${conv} merged with a copy of message ${convOfRebuilt(entry.sameAs ?? -1)}`);
         }
     }
     const order = result.timeline.map((e) => (e.kind === 'message' ? convOfInput(result.messages[e.position]?.index ?? -1) : convOfRebuilt(e.id)));
@@ -110,23 +110,23 @@ const missingIn = (o: Outcome): number[] => [...o.expected].filter((v) => !o.ord
 const inOrder = (order: readonly number[]): boolean => order.every((v, k) => k === 0 || v > (order[k - 1] ?? -1));
 
 /** Partial drops of a conversation of n messages (each a list of conversation indices, in drop order). */
-function partialDrops(n: number): number[][]
+function partialDrops(count: number): number[][]
 {
-    const all = Array.from({ length: n }, (_, k) => k);
+    const all = Array.from({ length: count }, (_, k) => k);
     const sets = [
-        all.filter((k) => (n - 1 - k) % 2 === 0), // every other one, ending with the last
-        all.filter((k) => (n - 1 - k) % 2 === 1), // every other one, without the last
-        [0, n - 1],
-        [n - 2, n - 1],
+        all.filter((k) => (count - 1 - k) % 2 === 0), // every other one, ending with the last
+        all.filter((k) => (count - 1 - k) % 2 === 1), // every other one, without the last
+        [0, count - 1],
+        [count - 2, count - 1],
         all.slice(0, -1), // all but the last
-        [Math.floor(n / 2)],
-        [Math.floor(n / 2), n - 1],
+        [Math.floor(count / 2)],
+        [Math.floor(count / 2), count - 1],
     ];
     const unique = new Map<string, number[]>();
-    for (const s of sets)
+    for (const dropSet of sets)
     {
-        const clean = [...new Set(s.filter((k) => k >= 0 && k < n))];
-        if (clean.length > 0 && clean.length < n)
+        const clean = [...new Set(dropSet.filter((k) => k >= 0 && k < count))];
+        if (clean.length > 0 && clean.length < count)
         {
             unique.set(clean.join(','), clean);
         }
@@ -149,16 +149,16 @@ describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =
         const rows: string[] = [];
         let rebuilt = 0;
         let linked = 0;
-        for (const c of CASES)
+        for (const threadCase of CASES)
         {
-            const n = c.messages?.length ?? 0;
-            const o = runScenario(c, Array.from({ length: n }, (_, k) => k));
-            rebuilt += o.result.reconstructed.length;
-            linked += o.result.reconstructed.filter((r) => r.link === 'real').length;
-            const inSequence = o.order.join(' ') === Array.from({ length: n }, (_, k) => k).join(' ');
-            if (o.rebuiltEntries > 0 || o.wrong.length > 0 || !inSequence)
+            const messageCount = threadCase.messages?.length ?? 0;
+            const outcome = runScenario(threadCase, Array.from({ length: messageCount }, (_, k) => k));
+            rebuilt += outcome.result.reconstructed.length;
+            linked += outcome.result.reconstructed.filter((r) => r.link === 'real').length;
+            const inSequence = outcome.order.join(' ') === Array.from({ length: messageCount }, (_, k) => k).join(' ');
+            if (outcome.rebuiltEntries > 0 || outcome.wrong.length > 0 || !inSequence)
             {
-                rows.push(`  ${c.id}: ${o.rebuiltEntries} entries; order ${o.order.join(' ')}; ${o.wrong.join('; ')}`);
+                rows.push(`  ${threadCase.id}: ${outcome.rebuiltEntries} entries; order ${outcome.order.join(' ')}; ${outcome.wrong.join('; ')}`);
             }
         }
         console.log(`target 1 (all dropped): ${rebuilt} rebuilt messages, ${linked} linked to their real file${rows.length === 0 ? '' : `\n${rows.join('\n')}`}`);
@@ -172,22 +172,22 @@ describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =
         let entries = 0;
         let truths = 0;
         const short: string[] = [];
-        for (const c of CASES)
+        for (const threadCase of CASES)
         {
-            const n = c.messages?.length ?? 0;
-            const o = runScenario(c, [n - 1]);
-            expect(o.wrong, c.id).toEqual([]);
-            expect(duplicatesIn(o.order), c.id).toEqual([]);
-            expect(inOrder(o.order), `${c.id}: ${o.order.join(' ')}`).toBe(true);
-            expect(o.order[o.order.length - 1], c.id).toBe(n - 1);
+            const messageCount = threadCase.messages?.length ?? 0;
+            const outcome = runScenario(threadCase, [messageCount - 1]);
+            expect(outcome.wrong, threadCase.id).toEqual([]);
+            expect(duplicatesIn(outcome.order), threadCase.id).toEqual([]);
+            expect(inOrder(outcome.order), `${threadCase.id}: ${outcome.order.join(' ')}`).toBe(true);
+            expect(outcome.order[outcome.order.length - 1], threadCase.id).toBe(messageCount - 1);
             // Every rebuilt message is an entry (nothing to link to), so the timeline is the splitter's output.
-            expect(o.rebuiltEntries, c.id).toBe(o.result.reconstructed.length);
-            expect(missingIn(o), c.id).toEqual([]);
-            entries += o.rebuiltEntries;
-            truths += n - 1;
-            if (o.rebuiltEntries < n - 1)
+            expect(outcome.rebuiltEntries, threadCase.id).toBe(outcome.result.reconstructed.length);
+            expect(missingIn(outcome), threadCase.id).toEqual([]);
+            entries += outcome.rebuiltEntries;
+            truths += messageCount - 1;
+            if (outcome.rebuiltEntries < messageCount - 1)
             {
-                short.push(`  ${c.id}: ${o.rebuiltEntries} of ${n - 1}`);
+                short.push(`  ${threadCase.id}: ${outcome.rebuiltEntries} of ${messageCount - 1}`);
             }
         }
         console.log(`target 2 (last dropped): ${entries} of ${truths} earlier messages in the timeline${short.length === 0 ? '' : `\n${short.join('\n')}`}`);
@@ -200,21 +200,21 @@ describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =
         let linkedReal = 0;
         let sameAs = 0;
         const problems: string[] = [];
-        for (const c of CASES)
+        for (const threadCase of CASES)
         {
-            const n = c.messages?.length ?? 0;
-            for (const dropped of partialDrops(n))
+            const messageCount = threadCase.messages?.length ?? 0;
+            for (const dropped of partialDrops(messageCount))
             {
                 scenarios++;
-                const o = runScenario(c, dropped);
-                linkedReal += o.result.reconstructed.filter((r) => r.link === 'real').length;
-                sameAs += o.result.reconstructed.filter((r) => r.link === 'same-as').length;
-                const label = `${c.id} [${dropped.join(',')}]`;
-                const dup = duplicatesIn(o.order);
-                const missing = missingIn(o);
-                if (o.wrong.length > 0 || dup.length > 0 || missing.length > 0 || !inOrder(o.order))
+                const outcome = runScenario(threadCase, dropped);
+                linkedReal += outcome.result.reconstructed.filter((r) => r.link === 'real').length;
+                sameAs += outcome.result.reconstructed.filter((r) => r.link === 'same-as').length;
+                const label = `${threadCase.id} [${dropped.join(',')}]`;
+                const duplicates = duplicatesIn(outcome.order);
+                const missing = missingIn(outcome);
+                if (outcome.wrong.length > 0 || duplicates.length > 0 || missing.length > 0 || !inOrder(outcome.order))
                 {
-                    problems.push(`  ${label}: order ${o.order.join(' ')}; duplicates ${dup.join(',')}; missing ${missing.join(',')}; ${o.wrong.join('; ')}`);
+                    problems.push(`  ${label}: order ${outcome.order.join(' ')}; duplicates ${duplicates.join(',')}; missing ${missing.join(',')}; ${outcome.wrong.join('; ')}`);
                 }
             }
         }
@@ -234,9 +234,9 @@ describe('thread rebuilding in the engine: speed (task 7.5)', () =>
     /** Times the rebuilding stages of one engine run. */
     function timed(results: readonly ParseResult[]): { out: EngineResult; total: number; rebuild: number }
     {
-        let at = 0;
+        let stageStart = 0;
         let rebuild = 0;
-        const t0 = performance.now();
+        const startTime = performance.now();
         const out = runEngine(results, {
             ...DEFAULT_PARTS,
             onStage: (stage) =>
@@ -244,15 +244,15 @@ describe('thread rebuilding in the engine: speed (task 7.5)', () =>
                 const now = performance.now();
                 if (stage === 'reconstruct')
                 {
-                    at = now;
+                    stageStart = now;
                 }
                 if (stage === 'done')
                 {
-                    rebuild = now - at;
+                    rebuild = now - stageStart;
                 }
             },
         });
-        return { out, total: performance.now() - t0, rebuild };
+        return { out, total: performance.now() - startTime, rebuild };
     }
 
     it('200 dropped emails with 19-generation quoted histories stay within a generous bound', () =>
@@ -275,8 +275,8 @@ describe('thread rebuilding in the engine: speed (task 7.5)', () =>
         const base = chain(Array.from({ length: 19 }, (_, i) => STYLES[i % STYLES.length] as QuoteStyle), { people: PEOPLE });
         const copies: ParseResult[] = Array.from({ length: 200 }, (_, k) =>
         {
-            const m = realFile(base, base.length - 1, `copy-${k}`);
-            return { ok: true, message: { ...m, date: { ...m.date, utcMs: (m.date.utcMs ?? 0) + k * 60_000 } } };
+            const message = realFile(base, base.length - 1, `copy-${k}`);
+            return { ok: true, message: { ...message, date: { ...message.date, utcMs: (message.date.utcMs ?? 0) + k * 60_000 } } };
         });
         const many = timed(copies);
         console.log(

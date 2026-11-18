@@ -1,6 +1,6 @@
 // The messages rebuilt from quoted text, as step 2 shows them (milestone 7,
 // task 7.6; brief section 8.6). The engine rebuilds them and places them in
-// one timeline with the real emails (Source/thread-analysis/rebuild-links.ts); this file
+// one timeline with the real emails (Source/thread-analysis/link-rebuilt-messages.ts); this file
 // only decides what the preview shows of them, in which order, and which of
 // them the reader wants in the PDF. It decides nothing about the text.
 //

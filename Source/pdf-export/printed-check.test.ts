@@ -5,7 +5,7 @@
 // on large inputs. Synthetic text only (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { MIN_RUN_WORDS } from '../thread-analysis/overlap';
+import { MIN_RUN_WORDS } from '../thread-analysis/overlap-quote-detection';
 import { printedText } from './printed-check';
 
 const S1 = 'The twelve oak desks will arrive on Thursday morning and the movers need the loading bay free until noon.';

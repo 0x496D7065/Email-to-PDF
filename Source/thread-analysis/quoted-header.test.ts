@@ -39,26 +39,26 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
     {
         const problems: string[] = [];
         let checked = 0;
-        for (const c of THREAD_CASES)
+        for (const testCase of THREAD_CASES)
         {
-            if (c.id === NAMES_ONLY_WRAPPED)
+            if (testCase.id === NAMES_ONLY_WRAPPED)
             {
                 continue; // a safe refusal (next test)
             }
-            const found = findReplyHeaders(c.thread.body, c.thread.subject);
-            for (const h of c.thread.headers)
+            const found = findReplyHeaders(testCase.thread.body, testCase.thread.subject);
+            for (const header of testCase.thread.headers)
             {
-                const hit = found.find((f) => f.start === h.start);
+                const hit = found.find((f) => f.start === header.start);
                 if (hit === undefined)
                 {
-                    problems.push(`${c.id}: generation ${h.generation} not found`);
+                    problems.push(`${testCase.id}: generation ${header.generation} not found`);
                     continue;
                 }
                 checked++;
-                const diffs = fieldDiffs(h, readQuotedHeader(c.thread.body, hit));
+                const diffs = fieldDiffs(header, readQuotedHeader(testCase.thread.body, hit));
                 if (diffs.length > 0)
                 {
-                    problems.push(`${c.id}: generation ${h.generation} (${h.style}): ${diffs.join('; ')}`);
+                    problems.push(`${testCase.id}: generation ${header.generation} (${header.style}): ${diffs.join('; ')}`);
                 }
             }
         }
@@ -68,22 +68,22 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
 
     it('refuses a wrapped names-only list: the label line only, flagged incomplete, nothing after it read', () =>
     {
-        const c = THREAD_CASES.find((x) => x.id === NAMES_ONLY_WRAPPED);
-        if (c === undefined)
+        const testCase = THREAD_CASES.find((x) => x.id === NAMES_ONLY_WRAPPED);
+        if (testCase === undefined)
         {
             throw new Error('case missing');
         }
         let checked = 0;
-        for (const f of findReplyHeaders(c.thread.body, c.thread.subject))
+        for (const foundHeader of findReplyHeaders(testCase.thread.body, testCase.thread.subject))
         {
-            const truth = c.thread.headers.find((h) => h.start === f.start);
+            const truth = testCase.thread.headers.find((h) => h.start === foundHeader.start);
             if (truth === undefined)
             {
                 continue;
             }
             checked++;
             const want = expectedFields(truth);
-            const got = readQuotedHeader(c.thread.body, f);
+            const got = readQuotedHeader(testCase.thread.body, foundHeader);
             expect(got.from).toEqual(want.from);
             expect(got.dateText).toBe(want.dateText);
             expect(got.cc).toEqual(want.cc);
@@ -95,7 +95,7 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
             expect(got.incomplete).toEqual(['to']);
             // The wrapped lines (and the Subject after them) are not read: they stay in the original text.
             expect(got.subject).toBeNull();
-            expect(got.headerEnd).toBe(f.headEnd);
+            expect(got.headerEnd).toBe(foundHeader.headEnd);
         }
         expect(checked).toBe(2);
     });
@@ -105,26 +105,26 @@ describe('readQuotedHeader: every header of the ground-truth threads', () =>
         const wrapped = THREAD_CASES.filter((c) => c.group === 'outlook-wrapped');
         expect(wrapped.length).toBeGreaterThan(0);
         let shortened = 0;
-        for (const c of wrapped)
+        for (const testCase of wrapped)
         {
-            if (c.id === NAMES_ONLY_WRAPPED)
+            if (testCase.id === NAMES_ONLY_WRAPPED)
             {
                 continue; // refused (test above)
             }
-            for (const f of findReplyHeaders(c.thread.body, c.thread.subject))
+            for (const foundHeader of findReplyHeaders(testCase.thread.body, testCase.thread.subject))
             {
-                const truth = c.thread.headers.find((h) => h.start === f.start);
+                const truth = testCase.thread.headers.find((h) => h.start === foundHeader.start);
                 if (truth === undefined)
                 {
                     continue;
                 }
-                if (f.headEnd < truth.headEnd)
+                if (foundHeader.headEnd < truth.headEnd)
                 {
                     shortened++;
                 }
-                const got = readQuotedHeader(c.thread.body, f);
+                const got = readQuotedHeader(testCase.thread.body, foundHeader);
                 expect(got.headerEnd).toBe(truth.headEnd);
-                expect(got.headerEnd).toBeGreaterThanOrEqual(f.headEnd);
+                expect(got.headerEnd).toBeGreaterThanOrEqual(foundHeader.headEnd);
             }
         }
         expect(shortened).toBeGreaterThan(0); // the gap is really there in findReplyHeaders
@@ -135,13 +135,13 @@ describe('readQuotedHeader: fixtures', () =>
 {
     it('reads the three headers of fixture 13 (Outlook NL over a Gmail quote over a quoted Outlook EN block)', async () =>
     {
-        const m = (await parseAllFixtures()).find((x) => x.source.fileName === 'eml/13-order-4-bob-outlook-nl.eml');
-        if (m === undefined)
+        const message = (await parseAllFixtures()).find((x) => x.source.fileName === 'eml/13-order-4-bob-outlook-nl.eml');
+        if (message === undefined)
         {
             throw new Error('fixture 13 missing');
         }
-        const body = m.bodyText;
-        const found = findReplyHeaders(body, m.subject ?? undefined);
+        const body = message.bodyText;
+        const found = findReplyHeaders(body, message.subject ?? undefined);
         const got = found.map((h) => readQuotedHeader(body, h));
         expect(got).toHaveLength(3);
         const alice = box('Alice Example', 'alice@example.test');
@@ -151,17 +151,17 @@ describe('readQuotedHeader: fixtures', () =>
         expect(got[1]).toEqual({ from: [bob], to: [], cc: [], subject: null, dateText: 'Mon, 3 Mar 2025 at 14:02', headerEnd: lineEnd('On Mon, 3 Mar 2025'), incomplete: [] });
         expect(got[2]).toEqual({ from: [alice], to: [bob], cc: [], subject: 'Office desks and chairs', dateText: 'Monday, March 3, 2025 9:15 AM', headerEnd: lineEnd('> Subject: Office'), incomplete: [] });
         // The body text is left as it was.
-        expect(m.bodyText).toBe(body);
+        expect(message.bodyText).toBe(body);
     });
 
     it('reads both attributions of fixture 22 (Gmail FR, Apple EN inside ">>", accented name)', async () =>
     {
-        const m = (await parseAllFixtures()).find((x) => x.source.fileName === 'eml/22-delivery-3-carol-gmail-fr.eml');
-        if (m === undefined)
+        const message = (await parseAllFixtures()).find((x) => x.source.fileName === 'eml/22-delivery-3-carol-gmail-fr.eml');
+        if (message === undefined)
         {
             throw new Error('fixture 22 missing');
         }
-        const got = findReplyHeaders(m.bodyText, m.subject ?? undefined).map((h) => readQuotedHeader(m.bodyText, h));
+        const got = findReplyHeaders(message.bodyText, message.subject ?? undefined).map((h) => readQuotedHeader(message.bodyText, h));
         expect(got.map((g) => [g.from, g.dateText, g.subject])).toEqual([
             [[box('Alice Example', 'alice@example.test')], 'mar. 4 mars 2025 \u00e0 13:05', null],
             [[box('Carol Test - \u00c9quipe Livraisons', 'carol@sample.invalid')], '4 Mar 2025, at 11:20', null],
@@ -263,15 +263,15 @@ describe('readQuotedHeader: header blocks', () =>
     it('never reads a list continuation after the last label: the list is flagged incomplete instead', () =>
     {
         const goesOn = ['---------- Forwarded message ---------', 'From: Bob <bob@x.example.test>', 'Date: Mon, Mar 3, 2025 at 2:02 PM', 'Subject: Desks', 'To: Alice <alice@example.test>,', 'Carol <carol@sample.invalid>', 'Body line one.', ''].join('\n');
-        const a = readOne(goesOn, 'Fwd: Desks');
-        expect(a.to).toEqual([box('Alice', 'alice@example.test')]);
-        expect(a.incomplete).toEqual(['to']);
-        expect(a.headerEnd).toBe(goesOn.indexOf('Carol <carol'));
+        const goesOnFields = readOne(goesOn, 'Fwd: Desks');
+        expect(goesOnFields.to).toEqual([box('Alice', 'alice@example.test')]);
+        expect(goesOnFields.incomplete).toEqual(['to']);
+        expect(goesOnFields.headerEnd).toBe(goesOn.indexOf('Carol <carol'));
         // No blank line between the last label and the body, no "," or ";": the body line is not read.
         const stops = ['---------- Forwarded message ---------', 'From: Bob <bob@x.example.test>', 'Date: Mon, Mar 3, 2025 at 2:02 PM', 'Subject: Desks', 'To: Alice <alice@example.test>', 'Body line one.', ''].join('\n');
-        const b = readOne(stops, 'Fwd: Desks');
-        expect(b.to).toEqual([box('Alice', 'alice@example.test')]);
-        expect(b.headerEnd).toBe(stops.indexOf('Body line one.'));
+        const stopsFields = readOne(stops, 'Fwd: Desks');
+        expect(stopsFields.to).toEqual([box('Alice', 'alice@example.test')]);
+        expect(stopsFields.headerEnd).toBe(stops.indexOf('Body line one.'));
     });
 
     it('does not read a following block or intro line as a continuation', () =>
@@ -482,44 +482,45 @@ describe('readQuotedHeader: attributions', () =>
 
 describe('readQuotedHeader: wrapped lists never take body text (file comment, rule 1)', () =>
 {
-    const SEP = '-----Original Message-----';
-    const HEAD = [SEP, 'From: Bob <bob@x.example.test>', 'Sent: Mon 3/3/2025 10:00'];
+    const SEPARATOR = '-----Original Message-----';
+    const HEAD = [SEPARATOR, 'From: Bob <bob@x.example.test>', 'Sent: Mon 3/3/2025 10:00'];
     /** The one header of `lines` joined, and the offset of `snippet` in it. */
-    const read = (lines: readonly string[], subject = ''): { got: QuotedHeaderFields; at: (snippet: string) => number } =>
+    const read = (lines: readonly string[], subject = ''): { got: QuotedHeaderFields; offsetOf: (snippet: string) => number } =>
     {
         const body = `${lines.join('\n')}\n`;
-        return { got: readOne(body, subject), at: (snippet) => body.indexOf(snippet) };
+        return { got: readOne(body, subject), offsetOf: (snippet) => body.indexOf(snippet) };
     };
 
     it('a Subject never continues, even with a label-like line further down (B1)', () =>
     {
-        const { got, at } = read([...HEAD, 'To: Carol <carol@sample.invalid>', 'Subject: P', 'Hi Carol,', 'Please see below.', 'Date: Friday works for me.', '', 'Bye']);
+        const { got, offsetOf } = read([...HEAD, 'To: Carol <carol@sample.invalid>', 'Subject: P', 'Hi Carol,', 'Please see below.', 'Date: Friday works for me.', '', 'Bye']);
         expect(got.subject).toBe('P');
         expect(got.dateText).toBe('Mon 3/3/2025 10:00');
-        expect(got.headerEnd).toBe(at('Hi Carol,'));
+        expect(got.headerEnd).toBe(offsetOf('Hi Carol,'));
     });
 
     it('a complete list without a separator does not go on: the body and its "Cc:" line stay out (B1)', () =>
     {
-        const { got, at } = read([...HEAD, 'To: Carol <carol@sample.invalid>', 'Hello Carol this is body', 'more body', 'Cc: something in body', '', 'end']);
+        const { got, offsetOf } = read([...HEAD, 'To: Carol <carol@sample.invalid>', 'Hello Carol this is body', 'more body', 'Cc: something in body', '', 'end']);
         expect(got.to).toEqual([box('Carol', 'carol@sample.invalid')]);
         expect(got.cc).toEqual([]);
-        expect(got.headerEnd).toBe(at('Hello Carol'));
+        expect(got.headerEnd).toBe(offsetOf('Hello Carol'));
     });
 
     it('a names-only list does not take a body line either', () =>
     {
-        const { got, at } = read([...HEAD, 'To: Carol Doe; Dan Roe', 'Hello Carol this is body', 'more body', 'Cc: something in body', '', 'end']);
+        const { got, offsetOf } = read(
+            [...HEAD, 'To: Carol Doe; Dan Roe', 'Hello Carol this is body', 'more body', 'Cc: something in body', '', 'end']);
         // A text line follows the list: it may go on, and "Dan Roe" may be cut short there: left out.
         expect(got.to).toEqual([box('Carol Doe')]);
         expect(got.incomplete).toEqual(['to']);
         expect(got.cc).toEqual([]);
-        expect(got.headerEnd).toBe(at('Hello Carol'));
+        expect(got.headerEnd).toBe(offsetOf('Hello Carol'));
         // Digits or a colon are not in names: the list is not continued, and the Subject after it is not read.
         const digits = read([...HEAD, 'To: Alice Example; Carol Test;', 'see the file: 3 pages', 'Subject: x', '', 'end']);
         expect(digits.got.to).toEqual([box('Alice Example'), box('Carol Test')]);
         expect(digits.got.subject).toBeNull();
-        expect(digits.got.headerEnd).toBe(digits.at('see the file'));
+        expect(digits.got.headerEnd).toBe(digits.offsetOf('see the file'));
     });
 
     it.each([
@@ -529,10 +530,10 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         ['To: Carol <carol@sample.invalid>;', ['Hi Carol,', 'the contract.', 'Cc: Dan']],
     ])('a list ending with ";" or "," does not take a body line right after it (B2): %s', (to, bodyLines) =>
     {
-        const { got, at } = read([SEP, 'From: Bob <bob@x.example.test>', 'Sent: Mon 3/3/2025 10:00', 'Subject: P', to, ...bodyLines, '']);
+        const { got, offsetOf } = read([SEPARATOR, 'From: Bob <bob@x.example.test>', 'Sent: Mon 3/3/2025 10:00', 'Subject: P', to, ...bodyLines, '']);
         expect(got.to).toEqual([box('Carol', 'carol@sample.invalid')]);
         expect(got.cc).toEqual([]);
-        expect(got.headerEnd).toBe(at(bodyLines[0] ?? ''));
+        expect(got.headerEnd).toBe(offsetOf(bodyLines[0] ?? ''));
     });
 
     it('a body line right after the last label, with a label-like line within MAX_CONTINUATION_LINES lines, stays out (S3)', () =>
@@ -540,7 +541,7 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         const gmail = read(['---------- Forwarded message ---------', 'From: Bob <bob@x.example.test>', 'Date: Mon, Mar 3, 2025 at 2:02 PM', 'Subject: P', 'To: Carol <carol@sample.invalid>, Dan <dan@example.test>', 'Thanks for the call.', 'Cc: is fine by me', ''], 'Fwd: P');
         expect(gmail.got.to).toEqual([box('Carol', 'carol@sample.invalid'), box('Dan', 'dan@example.test')]);
         expect(gmail.got.cc).toEqual([]);
-        expect(gmail.got.headerEnd).toBe(gmail.at('Thanks for'));
+        expect(gmail.got.headerEnd).toBe(gmail.offsetOf('Thanks for'));
     });
 
     it('wrapped lines followed by a label of a role already read (or From) are not taken', () =>
@@ -549,55 +550,55 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         expect(repeated.got.to).toEqual([box('Carol', 'carol@sample.invalid')]);
         expect(repeated.got.incomplete).toEqual(['to']);
         expect(repeated.got.dateText).toBe('Mon 3/3/2025 10:00');
-        expect(repeated.got.headerEnd).toBe(repeated.at('Eve <eve'));
+        expect(repeated.got.headerEnd).toBe(repeated.offsetOf('Eve <eve'));
         const from = read([...HEAD, 'To: Carol <carol@sample.invalid>;', 'Eve <eve@sample.invalid>', 'From: Zed <zed@example.test>', 'Subject: P', '']);
         expect(from.got.to).toEqual([box('Carol', 'carol@sample.invalid')]);
         expect(from.got.incomplete).toEqual(['to']);
         expect(from.got.subject).toBeNull();
-        expect(from.got.headerEnd).toBe(from.at('Eve <eve'));
+        expect(from.got.headerEnd).toBe(from.offsetOf('Eve <eve'));
     });
 
     it('reads a list wrapped inside a mailbox when a new label follows, and a wrapped Bcc without reporting it', () =>
     {
-        const { got, at } = read([...HEAD, 'To: Carol Test <carol@sample.invalid>; Frank', 'Mockup <frank@example.test>; Heidi Stub', '<heidi@sample.invalid>', 'Bcc: Secret <s@example.test>;', 'Other <o@example.test>', 'Cc: Dan <dan@example.test>', 'Subject: P', 'Body.']);
+        const { got, offsetOf } = read([...HEAD, 'To: Carol Test <carol@sample.invalid>; Frank', 'Mockup <frank@example.test>; Heidi Stub', '<heidi@sample.invalid>', 'Bcc: Secret <s@example.test>;', 'Other <o@example.test>', 'Cc: Dan <dan@example.test>', 'Subject: P', 'Body.']);
         expect(got.to).toEqual([box('Carol Test', 'carol@sample.invalid'), box('Frank Mockup', 'frank@example.test'), box('Heidi Stub', 'heidi@sample.invalid')]);
         expect(got.cc).toEqual([box('Dan', 'dan@example.test')]);
         expect(got.subject).toBe('P');
-        expect(got.headerEnd).toBe(at('Body.'));
+        expect(got.headerEnd).toBe(offsetOf('Body.'));
     });
 
     it('a mailbox cut short is not completed by a body line, even before a new label', () =>
     {
-        const { got, at } = read([...HEAD, 'To: Carol <carol@sample.invalid>; Frank', 'will call you tomorrow.', 'Cc: Dan <dan@example.test>', 'Subject: P', '']);
+        const { got, offsetOf } = read([...HEAD, 'To: Carol <carol@sample.invalid>; Frank', 'will call you tomorrow.', 'Cc: Dan <dan@example.test>', 'Subject: P', '']);
         // Frank has no address on the label line and may be cut short there: left out, the list flagged.
         expect(got.to).toEqual([box('Carol', 'carol@sample.invalid')]);
         expect(got.incomplete).toEqual(['to']);
         expect(got.cc).toEqual([]);
         expect(got.subject).toBeNull();
-        expect(got.headerEnd).toBe(at('will call'));
+        expect(got.headerEnd).toBe(offsetOf('will call'));
     });
 
     // Gmail forward head (To is the last label) and an Outlook head with names only.
-    const FWD = ['---------- Forwarded message ---------', 'From: Bob', 'Date: Mon, 3 Mar 2025 at 10:00', 'Subject: Contract'];
-    const FWD_ADDR = ['---------- Forwarded message ---------', 'From: Bob <bob@x.example.test>', 'Date: Mon, 3 Mar 2025 at 10:00', 'Subject: Contract'];
+    const FORWARD = ['---------- Forwarded message ---------', 'From: Bob', 'Date: Mon, 3 Mar 2025 at 10:00', 'Subject: Contract'];
+    const FORWARD_ADDRESS = ['---------- Forwarded message ---------', 'From: Bob <bob@x.example.test>', 'Date: Mon, 3 Mar 2025 at 10:00', 'Subject: Contract'];
 
     it.each([
-        ['N2: a body line, then a Cc label', [...FWD, 'To: Carol Doe; Frank Roe;', 'Thanks Bob', 'Cc: Dan']],
-        ['N4: a closing line, then a Bcc label', [...FWD, 'To: Carol Doe; Frank Roe;', 'Kind regards, Carol', 'Bcc: x']],
+        ['N2: a body line, then a Cc label', [...FORWARD, 'To: Carol Doe; Frank Roe;', 'Thanks Bob', 'Cc: Dan']],
+        ['N4: a closing line, then a Bcc label', [...FORWARD, 'To: Carol Doe; Frank Roe;', 'Kind regards, Carol', 'Bcc: x']],
         ['N5: a short line, then a Subject label', ['From: Bob', 'Sent: Monday, 3 March 2025 10:00', 'To: Carol Doe; Frank Roe;', 'See you soon', 'Subject: x', '', 'body']],
         ['N6: an Outlook list of names really wrapped', ['From: Bob <bob@x.example.test>', 'Sent: Monday, 3 March 2025 10:00', 'To: Carol Doe; Frank Roe;', 'Gina Poe; Heidi Stub', 'Subject: x', '', 'body']],
-        ['N10: two body lines, then a Cc label', [...FWD, 'To: Carol Doe; Frank Roe;', 'Thanks Bob', 'See below', 'Cc: Dan']],
+        ['N10: two body lines, then a Cc label', [...FORWARD, 'To: Carol Doe; Frank Roe;', 'Thanks Bob', 'See below', 'Cc: Dan']],
         ['FR1: "Madame," then "Objet :"', ['De : Bob', 'Envoy\u00e9 : lundi 3 mars 2025 10:00', '\u00c0 : Carol Doe; Frank Roe;', 'Madame,', 'Objet : demande']],
     ])('a names-only list never continues on the next lines (%s)', (_name, lines) =>
     {
         const body = `${lines.join('\n')}\n`;
-        const { got, at } = read(lines, body.startsWith('---') ? 'Fwd: Contract' : 'RE: x');
+        const { got, offsetOf } = read(lines, body.startsWith('---') ? 'Fwd: Contract' : 'RE: x');
         expect(got.to).toEqual([box('Carol Doe'), box('Frank Roe')]);
         expect(got.cc).toEqual([]);
         expect(got.incomplete).toEqual(['to']);
         // The line after the list is the first one not read (the label after it neither).
         const after = lines[lines.findIndex((l) => l.includes('Frank Roe;')) + 1] ?? '';
-        expect(got.headerEnd).toBe(at(after));
+        expect(got.headerEnd).toBe(offsetOf(after));
     });
 
     it.each([
@@ -608,12 +609,12 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         ['a bare no-reply address', 'noreply@x.example.test'],
     ])('a wrapped line is not taken, even before a new label, with %s', (_name, line) =>
     {
-        const { got, at } = read([...HEAD, 'To: Carol <carol@sample.invalid>,', line, 'Cc: Eve <eve@example.test>', 'Subject: P', '']);
+        const { got, offsetOf } = read([...HEAD, 'To: Carol <carol@sample.invalid>,', line, 'Cc: Eve <eve@example.test>', 'Subject: P', '']);
         expect(got.to).toEqual([box('Carol', 'carol@sample.invalid')]);
         expect(got.cc).toEqual([]);
         expect(got.subject).toBeNull();
         expect(got.incomplete).toEqual(['to']);
-        expect(got.headerEnd).toBe(at(line));
+        expect(got.headerEnd).toBe(offsetOf(line));
     });
 
     it.each([
@@ -626,36 +627,36 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         ['"Mr." with a trailing dot',['From: Bob <bob@x.test>', 'Sent: Monday, 3 March 2025 10:00', 'To: Carol <carol@x.test>;', 'Mr. Jan <jan@x.test>', 'Subject: request', '', 'body']],
     ])('a wrapped line starting with a salutation or title is not a recipient (%s)', (_name, lines) =>
     {
-        const { got, at } = read(lines, 'RE: x');
+        const { got, offsetOf } = read(lines, 'RE: x');
         expect(got.to).toEqual([box('Carol', 'carol@x.test')]);
         expect(got.cc).toEqual([]);
         // The greeting line is the first one not read; the subject label after it neither.
         expect(got.subject).toBeNull();
         expect(got.incomplete).toEqual(['to']);
-        expect(got.headerEnd).toBe(at(lines[3] ?? ''));
+        expect(got.headerEnd).toBe(offsetOf(lines[3] ?? ''));
     });
 
     it('a normal wrapped mailbox is still read before the next label', () =>
     {
-        const { got, at } = read(['From: Bob <bob@x.test>', 'Sent: Monday, 3 March 2025 10:00', 'To: Carol <carol@x.test>;', 'Erin Fox <erin@x.test>', 'Subject: request', '', 'body'], 'RE: x');
+        const { got, offsetOf } = read(['From: Bob <bob@x.test>', 'Sent: Monday, 3 March 2025 10:00', 'To: Carol <carol@x.test>;', 'Erin Fox <erin@x.test>', 'Subject: request', '', 'body'], 'RE: x');
         expect(got.to).toEqual([box('Carol', 'carol@x.test'), box('Erin Fox', 'erin@x.test')]);
         expect(got.subject).toBe('request');
         expect(got.incomplete).toEqual([]);
         // The header ends at the blank line after the Subject.
-        expect(got.headerEnd).toBe(at('\n\nbody') + 1);
+        expect(got.headerEnd).toBe(offsetOf('\n\nbody') + 1);
     });
 
     it.each([
-        ['A6: a sentence with a mailbox', [...FWD_ADDR, 'To: Carol <carol@x.example.test>,', 'Write to Dan <dan@x.example.test>', 'hello']],
-        ['A13: a mailbox and ";", then text', [...FWD_ADDR, 'To: Carol <carol@x.example.test>;', 'See Dan <dan@x.example.test>;', 'ok']],
-        ['A5: a bare address, then text', [...FWD_ADDR, 'To: Carol <carol@x.example.test>;', 'dan@x.example.test', 'hello']],
-        ['T1: a bare address, then a blank line', [...FWD_ADDR, 'To: Carol <carol@x.example.test>,', 'noreply@x.example.test', '', 'body']],
+        ['A6: a sentence with a mailbox', [...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>,', 'Write to Dan <dan@x.example.test>', 'hello']],
+        ['A13: a mailbox and ";", then text', [...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>;', 'See Dan <dan@x.example.test>;', 'ok']],
+        ['A5: a bare address, then text', [...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>;', 'dan@x.example.test', 'hello']],
+        ['T1: a bare address, then a blank line', [...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>,', 'noreply@x.example.test', '', 'body']],
     ])('a list with an address does not continue after the last label (%s)', (_name, lines) =>
     {
-        const { got, at } = read(lines, 'Fwd: Contract');
+        const { got, offsetOf } = read(lines, 'Fwd: Contract');
         expect(got.to).toEqual([box('Carol', 'carol@x.example.test')]);
         expect(got.incomplete).toEqual(['to']);
-        expect(got.headerEnd).toBe(at(lines[5] ?? ''));
+        expect(got.headerEnd).toBe(offsetOf(lines[5] ?? ''));
     });
 
     it.each([
@@ -665,7 +666,7 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         ['two "Last, First" mailboxes', 'Sample, Bob <bob@x.example.test>; Doe, Carol <carol@sample.invalid>'],
     ])('a From line with more than one mailbox gives no sender (%s)', (_name, from) =>
     {
-        const { got } = read([SEP, `From: ${from}`, 'Sent: Mon 3/3/2025 10:00', 'To: Dan <dan@example.test>', 'Subject: P', '', 'Body.']);
+        const { got } = read([SEPARATOR, `From: ${from}`, 'Sent: Mon 3/3/2025 10:00', 'To: Dan <dan@example.test>', 'Subject: P', '', 'Body.']);
         expect(got.from).toEqual([]);
         expect(got.to).toEqual([box('Dan', 'dan@example.test')]);
         expect(got.subject).toBe('P');
@@ -683,19 +684,19 @@ describe('readQuotedHeader: wrapped lists never take body text (file comment, ru
         expect(cut.got.to).toEqual([box('Carol Doe')]);
         expect(cut.got.incomplete).toEqual(['to']);
         // The same with an address before (A8): "Heidi" may be cut, left out.
-        const heidi = read([...FWD_ADDR, 'To: Carol <carol@x.example.test>; Heidi', 'Thanks for this', 'hello'], 'Fwd: Contract');
+        const heidi = read([...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>; Heidi', 'Thanks for this', 'hello'], 'Fwd: Contract');
         expect(heidi.got.to).toEqual([box('Carol', 'carol@x.example.test')]);
         expect(heidi.got.incomplete).toEqual(['to']);
         // A complete mailbox with an address is kept even when text follows (A12).
-        const kept = read([...FWD_ADDR, 'To: Carol <carol@x.example.test>', 'Thanks Bob', 'Cc: Dan <dan@example.test>'], 'Fwd: Contract');
+        const kept = read([...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>', 'Thanks Bob', 'Cc: Dan <dan@example.test>'], 'Fwd: Contract');
         expect(kept.got.to).toEqual([box('Carol', 'carol@x.example.test')]);
         expect(kept.got.cc).toEqual([]);
         expect(kept.got.incomplete).toEqual(['to']);
         // The last label, then a blank line (Gmail): complete.
-        const gmail = read([...FWD_ADDR, 'To: Carol <carol@x.example.test>, Dan <dan@example.test>', '', 'body'], 'Fwd: Contract');
+        const gmail = read([...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>, Dan <dan@example.test>', '', 'body'], 'Fwd: Contract');
         expect(gmail.got.incomplete).toEqual([]);
         // A trailing ";" before a blank line or the end of the text: may go on, flagged.
-        expect(read([...FWD_ADDR, 'To: Carol <carol@x.example.test>;', '', 'body'], 'Fwd: Contract').got.incomplete).toEqual(['to']);
+        expect(read([...FORWARD_ADDRESS, 'To: Carol <carol@x.example.test>;', '', 'body'], 'Fwd: Contract').got.incomplete).toEqual(['to']);
         // A wrapped list taken before the next label: read to its end, not flagged.
         const wrapped = read([...HEAD, 'To: Carol Test <carol@sample.invalid>;', 'Frank Mockup <frank@example.test>', 'Cc: Dan <dan@example.test>;', 'Eve Roe <eve@example.test>', 'Subject: P', '']);
         expect(wrapped.got.to).toEqual([box('Carol Test', 'carol@sample.invalid'), box('Frank Mockup', 'frank@example.test')]);
@@ -798,10 +799,10 @@ describe('readQuotedHeader: odd input', () =>
     {
         const pieces = ['From: ', 'Sent: ', 'To: ', 'Cc: ', 'Bcc: ', 'Subject: ', 'De : ', '\u00c0 : ', 'Van: ', 'On ', 'Le ', 'Op ', ' wrote:', ' a \u00e9crit :', ' schreef ', '<', '>', '[mailto:', ']', '"', "'", ',', ';', '@', 'x', ' ', '\n', '\r\n', '> ', '>>', '2:02 PM', '2025', '_'.repeat(12), '-----Original Message-----', '=?UTF-8?Q?a?='];
         let seed = 7;
-        const rand = (n: number): number =>
+        const rand = (limit: number): number =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
-            return seed % n;
+            return seed % limit;
         };
         for (let round = 0; round < 400; round++)
         {
@@ -811,10 +812,10 @@ describe('readQuotedHeader: odd input', () =>
             {
                 body += pieces[rand(pieces.length)] ?? '';
             }
-            for (const h of findReplyHeaders(body, rand(2) === 0 ? 'Fwd: x' : 'Re: x'))
+            for (const header of findReplyHeaders(body, rand(2) === 0 ? 'Fwd: x' : 'Re: x'))
             {
-                const got = readQuotedHeader(body, h);
-                expect(got.headerEnd).toBeGreaterThanOrEqual(h.headEnd);
+                const got = readQuotedHeader(body, header);
+                expect(got.headerEnd).toBeGreaterThanOrEqual(header.headEnd);
                 expect(got.headerEnd).toBeLessThanOrEqual(body.length);
             }
         }

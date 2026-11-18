@@ -465,8 +465,8 @@ describe('formatSenderLocal', () =>
 
     it('says zone-unknown for a .msg date: exact moment, no sender offset', () =>
     {
-        const msgDate = date({ original: '2025-04-02T09:00:00.000Z', offsetMinutes: null, zoneKnown: true });
-        expect(formatSenderLocal(msgDate)).toEqual({ kind: 'zone-unknown' });
+        const messageDate = date({ original: '2025-04-02T09:00:00.000Z', offsetMinutes: null, zoneKnown: true });
+        expect(formatSenderLocal(messageDate)).toEqual({ kind: 'zone-unknown' });
     });
 
     it('returns no-date when there is no moment', () =>

@@ -6,7 +6,7 @@
 // to estimate the time of a quoted date written without a zone: user
 // decision, see quoted-date.ts). Output: one ReconstructedMessage per earlier
 // message, newest first (= in body order). The engine links them
-// (rebuild-links.ts); the preview (Source/web-page/preview.ts) and the PDF
+// (link-rebuilt-messages.ts); the preview (Source/web-page/preview.ts) and the PDF
 // (Source/pdf-export/model.ts) show them, marked as rebuilt.
 //
 // How it works:
@@ -83,7 +83,7 @@ import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { hasWrittenZone, parseQuotedDate } from './quoted-date';
 import { isPlainName, readQuotedHeader } from './quoted-header';
 import { clean, findReplyHeaders, LABEL_HEAD_LENGTH, LABEL_PATTERN, LABEL_ROLE_OF, labelKey } from './reply-header';
-import { lineRanges } from './segments';
+import { lineRanges } from './fold-segments';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
 
 /** A body longer than this (characters) is not read: no rebuilt message. */
@@ -110,7 +110,7 @@ export interface ReconstructOptions
 }
 
 /** One line of the body. */
-interface QLine
+interface QuotedLine
 {
     readonly start: number;
     readonly contentEnd: number;
@@ -137,7 +137,7 @@ function isSpace(code: number): boolean
     return /\s/u.test(String.fromCharCode(code));
 }
 
-function classify(text: string, start: number, contentEnd: number, end: number): QLine
+function classify(text: string, start: number, contentEnd: number, end: number): QuotedLine
 {
     let k = start;
     let depth = 0;
@@ -170,9 +170,9 @@ export function removeQuoteMarks(text: string, from: number, to: number, depth: 
     const parts: string[] = [];
     for (const range of lineRanges(text.slice(from, to)))
     {
-        const s = from + range.start;
+        const lineStart = from + range.start;
         const contentEnd = from + range.contentEnd;
-        let i = s;
+        let i = lineStart;
         let removed = 0;
         while (removed < depth)
         {
@@ -198,14 +198,14 @@ export function removeQuoteMarks(text: string, from: number, to: number, depth: 
 }
 
 /** Index of the line starting at `offset` (binary search), or -1. */
-function lineIndexAt(lines: readonly QLine[], offset: number): number
+function lineIndexAt(lines: readonly QuotedLine[], offset: number): number
 {
     let lo = 0;
     let hi = lines.length - 1;
     while (lo <= hi)
     {
         const mid = (lo + hi) >> 1;
-        const line = lines[mid] as QLine;
+        const line = lines[mid] as QuotedLine;
         if (line.start === offset)
         {
             return mid;
@@ -223,7 +223,7 @@ function lineIndexAt(lines: readonly QLine[], offset: number): number
 }
 
 /** Whether the line starts with a From label (as reply-header.ts reads labels). */
-function isFromLabel(text: string, line: QLine): boolean
+function isFromLabel(text: string, line: QuotedLine): boolean
 {
     if (line.gap)
     {
@@ -268,13 +268,13 @@ function rebuild(text: string, subject: string | undefined, sourceOffset: number
     let parentDepth = 0;
     for (let k = 0; k < headers.length && kept.length < MAX_RECONSTRUCTED; k++)
     {
-        const h = headers[k];
-        if (h === undefined)
+        const header = headers[k];
+        if (header === undefined)
         {
             break;
         }
-        const segEnd = Math.min(headers[k + 1]?.start ?? limit, limit);
-        const message = candidate(text, lines, h, segEnd, parentDepth, sourceOffset, kept.length + 1);
+        const segmentEnd = Math.min(headers[k + 1]?.start ?? limit, limit);
+        const message = candidate(text, lines, header, segmentEnd, parentDepth, sourceOffset, kept.length + 1);
         if (message === null)
         {
             kept.pop(); // R1-R4: the holder's end is not known (file comment, REFUSAL)
@@ -286,25 +286,25 @@ function rebuild(text: string, subject: string | undefined, sourceOffset: number
     return kept;
 }
 
-/** Message for header `h` whose part ends at `segEnd`, or null when refused (rules R1-R5). */
+/** Message for `header` whose part ends at `segmentEnd`, or null when refused (rules R1-R5). */
 function candidate(
     text: string,
-    lines: readonly QLine[],
-    h: { readonly start: number; readonly headEnd: number; readonly kind: 'reply' | 'forward' },
-    segEnd: number,
+    lines: readonly QuotedLine[],
+    header: { readonly start: number; readonly headEnd: number; readonly kind: 'reply' | 'forward' },
+    segmentEnd: number,
     parentDepth: number,
     sourceOffset: number | null,
     generation: number,
 ): ReconstructedMessage | null
 {
-    const fields = readQuotedHeader(text, h);
+    const fields = readQuotedHeader(text, header);
     const headerEnd = fields.headerEnd;
     // R2: the fields end inside the message's part.
-    if (headerEnd <= h.start || headerEnd > segEnd)
+    if (headerEnd <= header.start || headerEnd > segmentEnd)
     {
         return null;
     }
-    const first = lineIndexAt(lines, h.start);
+    const first = lineIndexAt(lines, header.start);
     if (first < 0)
     {
         return null;
@@ -315,9 +315,9 @@ function candidate(
     let block = false;
     let introFirst = false;
     let k = first;
-    for (; k < lines.length && (lines[k] as QLine).start < headerEnd; k++)
+    for (; k < lines.length && (lines[k] as QuotedLine).start < headerEnd; k++)
     {
-        const line = lines[k] as QLine;
+        const line = lines[k] as QuotedLine;
         if (line.gap)
         {
             continue;
@@ -340,7 +340,7 @@ function candidate(
     {
         return null;
     }
-    const bodyFirst = k; // first line of [headerEnd, segEnd)
+    const bodyFirst = k; // first line of [headerEnd, segmentEnd)
 
     // Body depth (step 3) and R3.
     let depth: number;
@@ -355,9 +355,9 @@ function candidate(
     else
     {
         let firstText = -1;
-        for (let j = bodyFirst; j < lines.length && (lines[j] as QLine).start < segEnd; j++)
+        for (let j = bodyFirst; j < lines.length && (lines[j] as QuotedLine).start < segmentEnd; j++)
         {
-            if (!(lines[j] as QLine).gap)
+            if (!(lines[j] as QuotedLine).gap)
             {
                 firstText = j;
                 break;
@@ -367,7 +367,7 @@ function candidate(
         {
             return null;
         }
-        depth = (lines[firstText] as QLine).depth;
+        depth = (lines[firstText] as QuotedLine).depth;
         const gmail = headerDepth === parentDepth && depth === parentDepth + 1;
         const apple = headerDepth === parentDepth + 1 && depth === headerDepth;
         if (!gmail && !apple)
@@ -381,9 +381,9 @@ function candidate(
     }
 
     // R4: no text line of the part less deep than the body.
-    for (let j = bodyFirst; j < lines.length && (lines[j] as QLine).start < segEnd; j++)
+    for (let j = bodyFirst; j < lines.length && (lines[j] as QuotedLine).start < segmentEnd; j++)
     {
-        const line = lines[j] as QLine;
+        const line = lines[j] as QuotedLine;
         if (!line.gap && line.depth < depth)
         {
             return null;
@@ -404,12 +404,12 @@ function candidate(
     }
 
     return {
-        start: h.start,
+        start: header.start,
         headerEnd,
-        end: segEnd,
+        end: segmentEnd,
         depth,
         generation,
-        kind: h.kind,
+        kind: header.kind,
         from: fields.from,
         to: fields.to,
         cc: fields.cc,
@@ -418,7 +418,7 @@ function candidate(
         incomplete: fields.incomplete,
         date,
         dateApproximate: date === null || date.wallMs === null || !hasWrittenZone(date),
-        reconstructedText: removeQuoteMarks(text, headerEnd, segEnd, depth),
+        reconstructedText: removeQuoteMarks(text, headerEnd, segmentEnd, depth),
         quoteMarksRemoved: depth > 0,
     };
 }

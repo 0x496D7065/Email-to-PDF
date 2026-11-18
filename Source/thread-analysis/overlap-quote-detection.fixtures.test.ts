@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { dedupe } from './dedupe';
-import { orderMessages } from './order';
-import { detectQuotedOverlap } from './overlap';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
+import { orderMessages } from './chronological-order';
+import { detectQuotedOverlap } from './overlap-quote-detection';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
 
 interface Measured
 {
@@ -41,7 +41,7 @@ async function measure(): Promise<Map<string, Measured>>
         const folds = results[k] ?? [];
         const segments = buildSegments(body, folds);
         expect(checkSegments(body, segments)).toEqual([]);
-        expect(reconstruct(body, segments)).toBe(body);
+        expect(joinSegments(body, segments)).toBe(body);
         const foldedChars = segments.filter((s) => s.folded).reduce((n, s) => n + s.end - s.start, 0);
         const related = [...new Set(folds.map((f) => messages[f.related ?? -1]?.source.fileName ?? '?'))].sort();
         byFile.set(item.message.source.fileName, { file: item.message.source.fileName, body, folds, foldedChars, related });
@@ -50,16 +50,16 @@ async function measure(): Promise<Map<string, Measured>>
 }
 
 /** True when every character of `snippet` (first occurrence) is folded / shown. */
-function state(m: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
+function state(measured: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
 {
-    const at = m.body.indexOf(snippet);
-    if (at < 0)
+    const offset = measured.body.indexOf(snippet);
+    if (offset < 0)
     {
-        throw new Error(`${m.file}: snippet not found: ${snippet}`);
+        throw new Error(`${measured.file}: snippet not found: ${snippet}`);
     }
-    const covered = (i: number): boolean => m.folds.some((f) => f.start <= i && i < f.end);
+    const covered = (i: number): boolean => measured.folds.some((f) => f.start <= i && i < f.end);
     let foldedCount = 0;
-    for (let i = at; i < at + snippet.length; i++)
+    for (let i = offset; i < offset + snippet.length; i++)
     {
         if (covered(i))
         {
@@ -80,12 +80,12 @@ describe('overlap detection over the parsed fixtures', () =>
         const all = await measure();
         const get = (file: string): Measured =>
         {
-            const m = all.get(file);
-            if (m === undefined)
+            const measured = all.get(file);
+            if (measured === undefined)
             {
                 throw new Error(`no result for ${file}`);
             }
-            return m;
+            return measured;
         };
 
         // Measurement (the README asks to measure detection, not assume it).
@@ -110,24 +110,24 @@ describe('overlap detection over the parsed fixtures', () =>
         ];
         for (const [file, fresh, quoted, related] of replies)
         {
-            const m = get(file);
-            expect(state(m, fresh), `${file}: new text`).toBe('shown');
-            expect(state(m, quoted), `${file}: quoted text`).toBe('folded');
-            expect(m.related, file).toContain(related);
+            const measured = get(file);
+            expect(state(measured, fresh), `${file}: new text`).toBe('shown');
+            expect(state(measured, quoted), `${file}: quoted text`).toBe('folded');
+            expect(measured.related, file).toContain(related);
         }
 
         // Every message: its first non-empty line (the start of its own new text
         // in every fixture) stays shown. Manifest `bodyContains` snippets are not
         // used here because some of them are quoted history.
         expect(all.size).toBeGreaterThan(0);
-        for (const m of all.values())
+        for (const measured of all.values())
         {
-            const firstLine = m.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
+            const firstLine = measured.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
             if (firstLine === undefined)
             {
                 continue; // no text at all: nothing to fold
             }
-            expect(state(m, firstLine), `${m.file}: first line`).toBe('shown');
+            expect(state(measured, firstLine), `${measured.file}: first line`).toBe('shown');
         }
 
         // First messages of each thread: their own text stays shown.
@@ -144,7 +144,7 @@ describe('overlap detection over the parsed fixtures', () =>
         expect(get('eml/10-order-1-alice.eml').folds).toEqual([]);
         expect(get('eml/20-delivery-1-carol.eml').folds).toEqual([]);
 
-        // Known limitation (see overlap.ts): Bob repeats his signature and
+        // Known limitation (see overlap-quote-detection.ts): Bob repeats his signature and
         // disclaimer, so in his first setup message they match his earlier
         // message 11 and are folded as quoted-overlap. The signature detector
         // and the pipeline will relabel this; the rest of the message stays shown.

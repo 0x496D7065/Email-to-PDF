@@ -2,7 +2,7 @@
 // merged with another copy (task 7.5, review round 2). A wrong link would
 // later remove a quoted message from the timeline and the PDF by declaring
 // it identical to a different message; a visible repeat is acceptable
-// (rebuild-links.ts, file comment). Each case runs the whole engine on
+// (link-rebuilt-messages.ts, file comment). Each case runs the whole engine on
 // hand-written synthetic emails, so the splitter, the header reader and the
 // date reader take part, and first checks that the quoted message IS
 // rebuilt (the case is not empty). Synthetic data only (README.md, rule R7).
@@ -10,8 +10,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from './engine';
-import { comparableText } from './rebuild-links';
+import { runEngine } from './analyze-thread';
+import { comparableText } from './link-rebuilt-messages';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineRebuilt } from '../../Header/rebuilt-emails';
 import type { EngineResult } from '../../Header/thread-analysis-result';
@@ -51,9 +51,9 @@ const gmailReply = (own: string, date: string, who: string, quoted: string): str
         .map((l) => (l === '' ? '>' : `> ${l}`))
         .join('\n')}\n`;
 
-/** Outlook-style reply: own text, then a separator and a header block. `sep` is put between the header and the body. */
-const outlookReply = (own: string, header: readonly string[], quoted: string, sep = '\n'): string =>
-    `${own}\n\n________________________________\n${header.join('\n')}\n${sep}${quoted}`;
+/** Outlook-style reply: own text, then a separator and a header block. `separator` is put between the header and the body. */
+const outlookReply = (own: string, header: readonly string[], quoted: string, separator = '\n'): string =>
+    `${own}\n\n________________________________\n${header.join('\n')}\n${separator}${quoted}`;
 
 const WHO = 'Alice Example <alice@example.test>';
 
@@ -75,8 +75,8 @@ function expectNoLink(out: EngineResult): void
 }
 
 // A ~60-word invoice template; only the figures change.
-const invoice = (no: string, amount: string): string =>
-    `Hello Bob,\n\nPlease find attached invoice ${no} for the delivery of the office desks and chairs last week. ` +
+const invoice = (invoiceNumber: string, amount: string): string =>
+    `Hello Bob,\n\nPlease find attached invoice ${invoiceNumber} for the delivery of the office desks and chairs last week. ` +
     `The total amount of ${amount} euro is due within thirty days of the invoice date. Payment can be made by bank ` +
     `transfer to the account mentioned on the invoice. Let me know if anything is unclear.\n\nBest regards,\nAlice Example\nAccounts\n`;
 
@@ -119,8 +119,8 @@ describe('rebuilt messages that must not be linked to a real file', () =>
             'See below.\n\n---------- Forwarded message ---------\nFrom: Alice Example <alice@example.test>\n' +
             'Date: Mon, 3 Mar 2025 10:00:00 +0000\nSubject: Delivery\nTo: Bob Sample <bob@example.test>\n\nThanks!\n\nAlice\n';
         const out = run(real, email(BOB, '2025-03-03T16:00:00Z', body, 0, 'Fwd: Delivery'));
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.dateApproximate).toBe(false);
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.dateApproximate).toBe(false);
         expectNoLink(out);
     });
 
@@ -131,10 +131,10 @@ describe('rebuilt messages that must not be linked to a real file', () =>
         const reply = email(BOB, '2025-03-03T15:00:00Z', outlookReply('Understood, I will call the driver.\n\nBob', header, quoted, ''));
         const real = email(ALICE, '2025-03-03T14:00:00Z', `Yes, fine.\n\n${SIGNATURE}`);
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.incomplete).toEqual(['to']);
-        expect(r?.rebuilt.to).toEqual([]);
-        expect(r?.rebuilt.reconstructedText.startsWith('No, the delivery')).toBe(true);
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.incomplete).toEqual(['to']);
+        expect(rebuilt?.rebuilt.to).toEqual([]);
+        expect(rebuilt?.rebuilt.reconstructedText.startsWith('No, the delivery')).toBe(true);
         expectNoLink(out);
     });
 
@@ -155,8 +155,8 @@ describe('rebuilt messages that must not be linked to a real file', () =>
         const real = email(ALICE, '2025-03-03T10:00:00Z', 'Thanks, see you tomorrow.\n');
         const reply = email(BOB, '2025-03-03T11:00:00Z', gmailReply('Fine.', 'Mon, 3 Mar 2025 at 10:00', 'Alice Example', 'Thanks, see you tomorrow.'));
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.from).toEqual([{ name: 'Alice Example', address: '' }]);
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.from).toEqual([{ name: 'Alice Example', address: '' }]);
         expectNoLink(out);
     });
 
@@ -174,8 +174,8 @@ describe('rebuilt messages that must not be linked to a real file', () =>
         const real = email(ALICE, '2025-04-03T10:00:00Z', 'OK, thanks.\n');
         const reply = email(BOB, '2025-04-03T12:00:00Z', gmailReply('Then it is settled.', '04/03/2025 10:00', WHO, 'OK, thanks.'));
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.date?.wallMs ?? null).toBeNull(); // unreadable: ambiguous
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.date?.wallMs ?? null).toBeNull(); // unreadable: ambiguous
         expectNoLink(out);
     });
 
@@ -253,8 +253,8 @@ describe('copies of quoted messages that must not be merged', () =>
 // identical recurring messages a day apart.
 
 /** A ~45-word decision; only `w` changes. No figures. */
-const decision = (w: string): string =>
-    `Hello Bob,\n\nAfter reviewing the proposal with the board this afternoon, we have decided to ${w} the offer for the renovation of the warehouse. ` +
+const decision = (word: string): string =>
+    `Hello Bob,\n\nAfter reviewing the proposal with the board this afternoon, we have decided to ${word} the offer for the renovation of the warehouse. ` +
     `Our lawyer will send you the formal letter by the end of the week, together with the signed documents.\n\nBest regards,\nAlice\n`;
 
 /** The same text sent to several people; only the greeting changes. */
@@ -322,8 +322,8 @@ describe('one word changed inside the text: never the same message (review round
             'See below.\n\n---------- Forwarded message ---------\nFrom: Alice Example <alice@example.test>\n' +
             `Date: Mon, 3 Mar 2025 10:00:00 -0500\nSubject: Offer\nTo: Bob Sample <bob@example.test>\n\n${decision('reject')}`;
         const out = run(real, email(BOB, '2025-03-03T16:00:00Z', body, 0, 'Fwd: Offer'));
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.dateApproximate).toBe(false);
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.dateApproximate).toBe(false);
         expectNoLink(out);
     });
 
@@ -332,8 +332,8 @@ describe('one word changed inside the text: never the same message (review round
         const real = email(ALICE, '2025-03-03T15:00:20Z', decision('accept'));
         const reply = email(BOB, '2025-03-03T16:00:00Z', gmailReply('Noted, thanks.', 'Mon, 3 Mar 2025 at 15:00', 'Alice Example', decision('reject')));
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.from).toEqual([{ name: 'Alice Example', address: '' }]);
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.from).toEqual([{ name: 'Alice Example', address: '' }]);
         expectNoLink(out);
     });
 
@@ -399,8 +399,8 @@ describe('the same text a day apart: a recurring message, not the same one (revi
         const real = email(ALICE, '2025-03-03T09:00:12Z', REMINDER);
         const reply = email(BOB, '2025-03-04T10:00:00Z', gmailReply('Done.', 'Tue, 4 Mar 2025 at 09:00', WHO, REMINDER));
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.date?.precision).toBe('minute');
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.date?.precision).toBe('minute');
         expectNoLink(out);
     });
 
@@ -409,8 +409,8 @@ describe('the same text a day apart: a recurring message, not the same one (revi
         const real = email(ALICE, '2025-03-03T09:00:12Z', REMINDER);
         const reply = email(BOB, '2025-03-04T10:00:00Z', gmailReply('Done.', '4 March 2025', WHO, REMINDER));
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.date?.precision).toBe('day');
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.date?.precision).toBe('day');
         expectNoLink(out);
     });
 
@@ -527,8 +527,8 @@ describe('policy (b): short texts with one more word, same sender, same minute (
             'See below.\n\n---------- Forwarded message ---------\nFrom: Alice Example <alice@example.test>\n' +
             'Date: Mon, 3 Mar 2025 10:00:00 +0000\nSubject: Delivery\nTo: Bob Sample <bob@example.test>\n\nApproved.\n';
         const out = run(email(ALICE, '2025-03-03T10:00:31Z', 'Not approved.\n'), email(BOB, '2025-03-03T11:00:00Z', body, 0, 'Fwd: Delivery'));
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.dateApproximate).toBe(false);
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.dateApproximate).toBe(false);
         expectNoLink(out);
     });
 
@@ -622,8 +622,8 @@ describe('policy (b): the source zone unknown (round 4, S2)', () =>
         const real = email(ALICE, '2025-03-03T09:00:12Z', REMINDER);
         const reply = email(BOB, '2025-03-04T10:00:00Z', gmailReply('Done.', 'Tue, 4 Mar 2025 at 09:00', WHO, REMINDER), null);
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.date?.basis).toBe('none');
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.date?.basis).toBe('none');
         expectNoLink(out);
     });
 
@@ -632,9 +632,9 @@ describe('policy (b): the source zone unknown (round 4, S2)', () =>
         const real = email(ALICE, '2025-03-03T09:00:12Z', REMINDER);
         const reply = email(BOB, '2025-03-03T10:00:00Z', gmailReply('Done.', 'Mon, 3 Mar 2025 at 09:00', WHO, REMINDER), null);
         const out = run(real, reply);
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.date?.basis).toBe('none');
-        expect(r?.link).toBe('real');
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.date?.basis).toBe('none');
+        expect(rebuilt?.link).toBe('real');
     });
 });
 
@@ -695,15 +695,16 @@ describe('policy (b): what still links (round 4 controls)', () =>
     {
         const messages = chain(['outlook-nl'], { quote: { people: 'name', wrapAt: 60 }, moreTo: [ALICE, ALICE, ALICE, ALICE] });
         const [first, second] = messages as [ThreadMessage, ThreadMessage];
-        const asEmail = (m: ThreadMessage, body: string): NormalizedMessage => ({
-            ...email(m.from, new Date(instantOf(m.sent, m.zone)).toISOString(), body, m.zone.offsetMinutes, m.subject),
-            to: m.to,
+        const asEmail = (threadMessage: ThreadMessage, body: string): NormalizedMessage => ({
+            ...email(threadMessage.from, new Date(instantOf(threadMessage.sent, threadMessage.zone)).toISOString(), body,
+                threadMessage.zone.offsetMinutes, threadMessage.subject),
+            to: threadMessage.to,
         });
         const out = run(asEmail(first, buildThread([first]).body), asEmail(second, buildThread(messages).body));
-        const [r] = aliceRebuilt(out);
-        expect(r?.rebuilt.incomplete).toEqual(['to']);
-        expect(r?.rebuilt.reconstructedText.startsWith('Hello Bob')).toBe(false);
-        expect(comparableText(r?.rebuilt as EngineRebuilt['rebuilt']).startsWith('Hello Bob')).toBe(true);
-        expect(r?.link).toBe('real');
+        const [rebuilt] = aliceRebuilt(out);
+        expect(rebuilt?.rebuilt.incomplete).toEqual(['to']);
+        expect(rebuilt?.rebuilt.reconstructedText.startsWith('Hello Bob')).toBe(false);
+        expect(comparableText(rebuilt?.rebuilt as EngineRebuilt['rebuilt']).startsWith('Hello Bob')).toBe(true);
+        expect(rebuilt?.link).toBe('real');
     });
 });

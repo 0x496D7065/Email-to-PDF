@@ -1,6 +1,6 @@
 // Unit tests for the notes of an email (message-notes.ts). Synthetic data only.
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { t } from '../web-page/translations';
 import { codedCharacters, DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';

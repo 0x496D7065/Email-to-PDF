@@ -21,7 +21,7 @@
 //   [weekday] month day year [connector] [time [zone]]
 //   [weekday] numeric-date [connector] [time [zone]]
 // in this order only, with month and weekday names in English, French or
-// Dutch (date-words.ts), full or abbreviated, with or without a final ".",
+// Dutch (month-and-weekday-names.ts), full or abbreviated, with or without a final ".",
 // with or without accents; day as "3", "03", "3rd", "1er" (a suffix must
 // match its day: "1st", "2nd", "3rd", "4th", "11th", "21st", "1er" only on
 // day 1); connector "at", "\u00e0", "a", "om"; time "14:02", "14:02:00",
@@ -62,7 +62,7 @@
 //   function never throws.
 
 import { parseEmailDate } from '../email-reading/date-header';
-import { DATE_LANGUAGES } from './date-words';
+import { DATE_LANGUAGES } from './month-and-weekday-names';
 import type { QuotedDate } from '../../Header/rebuilt-emails';
 
 /** Longer text is not read at all (a real quote header date is under 60 characters). */
@@ -85,7 +85,7 @@ const MAX_YEAR = 2100;
 const MAX_TOKENS = 12;
 
 // ---------------------------------------------------------------------------
-// Word lookup tables, built once from date-words.ts.
+// Word lookup tables, built once from month-and-weekday-names.ts.
 
 function lookup(pick: (lang: (typeof DATE_LANGUAGES)[number]) => readonly (readonly string[])[]): ReadonlyMap<string, number>
 {
@@ -185,25 +185,25 @@ function stripComments(text: string): Stripped | null
     let out = '';
     let comments = '';
     let depth = 0;
-    for (const ch of text)
+    for (const character of text)
     {
-        if (ch === '(')
+        if (character === '(')
         {
             depth++;
             comments += ' ';
         }
-        else if (ch === ')' && depth > 0)
+        else if (character === ')' && depth > 0)
         {
             depth--;
             comments += ' ';
         }
         else if (depth === 0)
         {
-            out += ch;
+            out += character;
         }
         else
         {
-            comments += ch;
+            comments += character;
         }
     }
     return depth === 0 ? { text: out, comments } : null;
@@ -227,7 +227,7 @@ const withoutDot = (token: string): string => (token.endsWith('.') ? token.slice
 
 /**
  * True when tokens[0] is a weekday. A word that is also a month ("mar") is a
- * weekday only if a month word follows it (see date-words.ts).
+ * weekday only if a month word follows it (see month-and-weekday-names.ts).
  */
 function startsWithWeekday(tokens: readonly string[]): boolean
 {
@@ -258,14 +258,14 @@ function readZoneToken(token: string): number | null | undefined
         return 0;
     }
     let sign: string | undefined;
-    let hh: string | undefined;
-    let mm: string | undefined;
+    let hoursDigits: string | undefined;
+    let minutesDigits: string | undefined;
     const named = /^(?:gmt|utc|ut)([+-])(?:(\d{1,2})(?::(\d\d))?|(\d\d)(\d\d))$/.exec(token);
     if (named !== null)
     {
         sign = named[1];
-        hh = named[2] ?? named[4];
-        mm = named[3] ?? named[5];
+        hoursDigits = named[2] ?? named[4];
+        minutesDigits = named[3] ?? named[5];
     }
     else
     {
@@ -274,10 +274,10 @@ function readZoneToken(token: string): number | null | undefined
         {
             return undefined;
         }
-        [, sign, hh, mm] = bare;
+        [, sign, hoursDigits, minutesDigits] = bare;
     }
-    const hours = Number(hh);
-    const minutes = mm === undefined ? 0 : Number(mm);
+    const hours = Number(hoursDigits);
+    const minutes = minutesDigits === undefined ? 0 : Number(minutesDigits);
     if (!Number.isInteger(hours) || hours > 23 || minutes > 59)
     {
         return undefined;
@@ -321,7 +321,7 @@ function suffixFits(day: number, suffix: string | undefined): boolean
     return suffix === 'th';
 }
 
-interface Ymd
+interface CalendarDate
 {
     readonly year: number;
     readonly month: number; // 1-12
@@ -333,25 +333,25 @@ interface Ymd
  * comment). Returns null for ambiguous, two-digit-year or malformed dates;
  * the day and month ranges are checked later.
  */
-function readNumericDate(token: string): Ymd | null
+function readNumericDate(token: string): CalendarDate | null
 {
-    const m = /^(\d{1,4})([./-])(\d{1,2})\2(\d{1,4})$/.exec(token);
-    if (m === null)
+    const match = /^(\d{1,4})([./-])(\d{1,2})\2(\d{1,4})$/.exec(token);
+    if (match === null)
     {
         return null;
     }
-    const [, a = '', , b = '', c = ''] = m;
-    if (a.length === 4 && c.length <= 2)
+    const [, firstDigits = '', , middleDigits = '', lastDigits = ''] = match;
+    if (firstDigits.length === 4 && lastDigits.length <= 2)
     {
-        return { year: Number(a), month: Number(b), day: Number(c) };
+        return { year: Number(firstDigits), month: Number(middleDigits), day: Number(lastDigits) };
     }
-    if (a.length > 2 || c.length !== 4)
+    if (firstDigits.length > 2 || lastDigits.length !== 4)
     {
         return null; // two- or three-digit years: refused
     }
-    const first = Number(a);
-    const second = Number(b);
-    const year = Number(c);
+    const first = Number(firstDigits);
+    const second = Number(middleDigits);
+    const year = Number(lastDigits);
     if (first === second)
     {
         return { year, month: first, day: first };
@@ -368,9 +368,9 @@ function readNumericDate(token: string): Ymd | null
 }
 
 /** Milliseconds of a calendar date at midnight UTC, or null if the day does not exist (31 April, 29 Feb 2025). */
-function dateMs(ymd: Ymd): number | null
+function dateMs(calendarDate: CalendarDate): number | null
 {
-    const { year, month, day } = ymd;
+    const { year, month, day } = calendarDate;
     if (year < MIN_YEAR || year > MAX_YEAR || month < 1 || month > 12 || day < 1 || day > 31)
     {
         return null;
@@ -392,16 +392,16 @@ interface Clock
 /** "14:02", "14:02:00", "2:02pm", "2:02p.m." */
 function readClock(token: string): Clock | null
 {
-    const m = /^(\d{1,2}):(\d\d)(?::(\d\d))?(am|pm|a\.m\.|p\.m\.)?$/.exec(token);
-    if (m === null)
+    const match = /^(\d{1,2}):(\d\d)(?::(\d\d))?(am|pm|a\.m\.|p\.m\.)?$/.exec(token);
+    if (match === null)
     {
         return null;
     }
     return {
-        hour: Number(m[1]),
-        minute: Number(m[2]),
-        second: m[3] === undefined ? 0 : Number(m[3]),
-        meridiem: m[4] === undefined ? null : (MERIDIEM[m[4]] ?? null),
+        hour: Number(match[1]),
+        minute: Number(match[2]),
+        second: match[3] === undefined ? 0 : Number(match[3]),
+        meridiem: match[4] === undefined ? null : (MERIDIEM[match[4]] ?? null),
     };
 }
 
@@ -509,15 +509,15 @@ function readLocalized(tokens: readonly string[]): Reading | null
             }
             continue;
         }
-        const ymd = readNumericDate(token);
-        if (ymd !== null)
+        const numericDate = readNumericDate(token);
+        if (numericDate !== null)
         {
             if (numeric || day !== null || month !== null || year !== null)
             {
                 return null;
             }
-            ({ day, year } = ymd);
-            month = ymd.month - 1;
+            ({ day, year } = numericDate);
+            month = numericDate.month - 1;
             numeric = true;
             continue;
         }
@@ -690,16 +690,16 @@ export function parseQuotedDate(text: string, sourceOffsetMinutes: number | null
     // 02:02. Read with a real zone (exact), or with "-0000" (UTC, local zone
     // unknown: approximate, file comment). A one-letter military zone other
     // than "Z" is refused (unreadable, below).
-    const rfc = parseEmailDate(text);
+    const rfcDate = parseEmailDate(text);
     const whole = wholeRfcDate(stripped.text);
-    if (rfc.utcMs !== null && whole !== undefined && !tokens.some((t) => MERIDIEM[t] !== undefined))
+    if (rfcDate.utcMs !== null && whole !== undefined && !tokens.some((t) => MERIDIEM[t] !== undefined))
     {
         let zone: WrittenZone | undefined;
-        if (rfc.zoneKnown && rfc.offsetMinutes !== null)
+        if (rfcDate.zoneKnown && rfcDate.offsetMinutes !== null)
         {
-            zone = rfc.offsetMinutes;
+            zone = rfcDate.offsetMinutes;
         }
-        else if (rfc.offsetMinutes === null && whole.zone === '-0000')
+        else if (rfcDate.offsetMinutes === null && whole.zone === '-0000')
         {
             zone = 'utc-unknown';
         }
@@ -711,7 +711,7 @@ export function parseQuotedDate(text: string, sourceOffsetMinutes: number | null
         }
         if (zone !== undefined)
         {
-            const wallMs = rfc.utcMs + (typeof zone === 'number' ? zone : 0) * MINUTE_MS;
+            const wallMs = rfcDate.utcMs + (typeof zone === 'number' ? zone : 0) * MINUTE_MS;
             // parseEmailDate ignores the weekday; we check it.
             if (whole.weekday !== null && whole.weekday !== weekdayOf(wallMs))
             {

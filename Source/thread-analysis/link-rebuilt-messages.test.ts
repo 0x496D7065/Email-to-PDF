@@ -1,8 +1,8 @@
-// Unit tests for rebuild-links.ts: matching rebuilt messages to real ones,
+// Unit tests for link-rebuilt-messages.ts: matching rebuilt messages to real ones,
 // merging copies, and the timeline order. Synthetic data only (README.md,
 // rule R7). The run over the generated conversations is in
-// rebuild-links.measure.test.ts; the engine wiring in engine.test.ts; the
-// cases that must NOT link in rebuild-links.adversarial.test.ts.
+// link-rebuilt-messages.measure.test.ts; the engine wiring in analyze-thread.test.ts; the
+// cases that must NOT link in link-rebuilt-messages.adversarial.test.ts.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -27,7 +27,7 @@ import {
     nameWordsOf,
     wordsOf,
     type LinkSource,
-} from './rebuild-links';
+} from './link-rebuilt-messages';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 import type { QuotedDate, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
 
@@ -64,11 +64,11 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
     };
 }
 
-interface RbOptions
+interface RebuiltOptions
 {
     readonly from?: readonly EmailAddress[];
     /** Estimated moment; null = unreadable date. */
-    readonly est?: number | null;
+    readonly estimate?: number | null;
     readonly exact?: boolean;
     readonly precision?: 'minute' | 'day';
     readonly generation?: number;
@@ -79,37 +79,37 @@ interface RbOptions
 }
 
 /** A rebuilt message (offsets are not used by linkRebuilt). */
-function rb(text: string, o: RbOptions = {}): ReconstructedMessage
+function makeRebuilt(text: string, options: RebuiltOptions = {}): ReconstructedMessage
 {
-    const est = o.est === undefined ? T0 : o.est;
+    const estimate = options.estimate === undefined ? T0 : options.estimate;
     const date: QuotedDate | null =
-        est === null
-            ? o.dateText === undefined || o.dateText === null
+        estimate === null
+            ? options.dateText === undefined || options.dateText === null
                 ? null
-                : { text: o.dateText, wallMs: null, precision: null, estimatedUtcMs: null, basis: 'none' }
-            : { text: 'd', wallMs: est, precision: o.precision ?? 'minute', estimatedUtcMs: est, basis: o.exact === true ? 'rfc-zone' : 'source-offset' };
+                : { text: options.dateText, wallMs: null, precision: null, estimatedUtcMs: null, basis: 'none' }
+            : { text: 'd', wallMs: estimate, precision: options.precision ?? 'minute', estimatedUtcMs: estimate, basis: options.exact === true ? 'rfc-zone' : 'source-offset' };
     return {
         start: 0,
         headerEnd: 1,
         end: 1 + text.length,
         depth: 1,
-        generation: o.generation ?? 1,
+        generation: options.generation ?? 1,
         kind: 'reply',
-        from: o.from ?? [ALICE],
-        to: o.to ?? [BOB],
+        from: options.from ?? [ALICE],
+        to: options.to ?? [BOB],
         cc: [],
-        subject: o.subject === undefined ? 'Desks' : o.subject,
-        dateText: o.dateText === undefined ? 'd' : o.dateText,
-        incomplete: o.incomplete ?? [],
+        subject: options.subject === undefined ? 'Desks' : options.subject,
+        dateText: options.dateText === undefined ? 'd' : options.dateText,
+        incomplete: options.incomplete ?? [],
         date,
-        dateApproximate: o.exact !== true,
+        dateApproximate: options.exact !== true,
         reconstructedText: text,
         quoteMarksRemoved: true,
     };
 }
 
 /** A real message as a link source. */
-function src(index: number, message: NormalizedMessage, rebuilt: readonly ReconstructedMessage[] = [], ownEnd?: number): LinkSource
+function makeSource(index: number, message: NormalizedMessage, rebuilt: readonly ReconstructedMessage[] = [], ownEnd?: number): LinkSource
 {
     return { index, message, utcMs: message.date.utcMs, ownEnd: ownEnd ?? message.bodyText.length, rebuilt };
 }
@@ -125,8 +125,8 @@ const NAME = nameWordsOf([ALICE]);
 const plain = (text: string): ReturnType<typeof compared> => compared(text, new Set());
 const shares = (a: string, b: string): { a: number; b: number } | null =>
 {
-    const r = sharedWords(compared(a, NAME), compared(b, NAME));
-    return r === null ? null : { a: r.a, b: r.b };
+    const result = sharedWords(compared(a, NAME), compared(b, NAME));
+    return result === null ? null : { a: result.a, b: result.b };
 };
 
 describe('wordsOf and sameWords', () =>
@@ -264,40 +264,42 @@ describe('comparableText', () =>
 {
     it('leaves a complete header text unchanged', () =>
     {
-        expect(comparableText(rb('Frank Mockup; Grace Dummy\n\nHello Bob,\n'))).toBe('Frank Mockup; Grace Dummy\n\nHello Bob,\n');
+        expect(comparableText(makeRebuilt('Frank Mockup; Grace Dummy\n\nHello Bob,\n'))).toBe('Frank Mockup; Grace Dummy\n\nHello Bob,\n');
     });
 
     it('skips the leftover header lines of an incomplete header, up to the first blank line', () =>
     {
-        const r = rb('Frank Mockup; Grace Dummy\nOnderwerp: Desks\n\nHello Bob,\n\nAlice\n', { incomplete: ['to'] });
-        expect(comparableText(r)).toBe('Hello Bob,\n\nAlice\n');
-        const addresses = rb('frank@sample.invalid, Grace Dummy <grace@sample.invalid>\nSubject: Desks\n\nHello Bob,\n', { incomplete: ['to'] });
+        const rebuilt = makeRebuilt('Frank Mockup; Grace Dummy\nOnderwerp: Desks\n\nHello Bob,\n\nAlice\n', { incomplete: ['to'] });
+        expect(comparableText(rebuilt)).toBe('Hello Bob,\n\nAlice\n');
+        const addresses = makeRebuilt(
+            'frank@sample.invalid, Grace Dummy <grace@sample.invalid>\nSubject: Desks\n\nHello Bob,\n', { incomplete: ['to'] });
         expect(comparableText(addresses)).toBe('Hello Bob,\n');
         // Leftover lines up to the end: nothing to compare.
-        expect(comparableText(rb('Frank Mockup; Grace Dummy\n', { incomplete: ['to'] }))).toBe('');
+        expect(comparableText(makeRebuilt('Frank Mockup; Grace Dummy\n', { incomplete: ['to'] }))).toBe('');
     });
 
     it('skips nothing when the text opens with a blank line', () =>
     {
-        expect(comparableText(rb('\nHello Bob,\n', { incomplete: ['to'] }))).toBe('\nHello Bob,\n');
+        expect(comparableText(makeRebuilt('\nHello Bob,\n', { incomplete: ['to'] }))).toBe('\nHello Bob,\n');
     });
 
     it('skips nothing when a line does not look like a header leftover, or no blank line follows the leftovers', () =>
     {
         // No ";" or "@": a body line may be a name ("Thanks Bob").
-        expect(comparableText(rb('Frank Mockup\n\nHello Bob,\n', { incomplete: ['to'] }))).toBe('Frank Mockup\n\nHello Bob,\n');
+        expect(comparableText(makeRebuilt('Frank Mockup\n\nHello Bob,\n', { incomplete: ['to'] }))).toBe('Frank Mockup\n\nHello Bob,\n');
         // A body line with a comma, or with ";" and words that are no names.
-        expect(comparableText(rb('No, the delivery on Friday does not work.\n\nAlice\n', { incomplete: ['to'] }))).toBe('No, the delivery on Friday does not work.\n\nAlice\n');
-        expect(comparableText(rb('Fine; see the plan below.\n\nAlice\n', { incomplete: ['to'] }))).toBe('Fine; see the plan below.\n\nAlice\n');
+        expect(comparableText(makeRebuilt('No, the delivery on Friday does not work.\n\nAlice\n', { incomplete: ['to'] }))).toBe('No, the delivery on Friday does not work.\n\nAlice\n');
+        expect(comparableText(makeRebuilt('Fine; see the plan below.\n\nAlice\n', { incomplete: ['to'] })))
+            .toBe('Fine; see the plan below.\n\nAlice\n');
         // Leftover-shaped lines, then body text without a blank line between.
-        expect(comparableText(rb('Frank Mockup; Grace Dummy\nHello Bob,\n\nAlice\n', { incomplete: ['to'] }))).toBe('Frank Mockup; Grace Dummy\nHello Bob,\n\nAlice\n');
+        expect(comparableText(makeRebuilt('Frank Mockup; Grace Dummy\nHello Bob,\n\nAlice\n', { incomplete: ['to'] }))).toBe('Frank Mockup; Grace Dummy\nHello Bob,\n\nAlice\n');
     });
 
     it('skips nothing when an incomplete list is EMPTY (it may come from the "yields no mailbox" rule: the header was read whole)', () =>
     {
         const text = 'Frank Mockup; Grace Dummy\n\nHello Bob,\n';
-        expect(comparableText(rb(text, { incomplete: ['to'], to: [] }))).toBe(text);
-        expect(comparableText(rb(text, { incomplete: ['to', 'cc'] }))).toBe(text); // cc is empty
+        expect(comparableText(makeRebuilt(text, { incomplete: ['to'], to: [] }))).toBe(text);
+        expect(comparableText(makeRebuilt(text, { incomplete: ['to', 'cc'] }))).toBe(text); // cc is empty
     });
 });
 
@@ -502,50 +504,51 @@ describe('linkRebuilt: rebuilt vs real', () =>
     {
         const a = make({ bodyText: TEXT_A, ...real });
         const b = make({ from: [BOB], to: [ALICE], date: dated(T0 + 5 * HOUR), bodyText: `${TEXT_B}\n> quoted\n` });
-        return linkRebuilt([src(0, a), src(1, b, [rebuilt])]);
+        return linkRebuilt([makeSource(0, a), makeSource(1, b, [rebuilt])]);
     }
 
     it('links a rebuilt message to its real file: no entry of its own', () =>
     {
-        const out = pair(rb(TEXT_A, { est: T0 + 2 * HOUR }));
+        const out = pair(makeRebuilt(TEXT_A, { estimate: T0 + 2 * HOUR }));
         expect(out.reconstructed[0]).toMatchObject({ id: 0, sourceIndex: 1, link: 'real', realIndex: 0, sameAs: null });
         // Two hours apart on the quarter-hour grid: a 'zone' agreement (not strong).
         expect(out.reconstructed[0]?.match).toEqual({ coverage: 1, reverseCoverage: 1, dateDiffMs: -2 * HOUR, strong: false, ambiguousDate: false });
         expect(labels(out.timeline)).toEqual(['m0', 'm1']);
         // The same minute: an 'exact' agreement.
-        expect(pair(rb(TEXT_A)).reconstructed[0]?.match).toMatchObject({ dateDiffMs: 0, strong: true });
+        expect(pair(makeRebuilt(TEXT_A)).reconstructed[0]?.match).toMatchObject({ dateDiffMs: 0, strong: true });
     });
 
     it('matches a sender by name when the quote has no address', () =>
     {
-        expect(pair(rb(TEXT_A, { from: [{ name: 'alice  example', address: '' }] })).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(TEXT_A, { from: [{ name: 'alice  example', address: '' }] })).reconstructed[0]?.link).toBe('real');
     });
 
     it('does not match another sender, or the same name with another address', () =>
     {
-        expect(pair(rb(TEXT_A, { from: [CAROL] })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { from: [{ name: 'Alice Example', address: 'alice@sample.invalid' }] })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { from: [] })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { from: [CAROL] })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { from: [{ name: 'Alice Example', address: 'alice@sample.invalid' }] })).reconstructed[0]?.link)
+            .toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { from: [] })).reconstructed[0]?.link).toBe('entry');
     });
 
     it('dates: a zone offset apart only (writer zone in [-12 h, +14 h]), and a readable (or ambiguous) date is needed', () =>
     {
         // Source in UTC: real minus estimate in [-14 h, +12 h].
-        expect(pair(rb(TEXT_A, { est: T0 + 14 * HOUR })).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(TEXT_A, { est: T0 + 14 * HOUR + 15 * 60_000 })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { est: T0 - 12 * HOUR })).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(TEXT_A, { est: T0 - 12 * HOUR - 15 * 60_000 })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { est: T0 + 24 * HOUR })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { est: T0 - MATCH_WINDOW_MS - 1 })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { est: null, dateText: 'next week' })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A), { date: dated(null) }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 + 14 * HOUR })).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 + 14 * HOUR + 15 * 60_000 })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 - 12 * HOUR })).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 - 12 * HOUR - 15 * 60_000 })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 + 24 * HOUR })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 - MATCH_WINDOW_MS - 1 })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: null, dateText: 'next week' })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A), { date: dated(null) }).reconstructed[0]?.link).toBe('entry');
     });
 
     it('an ambiguous numeric date matches when one reading is within 26 h (never strong)', () =>
     {
-        const out = pair(rb(TEXT_A, { est: null, dateText: '03/04/2025 09:00' }), { date: dated(Date.parse('2025-04-03T08:00:00Z')) });
+        const out = pair(makeRebuilt(TEXT_A, { estimate: null, dateText: '03/04/2025 09:00' }), { date: dated(Date.parse('2025-04-03T08:00:00Z')) });
         expect(out.reconstructed[0]).toMatchObject({ link: 'real', match: { strong: false, ambiguousDate: true, dateDiffMs: -HOUR } });
-        const far = pair(rb(TEXT_A, { est: null, dateText: '03/04/2025 09:00' }), { date: dated(Date.parse('2025-06-03T08:00:00Z')) });
+        const far = pair(makeRebuilt(TEXT_A, { estimate: null, dateText: '03/04/2025 09:00' }), { date: dated(Date.parse('2025-06-03T08:00:00Z')) });
         expect(far.reconstructed[0]?.link).toBe('entry');
     });
 
@@ -572,76 +575,78 @@ describe('linkRebuilt: rebuilt vs real', () =>
     it('needs 80% of the rebuilt text in the real one, or 50% when the dates agree exactly or strongly', () =>
     {
         // A quarter of an hour apart (a zone agreement): 12 of 12 + 4 words = 75% (below 80%).
-        expect(pair(rb(withExtra(4), { est: T0 + QUARTER }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(withExtra(4), { estimate: T0 + QUARTER }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
         // 12 of 12 + 3 words: 80%.
-        expect(pair(rb(withExtra(3), { est: T0 + QUARTER }), { bodyText: REAL }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(withExtra(3), { estimate: T0 + QUARTER }), { bodyText: REAL }).reconstructed[0]?.link).toBe('real');
         // The same minute (exact, with an address): 12/24 = 50% is enough, 12/25 = 48% is not.
-        expect(pair(rb(withExtra(12), { est: T0 }), { bodyText: REAL }).reconstructed[0]).toMatchObject({ link: 'real', match: { strong: true } });
-        expect(pair(rb(withExtra(13), { est: T0 }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(withExtra(12), { estimate: T0 }), { bodyText: REAL }).reconstructed[0])
+            .toMatchObject({ link: 'real', match: { strong: true } });
+        expect(pair(makeRebuilt(withExtra(13), { estimate: T0 }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
         // Strong: two hours off, the offset between the source zone (UTC) and the real sender's zone (UTC+2).
         const plus2 = { date: { utcMs: T0, original: '', offsetMinutes: 120, zoneKnown: true }, bodyText: REAL };
-        expect(pair(rb(withExtra(12), { est: T0 + 2 * HOUR }), plus2).reconstructed[0]).toMatchObject({ link: 'real', match: { strong: true, dateDiffMs: -2 * HOUR } });
+        expect(pair(makeRebuilt(withExtra(12), { estimate: T0 + 2 * HOUR }), plus2).reconstructed[0]).toMatchObject({ link: 'real', match: { strong: true, dateDiffMs: -2 * HOUR } });
         // The same 50% with a mere grid match (not strong), off the grid, or a name only.
-        expect(pair(rb(withExtra(12), { est: T0 + 2 * HOUR }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(withExtra(12), { est: T0 + 2 * HOUR + 7 * 60_000 }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(withExtra(12), { est: T0, from: [{ name: 'Alice Example', address: '' }] }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(withExtra(12), { estimate: T0 + 2 * HOUR }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(withExtra(12), { estimate: T0 + 2 * HOUR + 7 * 60_000 }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(withExtra(12), { estimate: T0, from: [{ name: 'Alice Example', address: '' }] }), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
     });
 
     it('needs the very same words: other words anywhere but a trailing signature block mean no link', () =>
     {
         const words = REAL.split(' ');
         words[6] = 'zz';
-        expect(pair(rb(words.join(' ')), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(words.join(' ')), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
         // Extra words at the head or the tail that are no signature block: no link.
-        expect(pair(rb(`${letters('x', 2)} ${REAL}`), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(`${REAL} ${letters('x', 2)}`), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(`${REAL}\n\nWe Decline`),{ bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(`${letters('x', 2)} ${REAL}`), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(`${REAL} ${letters('x', 2)}`), { bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(`${REAL}\n\nWe Decline`),{ bodyText: REAL }).reconstructed[0]?.link).toBe('entry');
         // A trailing signature block on either side: a link.
-        expect(pair(rb(withExtra(2)), { bodyText: REAL }).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(REAL), { bodyText: withExtra(2) }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(withExtra(2)), { bodyText: REAL }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(REAL), { bodyText: withExtra(2) }).reconstructed[0]?.link).toBe('real');
     });
 
     it('needs 50% of the real message own text in the rebuilt one too', () =>
     {
         // 12 of 25 words in common (a signature block of 13), then 12 of 24.
-        expect(pair(rb(REAL), { bodyText: withExtra(13) }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(REAL), { bodyText: withExtra(12) }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(REAL), { bodyText: withExtra(13) }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(REAL), { bodyText: withExtra(12) }).reconstructed[0]?.link).toBe('real');
     });
 
     it('an exact date must be within two minutes; an approximate one on the quarter-hour grid', () =>
     {
-        expect(pair(rb(TEXT_A, { exact: true, est: T0 - 90_000 })).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(TEXT_A, { exact: true, est: T0 - 3 * 60_000 })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { exact: true, est: T0 - HOUR })).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(TEXT_A, { est: T0 - HOUR - 5 * 60_000 })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { exact: true, estimate: T0 - 90_000 })).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(TEXT_A, { exact: true, estimate: T0 - 3 * 60_000 })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { exact: true, estimate: T0 - HOUR })).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(TEXT_A, { estimate: T0 - HOUR - 5 * 60_000 })).reconstructed[0]?.link).toBe('entry');
     });
 
     it('a short text (fewer than 10 distinct shingles) links only when the dates agree exactly', () =>
     {
         const short = 'Fine, see you on Wednesday then.\n\nAlice\n'; // 7 words, 5 shingles
         expect(distinctShingles(wordsOf(short))).toBeLessThan(MIN_SHINGLES);
-        expect(pair(rb(short), { bodyText: short }).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(short, { exact: true, est: T0 + 60_000 }), { bodyText: short }).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(short, { est: T0 + HOUR }), { bodyText: short }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(short), { bodyText: short }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(short, { exact: true, estimate: T0 + 60_000 }), { bodyText: short }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(short, { estimate: T0 + HOUR }), { bodyText: short }).reconstructed[0]?.link).toBe('entry');
         // Not with a name-only sender either (never exact).
-        expect(pair(rb(short, { from: [{ name: 'Alice Example', address: '' }] }), { bodyText: short }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(short, { from: [{ name: 'Alice Example', address: '' }] }), { bodyText: short }).reconstructed[0]?.link)
+            .toBe('entry');
     });
 
     it('never links texts whose figures differ, however similar the rest', () =>
     {
         const real = `${TEXT_A}Order 4471, delivery in week 12.\n`;
-        expect(pair(rb(real), { bodyText: real }).reconstructed[0]?.link).toBe('real');
-        expect(pair(rb(`${TEXT_A}Order 4471, delivery in week 13.\n`), { bodyText: real }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(`${TEXT_A}Order 4471, delivery in week 12 or 12.\n`), { bodyText: real }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(real), { bodyText: real }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(`${TEXT_A}Order 4471, delivery in week 13.\n`), { bodyText: real }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(`${TEXT_A}Order 4471, delivery in week 12 or 12.\n`), { bodyText: real }).reconstructed[0]?.link).toBe('entry');
     });
 
     it('a date without minutes needs the strict text rule: 80% each way', () =>
     {
         const day = { precision: 'day', est: T0 - 8 * HOUR } as const;
-        expect(pair(rb(TEXT_A, day)).reconstructed[0]).toMatchObject({ link: 'real', match: { strong: false } });
+        expect(pair(makeRebuilt(TEXT_A, day)).reconstructed[0]).toMatchObject({ link: 'real', match: { strong: false } });
         // All of the rebuilt text in the real one, but the real one has more: 12 of its 16 words (75%) in the rebuilt text.
-        expect(pair(rb(REAL, day), { bodyText: withExtra(4) }).reconstructed[0]?.link).toBe('entry');
-        expect(pair(rb(REAL, { est: T0 - 8 * HOUR }), { bodyText: withExtra(4) }).reconstructed[0]?.link).toBe('real');
+        expect(pair(makeRebuilt(REAL, day), { bodyText: withExtra(4) }).reconstructed[0]?.link).toBe('entry');
+        expect(pair(makeRebuilt(REAL, { estimate: T0 - 8 * HOUR }), { bodyText: withExtra(4) }).reconstructed[0]?.link).toBe('real');
     });
 
     it('compares with the real message OWN text only, not the history it quotes', () =>
@@ -649,14 +654,14 @@ describe('linkRebuilt: rebuilt vs real', () =>
         // A later message from Alice quotes TEXT_A below its own (different) text.
         const later = make({ date: dated(T0 + 10 * HOUR), bodyText: `${TEXT_C}\n> earlier\n${TEXT_A}` });
         const quoter = make({ from: [BOB], date: dated(T0 + 12 * HOUR), bodyText: TEXT_B });
-        const out = linkRebuilt([src(0, later, [], TEXT_C.length), src(1, quoter, [rb(TEXT_A, { est: T0 })])]);
+        const out = linkRebuilt([makeSource(0, later, [], TEXT_C.length), makeSource(1, quoter, [makeRebuilt(TEXT_A, { estimate: T0 })])]);
         expect(out.reconstructed[0]?.link).toBe('entry');
     });
 
     it('never links a rebuilt message to its own source', () =>
     {
         const self = make({ bodyText: `${TEXT_A}\n${TEXT_A}` });
-        const out = linkRebuilt([src(0, self, [rb(TEXT_A, { est: T0 - HOUR })], TEXT_A.length)]);
+        const out = linkRebuilt([makeSource(0, self, [makeRebuilt(TEXT_A, { estimate: T0 - HOUR })], TEXT_A.length)]);
         expect(out.reconstructed[0]?.link).toBe('entry');
     });
 
@@ -665,9 +670,10 @@ describe('linkRebuilt: rebuilt vs real', () =>
         const exact = make({ date: dated(T0 + 3 * HOUR), bodyText: TEXT_A });
         const partial = make({ date: dated(T0), bodyText: `${TEXT_A}\nPS: one more line here.` });
         const quoter = make({ from: [BOB], date: dated(T0 + 20 * HOUR), bodyText: TEXT_B });
-        const out = linkRebuilt([src(0, partial), src(1, exact), src(2, quoter, [rb(`${TEXT_A}\nPS: one more line here.`, { est: T0 })])]);
+        const out = linkRebuilt([makeSource(0, partial), makeSource(1, exact),
+            makeSource(2, quoter, [makeRebuilt(`${TEXT_A}\nPS: one more line here.`, { estimate: T0 })])]);
         expect(out.reconstructed[0]).toMatchObject({ link: 'real', realIndex: 0 });
-        const twins = linkRebuilt([src(0, make({ date: dated(T0 + 3 * HOUR) })), src(1, make({ date: dated(T0 + HOUR) })), src(2, quoter, [rb(TEXT_A, { est: T0 })])]);
+        const twins = linkRebuilt([makeSource(0, make({ date: dated(T0 + 3 * HOUR) })), makeSource(1, make({ date: dated(T0 + HOUR) })), makeSource(2, quoter, [makeRebuilt(TEXT_A, { estimate: T0 })])]);
         expect(twins.reconstructed[0]).toMatchObject({ link: 'real', realIndex: 1 });
     });
 });
@@ -680,7 +686,7 @@ describe('linkRebuilt: the same quoted text in several emails', () =>
 
     it('becomes one entry; the other copies point to it, and it lists them', () =>
     {
-        const out = linkRebuilt([src(3, quoter(0), [rb(TEXT_A)]), src(7, quoter(1), [rb(TEXT_A)])]);
+        const out = linkRebuilt([makeSource(3, quoter(0), [makeRebuilt(TEXT_A)]), makeSource(7, quoter(1), [makeRebuilt(TEXT_A)])]);
         expect(out.reconstructed.map((r) => r.link)).toEqual(['entry', 'same-as']);
         expect(out.reconstructed[0]).toMatchObject({ copies: [1], alsoQuotedIn: [7] });
         expect(out.reconstructed[1]).toMatchObject({ sameAs: 0, copies: [], alsoQuotedIn: [] });
@@ -689,46 +695,49 @@ describe('linkRebuilt: the same quoted text in several emails', () =>
 
     it('the entry is the best copy: complete fields first, then more known fields, then the lower generation', () =>
     {
-        const incomplete = rb(TEXT_A, { incomplete: ['to'] });
-        const complete = rb(TEXT_A, { generation: 3 });
-        expect(linkRebuilt([src(0, quoter(0), [incomplete]), src(1, quoter(1), [complete])]).reconstructed.map((r) => r.link)).toEqual(['same-as', 'entry']);
-        const noSubject = rb(TEXT_A, { subject: null });
-        expect(linkRebuilt([src(0, quoter(0), [noSubject]), src(1, quoter(1), [rb(TEXT_A, { generation: 2 })])]).reconstructed.map((r) => r.link)).toEqual(['same-as', 'entry']);
-        const gen2 = rb(TEXT_A, { generation: 2 });
-        expect(linkRebuilt([src(0, quoter(0), [rb('Other words from Bob in between.', { from: [BOB] }), gen2]), src(1, quoter(1), [rb(TEXT_A)])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'same-as', 'entry']);
+        const incomplete = makeRebuilt(TEXT_A, { incomplete: ['to'] });
+        const complete = makeRebuilt(TEXT_A, { generation: 3 });
+        expect(linkRebuilt([makeSource(0, quoter(0), [incomplete]), makeSource(1, quoter(1), [complete])]).reconstructed.map((r) => r.link)).toEqual(['same-as', 'entry']);
+        const noSubject = makeRebuilt(TEXT_A, { subject: null });
+        expect(linkRebuilt([makeSource(0, quoter(0), [noSubject]), makeSource(1, quoter(1), [makeRebuilt(TEXT_A, { generation: 2 })])]).reconstructed.map((r) => r.link)).toEqual(['same-as', 'entry']);
+        const gen2 = makeRebuilt(TEXT_A, { generation: 2 });
+        expect(linkRebuilt([makeSource(0, quoter(0), [makeRebuilt('Other words from Bob in between.', { from: [BOB] }), gen2]), makeSource(1, quoter(1), [makeRebuilt(TEXT_A)])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'same-as', 'entry']);
     });
 
     it('never merges two messages rebuilt from the same email', () =>
     {
-        const same = linkRebuilt([src(0, quoter(0), [rb(TEXT_A), rb(TEXT_A, { generation: 2 })])]);
+        const same = linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(TEXT_A), makeRebuilt(TEXT_A, { generation: 2 })])]);
         expect(same.reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
     });
 
     it('merges copies without a readable date only when their date text is the same', () =>
     {
         const links = (a: string | null, b: string | null): string[] =>
-            linkRebuilt([src(0, quoter(0), [rb(TEXT_A, { est: null, dateText: a })]), src(1, quoter(1), [rb(TEXT_A, { est: null, dateText: b })])]).reconstructed.map((r) => r.link);
+            linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(TEXT_A, { estimate: null, dateText: a })]), makeSource(1, quoter(1), [makeRebuilt(TEXT_A, { estimate: null, dateText: b })])]).reconstructed.map((r) => r.link);
         expect(links('04/03/2025  05:21', '04/03/2025 05:21')).toEqual(['entry', 'same-as']);
         expect(links('04/03/2025 05:21', '04/03/2025 05:22')).toEqual(['entry', 'entry']);
         expect(links(null, null)).toEqual(['entry', 'entry']);
         // A readable copy and an unreadable one are not compared.
-        const mixed = linkRebuilt([src(0, quoter(0), [rb(TEXT_A)]), src(1, quoter(1), [rb(TEXT_A, { est: null, dateText: 'd' })])]);
+        const mixed = linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(TEXT_A)]),
+            makeSource(1, quoter(1), [makeRebuilt(TEXT_A, { estimate: null, dateText: 'd' })])]);
         expect(mixed.reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
     });
 
     it('does not merge different texts of one sender, or texts more than 26 h apart', () =>
     {
-        expect(linkRebuilt([src(0, quoter(0), [rb(TEXT_A)]), src(1, quoter(1), [rb(TEXT_C)])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
-        const far = linkRebuilt([src(0, quoter(0), [rb(TEXT_A)]), src(1, quoter(1), [rb(TEXT_A, { est: T0 + MATCH_WINDOW_MS + 1 })])]);
+        expect(linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(TEXT_A)]), makeSource(1, quoter(1), [makeRebuilt(TEXT_C)])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
+        const far = linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(TEXT_A)]),
+            makeSource(1, quoter(1), [makeRebuilt(TEXT_A, { estimate: T0 + MATCH_WINDOW_MS + 1 })])]);
         expect(far.reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
     });
 
     it('sources in one zone: another estimate is another message; sources in two zones: a zone offset apart is fine', () =>
     {
-        const links = (offsetB: number, estB: number): string[] =>
+        const links = (offsetB: number, estimateB: number): string[] =>
         {
             const b = make({ from: [BOB], date: { utcMs: T0 + 6 * HOUR, original: '', offsetMinutes: offsetB, zoneKnown: true }, bodyText: TEXT_B });
-            return linkRebuilt([src(0, quoter(0), [rb(TEXT_A)]), src(1, b, [rb(TEXT_A, { est: estB })])]).reconstructed.map((r) => r.link);
+            return linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(TEXT_A)]), makeSource(1, b, [makeRebuilt(TEXT_A, { estimate: estimateB })])])
+                .reconstructed.map((r) => r.link);
         };
         expect(links(0, T0 + 5 * HOUR)).toEqual(['entry', 'entry']);
         expect(links(0, T0)).toEqual(['entry', 'same-as']);
@@ -740,8 +749,8 @@ describe('linkRebuilt: the same quoted text in several emails', () =>
     {
         const short = 'OK, thanks.\n';
         const b = make({ from: [BOB], date: { utcMs: T0 + 6 * HOUR, original: '', offsetMinutes: -300, zoneKnown: true }, bodyText: TEXT_B });
-        expect(linkRebuilt([src(0, quoter(0), [rb(short)]), src(1, quoter(1), [rb(short)])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'same-as']);
-        expect(linkRebuilt([src(0, quoter(0), [rb(short)]), src(1, b, [rb(short, { est: T0 + 5 * HOUR })])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
+        expect(linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(short)]), makeSource(1, quoter(1), [makeRebuilt(short)])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'same-as']);
+        expect(linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(short)]), makeSource(1, b, [makeRebuilt(short, { estimate: T0 + 5 * HOUR })])]).reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
     });
 
     it('copies without a readable date: a date text with a year and a day, sources within 26 h, the strict text rule', () =>
@@ -749,7 +758,7 @@ describe('linkRebuilt: the same quoted text in several emails', () =>
         const links = (dateText: string, text: string, sourceGap: number): string[] =>
         {
             const b = make({ from: [BOB], date: dated(T0 + 5 * HOUR + sourceGap), bodyText: TEXT_B });
-            return linkRebuilt([src(0, quoter(0), [rb(text, { est: null, dateText })]), src(1, b, [rb(text, { est: null, dateText })])]).reconstructed.map((r) => r.link);
+            return linkRebuilt([makeSource(0, quoter(0), [makeRebuilt(text, { estimate: null, dateText })]), makeSource(1, b, [makeRebuilt(text, { estimate: null, dateText })])]).reconstructed.map((r) => r.link);
         };
         expect(links('04/03/2025 05:21', TEXT_A, 20 * HOUR)).toEqual(['entry', 'same-as']);
         expect(links('04/03/2025 05:21', TEXT_A, 27 * HOUR)).toEqual(['entry', 'entry']);
@@ -766,7 +775,7 @@ describe('linkRebuilt: timeline', () =>
     {
         const early = make({ date: dated(T0) });
         const late = make({ from: [BOB], date: dated(T0 + 10 * HOUR), bodyText: TEXT_B });
-        const out = linkRebuilt([src(0, early), src(1, late, [rb(TEXT_C, { est: T0 + 4 * HOUR }), rb('Other words entirely here.', { est: T0, generation: 2 })])]);
+        const out = linkRebuilt([makeSource(0, early), makeSource(1, late, [makeRebuilt(TEXT_C, { estimate: T0 + 4 * HOUR }), makeRebuilt('Other words entirely here.', { estimate: T0, generation: 2 })])]);
         expect(labels(out.timeline)).toEqual(['r1', 'm0', 'r0', 'm1']);
         expect(out.timeline.filter((e) => e.kind === 'rebuilt').map((e) => e.kind === 'rebuilt' && e.placement)).toEqual(['by-date', 'by-date']);
     });
@@ -775,7 +784,7 @@ describe('linkRebuilt: timeline', () =>
     {
         const quoter = make({ from: [BOB], date: dated(T0), bodyText: TEXT_B });
         const after = make({ date: dated(T0 + HOUR), bodyText: TEXT_C });
-        const out = linkRebuilt([src(0, quoter, [rb(TEXT_A, { est: T0 + 5 * HOUR })]), src(1, after)]);
+        const out = linkRebuilt([makeSource(0, quoter, [makeRebuilt(TEXT_A, { estimate: T0 + 5 * HOUR })]), makeSource(1, after)]);
         expect(labels(out.timeline)).toEqual(['r0', 'm0', 'm1']);
         expect(out.timeline[0]).toEqual({ kind: 'rebuilt', id: 0, placement: 'capped-by-quoter' });
     });
@@ -783,7 +792,8 @@ describe('linkRebuilt: timeline', () =>
     it('keeps the chain order: an older generation never after a newer one', () =>
     {
         const quoter = make({ from: [BOB], date: dated(T0 + 20 * HOUR), bodyText: TEXT_B });
-        const out = linkRebuilt([src(0, quoter, [rb(TEXT_A, { est: T0 }), rb(TEXT_C, { est: T0 + 5 * HOUR, generation: 2 })])]);
+        const out = linkRebuilt([makeSource(0, quoter,
+            [makeRebuilt(TEXT_A, { estimate: T0 }), makeRebuilt(TEXT_C, { estimate: T0 + 5 * HOUR, generation: 2 })])]);
         expect(labels(out.timeline)).toEqual(['r1', 'r0', 'm0']);
         expect(out.timeline[0]).toEqual({ kind: 'rebuilt', id: 1, placement: 'capped-by-quoter' });
     });
@@ -794,7 +804,7 @@ describe('linkRebuilt: timeline', () =>
         const other = make({ from: [CAROL], date: dated(T0 + 2 * HOUR), bodyText: 'Unrelated note from Carol.' });
         const last = make({ date: dated(T0 + 9 * HOUR), bodyText: TEXT_C });
         // last quotes Bob's reply (estimated too early, at T0), which quotes `first`.
-        const out = linkRebuilt([src(0, other), src(1, first), src(2, last, [rb(TEXT_B, { from: [BOB], est: T0 }), rb(TEXT_A, { est: T0 + 4 * HOUR, generation: 2 })])]);
+        const out = linkRebuilt([makeSource(0, other), makeSource(1, first), makeSource(2, last, [makeRebuilt(TEXT_B, { from: [BOB], estimate: T0 }), makeRebuilt(TEXT_A, { estimate: T0 + 4 * HOUR, generation: 2 })])]);
         expect(out.reconstructed.map((r) => r.link)).toEqual(['entry', 'real']);
         expect(labels(out.timeline)).toEqual(['m0', 'm1', 'r0', 'm2']);
         expect(out.timeline[2]).toEqual({ kind: 'rebuilt', id: 0, placement: 'after-quoted' });
@@ -805,8 +815,8 @@ describe('linkRebuilt: timeline', () =>
         const quoter = make({ from: [BOB], date: dated(T0 + 20 * HOUR), bodyText: TEXT_B });
         const before = make({ from: [CAROL], date: dated(T0 + 19 * HOUR), bodyText: 'Unrelated note from Carol.' });
         const out = linkRebuilt([
-            src(0, before),
-            src(1, quoter, [rb(TEXT_A, { est: null }), rb(TEXT_C, { est: null, generation: 2 }), rb('Very first words.', { est: T0, generation: 3 })]),
+            makeSource(0, before),
+            makeSource(1, quoter, [makeRebuilt(TEXT_A, { estimate: null }), makeRebuilt(TEXT_C, { estimate: null, generation: 2 }), makeRebuilt('Very first words.', { estimate: T0, generation: 3 })]),
         ]);
         expect(labels(out.timeline)).toEqual(['r2', 'm0', 'r1', 'r0', 'm1']);
         expect(out.timeline[2]).toEqual({ kind: 'rebuilt', id: 1, placement: 'before-quoter' });
@@ -817,7 +827,7 @@ describe('linkRebuilt: timeline', () =>
         const real = make({ from: [BOB], date: dated(T0 + 5 * HOUR), bodyText: TEXT_B });
         const middle = make({ from: [CAROL], date: dated(T0 + 3 * HOUR), bodyText: 'Unrelated note from Carol.' });
         const last = make({ date: dated(T0 + 9 * HOUR), bodyText: TEXT_C });
-        const out = linkRebuilt([src(0, middle), src(1, real), src(2, last, [rb(TEXT_B, { from: [BOB], est: T0 + 5 * HOUR }), rb(TEXT_A, { est: null, generation: 2 })])]);
+        const out = linkRebuilt([makeSource(0, middle), makeSource(1, real), makeSource(2, last, [makeRebuilt(TEXT_B, { from: [BOB], estimate: T0 + 5 * HOUR }), makeRebuilt(TEXT_A, { estimate: null, generation: 2 })])]);
         expect(out.reconstructed.map((r) => r.link)).toEqual(['real', 'entry']);
         expect(labels(out.timeline)).toEqual(['m0', 'r1', 'm1', 'm2']);
     });
@@ -828,9 +838,9 @@ describe('linkRebuilt: timeline', () =>
         const undatedA = make({ from: [BOB], date: dated(null), bodyText: TEXT_B });
         const undatedB = make({ from: [CAROL], date: dated(null), bodyText: 'Unrelated note from Carol.' });
         const out = linkRebuilt([
-            src(0, dates),
-            { ...src(1, undatedA, [rb(TEXT_C, { est: T0 + HOUR })]), utcMs: null },
-            { ...src(2, undatedB, [rb('Undated quote words.', { est: null, from: [BOB] })]), utcMs: null },
+            makeSource(0, dates),
+            { ...makeSource(1, undatedA, [makeRebuilt(TEXT_C, { estimate: T0 + HOUR })]), utcMs: null },
+            { ...makeSource(2, undatedB, [makeRebuilt('Undated quote words.', { estimate: null, from: [BOB] })]), utcMs: null },
         ]);
         expect(labels(out.timeline)).toEqual(['m0', 'r0', 'm1', 'r1', 'm2']);
     });
@@ -838,13 +848,13 @@ describe('linkRebuilt: timeline', () =>
     it('every real message stays in the timeline, once and in order, with or without rebuilt messages', () =>
     {
         expect(linkRebuilt([])).toEqual({ reconstructed: [], timeline: [] });
-        const out = linkRebuilt([src(0, make({ date: dated(T0 + HOUR) })), src(1, make({ date: dated(T0 + 2 * HOUR), bodyText: TEXT_C }), [rb(TEXT_A)])]);
+        const out = linkRebuilt([makeSource(0, make({ date: dated(T0 + HOUR) })), makeSource(1, make({ date: dated(T0 + 2 * HOUR), bodyText: TEXT_C }), [makeRebuilt(TEXT_A)])]);
         expect(labels(out.timeline).filter((l) => l.startsWith('m'))).toEqual(['m0', 'm1']);
     });
 
     it('does not modify its input, and its result survives a structured clone', () =>
     {
-        const sources = [src(0, make()), src(1, make({ from: [BOB], date: dated(T0 + HOUR), bodyText: TEXT_B }), [rb(TEXT_A), rb(TEXT_C, { est: null, generation: 2 })])];
+        const sources = [makeSource(0, make()), makeSource(1, make({ from: [BOB], date: dated(T0 + HOUR), bodyText: TEXT_B }), [makeRebuilt(TEXT_A), makeRebuilt(TEXT_C, { estimate: null, generation: 2 })])];
         const before = JSON.stringify(sources);
         const out = linkRebuilt(sources);
         expect(JSON.stringify(sources)).toBe(before);

@@ -9,7 +9,7 @@
 // Why offsets: a segment never holds a copy of the text, only two indices
 // into the message's original `bodyText`. The text itself is never copied,
 // trimmed or rewritten, so it cannot be lost or changed by accident: joining
-// the segments back (`reconstruct`) always gives the original body
+// the segments back (`joinSegments`) always gives the original body
 // (README.md, rule R6: collapse, never delete). `checkSegments` verifies this
 // shape and can be used as a runtime safety net.
 //
@@ -237,22 +237,22 @@ export function buildSegments(text: string, folds: readonly FoldRange[]): Segmen
     // `points` is sorted, so each pair (at, next) is one elementary piece.
     for (let i = 0; i + 1 < points.length; i++)
     {
-        const at = points[i] ?? 0;
+        const point = points[i] ?? 0;
         const next = points[i + 1] ?? text.length;
-        for (const f of closes.get(at) ?? [])
+        for (const fold of closes.get(point) ?? [])
         {
-            bump(reasonCounts, f.reason, -1);
-            if (f.related !== null)
+            bump(reasonCounts, fold.reason, -1);
+            if (fold.related !== null)
             {
-                bump(relatedCounts, f.related, -1);
+                bump(relatedCounts, fold.related, -1);
             }
         }
-        for (const f of opens.get(at) ?? [])
+        for (const fold of opens.get(point) ?? [])
         {
-            bump(reasonCounts, f.reason, 1);
-            if (f.related !== null)
+            bump(reasonCounts, fold.reason, 1);
+            if (fold.related !== null)
             {
-                bump(relatedCounts, f.related, 1);
+                bump(relatedCounts, fold.related, 1);
             }
         }
         const reasons = [...reasonCounts.keys()].sort(
@@ -260,7 +260,7 @@ export function buildSegments(text: string, folds: readonly FoldRange[]): Segmen
         );
         const related = [...relatedCounts.keys()].sort((a, b) => a - b);
         const segment: Segment = {
-            start: at,
+            start: point,
             end: next,
             folded: reasons.length > 0,
             reasons,
@@ -287,7 +287,7 @@ export function segmentText(text: string, segment: Segment): string
 }
 
 /** Joins all segments back together. For valid segments this always equals `text`. */
-export function reconstruct(text: string, segments: readonly Segment[]): string
+export function joinSegments(text: string, segments: readonly Segment[]): string
 {
     return segments.map((s) => segmentText(text, s)).join('');
 }
@@ -314,60 +314,60 @@ export function checkSegments(text: string, segments: readonly Segment[]): strin
         return problems;
     }
     let expectedStart = 0;
-    segments.forEach((s, i) =>
+    segments.forEach((segment, i) =>
     {
-        const where = `segment ${i} [${s.start}, ${s.end})`;
-        if (!Number.isInteger(s.start) || !Number.isInteger(s.end))
+        const where = `segment ${i} [${segment.start}, ${segment.end})`;
+        if (!Number.isInteger(segment.start) || !Number.isInteger(segment.end))
         {
             problems.push(`${where}: offsets must be integers`);
         }
-        if (s.start !== expectedStart)
+        if (segment.start !== expectedStart)
         {
             problems.push(`${where}: expected to start at ${expectedStart} (gap or overlap)`);
         }
-        if (s.end <= s.start)
+        if (segment.end <= segment.start)
         {
             problems.push(`${where}: empty or reversed`);
         }
-        if (s.end > text.length)
+        if (segment.end > text.length)
         {
             problems.push(`${where}: ends past the text (${text.length})`);
         }
-        if (splitsSurrogatePair(text, s.start))
+        if (splitsSurrogatePair(text, segment.start))
         {
             problems.push(`${where}: starts inside a surrogate pair`);
         }
-        if (s.folded !== s.reasons.length > 0)
+        if (segment.folded !== segment.reasons.length > 0)
         {
             problems.push(`${where}: folded must be true exactly when reasons is not empty`);
         }
-        if (s.reasons.some((r) => !reasonRank.has(r)))
+        if (segment.reasons.some((r) => !reasonRank.has(r)))
         {
             problems.push(`${where}: unknown reason`);
         }
-        const ranks = s.reasons.map((r) => reasonRank.get(r) ?? -1);
+        const ranks = segment.reasons.map((r) => reasonRank.get(r) ?? -1);
         if (ranks.some((r, k) => k > 0 && r <= (ranks[k - 1] ?? -1)))
         {
             problems.push(`${where}: reasons not sorted and unique`);
         }
-        if (s.related.some((n) => !Number.isSafeInteger(n) || n < 0))
+        if (segment.related.some((n) => !Number.isSafeInteger(n) || n < 0))
         {
             problems.push(`${where}: related must be non-negative integers`);
         }
-        if (s.related.some((n, k) => k > 0 && n <= (s.related[k - 1] ?? -1)))
+        if (segment.related.some((n, k) => k > 0 && n <= (segment.related[k - 1] ?? -1)))
         {
             problems.push(`${where}: related not sorted and unique`);
         }
-        if (!s.folded && s.related.length > 0)
+        if (!segment.folded && segment.related.length > 0)
         {
             problems.push(`${where}: shown segment with related`);
         }
         const prev = segments[i - 1];
-        if (prev && sameList(prev.reasons, s.reasons) && sameList(prev.related, s.related))
+        if (prev && sameList(prev.reasons, segment.reasons) && sameList(prev.related, segment.related))
         {
             problems.push(`${where}: identical to the previous segment (should be merged)`);
         }
-        expectedStart = s.end;
+        expectedStart = segment.end;
     });
     if (expectedStart !== text.length)
     {
@@ -389,11 +389,11 @@ export function lineRanges(text: string): LineRange[]
     let i = 0;
     while (i < text.length)
     {
-        const ch = text.charCodeAt(i);
-        if (ch === 0x0a || ch === 0x0d)
+        const code = text.charCodeAt(i);
+        if (code === 0x0a || code === 0x0d)
         {
             const contentEnd = i;
-            i += ch === 0x0d && text.charCodeAt(i + 1) === 0x0a ? 2 : 1;
+            i += code === 0x0d && text.charCodeAt(i + 1) === 0x0a ? 2 : 1;
             lines.push({ start, contentEnd, end: i });
             start = i;
         }
@@ -450,13 +450,13 @@ export function visibleView(
     options: { readonly unfoldAll: boolean },
 ): ViewBlock[]
 {
-    return segments.map((s) => ({
-        start: s.start,
-        end: s.end,
-        text: segmentText(text, s),
-        folded: s.folded,
-        reasons: s.reasons,
-        related: s.related,
-        collapsed: s.folded && !options.unfoldAll,
+    return segments.map((segment) => ({
+        start: segment.start,
+        end: segment.end,
+        text: segmentText(text, segment),
+        folded: segment.folded,
+        reasons: segment.reasons,
+        related: segment.related,
+        collapsed: segment.folded && !options.unfoldAll,
     }));
 }

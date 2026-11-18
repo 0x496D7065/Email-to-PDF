@@ -367,8 +367,8 @@ unticked).
 
 ### Accuracy on synthetic test conversations
 
-Measured by `Source/thread-analysis/reconstruct-measure.test.ts` and
-`Source/thread-analysis/rebuild-links.measure.test.ts` on 42 **synthetic**
+Measured by `Source/thread-analysis/reconstruct-quoted-messages.measure.test.ts` and
+`Source/thread-analysis/link-rebuilt-messages.measure.test.ts` on 42 **synthetic**
 conversations (166 emails, 124 of them quoted inside later ones), written
 to imitate each mail program's quote style. These numbers say nothing
 certain about real emails.

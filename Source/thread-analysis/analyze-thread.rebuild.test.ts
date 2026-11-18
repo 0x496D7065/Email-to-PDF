@@ -1,15 +1,15 @@
 // Tests for step 6 of the engine (task 7.5): messages rebuilt from quoted
 // text, their links and the timeline, and the safety net around them
 // (README.md, rules R6 and R7). Synthetic data only. The linking rules
-// themselves are tested in rebuild-links.test.ts, the targets over the
-// generated conversations in rebuild-links.measure.test.ts.
+// themselves are tested in link-rebuilt-messages.test.ts, the targets over the
+// generated conversations in link-rebuilt-messages.measure.test.ts.
 
 import { describe, expect, it } from 'vitest';
 import { buildThread } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from './engine';
-import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages } from './reconstruct';
-import { reconstruct } from './segments';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from './analyze-thread';
+import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages } from './reconstruct-quoted-messages';
+import { joinSegments } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
 import type { EngineResult } from '../../Header/thread-analysis-result';
@@ -79,9 +79,9 @@ describe('runEngine: rebuilt messages (step 6)', () =>
     it('gives the rebuilder the body, the subject and the offset of the Date header', () =>
     {
         const calls: unknown[] = [];
-        const m = make({ subject: 'Fwd: Desks', date: { utcMs: 1, original: '', offsetMinutes: -330, zoneKnown: true } });
-        runEngine([ok(m)], { ...DEFAULT_PARTS, reconstructQuotedMessages: (body, options) => (calls.push([body, options]), []) });
-        expect(calls).toEqual([[m.bodyText, { subject: 'Fwd: Desks', sourceOffsetMinutes: -330 }]]);
+        const message = make({ subject: 'Fwd: Desks', date: { utcMs: 1, original: '', offsetMinutes: -330, zoneKnown: true } });
+        runEngine([ok(message)], { ...DEFAULT_PARTS, reconstructQuotedMessages: (body, options) => (calls.push([body, options]), []) });
+        expect(calls).toEqual([[message.bodyText, { subject: 'Fwd: Desks', sourceOffsetMinutes: -330 }]]);
     });
 
     it('keeps the incomplete fields of a header read short (for the preview and the PDF)', () =>
@@ -122,15 +122,15 @@ describe('runEngine: rebuilding safety net', () =>
     const withFirst = (changes: Record<string, unknown>): unknown[] => [{ ...first, ...changes }, ...real.slice(1)];
     const throwingGetter = (): unknown =>
     {
-        const r: Record<string, unknown> = { ...first };
-        Object.defineProperty(r, 'end', {
+        const broken: Record<string, unknown> = { ...first };
+        Object.defineProperty(broken, 'end', {
             enumerable: true,
             get: () =>
             {
                 throw new Error('synthetic bug');
             },
         });
-        return [r];
+        return [broken];
     };
     it.each([
         ['not a list', () => 'oops'],
@@ -227,13 +227,13 @@ describe('runEngine: quoted history the splitter did not rebuild (7.4 review not
     // it, so only generation 1 is kept and everything after its end is in no
     // rebuilt message.
     const broken = THREAD.body.replace('>>> We are furnishing', '>> We are furnishing');
-    const h2 = THREAD.headers[1]!.start;
+    const secondHeaderStart = THREAD.headers[1]!.start;
 
     it('the splitter stops early here (precondition)', () =>
     {
         expect(broken).not.toBe(THREAD.body);
         const kept = reconstructQuotedMessages(broken, { subject: THREAD.subject, sourceOffsetMinutes: 0 });
-        expect(kept.map((r) => [r.generation, r.end])).toEqual([[1, h2]]);
+        expect(kept.map((r) => [r.generation, r.end])).toEqual([[1, secondHeaderStart]]);
     });
 
     it('nothing marks that tail as rebuilt or hides it, even when its messages are dropped as real files', () =>
@@ -249,19 +249,20 @@ describe('runEngine: quoted history the splitter did not rebuild (7.4 review not
         expect(realPart(out)).toEqual(realPart(runEngine(results, NO_REBUILD)));
         const fromSource = out.reconstructed.filter((r) => r.sourceIndex === 0);
         expect(fromSource.length).toBe(1);
-        for (const r of fromSource)
+        for (const rebuilt of fromSource)
         {
-            expect(r.rebuilt.end).toBeLessThanOrEqual(h2);
+            expect(rebuilt.rebuilt.end).toBeLessThanOrEqual(secondHeaderStart);
         }
         // Every rebuilt message from any email stays inside its own source's rebuilt range.
-        for (const r of out.reconstructed)
+        for (const entry of out.reconstructed)
         {
-            expect(r.sourceIndex === 0 ? r.rebuilt.end <= h2 : true).toBe(true);
+            expect(entry.sourceIndex === 0 ? entry.rebuilt.end <= secondHeaderStart : true).toBe(true);
         }
         // The tail is still shown by the source message itself, whole.
         const kept = out.messages[out.positionByIndex[0]!]!;
-        expect(reconstruct(broken, kept.segments)).toBe(broken);
-        expect(kept.segments.filter((s) => s.end > h2).map((s) => broken.slice(Math.max(s.start, h2), s.end)).join('')).toBe(broken.slice(h2));
+        expect(joinSegments(broken, kept.segments)).toBe(broken);
+        expect(kept.segments.filter((s) => s.end > secondHeaderStart).map((s) => broken.slice(Math.max(s.start, secondHeaderStart), s.end)).join(''))
+            .toBe(broken.slice(secondHeaderStart));
         // And every real message is in the timeline.
         expect(out.timeline.filter((e) => e.kind === 'message').length).toBe(3);
     });

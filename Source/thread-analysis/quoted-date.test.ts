@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatQuotedDate, QUOTE_STYLES, type Zone } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { DATE_LANGUAGES } from './date-words';
+import { DATE_LANGUAGES } from './month-and-weekday-names';
 import { hasWrittenZone, MAX_QUOTED_DATE_LENGTH, parseQuotedDate } from './quoted-date';
 import type { QuotedDate } from '../../Header/rebuilt-emails';
 
@@ -20,31 +20,31 @@ const HOUR = 3_600_000;
 /** The wall time read, as an ISO string (or null). */
 function wall(text: string): string | null
 {
-    const q = parseQuotedDate(text, null);
-    return q.wallMs === null ? null : new Date(q.wallMs).toISOString();
+    const quoted = parseQuotedDate(text, null);
+    return quoted.wallMs === null ? null : new Date(quoted.wallMs).toISOString();
 }
 
-function expectUnreadable(q: QuotedDate): void
+function expectUnreadable(quoted: QuotedDate): void
 {
-    expect(q.wallMs).toBeNull();
-    expect(q.precision).toBeNull();
-    expect(q.estimatedUtcMs).toBeNull();
-    expect(q.basis).toBe('none');
+    expect(quoted.wallMs).toBeNull();
+    expect(quoted.precision).toBeNull();
+    expect(quoted.estimatedUtcMs).toBeNull();
+    expect(quoted.basis).toBe('none');
 }
 
 describe('parseQuotedDate: RFC 5322 dates with a zone (exact)', () =>
 {
     it('reads a forward-block date and ignores the source offset', () =>
     {
-        const q = parseQuotedDate('Mon, 3 Mar 2025 14:02:00 +0900', -300);
-        expect(q).toEqual({
+        const quoted = parseQuotedDate('Mon, 3 Mar 2025 14:02:00 +0900', -300);
+        expect(quoted).toEqual({
             text: 'Mon, 3 Mar 2025 14:02:00 +0900',
             wallMs: utc(2025, 3, 3, 14, 2),
             precision: 'minute',
             estimatedUtcMs: utc(2025, 3, 3, 5, 2),
             basis: 'rfc-zone',
         });
-        expect(hasWrittenZone(q)).toBe(true);
+        expect(hasWrittenZone(quoted)).toBe(true);
     });
 
     it('keeps seconds, negative zones, comments and named zones', () =>
@@ -75,9 +75,9 @@ describe('parseQuotedDate: RFC 5322 dates with a zone (exact)', () =>
     {
         for (const source of [60, -300, null])
         {
-            const q = parseQuotedDate('Mon, 3 Mar 2025 14:02 -0000', source);
-            expect(q).toEqual({ text: 'Mon, 3 Mar 2025 14:02 -0000', wallMs: utc(2025, 3, 3, 14, 2), precision: 'minute', estimatedUtcMs: utc(2025, 3, 3, 14, 2), basis: 'none' });
-            expect(hasWrittenZone(q)).toBe(false);
+            const quoted = parseQuotedDate('Mon, 3 Mar 2025 14:02 -0000', source);
+            expect(quoted).toEqual({ text: 'Mon, 3 Mar 2025 14:02 -0000', wallMs: utc(2025, 3, 3, 14, 2), precision: 'minute', estimatedUtcMs: utc(2025, 3, 3, 14, 2), basis: 'none' });
+            expect(hasWrittenZone(quoted)).toBe(false);
         }
         expect(parseQuotedDate('3 Mar 2025 14:02 -0000 (unknown zone)', 60)).toMatchObject({ estimatedUtcMs: utc(2025, 3, 3, 14, 2), basis: 'none' });
         expectUnreadable(parseQuotedDate('Tue, 3 Mar 2025 14:02 -0000', 60)); // wrong weekday
@@ -268,11 +268,11 @@ describe('parseQuotedDate: written zones in other forms (exact)', () =>
         ['maandag 3 maart 2025 14:02 -03:00', -180],
     ] as const)('%s', (text, offset) =>
     {
-        const q = parseQuotedDate(text, 999);
-        expect(q.wallMs).toBe(utc(2025, 3, 3, 14, 2));
-        expect(q.estimatedUtcMs).toBe(utc(2025, 3, 3, 14, 2) - offset * 60_000);
-        expect(q.basis).toBe('written-zone');
-        expect(hasWrittenZone(q)).toBe(true);
+        const quoted = parseQuotedDate(text, 999);
+        expect(quoted.wallMs).toBe(utc(2025, 3, 3, 14, 2));
+        expect(quoted.estimatedUtcMs).toBe(utc(2025, 3, 3, 14, 2) - offset * 60_000);
+        expect(quoted.basis).toBe('written-zone');
+        expect(hasWrittenZone(quoted)).toBe(true);
     });
 
     it('refuses out-of-range or repeated zones', () =>
@@ -649,8 +649,8 @@ const INSTANTS: readonly number[] = [
 /** Thunderbird writes dd/mm/yyyy: readable only when day > 12 or day = month. */
 function thunderbirdReadable(text: string): boolean
 {
-    const [d = 0, m = 0] = text.split(/[/ ]/).map(Number);
-    return d > 12 || d === m;
+    const [day = 0, month = 0] = text.split(/[/ ]/).map(Number);
+    return day > 12 || day === month;
 }
 
 describe('parseQuotedDate: round trip of every builder date format', () =>
@@ -663,17 +663,17 @@ describe('parseQuotedDate: round trip of every builder date format', () =>
             for (const instant of INSTANTS)
             {
                 const text = formatQuotedDate(format, instant, zone);
-                const q = parseQuotedDate(text, zone.offsetMinutes);
+                const quoted = parseQuotedDate(text, zone.offsetMinutes);
                 if (format === 'thunderbird' && !thunderbirdReadable(text))
                 {
-                    expect(q.wallMs, text).toBeNull();
+                    expect(quoted.wallMs, text).toBeNull();
                     continue;
                 }
                 read++;
-                expect(q.wallMs, text).toBe(instant + zone.offsetMinutes * 60_000);
-                expect(q.estimatedUtcMs, text).toBe(instant);
-                expect(q.precision, text).toBe('minute');
-                expect(q.basis, text).toBe(format === 'apple-forward-en' ? 'written-zone' : 'source-offset');
+                expect(quoted.wallMs, text).toBe(instant + zone.offsetMinutes * 60_000);
+                expect(quoted.estimatedUtcMs, text).toBe(instant);
+                expect(quoted.precision, text).toBe('minute');
+                expect(quoted.basis, text).toBe(format === 'apple-forward-en' ? 'written-zone' : 'source-offset');
                 // With the source offset unknown, a written zone still gives the exact moment.
                 expect(parseQuotedDate(text, null).estimatedUtcMs, text).toBe(format === 'apple-forward-en' ? instant : instant + zone.offsetMinutes * 60_000);
             }
@@ -686,17 +686,17 @@ describe('parseQuotedDate: round trip of every thread case header', () =>
 {
     const headers = THREAD_CASES.flatMap((c) => c.thread.headers.map((h) => ({ id: c.id, group: c.group, h })));
 
-    it.each(headers.map((x) => [x.id, x.h.index, x] as const))('%s, message %i', (_id, _index, { h }) =>
+    it.each(headers.map((x) => [x.id, x.h.index, x] as const))('%s, message %i', (_id, _index, { h: header }) =>
     {
-        const q = parseQuotedDate(h.fields.date, h.shownIn.offsetMinutes);
-        const thunderbird = h.style === 'thunderbird-en';
-        if (thunderbird && !thunderbirdReadable(h.fields.date))
+        const quoted = parseQuotedDate(header.fields.date, header.shownIn.offsetMinutes);
+        const thunderbird = header.style === 'thunderbird-en';
+        if (thunderbird && !thunderbirdReadable(header.fields.date))
         {
-            expectUnreadable(q);
+            expectUnreadable(quoted);
             return;
         }
-        expect(q.estimatedUtcMs, h.fields.date).toBe(Date.parse(h.instantUtc));
-        expect(q.basis).toBe(h.style === 'apple-forward-en' ? 'written-zone' : 'source-offset');
+        expect(quoted.estimatedUtcMs, header.fields.date).toBe(Date.parse(header.instantUtc));
+        expect(quoted.basis).toBe(header.style === 'apple-forward-en' ? 'written-zone' : 'source-offset');
     });
 
     it('covers every quote style of the builder', () =>
@@ -708,10 +708,10 @@ describe('parseQuotedDate: round trip of every thread case header', () =>
     {
         const dates = headers.filter((x) => x.group === 'dates');
         expect(dates.length).toBeGreaterThan(5);
-        for (const { h } of dates)
+        for (const { h: header } of dates)
         {
-            const q = parseQuotedDate(h.fields.date, h.shownIn.offsetMinutes);
-            expect(q.estimatedUtcMs, h.fields.date).toBe(Date.parse(h.instantUtc));
+            const quoted = parseQuotedDate(header.fields.date, header.shownIn.offsetMinutes);
+            expect(quoted.estimatedUtcMs, header.fields.date).toBe(Date.parse(header.instantUtc));
         }
     });
 });

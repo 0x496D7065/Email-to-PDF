@@ -9,7 +9,7 @@ import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-bu
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { setLocale } from './translations';
 import { en } from './translations/en';

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import { runEngine } from './engine';
+import { runEngine } from './analyze-thread';
 import {
     DEFAULT_OUTPUT_POLICY,
     normalizeLine,
@@ -16,7 +16,7 @@ import {
     wordLines,
 } from './output-plan';
 import { detectReplyHeaders } from './reply-header';
-import { buildSegments, type FoldRange } from './segments';
+import { buildSegments, type FoldRange } from './fold-segments';
 import type { MessagePlan, OutputPolicy, PlanReason } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 import type { EngineMessage } from '../../Header/thread-analysis-result';
@@ -67,33 +67,33 @@ function engine(...mails: NormalizedMessage[]): EngineMessage[]
 
 function byBody(messages: readonly EngineMessage[], snippet: string): EngineMessage
 {
-    const m = messages.find((x) => x.message.bodyText.includes(snippet));
-    if (m === undefined)
+    const message = messages.find((x) => x.message.bodyText.includes(snippet));
+    if (message === undefined)
     {
         throw new Error(`no message with ${snippet}`);
     }
-    return m;
+    return message;
 }
 
-function kept(m: PlanInput, plan: MessagePlan): string
+function kept(input: PlanInput, plan: MessagePlan): string
 {
-    return plan.ranges.filter((r) => r.keep).map((r) => m.message.bodyText.slice(r.start, r.end)).join('');
+    return plan.ranges.filter((r) => r.keep).map((r) => input.message.bodyText.slice(r.start, r.end)).join('');
 }
 
-function omitted(m: PlanInput, plan: MessagePlan): string
+function omitted(input: PlanInput, plan: MessagePlan): string
 {
-    return plan.ranges.filter((r) => !r.keep).map((r) => m.message.bodyText.slice(r.start, r.end)).join('');
+    return plan.ranges.filter((r) => !r.keep).map((r) => input.message.bodyText.slice(r.start, r.end)).join('');
 }
 
 /** The reasons of the ranges overlapping `snippet` (first occurrence). */
-function reasonsAt(m: PlanInput, plan: MessagePlan, snippet: string): PlanReason[]
+function reasonsAt(input: PlanInput, plan: MessagePlan, snippet: string): PlanReason[]
 {
-    const at = m.message.bodyText.indexOf(snippet);
-    if (at < 0)
+    const offset = input.message.bodyText.indexOf(snippet);
+    if (offset < 0)
     {
         throw new Error(`snippet not found: ${snippet}`);
     }
-    return [...new Set(plan.ranges.filter((r) => r.start < at + snippet.length && r.end > at).map((r) => r.reason))];
+    return [...new Set(plan.ranges.filter((r) => r.start < offset + snippet.length && r.end > offset).map((r) => r.reason))];
 }
 
 /** Plans `messages` and checks the cover of every plan. */
@@ -101,10 +101,10 @@ function plan(messages: readonly PlanInput[], policy: OutputPolicy = DEFAULT_OUT
 {
     const plans = planOutput(messages, policy);
     expect(plans).toHaveLength(messages.length);
-    plans.forEach((p, k) =>
+    plans.forEach((messagePlan, k) =>
     {
         const body = messages[k]!.message.bodyText;
-        expect(p.ranges.map((r) => body.slice(r.start, r.end)).join('')).toBe(body);
+        expect(messagePlan.ranges.map((r) => body.slice(r.start, r.end)).join('')).toBe(body);
     });
     return plans;
 }
@@ -125,7 +125,7 @@ const quoted = (text: string): string =>
         .map((line) => (line === '' ? '>' : `> ${line}`))
         .join('\n');
 
-const BOB_SIG = '-- \nBob Sample\nSample Furniture (fictional company)';
+const BOB_SIGNATURE = '-- \nBob Sample\nSample Furniture (fictional company)';
 
 describe('planOutput: app quoted history', () =>
 {
@@ -133,16 +133,16 @@ describe('planOutput: app quoted history', () =>
     {
         const own = 'Hi Alice,\n\nYes, Friday morning works. Our driver will call you one hour before.\n\n';
         const tail = `On Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n${quoted(ALICE_TEXT)}\n`;
-        const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${BOB_SIG}\n\n${tail}` }));
+        const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${BOB_SIGNATURE}\n\n${tail}` }));
         const reply = byBody(all, 'Our driver');
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(`${own}${BOB_SIG}\n\n`);
-        expect(omitted(reply, p!)).toBe(tail);
-        expect(reasonsAt(reply, p!, 'On Mon')).toEqual(['app-quoted-history']);
-        expect(reasonsAt(reply, p!, 'Bob Sample\n')).toEqual(['signature']);
-        expect(p!.tailStart).toBe(reply.message.bodyText.indexOf('On Mon'));
-        expect(p!.keptAllBecauseEmpty).toBe(false);
-        expect(p!.fallback).toBe(false);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(`${own}${BOB_SIGNATURE}\n\n`);
+        expect(omitted(reply, messagePlan!)).toBe(tail);
+        expect(reasonsAt(reply, messagePlan!, 'On Mon')).toEqual(['app-quoted-history']);
+        expect(reasonsAt(reply, messagePlan!, 'Bob Sample\n')).toEqual(['signature']);
+        expect(messagePlan!.tailStart).toBe(reply.message.bodyText.indexOf('On Mon'));
+        expect(messagePlan!.keptAllBecauseEmpty).toBe(false);
+        expect(messagePlan!.fallback).toBe(false);
     });
 
     it('Outlook-style reply (From / Sent / To / Subject): leaves out the block and the quote below it', () =>
@@ -158,11 +158,11 @@ describe('planOutput: app quoted history', () =>
             ALICE_TEXT,
             '',
         ].join('\n');
-        const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${BOB_SIG}\n\n${tail}` }));
+        const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${BOB_SIGNATURE}\n\n${tail}` }));
         const reply = byBody(all, 'delivery is booked');
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(`${own}${BOB_SIG}\n\n`);
-        expect(omitted(reply, p!)).toBe(tail);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(`${own}${BOB_SIGNATURE}\n\n`);
+        expect(omitted(reply, messagePlan!)).toBe(tail);
     });
 
     it.each([
@@ -185,9 +185,9 @@ describe('planOutput: app quoted history', () =>
         const own = 'Bonjour Alice,\n\nVrijdag is goed, de chauffeur belt een uur vooraf.\n\n';
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${tail}` }));
         const reply = byBody(all, 'chauffeur');
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(own);
-        expect(omitted(reply, p!)).toBe(tail);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(own);
+        expect(omitted(reply, messagePlan!)).toBe(tail);
     });
 
     it('a quote without any header, found by the overlap detector only, is left out', () =>
@@ -196,8 +196,8 @@ describe('planOutput: app quoted history', () =>
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${ALICE_TEXT}\n` }));
         const reply = byBody(all, 'Friday it is');
         expect(reply.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true);
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(own);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(own);
     });
 
     it('keeps an overlap tail that repeats the SAME sender (own resend or disclaimer)', () =>
@@ -207,34 +207,34 @@ describe('planOutput: app quoted history', () =>
         const all = engine(mail({ from: BOB, body: first }), mail({ from: BOB, body: `${own}${first}` }));
         const second = byBody(all, 'Reminder');
         expect(second.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true);
-        const [, p] = plan(all);
-        expect(kept(second, p!)).toBe(second.message.bodyText);
-        expect(p!.tailStart).toBeNull();
+        const [, messagePlan] = plan(all);
+        expect(kept(second, messagePlan!)).toBe(second.message.bodyText);
+        expect(messagePlan!.tailStart).toBeNull();
     });
 
     it('an email that would be left with no text is kept whole, flagged keptAllBecauseEmpty', () =>
     {
         const body = `On Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n${quoted(ALICE_TEXT)}\n`;
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body }));
-        const [first, p] = plan(all);
+        const [first, messagePlan] = plan(all);
         expect(first!.keptAllBecauseEmpty).toBe(false);
-        expect(kept(all[1]!, p!)).toBe(body);
-        expect(p!.keptAllBecauseEmpty).toBe(true);
-        expect(p!.tailStart).toBe(0); // still classified
-        expect(reasonsAt(all[1]!, p!, 'On Mon')).toEqual(['app-quoted-history']);
+        expect(kept(all[1]!, messagePlan!)).toBe(body);
+        expect(messagePlan!.keptAllBecauseEmpty).toBe(true);
+        expect(messagePlan!.tailStart).toBe(0); // still classified
+        expect(reasonsAt(all[1]!, messagePlan!, 'On Mon')).toEqual(['app-quoted-history']);
     });
 
     it('keptAllBecauseEmpty: a repeated signature in an email kept whole is kept too', () =>
     {
         const tail = `On Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n${quoted(ALICE_TEXT)}\n`;
         // Hand-made folds: a body that is only Bob's (repeated) signature and a quote.
-        const body = `${BOB_SIG}\n\n${tail}`;
+        const body = `${BOB_SIGNATURE}\n\n${tail}`;
         const quoteStart = body.indexOf('On Mon');
         const folds: FoldRange[] = [
             { start: 0, end: quoteStart, reason: 'signature' },
             { start: quoteStart, end: body.length, reason: 'reply-header' },
         ];
-        const first = `First note.\n\n${BOB_SIG}\n`;
+        const first = `First note.\n\n${BOB_SIGNATURE}\n`;
         const inputs: PlanInput[] = [
             {
                 message: mail({ from: BOB, body: first }),
@@ -275,10 +275,10 @@ describe('planOutput: quotes the writer typed on purpose', () =>
         ].join('\n');
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body }));
         const reply = byBody(all, 'answers below');
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(body);
-        expect(reasonsAt(reply, p!, '> The lift')).toEqual(['writer-quote']);
-        expect(p!.tailStart).toBeNull();
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(body);
+        expect(reasonsAt(reply, messagePlan!, '> The lift')).toEqual(['writer-quote']);
+        expect(messagePlan!.tailStart).toBeNull();
     });
 
     it('bottom-posting (own text below the quote): everything is kept', () =>
@@ -286,9 +286,9 @@ describe('planOutput: quotes the writer typed on purpose', () =>
         const body = `On Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n${quoted(ALICE_TEXT)}\n\nYes, Friday morning works for us.\n`;
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body }));
         const reply = byBody(all, 'works for us');
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(body);
-        expect(reasonsAt(reply, p!, 'On Mon')).toEqual(['writer-quote']);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(body);
+        expect(reasonsAt(reply, messagePlan!, 'On Mon')).toEqual(['writer-quote']);
     });
 
     it('an overlap fold in the middle, followed by own text, is kept', () =>
@@ -297,8 +297,8 @@ describe('planOutput: quotes the writer typed on purpose', () =>
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: CAROL, body }));
         const reply = byBody(all, 'My comment');
         expect(reply.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true);
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(body);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(body);
     });
 });
 
@@ -311,21 +311,21 @@ describe('planOutput: forwards are not quoted history', () =>
     {
         const body = gmailForward(ALICE_TEXT);
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body, subject: 'Fwd: Office furniture' }));
-        const fwd = byBody(all, 'Forwarded message');
-        expect(fwd.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true);
-        const [, p] = plan(all);
-        expect(kept(fwd, p!)).toBe(body);
-        expect(reasonsAt(fwd, p!, 'Could you deliver')).toEqual(['forwarded']);
-        expect(p!.tailStart).toBeNull();
+        const forward = byBody(all, 'Forwarded message');
+        expect(forward.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true);
+        const [, messagePlan] = plan(all);
+        expect(kept(forward, messagePlan!)).toBe(body);
+        expect(reasonsAt(forward, messagePlan!, 'Could you deliver')).toEqual(['forwarded']);
+        expect(messagePlan!.tailStart).toBeNull();
     });
 
     it('a forward marker counts even when the subject is not a forward subject', () =>
     {
         const body = `Carol, see below.\n\n${gmailForward(ALICE_TEXT)}`;
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body, subject: 'Office furniture' }));
-        const fwd = byBody(all, 'Carol, see below');
-        const [, p] = plan(all);
-        expect(kept(fwd, p!)).toBe(body);
+        const forward = byBody(all, 'Carol, see below');
+        const [, messagePlan] = plan(all);
+        expect(kept(forward, messagePlan!)).toBe(body);
     });
 
     it('"-----Original Message-----" is a forward with a FW: subject, a reply with RE:', () =>
@@ -338,8 +338,8 @@ describe('planOutput: forwards are not quoted history', () =>
         ] as const)
         {
             const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${block}`, subject }));
-            const [, p] = plan(all);
-            expect(kept(all[1]!, p!), subject).toBe(expectKept);
+            const [, messagePlan] = plan(all);
+            expect(kept(all[1]!, messagePlan!), subject).toBe(expectKept);
         }
     });
 
@@ -350,11 +350,11 @@ describe('planOutput: forwards are not quoted history', () =>
         const attached = `${FORWARDED_SEPARATOR}\nFrom: Warehouse <warehouse@example.test>\nDate: Mon, 3 Mar 2025 10:00:00 +0000\nSubject: Stock\n\nThe oak desk is in stock.\n`;
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${quote}${attached}` }));
         const reply = byBody(all, 'confirmation from the warehouse');
-        const [, p] = plan(all);
+        const [, messagePlan] = plan(all);
         // The blank line after the quote is not folded, so it stays.
-        expect(kept(reply, p!)).toBe(`${own}\n${attached}`);
-        expect(omitted(reply, p!)).toBe(quote.slice(0, -1));
-        expect(reasonsAt(reply, p!, 'The oak desk is in stock')).toEqual(['forwarded']);
+        expect(kept(reply, messagePlan!)).toBe(`${own}\n${attached}`);
+        expect(omitted(reply, messagePlan!)).toBe(quote.slice(0, -1));
+        expect(reasonsAt(reply, messagePlan!, 'The oak desk is in stock')).toEqual(['forwarded']);
     });
 
     it('an Outlook reply quoting a forward: the forward is part of the quoted history', () =>
@@ -362,16 +362,16 @@ describe('planOutput: forwards are not quoted history', () =>
         const own = 'Thanks, noted.\n\n';
         const tail = `________________________________\nFrom: Alice Example <alice@example.test>\nSent: Monday, March 3, 2025 9:15 AM\nTo: Bob Sample <bob@furniture.example.test>\nSubject: FW: Stock\n\nSee below.\n\n${gmailForward('The oak desk is in stock, says the warehouse.')}`;
         const all = engine(mail({ from: BOB, body: `${own}${tail}` }));
-        const [p] = plan(all);
-        expect(kept(all[0]!, p!)).toBe(own);
-        expect(omitted(all[0]!, p!)).toBe(tail);
+        const [messagePlan] = plan(all);
+        expect(kept(all[0]!, messagePlan!)).toBe(own);
+        expect(omitted(all[0]!, messagePlan!)).toBe(tail);
     });
 });
 
 describe('planOutput: signatures, first per sender', () =>
 {
-    const bobMail = (text: string, sig = BOB_SIG, minutes?: number): NormalizedMessage =>
-        mail({ from: BOB, body: `${text}\n\n${sig}\n`, ...(minutes === undefined ? {} : { minutes }) });
+    const bobMail = (text: string, signature = BOB_SIGNATURE, minutes?: number): NormalizedMessage =>
+        mail({ from: BOB, body: `${text}\n\n${signature}\n`, ...(minutes === undefined ? {} : { minutes }) });
 
     it('an identical signature is kept once, then left out', () =>
     {
@@ -386,18 +386,18 @@ describe('planOutput: signatures, first per sender', () =>
 
     it('a changed signature is kept (once)', () =>
     {
-        const newSig = '-- \nBob Sample\nSample Furniture, new showroom address';
-        const all = engine(bobMail('First note.'), bobMail('Second note.', newSig), bobMail('Third note.', newSig));
+        const newSignature = '-- \nBob Sample\nSample Furniture, new showroom address';
+        const all = engine(bobMail('First note.'), bobMail('Second note.', newSignature), bobMail('Third note.', newSignature));
         expect(plan(all).map((p) => p.omittedSignatures)).toEqual([0, 0, 1]);
     });
 
     it('the same signature text from another sender is independent', () =>
     {
-        const sig = '-- \nSample Office\nMain Street 1';
+        const signature = '-- \nSample Office\nMain Street 1';
         const all = engine(
-            mail({ from: BOB, body: `Note from Bob.\n\n${sig}\n` }),
-            mail({ from: ALICE, body: `Note from Alice.\n\n${sig}\n` }),
-            mail({ from: BOB, body: `Bob again.\n\n${sig}\n` }),
+            mail({ from: BOB, body: `Note from Bob.\n\n${signature}\n` }),
+            mail({ from: ALICE, body: `Note from Alice.\n\n${signature}\n` }),
+            mail({ from: BOB, body: `Bob again.\n\n${signature}\n` }),
         );
         expect(plan(all).map((p) => p.omittedSignatures)).toEqual([0, 0, 1]);
     });
@@ -411,14 +411,14 @@ describe('planOutput: signatures, first per sender', () =>
     it('a signature inside a left-out tail does not count as kept', () =>
     {
         // Hand-made folds: Bob's signature quoted inside Alice's reply (overlap tail).
-        const aliceBody = `Thanks Bob.\n\n${'Old note from Bob about the desk delivery on Friday morning at the office.'}\n${BOB_SIG}\n`;
+        const aliceBody = `Thanks Bob.\n\n${'Old note from Bob about the desk delivery on Friday morning at the office.'}\n${BOB_SIGNATURE}\n`;
         const tailStart = aliceBody.indexOf('Old note');
-        const sigStart = aliceBody.indexOf('-- ');
+        const signatureStart = aliceBody.indexOf('-- ');
         const folds: FoldRange[] = [
             { start: tailStart, end: aliceBody.length, reason: 'quoted-overlap', related: 0 },
-            { start: sigStart, end: aliceBody.length, reason: 'signature' },
+            { start: signatureStart, end: aliceBody.length, reason: 'signature' },
         ];
-        const bobBody = `New note.\n\n${BOB_SIG}\n`;
+        const bobBody = `New note.\n\n${BOB_SIGNATURE}\n`;
         const bobFolds: FoldRange[] = [{ start: bobBody.indexOf('-- '), end: bobBody.length, reason: 'signature' }];
         const inputs: PlanInput[] = [
             { message: mail({ from: ALICE, body: 'x' }), segments: buildSegments('x', []), index: 0 },
@@ -435,19 +435,19 @@ describe('planOutput: signatures, first per sender', () =>
 
     it('a signature that the overlap detector also folds is not the start of quoted history', () =>
     {
-        const body = `Own text here.\n\n${BOB_SIG}\n\nOn Mon, 3 Mar 2025 at 14:02, Alice wrote:\n> line one\n> line two\n`;
-        const sigStart = body.indexOf('-- ');
-        const sigEnd = body.indexOf('\n\nOn Mon') + 1;
+        const body = `Own text here.\n\n${BOB_SIGNATURE}\n\nOn Mon, 3 Mar 2025 at 14:02, Alice wrote:\n> line one\n> line two\n`;
+        const signatureStart = body.indexOf('-- ');
+        const signatureEnd = body.indexOf('\n\nOn Mon') + 1;
         const quoteStart = body.indexOf('On Mon');
         const folds: FoldRange[] = [
-            { start: sigStart, end: sigEnd, reason: 'signature' },
-            { start: sigStart, end: sigEnd, reason: 'quoted-overlap', related: 1 },
+            { start: signatureStart, end: signatureEnd, reason: 'signature' },
+            { start: signatureStart, end: signatureEnd, reason: 'quoted-overlap', related: 1 },
             { start: quoteStart, end: body.length, reason: 'reply-header' },
         ];
         const input: PlanInput = { message: mail({ from: BOB, body }), segments: buildSegments(body, folds) };
-        const [p] = plan([input]);
-        expect(p!.tailStart).toBe(quoteStart);
-        expect(kept(input, p!)).toBe(body.slice(0, quoteStart));
+        const [messagePlan] = plan([input]);
+        expect(messagePlan!.tailStart).toBe(quoteStart);
+        expect(kept(input, messagePlan!)).toBe(body.slice(0, quoteStart));
     });
 });
 
@@ -458,8 +458,8 @@ describe('planOutput: policy variants', () =>
     const build = (): EngineMessage[] =>
         engine(
             mail({ from: ALICE, body: ALICE_TEXT }),
-            mail({ from: BOB, body: `${own}${BOB_SIG}\n\n${tail}` }),
-            mail({ from: BOB, body: `Second note.\n\n${BOB_SIG}\n` }),
+            mail({ from: BOB, body: `${own}${BOB_SIGNATURE}\n\n${tail}` }),
+            mail({ from: BOB, body: `Second note.\n\n${BOB_SIGNATURE}\n` }),
         );
 
     it("appQuotedHistory 'keep': the tail stays in (still labelled)", () =>
@@ -492,10 +492,10 @@ describe('planOutput: policy variants', () =>
     {
         const all = build();
         const plans = plan(all, { appQuotedHistory: 'omit', signatures: 'none', unfoldEverything: true });
-        plans.forEach((p, k) =>
+        plans.forEach((messagePlan, k) =>
         {
-            expect(p.ranges.every((r) => r.keep)).toBe(true);
-            expect(kept(all[k]!, p)).toBe(all[k]!.message.bodyText);
+            expect(messagePlan.ranges.every((r) => r.keep)).toBe(true);
+            expect(kept(all[k]!, messagePlan)).toBe(all[k]!.message.bodyText);
         });
         expect(plans[1]!.tailStart).not.toBeNull(); // still classified
     });
@@ -507,8 +507,8 @@ describe('planOutput: safety', () =>
     {
         const body = 'Some text\n> a\n> b\n';
         const input: PlanInput = { message: mail({ from: BOB, body }), segments: [{ start: 0, end: 3, folded: true, reasons: ['quote-marker'], related: [] }] };
-        const [p] = planOutput([input]);
-        expect(p).toEqual({ ranges: [{ start: 0, end: body.length, keep: true, reason: 'text' }], tailStart: null, omittedSignatures: 0, keptAllBecauseEmpty: false, fallback: true });
+        const [messagePlan] = planOutput([input]);
+        expect(messagePlan).toEqual({ ranges: [{ start: 0, end: body.length, keep: true, reason: 'text' }], tailStart: null, omittedSignatures: 0, keptAllBecauseEmpty: false, fallback: true });
     });
 
     it('an empty body gives no ranges; an empty list gives no plans', () =>
@@ -528,10 +528,10 @@ describe('planOutput: safety', () =>
         ];
         const input: PlanInput = { message: mail({ from: BOB, body }), segments: buildSegments(body, folds) };
         const other: PlanInput = { message: mail({ from: ALICE, body: 'x' }), segments: buildSegments('x', []), index: 3 };
-        const [p] = plan([input, other]);
-        expect(p!.tailStart).toBe(body.indexOf('A1'));
-        expect(kept(input, p!)).toBe('Own.\n\n\n\n');
-        expect(omitted(input, p!)).toBe('A1\nA2\nB1\nB2\n');
+        const [messagePlan] = plan([input, other]);
+        expect(messagePlan!.tailStart).toBe(body.indexOf('A1'));
+        expect(kept(input, messagePlan!)).toBe('Own.\n\n\n\n');
+        expect(omitted(input, messagePlan!)).toBe('A1\nA2\nB1\nB2\n');
     });
 });
 
@@ -546,49 +546,49 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
     const BELOW = 'Yes, Friday works, our driver Dan will call one hour before.\n\nBob\n';
 
     /** Runs the engine over Alice's email and Bob's reply; plans with or without Alice's email included. */
-    function run(body: string, aliceIncluded: boolean): { reply: EngineMessage; p: MessagePlan }
+    function run(body: string, aliceIncluded: boolean): { reply: EngineMessage; messagePlan: MessagePlan }
     {
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body }));
         const reply = all.find((m) => m.message.bodyText === body)!;
         expect(reply.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true);
         const included = aliceIncluded ? all : [reply];
         const plans = plan(included);
-        return { reply, p: plans[included.indexOf(reply)]! };
+        return { reply, messagePlan: plans[included.indexOf(reply)]! };
     }
 
     it('P1: own text below a confirmed quote (quoted email included): everything is kept', () =>
     {
         const body = `${EN_BLOCK}${ALICE_TEXT}\n\n${BELOW}`;
-        const { reply, p } = run(body, true);
-        expect(kept(reply, p)).toBe(body);
-        expect(p.tailStart).toBeNull();
-        expect(p.keptAllBecauseEmpty).toBe(false);
-        expect(reasonsAt(reply, p, 'Yes, Friday works')).toEqual(['text']);
-        expect(reasonsAt(reply, p, 'From: Alice')).toEqual(['writer-quote']);
+        const { reply, messagePlan } = run(body, true);
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.tailStart).toBeNull();
+        expect(messagePlan.keptAllBecauseEmpty).toBe(false);
+        expect(reasonsAt(reply, messagePlan, 'Yes, Friday works')).toEqual(['text']);
+        expect(reasonsAt(reply, messagePlan, 'From: Alice')).toEqual(['writer-quote']);
     });
 
     it('P1 with a greeting above: everything is kept', () =>
     {
         const body = `Hi Alice, see my answer below.\n\n${EN_BLOCK}${ALICE_TEXT}\n\n${BELOW}`;
-        const { reply, p } = run(body, true);
-        expect(kept(reply, p)).toBe(body);
+        const { reply, messagePlan } = run(body, true);
+        expect(kept(reply, messagePlan)).toBe(body);
     });
 
     it('P2: the quoted email NOT included: the block and all below it are left out (accepted limit)', () =>
     {
         const own = 'Hi Alice, see my answer below.\n\n';
         const body = `${own}${EN_BLOCK}${ALICE_TEXT}\n\n${BELOW}`;
-        const { reply, p } = run(body, false);
-        expect(kept(reply, p)).toBe(own);
-        expect(p.tailStart).toBe(own.length);
+        const { reply, messagePlan } = run(body, false);
+        expect(kept(reply, messagePlan)).toBe(own);
+        expect(messagePlan.tailStart).toBe(own.length);
     });
 
     it('P2 with no text above the block: rule 4 keeps the whole body', () =>
     {
         const body = `${EN_BLOCK}${ALICE_TEXT}\n\n${BELOW}`;
-        const { reply, p } = run(body, false);
-        expect(kept(reply, p)).toBe(body);
-        expect(p.keptAllBecauseEmpty).toBe(true);
+        const { reply, messagePlan } = run(body, false);
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.keptAllBecauseEmpty).toBe(true);
     });
 
     it('P3: an unconfirmed header block in own text: the block and below are left out, the line above stays', () =>
@@ -596,9 +596,9 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
         const own = 'The warehouse sent me this yesterday:\n\n';
         const body = `${own}From: Warehouse <warehouse@example.test>\nSent: Monday, March 3, 2025 9:15 AM\nTo: Bob Sample <bob@furniture.example.test>\n\nMY OWN COMMENT: the desk is late, the chairs are on time.\n\nBob\n`;
         const all = engine(mail({ from: BOB, body }));
-        const [p] = plan(all);
-        expect(kept(all[0]!, p!)).toBe(own);
-        expect(p!.keptAllBecauseEmpty).toBe(false);
+        const [messagePlan] = plan(all);
+        expect(kept(all[0]!, messagePlan!)).toBe(own);
+        expect(messagePlan!.keptAllBecauseEmpty).toBe(false);
     });
 
     it.each([
@@ -609,19 +609,19 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
         const own = 'Bonjour Alice,\n\n';
         const body = `${own}${block}${ALICE_TEXT}\n\n${below}`;
         const included = run(body, true);
-        expect(kept(included.reply, included.p)).toBe(body);
-        expect(reasonsAt(included.reply, included.p, below.slice(0, 10))).toEqual(['text']);
+        expect(kept(included.reply, included.messagePlan)).toBe(body);
+        expect(reasonsAt(included.reply, included.messagePlan, below.slice(0, 10))).toEqual(['text']);
         const alone = run(body, false);
-        expect(kept(alone.reply, alone.p)).toBe(own);
+        expect(kept(alone.reply, alone.messagePlan)).toBe(own);
     });
 
     it('a confirmed quote with nothing below it (normal top-posting): still left out', () =>
     {
         const own = 'Hi Alice,\n\nFriday works, our driver will call one hour before.\n\n';
         const body = `${own}${EN_BLOCK}${ALICE_TEXT}\n`;
-        const { reply, p } = run(body, true);
-        expect(kept(reply, p)).toBe(own);
-        expect(p.tailStart).toBe(own.length);
+        const { reply, messagePlan } = run(body, true);
+        expect(kept(reply, messagePlan)).toBe(own);
+        expect(messagePlan.tailStart).toBe(own.length);
     });
 
     it('N1: text below a confirmed quote that repeats an email NOT included is kept (it would be nowhere in the PDF)', () =>
@@ -634,10 +634,10 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
         const carolAt = body.indexOf('Carol wrote');
         expect(reply.segments.find((s) => s.start <= carolAt && carolAt < s.end)!.reasons).toContain('quoted-overlap');
         const included = all.filter((m) => m.message.from[0] !== CAROL);
-        const p = plan(included)[included.indexOf(reply)]!;
-        expect(kept(reply, p)).toBe(body);
-        expect(p.keptAllBecauseEmpty).toBe(false);
-        expect(reasonsAt(reply, p, 'Carol wrote')).toEqual(['text']);
+        const messagePlan = plan(included)[included.indexOf(reply)]!;
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.keptAllBecauseEmpty).toBe(false);
+        expect(reasonsAt(reply, messagePlan, 'Carol wrote')).toEqual(['text']);
         // A4: the same with the writer's own earlier email (not included) and an own line above it.
         const bobOld = 'All deliveries are made between eight and noon, and the driver needs a free parking place in front of the building.';
         const body2 = `${own}${EN_BLOCK}${ALICE_TEXT}\n\nAbout parking:\n${bobOld}\n`;
@@ -658,9 +658,9 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
         const reply = all.find((m) => m.message.bodyText === body)!;
         for (const included of [all, all.filter((m) => m.message.from[0] !== CAROL)])
         {
-            const p = plan(included)[included.indexOf(reply)]!;
-            expect(kept(reply, p)).toBe(own);
-            expect(p.tailStart).toBe(own.length);
+            const messagePlan = plan(included)[included.indexOf(reply)]!;
+            expect(kept(reply, messagePlan)).toBe(own);
+            expect(messagePlan.tailStart).toBe(own.length);
         }
     });
 
@@ -668,18 +668,18 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
     {
         const own = 'Hi Alice,\n\nFriday works.\n\n';
         const body = `${own}${EN_BLOCK}${ALICE_TEXT}\n\nSent from my phone\n\n> older line about the invoice\n> another older line\n`;
-        const { reply, p } = run(body, true);
-        expect(kept(reply, p)).toBe(body);
-        expect(reasonsAt(reply, p, 'Sent from my phone')).toEqual(['text']);
+        const { reply, messagePlan } = run(body, true);
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(reasonsAt(reply, messagePlan, 'Sent from my phone')).toEqual(['text']);
     });
 
     it('a ">" block right after the confirmed quote is covered: left out with it', () =>
     {
         const own = 'Hi Alice,\n\nFriday works.\n\n';
         const body = `${own}${EN_BLOCK}${ALICE_TEXT}\n\n> older line about the invoice\n> another older line\n`;
-        const { reply, p } = run(body, true);
+        const { reply, messagePlan } = run(body, true);
         expect(reply.segments.some((s) => s.reasons.includes('quote-marker'))).toBe(true);
-        expect(kept(reply, p)).toBe(own);
+        expect(kept(reply, messagePlan)).toBe(own);
     });
 
     it('S1: a line typed in the MIDDLE of a confirmed quote is own text: everything is kept', () =>
@@ -688,22 +688,22 @@ describe('planOutput: text below an Outlook-style quote (rule 2b)', () =>
         const parts = ALICE_TEXT.split('\n');
         const withGap = [...parts.slice(0, 3), '(noted)', ...parts.slice(3)].join('\n');
         const body = `${own}${EN_BLOCK}${withGap}\n`;
-        const { reply, p } = run(body, true);
+        const { reply, messagePlan } = run(body, true);
         const gap = body.indexOf('(noted)');
         const gapSegment = reply.segments.find((s) => s.start <= gap && gap < s.end)!;
         expect(gapSegment.reasons).toEqual(['reply-header']); // only the region fold: an uncovered gap
-        expect(kept(reply, p)).toBe(body);
-        expect(reasonsAt(reply, p, '(noted)')).toEqual(['text']);
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(reasonsAt(reply, messagePlan, '(noted)')).toEqual(['text']);
     });
 
     it('S1: a line with no letter or digit after the quote proves nothing: left out with it', () =>
     {
         const own = 'Hi Alice,\n\nFriday works.\n\n';
         const body = `${own}${EN_BLOCK}${ALICE_TEXT}\n\n* * * ---\n`;
-        const { reply, p } = run(body, true);
-        const at = body.indexOf('* * *');
-        expect(reply.segments.find((s) => s.start <= at && at < s.end)!.reasons).toEqual(['reply-header']);
-        expect(kept(reply, p)).toBe(own);
+        const { reply, messagePlan } = run(body, true);
+        const offset = body.indexOf('* * *');
+        expect(reply.segments.find((s) => s.start <= offset && offset < s.end)!.reasons).toEqual(['reply-header']);
+        expect(kept(reply, messagePlan)).toBe(own);
     });
 });
 
@@ -712,27 +712,28 @@ describe('planOutput: rule 2b, review round 3', () =>
     const EN_BLOCK =
         'From: Alice Example <alice@example.test>\nSent: Monday, March 3, 2025 9:15 AM\nTo: Bob Sample <bob@furniture.example.test>\nSubject: Office furniture\n\n';
     const ANSWER = 'Yes, Friday works, our driver will call you one hour before.';
-    const SIG = 'Kind regards,\nBob Sample\nSample Furniture (fictional company)\nShowroom: 12 Example Street, Testville\nPhone +00 000 000 000';
+    const SIGNATURE =
+        'Kind regards,\nBob Sample\nSample Furniture (fictional company)\nShowroom: 12 Example Street, Testville\nPhone +00 000 000 000';
     const DISCLAIMER = 'This message is confidential and intended only for the addressee. If you received it by mistake please delete it and tell the sender.';
-    const DASH_SIG = '-- \nBob Sample\nSample Furniture (fictional company)\nPhone +00 000 000 000';
+    const DASH_SIGNATURE = '-- \nBob Sample\nSample Furniture (fictional company)\nPhone +00 000 000 000';
 
     /** Bob's first email (with `closing`), Alice's email, Bob's Outlook-style reply `body`: all included. */
-    function threeMails(closing: string, body: string): { reply: EngineMessage; p: MessagePlan }
+    function threeMails(closing: string, body: string): { reply: EngineMessage; messagePlan: MessagePlan }
     {
         const first = mail({ from: BOB, body: `Hello Alice, about the desks for your office.\n\n${closing}\n` });
         const all = engine(first, mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body }));
         const reply = all.find((m) => m.message.bodyText === body)!;
-        return { reply, p: plan(all)[all.indexOf(reply)]! };
+        return { reply, messagePlan: plan(all)[all.indexOf(reply)]! };
     }
 
     it.each([
-        ['T1: a repeated signature', SIG, true],
+        ['T1: a repeated signature', SIGNATURE, true],
         ['T3: a repeated disclaimer', `Bob\n\n${DISCLAIMER}`, true],
-        ['T2: a repeated "-- " signature', DASH_SIG, false],
+        ['T2: a repeated "-- " signature', DASH_SIGNATURE, false],
     ])('B1, %s after the own answer below the quote: everything is kept', (_name, closing, linkedToOwnMail) =>
     {
         const body = `Hi Alice,\n\n${EN_BLOCK}${ALICE_TEXT}\n\n${ANSWER}\n\n${closing}\n`;
-        const { reply, p } = threeMails(closing, body);
+        const { reply, messagePlan } = threeMails(closing, body);
         // The closing is folded as a quote of Bob's OWN first email (input position 0).
         const closingAt = body.lastIndexOf(closing.slice(0, 12));
         const closingSegment = reply.segments.find((s) => s.start <= closingAt + 20 && closingAt + 20 < s.end)!;
@@ -740,20 +741,20 @@ describe('planOutput: rule 2b, review round 3', () =>
         {
             expect(closingSegment.related).toEqual([0]);
         }
-        expect(kept(reply, p)).toBe(body);
-        expect(p.tailStart).toBeNull();
-        expect(p.keptAllBecauseEmpty).toBe(false);
-        expect(reasonsAt(reply, p, ANSWER)).toEqual(['text']);
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.tailStart).toBeNull();
+        expect(messagePlan.keptAllBecauseEmpty).toBe(false);
+        expect(reasonsAt(reply, messagePlan, ANSWER)).toEqual(['text']);
     });
 
     it('B1, T4: the same with nothing above the header: kept by rule 2b, not by rule 4', () =>
     {
         const closing = `Bob\n\n${DISCLAIMER}`;
         const body = `${EN_BLOCK}${ALICE_TEXT}\n\n${ANSWER}\n\n${closing}\n`;
-        const { reply, p } = threeMails(closing, body);
-        expect(kept(reply, p)).toBe(body);
-        expect(p.keptAllBecauseEmpty).toBe(false);
-        expect(p.tailStart).toBeNull();
+        const { reply, messagePlan } = threeMails(closing, body);
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.keptAllBecauseEmpty).toBe(false);
+        expect(messagePlan.tailStart).toBeNull();
     });
 
     it('A3: an answer typed between two quoted paragraphs of an Outlook-style quote is kept', () =>
@@ -772,10 +773,10 @@ describe('planOutput: rule 2b, review round 3', () =>
         const body = `See my answers below.\n\n${EN_BLOCK}${[...alice.slice(0, 3), answer, ...alice.slice(3)].join('\n')}\n`;
         const all = engine(mail({ from: ALICE, body: alice.join('\n') }), mail({ from: BOB, body }));
         const reply = byBody(all, answer);
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(body);
-        expect(reasonsAt(reply, p!, answer)).toEqual(['text']);
-        expect(p!.keptAllBecauseEmpty).toBe(false);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(body);
+        expect(reasonsAt(reply, messagePlan!, answer)).toEqual(['text']);
+        expect(messagePlan!.keptAllBecauseEmpty).toBe(false);
     });
 
     const CAROL_NOTE = 'Please note the showroom is closed on Monday 10 March for the yearly inventory of all furniture items.';
@@ -788,11 +789,11 @@ describe('planOutput: rule 2b, review round 3', () =>
         const body = `Hi Alice,\n\n${EN_BLOCK}${ALICE_TEXT}\n\n${below}`;
         const all = engine(mail({ from: CAROL, body: CAROL_NOTE }), mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body }));
         const reply = all.find((m) => m.message.bodyText === body)!;
-        const at = body.indexOf('showroom is closed');
-        expect(reply.segments.find((s) => s.start <= at && at < s.end)!.related).toEqual([0]); // linked to Carol only
-        const p = plan(all)[all.indexOf(reply)]!;
-        expect(kept(reply, p)).toBe(body);
-        expect(p.keptAllBecauseEmpty).toBe(false);
+        const offset = body.indexOf('showroom is closed');
+        expect(reply.segments.find((s) => s.start <= offset && offset < s.end)!.related).toEqual([0]); // linked to Carol only
+        const messagePlan = plan(all)[all.indexOf(reply)]!;
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.keptAllBecauseEmpty).toBe(false);
     });
 
     it('A9: an own line, then a ">" quote of another email of Alice: everything is kept', () =>
@@ -802,9 +803,9 @@ describe('planOutput: rule 2b, review round 3', () =>
         const body = `Hi Alice,\n\n${EN_BLOCK}${ALICE_TEXT}\n\nAnd about your other mail:\n${quoted(alice2)}\n`;
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: ALICE, body: alice2 }), mail({ from: BOB, body }));
         const reply = all.find((m) => m.message.bodyText === body)!;
-        const p = plan(all)[all.indexOf(reply)]!;
-        expect(kept(reply, p)).toBe(body);
-        expect(p.keptAllBecauseEmpty).toBe(false);
+        const messagePlan = plan(all)[all.indexOf(reply)]!;
+        expect(kept(reply, messagePlan)).toBe(body);
+        expect(messagePlan.keptAllBecauseEmpty).toBe(false);
     });
 
     // ---- hand-made segments: the reply-header detector's folds plus chosen overlap / signature folds
@@ -826,11 +827,11 @@ describe('planOutput: rule 2b, review round 3', () =>
         return related === undefined ? { start, end: start + snippet.length, reason } : { start, end: start + snippet.length, reason, related };
     }
     /** Bob's reply `body` at input position 9 (the detector's reply-header folds plus `extra`), planned after `others`. */
-    function handPlan(body: string, extra: readonly FoldRange[], others: readonly PlanInput[]): { input: PlanInput; p: MessagePlan }
+    function handPlan(body: string, extra: readonly FoldRange[], others: readonly PlanInput[]): { input: PlanInput; messagePlan: MessagePlan }
     {
         const input: PlanInput = { message: mail({ from: BOB, body }), segments: buildSegments(body, [...detectReplyHeaders(body), ...extra]), index: 9 };
         const plans = plan([...others, input]);
-        return { input, p: plans[plans.length - 1]! };
+        return { input, messagePlan: plans[plans.length - 1]! };
     }
 
     const PARA_A = 'Could you deliver the oak desk and the four grey chairs on Friday morning?\n';
@@ -845,8 +846,8 @@ describe('planOutput: rule 2b, review round 3', () =>
         const body = `${OWN}${EN_BLOCK}${PARA_B}\n${PARA_A}`;
         // PARA_B: quoted from Bob's own email (position 3); PARA_A: from Alice's (position 0).
         const folds = [over(body, PARA_B, 'quoted-overlap', 3), over(body, PARA_A, 'quoted-overlap', 0)];
-        const { input, p } = handPlan(body, folds, [other(ALICE, 0), other(BOB, 3)]);
-        expect(kept(input, p)).toBe(OWN);
+        const { input, messagePlan } = handPlan(body, folds, [other(ALICE, 0), other(BOB, 3)]);
+        expect(kept(input, messagePlan)).toBe(OWN);
     });
 
     it('a whitespace-only overlap piece does not confirm the quote', () =>
@@ -855,19 +856,19 @@ describe('planOutput: rule 2b, review round 3', () =>
         // Only the blank lines are "quoted" from Alice: the quote is not confirmed, so PARA_A is not own text.
         const blankStart = body.indexOf('Subject: Office furniture\n') + 'Subject: Office furniture\n'.length;
         const folds: FoldRange[] = [{ start: blankStart, end: body.indexOf(PARA_A), reason: 'quoted-overlap', related: 0 }];
-        const { input, p } = handPlan(body, folds, [other(ALICE, 0)]);
-        expect(kept(input, p)).toBe(OWN);
+        const { input, messagePlan } = handPlan(body, folds, [other(ALICE, 0)]);
+        expect(kept(input, messagePlan)).toBe(OWN);
     });
 
     it('a signature after the quote is not own text', () =>
     {
-        const body = `${OWN}${EN_BLOCK}${PARA_A}\n${BOB_SIG}\n`;
-        const folds = [over(body, PARA_A, 'quoted-overlap', 0), over(body, `${BOB_SIG}\n`, 'signature')];
-        const { input, p } = handPlan(body, folds, [other(ALICE, 0)]);
-        expect(kept(input, p)).toBe(OWN);
+        const body = `${OWN}${EN_BLOCK}${PARA_A}\n${BOB_SIGNATURE}\n`;
+        const folds = [over(body, PARA_A, 'quoted-overlap', 0), over(body, `${BOB_SIGNATURE}\n`, 'signature')];
+        const { input, messagePlan } = handPlan(body, folds, [other(ALICE, 0)]);
+        expect(kept(input, messagePlan)).toBe(OWN);
         // Control: without the signature fold, those lines are own text.
         const bare = handPlan(body, folds.slice(0, 1), [other(ALICE, 0)]);
-        expect(kept(bare.input, bare.p)).toBe(body);
+        expect(kept(bare.input, bare.messagePlan)).toBe(body);
     });
 
     it('a marked header that runs to the end is not rule 2b (its lines start the tail)', () =>
@@ -877,8 +878,8 @@ describe('planOutput: rule 2b, review round 3', () =>
         const headers = detectReplyHeaders(body);
         expect(headers.map((h) => [h.start, h.end])).toEqual([[OWN.length, body.length]]);
         // No quote-marker fold here, so the last line is covered by the region fold only.
-        const { input, p } = handPlan(body, [over(body, `> ${PARA_A}`, 'quoted-overlap', 0)], [other(ALICE, 0)]);
-        expect(kept(input, p)).toBe(OWN);
+        const { input, messagePlan } = handPlan(body, [over(body, `> ${PARA_A}`, 'quoted-overlap', 0)], [other(ALICE, 0)]);
+        expect(kept(input, messagePlan)).toBe(OWN);
     });
 
     it("S2: the quoted email's own quoted chain (transitive, included emails only) is covered", () =>
@@ -890,13 +891,13 @@ describe('planOutput: rule 2b, review round 3', () =>
         const carol = other(CAROL, 1, PARA_D, [{ start: 0, end: PARA_D.length, reason: 'quoted-overlap', related: 2 }]);
         const dave = other({ name: 'Dave Old', address: 'dave@sample.test' }, 2);
         const chained = handPlan(body, folds, [alice, carol, dave]);
-        expect(kept(chained.input, chained.p)).toBe(OWN);
+        expect(kept(chained.input, chained.messagePlan)).toBe(OWN);
         // Alice quotes nobody: Carol's and Dave's lines are linked to other emails only -> own text, kept.
         const unchained = handPlan(body, folds, [other(ALICE, 0), carol, dave]);
-        expect(kept(unchained.input, unchained.p)).toBe(body);
+        expect(kept(unchained.input, unchained.messagePlan)).toBe(body);
         // Carol not included: the chain stops at Alice, Dave's lines are not covered -> kept.
         const broken = handPlan(body, folds, [alice, dave]);
-        expect(kept(broken.input, broken.p)).toBe(body);
+        expect(kept(broken.input, broken.messagePlan)).toBe(body);
         // Without the nested header lines being covered, they would count as own text: check they are found.
         const nestedAt = body.indexOf('-----Original');
         expect(detectReplyHeaders(body).some((h) => h.start === nestedAt)).toBe(true);
@@ -909,13 +910,13 @@ describe('planOutput: rule 2b, review round 3', () =>
         const link = (reason: FoldRange['reason']): PlanInput => other(ALICE, 0, PARA_C, [{ start: 0, end: PARA_C.length, reason, related: 1 }]);
         // Alice quotes Carol, Carol included: covered.
         const included = handPlan(body, folds, [link('quoted-overlap'), other(CAROL, 1)]);
-        expect(kept(included.input, included.p)).toBe(OWN);
+        expect(kept(included.input, included.messagePlan)).toBe(OWN);
         // Carol not included: her lines would be nowhere in the PDF -> own text, kept (N1).
         const notIncluded = handPlan(body, folds, [link('quoted-overlap')]);
-        expect(kept(notIncluded.input, notIncluded.p)).toBe(body);
+        expect(kept(notIncluded.input, notIncluded.messagePlan)).toBe(body);
         // A link on a fold that is not a quote (here a signature) is not a quote link.
         const notAQuote = handPlan(body, folds, [link('signature'), other(CAROL, 1)]);
-        expect(kept(notAQuote.input, notAQuote.p)).toBe(body);
+        expect(kept(notAQuote.input, notAQuote.messagePlan)).toBe(body);
     });
 
     it("S2: the quoted email is the first piece's link of ANOTHER sender, not the writer's own email linked with it", () =>
@@ -923,15 +924,15 @@ describe('planOutput: rule 2b, review round 3', () =>
         const body = `${OWN}${EN_BLOCK}${PARA_A}\n${PARA_B}`;
         // PARA_A is in Alice's (0) and in Bob's own (3) email; PARA_B only in Bob's.
         const folds = [over(body, PARA_A, 'quoted-overlap', 0), over(body, PARA_A, 'quoted-overlap', 3), over(body, PARA_B, 'quoted-overlap', 3)];
-        const { input, p } = handPlan(body, folds, [other(ALICE, 0), other(BOB, 3)]);
-        expect(kept(input, p)).toBe(body);
+        const { input, messagePlan } = handPlan(body, folds, [other(ALICE, 0), other(BOB, 3)]);
+        expect(kept(input, messagePlan)).toBe(body);
     });
 
     it('a nested header with nothing quoted below it: its lines are covered', () =>
     {
         const body = `${OWN}${EN_BLOCK}${PARA_A}\n${nestedHeader('Carol Test')}`;
-        const { input, p } = handPlan(body, [over(body, PARA_A, 'quoted-overlap', 0)], [other(ALICE, 0)]);
-        expect(kept(input, p)).toBe(OWN);
+        const { input, messagePlan } = handPlan(body, [over(body, PARA_A, 'quoted-overlap', 0)], [other(ALICE, 0)]);
+        expect(kept(input, messagePlan)).toBe(OWN);
     });
 
     it('quotedChain: follows links transitively, only through included emails, and stops on cycles', () =>
@@ -943,7 +944,7 @@ describe('planOutput: rule 2b, review round 3', () =>
             [7, [8]],
         ]);
         const included = new Set([0, 1, 2, 8]);
-        const ctx: QuoteContext = {
+        const context: QuoteContext = {
             isIncluded: (i) => included.has(i),
             sameSender: () => false,
             quotedLinks: (i) => (included.has(i) ? (links.get(i) ?? []) : []),
@@ -951,39 +952,39 @@ describe('planOutput: rule 2b, review round 3', () =>
             linePlaces: () => [],
         };
         const sorted = (s: ReadonlySet<number>): number[] => [...s].sort((a, b) => a - b);
-        expect(sorted(quotedChain([0], ctx))).toEqual([0, 1, 2]); // 7 is not included, so 8 is not reached
-        expect(sorted(quotedChain([7, 2], ctx))).toEqual([0, 1, 2]); // a start that is not included (7) is dropped
-        expect(quotedChain([], ctx).size).toBe(0);
+        expect(sorted(quotedChain([0], context))).toEqual([0, 1, 2]); // 7 is not included, so 8 is not reached
+        expect(sorted(quotedChain([7, 2], context))).toEqual([0, 1, 2]); // a start that is not included (7) is dropped
+        expect(quotedChain([], context).size).toBe(0);
     });
 
     it('Mr: a signature also folded as a quote of an included email of another sender is not the start of the tail', () =>
     {
-        const body = `Own text here.\n\n${BOB_SIG}\n`;
-        const sig = over(body, `${BOB_SIG}\n`, 'signature');
-        const input: PlanInput = { message: mail({ from: BOB, body }), segments: buildSegments(body, [sig, { ...sig, reason: 'quoted-overlap', related: 1 }]), index: 2 };
-        const [, p] = plan([other(CAROL, 1), input]);
-        expect(p!.tailStart).toBeNull();
-        expect(kept(input, p!)).toBe(body);
-        expect(reasonsAt(input, p!, 'Bob Sample')).toEqual(['signature']);
+        const body = `Own text here.\n\n${BOB_SIGNATURE}\n`;
+        const signature = over(body, `${BOB_SIGNATURE}\n`, 'signature');
+        const input: PlanInput = { message: mail({ from: BOB, body }), segments: buildSegments(body, [signature, { ...signature, reason: 'quoted-overlap', related: 1 }]), index: 2 };
+        const [, messagePlan] = plan([other(CAROL, 1), input]);
+        expect(messagePlan!.tailStart).toBeNull();
+        expect(kept(input, messagePlan!)).toBe(body);
+        expect(reasonsAt(input, messagePlan!, 'Bob Sample')).toEqual(['signature']);
     });
 
     describe('review round 4: text before the first confirming piece, emoji and digits', () =>
     {
         /** Alice's email `aliceBody` and Bob's reply `body`, through the engine, both included. */
-        function pair(aliceBody: string, body: string): { reply: EngineMessage; p: MessagePlan }
+        function pair(aliceBody: string, body: string): { reply: EngineMessage; messagePlan: MessagePlan }
         {
             const all = engine(mail({ from: ALICE, body: aliceBody }), mail({ from: BOB, body }));
             const reply = all.find((m) => m.message.bodyText === body)!;
-            return { reply, p: plan(all)[all.indexOf(reply)]! };
+            return { reply, messagePlan: plan(all)[all.indexOf(reply)]! };
         }
         /** The fold reasons of Bob's segment at `snippet`. */
         const reasonsOfSegment = (reply: EngineMessage, snippet: string): readonly string[] =>
         {
-            const at = reply.message.bodyText.indexOf(snippet);
-            return reply.segments.find((s) => s.start <= at && at < s.end)!.reasons;
+            const offset = reply.message.bodyText.indexOf(snippet);
+            return reply.segments.find((s) => s.start <= offset && offset < s.end)!.reasons;
         };
         // Alice's email opens with lines too short for the overlap detector.
-        const ALICE_Q = 'Hi Bob,\n\nFriday ok?\n\nThe office is on the second floor and the lift is large enough for the desk and the chairs we ordered.\n\nThanks,\nAlice';
+        const ALICE_SHORT_OPENING = 'Hi Bob,\n\nFriday ok?\n\nThe office is on the second floor and the lift is large enough for the desk and the chairs we ordered.\n\nThanks,\nAlice';
         const LONG = 'The office is on the second floor and the lift is large enough for the desk and the chairs we ordered.';
 
         it.each([
@@ -992,51 +993,51 @@ describe('planOutput: rule 2b, review round 3', () =>
         ])('%s as the only answer below a confirmed quote: everything is kept', (_name, answer) =>
         {
             const body = `Hi Alice,\n\n${EN_BLOCK}${ALICE_TEXT}\n\n${answer}\n`;
-            const { reply, p } = pair(ALICE_TEXT, body);
+            const { reply, messagePlan } = pair(ALICE_TEXT, body);
             expect(reasonsOfSegment(reply, answer)).toEqual(['reply-header']);
-            expect(kept(reply, p)).toBe(body);
-            expect(p.keptAllBecauseEmpty).toBe(false);
-            expect(reasonsAt(reply, p, answer)).toEqual(['text']);
+            expect(kept(reply, messagePlan)).toBe(body);
+            expect(messagePlan.keptAllBecauseEmpty).toBe(false);
+            expect(reasonsAt(reply, messagePlan, answer)).toEqual(['text']);
         });
 
         it('R4: an answer typed right under a short quoted question, before the first confirming piece, is kept', () =>
         {
             const answer = 'Yes, Friday at nine.';
             const body = `See below.\n\n${EN_BLOCK}Hi Bob,\n\nFriday ok?\n${answer}\n\n${LONG}\n\nThanks,\nAlice\n`;
-            const { reply, p } = pair(ALICE_Q, body);
+            const { reply, messagePlan } = pair(ALICE_SHORT_OPENING, body);
             // The opening and the answer are folded by the header region only (too short to match).
             expect(reasonsOfSegment(reply, answer)).toEqual(['reply-header']);
             expect(reasonsOfSegment(reply, LONG)).toContain('quoted-overlap');
-            expect(kept(reply, p)).toBe(body);
-            expect(p.tailStart).toBeNull();
-            expect(reasonsAt(reply, p, answer)).toEqual(['text']);
+            expect(kept(reply, messagePlan)).toBe(body);
+            expect(messagePlan.tailStart).toBeNull();
+            expect(reasonsAt(reply, messagePlan, answer)).toEqual(['text']);
         });
 
         it('R5: a line typed straight under the header lines, above the quoted text, is kept', () =>
         {
             const line = 'My answers are marked with BOB.';
             const body = `See below.\n\n${EN_BLOCK}${line}\n\n${ALICE_TEXT}\n`;
-            const { reply, p } = pair(ALICE_TEXT, body);
+            const { reply, messagePlan } = pair(ALICE_TEXT, body);
             expect(reasonsOfSegment(reply, line)).toEqual(['reply-header']);
-            expect(kept(reply, p)).toBe(body);
-            expect(reasonsAt(reply, p, line)).toEqual(['text']);
+            expect(kept(reply, messagePlan)).toBe(body);
+            expect(reasonsAt(reply, messagePlan, line)).toEqual(['text']);
         });
 
         it('R10: a second answer after the first confirming piece is still found', () =>
         {
             const body = `See below.\n\n${EN_BLOCK}Hi Bob,\n\nFriday ok?\nYes.\n\n${LONG}\nGreat, no stairs then.\n\nThanks,\nAlice\n`;
-            const { reply, p } = pair(ALICE_Q, body);
-            expect(kept(reply, p)).toBe(body);
-            expect(reasonsAt(reply, p, 'Great, no stairs')).toEqual(['text']);
+            const { reply, messagePlan } = pair(ALICE_SHORT_OPENING, body);
+            expect(kept(reply, messagePlan)).toBe(body);
+            expect(reasonsAt(reply, messagePlan, 'Great, no stairs')).toEqual(['text']);
         });
 
         it('top-posting over a quoted email that opens with a short greeting and question: the quote is still left out', () =>
         {
             const own = 'Hi Alice,\n\nFriday at nine works.\n\n';
-            const body = `${own}${EN_BLOCK}${ALICE_Q}\n`;
-            const { reply, p } = pair(ALICE_Q, body);
-            expect(kept(reply, p)).toBe(own);
-            expect(p.tailStart).toBe(own.length);
+            const body = `${own}${EN_BLOCK}${ALICE_SHORT_OPENING}\n`;
+            const { reply, messagePlan } = pair(ALICE_SHORT_OPENING, body);
+            expect(kept(reply, messagePlan)).toBe(own);
+            expect(messagePlan.tailStart).toBe(own.length);
         });
 
         it("top-posting, the quoted email's own short opening cut off by a nested header the mail app rewrote: still left out", () =>
@@ -1054,8 +1055,8 @@ describe('planOutput: rule 2b, review round 3', () =>
                 // The opening is not matched by the overlap detector: only the line check covers it.
                 expect(reasonsOfSegment(reply, 'Friday ok?')).toEqual(['reply-header']);
                 const included = withBobOld ? all : all.filter((m) => m.message.bodyText !== bobOld);
-                const p = plan(included)[included.indexOf(reply)]!;
-                expect(kept(reply, p), `Bob's old email included: ${withBobOld}`).toBe(own);
+                const messagePlan = plan(included)[included.indexOf(reply)]!;
+                expect(kept(reply, messagePlan), `Bob's old email included: ${withBobOld}`).toBe(own);
             }
         });
 
@@ -1066,27 +1067,27 @@ describe('planOutput: rule 2b, review round 3', () =>
             const folds = [over(body, PARA_A, 'quoted-overlap', 0)];
             // Alice (0) has both lines (spaces aside): covered, the quote is left out.
             const covered = handPlan(body, folds, [other(ALICE, 0, `Hi Bob,\nFriday ok?\n${PARA_A}`)]);
-            expect(kept(covered.input, covered.p)).toBe(OWN);
+            expect(kept(covered.input, covered.messagePlan)).toBe(OWN);
             // Only one of the lines in Alice's email: the other one is own text, everything is kept.
             const half = handPlan(body, folds, [other(ALICE, 0, `Hi Bob,\n${PARA_A}`)]);
-            expect(kept(half.input, half.p)).toBe(body);
+            expect(kept(half.input, half.messagePlan)).toBe(body);
             // A line inside a longer line of Alice's email does not count.
             const part = handPlan(body, folds, [other(ALICE, 0, `Hi Bob,\nFriday ok? Or Monday?\n${PARA_A}`)]);
-            expect(kept(part.input, part.p)).toBe(body);
+            expect(kept(part.input, part.messagePlan)).toBe(body);
             // The lines are in an included email that is NOT in the quoted chain (Carol, 1): own text, kept.
             const elsewhere = handPlan(body, folds, [other(ALICE, 0, PARA_A), other(CAROL, 1, 'Hi Bob,\nFriday ok?\n')]);
-            expect(kept(elsewhere.input, elsewhere.p)).toBe(body);
+            expect(kept(elsewhere.input, elsewhere.messagePlan)).toBe(body);
             // In an email of the chain that Alice quotes (Carol, 1): covered.
             const aliceQuotesCarol = other(ALICE, 0, PARA_A, [{ start: 0, end: PARA_A.length, reason: 'quoted-overlap', related: 1 }]);
             const chained = handPlan(body, folds, [aliceQuotesCarol, other(CAROL, 1, 'Hi Bob,\nFriday ok?\n')]);
-            expect(kept(chained.input, chained.p)).toBe(OWN);
+            expect(kept(chained.input, chained.messagePlan)).toBe(OWN);
         });
 
         it('after the first confirming piece, only overlap counts: a short quoted line it did not match keeps the email (when unsure, keep)', () =>
         {
             const body = `${OWN}${EN_BLOCK}${PARA_A}\nThanks,\nAlice\n`;
-            const { input, p } = handPlan(body, [over(body, PARA_A, 'quoted-overlap', 0)], [other(ALICE, 0, `${PARA_A}\nThanks,\nAlice`)]);
-            expect(kept(input, p)).toBe(body);
+            const { input, messagePlan } = handPlan(body, [over(body, PARA_A, 'quoted-overlap', 0)], [other(ALICE, 0, `${PARA_A}\nThanks,\nAlice`)]);
+            expect(kept(input, messagePlan)).toBe(body);
         });
 
         it('M18: an overlap piece ABOVE the header does not decide which email is quoted', () =>
@@ -1095,8 +1096,8 @@ describe('planOutput: rule 2b, review round 3', () =>
             const body = `${top}${EN_BLOCK}${PARA_A}`;
             // PARA_C above the header: quoted from Carol (1); the quote below: Alice (0).
             const folds = [over(body, PARA_C, 'quoted-overlap', 1), over(body, PARA_A, 'quoted-overlap', 0)];
-            const { input, p } = handPlan(body, folds, [other(ALICE, 0), other(CAROL, 1)]);
-            expect(kept(input, p)).toBe(top);
+            const { input, messagePlan } = handPlan(body, folds, [other(ALICE, 0), other(CAROL, 1)]);
+            expect(kept(input, messagePlan)).toBe(top);
         });
 
         it('M20: an Outlook-style reply followed by an attached email: the quote is left out, the attached email kept', () =>
@@ -1104,9 +1105,9 @@ describe('planOutput: rule 2b, review round 3', () =>
             const own = 'Hi Alice, see the warehouse note.\n\n';
             const attached = `${FORWARDED_SEPARATOR}\nFrom: Warehouse <warehouse@example.test>\nDate: Mon, 3 Mar 2025 10:00:00 +0000\nSubject: Stock\n\nThe oak desk is in stock and ready to ship.\n`;
             const body = `${own}${EN_BLOCK}${ALICE_TEXT}\n\n${attached}`;
-            const { reply, p } = pair(ALICE_TEXT, body);
-            expect(kept(reply, p)).toBe(`${own}${attached}`);
-            expect(reasonsAt(reply, p, 'The oak desk is in stock')).toEqual(['forwarded']);
+            const { reply, messagePlan } = pair(ALICE_TEXT, body);
+            expect(kept(reply, messagePlan)).toBe(`${own}${attached}`);
+            expect(reasonsAt(reply, messagePlan, 'The oak desk is in stock')).toEqual(['forwarded']);
         });
 
         it('normalizeLine: NFC, runs of white space as one space, trimmed', () =>
@@ -1145,15 +1146,15 @@ describe('planOutput: rule 2b, review round 3', () =>
                     `See below.\n\n${EN_BLOCK}Thanks,\n\n${ALICE_TEXT}\n`,
                     'Thanks,', // its first occurrence: the line under the header
                 ],
-                ['G5 (control): "Yes." with no such line in the chain', ALICE_Q, `See below.\n\n${EN_BLOCK}Hi Bob,\n\nFriday ok?\nYes.\n\n${LONG}\n\nThanks,\nAlice\n`, 'Friday ok?\nYes.'],
+                ['G5 (control): "Yes." with no such line in the chain', ALICE_SHORT_OPENING, `See below.\n\n${EN_BLOCK}Hi Bob,\n\nFriday ok?\nYes.\n\n${LONG}\n\nThanks,\nAlice\n`, 'Friday ok?\nYes.'],
             ])('%s: everything is kept', (_name, aliceBody, body, snippet) =>
             {
-                const { reply, p } = pair(aliceBody, body);
+                const { reply, messagePlan } = pair(aliceBody, body);
                 expect(reply.segments.some((s) => s.reasons.includes('quoted-overlap'))).toBe(true); // confirmed
-                expect(kept(reply, p)).toBe(body);
-                expect(p.tailStart).toBeNull();
-                expect(p.keptAllBecauseEmpty).toBe(false);
-                expect(reasonsAt(reply, p, snippet)).toEqual(['text']);
+                expect(kept(reply, messagePlan)).toBe(body);
+                expect(messagePlan.tailStart).toBeNull();
+                expect(messagePlan.keptAllBecauseEmpty).toBe(false);
+                expect(reasonsAt(reply, messagePlan, snippet)).toEqual(['text']);
             });
 
             it('G8: a date answer under the quoted question, the same line in an email the quoted email quotes: kept', () =>
@@ -1164,9 +1165,9 @@ describe('planOutput: rule 2b, review round 3', () =>
                 const body = `See below.\n\n${EN_BLOCK}Hi Bob,\n\nWhich day?\nMonday 10 March\n\n${LONG}\n\nThanks,\nAlice\n\n${carolHeader}${note}\n`;
                 const all = engine(mail({ from: CAROL, body: note, subject: 'Notice' }), mail({ from: ALICE, body: aliceBody }), mail({ from: BOB, body }));
                 const reply = all.find((m) => m.message.bodyText === body)!;
-                const p = plan(all)[all.indexOf(reply)]!;
-                expect(kept(reply, p)).toBe(body);
-                expect(reasonsAt(reply, p, 'Which day?\nMonday 10 March')).toEqual(['text']);
+                const messagePlan = plan(all)[all.indexOf(reply)]!;
+                expect(kept(reply, messagePlan)).toBe(body);
+                expect(reasonsAt(reply, messagePlan, 'Which day?\nMonday 10 March')).toEqual(['text']);
             });
 
             it('a multi-line opening: covered only as consecutive word lines of ONE chain email, its first ones at the top', () =>
@@ -1176,23 +1177,23 @@ describe('planOutput: rule 2b, review round 3', () =>
                 const folds = [over(body, PARA_A, 'quoted-overlap', 0)];
                 // Alice's first word lines, in order (blank lines aside): covered, the quote is left out.
                 const consecutive = handPlan(body, folds, [other(ALICE, 0, `Hi Bob,\n\nFriday ok?\n\nSee you.\n${PARA_A}`)]);
-                expect(kept(consecutive.input, consecutive.p)).toBe(OWN);
+                expect(kept(consecutive.input, consecutive.messagePlan)).toBe(OWN);
                 // The same lines with another word line between them: own text, everything is kept.
                 const gap = handPlan(body, folds, [other(ALICE, 0, `Hi Bob,\nFriday ok?\nOr Monday.\nSee you.\n${PARA_A}`)]);
-                expect(kept(gap.input, gap.p)).toBe(body);
+                expect(kept(gap.input, gap.messagePlan)).toBe(body);
                 // Alice's email ends before the last line (which is only in Carol's email, not in the chain): own text.
                 const short = handPlan(body, folds, [other(ALICE, 0, 'Hi Bob,\n\nFriday ok?'), other(CAROL, 1, 'See you.')]);
-                expect(kept(short.input, short.p)).toBe(body);
+                expect(kept(short.input, short.messagePlan)).toBe(body);
                 // In another order: own text.
                 const order = handPlan(body, folds, [other(ALICE, 0, `Friday ok?\nHi Bob,\nSee you.\n${PARA_A}`)]);
-                expect(kept(order.input, order.p)).toBe(body);
+                expect(kept(order.input, order.messagePlan)).toBe(body);
                 // Split over two emails of the chain (Alice quotes Carol, 1), even at the same places: own text.
                 const aliceQuotesCarol = other(ALICE, 0, `Hi Bob,\nFriday ok?\n${PARA_A}`, [{ start: 0, end: 7, reason: 'quoted-overlap', related: 1 }]);
                 const split = handPlan(body, folds, [aliceQuotesCarol, other(CAROL, 1, 'First line.\nSecond line.\nSee you.\n')]);
-                expect(kept(split.input, split.p)).toBe(body);
+                expect(kept(split.input, split.messagePlan)).toBe(body);
                 // All of them in Carol's email (in the chain): covered.
                 const inCarol = handPlan(body, folds, [aliceQuotesCarol, other(CAROL, 1, 'Hi Bob,\nFriday ok?\nSee you.\n')]);
-                expect(kept(inCarol.input, inCarol.p)).toBe(OWN);
+                expect(kept(inCarol.input, inCarol.messagePlan)).toBe(OWN);
             });
 
             it('at the top of the quote, the lines must be the FIRST word lines of the chain email', () =>
@@ -1201,10 +1202,10 @@ describe('planOutput: rule 2b, review round 3', () =>
                 const folds = [over(body, PARA_A, 'quoted-overlap', 0)];
                 // "Thanks," is in Alice's email, but not at its top: own text, everything is kept.
                 const later = handPlan(body, folds, [other(ALICE, 0, `Hi Bob,\n${PARA_A}Thanks,\nAlice`)]);
-                expect(kept(later.input, later.p)).toBe(body);
+                expect(kept(later.input, later.messagePlan)).toBe(body);
                 // Alice's email opens with it: covered.
                 const top = handPlan(body, folds, [other(ALICE, 0, `Thanks,\n${PARA_A}`)]);
-                expect(kept(top.input, top.p)).toBe(OWN);
+                expect(kept(top.input, top.messagePlan)).toBe(OWN);
             });
 
             it('below an earlier word piece of the quote, the lines may be anywhere in the chain email (consecutive)', () =>
@@ -1214,11 +1215,11 @@ describe('planOutput: rule 2b, review round 3', () =>
                 const folds = [over(body, PARA_B, 'quoted-overlap', 5), over(body, PARA_A, 'quoted-overlap', 0)];
                 const alice = other(ALICE, 0, `Hi Bob,\n${PARA_B}Friday ok?\n${PARA_A}`);
                 const covered = handPlan(body, folds, [alice, other(BOB, 5, PARA_B)]);
-                expect(kept(covered.input, covered.p)).toBe(OWN);
+                expect(kept(covered.input, covered.messagePlan)).toBe(OWN);
                 // A line Alice does not have there: own text.
                 const answered = `${OWN}${EN_BLOCK}Hi Bob,\n\n${PARA_B}Friday ok?\nYes.\n\n${PARA_A}`;
                 const own = handPlan(answered, [over(answered, PARA_B, 'quoted-overlap', 5), over(answered, PARA_A, 'quoted-overlap', 0)], [alice, other(BOB, 5, PARA_B)]);
-                expect(kept(own.input, own.p)).toBe(answered);
+                expect(kept(own.input, own.messagePlan)).toBe(answered);
             });
         });
     });
@@ -1231,9 +1232,9 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
         const own = 'Fine, Friday it is. See you then.\n\n';
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${ALICE_TEXT}\n` }));
         const reply = byBody(all, 'Friday it is');
-        const [p] = plan([reply]);
-        expect(kept(reply, p!)).toBe(reply.message.bodyText);
-        expect(p!.tailStart).toBeNull();
+        const [messagePlan] = plan([reply]);
+        expect(kept(reply, messagePlan!)).toBe(reply.message.bodyText);
+        expect(messagePlan!.tailStart).toBeNull();
     });
 
     it('P14: ">" lines without a reply header are kept (likely pasted by the writer)', () =>
@@ -1241,9 +1242,9 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
         const body = 'Plan:\n> step one: measure the room\n> step two: order the desks\n';
         const all = engine(mail({ from: BOB, body }));
         expect(all[0]!.segments.some((s) => s.reasons.includes('quote-marker'))).toBe(true);
-        const [p] = plan(all);
-        expect(kept(all[0]!, p!)).toBe(body);
-        expect(reasonsAt(all[0]!, p!, '> step one')).toEqual(['writer-quote']);
+        const [messagePlan] = plan(all);
+        expect(kept(all[0]!, messagePlan!)).toBe(body);
+        expect(reasonsAt(all[0]!, messagePlan!, '> step one')).toEqual(['writer-quote']);
     });
 
     it('a ">" quote without a reply header is kept even when its email is included', () =>
@@ -1251,22 +1252,22 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
         const own = 'Agreed, see the point below.\n\n';
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body: `${own}${quoted(ALICE_TEXT)}\n` }));
         const reply = byBody(all, 'Agreed');
-        const [, p] = plan(all);
-        expect(kept(reply, p!)).toBe(reply.message.bodyText);
+        const [, messagePlan] = plan(all);
+        expect(kept(reply, messagePlan!)).toBe(reply.message.bodyText);
     });
 
     it('S4 / M5: a forward subject keeps an attribution quote of an included email', () =>
     {
         const body = `FYI\n\nOn Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n${quoted(ALICE_TEXT)}\n`;
         const all = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body, subject: 'Fwd: Office furniture' }));
-        const fwd = byBody(all, 'FYI');
-        const [, p] = plan(all);
-        expect(kept(fwd, p!)).toBe(body);
-        expect(p!.tailStart).toBeNull();
+        const forward = byBody(all, 'FYI');
+        const [, messagePlan] = plan(all);
+        expect(kept(forward, messagePlan!)).toBe(body);
+        expect(messagePlan!.tailStart).toBeNull();
         // Control: the same body with a reply subject loses the quote.
         const replyAll = engine(mail({ from: ALICE, body: ALICE_TEXT }), mail({ from: BOB, body, subject: 'RE: Office furniture' }));
-        const [, q] = plan(replyAll);
-        expect(kept(byBody(replyAll, 'FYI'), q!)).toBe('FYI\n\n');
+        const [, replyAllPlan] = plan(replyAll);
+        expect(kept(byBody(replyAll, 'FYI'), replyAllPlan!)).toBe('FYI\n\n');
     });
 
     it('P13 / M7: a forward header inside a ">" quote is not a forward boundary (part of the quoted history)', () =>
@@ -1286,9 +1287,9 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
             '',
         ].join('\n');
         const all = engine(mail({ from: BOB, body: `${own}${tail}` }));
-        const [p] = plan(all);
-        expect(kept(all[0]!, p!)).toBe(own);
-        expect(p!.ranges.some((r) => r.reason === 'forwarded')).toBe(false);
+        const [messagePlan] = plan(all);
+        expect(kept(all[0]!, messagePlan!)).toBe(own);
+        expect(messagePlan!.ranges.some((r) => r.reason === 'forwarded')).toBe(false);
     });
 
     it('P13b / M7: a quoted forward header with no reply header around it is a writer quote, not a forwarded part', () =>
@@ -1306,21 +1307,21 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
             '',
         ].join('\n');
         const all = engine(mail({ from: BOB, body }));
-        const [p] = plan(all);
-        expect(kept(all[0]!, p!)).toBe(body);
-        expect(reasonsAt(all[0]!, p!, '> The oak desk')).toEqual(['writer-quote']);
+        const [messagePlan] = plan(all);
+        expect(kept(all[0]!, messagePlan!)).toBe(body);
+        expect(reasonsAt(all[0]!, messagePlan!, '> The oak desk')).toEqual(['writer-quote']);
     });
 
     /** Hand-made: own text, then an overlap-only fold (no signature) linked to input position 0. */
     function overlapCase(fromReply: EmailAddress | null, fromQuoted: EmailAddress | null): { input: PlanInput; plans: MessagePlan[] }
     {
         const body = 'Own text.\n\nOld paragraph about the desk delivery on Friday morning at the second floor office.\n';
-        const at = body.indexOf('Old');
+        const offset = body.indexOf('Old');
         const quotedMail: NormalizedMessage = { ...mail({ from: ALICE, body: 'x' }), from: fromQuoted === null ? [] : [fromQuoted] };
         const replyMail: NormalizedMessage = { ...mail({ from: BOB, body }), from: fromReply === null ? [] : [fromReply] };
         const input: PlanInput = {
             message: replyMail,
-            segments: buildSegments(body, [{ start: at, end: body.length, reason: 'quoted-overlap', related: 0 }]),
+            segments: buildSegments(body, [{ start: offset, end: body.length, reason: 'quoted-overlap', related: 0 }]),
             index: 1,
         };
         return { input, plans: plan([{ message: quotedMail, segments: buildSegments('x', []), index: 0 }, input]) };
@@ -1343,12 +1344,12 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
     it('a lone folded whitespace piece outside the tail is labelled text', () =>
     {
         const body = 'Own text.\n\nMore own text.\n';
-        const at = body.indexOf('\n\n') + 1;
+        const offset = body.indexOf('\n\n') + 1;
         const input: PlanInput = {
             message: mail({ from: BOB, body }),
-            segments: buildSegments(body, [{ start: at, end: at + 1, reason: 'quote-marker' }]),
+            segments: buildSegments(body, [{ start: offset, end: offset + 1, reason: 'quote-marker' }]),
         };
-        const [p] = plan([input]);
-        expect(p!.ranges).toEqual([{ start: 0, end: body.length, keep: true, reason: 'text' }]);
+        const [messagePlan] = plan([input]);
+        expect(messagePlan!.ranges).toEqual([{ start: 0, end: body.length, keep: true, reason: 'text' }]);
     });
 });

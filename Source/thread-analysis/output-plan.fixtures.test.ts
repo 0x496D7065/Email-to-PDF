@@ -5,30 +5,30 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from './engine';
+import { runEngine } from './analyze-thread';
 import { planOutput } from './output-plan';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { EngineMessage } from '../../Header/thread-analysis-result';
 
-function keptText(m: EngineMessage, p: MessagePlan): string
+function keptText(message: EngineMessage, messagePlan: MessagePlan): string
 {
-    return p.ranges.filter((r) => r.keep).map((r) => m.message.bodyText.slice(r.start, r.end)).join('');
+    return messagePlan.ranges.filter((r) => r.keep).map((r) => message.message.bodyText.slice(r.start, r.end)).join('');
 }
 
 /** Whether every character of `snippet` (first occurrence) is kept, none is, or some are. */
-function state(m: EngineMessage, p: MessagePlan, snippet: string): 'kept' | 'left out' | 'mixed'
+function state(message: EngineMessage, messagePlan: MessagePlan, snippet: string): 'kept' | 'left out' | 'mixed'
 {
-    const at = m.message.bodyText.indexOf(snippet);
-    if (at < 0)
+    const offset = message.message.bodyText.indexOf(snippet);
+    if (offset < 0)
     {
-        throw new Error(`${m.message.source.fileName}: snippet not found: ${snippet}`);
+        throw new Error(`${message.message.source.fileName}: snippet not found: ${snippet}`);
     }
     let out = 0;
-    for (const r of p.ranges)
+    for (const range of messagePlan.ranges)
     {
-        if (!r.keep)
+        if (!range.keep)
         {
-            out += Math.max(0, Math.min(r.end, at + snippet.length) - Math.max(r.start, at));
+            out += Math.max(0, Math.min(range.end, offset + snippet.length) - Math.max(range.start, offset));
         }
     }
     if (out === 0)
@@ -51,53 +51,53 @@ describe('output plan over the parsed fixtures', () =>
         }
         return cached;
     }
-    const find = (c: NonNullable<typeof cached>, file: string): [EngineMessage, MessagePlan] =>
+    const find = (runResult: NonNullable<typeof cached>, file: string): [EngineMessage, MessagePlan] =>
     {
-        const k = c.messages.findIndex((m) => m.message.source.fileName === file);
+        const k = runResult.messages.findIndex((m) => m.message.source.fileName === file);
         if (k < 0)
         {
             throw new Error(`no kept message for ${file}`);
         }
-        return [c.messages[k]!, c.plans[k]!];
+        return [runResult.messages[k]!, runResult.plans[k]!];
     };
 
     it('keeps the first line of every email, and reports what is left out', async () =>
     {
-        const c = await run();
+        const runResult = await run();
         let tails = 0;
         let signatures = 0;
-        const rows = c.messages.map((m, k) =>
+        const rows = runResult.messages.map((message, k) =>
         {
-            const p = c.plans[k]!;
-            const body = m.message.bodyText;
-            expect(p.fallback, m.message.source.fileName).toBe(false);
+            const messagePlan = runResult.plans[k]!;
+            const body = message.message.bodyText;
+            expect(messagePlan.fallback, message.message.source.fileName).toBe(false);
             const firstLine = body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
             if (firstLine !== undefined)
             {
-                expect(state(m, p, firstLine), `${m.message.source.fileName}: first line`).toBe('kept');
+                expect(state(message, messagePlan, firstLine), `${message.message.source.fileName}: first line`).toBe('kept');
             }
-            const left = p.ranges.filter((r) => !r.keep).reduce((n, r) => n + r.end - r.start, 0);
-            if (p.tailStart !== null)
+            const left = messagePlan.ranges.filter((r) => !r.keep).reduce((n, r) => n + r.end - r.start, 0);
+            if (messagePlan.tailStart !== null)
             {
                 tails++;
             }
-            signatures += p.omittedSignatures;
+            signatures += messagePlan.omittedSignatures;
             const notes = [
-                p.tailStart === null ? '' : `quoted history from ${p.tailStart}`,
-                p.omittedSignatures > 0 ? `${p.omittedSignatures} signature(s)` : '',
-                p.ranges.some((r) => r.reason === 'forwarded') ? 'has forwarded part' : '',
-                p.keptAllBecauseEmpty ? 'KEPT WHOLE (nothing else left)' : '',
+                messagePlan.tailStart === null ? '' : `quoted history from ${messagePlan.tailStart}`,
+                messagePlan.omittedSignatures > 0 ? `${messagePlan.omittedSignatures} signature(s)` : '',
+                messagePlan.ranges.some((r) => r.reason === 'forwarded') ? 'has forwarded part' : '',
+                messagePlan.keptAllBecauseEmpty ? 'KEPT WHOLE (nothing else left)' : '',
             ].filter((s) => s !== '');
-            return `${m.message.source.fileName}: ${body.length} chars, ${left} left out${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`;
+            return `${message.message.source.fileName}: ${body.length} chars, ${left} left out${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`;
         });
-        console.log(`output plan on fixtures: ${tails} of ${c.messages.length} emails lose a quoted tail, ${signatures} signature(s) left out\n${rows.join('\n')}`);
+        console.log(`output plan on fixtures: ${tails} of ${runResult.messages.length} emails lose a quoted tail, ${signatures} signature(s) left out\n${rows.join('\n')}`);
         expect(tails).toBeGreaterThanOrEqual(8);
-        expect(c.plans.some((p) => p.keptAllBecauseEmpty)).toBe(false);
+        expect(runResult.plans.some((p) => p.keptAllBecauseEmpty)).toBe(false);
     });
 
     it('leaves out the quoted history of the known replies, keeps their new text', async () =>
     {
-        const c = await run();
+        const runResult = await run();
         // [file, new text that must be kept, quoted text that must be left out]
         const replies: [string, string, string][] = [
             ['eml/11-order-2-bob-outlook-en.eml', 'I can come by on Wednesday 5 March', 'We are furnishing a small office for four people'],
@@ -110,10 +110,10 @@ describe('output plan over the parsed fixtures', () =>
         ];
         for (const [file, fresh, quoted] of replies)
         {
-            const [m, p] = find(c, file);
-            expect(state(m, p, fresh), `${file}: new text`).toBe('kept');
-            expect(state(m, p, quoted), `${file}: quoted text`).toBe('left out');
-            expect(keptText(m, p).trim().length, file).toBeGreaterThan(0);
+            const [message, messagePlan] = find(runResult, file);
+            expect(state(message, messagePlan, fresh), `${file}: new text`).toBe('kept');
+            expect(state(message, messagePlan, quoted), `${file}: quoted text`).toBe('left out');
+            expect(keptText(message, messagePlan).trim().length, file).toBeGreaterThan(0);
         }
     });
 });

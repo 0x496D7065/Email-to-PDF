@@ -255,7 +255,7 @@ test.beforeAll(async () =>
 
 /**
  * The emails of the PDF, in order: one per duplicate group, by date, the
- * undated ones last in drop order (Source/thread-analysis/order.ts), without the
+ * undated ones last in drop order (Source/thread-analysis/chronological-order.ts), without the
  * unticked one. Each with every file of its group. Throws if two emails
  * share a date (their order would not be known here).
  */

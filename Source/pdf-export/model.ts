@@ -29,7 +29,7 @@
 //
 // Rebuilt emails (milestone 7, tasks 7.7 and 8.3; brief section 8.6):
 // earlier emails rebuilt from the quoted text of an email
-// (Source/thread-analysis/rebuild-links.ts), the ones the reader chose (`rebuilt`,
+// (Source/thread-analysis/link-rebuilt-messages.ts), the ones the reader chose (`rebuilt`,
 // Source/web-page/review.ts includedRebuilt), at their place in the timeline
 // (planPdfOrder). USER DECISION 2026-11-02 (task 8.3, an approved exception
 // to brief section 8.6, for the PDF only): in the PDF a rebuilt email looks
@@ -102,7 +102,7 @@
 // 8.14). `flags.printedElsewhere` (data only) tells when the rule left
 // something out. Known repeats this
 // rule cannot remove (when unsure, the tool shows text twice rather than
-// lose it): a rebuilt email that rebuild-links.ts could not prove to be
+// lose it): a rebuilt email that link-rebuilt-messages.ts could not prove to be
 // the same as a real file (both are printed), a forwarded part that could
 // not be rebuilt at all (the plan keeps it, even when its email is also in
 // the PDF as a real file), the same old email kept inline in two real
@@ -145,7 +145,7 @@
 // kept (D2), and when it lacks header data the attached copy has (a Bcc
 // line, a date), the block's header lines stay. A holder merged into
 // another copy: the engine moves the place to the kept copy (S1,
-// engine.ts settleAttached), so an unticked attached email is printed in
+// analyze-thread.ts settleAttached), so an unticked attached email is printed in
 // no copy of it. The block is exactly the attached email's text as the
 // parser wrote it, so no writer's answer can sit inside it: the B1 check
 // above does not apply to it. When the attached email could not be read,
@@ -246,7 +246,7 @@
 // rebuilt email dated by a day alone counts from the start of that day in
 // the chosen zone, dayStartInZone, and shows as that day); with no dated
 // email at all it shows "no date". Real undated emails are at the end of
-// the list, in file order (Source/thread-analysis/order.ts).
+// the list, in file order (Source/thread-analysis/chronological-order.ts).
 //
 // No source files on the cover (user decision 2026-11-09, task 8.12, which
 // replaces the list with SHA-256 of brief section 8.5): no heading, no file
@@ -263,7 +263,7 @@
 // passes `generatedAt`), README.md, rule R7.
 
 import { headerLabelCounts } from '../thread-analysis/quoted-header';
-import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-analysis/rebuild-links';
+import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-analysis/link-rebuilt-messages';
 import { mapOffsets } from '../thread-analysis/same-text-offsets';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../thread-analysis/time-format';
 import { displayAuthor } from '../web-page-logic/display-author';
@@ -810,10 +810,10 @@ function forwardedFrom(ranges: readonly PlanRange[]): number | null
  * `headerEnd`, or, when its header was read short (a To / Cc list that may
  * go on), after the lines left of that header at the top of its text (the
  * rest of a wrapped list, a Subject line) and the blank line below them, as
- * comparableText (rebuild-links.ts) skips them. Those lines are header
+ * comparableText (link-rebuilt-messages.ts) skips them. Those lines are header
  * lines, not the quoted email's text and not an answer: the no-repeat rule
  * keeps them with the header lines. reconstructedText keeps every line
- * break of the body (reconstruct.ts, step 4), so the n-th "\n" of the text
+ * break of the body (reconstruct-quoted-messages.ts, step 4), so the n-th "\n" of the text
  * skipped is the n-th "\n" from `headerEnd` in the body. Never past `end`.
  * Theoretical corner: when the header was read short and the writer's
  * answer directly under the quoted header looks like a leftover header
@@ -862,15 +862,15 @@ export function headerLinesEnd(body: string, r: ReconstructedMessage): number
  * for a forwarded part, because the reader unticked its rebuilt email), per
  * list position (only emails in the PDF; an email with none is not in the
  * map). A part is the WHOLE place a rebuilt message was read from
- * (Source/thread-analysis/reconstruct.ts), [start, end): its header lines and its
+ * (Source/thread-analysis/reconstruct-quoted-messages.ts), [start, end): its header lines and its
  * text, when that message is in the PDF:
  * - an entry (link 'entry') with a slot in this PDF;
  * - a copy of such an entry (link 'same-as'): the entry prints the same
- *   words (rebuild-links.ts, rule 2; only a signature block at the end of
+ *   words (link-rebuilt-messages.ts, rule 2; only a signature block at the end of
  *   one copy may differ: see A DIFFERING SIGNATURE below);
  * - one linked to a real email (link 'real', "the real file wins") when
  *   that real email is in the PDF too: it prints the same words as its own
- *   text (rebuild-links.ts, rule 1c; only a signature block may differ).
+ *   text (link-rebuilt-messages.ts, rule 1c; only a signature block may differ).
  * HEADER LINES (task 8.13a, Q4; they no longer stay in the body, B2): the
  * header lines [start, headerLinesEnd) always leave the body with the
  * place. When the place is printed as a REBUILT email whose header rows do
@@ -897,7 +897,7 @@ export function headerLinesEnd(body: string, r: ReconstructedMessage): number
  * BuildPdfInput.rebuildingOff: then no forwarded part is cut).
  * A DIFFERING SIGNATURE (task 8.13a review round 2): a copy linked to the
  * email that prints it (link 'same-as', or 'real') may end with a signature
- * block the printed text does not have (rebuild-links.ts, rules 1c and 2:
+ * block the printed text does not have (link-rebuilt-messages.ts, rules 1c and 2:
  * one of the two texts may end with one). That block is printed nowhere
  * else, so it stays INLINE (the part ends where it starts, extraTail); only
  * the words the other email prints are cut. When it is unclear where in the
@@ -906,7 +906,7 @@ export function headerLinesEnd(body: string, r: ReconstructedMessage): number
  * message that is not in the PDF for any other reason (not a forwarded
  * part, its entry chosen but not placed, a real file linked to it that is
  * not in the PDF), and any quoted part the engine could not rebuild at all
- * (reconstruct.ts, REFUSAL: there is no place for it).
+ * (reconstruct-quoted-messages.ts, REFUSAL: there is no place for it).
  * THE WRITER'S ANSWER STAYS (task 8.10, B1, review round 3, as narrowed by
  * task 8.13a, Q3): a place whose text holds BOTH text the plan calls the
  * writer's own ('text', or a kept signature: holdsOwnText) AND text the
@@ -1080,14 +1080,14 @@ function headerKey(text: string): string
  * and that `printedText` (the text the email printing this place prints: the
  * copy a rebuilt email shows, or a real file's body) does not print, or null
  * (task 8.13a review round 2). The link rules let ONE of two linked texts end
- * with a signature block the other lacks (rebuild-links.ts, rules 1c and 2;
+ * with a signature block the other lacks (link-rebuilt-messages.ts, rules 1c and 2;
  * signatureStart, with the place's sender names). Null when the place has
  * no such block, or when `printedText` holds all the place's words in the
  * same order (comparableText: the header leftovers a header read short
  * leaves at the top of its text aside), block included: then it is printed
  * there. Otherwise the block's offset: the start of its first line in `body`
  * (the place's text keeps its lines one for one, only quote marks are
- * removed, reconstruct.ts step 4). 'unsure' (task 8.13a final round) when
+ * removed, reconstruct-quoted-messages.ts step 4). 'unsure' (task 8.13a final round) when
  * the block is there but its line cannot be found inside the place (the
  * lines do not map one for one: the place's text has more lines than the
  * place, or the line falls at or past its end), or the texts are not
@@ -1275,7 +1275,7 @@ function blockClaims(holderBody: string, start: number, end: number, ownBody: st
  *   keeps its block too (when unsure, keep). One the reader unticked is
  *   left out as above.
  * A place is used only in the very body it names (the holder's own copy, or
- * the kept copy it was moved to, engine.ts settleAttached), in the PDF, with
+ * the kept copy it was moved to, analyze-thread.ts settleAttached), in the PDF, with
  * valid offsets, and not in the email's own body.
  */
 function attachedBlockParts(
@@ -1349,7 +1349,7 @@ function attachedBlockParts(
     // Deepest first (longest path): this assumes the blocks inside an email's own body belong to deeper
     // attached entries. With D2/S1 the kept body may be a dropped file, whose own attached entries have
     // depth 1. It still works: copies merge only when their bodies are equal (normalizeBody), so the kept
-    // body holds the same blocks, and S1 (engine.ts settleAttached) moves the places of the entries
+    // body holds the same blocks, and S1 (analyze-thread.ts settleAttached) moves the places of the entries
     // attached inside the merged copy to the kept body, where they keep their own (deeper) path.
     const depth = (a: EngineAttached): number => listOrNone(a.path).length;
     const order = list.map((a, k) => ({ a, k })).sort((x, y) => depth(y.a) - depth(x.a) || y.k - x.k);

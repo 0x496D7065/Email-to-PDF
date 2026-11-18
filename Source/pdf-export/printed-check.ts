@@ -19,7 +19,7 @@
 // printed after all (and then counts as printed for the next ones).
 //
 // HOW TEXT IS COMPARED (the way the overlap detector matches quotes,
-// Source/thread-analysis/overlap.ts): only WORDS count (tokenizeWords: letters and
+// Source/thread-analysis/overlap-quote-detection.ts): only WORDS count (tokenizeWords: letters and
 // digits, NFC, lower case), so "> " quote marks, line wrapping, indentation,
 // blank lines and punctuation make no difference. Let n be the candidate's
 // word count and least = min(MIN_RUN_WORDS, n) (MIN_RUN_WORDS = 12, about
@@ -40,7 +40,7 @@
 // WHEN UNSURE, NOT FOUND, so the candidate is printed (maybe twice, never
 // nowhere): a word printed nowhere makes it not found at once; a run of 4
 // or more words is looked for only from the first MAX_POSTINGS places of
-// its first SHINGLE_WORDS words (as in overlap.ts), so a run hidden behind
+// its first SHINGLE_WORDS words (as in overlap-quote-detection.ts), so a run hidden behind
 // a very common shingle is missed; and a candidate mixing a short text
 // printed alone (fewer than 12 words, say a one-line email) into a longer
 // one is not found, since that short text is no run of 12.
@@ -54,7 +54,7 @@
 //
 // Pure: no DOM, no clock, nothing stored (README.md, rules R5 and R7).
 
-import { MAX_POSTINGS, MIN_RUN_WORDS, SHINGLE_WORDS, tokenizeWords } from '../thread-analysis/overlap';
+import { MAX_POSTINGS, MIN_RUN_WORDS, SHINGLE_WORDS, tokenizeWords } from '../thread-analysis/overlap-quote-detection';
 
 /** The text the PDF prints, built piece by piece, and the check against it. */
 export interface PrintedText

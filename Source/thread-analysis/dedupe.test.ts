@@ -51,7 +51,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 }
 
 /** A date `deltaMs` after the default one. */
-function at(deltaMs: number): NormalizedMessage['date']
+function dateAt(deltaMs: number): NormalizedMessage['date']
 {
     return { ...make().date, utcMs: DATE_MS + deltaMs };
 }
@@ -65,9 +65,9 @@ function groupsOf(result: DedupeResult): string[][]
 }
 
 /** The warning codes of a kept message. */
-function codes(k: KeptMessage): string[]
+function codes(keptEntry: KeptMessage): string[]
 {
-    return k.warnings.map((w) => w.code);
+    return keptEntry.warnings.map((w) => w.code);
 }
 
 /** Recipient keys as the engine compares them (lower-cased address, else the name). */
@@ -84,15 +84,15 @@ function keys(list: readonly EmailAddress[]): string[]
 function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeResult): void
 {
     const seen = new Map<number, number>();
-    for (const k of result.kept)
+    for (const keptEntry of result.kept)
     {
-        const kept = k.message;
-        expect(input[k.index]).toBe(kept);
-        seen.set(k.index, (seen.get(k.index) ?? 0) + 1);
-        for (const d of k.duplicates)
+        const kept = keptEntry.message;
+        expect(input[keptEntry.index]).toBe(kept);
+        seen.set(keptEntry.index, (seen.get(keptEntry.index) ?? 0) + 1);
+        for (const duplicate of keptEntry.duplicates)
         {
-            const copy = input[d.index]!;
-            expect(copy.source).toBe(d.source);
+            const copy = input[duplicate.index]!;
+            expect(copy.source).toBe(duplicate.source);
             // Same content.
             expect(normalizeBody(copy.bodyText)).toBe(normalizeBody(kept.bodyText));
             expect(subjectKey(copy.subject)).toBe(subjectKey(kept.subject));
@@ -116,14 +116,14 @@ function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeRe
             {
                 expect(kept.inReplyTo).toBe(copy.inReplyTo);
             }
-            for (const ref of copy.references)
+            for (const reference of copy.references)
             {
-                expect(kept.references).toContain(ref);
+                expect(kept.references).toContain(reference);
             }
             // The rule really holds.
             const keptMs = kept.date.utcMs;
             const copyMs = copy.date.utcMs;
-            if (d.rule === 'message-id')
+            if (duplicate.rule === 'message-id')
             {
                 expect(copy.messageId).not.toBeNull();
                 expect(copy.messageId).toBe(kept.messageId);
@@ -144,19 +144,19 @@ function expectNothingLost(input: readonly NormalizedMessage[], result: DedupeRe
             {
                 expect(keptMs).not.toBeNull();
             }
-            seen.set(d.index, (seen.get(d.index) ?? 0) + 1);
+            seen.set(duplicate.index, (seen.get(duplicate.index) ?? 0) + 1);
         }
         // Warnings: at most MAX_RELATED positions, ascending, never the group's own members.
-        const members = new Set([k.index, ...k.duplicates.map((d) => d.index)]);
-        for (const w of k.warnings)
+        const members = new Set([keptEntry.index, ...keptEntry.duplicates.map((d) => d.index)]);
+        for (const warning of keptEntry.warnings)
         {
-            expect(w.related.length).toBeLessThanOrEqual(MAX_RELATED);
-            expect(w.related.length).toBe(Math.min(w.relatedTotal, MAX_RELATED));
-            for (let i = 1; i < w.related.length; i++)
+            expect(warning.related.length).toBeLessThanOrEqual(MAX_RELATED);
+            expect(warning.related.length).toBe(Math.min(warning.relatedTotal, MAX_RELATED));
+            for (let i = 1; i < warning.related.length; i++)
             {
-                expect(w.related[i]!).toBeGreaterThan(w.related[i - 1]!);
+                expect(warning.related[i]!).toBeGreaterThan(warning.related[i - 1]!);
             }
-            for (const i of w.related)
+            for (const i of warning.related)
             {
                 expect(members.has(i)).toBe(false);
             }
@@ -244,7 +244,7 @@ describe('dedupe: matching rules', () =>
     it('merges same Message-ID + same body, rule message-id', () =>
     {
         const a = make();
-        const b = make({ date: at(1000) }); // .msg times can differ slightly
+        const b = make({ date: dateAt(1000) }); // .msg times can differ slightly
         const result = run([a, b]);
         expect(result.kept).toHaveLength(1);
         expect(result.mergedCount).toBe(1);
@@ -291,7 +291,7 @@ describe('dedupe: matching rules', () =>
 
     it('does NOT merge the same body with a different date (no common id)', () =>
     {
-        expect(run([make({ messageId: null }), make({ messageId: null, date: at(60_000) })]).mergedCount).toBe(0);
+        expect(run([make({ messageId: null }), make({ messageId: null, date: dateAt(60_000) })]).mergedCount).toBe(0);
     });
 
     it('does NOT use the author + date rule when the date is missing', () =>
@@ -342,9 +342,9 @@ describe('dedupe: matching rules', () =>
         expect(run([a, sameNames]).mergedCount).toBe(1);
 
         const otherName = make({ attachments: [note, { ...note, fileName: 'plan-v2.txt' }] });
-        const res = run([a, otherName]);
-        expect(res.mergedCount).toBe(0);
-        expect(codes(res.kept[0]!)).toEqual(['same-id-different-content']);
+        const result = run([a, otherName]);
+        expect(result.mergedCount).toBe(0);
+        expect(codes(result.kept[0]!)).toEqual(['same-id-different-content']);
 
         const repeated = make({ attachments: [note, note] });
         const once = make({ attachments: [note] });
@@ -411,13 +411,13 @@ describe('dedupe: date under the Message-ID rule', () =>
 {
     it(`merges dates up to ${String(DATE_TOLERANCE_MS)} ms apart`, () =>
     {
-        expect(run([make(), make({ date: at(DATE_TOLERANCE_MS) })]).mergedCount).toBe(1);
-        expect(run([make(), make({ date: at(-DATE_TOLERANCE_MS) })]).mergedCount).toBe(1);
+        expect(run([make(), make({ date: dateAt(DATE_TOLERANCE_MS) })]).mergedCount).toBe(1);
+        expect(run([make(), make({ date: dateAt(-DATE_TOLERANCE_MS) })]).mergedCount).toBe(1);
     });
 
     it('does NOT merge dates further apart, and warns', () =>
     {
-        const result = run([make(), make({ date: at(DATE_TOLERANCE_MS + 1) })]);
+        const result = run([make(), make({ date: dateAt(DATE_TOLERANCE_MS + 1) })]);
         expect(result.mergedCount).toBe(0);
         expect(result.kept.map((k) => k.warnings)).toEqual([
             [{ code: 'duplicate-date-differs', related: [1], relatedTotal: 1 }],
@@ -428,11 +428,11 @@ describe('dedupe: date under the Message-ID rule', () =>
     it('a chain of close dates cannot merge two copies too far apart', () =>
     {
         const half = DATE_TOLERANCE_MS * 0.75;
-        const result = run([make(), make({ date: at(half) }), make({ date: at(2 * half) })]);
+        const result = run([make(), make({ date: dateAt(half) }), make({ date: dateAt(2 * half) })]);
         expect(result.kept).toHaveLength(2);
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            const members = [k.index, ...k.duplicates.map((d) => d.index)];
+            const members = [keptEntry.index, ...keptEntry.duplicates.map((d) => d.index)];
             expect(members.includes(0) && members.includes(2)).toBe(false);
         }
         expect(result.kept.every((k) => codes(k).includes('duplicate-date-differs'))).toBe(true);
@@ -518,7 +518,7 @@ describe('dedupe: missing date', () =>
 
     it('keeps a dated copy for any input order (two undated, two dated copies)', () =>
     {
-        const input = [make({ date: noDate }), make(), make({ date: noDate }), make({ date: at(1000) })];
+        const input = [make({ date: noDate }), make(), make({ date: noDate }), make({ date: dateAt(1000) })];
         let seed = 11;
         const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
         for (let round = 0; round < 25; round++)
@@ -632,21 +632,21 @@ describe('dedupe: groups', () =>
     {
         // a ~ b by Message-ID (both from Alice, dates within the tolerance);
         // b ~ c by author + date (c has another id). a and c share no id and no date.
-        const a = make({ messageId: 'x@example.test', date: at(-60_000) });
+        const a = make({ messageId: 'x@example.test', date: dateAt(-60_000) });
         const b = make({ messageId: 'x@example.test' });
         const c = make({ messageId: 'y@example.test' });
         const result = run([a, b, c]);
         expect(result.kept).toHaveLength(2);
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            const members = [k.index, ...k.duplicates.map((d) => d.index)];
+            const members = [keptEntry.index, ...keptEntry.duplicates.map((d) => d.index)];
             expect(members.includes(0) && members.includes(2)).toBe(false);
         }
         // Both sides are flagged, each pointing at the message it matched in the other group.
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            const members = [k.index, ...k.duplicates.map((d) => d.index)];
-            const flag = k.warnings.find((w) => w.code === 'possible-duplicate-not-merged');
+            const members = [keptEntry.index, ...keptEntry.duplicates.map((d) => d.index)];
+            const flag = keptEntry.warnings.find((w) => w.code === 'possible-duplicate-not-merged');
             expect(flag).toBeDefined();
             expect(flag!.related).toHaveLength(1);
             expect(members).not.toContain(flag!.related[0]);
@@ -660,19 +660,19 @@ describe('dedupe: groups', () =>
         const withBcc = make({ bcc: [PLANNING] });
         const result = run([withCc, small, withBcc]);
         expect(result.kept).toHaveLength(2);
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            const members = [k.index, ...k.duplicates.map((d) => d.index)];
+            const members = [keptEntry.index, ...keptEntry.duplicates.map((d) => d.index)];
             expect(members.includes(0) && members.includes(2)).toBe(false);
         }
         expect(result.kept.every((k) => codes(k).includes('duplicate-recipients-differ'))).toBe(true);
         // `related` never lists a member of the message's own group.
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            const members = new Set([k.index, ...k.duplicates.map((d) => d.index)]);
-            for (const w of k.warnings)
+            const members = new Set([keptEntry.index, ...keptEntry.duplicates.map((d) => d.index)]);
+            for (const warning of keptEntry.warnings)
             {
-                for (const i of w.related)
+                for (const i of warning.related)
                 {
                     expect(members.has(i)).toBe(false);
                 }
@@ -708,9 +708,9 @@ describe('dedupe: groups', () =>
             make({ cc: [PLANNING] }), // conflicts with the Bcc copy
             make({ messageId: 'z@example.test', bodyText: 'Z' }),
             make({ messageId: 'z@example.test', bodyText: 'Z\r\n' }),
-            make({ messageId: 'x@example.test', date: at(-1) }),
-            make({ date: at(90_000) }), // close to the first copies, but not to the next one
-            make({ date: at(180_000) }),
+            make({ messageId: 'x@example.test', date: dateAt(-1) }),
+            make({ date: dateAt(90_000) }), // close to the first copies, but not to the next one
+            make({ date: dateAt(180_000) }),
             make({ references: ['o@example.test'] }),
         ];
         const expected = groupsOf(run(input));
@@ -748,9 +748,9 @@ describe('dedupe: groups', () =>
                 expect(result.mergedCount, warning).toBe(0);
                 expect(result.kept.map((k) => k.message.warnings), warning).toEqual(input.map((m) => m.warnings));
                 // Same Message-ID, different content: both say so.
-                for (const k of result.kept)
+                for (const keptEntry of result.kept)
                 {
-                    expect(codes(k), warning).toEqual(['same-id-different-content']);
+                    expect(codes(keptEntry), warning).toEqual(['same-id-different-content']);
                 }
             }
             // Two copies with the same warning still merge.
@@ -770,9 +770,9 @@ describe('dedupe: groups', () =>
             const result = run(input);
             expect(result.mergedCount).toBe(0);
             expect(result.kept.map((k) => k.message.warnings)).toEqual(input.map((m) => m.warnings));
-            for (const k of result.kept)
+            for (const keptEntry of result.kept)
             {
-                expect(codes(k)).toEqual(['same-id-different-content']);
+                expect(codes(keptEntry)).toEqual(['same-id-different-content']);
             }
         }
         // Two RTF-only copies still merge.
@@ -839,7 +839,7 @@ describe('dedupe: speed', () =>
                 messageId: null,
                 bodyText: 'Thanks!',
                 from: [{ name: 'Sender', address: `sender-${String(i % 50)}@example.test` }],
-                date: at(i * 1000),
+                date: dateAt(i * 1000),
             }),
         );
         const start = performance.now();
@@ -851,7 +851,7 @@ describe('dedupe: speed', () =>
 
     it('5000 messages with the same body and one author: under 2 s', () =>
     {
-        const input = Array.from({ length: 5000 }, (_, i) => make({ messageId: null, bodyText: 'Thanks!', date: at(i * 1000) }));
+        const input = Array.from({ length: 5000 }, (_, i) => make({ messageId: null, bodyText: 'Thanks!', date: dateAt(i * 1000) }));
         const start = performance.now();
         expect(dedupe(input).mergedCount).toBe(0);
         expect(performance.now() - start).toBeLessThan(2000);
@@ -864,7 +864,7 @@ describe('dedupe: speed', () =>
         {
             for (let c = 0; c < 20; c++)
             {
-                input.push(make({ messageId: `m${String(m)}@example.test`, bodyText: 'Thanks!', date: at(m * 1000) }));
+                input.push(make({ messageId: `m${String(m)}@example.test`, bodyText: 'Thanks!', date: dateAt(m * 1000) }));
             }
         }
         for (let c = 0; c < 1000; c++)
@@ -885,13 +885,14 @@ describe('dedupe: speed', () =>
         const result = dedupe(input);
         const elapsed = performance.now() - start;
         expect(result.kept).toHaveLength(2);
-        for (const k of result.kept)
+        for (const keptEntry of result.kept)
         {
-            expect(k.duplicates).toHaveLength(2499);
-            expect(k.warnings).toHaveLength(1);
-            expect(k.warnings[0]!.code).toBe('duplicate-recipients-differ');
-            expect(k.warnings[0]!.relatedTotal).toBe(2500);
-            expect(k.warnings[0]!.related).toEqual(Array.from({ length: MAX_RELATED }, (_, i) => 2 * i + (k.index % 2 === 0 ? 1 : 0)));
+            expect(keptEntry.duplicates).toHaveLength(2499);
+            expect(keptEntry.warnings).toHaveLength(1);
+            expect(keptEntry.warnings[0]!.code).toBe('duplicate-recipients-differ');
+            expect(keptEntry.warnings[0]!.relatedTotal).toBe(2500);
+            expect(keptEntry.warnings[0]!.related)
+                .toEqual(Array.from({ length: MAX_RELATED }, (_, i) => 2 * i + (keptEntry.index % 2 === 0 ? 1 : 0)));
         }
         expect(elapsed).toBeLessThan(2000);
     });
@@ -941,7 +942,7 @@ describe('dedupe: a dropped file against attached copies (D2, task 8.13b-3 revie
         expect(keepsHeaderData(base, make())).toBe(true);
         expect(keepsHeaderData(make({ bcc: [PERSON] }), base)).toBe(true);
         expect(keepsHeaderData(base, make({ bcc: [PERSON] }))).toBe(false);
-        expect(keepsHeaderData(base, make({ date: at(60_000) }))).toBe(false);
+        expect(keepsHeaderData(base, make({ date: dateAt(60_000) }))).toBe(false);
         expect(keepsHeaderData(make({ date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false } }), base)).toBe(false);
     });
 });

@@ -1,4 +1,4 @@
-// Links the messages rebuilt from quoted text (reconstruct.ts) to the real
+// Links the messages rebuilt from quoted text (reconstruct-quoted-messages.ts) to the real
 // dropped messages and to each other, and builds the timeline: one ordered
 // list of real messages and rebuilt messages (milestone 7, task 7.5; brief
 // section 8.6). Pure: no DOM, no storage, no clock; the input is never
@@ -265,32 +265,32 @@ export function wordsOf(text: string): Words
     return { tokens: text.toLowerCase().normalize('NFC').match(WORD) ?? [], sets: new Map() };
 }
 
-function shingles(w: Words, k: number): ReadonlySet<string>
+function shingles(words: Words, size: number): ReadonlySet<string>
 {
-    let set = w.sets.get(k);
+    let set = words.sets.get(size);
     if (set === undefined)
     {
-        const s = new Set<string>();
-        const t = w.tokens;
-        for (let i = 0; i + k <= t.length; i++)
+        const created = new Set<string>();
+        const tokens = words.tokens;
+        for (let i = 0; i + size <= tokens.length; i++)
         {
-            let shingle = t[i] as string;
-            for (let j = 1; j < k; j++)
+            let shingle = tokens[i] as string;
+            for (let j = 1; j < size; j++)
             {
-                shingle += ` ${t[i + j] as string}`;
+                shingle += ` ${tokens[i + j] as string}`;
             }
-            s.add(shingle);
+            created.add(shingle);
         }
-        w.sets.set(k, s);
-        set = s;
+        words.sets.set(size, created);
+        set = created;
     }
     return set;
 }
 
 /** Number of distinct shingles of SHINGLE_WORDS words (0 for a text shorter than that). */
-export function distinctShingles(w: Words): number
+export function distinctShingles(words: Words): number
 {
-    return shingles(w, SHINGLE_WORDS).size;
+    return shingles(words, SHINGLE_WORDS).size;
 }
 
 const joinedCache = new WeakMap<Words, string>();
@@ -300,15 +300,15 @@ const joinedCache = new WeakMap<Words, string>();
  * never holds a space, so " a b " is found in " x a b y " only as the whole
  * words a, b in this order (never as a part of a word).
  */
-function joined(w: Words): string
+function joined(words: Words): string
 {
-    let j = joinedCache.get(w);
-    if (j === undefined)
+    let joinedText = joinedCache.get(words);
+    if (joinedText === undefined)
     {
-        j = ` ${w.tokens.join(' ')} `;
-        joinedCache.set(w, j);
+        joinedText = ` ${words.tokens.join(' ')} `;
+        joinedCache.set(words, joinedText);
     }
-    return j;
+    return joinedText;
 }
 
 /** Whether two word lists are the very same words in the same order (file comment, 1c). */
@@ -344,9 +344,9 @@ const VETO_WORDS: ReadonlySet<string> = new Set([
 ]);
 
 /** Whether a word (lower case) may change the meaning (VETO_PREFIXES, VETO_WORDS). */
-function vetoWord(w: string): boolean
+function vetoWord(word: string): boolean
 {
-    return VETO_WORDS.has(w) || VETO_PREFIXES.some((p) => w.startsWith(p));
+    return VETO_WORDS.has(word) || VETO_PREFIXES.some((p) => word.startsWith(p));
 }
 
 /**
@@ -362,31 +362,31 @@ function vetoWord(w: string): boolean
  */
 export function contactLine(line: string): boolean
 {
-    const s = line.trim().normalize('NFC');
-    if (s === '' || s.length > MAX_SIGNATURE_LINE_LENGTH || /[?!;\u00bf\u00a1]/u.test(s))
+    const trimmed = line.trim().normalize('NFC');
+    if (trimmed === '' || trimmed.length > MAX_SIGNATURE_LINE_LENGTH || /[?!;\u00bf\u00a1]/u.test(trimmed))
     {
         return false;
     }
-    const colon = s.indexOf(':');
-    const label = colon < 0 ? [] : (s.slice(0, colon).match(WORD) ?? []);
+    const colon = trimmed.indexOf(':');
+    const label = colon < 0 ? [] : (trimmed.slice(0, colon).match(WORD) ?? []);
     if (label.length > 2 || label.some((w) => vetoWord(w.toLowerCase())))
     {
         return false;
     }
-    const rest = (colon < 0 ? s : s.slice(colon + 1)).replace(/\S+@\S+/gu, ' ').replace(/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+/giu, ' ');
+    const rest = (colon < 0 ? trimmed : trimmed.slice(colon + 1)).replace(/\S+@\S+/gu, ' ').replace(/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+/giu, ' ');
     const words = rest.match(WORD) ?? [];
     if (words.length > MAX_SIGNATURE_LINE_WORDS)
     {
         return false;
     }
-    return words.every((w) =>
+    return words.every((word) =>
     {
-        const lower = w.toLowerCase();
+        const lower = word.toLowerCase();
         if (vetoWord(lower))
         {
             return false;
         }
-        return !/^\p{Ll}/u.test(w) || CONNECTORS.has(lower);
+        return !/^\p{Ll}/u.test(word) || CONNECTORS.has(lower);
     });
 }
 
@@ -409,35 +409,35 @@ const MARKER_LABELS: ReadonlySet<string> = new Set([
  */
 export function contactMarker(line: string): boolean
 {
-    let s = line.trim().normalize('NFC');
+    let text = line.trim().normalize('NFC');
     let labelled = false;
-    const label = /^([\p{L}][\p{L}-]*)\.?\s*:?\s*/u.exec(s);
-    if (label && MARKER_LABELS.has((label[1] as string).toLowerCase()) && label[0].length < s.length)
+    const label = /^([\p{L}][\p{L}-]*)\.?\s*:?\s*/u.exec(text);
+    if (label && MARKER_LABELS.has((label[1] as string).toLowerCase()) && label[0].length < text.length)
     {
-        s = s.slice(label[0].length);
+        text = text.slice(label[0].length);
         labelled = true;
     }
-    if (/^<?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/u.test(s))
+    if (/^<?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/u.test(text))
     {
         return true;
     }
-    if (/^(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+$/iu.test(s))
+    if (/^(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+$/iu.test(text))
     {
         return true;
     }
-    if (!/^\+?\(?\d[\d .()-]*\d\)?$/u.test(s))
+    if (!/^\+?\(?\d[\d .()-]*\d\)?$/u.test(text))
     {
         return false;
     }
-    if (/^\d{1,4}[.-]\d{1,2}[.-]\d{1,4}$/u.test(s))
+    if (/^\d{1,4}[.-]\d{1,2}[.-]\d{1,4}$/u.test(text))
     {
         return false;
     }
-    if ((s.match(/\d/gu) ?? []).length < 6)
+    if ((text.match(/\d/gu) ?? []).length < 6)
     {
         return false;
     }
-    return labelled || /^[+(0]/u.test(s);
+    return labelled || /^[+(0]/u.test(text);
 }
 
 /**
@@ -463,11 +463,11 @@ export function signatureStart(text: string, senderWords: ReadonlySet<string>): 
         return null;
     }
     const lines: { start: number; text: string }[] = [];
-    let at = 0;
+    let lineStart = 0;
     for (const raw of text.split('\n'))
     {
-        lines.push({ start: at, text: raw });
-        at += raw.length + 1;
+        lines.push({ start: lineStart, text: raw });
+        lineStart += raw.length + 1;
     }
     const blank = (k: number): boolean => (lines[k] as { text: string }).text.trim() === '';
     let end = lines.length;
@@ -542,19 +542,19 @@ export interface Compared
 /** The Compared form of `text`, sent by a sender whose name words are `senderWords`. */
 export function compared(text: string, senderWords: ReadonlySet<string>): Compared
 {
-    const at = signatureStart(text, senderWords);
-    return { full: wordsOf(text), core: at === null ? null : wordsOf(text.slice(0, at)) };
+    const signatureAt = signatureStart(text, senderWords);
+    return { full: wordsOf(text), core: signatureAt === null ? null : wordsOf(text.slice(0, signatureAt)) };
 }
 
 /** The words of display names, for signatureStart. */
 export function nameWordsOf(mailboxes: readonly Pick<EmailAddress, 'name'>[]): Set<string>
 {
     const out = new Set<string>();
-    for (const m of mailboxes)
+    for (const mailbox of mailboxes)
     {
-        for (const w of wordsOf(m.name).tokens)
+        for (const word of wordsOf(mailbox.name).tokens)
         {
-            out.add(w);
+            out.add(word);
         }
     }
     return out;
@@ -568,9 +568,9 @@ export function nameWordsOf(mailboxes: readonly Pick<EmailAddress, 'name'>[]): S
  */
 export function sharedWords(a: Compared, b: Compared): { readonly a: number; readonly b: number; readonly words: Words } | null
 {
-    const na = a.full.tokens.length;
-    const nb = b.full.tokens.length;
-    if (na === 0 || nb === 0)
+    const aWordCount = a.full.tokens.length;
+    const bWordCount = b.full.tokens.length;
+    if (aWordCount === 0 || bWordCount === 0)
     {
         return null;
     }
@@ -580,11 +580,11 @@ export function sharedWords(a: Compared, b: Compared): { readonly a: number; rea
     }
     if (a.core !== null && a.core.tokens.length > 0 && sameWords(a.core, b.full))
     {
-        return { a: a.core.tokens.length / na, b: 1, words: a.core };
+        return { a: a.core.tokens.length / aWordCount, b: 1, words: a.core };
     }
     if (b.core !== null && b.core.tokens.length > 0 && sameWords(a.full, b.core))
     {
-        return { a: 1, b: b.core.tokens.length / nb, words: b.core };
+        return { a: 1, b: b.core.tokens.length / bWordCount, words: b.core };
     }
     return null;
 }
@@ -593,23 +593,23 @@ const DIGITS = /\p{N}+/gu;
 const digitCache = new WeakMap<Words, string>();
 
 /** The digit runs of a text in text order, as one string (file comment, 1d). */
-export function digitsOf(w: Words): string
+export function digitsOf(words: Words): string
 {
-    let d = digitCache.get(w);
-    if (d === undefined)
+    let digits = digitCache.get(words);
+    if (digits === undefined)
     {
         const runs: string[] = [];
-        for (const t of w.tokens)
+        for (const token of words.tokens)
         {
-            for (const run of t.match(DIGITS) ?? [])
+            for (const run of token.match(DIGITS) ?? [])
             {
                 runs.push(run);
             }
         }
-        d = runs.join(' ');
-        digitCache.set(w, d);
+        digits = runs.join(' ');
+        digitCache.set(words, digits);
     }
-    return d;
+    return digits;
 }
 
 /** Shares needed (each way) and whether MIN_SHINGLES applies, per date level (file comment, 1c and 2). */
@@ -635,7 +635,7 @@ const COPY_RULES: Readonly<Record<DateAgreement, TextRule>> = {
 };
 
 /** Both shares when texts A and B agree under `rule` (file comment, 1c, 1d and 2), else null. */
-function textAgreement(a: Compared, b: Compared, rule: TextRule): { fwd: number; rev: number } | null
+function textAgreement(a: Compared, b: Compared, rule: TextRule): { forward: number; reverse: number } | null
 {
     if (rule.minEvidence && (distinctShingles(a.full) < MIN_SHINGLES || distinctShingles(b.full) < MIN_SHINGLES))
     {
@@ -651,13 +651,13 @@ function textAgreement(a: Compared, b: Compared, rule: TextRule): { fwd: number;
     {
         return null;
     }
-    const da = digitsOf(shares.a === 1 ? a.full : (a.core as Words));
-    const db = digitsOf(shares.b === 1 ? b.full : (b.core as Words));
-    if (da !== db)
+    const aDigits = digitsOf(shares.a === 1 ? a.full : (a.core as Words));
+    const bDigits = digitsOf(shares.b === 1 ? b.full : (b.core as Words));
+    if (aDigits !== bDigits)
     {
         return null;
     }
-    return { fwd: shares.a, rev: shares.b };
+    return { forward: shares.a, reverse: shares.b };
 }
 
 // ---------------------------------------------------------------- people and dates
@@ -668,40 +668,40 @@ function normalName(name: string): string
 }
 
 /** 'a:' + address, or 'n:' + name when there is no address; null when empty. */
-function mailboxKey(m: EmailAddress, useName: boolean): string | null
+function mailboxKey(mailbox: EmailAddress, useName: boolean): string | null
 {
-    const address = m.address.trim().toLowerCase();
+    const address = mailbox.address.trim().toLowerCase();
     if (!useName)
     {
         return address === '' ? null : `a:${address}`;
     }
-    const name = normalName(m.name);
+    const name = normalName(mailbox.name);
     return name === '' ? null : `n:${name}`;
 }
 
 /** The rebuilt message's sender key (file comment, 1a); null without exactly one From mailbox. */
-export function rebuiltSenderKey(r: Pick<ReconstructedMessage, 'from'>): string | null
+export function rebuiltSenderKey(rebuilt: Pick<ReconstructedMessage, 'from'>): string | null
 {
-    if (r.from.length !== 1)
+    if (rebuilt.from.length !== 1)
     {
         return null;
     }
-    const m = r.from[0] as EmailAddress;
-    return mailboxKey(m, false) ?? mailboxKey(m, true);
+    const mailbox = rebuilt.from[0] as EmailAddress;
+    return mailboxKey(mailbox, false) ?? mailboxKey(mailbox, true);
 }
 
 /** Every key a real message's From mailboxes answer to (address keys and name keys). */
 export function realSenderKeys(message: Pick<NormalizedMessage, 'from'>): string[]
 {
     const keys = new Set<string>();
-    for (const m of message.from)
+    for (const mailbox of message.from)
     {
         for (const useName of [false, true])
         {
-            const k = mailboxKey(m, useName);
-            if (k !== null)
+            const key = mailboxKey(mailbox, useName);
+            if (key !== null)
             {
-                keys.add(k);
+                keys.add(key);
             }
         }
     }
@@ -713,8 +713,8 @@ const MINUTE_MS = 60_000;
 /** Distance of |diff| to the nearest whole number of ZONE_STEP_MS. */
 function offGrid(diffMs: number): number
 {
-    const m = Math.abs(diffMs) % ZONE_STEP_MS;
-    return Math.min(m, ZONE_STEP_MS - m);
+    const remainder = Math.abs(diffMs) % ZONE_STEP_MS;
+    return Math.min(remainder, ZONE_STEP_MS - remainder);
 }
 
 /** Whether `diffMs` lies in [lo, hi], widened by `slack` at both ends. */
@@ -825,8 +825,8 @@ export function copyDateAgreement(a: CopyDate, b: CopyDate, diffMs: number): Dat
     const spanA = a.precision === 'day' ? DAY_MS : 0;
     const spanB = b.precision === 'day' ? DAY_MS : 0;
     const minutes = spanA === 0 && spanB === 0;
-    const sa = a.zoneMinutes * MINUTE_MS;
-    const sb = b.zoneMinutes * MINUTE_MS;
+    const shiftA = a.zoneMinutes * MINUTE_MS;
+    const shiftB = b.zoneMinutes * MINUTE_MS;
     if (!a.approximate && !b.approximate)
     {
         if (!within(diffMs, -spanB, spanA, EXACT_SLACK_MS))
@@ -838,21 +838,21 @@ export function copyDateAgreement(a: CopyDate, b: CopyDate, diffMs: number): Dat
     if (a.approximate && b.approximate)
     {
         // Two days only are two midnights: the very same shift, no day part.
-        const da = spanB === 0 ? spanA : 0;
-        const db = spanA === 0 ? spanB : 0;
-        if (within(diffMs, -db, da, ZONE_SLACK_MS))
+        const allowanceA = spanB === 0 ? spanA : 0;
+        const allowanceB = spanA === 0 ? spanB : 0;
+        if (within(diffMs, -allowanceB, allowanceA, ZONE_SLACK_MS))
         {
             return minutes ? 'exact' : 'strict';
         }
-        if (within(diffMs, sa - sb - db, sa - sb + da, ZONE_SLACK_MS))
+        if (within(diffMs, shiftA - shiftB - allowanceB, shiftA - shiftB + allowanceA, ZONE_SLACK_MS))
         {
             return minutes ? 'zone' : 'strict';
         }
         return null;
     }
     // One exact (its W is its S: no shift), one approximate with W in [-12 h, +14 h].
-    const lo = a.approximate ? sa - MAX_EAST_MS : -(sb + MAX_WEST_MS);
-    const hi = a.approximate ? sa + MAX_WEST_MS : -(sb - MAX_EAST_MS);
+    const lo = a.approximate ? shiftA - MAX_EAST_MS : -(shiftB + MAX_WEST_MS);
+    const hi = a.approximate ? shiftA + MAX_WEST_MS : -(shiftB - MAX_EAST_MS);
     if (!within(diffMs, lo - spanB, hi + spanA, ZONE_SLACK_MS))
     {
         return null;
@@ -875,9 +875,9 @@ interface Item
     readonly id: number;
     /** Source position in the sources list. */
     readonly pos: number;
-    readonly r: ReconstructedMessage;
+    readonly rebuilt: ReconstructedMessage;
     readonly key: string | null;
-    readonly est: number | null;
+    readonly estimate: number | null;
     /** The zone offset its estimate assumed, minutes (CopyDate.zoneMinutes). */
     readonly zoneMinutes: number;
     words: Compared | null;
@@ -890,34 +890,34 @@ interface Item
 /** A line that can be what is left of a header read short (comparableText). */
 function leftoverLine(line: string): boolean
 {
-    const s = line.replace(/\s+/gu, ' ').trim().normalize('NFC');
-    if (s === '')
+    const normalized = line.replace(/\s+/gu, ' ').trim().normalize('NFC');
+    if (normalized === '')
     {
         return false;
     }
-    const label = LABEL_PATTERN.exec(s.slice(0, LABEL_HEAD_LENGTH))?.[1];
+    const label = LABEL_PATTERN.exec(normalized.slice(0, LABEL_HEAD_LENGTH))?.[1];
     if (label !== undefined && LABEL_ROLE_OF.has(labelKey(label)))
     {
         return true;
     }
     // A mailbox list goes on with ";" (Outlook) or with addresses.
-    if (!/[;@]/u.test(s))
+    if (!/[;@]/u.test(normalized))
     {
         return false;
     }
-    const items = s
+    const items = normalized
         .split(/[;,]/u)
         .map((x) => x.trim())
         .filter((x) => x !== '');
     return (
         items.length > 0 &&
-        items.every((x) =>
+        items.every((part) =>
         {
-            if (/^[^<>@]*<[^<>\s]*@[^\s]*>$/u.test(x) || /^(?:mailto:)?[^\s<>@]+@[^\s<>@]+$/iu.test(x))
+            if (/^[^<>@]*<[^<>\s]*@[^\s]*>$/u.test(part) || /^(?:mailto:)?[^\s<>@]+@[^\s<>@]+$/iu.test(part))
             {
                 return true;
             }
-            const name = x.replace(/"/gu, '').trim();
+            const name = part.replace(/"/gu, '').trim();
             return name !== '' && !/[\p{N}<>@()[\]]/u.test(name) && isPlainName(name, false);
         })
     );
@@ -941,14 +941,14 @@ function leftoverLine(line: string): boolean
  * words, so fewer links, never more). Left out up to the end: nothing is
  * compared (no words, no link).
  */
-export function comparableText(r: Pick<ReconstructedMessage, 'incomplete' | 'reconstructedText' | 'to' | 'cc'>): string
+export function comparableText(rebuilt: Pick<ReconstructedMessage, 'incomplete' | 'reconstructedText' | 'to' | 'cc'>): string
 {
-    const text = r.reconstructedText;
-    if (r.incomplete.length === 0)
+    const text = rebuilt.reconstructedText;
+    if (rebuilt.incomplete.length === 0)
     {
         return text;
     }
-    if (r.incomplete.some((role) => (role === 'to' ? r.to : r.cc).length === 0))
+    if (rebuilt.incomplete.some((role) => (role === 'to' ? rebuilt.to : rebuilt.cc).length === 0))
     {
         return text;
     }
@@ -957,13 +957,13 @@ export function comparableText(r: Pick<ReconstructedMessage, 'incomplete' | 'rec
     for (let at = 0; at < text.length; )
     {
         line.lastIndex = at;
-        const m = line.exec(text) as RegExpExecArray;
-        const next = at + m[0].length;
-        if (m[0].trim() === '')
+        const match = line.exec(text) as RegExpExecArray;
+        const next = at + match[0].length;
+        if (match[0].trim() === '')
         {
             return skipped === 0 ? text : text.slice(next);
         }
-        if (!leftoverLine(m[0]))
+        if (!leftoverLine(match[0]))
         {
             return text;
         }
@@ -978,20 +978,20 @@ const SWAPPABLE = /^\s*(\d{1,2})([./-])(\d{1,2})\2(\d{4})(?![\d])(.*)$/su;
 /** The readable readings of an ambiguous numeric date (ambiguousReadings), as dates. */
 function ambiguousDates(dateText: string | null, sourceOffsetMinutes: number | null): QuotedDate[]
 {
-    const m = dateText === null ? null : SWAPPABLE.exec(dateText);
-    if (m === null)
+    const match = dateText === null ? null : SWAPPABLE.exec(dateText);
+    if (match === null)
     {
         return [];
     }
-    const [, a, , b, year, rest] = m as unknown as [string, string, string, string, string, string];
+    const [, firstNumber, , secondNumber, year, rest] = match as unknown as [string, string, string, string, string, string];
     const out: QuotedDate[] = [];
-    for (const text of [`${year}-${b}-${a}${rest}`, `${year}-${a}-${b}${rest}`])
+    for (const text of [`${year}-${secondNumber}-${firstNumber}${rest}`, `${year}-${firstNumber}-${secondNumber}${rest}`])
     {
-        const d = parseQuotedDate(text, sourceOffsetMinutes);
-        const ms = d.estimatedUtcMs;
+        const reading = parseQuotedDate(text, sourceOffsetMinutes);
+        const ms = reading.estimatedUtcMs;
         if (ms !== null && Number.isFinite(ms) && !out.some((x) => x.estimatedUtcMs === ms))
         {
-            out.push(d);
+            out.push(reading);
         }
     }
     return out;
@@ -1022,34 +1022,34 @@ export function datedText(text: string): boolean
 }
 
 /** The estimate of a readable date, or null. */
-function estimateOf(r: ReconstructedMessage): number | null
+function estimateOf(rebuilt: ReconstructedMessage): number | null
 {
-    const ms = r.date?.estimatedUtcMs;
+    const ms = rebuilt.date?.estimatedUtcMs;
     return typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
 }
 
 /** Known fields, for the best-copy order. */
-function completeness(it: Item): number
+function completeness(item: Item): number
 {
-    const r = it.r;
+    const rebuilt = item.rebuilt;
     return (
-        (it.key !== null ? 1 : 0) +
-        (r.to.length > 0 ? 1 : 0) +
-        (r.subject !== null ? 1 : 0) +
-        (it.est !== null ? 1 : 0) +
-        (it.est !== null && !r.dateApproximate ? 1 : 0)
+        (item.key !== null ? 1 : 0) +
+        (rebuilt.to.length > 0 ? 1 : 0) +
+        (rebuilt.subject !== null ? 1 : 0) +
+        (item.estimate !== null ? 1 : 0) +
+        (item.estimate !== null && !rebuilt.dateApproximate ? 1 : 0)
     );
 }
 
-/** Index of the first entry of `list` (sorted by `at`) with at >= `value`. */
-function lowerBound<T>(list: readonly T[], value: number, at: (t: T) => number): number
+/** Index of the first entry of `list` (sorted by `sortKey`) with sortKey >= `value`. */
+function lowerBound<T>(list: readonly T[], value: number, sortKey: (entry: T) => number): number
 {
     let lo = 0;
     let hi = list.length;
     while (lo < hi)
     {
         const mid = (lo + hi) >> 1;
-        if (at(list[mid] as T) < value)
+        if (sortKey(list[mid] as T) < value)
         {
             lo = mid + 1;
         }
@@ -1067,50 +1067,50 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
 {
     const offsetOf = (pos: number): number | null =>
     {
-        const o = (sources[pos] as LinkSource).message.date.offsetMinutes;
-        return typeof o === 'number' && Number.isFinite(o) ? o : null;
+        const offset = (sources[pos] as LinkSource).message.date.offsetMinutes;
+        return typeof offset === 'number' && Number.isFinite(offset) ? offset : null;
     };
     // Every rebuilt message, by source position, then newest first.
     const items: Item[] = [];
-    const bySource: Item[][] = sources.map((s, pos) =>
-        s.rebuilt.map((r) =>
+    const bySource: Item[][] = sources.map((source, pos) =>
+        source.rebuilt.map((rebuilt) =>
         {
-            const zoneMinutes = r.date?.basis === 'source-offset' ? (offsetOf(pos) ?? 0) : 0;
-            const it: Item = { id: items.length, pos, r, key: rebuiltSenderKey(r), est: estimateOf(r), zoneMinutes, words: null, realPos: null, match: null, groupOf: null };
-            items.push(it);
-            return it;
+            const zoneMinutes = rebuilt.date?.basis === 'source-offset' ? (offsetOf(pos) ?? 0) : 0;
+            const item: Item = { id: items.length, pos, rebuilt, key: rebuiltSenderKey(rebuilt), estimate: estimateOf(rebuilt), zoneMinutes, words: null, realPos: null, match: null, groupOf: null };
+            items.push(item);
+            return item;
         }),
     );
-    const wordsOfItem = (it: Item): Compared => (it.words ??= compared(comparableText(it.r), nameWordsOf(it.r.from)));
+    const wordsOfItem = (item: Item): Compared => (item.words ??= compared(comparableText(item.rebuilt), nameWordsOf(item.rebuilt.from)));
     const ownWords: (Compared | null)[] = sources.map(() => null);
     const ownWordsOf = (pos: number): Compared =>
     {
-        let w = ownWords[pos];
-        if (w === null || w === undefined)
+        let words = ownWords[pos];
+        if (words === null || words === undefined)
         {
-            const s = sources[pos] as LinkSource;
-            w = compared(s.message.bodyText.slice(0, s.ownEnd), nameWordsOf(s.message.from));
-            ownWords[pos] = w;
+            const source = sources[pos] as LinkSource;
+            words = compared(source.message.bodyText.slice(0, source.ownEnd), nameWordsOf(source.message.from));
+            ownWords[pos] = words;
         }
-        return w;
+        return words;
     };
 
     // 1. The real file wins.
     const realByKey = new Map<string, { readonly pos: number; readonly utc: number }[]>();
-    sources.forEach((s, pos) =>
+    sources.forEach((source, pos) =>
     {
-        if (s.utcMs === null)
+        if (source.utcMs === null)
         {
             return;
         }
-        for (const k of realSenderKeys(s.message))
+        for (const key of realSenderKeys(source.message))
         {
-            let list = realByKey.get(k);
+            let list = realByKey.get(key);
             if (list === undefined)
             {
-                realByKey.set(k, (list = []));
+                realByKey.set(key, (list = []));
             }
-            list.push({ pos, utc: s.utcMs });
+            list.push({ pos, utc: source.utcMs });
         }
     });
     for (const list of realByKey.values())
@@ -1118,41 +1118,41 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         list.sort((a, b) => a.utc - b.utc || a.pos - b.pos);
     }
 
-    for (const it of items)
+    for (const item of items)
     {
-        if (it.key === null)
+        if (item.key === null)
         {
             continue;
         }
-        const list = realByKey.get(it.key);
+        const list = realByKey.get(item.key);
         if (list === undefined)
         {
             continue;
         }
-        const addressed = it.key.startsWith('a:');
-        const ambiguous = it.est === null;
-        const dates: QuotedDate[] = ambiguous ? ambiguousDates(it.r.dateText, offsetOf(it.pos)) : [it.r.date as QuotedDate];
+        const addressed = item.key.startsWith('a:');
+        const ambiguous = item.estimate === null;
+        const dates: QuotedDate[] = ambiguous ? ambiguousDates(item.rebuilt.dateText, offsetOf(item.pos)) : [item.rebuilt.date as QuotedDate];
         // Real position -> the closest reading that agrees, with its level.
         const nearest = new Map<number, { diff: number; level: DateAgreement }>();
         for (const date of dates)
         {
-            const est = date.estimatedUtcMs as number;
-            const approximate = ambiguous ? !hasWrittenZone(date) : it.r.dateApproximate;
+            const estimate = date.estimatedUtcMs as number;
+            const approximate = ambiguous ? !hasWrittenZone(date) : item.rebuilt.dateApproximate;
             // The zone the estimate assumed (S, file comment 1b): known only for basis 'source-offset'.
-            const sourceOffset = date.basis === 'source-offset' ? offsetOf(it.pos) : null;
-            for (let i = lowerBound(list, est - MATCH_WINDOW_MS, (e) => e.utc); i < list.length; i++)
+            const sourceOffset = date.basis === 'source-offset' ? offsetOf(item.pos) : null;
+            for (let i = lowerBound(list, estimate - MATCH_WINDOW_MS, (e) => e.utc); i < list.length; i++)
             {
-                const e = list[i] as { pos: number; utc: number };
-                if (e.utc > est + MATCH_WINDOW_MS)
+                const real = list[i] as { pos: number; utc: number };
+                if (real.utc > estimate + MATCH_WINDOW_MS)
                 {
                     break;
                 }
-                if (e.pos === it.pos)
+                if (real.pos === item.pos)
                 {
                     continue;
                 }
-                const diff = e.utc - est;
-                const realOffset = offsetOf(e.pos);
+                const diff = real.utc - estimate;
+                const realOffset = offsetOf(real.pos);
                 const senderDiff = realOffset === null || sourceOffset === null ? null : (sourceOffset - realOffset) * MINUTE_MS;
                 let level = realDateAgreement(date, approximate, diff, sourceOffset === null ? null : sourceOffset * MINUTE_MS, senderDiff);
                 if (level === null)
@@ -1163,108 +1163,108 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
                 {
                     level = ambiguous ? 'strict' : 'zone';
                 }
-                const old = nearest.get(e.pos);
-                if (old === undefined || Math.abs(diff) < Math.abs(old.diff))
+                const previous = nearest.get(real.pos);
+                if (previous === undefined || Math.abs(diff) < Math.abs(previous.diff))
                 {
-                    nearest.set(e.pos, { diff, level });
+                    nearest.set(real.pos, { diff, level });
                 }
             }
         }
         const near = [...nearest].map(([pos, v]) => ({ pos, ...v }));
         near.sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff) || a.pos - b.pos);
         let best: { pos: number; match: RealMatch } | null = null;
-        for (const c of near.slice(0, MAX_CANDIDATES))
+        for (const candidate of near.slice(0, MAX_CANDIDATES))
         {
-            const agreed = textAgreement(wordsOfItem(it), ownWordsOf(c.pos), REAL_RULES[c.level]);
+            const agreed = textAgreement(wordsOfItem(item), ownWordsOf(candidate.pos), REAL_RULES[candidate.level]);
             if (agreed === null)
             {
                 continue;
             }
             const better =
                 best === null ||
-                agreed.fwd > best.match.coverage ||
-                (agreed.fwd === best.match.coverage && Math.abs(c.diff) < Math.abs(best.match.dateDiffMs));
+                agreed.forward > best.match.coverage ||
+                (agreed.forward === best.match.coverage && Math.abs(candidate.diff) < Math.abs(best.match.dateDiffMs));
             if (better)
             {
-                const strong = c.level === 'exact' || c.level === 'strong';
-                best = { pos: c.pos, match: { coverage: agreed.fwd, reverseCoverage: agreed.rev, dateDiffMs: c.diff, strong, ambiguousDate: ambiguous } };
+                const strong = candidate.level === 'exact' || candidate.level === 'strong';
+                best = { pos: candidate.pos, match: { coverage: agreed.forward, reverseCoverage: agreed.reverse, dateDiffMs: candidate.diff, strong, ambiguousDate: ambiguous } };
             }
         }
         if (best !== null)
         {
-            it.realPos = best.pos;
-            it.match = best.match;
+            item.realPos = best.pos;
+            item.match = best.match;
         }
     }
 
     // 2. Rebuilt vs rebuilt, in best-copy order.
-    const unmatched = items.filter((it) => it.realPos === null);
+    const unmatched = items.filter((item) => item.realPos === null);
     unmatched.sort(
         (a, b) =>
-            a.r.incomplete.length - b.r.incomplete.length ||
+            a.rebuilt.incomplete.length - b.rebuilt.incomplete.length ||
             completeness(b) - completeness(a) ||
-            a.r.generation - b.r.generation ||
+            a.rebuilt.generation - b.rebuilt.generation ||
             a.pos - b.pos ||
             a.id - b.id,
     );
-    const copyDate = (it: Item): CopyDate => ({ precision: (it.r.date as QuotedDate).precision, approximate: it.r.dateApproximate, zoneMinutes: it.zoneMinutes });
-    const sourceTime = (it: Item): number | null =>
+    const copyDate = (item: Item): CopyDate => ({ precision: (item.rebuilt.date as QuotedDate).precision, approximate: item.rebuilt.dateApproximate, zoneMinutes: item.zoneMinutes });
+    const sourceTime = (item: Item): number | null =>
     {
-        const t = (sources[it.pos] as LinkSource).message.date.utcMs;
-        return typeof t === 'number' && Number.isFinite(t) ? t : null;
+        const time = (sources[item.pos] as LinkSource).message.date.utcMs;
+        return typeof time === 'number' && Number.isFinite(time) ? time : null;
     };
     const entriesByKey = new Map<string, Item[]>();
     // Entries without a readable date, by sender key and date text as written.
     const undatedEntries = new Map<string, Item[]>();
-    const undatedKey = (it: Item): string | null =>
+    const undatedKey = (item: Item): string | null =>
     {
-        const text = it.r.dateText?.replace(/\s+/gu, ' ').trim() ?? '';
-        return it.key === null || it.est !== null || !datedText(text) || sourceTime(it) === null ? null : JSON.stringify([it.key, text]);
+        const text = item.rebuilt.dateText?.replace(/\s+/gu, ' ').trim() ?? '';
+        return item.key === null || item.estimate !== null || !datedText(text) || sourceTime(item) === null ? null : JSON.stringify([item.key, text]);
     };
     const groupSources = new Map<number, Set<number>>();
     const members = new Map<number, number[]>();
-    for (const it of unmatched)
+    for (const item of unmatched)
     {
         let best: { entry: Item; score: number; diff: number } | null = null;
-        const consider = (e: Item, diff: number, level: DateAgreement): void =>
+        const consider = (candidate: Item, diff: number, level: DateAgreement): void =>
         {
-            const agreed = textAgreement(wordsOfItem(it), wordsOfItem(e), COPY_RULES[level]);
+            const agreed = textAgreement(wordsOfItem(item), wordsOfItem(candidate), COPY_RULES[level]);
             if (agreed === null)
             {
                 return;
             }
-            const score = Math.min(agreed.fwd, agreed.rev);
+            const score = Math.min(agreed.forward, agreed.reverse);
             if (best === null || score > best.score || (score === best.score && Math.abs(diff) < Math.abs(best.diff)))
             {
-                best = { entry: e, score, diff };
+                best = { entry: candidate, score, diff };
             }
         };
-        if (it.key !== null && it.est !== null)
+        if (item.key !== null && item.estimate !== null)
         {
-            const est = it.est;
-            const addressed = it.key.startsWith('a:');
+            const estimate = item.estimate;
+            const addressed = item.key.startsWith('a:');
             // Entries of this sender, sorted by date: only those within the window are read.
-            const list = entriesByKey.get(it.key) ?? [];
+            const list = entriesByKey.get(item.key) ?? [];
             const inWindow: Item[] = [];
-            for (let i = lowerBound(list, est - MATCH_WINDOW_MS, (e) => e.est as number); i < list.length; i++)
+            for (let i = lowerBound(list, estimate - MATCH_WINDOW_MS, (e) => e.estimate as number); i < list.length; i++)
             {
-                const e = list[i] as Item;
-                if ((e.est as number) > est + MATCH_WINDOW_MS)
+                const candidate = list[i] as Item;
+                if ((candidate.estimate as number) > estimate + MATCH_WINDOW_MS)
                 {
                     break;
                 }
-                if (!(groupSources.get(e.id) as Set<number>).has(it.pos))
+                if (!(groupSources.get(candidate.id) as Set<number>).has(item.pos))
                 {
-                    inWindow.push(e);
+                    inWindow.push(candidate);
                 }
             }
             const near = inWindow
-                .sort((a, b) => Math.abs((a.est as number) - est) - Math.abs((b.est as number) - est) || a.id - b.id)
+                .sort((a, b) => Math.abs((a.estimate as number) - estimate) - Math.abs((b.estimate as number) - estimate) || a.id - b.id)
                 .slice(0, MAX_CANDIDATES);
-            for (const e of near)
+            for (const candidate of near)
             {
-                const diff = (e.est as number) - est;
-                let level = copyDateAgreement(copyDate(it), copyDate(e), diff);
+                const diff = (candidate.estimate as number) - estimate;
+                let level = copyDateAgreement(copyDate(item), copyDate(candidate), diff);
                 if (level === null)
                 {
                     continue;
@@ -1273,63 +1273,63 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
                 {
                     level = 'zone';
                 }
-                consider(e, diff, level);
+                consider(candidate, diff, level);
             }
         }
-        const uk = undatedKey(it);
-        if (uk !== null)
+        const undatedTextKey = undatedKey(item);
+        if (undatedTextKey !== null)
         {
             // No readable date: only a copy with the very same (precise) date text, sources within 26 h.
-            const t = sourceTime(it) as number;
-            const same = (undatedEntries.get(uk) ?? []).filter(
-                (x) => !(groupSources.get(x.id) as Set<number>).has(it.pos) && Math.abs((sourceTime(x) as number) - t) <= MATCH_WINDOW_MS,
+            const sourceMs = sourceTime(item) as number;
+            const same = (undatedEntries.get(undatedTextKey) ?? []).filter(
+                (x) => !(groupSources.get(x.id) as Set<number>).has(item.pos) && Math.abs((sourceTime(x) as number) - sourceMs) <= MATCH_WINDOW_MS,
             );
-            for (const e of same.slice(0, MAX_CANDIDATES))
+            for (const candidate of same.slice(0, MAX_CANDIDATES))
             {
-                consider(e, 0, 'strict');
+                consider(candidate, 0, 'strict');
             }
         }
         const chosen = best as { entry: Item } | null;
         if (chosen !== null)
         {
-            it.groupOf = chosen.entry.id;
-            (groupSources.get(chosen.entry.id) as Set<number>).add(it.pos);
-            (members.get(chosen.entry.id) as number[]).push(it.id);
+            item.groupOf = chosen.entry.id;
+            (groupSources.get(chosen.entry.id) as Set<number>).add(item.pos);
+            (members.get(chosen.entry.id) as number[]).push(item.id);
         }
         else
         {
-            it.groupOf = it.id;
-            groupSources.set(it.id, new Set([it.pos]));
-            members.set(it.id, []);
-            if (it.key !== null && it.est !== null)
+            item.groupOf = item.id;
+            groupSources.set(item.id, new Set([item.pos]));
+            members.set(item.id, []);
+            if (item.key !== null && item.estimate !== null)
             {
-                let list = entriesByKey.get(it.key);
+                let list = entriesByKey.get(item.key);
                 if (list === undefined)
                 {
-                    entriesByKey.set(it.key, (list = []));
+                    entriesByKey.set(item.key, (list = []));
                 }
                 // Kept sorted by date (then id), for the window search above.
-                const est = it.est;
-                const id = it.id;
-                let at = lowerBound(list, est, (e) => e.est as number);
-                while (at < list.length && (list[at] as Item).est === est && (list[at] as Item).id < id)
+                const estimate = item.estimate;
+                const id = item.id;
+                let insertAt = lowerBound(list, estimate, (e) => e.estimate as number);
+                while (insertAt < list.length && (list[insertAt] as Item).estimate === estimate && (list[insertAt] as Item).id < id)
                 {
-                    at++;
+                    insertAt++;
                 }
-                list.splice(at, 0, it);
+                list.splice(insertAt, 0, item);
             }
-            if (uk !== null)
+            if (undatedTextKey !== null)
             {
-                let list = undatedEntries.get(uk);
+                let list = undatedEntries.get(undatedTextKey);
                 if (list === undefined)
                 {
-                    undatedEntries.set(uk, (list = []));
+                    undatedEntries.set(undatedTextKey, (list = []));
                 }
-                list.push(it);
+                list.push(item);
             }
         }
     }
-    const isEntry = (it: Item): boolean => it.realPos === null && it.groupOf === it.id;
+    const isEntry = (item: Item): boolean => item.realPos === null && item.groupOf === item.id;
 
     // 3. Time keys and anchors along each chain.
     // A key is (time, side): side -1 = just before a real message at that
@@ -1337,45 +1337,45 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
     // it quotes), 0 = by its own date (before a real message at the same time).
     const keyOf = new Map<number, { key: number; side: number; placement: RebuiltPlacement }>();
     const anchorOf = new Map<number, string>(); // id -> 'm<pos>' or 'r<id>'
-    const realTime = (it: Item): number | null => (it.realPos === null ? null : (sources[it.realPos] as LinkSource).utcMs);
+    const realTime = (item: Item): number | null => (item.realPos === null ? null : (sources[item.realPos] as LinkSource).utcMs);
     bySource.forEach((chain, pos) =>
     {
         // Real times bound each rebuilt message: no later than the newer real
         // messages of its chain (the source, matched ones), no earlier than the
         // older matched ones. The newer bound wins if they disagree.
         const upper: (number | null)[] = [];
-        let u = (sources[pos] as LinkSource).utcMs;
-        for (const it of chain)
+        let upperTime = (sources[pos] as LinkSource).utcMs;
+        for (const item of chain)
         {
-            upper.push(u);
-            const t = realTime(it);
-            if (t !== null)
+            upper.push(upperTime);
+            const time = realTime(item);
+            if (time !== null)
             {
-                u = u === null ? t : Math.min(u, t);
+                upperTime = upperTime === null ? time : Math.min(upperTime, time);
             }
         }
         const lower: (number | null)[] = chain.map(() => null);
-        let l: number | null = null;
+        let lowerTime: number | null = null;
         for (let k = chain.length - 1; k >= 0; k--)
         {
-            lower[k] = l;
-            const t = realTime(chain[k] as Item);
-            if (t !== null)
+            lower[k] = lowerTime;
+            const time = realTime(chain[k] as Item);
+            if (time !== null)
             {
-                l = l === null ? t : Math.max(l, t);
+                lowerTime = lowerTime === null ? time : Math.max(lowerTime, time);
             }
         }
         // Clamp, then keep the chain order: never after the newer rebuilt message.
         let prev: { key: number; side: number } | null = null;
-        chain.forEach((it, k) =>
+        chain.forEach((item, k) =>
         {
-            if (it.realPos !== null || it.est === null)
+            if (item.realPos !== null || item.estimate === null)
             {
                 return;
             }
             const lo = lower[k] ?? null;
             const hi = upper[k] ?? null;
-            let key = it.est;
+            let key = item.estimate;
             let side = 0;
             if (lo !== null && key < lo)
             {
@@ -1392,49 +1392,50 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
                 key = prev.key;
                 side = prev.side;
             }
-            const placement: RebuiltPlacement = key < it.est ? 'capped-by-quoter' : key > it.est ? 'after-quoted' : 'by-date';
-            keyOf.set(it.id, { key, side, placement });
+            const placement: RebuiltPlacement = key < item.estimate ? 'capped-by-quoter' : key > item.estimate ? 'after-quoted' : 'by-date';
+            keyOf.set(item.id, { key, side, placement });
             prev = { key, side };
         });
-        chain.forEach((it, k) =>
+        chain.forEach((item, k) =>
         {
-            if (it.realPos !== null || it.est !== null)
+            if (item.realPos !== null || item.estimate !== null)
             {
                 return;
             }
             let anchor = `m${pos}`;
             for (let j = k - 1; j >= 0; j--)
             {
-                const q = chain[j] as Item;
-                if (q.realPos !== null)
+                const older = chain[j] as Item;
+                if (older.realPos !== null)
                 {
-                    anchor = `m${q.realPos}`;
+                    anchor = `m${older.realPos}`;
                     break;
                 }
-                if (isEntry(q))
+                if (isEntry(older))
                 {
-                    anchor = `r${q.id}`;
+                    anchor = `r${older.id}`;
                     break;
                 }
             }
-            anchorOf.set(it.id, anchor);
+            anchorOf.set(item.id, anchor);
         });
     });
 
     // Keyed entries merged into the dated real messages.
-    const keyed = items.filter((it) => isEntry(it) && keyOf.has(it.id));
-    const keyFor = (it: Item): number => (keyOf.get(it.id) as { key: number }).key;
-    const sideFor = (it: Item): number => (keyOf.get(it.id) as { side: number }).side;
-    keyed.sort((a, b) => keyFor(a) - keyFor(b) || sideFor(a) - sideFor(b) || b.r.generation - a.r.generation || a.pos - b.pos || a.id - b.id);
+    const keyed = items.filter((item) => isEntry(item) && keyOf.has(item.id));
+    const keyFor = (item: Item): number => (keyOf.get(item.id) as { key: number }).key;
+    const sideFor = (item: Item): number => (keyOf.get(item.id) as { side: number }).side;
+    keyed.sort((a, b) =>
+        keyFor(a) - keyFor(b) || sideFor(a) - sideFor(b) || b.rebuilt.generation - a.rebuilt.generation || a.pos - b.pos || a.id - b.id);
     // Before a real message at time t: an earlier key, or the same time unless placed just after (side +1).
-    const before = (it: Item, t: number): boolean => keyFor(it) < t || (keyFor(it) === t && sideFor(it) <= 0);
+    const before = (item: Item, t: number): boolean => keyFor(item) < t || (keyFor(item) === t && sideFor(item) <= 0);
     const base: string[] = [];
     let j = 0;
-    sources.forEach((s, pos) =>
+    sources.forEach((source, pos) =>
     {
-        if (s.utcMs !== null)
+        if (source.utcMs !== null)
         {
-            while (j < keyed.length && before(keyed[j] as Item, s.utcMs))
+            while (j < keyed.length && before(keyed[j] as Item, source.utcMs))
             {
                 base.push(`r${(keyed[j++] as Item).id}`);
             }
@@ -1455,10 +1456,10 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
 
     // Undated entries just before their anchor, older first.
     const children = new Map<string, Item[]>();
-    for (const it of items)
+    for (const item of items)
     {
-        const anchor = anchorOf.get(it.id);
-        if (anchor === undefined || !isEntry(it))
+        const anchor = anchorOf.get(item.id);
+        if (anchor === undefined || !isEntry(item))
         {
             continue;
         }
@@ -1467,49 +1468,49 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         {
             children.set(anchor, (list = []));
         }
-        list.push(it);
+        list.push(item);
     }
     for (const list of children.values())
     {
-        list.sort((a, b) => b.r.generation - a.r.generation || a.pos - b.pos || a.id - b.id);
+        list.sort((a, b) => b.rebuilt.generation - a.rebuilt.generation || a.pos - b.pos || a.id - b.id);
     }
 
     const timeline: TimelineEntry[] = [];
-    const emit = (ref: string): void =>
+    const emit = (anchor: string): void =>
     {
-        for (const child of children.get(ref) ?? [])
+        for (const child of children.get(anchor) ?? [])
         {
             emit(`r${child.id}`);
         }
-        if (ref.startsWith('m'))
+        if (anchor.startsWith('m'))
         {
-            timeline.push({ kind: 'message', position: Number(ref.slice(1)) });
+            timeline.push({ kind: 'message', position: Number(anchor.slice(1)) });
         }
         else
         {
-            const id = Number(ref.slice(1));
+            const id = Number(anchor.slice(1));
             timeline.push({ kind: 'rebuilt', id, placement: keyOf.get(id)?.placement ?? 'before-quoter' });
         }
     };
-    for (const ref of base)
+    for (const anchor of base)
     {
-        emit(ref);
+        emit(anchor);
     }
 
-    const reconstructed: EngineRebuilt[] = items.map((it) =>
+    const reconstructed: EngineRebuilt[] = items.map((item) =>
     {
-        const source = sources[it.pos] as LinkSource;
-        if (it.realPos !== null)
+        const source = sources[item.pos] as LinkSource;
+        if (item.realPos !== null)
         {
-            return { id: it.id, sourceIndex: source.index, rebuilt: it.r, link: 'real', realIndex: (sources[it.realPos] as LinkSource).index, match: it.match, sameAs: null, copies: [], alsoQuotedIn: [] };
+            return { id: item.id, sourceIndex: source.index, rebuilt: item.rebuilt, link: 'real', realIndex: (sources[item.realPos] as LinkSource).index, match: item.match, sameAs: null, copies: [], alsoQuotedIn: [] };
         }
-        if (it.groupOf !== it.id)
+        if (item.groupOf !== item.id)
         {
-            return { id: it.id, sourceIndex: source.index, rebuilt: it.r, link: 'same-as', realIndex: null, match: null, sameAs: it.groupOf, copies: [], alsoQuotedIn: [] };
+            return { id: item.id, sourceIndex: source.index, rebuilt: item.rebuilt, link: 'same-as', realIndex: null, match: null, sameAs: item.groupOf, copies: [], alsoQuotedIn: [] };
         }
-        const copies = [...(members.get(it.id) ?? [])].sort((a, b) => a - b);
+        const copies = [...(members.get(item.id) ?? [])].sort((a, b) => a - b);
         const also = [...new Set(copies.map((c) => (sources[(items[c] as Item).pos] as LinkSource).index))].sort((a, b) => a - b);
-        return { id: it.id, sourceIndex: source.index, rebuilt: it.r, link: 'entry', realIndex: null, match: null, sameAs: null, copies, alsoQuotedIn: also };
+        return { id: item.id, sourceIndex: source.index, rebuilt: item.rebuilt, link: 'entry', realIndex: null, match: null, sameAs: null, copies, alsoQuotedIn: also };
     });
     return { reconstructed, timeline };
 }

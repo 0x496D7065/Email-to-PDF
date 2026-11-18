@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { hasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -1279,7 +1279,7 @@ describe('Q3, option B (user decision 2026-11-09, task 8.13a, replaces 3a option
 
 describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked is left out; one the tool refused to rebuild stays', () =>
 {
-    // A forward whose forwarded header gives no sender mailbox and no readable date: reconstruct.ts refuses it (R1).
+    // A forward whose forwarded header gives no sender mailbox and no readable date: reconstruct-quoted-messages.ts refuses it (R1).
     const refusedBody =
         'Hi Carol,\n\nSee the invoice note below.\n\nAlice\n\n---------- Forwarded message ---------\nFrom: the accounting team\nDate: sometime in March\nSubject: Desk invoice\n\nThe invoice for the twelve oak desks is attached.\n';
     const refusedText = 'The invoice for the twelve oak desks is attached.';
@@ -1380,7 +1380,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
     });
 });
 
-describe('a copy that ends with a signature block the printed copy lacks (task 8.13a review round 2, rules 1c / 2 of rebuild-links.ts)', () =>
+describe('a copy that ends with a signature block the printed copy lacks (task 8.13a review round 2, rules 1c / 2 of link-rebuilt-messages.ts)', () =>
 {
     const CAROL = { name: 'Carol Test', address: 'carol@example.test' };
     const DAVE = { name: 'Dave Sample', address: 'dave@example.test' };

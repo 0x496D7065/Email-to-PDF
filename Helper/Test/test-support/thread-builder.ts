@@ -69,7 +69,7 @@ export interface WallTime
  * - gmail-xx: an attribution line above a ">" quote ("On ... wrote:").
  *   gmail-en is the en-US form ("On Mon, Mar 3, 2025 at 2:02 PM ..."),
  *   gmail-en-gb the en-GB one ("On Mon, 3 Mar 2025 at 14:02, ..."), as in
- *   the comment of Source/thread-analysis/reply-patterns.ts.
+ *   the comment of Source/thread-analysis/reply-header-patterns.ts.
  * - gmail-forward-xx: "---------- Forwarded message ---------" + block, no ">".
  * - apple-xx: the attribution is INSIDE the ">" quote, then a ">" line.
  * - apple-forward-en: "Begin forwarded message:" + block (From, Subject,

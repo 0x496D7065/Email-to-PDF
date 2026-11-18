@@ -2,7 +2,7 @@
 // only the fields the ordering reads are built.
 
 import { describe, expect, it } from 'vitest';
-import { orderMessages, type Orderable } from './order';
+import { orderMessages, type Orderable } from './chronological-order';
 import { MAX_DISPLAYABLE_MS, MIN_DISPLAYABLE_MS } from './time-format';
 
 interface Item extends Orderable

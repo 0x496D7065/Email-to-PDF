@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { detectReplyHeaders } from './reply-header';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
 
 interface Measured
 {
@@ -16,16 +16,16 @@ interface Measured
 }
 
 /** Whether every character of `snippet` (first occurrence) is folded, none is, or some are. */
-function state(m: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
+function state(measured: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
 {
-    const at = m.body.indexOf(snippet);
-    if (at < 0)
+    const offset = measured.body.indexOf(snippet);
+    if (offset < 0)
     {
-        throw new Error(`${m.file}: snippet not found: ${snippet}`);
+        throw new Error(`${measured.file}: snippet not found: ${snippet}`);
     }
-    const covered = (i: number): boolean => m.folds.some((f) => f.start <= i && i < f.end);
+    const covered = (i: number): boolean => measured.folds.some((f) => f.start <= i && i < f.end);
     let foldedCount = 0;
-    for (let i = at; i < at + snippet.length; i++)
+    for (let i = offset; i < offset + snippet.length; i++)
     {
         if (covered(i))
         {
@@ -51,19 +51,19 @@ describe('reply-header detection over the parsed fixtures', () =>
             const folds = detectReplyHeaders(body, message.subject ?? undefined);
             const segments = buildSegments(body, folds);
             expect(checkSegments(body, segments)).toEqual([]);
-            expect(reconstruct(body, segments)).toBe(body);
+            expect(joinSegments(body, segments)).toBe(body);
             const foldedChars = segments.filter((s) => s.folded).reduce((n, s) => n + s.end - s.start, 0);
             const file = message.source.fileName;
             all.set(file, { file, body, folds, foldedChars });
         }
         const get = (file: string): Measured =>
         {
-            const m = all.get(file);
-            if (m === undefined)
+            const measured = all.get(file);
+            if (measured === undefined)
             {
                 throw new Error(`no result for ${file}`);
             }
-            return m;
+            return measured;
         };
 
         // Measurement (the README asks to measure detection, not assume it).
@@ -75,14 +75,14 @@ describe('reply-header detection over the parsed fixtures', () =>
         // Every message: its first non-empty line (the start of its own new
         // text in every fixture) stays shown.
         expect(all.size).toBe(messages.length);
-        for (const m of all.values())
+        for (const measured of all.values())
         {
-            const firstLine = m.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
+            const firstLine = measured.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
             if (firstLine === undefined)
             {
                 continue; // no text at all: nothing to fold
             }
-            expect(state(m, firstLine), `${m.file}: first line`).toBe('shown');
+            expect(state(measured, firstLine), `${measured.file}: first line`).toBe('shown');
         }
 
         // Outlook replies: the whole header block and everything after it folded.
@@ -95,10 +95,10 @@ describe('reply-header detection over the parsed fixtures', () =>
         ];
         for (const [file, fresh, firstLabel] of outlook)
         {
-            const m = get(file);
-            expect(state(m, fresh), `${file}: new text`).toBe('shown');
-            const rule = m.body.lastIndexOf('____', m.body.indexOf(firstLabel));
-            expect(state(m, m.body.slice(rule)), `${file}: header block to the end`).toBe('folded');
+            const measured = get(file);
+            expect(state(measured, fresh), `${file}: new text`).toBe('shown');
+            const rule = measured.body.lastIndexOf('____', measured.body.indexOf(firstLabel));
+            expect(state(measured, measured.body.slice(rule)), `${file}: header block to the end`).toBe('folded');
         }
 
         // msg-04: the whole Dutch block, line by line.
@@ -116,9 +116,9 @@ describe('reply-header detection over the parsed fixtures', () =>
         ];
         for (const [file, fresh, attribution] of attributions)
         {
-            const m = get(file);
-            expect(state(m, fresh), `${file}: new text`).toBe('shown');
-            expect(state(m, attribution), `${file}: attribution`).toBe('folded');
+            const measured = get(file);
+            expect(state(measured, fresh), `${file}: new text`).toBe('shown');
+            expect(state(measured, attribution), `${file}: attribution`).toBe('folded');
         }
     });
 });

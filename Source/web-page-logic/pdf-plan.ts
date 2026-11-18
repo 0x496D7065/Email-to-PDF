@@ -51,8 +51,8 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
-import { FOLD_REASONS } from '../thread-analysis/segments';
-import { senderKeyOf, signatureBlockKey } from '../thread-analysis/signature';
+import { FOLD_REASONS } from '../thread-analysis/fold-segments';
+import { senderKeyOf, signatureBlockKey } from '../thread-analysis/signature-detection';
 import { displayBlocks } from './display-blocks';
 import type { MessagePlan, PlanRange } from '../../Header/output-plan';
 import type { PrintedAs } from '../../Header/pdf-document-model';

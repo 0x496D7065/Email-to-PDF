@@ -1,7 +1,7 @@
 // Unit tests for the strings system: every string is usable, placeholders
 // are consistent, and t() fills them in as text.
 import { describe, expect, it } from 'vitest';
-import { FOLD_REASONS } from '../../thread-analysis/segments';
+import { FOLD_REASONS } from '../../thread-analysis/fold-segments';
 import { en } from './en';
 import { fr } from './fr';
 import { nl } from './nl';

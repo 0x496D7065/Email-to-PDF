@@ -7,7 +7,7 @@
 // rule R7: synthetic data only).
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { attachedCount, attachedLinks } from './attached-links';

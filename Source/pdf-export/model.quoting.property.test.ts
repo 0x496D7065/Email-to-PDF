@@ -15,7 +15,7 @@
 // Random ticks and random rebuilt emails chosen. Checked:
 // - every ticked email's own sentence is printed at least once in the PDF
 //   (the PRINTED SOMEWHERE check, Source/pdf-export/model.ts, and the engine's
-//   withHeldReferences, Source/thread-analysis/overlap.ts); how often one is printed
+//   withHeldReferences, Source/thread-analysis/overlap-quote-detection.ts); how often one is printed
 //   twice is counted and reported (allowed: restoring may print twice);
 // - an unticked email's sentence is printed nowhere when no ticked email's
 //   own text quotes it (Q3: an unticked attached email is left out of the
@@ -27,8 +27,8 @@ import { describe, expect, it } from 'vitest';
 import { groupAsAttached } from '../../Helper/Test/test-support/attached-builder';
 import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { quotingCase, quotingSentence, type QuotingCase } from '../../Helper/Test/test-support/quoting-builder';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
-import { detectQuotedOverlap } from '../thread-analysis/overlap';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, noRepeat } from './model';

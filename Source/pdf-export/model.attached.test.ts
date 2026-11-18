@@ -11,8 +11,8 @@
 import { describe, expect, it } from 'vitest';
 import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
-import { detectQuotedOverlap } from '../thread-analysis/overlap';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
@@ -266,7 +266,7 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
     const WED = 'Wed, 4 Jun 2025 10:00:00 +0200';
     const withHeader = `${FINE}\r\n\r\nOn Mon, 2 Jun 2025 at 10:00, Ann Old <ann@example.test> wrote:\r\n> ${OLD}\r\n`;
     // A reply header with neither a readable date nor a sender mailbox: the quote cannot be rebuilt
-    // (reconstruct.ts, R1), but Ben's plan still leaves it out as quoted history.
+    // (reconstruct-quoted-messages.ts, R1), but Ben's plan still leaves it out as quoted history.
     const marksOnly = `${FINE}\r\n\r\nOn a quiet afternoon last spring, the old office team wrote:\r\n> ${OLD}\r\n`;
     const build = async (benBody: string): Promise<EngineResult> => runEngine([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(simple('ben', TUE, benBody))))]);
 

@@ -16,8 +16,8 @@ describe('mapOffsets', () =>
     {
         const from = 'Hello team,\n\nThe oak desks.\nKind regards\n';
         const to = 'Hello team,\r\n\r\nThe oak desks.\r\nKind regards\r\n';
-        const at = from.indexOf('oak');
-        const [start, mid, end, last] = mapOffsets(from, to, [from.indexOf('The'), at, from.indexOf('\nKind'), from.length]) as [number, number, number, number];
+        const offset = from.indexOf('oak');
+        const [start, mid, end, last] = mapOffsets(from, to, [from.indexOf('The'), offset, from.indexOf('\nKind'), from.length]) as [number, number, number, number];
         expect(to.slice(start, start + 3)).toBe('The');
         expect(to.slice(mid, mid + 3)).toBe('oak');
         expect(to.slice(end, end + 2)).toBe('\r\n');
@@ -95,9 +95,9 @@ describe('mapOffsets', () =>
             const mapped = mapOffsets(from, to, starts);
             expect(mapped).not.toBeNull();
             // Each line with text keeps its text after the mapped offset.
-            starts.forEach((s, k) =>
+            starts.forEach((start, k) =>
             {
-                const text = from.slice(s).split(/\r\n|\r|\n/u)[0]!.replace(/[ \t]+$/u, '');
+                const text = from.slice(start).split(/\r\n|\r|\n/u)[0]!.replace(/[ \t]+$/u, '');
                 if (text === '')
                 {
                     return;

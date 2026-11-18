@@ -34,7 +34,7 @@
 // Pure functions, no DOM (README.md, rule R7). Never throws for a broken
 // entry: an entry that is not usable is skipped.
 
-import { attachedAt } from '../thread-analysis/engine';
+import { attachedAt } from '../thread-analysis/analyze-thread';
 import type { AttachedLinks, UnreadAttachedCode } from '../../Header/preview-display';
 import type { EngineAttached, EngineAttachedPlace, EngineResult } from '../../Header/thread-analysis-result';
 

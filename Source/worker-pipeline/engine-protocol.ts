@@ -8,12 +8,12 @@
 // side and engine-worker.ts for why the engine runs in a worker.
 //
 // Messages are copied by the browser (structured clone): plain data only.
-// The engine's result is plain data on purpose (see Source/thread-analysis/engine.ts),
+// The engine's result is plain data on purpose (see Source/thread-analysis/analyze-thread.ts),
 // including the messages rebuilt from quoted text and the timeline (task
 // 7.5: `reconstructed`, `timeline`, `reconstructionWarnings`).
 // Nothing is stored anywhere (README.md, rule R5).
 
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import type { FromEngineWorker, ToEngineWorker } from '../../Header/engine-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';

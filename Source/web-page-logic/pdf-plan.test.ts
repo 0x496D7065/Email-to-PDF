@@ -7,9 +7,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { buildSegments, type FoldRange } from '../thread-analysis/segments';
+import { buildSegments, type FoldRange } from '../thread-analysis/fold-segments';
 import { displayBlocks } from './display-blocks';
 import { labelOf, mergeSamePrintedAs, pdfBlocks, pdfBreaks, printedAsEmailOfItsOwn, signatureSources, viewKey } from './pdf-plan';
 import type { MessagePlan, PlanRange } from '../../Header/output-plan';

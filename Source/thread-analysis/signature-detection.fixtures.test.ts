@@ -4,7 +4,7 @@
 // expectations (README.md, rule R7).
 //
 // ownTextEnd: the start of the first quote-marker or reply-header fold. The
-// overlap folds are left out on purpose: overlap.ts also folds the sender's
+// overlap folds are left out on purpose: overlap-quote-detection.ts also folds the sender's
 // own repeated signature (as 'quoted-overlap'), so its first fold may start
 // AT the signature, which would hide the signature from this detector. The
 // pipeline will make that choice properly; this test uses the simple rule.
@@ -14,8 +14,8 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { dedupe } from './dedupe';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
-import { detectSignatures, senderKeyOf } from './signature';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
+import { detectSignatures, senderKeyOf } from './signature-detection';
 
 interface Measured
 {
@@ -27,16 +27,16 @@ interface Measured
 }
 
 /** True when every character of `snippet` (first occurrence) is folded / shown. */
-function state(m: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
+function state(measured: Measured, snippet: string): 'folded' | 'shown' | 'mixed'
 {
-    const at = m.body.indexOf(snippet);
-    if (at < 0)
+    const offset = measured.body.indexOf(snippet);
+    if (offset < 0)
     {
-        throw new Error(`${m.file}: snippet not found: ${snippet}`);
+        throw new Error(`${measured.file}: snippet not found: ${snippet}`);
     }
-    const covered = (i: number): boolean => m.folds.some((f) => f.start <= i && i < f.end);
+    const covered = (i: number): boolean => measured.folds.some((f) => f.start <= i && i < f.end);
     let foldedCount = 0;
-    for (let i = at; i < at + snippet.length; i++)
+    for (let i = offset; i < offset + snippet.length; i++)
     {
         if (covered(i))
         {
@@ -69,10 +69,10 @@ describe('signature detection over the parsed fixtures', () =>
             const folds = results[i] ?? [];
             const segments = buildSegments(body, folds);
             expect(checkSegments(body, segments)).toEqual([]);
-            expect(reconstruct(body, segments)).toBe(body);
-            for (const f of folds)
+            expect(joinSegments(body, segments)).toBe(body);
+            for (const fold of folds)
             {
-                expect(f.reason).toBe('signature');
+                expect(fold.reason).toBe('signature');
             }
             const foldedChars = segments.filter((s) => s.folded).reduce((n, s) => n + s.end - s.start, 0);
             const file = message.source.fileName;
@@ -80,12 +80,12 @@ describe('signature detection over the parsed fixtures', () =>
         });
         const get = (file: string): Measured =>
         {
-            const m = all.get(file);
-            if (m === undefined)
+            const measured = all.get(file);
+            if (measured === undefined)
             {
                 throw new Error(`no result for ${file}`);
             }
-            return m;
+            return measured;
         };
 
         // Measurement (the README asks to measure detection, not assume it).
@@ -99,19 +99,19 @@ describe('signature detection over the parsed fixtures', () =>
         const bob = [...all.values()].filter((m) => m.sender === 'bob@furniture.example.test');
         expect(bob.length).toBeGreaterThanOrEqual(3);
         let bobFolded = 0;
-        for (const m of bob)
+        for (const measured of bob)
         {
-            const at = m.body.indexOf('Met vriendelijke groeten,');
-            const ownEnd = inputs[messages.findIndex((x) => x.source.fileName === m.file)]?.ownTextEnd ?? 0;
-            if (at < 0 || at > ownEnd)
+            const offset = measured.body.indexOf('Met vriendelijke groeten,');
+            const ownEnd = inputs[messages.findIndex((x) => x.source.fileName === measured.file)]?.ownTextEnd ?? 0;
+            if (offset < 0 || offset > ownEnd)
             {
                 continue;
             }
-            expect(state(m, 'Met vriendelijke groeten,\nBob Sample'), m.file).toBe('folded');
+            expect(state(measured, 'Met vriendelijke groeten,\nBob Sample'), measured.file).toBe('folded');
             const disclaimer = 'DISCLAIMER: This e-mail and any attachments are confidential';
-            if (m.body.includes(disclaimer))
+            if (measured.body.includes(disclaimer))
             {
-                expect(state(m, disclaimer), m.file).toBe('folded');
+                expect(state(measured, disclaimer), measured.file).toBe('folded');
             }
             bobFolded++;
         }
@@ -125,14 +125,14 @@ describe('signature detection over the parsed fixtures', () =>
         expect(state(get('eml/10-order-1-alice.eml'), 'Alice Example\nSent from my laptop')).toBe('folded');
 
         // Every message: its first non-empty line stays shown.
-        for (const m of all.values())
+        for (const measured of all.values())
         {
-            const firstLine = m.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
+            const firstLine = measured.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
             if (firstLine === undefined)
             {
                 continue;
             }
-            expect(state(m, firstLine), `${m.file}: first line`).toBe('shown');
+            expect(state(measured, firstLine), `${measured.file}: first line`).toBe('shown');
         }
     });
 });

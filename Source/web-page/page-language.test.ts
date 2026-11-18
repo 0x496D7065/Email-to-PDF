@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../Helper/Test/test-support/fake-dom';
 import { testLanguageName, TEST_LOCALE } from '../../Helper/Test/test-support/test-locale';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import type { ListenerTarget } from './add-files';
 import { en } from './translations/en';
 import { getLocale, isPluralForms, setLocale, SUPPORTED_LOCALES, t } from './translations';

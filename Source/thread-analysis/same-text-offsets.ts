@@ -22,12 +22,12 @@ interface Line
 function linesOf(text: string): Line[]
 {
     const out: Line[] = [];
-    const re = /\r\n|\r|\n/gu;
+    const lineBreak = /\r\n|\r|\n/gu;
     let start = 0;
-    for (let m = re.exec(text); m !== null; m = re.exec(text))
+    for (let match = lineBreak.exec(text); match !== null; match = lineBreak.exec(text))
     {
-        out.push({ start, contentEnd: m.index, next: m.index + m[0].length });
-        start = m.index + m[0].length;
+        out.push({ start, contentEnd: match.index, next: match.index + match[0].length });
+        start = match.index + match[0].length;
     }
     out.push({ start, contentEnd: text.length, next: text.length });
     return out;
@@ -39,28 +39,28 @@ const lineKey = (text: string, l: Line): string => text.slice(l.start, l.content
 /** The first and one past the last line that is not blank (as normalizeBody sees them); [n, n) when every line is blank. */
 function contentLines(text: string, lines: readonly Line[]): [number, number]
 {
-    let a = 0;
-    let b = lines.length;
-    while (a < b && lineKey(text, lines[a]!) === '')
+    let first = 0;
+    let end = lines.length;
+    while (first < end && lineKey(text, lines[first]!) === '')
     {
-        a++;
+        first++;
     }
-    while (b > a && lineKey(text, lines[b - 1]!) === '')
+    while (end > first && lineKey(text, lines[end - 1]!) === '')
     {
-        b--;
+        end--;
     }
-    return a === b ? [lines.length, lines.length] : [a, b];
+    return first === end ? [lines.length, lines.length] : [first, end];
 }
 
-/** The line holding offset `at` (its start <= at, and at < its next line's start, or the last line). */
-function lineAt(lines: readonly Line[], at: number): number
+/** The line holding `offset` (its start <= offset, and offset < its next line's start, or the last line). */
+function lineAt(lines: readonly Line[], offset: number): number
 {
     let lo = 0;
     let hi = lines.length - 1;
     while (lo < hi)
     {
         const mid = (lo + hi + 1) >> 1;
-        if (lines[mid]!.start <= at)
+        if (lines[mid]!.start <= offset)
         {
             lo = mid;
         }
@@ -97,62 +97,62 @@ export function mapOffsets(from: string, to: string, offsets: readonly number[])
     {
         return [...offsets];
     }
-    const a = linesOf(from);
-    const b = linesOf(to);
-    const [a0, a1] = contentLines(from, a);
-    const [b0, b1] = contentLines(to, b);
-    if (a1 - a0 !== b1 - b0)
+    const fromLines = linesOf(from);
+    const toLines = linesOf(to);
+    const [fromFirst, fromEnd] = contentLines(from, fromLines);
+    const [toFirst, toEnd] = contentLines(to, toLines);
+    if (fromEnd - fromFirst !== toEnd - toFirst)
     {
         return null;
     }
-    for (let k = 0; a0 + k < a1; k++)
+    for (let k = 0; fromFirst + k < fromEnd; k++)
     {
-        if (lineKey(from, a[a0 + k]!) !== lineKey(to, b[b0 + k]!))
+        if (lineKey(from, fromLines[fromFirst + k]!) !== lineKey(to, toLines[toFirst + k]!))
         {
             return null;
         }
     }
     const out: number[] = [];
-    for (const o of offsets)
+    for (const offset of offsets)
     {
-        if (o === from.length)
+        if (offset === from.length)
         {
             out.push(to.length);
             continue;
         }
-        const i = lineAt(a, o);
-        if (a0 === a.length)
+        const i = lineAt(fromLines, offset);
+        if (fromFirst === fromLines.length)
         {
             // No text at all: only blank lines on both sides.
-            out.push(o === 0 ? 0 : to.length);
+            out.push(offset === 0 ? 0 : to.length);
             continue;
         }
-        if (i < a0)
+        if (i < fromFirst)
         {
-            out.push(b[b0]!.start);
+            out.push(toLines[toFirst]!.start);
             continue;
         }
-        if (i >= a1)
+        if (i >= fromEnd)
         {
-            out.push(b[b1 - 1]!.contentEnd);
+            out.push(toLines[toEnd - 1]!.contentEnd);
             continue;
         }
-        const la = a[i]!;
-        const lb = b[b0 + (i - a0)]!;
-        const column = o - la.start;
-        const fromLine = from.slice(la.start, la.contentEnd);
-        const toLine = to.slice(lb.start, lb.contentEnd);
+        const fromRange = fromLines[i]!;
+        const toRange = toLines[toFirst + (i - fromFirst)]!;
+        const column = offset - fromRange.start;
+        const fromLine = from.slice(fromRange.start, fromRange.contentEnd);
+        const toLine = to.slice(toRange.start, toRange.contentEnd);
         if (column === 0)
         {
-            out.push(lb.start);
+            out.push(toRange.start);
         }
-        else if (o >= la.contentEnd)
+        else if (offset >= fromRange.contentEnd)
         {
-            out.push(lb.contentEnd);
+            out.push(toRange.contentEnd);
         }
         else if (fromLine.slice(0, column) === toLine.slice(0, column))
         {
-            out.push(lb.start + column);
+            out.push(toRange.start + column);
         }
         else
         {

@@ -16,12 +16,12 @@
 // - the no-repeat rule alone (Source/pdf-export/model.ts, blockClaims: only what an
 //   attached email's page prints is left out of the email holding it,
 //   review round 4), with an overlap detector that ignores the holder links
-//   (`holds`, Source/thread-analysis/overlap.ts): still at least once.
+//   (`holds`, Source/thread-analysis/overlap-quote-detection.ts): still at least once.
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
-import { detectQuotedOverlap } from '../thread-analysis/overlap';
+import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';

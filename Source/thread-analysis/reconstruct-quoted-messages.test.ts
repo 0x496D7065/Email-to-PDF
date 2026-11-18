@@ -1,11 +1,11 @@
-// Tests for reconstruct.ts (milestone 7, task 7.4). Synthetic data only
+// Tests for reconstruct-quoted-messages.ts (milestone 7, task 7.4). Synthetic data only
 // (README.md, rule R7): example.test / sample.invalid addresses, invented
 // people. Non-ASCII letters are written as \u escapes.
 
 import { describe, expect, it } from 'vitest';
 import { NEGATIVE_CASES, THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct';
+import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct-quoted-messages';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
 
 const rebuild = (body: string, subject = 'Re: Office desks', sourceOffsetMinutes: number | null = 0): ReconstructedMessage[] =>
@@ -49,35 +49,35 @@ function onlyMarksRemoved(big: string, small: string): boolean
 function checkProperties(body: string, got: readonly ReconstructedMessage[]): string[]
 {
     const problems: string[] = [];
-    got.forEach((m, i) =>
+    got.forEach((message, i) =>
     {
-        if (!(m.start < m.headerEnd && m.headerEnd <= m.end && m.end <= body.length))
+        if (!(message.start < message.headerEnd && message.headerEnd <= message.end && message.end <= body.length))
         {
-            problems.push(`#${i}: offsets ${m.start} ${m.headerEnd} ${m.end}`);
+            problems.push(`#${i}: offsets ${message.start} ${message.headerEnd} ${message.end}`);
         }
         const next = got[i + 1];
-        if (next !== undefined && next.start !== m.end)
+        if (next !== undefined && next.start !== message.end)
         {
-            problems.push(`#${i}: ends at ${m.end}, next starts at ${next.start}`);
+            problems.push(`#${i}: ends at ${message.end}, next starts at ${next.start}`);
         }
-        if (m.generation !== i + 1)
+        if (message.generation !== i + 1)
         {
-            problems.push(`#${i}: generation ${m.generation}`);
+            problems.push(`#${i}: generation ${message.generation}`);
         }
-        const slice = body.slice(m.headerEnd, m.end);
-        if (m.reconstructedText !== oracle(slice, m.depth))
+        const slice = body.slice(message.headerEnd, message.end);
+        if (message.reconstructedText !== oracle(slice, message.depth))
         {
-            problems.push(`#${i}: text is not the slice with ${m.depth} marks removed`);
+            problems.push(`#${i}: text is not the slice with ${message.depth} marks removed`);
         }
-        if (!onlyMarksRemoved(slice, m.reconstructedText))
+        if (!onlyMarksRemoved(slice, message.reconstructedText))
         {
             problems.push(`#${i}: more than marks removed`);
         }
-        if (m.reconstructedText.split('\n').length !== slice.split('\n').length)
+        if (message.reconstructedText.split('\n').length !== slice.split('\n').length)
         {
             problems.push(`#${i}: line count changed`);
         }
-        if (m.quoteMarksRemoved !== m.depth > 0)
+        if (message.quoteMarksRemoved !== message.depth > 0)
         {
             problems.push(`#${i}: quoteMarksRemoved`);
         }
@@ -90,32 +90,32 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
     it('rebuilds every earlier message, in order, with the right offsets, generation, depth and kind', () =>
     {
         const problems: string[] = [];
-        for (const c of THREAD_CASES)
+        for (const testCase of THREAD_CASES)
         {
-            const got = rebuild(c.thread.body, c.thread.subject);
-            if (got.length !== c.thread.headers.length)
+            const got = rebuild(testCase.thread.body, testCase.thread.subject);
+            if (got.length !== testCase.thread.headers.length)
             {
-                problems.push(`${c.id}: ${got.length} rebuilt, ${c.thread.headers.length} expected`);
+                problems.push(`${testCase.id}: ${got.length} rebuilt, ${testCase.thread.headers.length} expected`);
                 continue;
             }
-            c.thread.headers.forEach((h, i) =>
+            testCase.thread.headers.forEach((header, i) =>
             {
-                const m = got[i];
-                if (m === undefined)
+                const message = got[i];
+                if (message === undefined)
                 {
                     return;
                 }
-                const want = { start: h.start, generation: h.generation, depth: h.textDepth };
-                const have = { start: m.start, generation: m.generation, depth: m.depth };
+                const want = { start: header.start, generation: header.generation, depth: header.textDepth };
+                const have = { start: message.start, generation: message.generation, depth: message.depth };
                 if (JSON.stringify(want) !== JSON.stringify(have))
                 {
-                    problems.push(`${c.id} #${i}: ${JSON.stringify(have)}, want ${JSON.stringify(want)}`);
+                    problems.push(`${testCase.id} #${i}: ${JSON.stringify(have)}, want ${JSON.stringify(want)}`);
                 }
             });
             const last = got[got.length - 1];
-            if (last !== undefined && last.end !== c.thread.body.length)
+            if (last !== undefined && last.end !== testCase.thread.body.length)
             {
-                problems.push(`${c.id}: last ends at ${last.end}`);
+                problems.push(`${testCase.id}: last ends at ${last.end}`);
             }
         }
         expect(problems).toEqual([]);
@@ -124,14 +124,14 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
     it('rebuilt text is the message as written (trimmed), except the two headers read short (names-only wrapped list)', () =>
     {
         const misses: string[] = [];
-        for (const c of THREAD_CASES)
+        for (const testCase of THREAD_CASES)
         {
-            const got = rebuild(c.thread.body, c.thread.subject);
-            c.thread.headers.forEach((h, i) =>
+            const got = rebuild(testCase.thread.body, testCase.thread.subject);
+            testCase.thread.headers.forEach((header, i) =>
             {
-                if (got[i]?.reconstructedText.trim() !== h.ownText)
+                if (got[i]?.reconstructedText.trim() !== header.ownText)
                 {
-                    misses.push(`${c.id} #${i}`);
+                    misses.push(`${testCase.id} #${i}`);
                 }
             });
         }
@@ -140,76 +140,77 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
 
     it('keeps every character: the properties hold for every case (collapse, never delete)', () =>
     {
-        for (const c of THREAD_CASES)
+        for (const testCase of THREAD_CASES)
         {
-            expect(checkProperties(c.thread.body, rebuild(c.thread.body, c.thread.subject)), c.id).toEqual([]);
+            expect(checkProperties(testCase.thread.body, rebuild(testCase.thread.body, testCase.thread.subject)), testCase.id).toEqual([]);
         }
     });
 
     it('keeps the raw header text in the source: [start, headerEnd) is the header as written', () =>
     {
-        for (const c of THREAD_CASES)
+        for (const testCase of THREAD_CASES)
         {
-            const got = rebuild(c.thread.body, c.thread.subject);
-            c.thread.headers.forEach((h, i) =>
+            const got = rebuild(testCase.thread.body, testCase.thread.subject);
+            testCase.thread.headers.forEach((header, i) =>
             {
-                const m = got[i];
-                if (m === undefined || c.id === 'outlook-nl wrapped names only')
+                const message = got[i];
+                if (message === undefined || testCase.id === 'outlook-nl wrapped names only')
                 {
                     return;
                 }
-                expect(c.thread.body.slice(m.start, m.headerEnd), `${c.id} #${i}`).toBe(c.thread.body.slice(h.start, h.headEnd));
+                expect(testCase.thread.body.slice(message.start, message.headerEnd), `${testCase.id} #${i}`)
+                    .toBe(testCase.thread.body.slice(header.start, header.headEnd));
             });
         }
     });
 
     it('dates: read in the source zone, approximate; with the source zone the first one is exact in time', () =>
     {
-        for (const c of THREAD_CASES)
+        for (const testCase of THREAD_CASES)
         {
-            const first = c.thread.headers[0];
+            const first = testCase.thread.headers[0];
             if (first === undefined)
             {
                 continue;
             }
             // The source is the quoting message: its zone is the zone gen 1 is shown in.
-            const got = rebuild(c.thread.body, c.thread.subject, first.shownIn.offsetMinutes)[0];
+            const got = rebuild(testCase.thread.body, testCase.thread.subject, first.shownIn.offsetMinutes)[0];
             // Thunderbird's numeric dates such as 03/04/2025 (3 April or 4 March?) are unreadable on purpose (quoted-date.ts).
             if (first.style === 'thunderbird-en' && got?.date?.wallMs === null)
             {
-                expect(got.dateApproximate, c.id).toBe(true);
+                expect(got.dateApproximate, testCase.id).toBe(true);
                 continue;
             }
-            expect(got?.date?.estimatedUtcMs ?? null, c.id).toBe(Date.parse(first.instantUtc));
+            expect(got?.date?.estimatedUtcMs ?? null, testCase.id).toBe(Date.parse(first.instantUtc));
             const written = got?.date?.basis === 'written-zone' || got?.date?.basis === 'rfc-zone';
-            expect(got?.dateApproximate, c.id).toBe(!written);
+            expect(got?.dateApproximate, testCase.id).toBe(!written);
         }
     });
 
     it('a date with a written zone (Apple forward "GMT+5:30") is exact; no source offset gives basis "none"', () =>
     {
-        const c = THREAD_CASES.find((t) => t.id === 'apple forward of a gmail thread');
-        if (c === undefined)
+        const testCase = THREAD_CASES.find((t) => t.id === 'apple forward of a gmail thread');
+        if (testCase === undefined)
         {
             throw new Error('case missing');
         }
-        const got = rebuild(c.thread.body, c.thread.subject, null);
+        const got = rebuild(testCase.thread.body, testCase.thread.subject, null);
         expect(got[0]?.kind).toBe('forward');
         expect(got[0]?.date?.basis).toBe('written-zone');
         expect(got[0]?.dateApproximate).toBe(false);
-        expect(got[0]?.date?.estimatedUtcMs).toBe(Date.parse(c.thread.headers[0]?.instantUtc ?? ''));
+        expect(got[0]?.date?.estimatedUtcMs).toBe(Date.parse(testCase.thread.headers[0]?.instantUtc ?? ''));
         expect(got[1]?.date?.basis).toBe('none');
         expect(got[1]?.dateApproximate).toBe(true);
     });
 
     it('rebuilds inside forwarded text (user decision Q3)', () =>
     {
-        const c = THREAD_CASES.find((t) => t.id === 'forward in the middle');
-        if (c === undefined)
+        const testCase = THREAD_CASES.find((t) => t.id === 'forward in the middle');
+        if (testCase === undefined)
         {
             throw new Error('case missing');
         }
-        expect(rebuild(c.thread.body, c.thread.subject).map((m) => [m.generation, m.kind, m.depth])).toEqual([
+        expect(rebuild(testCase.thread.body, testCase.thread.subject).map((m) => [m.generation, m.kind, m.depth])).toEqual([
             [1, 'reply', 1],
             [2, 'forward', 1],
             [3, 'reply', 2],
@@ -219,9 +220,9 @@ describe('reconstructQuotedMessages: the generated threads (ground truth)', () =
 
 describe('reconstructQuotedMessages: negatives (no rebuilt message)', () =>
 {
-    it.each(NEGATIVE_CASES.map((n) => [n.id, n] as const))('%s', (_id, n) =>
+    it.each(NEGATIVE_CASES.map((n) => [n.id, n] as const))('%s', (_id, negativeCase) =>
     {
-        expect(rebuild(n.body, n.subject)).toEqual([]);
+        expect(rebuild(negativeCase.body, negativeCase.subject)).toEqual([]);
     });
 });
 
@@ -382,10 +383,10 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
     {
         const pieces = ['From: ', 'Sent: ', 'To: ', 'Subject: ', 'De : ', 'Van: ', 'On ', 'Le ', ' wrote:', ' a \u00e9crit :', ' schreef ', '<a@x.example.test>', 'Bob Sample', ',', ';', 'Mon, 3 Mar 2025 at 14:02', 'Monday, March 3, 2025 9:15 AM', '2025', 'x', ' ', '\n', '\n', '\r\n', '> ', '>', '>> ', '> > ', '_'.repeat(32), '-----Original Message-----', FORWARDED_SEPARATOR, '\u00a0'];
         let seed = 11;
-        const rand = (n: number): number =>
+        const rand = (limit: number): number =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
-            return seed % n;
+            return seed % limit;
         };
         for (let round = 0; round < 600; round++)
         {
@@ -403,28 +404,28 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
     {
         const inserts = ['', '>', 'Inline answer.', '> inserted quote', '>> deeper', '> > apple deeper', '-----Original Message-----', 'From: x', `> ${GMAIL}`, GMAIL, '\r', '  > spaced'];
         let seed = 5;
-        const rand = (n: number): number =>
+        const rand = (limit: number): number =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
-            return seed % n;
+            return seed % limit;
         };
         let rebuilt = 0;
         for (let round = 0; round < 400; round++)
         {
-            const c = THREAD_CASES[rand(THREAD_CASES.length)];
-            if (c === undefined)
+            const testCase = THREAD_CASES[rand(THREAD_CASES.length)];
+            if (testCase === undefined)
             {
                 continue;
             }
-            const bodyLines = c.thread.body.split('\n');
-            const at = rand(bodyLines.length);
-            bodyLines.splice(at, 0, inserts[rand(inserts.length)] ?? '');
+            const bodyLines = testCase.thread.body.split('\n');
+            const lineIndex = rand(bodyLines.length);
+            bodyLines.splice(lineIndex, 0, inserts[rand(inserts.length)] ?? '');
             const body = bodyLines.join('\n');
-            const got = rebuild(body, c.thread.subject);
+            const got = rebuild(body, testCase.thread.subject);
             rebuilt += got.length;
-            expect(checkProperties(body, got), `${c.id} + line ${at}`).toEqual([]);
+            expect(checkProperties(body, got), `${testCase.id} + line ${lineIndex}`).toEqual([]);
             // An inserted GMAIL line may be a real-looking extra header; the others never add messages.
-            expect(got.length, `${c.id} + line ${at}`).toBeLessThanOrEqual(c.thread.headers.length + 1);
+            expect(got.length, `${testCase.id} + line ${lineIndex}`).toBeLessThanOrEqual(testCase.thread.headers.length + 1);
         }
         expect(rebuilt).toBeGreaterThan(0); // the properties were checked on real results, not only on []
     });
@@ -438,7 +439,7 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
     it('thousands of ">" levels: fast, nothing rebuilt beyond MAX_QUOTE_DEPTH', () =>
     {
         const deep = `${'>'.repeat(200_000)} ${GMAIL}\n${'>'.repeat(200_001)} old\n`;
-        const t = performance.now();
+        const startTime = performance.now();
         expect(rebuild(deep)).toEqual([]);
         // A Gmail chain 150 levels deep: the chain stops past MAX_QUOTE_DEPTH (the last holder dropped too).
         const parts: string[] = ['Thanks.', ''];
@@ -451,16 +452,16 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
         expect(got.length).toBe(MAX_QUOTE_DEPTH - 1);
         expect(Math.max(...got.map((m) => m.depth))).toBeLessThanOrEqual(MAX_QUOTE_DEPTH);
         expect(checkProperties(chain, got)).toEqual([]);
-        expect(performance.now() - t).toBeLessThan(2000);
+        expect(performance.now() - startTime).toBeLessThan(2000);
     });
 
     it('thousands of header-like lines: fast and nothing rebuilt', () =>
     {
         for (const body of ['From: a\n'.repeat(100_000), `${GMAIL}\n> x\n`.repeat(5_000), 'From: a <a@x.example.test>\nSent: 2025\nTo: b\n'.repeat(30_000)])
         {
-            const t = performance.now();
+            const startTime = performance.now();
             expect(rebuild(body)).toEqual([]);
-            expect(performance.now() - t).toBeLessThan(2000);
+            expect(performance.now() - startTime).toBeLessThan(2000);
         }
     });
 
@@ -468,9 +469,9 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
     {
         const block = lines(...OUTLOOK(), '', 'Old text.', '');
         const body = `Thanks.\n\n${block.repeat(MAX_RECONSTRUCTED + 20)}`;
-        const t = performance.now();
+        const startTime = performance.now();
         const got = rebuild(body);
-        expect(performance.now() - t).toBeLessThan(3000);
+        expect(performance.now() - startTime).toBeLessThan(3000);
         expect(got.length).toBe(MAX_RECONSTRUCTED);
         expect(got[got.length - 1]?.end).toBe('Thanks.\n\n'.length + MAX_RECONSTRUCTED * block.length);
         expect(checkProperties(body, got)).toEqual([]);
@@ -480,9 +481,9 @@ describe('reconstructQuotedMessages: odd and hostile input', () =>
     {
         const quoted = Array.from({ length: 200_000 }, (_, i) => `> line ${i} of the old message\n`).join('');
         const body = `Thanks.\n\n${GMAIL}\n${quoted}`;
-        const t = performance.now();
+        const startTime = performance.now();
         const got = rebuild(body);
-        expect(performance.now() - t).toBeLessThan(3000);
+        expect(performance.now() - startTime).toBeLessThan(3000);
         expect(got.length).toBe(1);
         expect(checkProperties(body, got)).toEqual([]);
     });

@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/engine';
+import { runEngine } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/model';

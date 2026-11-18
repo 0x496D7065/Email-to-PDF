@@ -10,8 +10,8 @@ import {
     detectQuotedOverlap,
     tokenizeWords,
     type OverlapInput,
-} from './overlap';
-import { buildSegments, checkSegments, reconstruct, type FoldRange } from './segments';
+} from './overlap-quote-detection';
+import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
 
 interface Spec
 {
@@ -26,13 +26,13 @@ interface Spec
 /** Builds inputs in chronological order; `index` is 10 * (position + 1) so it differs from the position. */
 function inputs(specs: readonly Spec[]): OverlapInput[]
 {
-    return specs.map((s, k) => ({
-        bodyText: s.body,
-        messageId: s.id ?? null,
-        inReplyTo: s.inReplyTo ?? null,
-        references: s.references ?? [],
+    return specs.map((spec, k) => ({
+        bodyText: spec.body,
+        messageId: spec.id ?? null,
+        inReplyTo: spec.inReplyTo ?? null,
+        references: spec.references ?? [],
         index: 10 * (k + 1),
-        ...(s.holds === undefined ? {} : { holds: s.holds as readonly number[] }),
+        ...(spec.holds === undefined ? {} : { holds: spec.holds as readonly number[] }),
     }));
 }
 
@@ -47,11 +47,11 @@ function detect(specs: readonly Spec[]): FoldRange[][]
         const body = messages[k]?.bodyText ?? '';
         const segments = buildSegments(body, folds);
         expect(checkSegments(body, segments)).toEqual([]);
-        expect(reconstruct(body, segments)).toBe(body);
-        for (const f of folds)
+        expect(joinSegments(body, segments)).toBe(body);
+        for (const fold of folds)
         {
-            expect(f.reason).toBe('quoted-overlap');
-            expect(f.start).toBeLessThan(f.end);
+            expect(fold.reason).toBe('quoted-overlap');
+            expect(fold.start).toBeLessThan(fold.end);
         }
     });
     return result;
@@ -78,10 +78,10 @@ function folded(body: string, folds: readonly FoldRange[]): string
 /** Whether every character of `snippet` (first occurrence) is folded, none is, or some are. */
 function state(body: string, folds: readonly FoldRange[], snippet: string): 'folded' | 'shown' | 'mixed'
 {
-    const at = body.indexOf(snippet);
-    expect(at, snippet).toBeGreaterThanOrEqual(0);
+    const offset = body.indexOf(snippet);
+    expect(offset, snippet).toBeGreaterThanOrEqual(0);
     let count = 0;
-    for (let i = at; i < at + snippet.length; i++)
+    for (let i = offset; i < offset + snippet.length; i++)
     {
         if (folds.some((f) => f.start <= i && i < f.end))
         {
@@ -131,9 +131,9 @@ describe('tokenizeWords', () =>
         const text = '> Hello, Bob!\n> Room 2 at 10:00.';
         const words = tokenizeWords(text);
         expect(words.map((w) => w.key)).toEqual(['hello', 'bob', 'room', '2', 'at', '10', '00']);
-        for (const w of words)
+        for (const word of words)
         {
-            expect(text.slice(w.start, w.end).toLowerCase()).toBe(w.key);
+            expect(text.slice(word.start, word.end).toLowerCase()).toBe(word.key);
         }
     });
 
@@ -319,10 +319,10 @@ describe('detectQuotedOverlap: thresholds', () =>
         const words = MIN_RUN_WORDS - 1;
         const a = `${Array.from({ length: words }, (_, k) => `shared${k}`).join(' ')} end of message one\n`;
         const b = `start ${Array.from({ length: words }, (_, k) => `shared${k}`).join(' ')} other text\n`;
-        const [, r1] = detect([{ body: short }, { body: reply }]);
-        const [, r2] = detect([{ body: a }, { body: b }]);
-        expect(r1).toEqual([]);
-        expect(r2).toEqual([]);
+        const [, shortResult] = detect([{ body: short }, { body: reply }]);
+        const [, sharedResult] = detect([{ body: a }, { body: b }]);
+        expect(shortResult).toEqual([]);
+        expect(sharedResult).toEqual([]);
     });
 
     it('folds a shared run of exactly the minimum length', () =>
@@ -354,17 +354,17 @@ describe('detectQuotedOverlap: direction', () =>
 
     it('uses References too, and falls back to the order when neither or both reference', () =>
     {
-        const viaRefs = detect([
+        const viaReferences = detect([
             { body: BOB_2, id: 'reply@example.test', references: ['x@example.test', 'orig@example.test'] },
             { body: ALICE_1, id: 'orig@example.test' },
         ]);
-        expect(viaRefs[1]).toEqual([]);
-        expect(viaRefs[0]!.length).toBe(1);
+        expect(viaReferences[1]).toEqual([]);
+        expect(viaReferences[0]!.length).toBe(1);
 
         // No references: the later one (here the original, by a wrong clock) is folded.
-        const noRefs = detect([{ body: BOB_2 }, { body: ALICE_1 }]);
-        expect(noRefs[0]).toEqual([]);
-        expect(folded(ALICE_1, noRefs[1]!)).toBe(ALICE_1);
+        const noReferences = detect([{ body: BOB_2 }, { body: ALICE_1 }]);
+        expect(noReferences[0]).toEqual([]);
+        expect(folded(ALICE_1, noReferences[1]!)).toBe(ALICE_1);
 
         // Both reference each other: again the later one.
         const both = detect([
@@ -384,17 +384,17 @@ describe('detectQuotedOverlap: direction', () =>
     });
 
     // Task 8.13b-3, review round 2 (M1): an email holding an attached email always quotes it.
-    const FWD = `Please see the email below.\n\n${ALICE_1}`;
+    const FORWARD = `Please see the email below.\n\n${ALICE_1}`;
 
     it('folds the holder, never the email it holds, whatever the order says (holds wins over the clocks)', () =>
     {
         // The attached email (index 20) comes after its holder (index 10), say by a date with no zone.
-        const [holder, held] = detect([{ body: FWD, holds: [20] }, { body: ALICE_1 }]);
+        const [holder, held] = detect([{ body: FORWARD, holds: [20] }, { body: ALICE_1 }]);
         expect(held).toEqual([]);
-        expect(folded(FWD, holder!)).toBe(ALICE_1);
+        expect(folded(FORWARD, holder!)).toBe(ALICE_1);
         expect(holder!.map((f) => f.related)).toEqual([20]);
         // Without the link, the later one is folded: the attached email's own text, as quoted from its holder.
-        const [plainHolder, plainHeld] = detect([{ body: FWD }, { body: ALICE_1 }]);
+        const [plainHolder, plainHeld] = detect([{ body: FORWARD }, { body: ALICE_1 }]);
         expect(plainHolder).toEqual([]);
         expect(folded(ALICE_1, plainHeld!)).toBe(ALICE_1);
     });
@@ -404,7 +404,7 @@ describe('detectQuotedOverlap: direction', () =>
         // The attached email claims to reply to its holder: still never folded as quoted from it.
         const [held, holder] = detect([
             { body: ALICE_1, id: 'a@example.test', inReplyTo: 'p@example.test' },
-            { body: FWD, id: 'p@example.test', holds: [10] },
+            { body: FORWARD, id: 'p@example.test', holds: [10] },
         ]);
         expect(held).toEqual([]);
         expect(holder!.map((f) => f.related)).toEqual([10]);
@@ -422,7 +422,7 @@ describe('detectQuotedOverlap: direction', () =>
         const REPLY = `Fine by me.\n\nOn Monday, Ann wrote:\n> ${ALICE_1}`;
         const specs = (holds: boolean): Spec[] => [
             { body: REPLY, id: 'b@example.test', inReplyTo: 'a@example.test' },
-            { body: `${FWD}\n\nFine by me.\n\nOn Monday, Ann wrote:\n> ${ALICE_1}`, id: 'c@example.test', ...(holds ? { holds: [10] } : {}) },
+            { body: `${FORWARD}\n\nFine by me.\n\nOn Monday, Ann wrote:\n> ${ALICE_1}`, id: 'c@example.test', ...(holds ? { holds: [10] } : {}) },
             { body: ALICE_1, id: 'a@example.test' },
         ];
         const [, forward, ann] = detect(specs(true));
@@ -435,8 +435,8 @@ describe('detectQuotedOverlap: direction', () =>
         // At any depth: held through a middle forward, the same.
         const deep = detect([
             { body: REPLY, id: 'b@example.test', inReplyTo: 'a@example.test' },
-            { body: `${FWD}\n\n${REPLY}`, id: 'm@example.test', holds: [10] },
-            { body: `Passing it on.\n\n${FWD}\n\n${REPLY}`, id: 'c@example.test', holds: [20, 10] },
+            { body: `${FORWARD}\n\n${REPLY}`, id: 'm@example.test', holds: [10] },
+            { body: `Passing it on.\n\n${FORWARD}\n\n${REPLY}`, id: 'c@example.test', holds: [20, 10] },
             { body: ALICE_1, id: 'a@example.test' },
         ]);
         expect(deep[3]).toEqual([]);
@@ -444,14 +444,14 @@ describe('detectQuotedOverlap: direction', () =>
 
     it('both holding each other (not expected) or entries that are not numbers: the usual rules', () =>
     {
-        const both = detect([{ body: FWD, holds: [20] }, { body: ALICE_1, holds: [10] }]);
+        const both = detect([{ body: FORWARD, holds: [20] }, { body: ALICE_1, holds: [10] }]);
         expect(both[0]).toEqual([]);
         expect(folded(ALICE_1, both[1]!)).toBe(ALICE_1);
-        const junk = detect([{ body: FWD, holds: ['20', null, Number.NaN] }, { body: ALICE_1 }]);
+        const junk = detect([{ body: FORWARD, holds: ['20', null, Number.NaN] }, { body: ALICE_1 }]);
         expect(junk[0]).toEqual([]);
         expect(folded(ALICE_1, junk[1]!)).toBe(ALICE_1);
         // A held index that is no message of the list changes nothing.
-        const stray = detect([{ body: FWD, holds: [999] }, { body: ALICE_1 }]);
+        const stray = detect([{ body: FORWARD, holds: [999] }, { body: ALICE_1 }]);
         expect(stray[0]).toEqual([]);
     });
 
@@ -656,9 +656,9 @@ describe('detectQuotedOverlap: purity', () =>
             { body: BOB_2, id: 'b@example.test', inReplyTo: 'a@example.test', references: ['a@example.test'] },
         ]);
         const snapshot = JSON.stringify(messages);
-        for (const m of messages)
+        for (const message of messages)
         {
-            Object.freeze(m);
+            Object.freeze(message);
         }
         Object.freeze(messages);
         detectQuotedOverlap(messages);
@@ -698,9 +698,9 @@ describe('detectQuotedOverlap: speed', () =>
         const totalChars = specs.reduce((sum, s) => sum + s.body.length, 0);
         expect(totalChars).toBeGreaterThan(1_000_000);
 
-        const t0 = performance.now();
+        const startTime = performance.now();
         const result = detectQuotedOverlap(inputs(specs));
-        const ms = performance.now() - t0;
+        const ms = performance.now() - startTime;
         console.log(`overlap speed: 300 messages, ${(totalChars / 1e6).toFixed(2)} MB, ${ms.toFixed(0)} ms`);
         expect(ms).toBeLessThan(5000);
 
@@ -734,9 +734,9 @@ describe('detectQuotedOverlap: speed', () =>
                 body: blocks.map((ws, b) => `new${r}y${b} ${ws.slice(0, 6).join(' ')}\n${ws.slice(6).join(' ')}\n`).join(''),
             });
         }
-        const t0 = performance.now();
+        const startTime = performance.now();
         const result = detectQuotedOverlap(inputs(specs));
-        const ms = performance.now() - t0;
+        const ms = performance.now() - startTime;
         console.log(`overlap speed: 20 replies x 2000 mid-line runs, ${ms.toFixed(0)} ms`);
         expect(ms).toBeLessThan(5000);
         // Only the second line of each block (12 words, all quoted) is folded.
@@ -753,9 +753,9 @@ describe('detectQuotedOverlap: speed', () =>
         const block = 'please find the weekly report attached as usual and reply if anything is missing ';
         const body = `${block.repeat(400)}\n`; // about 6000 words, every shingle repeated hundreds of times
         const specs = Array.from({ length: 50 }, () => ({ body }));
-        const t0 = performance.now();
+        const startTime = performance.now();
         const result = detectQuotedOverlap(inputs(specs));
-        const ms = performance.now() - t0;
+        const ms = performance.now() - startTime;
         console.log(`overlap speed: 50 x ${body.length} chars of repeated boilerplate, ${ms.toFixed(0)} ms`);
         expect(ms).toBeLessThan(5000);
         expect(result[0]).toEqual([]);

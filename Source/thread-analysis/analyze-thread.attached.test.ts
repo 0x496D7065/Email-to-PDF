@@ -10,20 +10,20 @@ import { createEmlParser } from '../email-reading/eml-parser';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { createMsgParser } from '../email-reading/msg-parser';
-import { attachedAt, DEFAULT_PARTS, runEngine } from './engine';
-import type { OverlapInput } from './overlap';
-import { checkSegments, reconstruct } from './segments';
+import { attachedAt, DEFAULT_PARTS, runEngine } from './analyze-thread';
+import type { OverlapInput } from './overlap-quote-detection';
+import { checkSegments, joinSegments } from './fold-segments';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
-const eml = createEmlParser({ htmlToText: stub });
-const msg = createMsgParser({ htmlToText: stub });
+const emlParser = createEmlParser({ htmlToText: stub });
+const msgParser = createMsgParser({ htmlToText: stub });
 
 const plain = (text: string): string => crlf('Content-Type: text/plain; charset=utf-8', '', text);
-const mixed = (b: string, ...parts: string[]): string =>
-    crlf(`Content-Type: multipart/mixed; boundary="${b}"`, '', ...parts.flatMap((p) => [`--${b}`, p]), `--${b}--`, '');
+const mixed = (boundary: string, ...parts: string[]): string =>
+    crlf(`Content-Type: multipart/mixed; boundary="${boundary}"`, '', ...parts.flatMap((p) => [`--${boundary}`, p]), `--${boundary}--`, '');
 const rfc822 = (message: string, disposition?: string): string =>
     crlf('Content-Type: message/rfc822', ...(disposition === undefined ? [] : [`Content-Disposition: ${disposition}`]), '', message);
 const AS_FILE = 'attachment; filename="forwarded.eml"';
@@ -48,43 +48,43 @@ const B_BODY = 'Please confirm the delivery window for the twelve oak desks befo
 
 async function parseEml(name: string, text: string): Promise<ParseResult>
 {
-    return eml.parse({ name, bytes: new TextEncoder().encode(text) });
+    return emlParser.parse({ name, bytes: new TextEncoder().encode(text) });
 }
 async function parseMsg(name: string, spec: MsgSpec): Promise<ParseResult>
 {
-    return msg.parse({ name, bytes: buildMsg(spec) });
+    return msgParser.parse({ name, bytes: buildMsg(spec) });
 }
-const ok = (r: ParseResult): Extract<ParseResult, { ok: true }> =>
+const ok = (result: ParseResult): Extract<ParseResult, { ok: true }> =>
 {
-    if (!r.ok)
+    if (!result.ok)
     {
-        throw new Error(r.detail);
+        throw new Error(result.detail);
     }
-    return r;
+    return result;
 };
 const bySubject = (out: EngineResult, subject: string): EngineMessage =>
 {
-    const m = out.messages.find((x) => x.message.subject === subject);
-    if (m === undefined)
+    const message = out.messages.find((x) => x.message.subject === subject);
+    if (message === undefined)
     {
         throw new Error(`no message ${subject}`);
     }
-    return m;
+    return message;
 };
 const subjects = (out: EngineResult): string[] => out.messages.map((m) => m.message.subject);
 
 /** Every kept message is fully recoverable and every input position is held exactly once. */
 function expectWhole(out: EngineResult): void
 {
-    for (const m of out.messages)
+    for (const message of out.messages)
     {
-        expect(checkSegments(m.message.bodyText, m.segments)).toEqual([]);
-        expect(reconstruct(m.message.bodyText, m.segments)).toBe(m.message.bodyText);
+        expect(checkSegments(message.message.bodyText, message.segments)).toEqual([]);
+        expect(joinSegments(message.message.bodyText, message.segments)).toBe(message.message.bodyText);
     }
     const seen = new Set<number>();
-    for (const m of out.messages)
+    for (const message of out.messages)
     {
-        for (const i of [m.index, ...m.duplicates.map((d) => d.index)])
+        for (const i of [message.index, ...message.duplicates.map((d) => d.index)])
         {
             expect(seen.has(i)).toBe(false);
             seen.add(i);
@@ -110,15 +110,15 @@ describe('runEngine: attached emails are messages of their own', () =>
         const entry = attachedAt(out, 1)!;
         expect(entry).toMatchObject({ index: 1, parentIndex: 0, fileIndex: 0, path: [1], names: [''] });
         expect(entry.places).toHaveLength(1);
-        const p = bySubject(out, 'alice subject');
-        const block = p.message.bodyText.slice(entry.places[0]!.start, entry.places[0]!.end);
+        const parentMessage = bySubject(out, 'alice subject');
+        const block = parentMessage.message.bodyText.slice(entry.places[0]!.start, entry.places[0]!.end);
         expect(block.startsWith(FORWARDED_SEPARATOR)).toBe(true);
         expect(block.endsWith(a.message.bodyText)).toBe(true);
         expect(block).toContain(A_BODY);
         expect(attachedAt(out, 0)).toBeUndefined();
         // The overlap detector folds the forward's text in the parent, linked to the attached email (Q6).
-        const at = p.message.bodyText.indexOf(A_BODY);
-        const covering = p.segments.filter((s) => s.start <= at && s.end > at);
+        const offset = parentMessage.message.bodyText.indexOf(A_BODY);
+        const covering = parentMessage.segments.filter((s) => s.start <= offset && s.end > offset);
         expect(covering.some((s) => s.folded && s.related.includes(1))).toBe(true);
     });
 
@@ -165,10 +165,10 @@ describe('runEngine: attached emails are messages of their own', () =>
         const inner = attachedAt(out, 2)!;
         expect(inner).toMatchObject({ parentIndex: 1, fileIndex: 0, path: [1, 1], names: ['', 'inner.eml'] });
         expect(inner.places.map((p) => p.holderIndex)).toEqual([1, 0]);
-        for (const p of inner.places)
+        for (const place of inner.places)
         {
-            const holder = out.messages[out.positionByIndex[p.holderIndex]!]!.message.bodyText;
-            expect(holder.slice(p.start, p.end).endsWith(bySubject(out, 'carol subject').message.bodyText)).toBe(true);
+            const holder = out.messages[out.positionByIndex[place.holderIndex]!]!.message.bodyText;
+            expect(holder.slice(place.start, place.end).endsWith(bySubject(out, 'carol subject').message.bodyText)).toBe(true);
         }
     });
 
@@ -318,8 +318,8 @@ describe('runEngine: an email holding an attached email always quotes it (task 8
     /** Bob's email: its own text, then an inline forward of Carol's. */
     const aWithForward = (date: string | null): string => holding('bob', date, plain(UNIQUE_A), rfc822(simple('carol', 'Sun, 1 Jun 2025 09:00:00 +0200', B_BODY)));
     /** Every folded segment of `m` linked to message `related` (an input position). */
-    const foldsFrom = (out: EngineResult, m: EngineMessage, related: number): number =>
-        m.segments.filter((s) => s.folded && s.related.some((i) => out.positionByIndex[i] === out.positionByIndex[related])).length;
+    const foldsFrom = (out: EngineResult, message: EngineMessage, related: number): number =>
+        message.segments.filter((s) => s.folded && s.related.some((i) => out.positionByIndex[i] === out.positionByIndex[related])).length;
     /** Runs the engine and records what the overlap detector was given. */
     const spied = (results: readonly ParseResult[]): { out: EngineResult; given: OverlapInput[] } =>
     {
@@ -375,9 +375,9 @@ describe('runEngine: an email holding an attached email always quotes it (task 8
     {
         const { given } = spied([ok(await parseEml('one.eml', simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY))), ok(await parseEml('two.eml', simple('carol', null, B_BODY)))]);
         expect(given).toHaveLength(2);
-        for (const g of given)
+        for (const input of given)
         {
-            expect(g).not.toHaveProperty('holds');
+            expect(input).not.toHaveProperty('holds');
         }
     });
 });
@@ -426,13 +426,13 @@ describe('runEngine: attached emails and rebuilt emails', () =>
         const attachedPosition = out.messages.findIndex((m) => m.message.subject === 'bob subject');
         // Nothing is rebuilt inside the parent's forwarded block.
         const block = attachedAt(out, 2)!.places[0]!;
-        for (const r of out.reconstructed)
+        for (const rebuilt of out.reconstructed)
         {
-            if (out.positionByIndex[r.sourceIndex] !== parentPosition)
+            if (out.positionByIndex[rebuilt.sourceIndex] !== parentPosition)
             {
                 continue;
             }
-            expect(r.rebuilt.end <= block.start || r.rebuilt.start >= block.end).toBe(true);
+            expect(rebuilt.rebuilt.end <= block.start || rebuilt.rebuilt.start >= block.end).toBe(true);
         }
         // The reply's quote of the attached email is linked to it ("the real file wins"): not its own entry.
         const fromReply = out.reconstructed.filter((r) => out.messages[out.positionByIndex[r.sourceIndex]!]?.message.subject === 'carol subject');

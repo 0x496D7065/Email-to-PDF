@@ -1,12 +1,12 @@
 // Unit tests for the preview's grouped blocks (display-blocks.ts): exact
-// cases, a seeded property test in the style of Source/thread-analysis/segments.test.ts,
+// cases, a seeded property test in the style of Source/thread-analysis/fold-segments.test.ts,
 // and every synthetic fixture through the real engine. The key invariant
 // (README.md, rule R6): joining all blocks gives the body back unchanged.
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { primaryReason, runEngine } from '../thread-analysis/engine';
-import { buildSegments, FOLD_REASONS, type FoldRange } from '../thread-analysis/segments';
+import { primaryReason, runEngine } from '../thread-analysis/analyze-thread';
+import { buildSegments, FOLD_REASONS, type FoldRange } from '../thread-analysis/fold-segments';
 import { displayBlocks, MAX_ABSORBED_WHITESPACE } from './display-blocks';
 import type { DisplayBlock } from '../../Header/pdf-plan';
 import type { Segment } from '../../Header/thread-analysis-result';
@@ -206,7 +206,7 @@ describe('displayBlocks: exact cases', () =>
 
 // ---------------------------------------------------------------------------
 // Property test: random texts and folds with a fixed seed, so any failure can
-// be replayed (same approach as Source/thread-analysis/segments.test.ts).
+// be replayed (same approach as Source/thread-analysis/fold-segments.test.ts).
 
 /** mulberry32: a small, well-known seeded random generator returning [0, 1). */
 function mulberry32(seed: number): () => number
