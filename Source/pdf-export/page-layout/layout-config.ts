@@ -11,23 +11,23 @@ import { TAB_WIDTH } from '../text';
 import type { LaidOutColor, LayoutConfig, TextStyle } from '../../../Header/laid-out-document';
 import type { PdfRole } from '../../../Header/pdf-document-model';
 
-const TEXT: LaidOutColor = { gray: 0.1 };
-const GREY: LaidOutColor = { gray: 0.42 };
+const TEXT_COLOR: LaidOutColor = { gray: 0.1 };
+const GREY_COLOR: LaidOutColor = { gray: 0.42 };
 
 /** The default look (A4, IBM Plex). */
 export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
     page: { width: 595.28, height: 841.89 },
     margin: { top: 56, right: 56, bottom: 56, left: 56 },
     roles: {
-        title: { font: 'sans-bold', size: 20, color: TEXT, lineHeight: 1.3 },
-        heading: { font: 'sans-bold', size: 13, color: TEXT, lineHeight: 1.3 },
-        'field-label': { font: 'sans-bold', size: 9.5, color: GREY, lineHeight: 1.35 },
-        'field-value': { font: 'sans-regular', size: 9.5, color: TEXT, lineHeight: 1.35 },
-        body: { font: 'sans-regular', size: 10, color: TEXT, lineHeight: 1.35 },
-        muted: { font: 'sans-italic', size: 9.5, color: GREY, lineHeight: 1.35 },
-        code: { font: 'mono-regular', size: 9, color: GREY, lineHeight: 1.35 },
+        title: { font: 'sans-bold', size: 20, color: TEXT_COLOR, lineHeight: 1.3 },
+        heading: { font: 'sans-bold', size: 13, color: TEXT_COLOR, lineHeight: 1.3 },
+        'field-label': { font: 'sans-bold', size: 9.5, color: GREY_COLOR, lineHeight: 1.35 },
+        'field-value': { font: 'sans-regular', size: 9.5, color: TEXT_COLOR, lineHeight: 1.35 },
+        body: { font: 'sans-regular', size: 10, color: TEXT_COLOR, lineHeight: 1.35 },
+        muted: { font: 'sans-italic', size: 9.5, color: GREY_COLOR, lineHeight: 1.35 },
+        code: { font: 'mono-regular', size: 9, color: GREY_COLOR, lineHeight: 1.35 },
     },
-    footer: { style: { font: 'sans-regular', size: 8.5, color: GREY, lineHeight: 1.3 }, baselineFromBottom: 30, align: 'center' },
+    footer: { style: { font: 'sans-regular', size: 8.5, color: GREY_COLOR, lineHeight: 1.3 }, baselineFromBottom: 30, align: 'center' },
     fields: { labelWidth: 78, gap: 10, rowGap: 1.5 },
     list: { bullet: '\u{2022}', indent: 12, itemGap: 3 },
     // One tab: 4 spaces of IBM Plex Sans Regular (0.236 em each) at 10 pt, 9.44 pt (task 8.9).
@@ -57,23 +57,25 @@ export const MAX_DIGIT_EM = 0.6;
 export const SHORT_DATE_EM = 8.6;
 
 /** One check of validateLayoutConfig. */
-function check(ok: boolean, what: string): void
+function checkConfig(ok: boolean, problem: string): void
 {
     if (!ok)
     {
-        throw new Error(`layout: invalid config: ${what}`);
+        throw new Error(`layout: invalid config: ${problem}`);
     }
 }
 
-const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const positive = (value: unknown, what: string): void => check(isNumber(value) && value > 0, `${what} must be a finite number > 0`);
-const nonNegative = (value: unknown, what: string): void => check(isNumber(value) && value >= 0, `${what} must be a finite number >= 0`);
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const requirePositive = (value: unknown, field: string): void =>
+    checkConfig(isFiniteNumber(value) && value > 0, `${field} must be a finite number > 0`);
+const requireNonNegative = (value: unknown, field: string): void =>
+    checkConfig(isFiniteNumber(value) && value >= 0, `${field} must be a finite number >= 0`);
 
-function checkStyle(style: TextStyle | undefined, what: string): void
+function checkStyle(style: TextStyle | undefined, field: string): void
 {
-    check(typeof style === 'object' && style !== null, `${what} is missing`);
-    positive(style!.size, `${what}.size`);
-    positive(style!.lineHeight, `${what}.lineHeight`);
+    checkConfig(typeof style === 'object' && style !== null, `${field} is missing`);
+    requirePositive(style!.size, `${field}.size`);
+    requirePositive(style!.lineHeight, `${field}.lineHeight`);
 }
 
 const ROLE_NAMES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'field-value', 'body', 'muted', 'code'];
@@ -86,56 +88,56 @@ const ROLE_NAMES: readonly PdfRole[] = ['title', 'heading', 'field-label', 'fiel
  */
 export function validateLayoutConfig(config: LayoutConfig): void
 {
-    positive(config.page.width, 'page.width');
-    positive(config.page.height, 'page.height');
+    requirePositive(config.page.width, 'page.width');
+    requirePositive(config.page.height, 'page.height');
     for (const side of ['top', 'right', 'bottom', 'left'] as const)
     {
-        nonNegative(config.margin[side], `margin.${side}`);
+        requireNonNegative(config.margin[side], `margin.${side}`);
     }
     const contentWidth = config.page.width - config.margin.left - config.margin.right;
-    check(contentWidth > 0, 'the left and right margins leave no room for text');
-    check(config.page.height - config.margin.top - config.margin.bottom > 0, 'the top and bottom margins leave no room for text');
+    checkConfig(contentWidth > 0, 'the left and right margins leave no room for text');
+    checkConfig(config.page.height - config.margin.top - config.margin.bottom > 0, 'the top and bottom margins leave no room for text');
     for (const role of ROLE_NAMES)
     {
         checkStyle(config.roles[role], `roles.${role}`);
     }
     checkStyle(config.footer.style, 'footer.style');
-    nonNegative(config.footer.baselineFromBottom, 'footer.baselineFromBottom');
-    check(config.footer.baselineFromBottom < config.page.height, 'footer.baselineFromBottom must be inside the page');
-    check(config.footer.align === 'center' || config.footer.align === 'right', "footer.align must be 'center' or 'right'");
-    positive(config.fields.labelWidth, 'fields.labelWidth');
-    nonNegative(config.fields.gap, 'fields.gap');
-    nonNegative(config.fields.rowGap, 'fields.rowGap');
-    check(config.fields.labelWidth + config.fields.gap < contentWidth, 'fields.labelWidth + fields.gap must be less than the text area width');
-    check(typeof config.list.bullet === 'string', 'list.bullet must be a string');
-    positive(config.list.indent, 'list.indent');
-    check(config.list.indent < contentWidth, 'list.indent must be less than the text area width');
-    nonNegative(config.list.itemGap, 'list.itemGap');
-    check(Number.isInteger(config.bodyIndentSpaces) && config.bodyIndentSpaces >= 1, 'bodyIndentSpaces must be a whole number >= 1');
-    const ix = config.index;
+    requireNonNegative(config.footer.baselineFromBottom, 'footer.baselineFromBottom');
+    checkConfig(config.footer.baselineFromBottom < config.page.height, 'footer.baselineFromBottom must be inside the page');
+    checkConfig(config.footer.align === 'center' || config.footer.align === 'right', "footer.align must be 'center' or 'right'");
+    requirePositive(config.fields.labelWidth, 'fields.labelWidth');
+    requireNonNegative(config.fields.gap, 'fields.gap');
+    requireNonNegative(config.fields.rowGap, 'fields.rowGap');
+    checkConfig(config.fields.labelWidth + config.fields.gap < contentWidth, 'fields.labelWidth + fields.gap must be less than the text area width');
+    checkConfig(typeof config.list.bullet === 'string', 'list.bullet must be a string');
+    requirePositive(config.list.indent, 'list.indent');
+    checkConfig(config.list.indent < contentWidth, 'list.indent must be less than the text area width');
+    requireNonNegative(config.list.itemGap, 'list.itemGap');
+    checkConfig(Number.isInteger(config.bodyIndentSpaces) && config.bodyIndentSpaces >= 1, 'bodyIndentSpaces must be a whole number >= 1');
+    const indexConfig = config.index;
     for (const name of ['numberWidth', 'dateWidth', 'fromWidth', 'pageWidth'] as const)
     {
-        positive(ix[name], `index.${name}`);
+        requirePositive(indexConfig[name], `index.${name}`);
     }
     for (const name of ['gap', 'rowGap', 'headerGap'] as const)
     {
-        nonNegative(ix[name], `index.${name}`);
+        requireNonNegative(indexConfig[name], `index.${name}`);
     }
-    check(
-        ix.numberWidth + ix.dateWidth + ix.fromWidth + ix.pageWidth + 4 * ix.gap < contentWidth,
+    checkConfig(
+        indexConfig.numberWidth + indexConfig.dateWidth + indexConfig.fromWidth + indexConfig.pageWidth + 4 * indexConfig.gap < contentWidth,
         'the index columns and gaps must leave room for the subject column',
     );
     // A page number and a short date each stay on one line (see INDEX_PAGE_DIGITS, SHORT_DATE_EM).
     const bodySize = config.roles.body.size;
-    check(ix.pageWidth >= INDEX_PAGE_DIGITS * MAX_DIGIT_EM * bodySize - 1e-9, `index.pageWidth must hold a ${String(INDEX_PAGE_DIGITS)}-digit page number`);
-    check(ix.dateWidth >= SHORT_DATE_EM * bodySize - 1e-9, 'index.dateWidth must hold a date as "YYYY-MM-DD HH:mm" on one line');
+    checkConfig(indexConfig.pageWidth >= INDEX_PAGE_DIGITS * MAX_DIGIT_EM * bodySize - 1e-9, `index.pageWidth must hold a ${String(INDEX_PAGE_DIGITS)}-digit page number`);
+    checkConfig(indexConfig.dateWidth >= SHORT_DATE_EM * bodySize - 1e-9, 'index.dateWidth must hold a date as "YYYY-MM-DD HH:mm" on one line');
     // The attachment lines of an index row run from the date column to the end of the subject column.
-    check(config.list.indent < contentWidth - ix.numberWidth - ix.pageWidth - 2 * ix.gap, 'list.indent must be less than the width of the index attachment lines');
+    checkConfig(config.list.indent < contentWidth - indexConfig.numberWidth - indexConfig.pageWidth - 2 * indexConfig.gap, 'list.indent must be less than the width of the index attachment lines');
     for (const [name, value] of Object.entries(config.spacing))
     {
-        nonNegative(value, `spacing.${name}`);
+        requireNonNegative(value, `spacing.${name}`);
     }
-    nonNegative(config.rule.width, 'rule.width');
-    check(typeof config.newPagePerEmail === 'boolean', 'newPagePerEmail must be true or false');
-    check(Number.isInteger(config.keepBodyLines) && config.keepBodyLines >= 0, 'keepBodyLines must be a whole number >= 0');
+    requireNonNegative(config.rule.width, 'rule.width');
+    checkConfig(typeof config.newPagePerEmail === 'boolean', 'newPagePerEmail must be true or false');
+    checkConfig(Number.isInteger(config.keepBodyLines) && config.keepBodyLines >= 0, 'keepBodyLines must be a whole number >= 0');
 }

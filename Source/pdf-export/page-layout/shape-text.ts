@@ -38,13 +38,13 @@ import type { FontMetrics } from './font-metrics';
 import type { TextStyle } from '../../../Header/laid-out-document';
 
 /** Item kinds (bit flags). */
-export const SPACE = 1;
+export const SPACE_ITEM = 1;
 /** A line may break right after this item (ZWSP, "-", "/"). */
-export const BREAK_AFTER = 2;
+export const BREAK_AFTER_ITEM = 2;
 /** A soft hyphen: a line may break after it, and then a hyphen is drawn. */
 export const SOFT_HYPHEN_ITEM = 4;
 /** One "[U+XXXX]" code drawn for a character the font lacks. */
-export const PLACEHOLDER = 8;
+export const PLACEHOLDER_ITEM = 8;
 
 /** A style with its font metrics and its line box (see typesetter.ts). */
 export interface ResolvedStyle
@@ -64,12 +64,12 @@ export interface ResolvedStyle
  */
 export class ShapedText
 {
-    readonly style: number[] = [];
+    readonly styleIndex: number[] = [];
     readonly kind: number[] = [];
     /** Width in points. */
     readonly width: number[] = [];
     /** The original text this item stands for when copied ('' for the 2nd and later codes of a cluster). */
-    readonly copy: string[] = [];
+    readonly copyText: string[] = [];
     readonly glyphEnd: number[] = [];
     readonly glyphs: number[] = [];
     /** The text each glyph stands for (for the font's ToUnicode map). */
@@ -85,26 +85,26 @@ export class ShapedText
         return item === 0 ? 0 : this.glyphEnd[item - 1]!;
     }
 
-    push(style: number, kind: number, width: number, copy: string): void
+    addItem(styleIndex: number, kind: number, width: number, copyText: string): void
     {
-        this.style.push(style);
+        this.styleIndex.push(styleIndex);
         this.kind.push(kind);
         this.width.push(width);
-        this.copy.push(copy);
+        this.copyText.push(copyText);
         this.glyphEnd.push(this.glyphs.length);
     }
 }
 
 /** Plain Latin text: every code unit is a grapheme cluster of its own. */
-const SIMPLE = /^[\u{20}-\u{7E}\u{A0}-\u{2FF}]*$/u;
+const PLAIN_LATIN = /^[\u{20}-\u{7E}\u{A0}-\u{2FF}]*$/u;
 
 /** Most code points tried for a composed (NFC) form: real base + marks clusters are short. */
-const MAX_COMPOSE = 8;
+const MAX_COMPOSE_CODE_POINTS = 8;
 
-const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
 /** Spaces a line may break after (not U+00A0 / U+2007 / U+202F, the no-break ones). */
-function isSpace(codePoint: number): boolean
+function isBreakableSpace(codePoint: number): boolean
 {
     return (
         codePoint === 0x20 ||
@@ -124,7 +124,7 @@ function isBreakAfter(codePoint: number): boolean
 /** A run to shape: its text and the index of its style. */
 export interface StyledText
 {
-    readonly style: number;
+    readonly styleIndex: number;
     readonly text: string;
 }
 
@@ -136,7 +136,7 @@ export class Shaper
     constructor(
         private readonly styles: readonly ResolvedStyle[],
         /** The style of placeholders ('code'). */
-        private readonly codeStyle: number,
+        private readonly codeStyleIndex: number,
     )
     {
     }
@@ -144,119 +144,122 @@ export class Shaper
     /** Shapes the runs of one line into items. */
     shape(runs: readonly StyledText[]): ShapedText
     {
-        const out = new ShapedText();
+        const shaped = new ShapedText();
         for (const run of runs)
         {
             if (run.text === '')
             {
                 continue;
             }
-            if (SIMPLE.test(run.text))
+            if (PLAIN_LATIN.test(run.text))
             {
-                this.simple(out, run.style, run.text);
+                this.shapePlainLatin(shaped, run.styleIndex, run.text);
             }
             else
             {
-                for (const { segment } of segmenter.segment(run.text))
+                for (const { segment } of graphemeSegmenter.segment(run.text))
                 {
-                    this.cluster(out, run.style, segment);
+                    this.shapeCluster(shaped, run.styleIndex, segment);
                 }
             }
         }
-        return out;
+        return shaped;
     }
 
     /** The fast path: one code unit per cluster. */
-    private simple(out: ShapedText, style: number, text: string): void
+    private shapePlainLatin(shaped: ShapedText, styleIndex: number, text: string): void
     {
-        const { metrics, style: look } = this.styles[style]!;
-        const size = look.size;
+        const { metrics, style: textStyle } = this.styles[styleIndex]!;
+        const size = textStyle.size;
         for (let i = 0; i < text.length; i++)
         {
-            const cp = text.charCodeAt(i);
-            const ch = text[i]!;
-            if (cp === SOFT_HYPHEN)
+            const codePoint = text.charCodeAt(i);
+            const character = text[i]!;
+            if (codePoint === SOFT_HYPHEN)
             {
-                out.push(style, SOFT_HYPHEN_ITEM, 0, ch);
+                shaped.addItem(styleIndex, SOFT_HYPHEN_ITEM, 0, character);
                 continue;
             }
-            const glyph = metrics.glyph(cp);
+            const glyph = metrics.glyph(codePoint);
             if (glyph === 0)
             {
-                this.cluster(out, style, ch);
+                this.shapeCluster(shaped, styleIndex, character);
                 continue;
             }
-            out.glyphs.push(glyph);
-            out.glyphText.push(ch);
-            out.push(style, cp === 0x20 ? SPACE : isBreakAfter(cp) ? BREAK_AFTER : 0, metrics.advance(glyph) * size, ch);
+            shaped.glyphs.push(glyph);
+            shaped.glyphText.push(character);
+            shaped.addItem(styleIndex, codePoint === 0x20 ? SPACE_ITEM : isBreakAfter(codePoint) ? BREAK_AFTER_ITEM : 0,
+                metrics.advance(glyph) * size, character);
         }
     }
 
     /** One grapheme cluster (see the top of this file). */
-    private cluster(out: ShapedText, style: number, cluster: string): void
+    private shapeCluster(shaped: ShapedText, styleIndex: number, cluster: string): void
     {
-        const { metrics, style: look } = this.styles[style]!;
-        const cps: number[] = [];
-        for (const ch of cluster)
+        const { metrics, style: textStyle } = this.styles[styleIndex]!;
+        const codePoints: number[] = [];
+        for (const character of cluster)
         {
-            cps.push(ch.codePointAt(0)!);
+            codePoints.push(character.codePointAt(0)!);
         }
-        if (cps.length === 1 && cps[0] === SOFT_HYPHEN)
+        if (codePoints.length === 1 && codePoints[0] === SOFT_HYPHEN)
         {
-            out.push(style, SOFT_HYPHEN_ITEM, 0, cluster);
+            shaped.addItem(styleIndex, SOFT_HYPHEN_ITEM, 0, cluster);
             return;
         }
-        const drawn = cps.filter((cp) => !isDrawnAsNothing(cp));
-        if (drawn.length === 0)
+        const drawnCodePoints = codePoints.filter((codePoint) => !isDrawnAsNothing(codePoint));
+        if (drawnCodePoints.length === 0)
         {
-            out.push(style, cps[0] === ZERO_WIDTH_SPACE ? BREAK_AFTER : 0, 0, cluster);
+            shaped.addItem(styleIndex, codePoints[0] === ZERO_WIDTH_SPACE ? BREAK_AFTER_ITEM : 0, 0, cluster);
             return;
         }
 
-        const hasAll = drawn.every((cp) => metrics.glyph(cp) !== 0);
-        if (drawn.length > 1 || !hasAll)
+        const fontHasAll = drawnCodePoints.every((codePoint) => metrics.glyph(codePoint) !== 0);
+        if (drawnCodePoints.length > 1 || !fontHasAll)
         {
-            const composed = drawn.length <= MAX_COMPOSE ? String.fromCodePoint(...drawn).normalize('NFC') : '';
-            const cp = composed.codePointAt(0);
-            if (cp !== undefined && composed.length === (cp > 0xffff ? 2 : 1) && metrics.glyph(cp) !== 0)
+            const composed = drawnCodePoints.length <= MAX_COMPOSE_CODE_POINTS ? String.fromCodePoint(...drawnCodePoints).normalize('NFC') : '';
+            const composedCodePoint = composed.codePointAt(0);
+            if (composedCodePoint !== undefined && composed.length === (composedCodePoint > 0xffff ? 2 : 1) && metrics.glyph(composedCodePoint) !== 0)
             {
-                const glyph = metrics.glyph(cp);
-                out.glyphs.push(glyph);
-                out.glyphText.push(composed);
-                out.push(style, isBreakAfter(cp) ? BREAK_AFTER : 0, metrics.advance(glyph) * look.size, cluster);
+                const glyph = metrics.glyph(composedCodePoint);
+                shaped.glyphs.push(glyph);
+                shaped.glyphText.push(composed);
+                shaped.addItem(styleIndex, isBreakAfter(composedCodePoint) ? BREAK_AFTER_ITEM : 0, metrics.advance(glyph) * textStyle.size, cluster);
                 return;
             }
         }
 
-        if (hasAll)
+        if (fontHasAll)
         {
             let width = 0;
-            for (const cp of drawn)
+            for (const codePoint of drawnCodePoints)
             {
-                const glyph = metrics.glyph(cp);
-                out.glyphs.push(glyph);
-                out.glyphText.push(String.fromCodePoint(cp));
+                const glyph = metrics.glyph(codePoint);
+                shaped.glyphs.push(glyph);
+                shaped.glyphText.push(String.fromCodePoint(codePoint));
                 width += metrics.advance(glyph);
             }
-            const kind = drawn.length === 1 ? (isSpace(drawn[0]!) ? SPACE : isBreakAfter(drawn[0]!) ? BREAK_AFTER : 0) : 0;
-            out.push(style, kind, width * look.size, cluster);
+            const kind = drawnCodePoints.length === 1
+                ? (isBreakableSpace(drawnCodePoints[0]!) ? SPACE_ITEM : isBreakAfter(drawnCodePoints[0]!) ? BREAK_AFTER_ITEM : 0)
+                : 0;
+            shaped.addItem(styleIndex, kind, width * textStyle.size, cluster);
             return;
         }
 
         // Missing glyph: the whole cluster as codes, in the 'code' style.
-        const code = this.styles[this.codeStyle]!;
-        for (const [k, cp] of drawn.entries())
+        const codeStyle = this.styles[this.codeStyleIndex]!;
+        for (const [position, codePoint] of drawnCodePoints.entries())
         {
             let width = 0;
-            for (const ch of controlMarker(cp))
+            for (const character of controlMarker(codePoint))
             {
-                const glyph = code.metrics.glyph(ch.charCodeAt(0));
-                out.glyphs.push(glyph);
-                out.glyphText.push(ch);
-                width += code.metrics.advance(glyph);
+                const glyph = codeStyle.metrics.glyph(character.charCodeAt(0));
+                shaped.glyphs.push(glyph);
+                shaped.glyphText.push(character);
+                width += codeStyle.metrics.advance(glyph);
             }
-            out.push(this.codeStyle, PLACEHOLDER, width * code.style.size, k === 0 ? cluster : '');
+            shaped.addItem(this.codeStyleIndex, PLACEHOLDER_ITEM, width * codeStyle.style.size, position === 0 ? cluster : '');
         }
-        this.placeholders += drawn.length;
+        this.placeholders += drawnCodePoints.length;
     }
 }

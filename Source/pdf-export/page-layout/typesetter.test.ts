@@ -6,7 +6,7 @@ import { readWoffFont } from '../font-reader/parse-font';
 import { PDF_FONTS } from '../bundled-fonts';
 import { sanitizeRuns } from '../text';
 import { DEFAULT_LAYOUT_CONFIG } from './layout-config';
-import { SPACE } from './shape-text';
+import { SPACE_ITEM } from './shape-text';
 import { type LaidLine, Typesetter } from './typesetter';
 import type { LaidOutTextRun } from '../../../Header/laid-out-document';
 import type { PdfLine, PdfRole } from '../../../Header/pdf-document-model';
@@ -31,28 +31,28 @@ function bodyWidth(text: string): number
     return (font.measure(text) * BODY.size) / font.unitsPerEm;
 }
 
-function emitAll(ts: Typesetter, lines: readonly LaidLine[]): LaidOutTextRun[][]
+function drawAll(typesetter: Typesetter, lines: readonly LaidLine[]): LaidOutTextRun[][]
 {
     return lines.map((line) =>
     {
-        const out: LaidOutTextRun[] = [];
-        ts.emit(line, 0, 0, out);
-        return out;
+        const lineRuns: LaidOutTextRun[] = [];
+        typesetter.drawLine(line, 0, 0, lineRuns);
+        return lineRuns;
     });
 }
 
 /** Wraps one line; per wrapped line: the copy text, the drawn text (glyph texts) and the runs. */
 function wrap(line: PdfLine, width = WIDE, strut: PdfRole = 'body')
 {
-    const ts = new Typesetter(fonts, DEFAULT_LAYOUT_CONFIG);
-    const lines = ts.wrap(line, width, strut);
-    const runs = emitAll(ts, lines);
+    const typesetter = new Typesetter(fonts, DEFAULT_LAYOUT_CONFIG);
+    const lines = typesetter.wrap(line, width, strut);
+    const runs = drawAll(typesetter, lines);
     return {
-        ts,
+        typesetter,
         lines,
         runs,
-        copies: runs.map((r) => r.map((x) => x.copyText).join('')),
-        drawn: runs.map((r) => r.map((x) => x.glyphText.join('')).join('')),
+        copies: runs.map((lineRuns) => lineRuns.map((run) => run.copyText).join('')),
+        drawn: runs.map((lineRuns) => lineRuns.map((run) => run.glyphText.join('')).join('')),
     };
 }
 
@@ -65,14 +65,14 @@ function extent(runs: readonly LaidOutTextRun[]): number
     for (const run of runs)
     {
         const font = fonts[run.font];
-        let x = run.x;
+        let penX = run.x;
         let lastInk = run.x;
         for (const [i, glyph] of run.glyphs.entries())
         {
-            x += (font.advance(glyph) * run.size) / font.unitsPerEm;
+            penX += (font.advance(glyph) * run.size) / font.unitsPerEm;
             if (run.glyphText[i] !== ' ')
             {
-                lastInk = x;
+                lastInk = penX;
             }
         }
         if (run.glyphText.some((t) => t !== ' '))
@@ -91,8 +91,8 @@ describe('glyph mapping', () =>
 
     it.each<PdfRole>(['body', 'heading', 'muted', 'field-label', 'code'])('draws common accents and punctuation with real glyphs (%s)', (role) =>
     {
-        const { ts, runs, copies } = wrap([{ role, text: ACCENTS }]);
-        expect(ts.placeholders).toBe(0);
+        const { typesetter, runs, copies } = wrap([{ role, text: ACCENTS }]);
+        expect(typesetter.placeholders).toBe(0);
         expect(runs).toHaveLength(1);
         const run = runs[0]![0]!;
         expect(run.font).toBe(DEFAULT_LAYOUT_CONFIG.roles[role].font);
@@ -104,13 +104,13 @@ describe('glyph mapping', () =>
 
     it('draws "e" + U+0301 with the glyph of U+00E9, copy text keeps both code points', () =>
     {
-        const { runs, ts } = wrap(body('Caf' + 'e\u{301}'));
+        const { runs, typesetter } = wrap(body('Caf' + 'e\u{301}'));
         const run = runs[0]![0]!;
         expect(run.glyphs.at(-1)).toBe(fonts['sans-regular'].glyphFor(0xe9));
         expect(run.glyphs).toHaveLength(4);
         expect(run.glyphText.at(-1)).toBe('\u{E9}');
         expect(run.copyText).toBe('Cafe\u{301}');
-        expect(ts.placeholders).toBe(0);
+        expect(typesetter.placeholders).toBe(0);
     });
 
     it('draws "q" + U+0301 (no composed form) as two glyphs, the mark at its own advance', () =>
@@ -127,7 +127,7 @@ describe('glyph mapping', () =>
 
     it('draws an emoji as a placeholder in the code style; its copy text is the emoji', () =>
     {
-        const { runs, ts } = wrap(body('Hi \u{1F600}!'));
+        const { runs, typesetter } = wrap(body('Hi \u{1F600}!'));
         const line = runs[0]!;
         expect(line.map((r) => r.copyText)).toEqual(['Hi ', '\u{1F600}', '!']);
         const code = line[1]!;
@@ -135,7 +135,7 @@ describe('glyph mapping', () =>
         expect(code).toMatchObject({ font: style.font, size: style.size, color: style.color });
         expect(code.glyphText.join('')).toBe('[U+1F600]');
         expect(code.glyphs.every((g) => g !== 0)).toBe(true);
-        expect(ts.placeholders).toBe(1);
+        expect(typesetter.placeholders).toBe(1);
     });
 
     it('draws one code per drawn code point of an emoji sequence, skipping ZWJ and VS16', () =>
@@ -143,12 +143,12 @@ describe('glyph mapping', () =>
         const woman = '\u{1F469}\u{200D}\u{1F4BB}';
         const wave = '\u{1F44B}\u{1F3FD}';
         const heart = '\u{2764}\u{FE0F}';
-        const { runs, ts } = wrap(body(woman + wave + heart));
+        const { runs, typesetter } = wrap(body(woman + wave + heart));
         const code = runs[0]!;
         expect(code).toHaveLength(1);
         expect(code[0]!.glyphText.join('')).toBe('[U+1F469][U+1F4BB][U+1F44B][U+1F3FD][U+2764]');
         expect(code[0]!.copyText).toBe(woman + wave + heart);
-        expect(ts.placeholders).toBe(5);
+        expect(typesetter.placeholders).toBe(5);
     });
 
     it('draws group 2 characters as nothing (no glyph, no width), keeping them in the copy text', () =>
@@ -176,10 +176,10 @@ describe('glyph mapping', () =>
             { role: 'field-value', text: 'report.pdf' },
             { role: 'muted', text: ' (12 KB)' },
         ]);
-        const [a, b] = runs[0]!;
-        expect(a!.y).toBe(b!.y);
+        const [valueRun, mutedRun] = runs[0]!;
+        expect(valueRun!.y).toBe(mutedRun!.y);
         const font = fonts['sans-regular'];
-        expect(b!.x).toBeCloseTo((font.measure('report.pdf') * 9.5) / font.unitsPerEm, 6);
+        expect(mutedRun!.x).toBeCloseTo((font.measure('report.pdf') * 9.5) / font.unitsPerEm, 6);
     });
 });
 
@@ -265,17 +265,17 @@ describe('line breaking', () =>
 
     it('keeps an empty line, with the height of its style', () =>
     {
-        const { lines, runs, ts } = wrap([]);
+        const { lines, runs, typesetter } = wrap([]);
         expect(lines).toHaveLength(1);
         expect(lines[0]!.height).toBeCloseTo(BODY.size * BODY.lineHeight, 6);
-        expect(lines[0]!.height).toBe(ts.lineHeight('body'));
+        expect(lines[0]!.height).toBe(typesetter.lineHeight('body'));
         expect(runs[0]).toEqual([]);
     });
 
     it('gives the title a line pitch of 20 x 1.3 points', () =>
     {
-        const { lines, ts } = wrap([], WIDE, 'title');
-        expect(ts.lineHeight('title')).toBeCloseTo(20 * 1.3, 6);
+        const { lines, typesetter } = wrap([], WIDE, 'title');
+        expect(typesetter.lineHeight('title')).toBeCloseTo(20 * 1.3, 6);
         expect(lines[0]!.height).toBeCloseTo(20 * 1.3, 6);
     });
 
@@ -294,26 +294,26 @@ describe('line breaking', () =>
         expect(copies.join('')).toBe(text);
         // Every line holds whole clusters.
         const boundaries = new Set<number>([0]);
-        let at = 0;
-        for (const g of graphemes(text))
+        let offset = 0;
+        for (const grapheme of graphemes(text))
         {
-            boundaries.add((at += g.length));
+            boundaries.add((offset += grapheme.length));
         }
-        at = 0;
+        offset = 0;
         for (const copy of copies)
         {
-            expect(boundaries.has(at)).toBe(true);
-            at += copy.length;
+            expect(boundaries.has(offset)).toBe(true);
+            offset += copy.length;
         }
     });
 
     it('never makes a line wider than the column (many texts and widths)', () =>
     {
         let seed = 7;
-        const random = (n: number): number =>
+        const random = (bound: number): number =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
-            return seed % n;
+            return seed % bound;
         };
         const words = ['Alice', 'Example', 'desk', 'delivery', 'example.test/a/b', 'well-known', 'hy\u{AD}phen\u{AD}ated', 'e\u{301}t\u{E9}', '\u{1F600}', 'x'.repeat(40), 'zero\u{200B}width'];
         for (let round = 0; round < 60; round++)
@@ -331,7 +331,7 @@ describe('line breaking', () =>
                 let inked = 0;
                 for (let k = line.start; k < line.end; k++)
                 {
-                    if (line.text.width[k]! > 0 && (line.text.kind[k]! & SPACE) === 0)
+                    if (line.shapedText.width[k]! > 0 && (line.shapedText.kind[k]! & SPACE_ITEM) === 0)
                     {
                         inked++;
                     }

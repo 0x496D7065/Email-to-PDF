@@ -61,7 +61,7 @@
 //
 // Pure: no DOM, no clock, no storage, worker-safe (README.md, rules R5,
 // R7). Email text only ever becomes glyphs and copy text (rule R4).
-import { layItem, layRow, linesHeight, placeItem, placeRow, type LaidRow } from './field-rows-and-lists';
+import { layListItem, layFieldRow, linesHeight, placeListItem, placeFieldRow, type LaidFieldRow } from './field-rows-and-lists';
 import { DEFAULT_LAYOUT_CONFIG, validateLayoutConfig } from './layout-config';
 import { INDEX_DESTINATION, layIndex, placeIndex } from './email-index-table';
 import { PageBuilder, type PageInProgress } from './page-builder';
@@ -160,76 +160,79 @@ export function settlePageCount<T extends { readonly pages: number }>(
  */
 export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, ParsedFont>>, options: LayoutOptions): PdfLayout
 {
-    const base = options.config ?? DEFAULT_LAYOUT_CONFIG;
-    const config: LayoutConfig = options.newPagePerEmail === undefined ? base : { ...base, newPagePerEmail: options.newPagePerEmail };
+    const baseConfig = options.config ?? DEFAULT_LAYOUT_CONFIG;
+    const config: LayoutConfig = options.newPagePerEmail === undefined ? baseConfig : { ...baseConfig, newPagePerEmail: options.newPagePerEmail };
     validateLayoutConfig(config);
     const typesetter = new Typesetter(fonts, config);
     const bodyIndent = bodyIndentWidth(typesetter, config);
 
     // The emails, once, on pages of their own (page numbers relative to the first email page).
-    const emails = new PageBuilder(config, typesetter);
-    const emailPages = new Map<string, number>();
-    for (const [k, email] of doc.emails.entries())
+    const emailBuilder = new PageBuilder(config, typesetter);
+    const emailPageByAnchor = new Map<string, number>();
+    for (const [position, email] of doc.emails.entries())
     {
-        placeEmail(emails, email, k === 0, bodyIndent, emailPages);
+        placeEmail(emailBuilder, email, position === 0, bodyIndent, emailPageByAnchor);
     }
-    const emailPageList = doc.emails.length > 0 ? emails.pages : [];
+    const emailPages = doc.emails.length > 0 ? emailBuilder.pages : [];
 
-    const entries = doc.index.entries;
-    for (const entry of entries)
+    const indexEntries = doc.index.entries;
+    for (const entry of indexEntries)
     {
-        if (!emailPages.has(entry.anchor))
+        if (!emailPageByAnchor.has(entry.anchor))
         {
             throw new Error(`layout: the index entry ${entry.anchor} has no email`);
         }
     }
     // And the other way (task 8.13): every email laid out, with its heading and header rows, has its own index entry.
-    const indexed = new Set(entries.map((entry) => entry.anchor));
+    const indexedAnchors = new Set(indexEntries.map((entry) => entry.anchor));
     for (const email of doc.emails)
     {
-        if (!indexed.has(email.anchor))
+        if (!indexedAnchors.has(email.anchor))
         {
             throw new Error(`layout: the email ${email.anchor} has no index entry`);
         }
     }
-    const laidIndex = entries.length > 0 ? layIndex(typesetter, config, emails.left, emails.width, doc.index) : null;
+    const laidIndex = indexEntries.length > 0 ? layIndex(typesetter, config, emailBuilder.left, emailBuilder.contentWidth, doc.index) : null;
 
     // The cover and the index, until the page numbers settle. Placeholders of a discarded pass are not counted.
-    let discarded = 0;
-    let last = 0;
+    let discardedPlaceholders = 0;
+    let lastPassPlaceholders = 0;
     const { front, passes } = settlePageCount((guess) =>
     {
-        discarded += last;
-        const before = typesetter.placeholders;
-        const b = new PageBuilder(config, typesetter);
-        b.destination(COVER_DESTINATION, 0);
+        discardedPlaceholders += lastPassPlaceholders;
+        const placeholdersBefore = typesetter.placeholders;
+        const frontBuilder = new PageBuilder(config, typesetter);
+        frontBuilder.addDestination(COVER_DESTINATION, 0);
         for (const block of doc.cover.blocks)
         {
-            placeBlock(b, block);
+            placeBlock(frontBuilder, block);
         }
         if (laidIndex !== null)
         {
-            placeIndex(b, laidIndex, (anchor) => guess + emailPages.get(anchor)! + 1);
+            placeIndex(frontBuilder, laidIndex, (anchor) => guess + emailPageByAnchor.get(anchor)! + 1);
         }
-        last = typesetter.placeholders - before;
-        return { builder: b, pages: b.pages.length };
+        lastPassPlaceholders = typesetter.placeholders - placeholdersBefore;
+        return { builder: frontBuilder, pages: frontBuilder.pages.length };
     }, options.maxPasses ?? MAX_FRONT_PASSES);
 
     const frontPages = front.pages;
-    const allPages = [...front.builder.pages, ...emailPageList];
+    const allPages = [...front.builder.pages, ...emailPages];
     const anchorPages = new Map<string, number>();
-    for (const [anchor, page] of emailPages)
+    for (const [anchor, page] of emailPageByAnchor)
     {
         anchorPages.set(anchor, frontPages + page);
     }
-    const destinations = [...front.builder.destinations, ...emails.destinations.map((d) => ({ ...d, page: frontPages + d.page }))];
+    const destinations = [
+        ...front.builder.destinations,
+        ...emailBuilder.destinations.map((destination) => ({ ...destination, page: frontPages + destination.page }))
+    ];
 
     const outline: LaidOutOutlineItem[] = [{ title: options.strings.coverBookmark, destination: COVER_DESTINATION, children: [] }];
     if (laidIndex !== null)
     {
         outline.push({ title: doc.index.heading, destination: INDEX_DESTINATION, children: [] });
     }
-    for (const entry of entries)
+    for (const entry of indexEntries)
     {
         outline.push({ title: entry.bookmark, destination: entry.anchor, children: [] });
     }
@@ -244,7 +247,7 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
             info: { title: doc.title, producer: options.strings.producer },
         },
         anchorPages,
-        placeholders: typesetter.placeholders - discarded,
+        placeholders: typesetter.placeholders - discardedPlaceholders,
         frontPages,
         passes,
         bodyIndent,
@@ -252,127 +255,127 @@ export function layoutPdf(doc: PdfDocument, fonts: Readonly<Record<PdfFontName, 
 }
 
 /** One cover block. */
-function placeBlock(b: PageBuilder, block: PdfBlock): void
+function placeBlock(builder: PageBuilder, block: PdfBlock): void
 {
-    const ts = b.typesetter;
-    const { spacing } = b.config;
+    const typesetter = builder.typesetter;
+    const { spacing } = builder.config;
     switch (block.kind)
     {
         case 'heading': {
             if (block.level === 1)
             {
-                b.placeAll(ts.wrap(block.line, b.width, 'title'));
-                b.space(spacing.afterTitle);
+                builder.placeLines(typesetter.wrap(block.line, builder.contentWidth, 'title'));
+                builder.addSpace(spacing.afterTitle);
                 return;
             }
-            const lines = ts.wrap(block.line, b.width, 'heading');
-            b.space(spacing.beforeSection);
+            const lines = typesetter.wrap(block.line, builder.contentWidth, 'heading');
+            builder.addSpace(spacing.beforeSection);
             // Kept with the start of its section: two lines of text.
-            b.ensure(linesHeight(lines) + spacing.afterHeading + 2 * ts.lineHeight('body'));
-            b.placeAll(lines);
-            b.space(spacing.afterHeading);
+            builder.newPageUnlessFits(linesHeight(lines) + spacing.afterHeading + 2 * typesetter.lineHeight('body'));
+            builder.placeLines(lines);
+            builder.addSpace(spacing.afterHeading);
             return;
         }
         case 'fields':
             for (const row of block.rows)
             {
-                placeRow(b, layRow(b, row));
+                placeFieldRow(builder, layFieldRow(builder, row));
             }
-            b.space(spacing.betweenBlocks);
+            builder.addSpace(spacing.betweenBlocks);
             return;
         case 'paragraph':
-            b.placeAll(ts.wrap(block.line, b.width, 'body'));
-            b.space(spacing.betweenBlocks);
+            builder.placeLines(typesetter.wrap(block.line, builder.contentWidth, 'body'));
+            builder.addSpace(spacing.betweenBlocks);
             return;
         case 'list':
-            for (const [k, item] of block.items.entries())
+            for (const [position, item] of block.items.entries())
             {
-                if (k > 0)
+                if (position > 0)
                 {
-                    b.space(b.config.list.itemGap);
+                    builder.addSpace(builder.config.list.itemGap);
                 }
-                placeItem(b, layItem(b, item));
+                placeListItem(builder, layListItem(builder, item));
             }
-            b.space(spacing.betweenBlocks);
+            builder.addSpace(spacing.betweenBlocks);
             return;
     }
 }
 
 /** One email (see the pagination rules at the top of this file). */
-function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent: number, anchorPages: Map<string, number>): void
+function placeEmail(builder: PageBuilder, email: PdfEmail, isFirstEmail: boolean, bodyIndent: number, emailPageByAnchor: Map<string, number>): void
 {
-    const ts = b.typesetter;
-    const { spacing } = b.config;
-    const heading = ts.wrap([{ role: 'heading', text: email.heading }], b.width, 'heading');
-    const rows: LaidRow[] = email.fields.map((row) => layRow(b, row));
+    const typesetter = builder.typesetter;
+    const { spacing } = builder.config;
+    const heading = typesetter.wrap([{ role: 'heading', text: email.heading }], builder.contentWidth, 'heading');
+    const rows: LaidFieldRow[] = email.fields.map((row) => layFieldRow(builder, row));
     // Every body line one tab in (tasks 8.6 and 8.9), wrapped lines too, wrapped to the width left;
     // the notes too (only the "(no text)" placeholder, where the text would be: task 8.10).
-    const bodyX = b.left + bodyIndent;
-    const notes = email.notes.flatMap((line) => ts.wrap(line, b.width - bodyIndent, 'body'));
-    const body = email.body.flatMap((line) => ts.wrap(line, b.width - bodyIndent, 'body'));
+    const bodyX = builder.left + bodyIndent;
+    const notes = email.notes.flatMap((line) => typesetter.wrap(line, builder.contentWidth - bodyIndent, 'body'));
+    const body = email.body.flatMap((line) => typesetter.wrap(line, builder.contentWidth - bodyIndent, 'body'));
 
     // The block kept together.
     const headingHeight = linesHeight(heading) + spacing.afterHeading;
-    const tableHeight = rows.reduce((h, r) => h + r.height, 0);
-    let keep =
+    const tableHeight = rows.reduce((total, row) => total + row.height, 0);
+    let keepHeight =
         headingHeight +
         tableHeight +
         spacing.afterFields +
         (notes.length > 0 ? linesHeight(notes) + spacing.afterNotes : 0) +
-        linesHeight(body.slice(0, b.config.keepBodyLines));
-    if (keep > b.contentHeight)
+        linesHeight(body.slice(0, builder.config.keepBodyLines));
+    if (keepHeight > builder.contentHeight)
     {
-        keep = headingHeight + (rows[0]?.height ?? 0);
+        keepHeight = headingHeight + (rows[0]?.height ?? 0);
     }
 
     // After this, the keep block fits below the cursor (or the page is empty).
-    // `first` is only a safeguard: the first email starts on a fresh PageBuilder, so `!b.atTop` is already false for it.
-    if (!b.atTop)
+    // `isFirstEmail` is only a safeguard: the first email starts on a fresh PageBuilder, so `!builder.atTop` is already false for it.
+    if (!builder.atTop)
     {
-        if (b.config.newPagePerEmail && !first)
+        if (builder.config.newPagePerEmail && !isFirstEmail)
         {
-            b.newPage();
+            builder.newPage();
         }
-        else if (!b.fits(spacing.betweenEmails + keep))
+        else if (!builder.fits(spacing.betweenEmails + keepHeight))
         {
-            b.newPage();
+            builder.newPage();
         }
         else
         {
-            b.rule(b.y + spacing.betweenEmails / 2);
-            b.y += spacing.betweenEmails;
+            builder.drawRule(builder.cursorY + spacing.betweenEmails / 2);
+            builder.cursorY += spacing.betweenEmails;
         }
     }
 
-    b.destination(email.anchor, b.y - spacing.destinationAbove);
-    anchorPages.set(email.anchor, b.pageIndex);
-    b.placeAll(heading);
-    b.space(spacing.afterHeading);
+    builder.addDestination(email.anchor, builder.cursorY - spacing.destinationAbove);
+    emailPageByAnchor.set(email.anchor, builder.pageIndex);
+    builder.placeLines(heading);
+    builder.addSpace(spacing.afterHeading);
     for (const row of rows)
     {
-        placeRow(b, row);
+        placeFieldRow(builder, row);
     }
-    b.space(spacing.afterFields);
+    builder.addSpace(spacing.afterFields);
     if (notes.length > 0)
     {
-        b.placeAll(notes, bodyX);
-        b.space(spacing.afterNotes);
+        builder.placeLines(notes, bodyX);
+        builder.addSpace(spacing.afterNotes);
     }
-    for (const laid of body)
+    for (const bodyLine of body)
     {
-        b.place(laid, bodyX);
+        builder.placeLine(bodyLine, bodyX);
     }
 
     if (email.attachments !== null)
     {
-        b.space(spacing.beforeAttachments);
-        const label = ts.wrap([{ role: 'field-label', text: email.attachments.label }], b.width, 'field-label');
-        const items = email.attachments.items.map((item) => layItem(b, [item]));
-        b.ensure(linesHeight(label) + (items[0]?.lines[0]?.height ?? 0));
-        b.placeAll(label);
+        builder.addSpace(spacing.beforeAttachments);
+        const label = typesetter.wrap([{ role: 'field-label', text: email.attachments.label }], builder.contentWidth, 'field-label');
+        const items = email.attachments.items.map((item) => layListItem(builder, [item]));
+        builder.newPageUnlessFits(linesHeight(label) + (items[0]?.lines[0]?.height ?? 0));
+        builder.placeLines(label);
         for (const item of items)
         {
-            placeItem(b, item);
+            placeListItem(builder, item);
         }
     }
 }
@@ -381,21 +384,24 @@ function placeEmail(b: PageBuilder, email: PdfEmail, first: boolean, bodyIndent:
  * The footer of every page, now that the page count is known: one line, at
  * most the width of the text area (an Error if it is wider, never cut).
  */
-function addFooters(b: PageBuilder, all: readonly PageInProgress[], strings: LayoutStrings): LaidOutPage[]
+function addFooters(builder: PageBuilder, allPages: readonly PageInProgress[], strings: LayoutStrings): LaidOutPage[]
 {
-    const ts = b.typesetter;
-    const { footer, page } = b.config;
-    const total = all.length;
-    return all.map((p, index) =>
+    const typesetter = builder.typesetter;
+    const { footer, page: pageConfig } = builder.config;
+    const pageCount = allPages.length;
+    return allPages.map((page, position) =>
     {
-        const lines = ts.wrap([{ role: 'muted', text: strings.pageFooter(index + 1, total) }], b.width, 'muted', ts.footerStyle);
+        const lines = typesetter.wrap([{ role: 'muted', text: strings.pageFooter(position + 1, pageCount) }], builder.contentWidth,
+            'muted', typesetter.footerStyleIndex);
         if (lines.length !== 1)
         {
             throw new Error('layout: the page footer is wider than the text area');
         }
         const line = lines[0]!;
-        const x = footer.align === 'right' ? b.left + b.width - line.width : b.left + (b.width - line.width) / 2;
-        ts.emit(line, x, page.height - footer.baselineFromBottom - line.above, p.text);
-        return p;
+        const x = footer.align === 'right'
+            ? builder.left + builder.contentWidth - line.width
+            : builder.left + (builder.contentWidth - line.width) / 2;
+        typesetter.drawLine(line, x, pageConfig.height - footer.baselineFromBottom - line.above, page.text);
+        return page;
     });
 }

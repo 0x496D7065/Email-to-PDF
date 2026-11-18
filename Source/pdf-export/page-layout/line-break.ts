@@ -13,17 +13,17 @@
 // A single item wider than the line (rare: a huge cluster) gets a line of
 // its own. Spaces at the start of the text (indentation) are kept. A line
 // with no item is one empty line. Pure (README.md, rule R7).
-import { BREAK_AFTER, type ShapedText, SOFT_HYPHEN_ITEM, SPACE } from './shape-text';
+import { BREAK_AFTER_ITEM, type ShapedText, SOFT_HYPHEN_ITEM, SPACE_ITEM } from './shape-text';
 
 /** LineRange.hyphenAt when the line does not end at a soft hyphen. */
-export const SHY_NONE = -1;
+export const NO_SOFT_HYPHEN = -1;
 
 /** One line: items [start, end). */
 export interface LineRange
 {
     readonly start: number;
     readonly end: number;
-    /** The soft hyphen item where the line breaks (a hyphen is drawn after it), or SHY_NONE. */
+    /** The soft hyphen item where the line breaks (a hyphen is drawn after it), or NO_SOFT_HYPHEN. */
     readonly hyphenAt: number;
     /** Drawn width: trailing spaces not counted, the hyphen counted. */
     readonly width: number;
@@ -38,90 +38,90 @@ const EPSILON = 1e-6;
  */
 export function breakLines(text: ShapedText, maxWidth: number, hyphenWidth: (item: number) => number): LineRange[]
 {
-    const n = text.length;
+    const itemCount = text.length;
     const { kind, width } = text;
     const lines: LineRange[] = [];
-    if (n === 0)
+    if (itemCount === 0)
     {
-        return [{ start: 0, end: 0, hyphenAt: SHY_NONE, width: 0 }];
+        return [{ start: 0, end: 0, hyphenAt: NO_SOFT_HYPHEN, width: 0 }];
     }
-    const limit = maxWidth + EPSILON;
+    const widthLimit = maxWidth + EPSILON;
     let start = 0;
-    while (start < n)
+    while (start < itemCount)
     {
-        let x = 0; // width so far, trailing spaces included
-        let visible = 0; // width so far, trailing spaces not included
-        let candidate = -1; // the line may end before this item
+        let widthWithSpaces = 0; // width so far, trailing spaces included
+        let visibleWidth = 0; // width so far, trailing spaces not included
+        let candidateEnd = -1; // the line may end before this item
         let candidateWidth = 0;
-        let candidateHyphen = SHY_NONE;
-        let end = n;
+        let candidateHyphen = NO_SOFT_HYPHEN;
+        let end = itemCount;
         let endWidth = -1;
-        let hyphenAt = SHY_NONE;
-        for (let i = start; i < n; i++)
+        let hyphenAt = NO_SOFT_HYPHEN;
+        for (let i = start; i < itemCount; i++)
         {
-            const k = kind[i]!;
-            const w = width[i]!;
-            if ((k & SPACE) !== 0)
+            const itemKind = kind[i]!;
+            const itemWidth = width[i]!;
+            if ((itemKind & SPACE_ITEM) !== 0)
             {
-                x += w;
+                widthWithSpaces += itemWidth;
                 continue;
             }
-            if (i > start && (kind[i - 1]! & SPACE) !== 0)
+            if (i > start && (kind[i - 1]! & SPACE_ITEM) !== 0)
             {
-                candidate = i;
-                candidateWidth = visible;
-                candidateHyphen = SHY_NONE;
+                candidateEnd = i;
+                candidateWidth = visibleWidth;
+                candidateHyphen = NO_SOFT_HYPHEN;
             }
-            if ((k & SOFT_HYPHEN_ITEM) !== 0)
+            if ((itemKind & SOFT_HYPHEN_ITEM) !== 0)
             {
-                const withHyphen = x + hyphenWidth(i);
-                if (withHyphen <= limit)
+                const widthWithHyphen = widthWithSpaces + hyphenWidth(i);
+                if (widthWithHyphen <= widthLimit)
                 {
-                    candidate = i + 1;
-                    candidateWidth = withHyphen;
+                    candidateEnd = i + 1;
+                    candidateWidth = widthWithHyphen;
                     candidateHyphen = i;
                 }
                 continue;
             }
-            if (x + w <= limit)
+            if (widthWithSpaces + itemWidth <= widthLimit)
             {
-                x += w;
-                visible = x;
-                if ((k & BREAK_AFTER) !== 0)
+                widthWithSpaces += itemWidth;
+                visibleWidth = widthWithSpaces;
+                if ((itemKind & BREAK_AFTER_ITEM) !== 0)
                 {
-                    candidate = i + 1;
-                    candidateWidth = visible;
-                    candidateHyphen = SHY_NONE;
+                    candidateEnd = i + 1;
+                    candidateWidth = visibleWidth;
+                    candidateHyphen = NO_SOFT_HYPHEN;
                 }
                 continue;
             }
             // Item i does not fit.
-            if (candidate > start)
+            if (candidateEnd > start)
             {
-                end = candidate;
+                end = candidateEnd;
                 endWidth = candidateWidth;
                 hyphenAt = candidateHyphen;
             }
             else if (i > start)
             {
                 end = i; // no break place: break between items
-                endWidth = visible;
+                endWidth = visibleWidth;
             }
             else
             {
                 end = i + 1; // one item wider than the line
-                endWidth = w;
+                endWidth = itemWidth;
             }
             break;
         }
         if (endWidth < 0)
         {
-            endWidth = visible; // the rest fits
+            endWidth = visibleWidth; // the rest fits
         }
         // Spaces after the break stay on this line (never at the start of the next one).
         // Needed after a single item wider than the line ("[U+1F600] next" in a
         // narrow column); a break after spaces already ends at a non-space.
-        while (end < n && (kind[end]! & SPACE) !== 0)
+        while (end < itemCount && (kind[end]! & SPACE_ITEM) !== 0)
         {
             end++;
         }

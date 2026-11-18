@@ -5,13 +5,13 @@
 // Source/pdf-export/font-reader/parse-font.ts). Pure (README.md, rule R7).
 import type { ParsedFont } from '../../../Header/pdf-fonts';
 
-const UNKNOWN = -1;
+const UNKNOWN_GLYPH = -1;
 
 export class FontMetrics
 {
-    /** Glyph id per BMP code point, UNKNOWN until looked up. */
-    private readonly bmp = new Int32Array(0x10000).fill(UNKNOWN);
-    private readonly astral = new Map<number, number>();
+    /** Glyph id per BMP code point, UNKNOWN_GLYPH until looked up. */
+    private readonly bmpGlyphs = new Int32Array(0x10000).fill(UNKNOWN_GLYPH);
+    private readonly astralGlyphs = new Map<number, number>();
     /** Advance width of each glyph, in ems. */
     private readonly advances: Float64Array;
     /** hhea ascender and descender in ems (descender negative, as stored). */
@@ -21,9 +21,9 @@ export class FontMetrics
     constructor(readonly font: ParsedFont)
     {
         this.advances = new Float64Array(font.numGlyphs);
-        for (let g = 0; g < font.numGlyphs; g++)
+        for (let glyphId = 0; glyphId < font.numGlyphs; glyphId++)
         {
-            this.advances[g] = font.advance(g) / font.unitsPerEm;
+            this.advances[glyphId] = font.advance(glyphId) / font.unitsPerEm;
         }
         this.ascent = font.hhea.ascender / font.unitsPerEm;
         this.descent = font.hhea.descender / font.unitsPerEm;
@@ -34,21 +34,21 @@ export class FontMetrics
     {
         if (codePoint < 0x10000)
         {
-            let g = this.bmp[codePoint]!;
-            if (g === UNKNOWN)
+            let glyphId = this.bmpGlyphs[codePoint]!;
+            if (glyphId === UNKNOWN_GLYPH)
             {
-                g = this.font.glyphFor(codePoint);
-                this.bmp[codePoint] = g;
+                glyphId = this.font.glyphFor(codePoint);
+                this.bmpGlyphs[codePoint] = glyphId;
             }
-            return g;
+            return glyphId;
         }
-        let g = this.astral.get(codePoint);
-        if (g === undefined)
+        let glyphId = this.astralGlyphs.get(codePoint);
+        if (glyphId === undefined)
         {
-            g = this.font.glyphFor(codePoint);
-            this.astral.set(codePoint, g);
+            glyphId = this.font.glyphFor(codePoint);
+            this.astralGlyphs.set(codePoint, glyphId);
         }
-        return g;
+        return glyphId;
     }
 
     /** The advance of a glyph, in ems. */

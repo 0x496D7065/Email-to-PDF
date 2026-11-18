@@ -8,7 +8,7 @@ import type { LaidLine } from './typesetter';
 import type { PdfFieldRow, PdfLine } from '../../../Header/pdf-document-model';
 
 /** A table row, wrapped: its label lines and its value lines. */
-export interface LaidRow
+export interface LaidFieldRow
 {
     readonly label: readonly LaidLine[];
     readonly value: readonly LaidLine[];
@@ -16,24 +16,24 @@ export interface LaidRow
     readonly height: number;
 }
 
-const sum = (lines: readonly LaidLine[]): number => lines.reduce((h, l) => h + l.height, 0);
+const sumHeights = (lines: readonly LaidLine[]): number => lines.reduce((total, line) => total + line.height, 0);
 
 /** Total height of some lines. */
 export function linesHeight(lines: readonly LaidLine[]): number
 {
-    return sum(lines);
+    return sumHeights(lines);
 }
 
 /** Wraps a row of a label/value table. */
-export function layRow(b: PageBuilder, row: PdfFieldRow): LaidRow
+export function layFieldRow(builder: PageBuilder, row: PdfFieldRow): LaidFieldRow
 {
-    const ts = b.typesetter;
-    const { labelWidth, gap, rowGap } = b.config.fields;
-    const valueWidth = Math.max(1, b.width - labelWidth - gap);
-    const label = ts.wrap(row.label === '' ? [] : [{ role: 'field-label', text: row.label }], labelWidth, 'field-label');
+    const typesetter = builder.typesetter;
+    const { labelWidth, gap, rowGap } = builder.config.fields;
+    const valueWidth = Math.max(1, builder.contentWidth - labelWidth - gap);
+    const label = typesetter.wrap(row.label === '' ? [] : [{ role: 'field-label', text: row.label }], labelWidth, 'field-label');
     const values: readonly PdfLine[] = row.value.length === 0 ? [[]] : row.value;
-    const value = values.flatMap((line) => ts.wrap(line, valueWidth, 'field-value'));
-    return { label, value, height: Math.max(sum(label), sum(value)) + rowGap };
+    const value = values.flatMap((line) => typesetter.wrap(line, valueWidth, 'field-value'));
+    return { label, value, height: Math.max(sumHeights(label), sumHeights(value)) + rowGap };
 }
 
 /**
@@ -41,64 +41,64 @@ export function layRow(b: PageBuilder, row: PdfFieldRow): LaidRow
  * breaks between its lines (the k-th label line and the k-th value line
  * share one band, so the first ones stay on one baseline).
  */
-export function placeRow(b: PageBuilder, row: LaidRow): void
+export function placeFieldRow(builder: PageBuilder, row: LaidFieldRow): void
 {
-    const { labelWidth, gap, rowGap } = b.config.fields;
-    if (row.height <= b.contentHeight)
+    const { labelWidth, gap, rowGap } = builder.config.fields;
+    if (row.height <= builder.contentHeight)
     {
-        b.ensure(row.height);
+        builder.newPageUnlessFits(row.height);
     }
-    const valueX = b.left + labelWidth + gap;
-    const bands = Math.max(row.label.length, row.value.length);
-    for (let k = 0; k < bands; k++)
+    const valueX = builder.left + labelWidth + gap;
+    const bandCount = Math.max(row.label.length, row.value.length);
+    for (let band = 0; band < bandCount; band++)
     {
-        const label = row.label[k];
-        const value = row.value[k];
+        const label = row.label[band];
+        const value = row.value[band];
         const height = Math.max(label?.height ?? 0, value?.height ?? 0);
-        b.ensure(height);
+        builder.newPageUnlessFits(height);
         if (label !== undefined)
         {
-            b.typesetter.emit(label, b.left, b.y, b.page.text);
+            builder.typesetter.drawLine(label, builder.left, builder.cursorY, builder.currentPage.text);
         }
         if (value !== undefined)
         {
-            b.typesetter.emit(value, valueX, b.y, b.page.text);
+            builder.typesetter.drawLine(value, valueX, builder.cursorY, builder.currentPage.text);
         }
-        b.y += height;
+        builder.cursorY += height;
     }
-    b.y += rowGap;
+    builder.cursorY += rowGap;
 }
 
 /** A list item, wrapped (each of its lines wrapped on its own). */
-export interface LaidItem
+export interface LaidListItem
 {
     readonly bullet: LaidLine;
     readonly lines: readonly LaidLine[];
     readonly height: number;
 }
 
-export function layItem(b: PageBuilder, item: readonly PdfLine[]): LaidItem
+export function layListItem(builder: PageBuilder, item: readonly PdfLine[]): LaidListItem
 {
-    const ts = b.typesetter;
-    const { bullet, indent } = b.config.list;
-    const lines = (item.length === 0 ? [[]] : item).flatMap((line) => ts.wrap(line, Math.max(1, b.width - indent), 'body'));
-    return { bullet: ts.wrap([{ role: 'body', text: bullet }], indent, 'body')[0]!, lines, height: sum(lines) };
+    const typesetter = builder.typesetter;
+    const { bullet, indent } = builder.config.list;
+    const lines = (item.length === 0 ? [[]] : item).flatMap((line) => typesetter.wrap(line, Math.max(1, builder.contentWidth - indent), 'body'));
+    return { bullet: typesetter.wrap([{ role: 'body', text: bullet }], indent, 'body')[0]!, lines, height: sumHeights(lines) };
 }
 
 /** Places a list item: kept on one page when it fits on one; the bullet on the first line's baseline. */
-export function placeItem(b: PageBuilder, item: LaidItem): void
+export function placeListItem(builder: PageBuilder, item: LaidListItem): void
 {
-    const { indent } = b.config.list;
-    if (item.height <= b.contentHeight)
+    const { indent } = builder.config.list;
+    if (item.height <= builder.contentHeight)
     {
-        b.ensure(item.height);
+        builder.newPageUnlessFits(item.height);
     }
     const [first, ...rest] = item.lines;
     if (first !== undefined)
     {
-        b.ensure(first.height);
-        b.typesetter.emit(item.bullet, b.left, b.y + first.above - item.bullet.above, b.page.text);
-        b.place(first, b.left + indent);
+        builder.newPageUnlessFits(first.height);
+        builder.typesetter.drawLine(item.bullet, builder.left, builder.cursorY + first.above - item.bullet.above, builder.currentPage.text);
+        builder.placeLine(first, builder.left + indent);
     }
-    b.placeAll(rest, b.left + indent);
+    builder.placeLines(rest, builder.left + indent);
 }

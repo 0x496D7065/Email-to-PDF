@@ -18,19 +18,19 @@ export interface PageInProgress
 const EPSILON = 1e-6;
 
 /** Destination names the backend accepts (made by our code only). */
-const DESTINATION_NAME = /^[A-Za-z0-9._-]{1,127}$/;
+const DESTINATION_NAME_PATTERN = /^[A-Za-z0-9._-]{1,127}$/;
 
 export class PageBuilder
 {
     readonly pages: PageInProgress[] = [];
     readonly destinations: LaidOutDestination[] = [];
     /** Top of the next thing to place. */
-    y: number;
+    cursorY: number;
     readonly top: number;
     readonly bottom: number;
     readonly left: number;
     /** Width of the text area. */
-    readonly width: number;
+    readonly contentWidth: number;
 
     constructor(
         readonly config: LayoutConfig,
@@ -40,12 +40,12 @@ export class PageBuilder
         this.top = config.margin.top;
         this.bottom = config.page.height - config.margin.bottom;
         this.left = config.margin.left;
-        this.width = config.page.width - config.margin.left - config.margin.right;
-        if (!(this.width > 0 && this.bottom > this.top))
+        this.contentWidth = config.page.width - config.margin.left - config.margin.right;
+        if (!(this.contentWidth > 0 && this.bottom > this.top))
         {
             throw new Error('layout: the margins leave no room for text');
         }
-        this.y = this.top;
+        this.cursorY = this.top;
         this.newPage();
     }
 
@@ -55,7 +55,7 @@ export class PageBuilder
         return this.bottom - this.top;
     }
 
-    get page(): PageInProgress
+    get currentPage(): PageInProgress
     {
         return this.pages[this.pages.length - 1]!;
     }
@@ -69,22 +69,22 @@ export class PageBuilder
     /** Nothing placed on the current page yet. */
     get atTop(): boolean
     {
-        return this.y <= this.top + EPSILON;
+        return this.cursorY <= this.top + EPSILON;
     }
 
     newPage(): void
     {
         this.pages.push({ fills: [], lines: [], text: [], links: [] });
-        this.y = this.top;
+        this.cursorY = this.top;
     }
 
     fits(height: number): boolean
     {
-        return this.y + height <= this.bottom + EPSILON;
+        return this.cursorY + height <= this.bottom + EPSILON;
     }
 
     /** Starts a new page unless `height` fits below the cursor (or the page is still empty). */
-    ensure(height: number): void
+    newPageUnlessFits(height: number): void
     {
         if (!this.atTop && !this.fits(height))
         {
@@ -93,41 +93,41 @@ export class PageBuilder
     }
 
     /** Vertical space; none at the top of a page. */
-    space(height: number): void
+    addSpace(height: number): void
     {
         if (!this.atTop)
         {
-            this.y += height;
+            this.cursorY += height;
         }
     }
 
     /** Places one line at `x` (a new page first if it does not fit). */
-    place(line: LaidLine, x: number = this.left): void
+    placeLine(line: LaidLine, x: number = this.left): void
     {
-        this.ensure(line.height);
-        this.typesetter.emit(line, x, this.y, this.page.text);
-        this.y += line.height;
+        this.newPageUnlessFits(line.height);
+        this.typesetter.drawLine(line, x, this.cursorY, this.currentPage.text);
+        this.cursorY += line.height;
     }
 
-    placeAll(lines: readonly LaidLine[], x: number = this.left): void
+    placeLines(lines: readonly LaidLine[], x: number = this.left): void
     {
         for (const line of lines)
         {
-            this.place(line, x);
+            this.placeLine(line, x);
         }
     }
 
     /** A horizontal rule across the text area at height `y` of the current page. */
-    rule(y: number): void
+    drawRule(y: number): void
     {
         const { width, color } = this.config.rule;
-        this.page.lines.push({ x1: this.left, y1: y, x2: this.left + this.width, y2: y, width, color });
+        this.currentPage.lines.push({ x1: this.left, y1: y, x2: this.left + this.contentWidth, y2: y, width, color });
     }
 
     /** A named destination at `y` of the current page (clamped to the page). */
-    destination(name: string, y: number): void
+    addDestination(name: string, y: number): void
     {
-        if (!DESTINATION_NAME.test(name))
+        if (!DESTINATION_NAME_PATTERN.test(name))
         {
             throw new Error(`layout: invalid destination name ${JSON.stringify(name).slice(0, 80)}`);
         }
