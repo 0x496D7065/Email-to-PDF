@@ -25,7 +25,7 @@ import { readSfntDirectory } from '../font-reader/sfnt-directory';
 import { unwrapWoff } from '../font-reader/unwrap-woff';
 import { PDF_FONTS } from '../bundled-fonts';
 import { isDrawnAsNothing } from '../text';
-import { MAX_OUTLINE_DEPTH, MAX_PAGES, OwnPdfWriter, writePdf } from './write-pdf';
+import { MAX_OUTLINE_DEPTH, MAX_PAGES, PdfWriter, writePdf } from './write-pdf';
 import { MAX_OUTPUT_BYTES } from './pdf-file-builder';
 import { PdfWriteError } from './pdf-syntax';
 import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage, LaidOutTextRun, PdfFontSet } from '../../../Header/laid-out-document';
@@ -73,9 +73,9 @@ function doc(pages: LaidOutPage[], extra: Partial<LaidOutDocument> = {}): LaidOu
     return { pageSize: A4, pages, destinations: [], outline: [], info: { title: 'Mail of Alice Example', producer: PRODUCER }, ...extra };
 }
 
-async function write(d: LaidOutDocument, set: PdfFontSet = fonts): Promise<{ bytes: Uint8Array; pdf: ParsedPdf }>
+async function write(input: LaidOutDocument, fontSet: PdfFontSet = fonts): Promise<{ bytes: Uint8Array; pdf: ParsedPdf }>
 {
-    const bytes = await new OwnPdfWriter().render(d, set);
+    const bytes = await new PdfWriter().render(input, fontSet);
     return { bytes, pdf: readPdf(bytes) };
 }
 
@@ -96,17 +96,17 @@ async function copiedRuns(pdf: ParsedPdf, index = 0): Promise<{ copied: string; 
 {
     const pageDict = pdf.pages()[index]!;
     const fontsOfPage = pageFonts(pdf, pageDict);
-    const maps = new Map<string, Map<number, string>>();
-    for (const [key, type0] of fontsOfPage)
+    const toUnicodeByFont = new Map<string, Map<number, string>>();
+    for (const [resourceName, type0] of fontsOfPage)
     {
-        maps.set(key, await toUnicodeOf(pdf, type0));
+        toUnicodeByFont.set(resourceName, await toUnicodeOf(pdf, type0));
     }
     const { runs } = readContent(await pdf.dataText(pageDict.get('Contents')));
-    return runs.map((r) =>
+    return runs.map((contentRun) =>
     {
-        const map = maps.get(r.font)!;
-        const viaToUnicode = r.glyphs.map((g) => map.get(g) ?? '').join('');
-        return { copied: r.actualText ?? viaToUnicode, actualText: r.actualText, glyphs: r.glyphs };
+        const toUnicode = toUnicodeByFont.get(contentRun.font)!;
+        const viaToUnicode = contentRun.glyphs.map((glyph) => toUnicode.get(glyph) ?? '').join('');
+        return { copied: contentRun.actualText ?? viaToUnicode, actualText: contentRun.actualText, glyphs: contentRun.glyphs };
     });
 }
 
@@ -124,7 +124,7 @@ function* allValues(pdf: ParsedPdf): Generator<PdfValue>
         }
         else if (value instanceof PdfDict)
         {
-            stack.push(...value.entries.values(), ...value.keys().map((k) => new PdfName(k)));
+            stack.push(...value.entries.values(), ...value.keys().map((key) => new PdfName(key)));
         }
         else if (value instanceof PdfStream)
         {
@@ -135,15 +135,15 @@ function* allValues(pdf: ParsedPdf): Generator<PdfValue>
 
 const latin1 = (bytes: Uint8Array): string =>
 {
-    let s = '';
-    for (let i = 0; i < bytes.length; i += 8192)
+    let text = '';
+    for (let chunkStart = 0; chunkStart < bytes.length; chunkStart += 8192)
     {
-        s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+        text += String.fromCharCode(...bytes.subarray(chunkStart, chunkStart + 8192));
     }
-    return s;
+    return text;
 };
 
-describe('OwnPdfWriter: structure', () =>
+describe('PdfWriter: structure', () =>
 {
     it('writes a minimal one-page document', async () =>
     {
@@ -163,11 +163,11 @@ describe('OwnPdfWriter: structure', () =>
     it('writes several pages, each with its own content', async () =>
     {
         const texts = ['Page one', 'Page two', 'Page three'];
-        const { pdf } = await write(doc(texts.map((t) => page([run(t)]))));
+        const { pdf } = await write(doc(texts.map((text) => page([run(text)]))));
         expect(pdf.pages()).toHaveLength(3);
-        for (const [i, t] of texts.entries())
+        for (const [pageIndex, text] of texts.entries())
         {
-            expect((await copiedRuns(pdf, i))[0]!.copied).toBe(t);
+            expect((await copiedRuns(pdf, pageIndex))[0]!.copied).toBe(text);
         }
     });
 
@@ -177,13 +177,13 @@ describe('OwnPdfWriter: structure', () =>
         const lines = [{ x1: 10, y1: 60, x2: 200, y2: 60, width: 0.5, color: { rgb: [0.2, 0.4, 0.6] as const } }];
         const { pdf } = await write(doc([page([run('Text', { color: { rgb: [0, 0, 0.5] } })], { fills, lines })]));
         const { ops, runs } = readContent(await pdf.dataText(pdf.pages()[0]!.get('Contents')));
-        const names = ops.map((o) => o.op);
+        const names = ops.map((operation) => operation.op);
         expect(names.indexOf('re')).toBeLessThan(names.indexOf('S'));
         expect(names.indexOf('S')).toBeLessThan(names.indexOf('BT'));
-        expect(ops.find((o) => o.op === 're')!.operands).toEqual([10, 791.89, 100, 30]);
-        expect(ops.find((o) => o.op === 'g')!.operands).toEqual([0.9]);
-        expect(ops.find((o) => o.op === 'RG')!.operands).toEqual([0.2, 0.4, 0.6]);
-        expect(ops.find((o) => o.op === 'm')!.operands).toEqual([10, 781.89]);
+        expect(ops.find((operation) => operation.op === 're')!.operands).toEqual([10, 791.89, 100, 30]);
+        expect(ops.find((operation) => operation.op === 'g')!.operands).toEqual([0.9]);
+        expect(ops.find((operation) => operation.op === 'RG')!.operands).toEqual([0.2, 0.4, 0.6]);
+        expect(ops.find((operation) => operation.op === 'm')!.operands).toEqual([10, 781.89]);
         expect(runs[0]!.fill).toEqual([0, 0, 0.5]);
     });
 
@@ -205,9 +205,9 @@ describe('OwnPdfWriter: structure', () =>
 
     it('writes a deterministic /ID: two equal values from SHA-256 of the body', async () =>
     {
-        const d = doc([page([run('Same input')])]);
-        const { bytes, pdf } = await write(d);
-        const again = await new OwnPdfWriter().render(d, fonts);
+        const input = doc([page([run('Same input')])]);
+        const { bytes, pdf } = await write(input);
+        const again = await new PdfWriter().render(input, fonts);
         expect(again).toEqual(bytes);
         const [first, second] = pdf.trailer.get('ID') as PdfString[];
         expect(first!.hex && second!.hex).toBe(true);
@@ -217,17 +217,17 @@ describe('OwnPdfWriter: structure', () =>
         const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.slice(0, bodyEnd)));
         expect(first!.bytes).toEqual(digest.subarray(0, 16));
         // A different input gives a different /ID.
-        const other = readPdf(await new OwnPdfWriter().render(doc([page([run('Other input')])]), fonts));
+        const other = readPdf(await new PdfWriter().render(doc([page([run('Other input')])]), fonts));
         expect((other.trailer.get('ID') as PdfString[])[0]!.bytes).not.toEqual(first!.bytes);
     });
 
     it('never writes anything that acts (JavaScript, actions, URIs, files, forms)', async () =>
     {
-        const d = doc([page([run('x')], { links: [{ rect: { x: 1, y: 1, width: 5, height: 5 }, destination: 'top' }] })], {
+        const input = doc([page([run('x')], { links: [{ rect: { x: 1, y: 1, width: 5, height: 5 }, destination: 'top' }] })], {
             destinations: [{ name: 'top', page: 0, y: 0 }],
             outline: [{ title: 'Top', destination: 'top', children: [] }],
         });
-        const { pdf } = await write(d);
+        const { pdf } = await write(input);
         const forbidden = ['JavaScript', 'JS', 'URI', 'Launch', 'OpenAction', 'AA', 'A', 'EmbeddedFile', 'EmbeddedFiles', 'AcroForm', 'XFA', 'GoToR', 'SubmitForm'];
         for (const value of allValues(pdf))
         {
@@ -244,7 +244,7 @@ describe('OwnPdfWriter: structure', () =>
     });
 });
 
-describe('OwnPdfWriter: fonts', () =>
+describe('PdfWriter: fonts', () =>
 {
     it('embeds all four fonts whole, with widths from the font', async () =>
     {
@@ -259,10 +259,10 @@ describe('OwnPdfWriter: fonts', () =>
             expect(pdf.name(type0.get('Subtype'))).toBe('Type0');
             expect(pdf.name(type0.get('Encoding'))).toBe('Identity-H');
             expect(pdf.name(type0.get('BaseFont'))).toBe(parsed.postScriptName);
-            const cid = pdf.dict((type0.get('DescendantFonts') as PdfValue[])[0]);
-            expect(pdf.name(cid.get('Subtype'))).toBe('CIDFontType2');
-            expect(pdf.name(cid.get('CIDToGIDMap'))).toBe('Identity');
-            const descriptor = pdf.dict(cid.get('FontDescriptor'));
+            const cidFontDict = pdf.dict((type0.get('DescendantFonts') as PdfValue[])[0]);
+            expect(pdf.name(cidFontDict.get('Subtype'))).toBe('CIDFontType2');
+            expect(pdf.name(cidFontDict.get('CIDToGIDMap'))).toBe('Identity');
+            const descriptor = pdf.dict(cidFontDict.get('FontDescriptor'));
             expect(pdf.name(descriptor.get('FontName'))).toBe(parsed.postScriptName);
             const flags = descriptor.get('Flags') as number;
             expect(flags & 32).toBe(32); // Nonsymbolic
@@ -276,7 +276,7 @@ describe('OwnPdfWriter: fonts', () =>
             expect(fontFile.dict.get('Length1')).toBe(parsed.sfnt.length);
             expect(await pdf.data(descriptor.get('FontFile2'))).toEqual(parsed.sfnt);
             // /W: exactly the used glyphs, with the font's advances.
-            const widths = readWidths(cid.get('W') as PdfValue[]);
+            const widths = readWidths(cidFontDict.get('W') as PdfValue[]);
             const used = new Set(runs[index]!.glyphs);
             expect(new Set(widths.keys())).toEqual(used);
             for (const glyph of used)
@@ -318,33 +318,33 @@ describe('OwnPdfWriter: fonts', () =>
     {
         const restricted = await patchedFsType(0x0002);
         expect(restricted.fsType).toBe(0x0002);
-        const set = { ...fonts, 'sans-regular': restricted };
-        await expect(new OwnPdfWriter().render(doc([page([run('x')])]), set)).rejects.toThrow(/restricted license/);
-        await expect(new OwnPdfWriter().render(doc([page([run('x', { font: 'sans-bold' })])]), set)).resolves.toBeInstanceOf(Uint8Array);
+        const fontSet = { ...fonts, 'sans-regular': restricted };
+        await expect(new PdfWriter().render(doc([page([run('x')])]), fontSet)).rejects.toThrow(/restricted license/);
+        await expect(new PdfWriter().render(doc([page([run('x', { font: 'sans-bold' })])]), fontSet)).resolves.toBeInstanceOf(Uint8Array);
     });
 });
 
-describe('OwnPdfWriter: copy layer', () =>
+describe('PdfWriter: copy layer', () =>
 {
     it('maps accents and punctuation back through ToUnicode, without ActualText', async () =>
     {
         const text = '\u{E9} \u{E7} \u{DF} \u{153} \u{20AC} \u{201C} \u{201D} \u{AB} \u{BB} \u{2013} \u{2026} \u{142} \u{151}';
         const { pdf } = await write(doc([page([run(text), run(text, { font: 'sans-bold' })])]));
-        for (const r of await copiedRuns(pdf))
+        for (const copiedRun of await copiedRuns(pdf))
         {
-            expect(r.copied).toBe(text);
-            expect(r.actualText).toBeUndefined();
+            expect(copiedRun.copied).toBe(text);
+            expect(copiedRun.actualText).toBeUndefined();
         }
     });
 
     it('keeps a combining mark as its own code point', async () =>
     {
         const { pdf } = await write(doc([page([run('e\u{301}')])]));
-        const [r] = await copiedRuns(pdf);
-        expect(r!.glyphs).toHaveLength(2);
-        expect(r!.copied).toBe('e\u{301}');
-        expect([...r!.copied]).toHaveLength(2);
-        expect(r!.actualText).toBeUndefined();
+        const [copiedRun] = await copiedRuns(pdf);
+        expect(copiedRun!.glyphs).toHaveLength(2);
+        expect(copiedRun!.copied).toBe('e\u{301}');
+        expect([...copiedRun!.copied]).toHaveLength(2);
+        expect(copiedRun!.actualText).toBeUndefined();
     });
 
     it('gives a drawn placeholder its emoji as ActualText (ZWJ and VS16 kept, other group 2 dropped)', async () =>
@@ -362,13 +362,13 @@ describe('OwnPdfWriter: copy layer', () =>
 
     it('uses the first text of a glyph in ToUnicode, and ActualText for the others', async () =>
     {
-        const a = fonts['sans-regular'].glyphFor(0x41);
+        const glyphA = fonts['sans-regular'].glyphFor(0x41);
         const one = run('A');
-        const other: LaidOutTextRun = { ...run('A'), glyphs: [a], glyphText: ['Z'], copyText: 'Z' };
+        const other: LaidOutTextRun = { ...run('A'), glyphs: [glyphA], glyphText: ['Z'], copyText: 'Z' };
         const { pdf } = await write(doc([page([one, other])]));
-        const [r1, r2] = await copiedRuns(pdf);
-        expect(r1).toMatchObject({ copied: 'A', actualText: undefined });
-        expect(r2).toMatchObject({ copied: 'Z', actualText: 'Z' });
+        const [firstRun, secondRun] = await copiedRuns(pdf);
+        expect(firstRun).toMatchObject({ copied: 'A', actualText: undefined });
+        expect(secondRun).toMatchObject({ copied: 'Z', actualText: 'Z' });
     });
 
     it('always writes an explicit actualText', async () =>
@@ -380,8 +380,8 @@ describe('OwnPdfWriter: copy layer', () =>
     it('puts an explicit actualText through the copy layer (bidi override replaced, ZWSP dropped)', async () =>
     {
         const { pdf } = await write(doc([page([run('ab', { actualText: 'a\u{202E}\u{200B}b' })])]));
-        const [r] = await copiedRuns(pdf);
-        expect(r!.actualText).toBe('a\u{FFFD}b');
+        const [copiedRun] = await copiedRuns(pdf);
+        expect(copiedRun!.actualText).toBe('a\u{FFFD}b');
     });
 
     it('puts info.title through the copy layer (bidi override replaced, ZWSP dropped)', async () =>
@@ -404,16 +404,16 @@ describe('OwnPdfWriter: copy layer', () =>
     {
         const hostile = run('ab', { copyText: 'a\u{7}\u{202E}\u{D800}b', glyphText: ['a\u{0}', 'b'] });
         const { pdf } = await write(doc([page([hostile])]));
-        const [r] = await copiedRuns(pdf);
-        expect(r!.actualText).toBe('a\u{FFFD}\u{FFFD}\u{FFFD}b');
+        const [copiedRun] = await copiedRuns(pdf);
+        expect(copiedRun!.actualText).toBe('a\u{FFFD}\u{FFFD}\u{FFFD}b');
         const map = await toUnicodeOf(pdf, pageFonts(pdf, pdf.pages()[0]!).get('F1')!);
         expect(map.get(hostile.glyphs[0]!)).toBe('a\u{FFFD}');
         for (const text of map.values())
         {
             for (const character of text)
             {
-                const cp = character.codePointAt(0)!;
-                expect(cp < 0x20 || (cp >= 0x202a && cp <= 0x202e)).toBe(false);
+                const codePoint = character.codePointAt(0)!;
+                expect(codePoint < 0x20 || (codePoint >= 0x202a && codePoint <= 0x202e)).toBe(false);
             }
         }
     });
@@ -426,11 +426,11 @@ describe('OwnPdfWriter: copy layer', () =>
     });
 });
 
-describe('OwnPdfWriter: links, destinations, bookmarks', () =>
+describe('PdfWriter: links, destinations, bookmarks', () =>
 {
     it('links to named destinations on the right pages', async () =>
     {
-        const d = doc(
+        const input = doc(
             [
                 page([run('Index')], { links: [{ rect: { x: 50, y: 90, width: 200, height: 14 }, destination: 'email-2' }] }),
                 page([run('Email 1')]),
@@ -444,12 +444,12 @@ describe('OwnPdfWriter: links, destinations, bookmarks', () =>
                 ],
             },
         );
-        const { pdf } = await write(d);
+        const { pdf } = await write(input);
         const dests = readDests(pdf);
         expect(dests.get('index')).toEqual({ page: 0, top: 841.89 });
         expect(dests.get('email-1')).toEqual({ page: 1, top: 801.89 });
         expect(dests.get('email-2')).toEqual({ page: 2, top: 769.39 });
-        const annots = (pdf.pages()[0]!.get('Annots') as PdfValue[]).map((a) => pdf.dict(a));
+        const annots = (pdf.pages()[0]!.get('Annots') as PdfValue[]).map((reference) => pdf.dict(reference));
         expect(annots).toHaveLength(1);
         const link = annots[0]!;
         expect(link.keys().sort()).toEqual(['Border', 'Dest', 'Rect', 'Subtype', 'Type']);
@@ -458,7 +458,7 @@ describe('OwnPdfWriter: links, destinations, bookmarks', () =>
         expect(link.get('Rect')).toEqual([50, 737.89, 250, 751.89]);
         expect(dests.get(pdf.name(link.get('Dest')))!.page).toBe(2);
         expect(pdf.pages()[1]!.has('Annots')).toBe(false);
-        const back = (pdf.pages()[2]!.get('Annots') as PdfValue[]).map((a) => pdf.dict(a));
+        const back = (pdf.pages()[2]!.get('Annots') as PdfValue[]).map((reference) => pdf.dict(reference));
         expect(back).toHaveLength(1);
         expect(pdf.name(back[0]!.get('Dest'))).toBe('index');
         // Annotations are indirect objects.
@@ -488,7 +488,7 @@ describe('OwnPdfWriter: links, destinations, bookmarks', () =>
             { title: hostile[3]!, destination: 'e2', children: [{ title: hostile[4]!, destination: 'e2', children: [] }] },
             { title: hostile[5]!, destination: 'cover', children: [] },
         ];
-        const d = doc([page([run('Cover')]), page([run('Email')])], {
+        const input = doc([page([run('Cover')]), page([run('Email')])], {
             outline,
             destinations: [
                 { name: 'cover', page: 0, y: 0 },
@@ -497,14 +497,14 @@ describe('OwnPdfWriter: links, destinations, bookmarks', () =>
             ],
             info: { title: hostile[1]!, producer: PRODUCER },
         });
-        const { pdf, bytes } = await write(d);
+        const { pdf, bytes } = await write(input);
         expect(pdf.name(pdf.catalog.get('PageMode'))).toBe('UseOutlines');
         const read = readOutline(pdf)!;
         // Visible: Cover, its 2 children (open), then 2 more top-level items.
         expect(read.count).toBe(5);
-        expect(read.items.map((i) => i.count)).toEqual([2, -1, undefined]);
+        expect(read.items.map((item) => item.count)).toEqual([2, -1, undefined]);
         expect(read.items[0]!.children[1]!.count).toBe(-1);
-        expect(read.items[0]!.children.map((c) => c.title)).toEqual([hostile[0], hostile[1]]);
+        expect(read.items[0]!.children.map((child) => child.title)).toEqual([hostile[0], hostile[1]]);
         expect(read.items[0]!.children[1]!.children[0]!.title).toBe('broken \u{FFFD} half');
         expect(read.items[1]!.title).toBe('\u{FFFD}reversed zero');
         expect(read.items[1]!.children[0]!.title).toBe('Lunch \u{1F355}');
@@ -521,7 +521,7 @@ describe('OwnPdfWriter: links, destinations, bookmarks', () =>
     });
 });
 
-describe('OwnPdfWriter: invalid input', () =>
+describe('PdfWriter: invalid input', () =>
 {
     const cases: [string, () => LaidOutDocument, RegExp][] = [
         ['NaN coordinate', () => doc([page([run('x', { x: NaN })])]), /finite/],
@@ -598,9 +598,9 @@ describe('OwnPdfWriter: invalid input', () =>
 
     it.each(cases)('%s throws a PdfWriteError', async (_label, make, message) =>
     {
-        const error: unknown = await new OwnPdfWriter().render(make(), fonts).then(
+        const error: unknown = await new PdfWriter().render(make(), fonts).then(
             () => undefined,
-            (e: unknown) => e,
+            (rejection: unknown) => rejection,
         );
         expect(error).toBeInstanceOf(PdfWriteError);
         expect((error as Error).message).toMatch(message);
@@ -608,15 +608,15 @@ describe('OwnPdfWriter: invalid input', () =>
 
     it('refuses a font that is used but not given', async () =>
     {
-        await expect(new OwnPdfWriter().render(doc([page([run('x')])]), {})).rejects.toThrow(/not given/);
+        await expect(new PdfWriter().render(doc([page([run('x')])]), {})).rejects.toThrow(/not given/);
     });
 
     it('wraps an unexpected failure as a PdfWriteError, keeping the cause', async () =>
     {
-        const d = { ...doc([page()]), pages: [{ fills: [throwingFill()], lines: [], text: [], links: [] }] } as unknown as LaidOutDocument;
-        const error: unknown = await new OwnPdfWriter().render(d, fonts).then(
+        const input = { ...doc([page()]), pages: [{ fills: [throwingFill()], lines: [], text: [], links: [] }] } as unknown as LaidOutDocument;
+        const error: unknown = await new PdfWriter().render(input, fonts).then(
             () => undefined,
-            (e: unknown) => e,
+            (rejection: unknown) => rejection,
         );
         expect(error).toBeInstanceOf(PdfWriteError);
         expect((error as Error).cause).toBeInstanceOf(TypeError);
@@ -640,11 +640,11 @@ describe('OwnPdfWriter: invalid input', () =>
             depth++;
         }
         expect(depth).toBe(MAX_OUTLINE_DEPTH);
-        await expect(new OwnPdfWriter().render(nested(MAX_OUTLINE_DEPTH + 1), fonts)).rejects.toThrow(/nested deeper/);
+        await expect(new PdfWriter().render(nested(MAX_OUTLINE_DEPTH + 1), fonts)).rejects.toThrow(/nested deeper/);
     });
 });
 
-describe('OwnPdfWriter: limits and scale', () =>
+describe('PdfWriter: limits and scale', () =>
 {
     it('has the documented limits', () =>
     {
@@ -654,16 +654,16 @@ describe('OwnPdfWriter: limits and scale', () =>
 
     it('refuses more pages than the limit', async () =>
     {
-        const d = doc([page(), page(), page()]);
-        await expect(new OwnPdfWriter({ maxPages: 2 }).render(d, fonts)).rejects.toThrow(/more than the limit of 2/);
-        await expect(writePdf(d, fonts, { maxPages: 3 })).resolves.toBeInstanceOf(Uint8Array);
+        const input = doc([page(), page(), page()]);
+        await expect(new PdfWriter({ maxPages: 2 }).render(input, fonts)).rejects.toThrow(/more than the limit of 2/);
+        await expect(writePdf(input, fonts, { maxPages: 3 })).resolves.toBeInstanceOf(Uint8Array);
     });
 
     it('refuses output larger than the limit', async () =>
     {
-        const d = doc([page([run('x')])]);
-        await expect(new OwnPdfWriter({ maxBytes: 50_000 }).render(d, fonts)).rejects.toThrow(PdfWriteError);
-        await expect(new OwnPdfWriter({ maxBytes: 50_000 }).render(d, fonts)).rejects.toThrow(/larger than/);
+        const input = doc([page([run('x')])]);
+        await expect(new PdfWriter({ maxBytes: 50_000 }).render(input, fonts)).rejects.toThrow(PdfWriteError);
+        await expect(new PdfWriter({ maxBytes: 50_000 }).render(input, fonts)).rejects.toThrow(/larger than/);
     });
 
     it('writes a 2000-page document in bounded time', async () =>
@@ -672,47 +672,48 @@ describe('OwnPdfWriter: limits and scale', () =>
         const pages: LaidOutPage[] = [];
         const destinations = [];
         const outline: LaidOutOutlineItem[] = [];
-        for (let p = 0; p < 2000; p++)
+        for (let pageIndex = 0; pageIndex < 2000; pageIndex++)
         {
-            const text = Array.from({ length: 50 }, (_, i) => run(`${p + 1}.${i + 1} ${line}`, { y: 60 + 14 * i, font: i === 0 ? 'sans-bold' : 'sans-regular' }));
+            const text = Array.from({ length: 50 }, (_, runIndex) =>
+                run(`${pageIndex + 1}.${runIndex + 1} ${line}`, { y: 60 + 14 * runIndex, font: runIndex === 0 ? 'sans-bold' : 'sans-regular' }));
             pages.push(page(text, { fills: [{ x: 40, y: 40, width: 515, height: 16, color: { gray: 0.93 } }] }));
-            if (p % 2 === 0)
+            if (pageIndex % 2 === 0)
             {
-                destinations.push({ name: `email-${p / 2 + 1}`, page: p, y: 40 });
-                outline.push({ title: `Email ${p / 2 + 1} from Alice Example`, destination: `email-${p / 2 + 1}`, children: [] });
+                destinations.push({ name: `email-${pageIndex / 2 + 1}`, page: pageIndex, y: 40 });
+                outline.push({ title: `Email ${pageIndex / 2 + 1} from Alice Example`, destination: `email-${pageIndex / 2 + 1}`, children: [] });
             }
         }
         const started = performance.now();
-        const bytes = await new OwnPdfWriter().render(doc(pages, { destinations, outline }), fonts);
-        const ms = performance.now() - started;
+        const bytes = await new PdfWriter().render(doc(pages, { destinations, outline }), fonts);
+        const elapsedMs = performance.now() - started;
         const pdf = readPdf(bytes);
         expect(pdf.pages()).toHaveLength(2000);
         expect(readOutline(pdf)!.items).toHaveLength(1000);
-        console.log(`2000 pages: ${Math.round(ms)} ms, ${(bytes.length / (1024 * 1024)).toFixed(2)} MiB`);
-        expect(ms).toBeLessThan(30_000);
+        console.log(`2000 pages: ${Math.round(elapsedMs)} ms, ${(bytes.length / (1024 * 1024)).toFixed(2)} MiB`);
+        expect(elapsedMs).toBeLessThan(30_000);
     }, 60_000);
 });
 
 /** /W array -> glyph id -> width. */
-function readWidths(w: PdfValue[]): Map<number, number>
+function readWidths(widthEntries: PdfValue[]): Map<number, number>
 {
     const result = new Map<number, number>();
-    for (let i = 0; i < w.length; )
+    for (let position = 0; position < widthEntries.length; )
     {
-        const first = w[i] as number;
-        const next = w[i + 1];
+        const first = widthEntries[position] as number;
+        const next = widthEntries[position + 1];
         if (Array.isArray(next))
         {
-            next.forEach((width, k) => result.set(first + k, width as number));
-            i += 2;
+            next.forEach((width, offset) => result.set(first + offset, width as number));
+            position += 2;
         }
         else
         {
-            for (let g = first; g <= (next as number); g++)
+            for (let glyph = first; glyph <= (next as number); glyph++)
             {
-                result.set(g, w[i + 2] as number);
+                result.set(glyph, widthEntries[position + 2] as number);
             }
-            i += 3;
+            position += 3;
         }
     }
     return result;
@@ -721,13 +722,13 @@ function readWidths(w: PdfValue[]): Map<number, number>
 /** Plex Sans Regular with OS/2 fsType changed (table checksum fixed), parsed. */
 async function patchedFsType(fsType: number): Promise<ParsedFont>
 {
-    const copy = (await unwrapWoff(PDF_FONTS['sans-regular'])).slice();
-    const directory = readSfntDirectory(copy);
+    const fontBytes = (await unwrapWoff(PDF_FONTS['sans-regular'])).slice();
+    const directory = readSfntDirectory(fontBytes);
     const table = directory.tables.get('OS/2')!;
-    const view = new DataView(copy.buffer);
+    const view = new DataView(fontBytes.buffer);
     view.setUint16(table.offset + 8, fsType);
     const index = [...directory.tables.keys()].indexOf('OS/2');
     const tag = view.getUint32(12 + 16 * index);
-    view.setUint32(12 + 16 * index + 4, directoryChecksum(tag, copy, table.offset, table.length));
-    return parseFont(copy);
+    view.setUint32(12 + 16 * index + 4, directoryChecksum(tag, fontBytes, table.offset, table.length));
+    return parseFont(fontBytes);
 }

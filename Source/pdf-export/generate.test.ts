@@ -15,7 +15,7 @@ import { loadPdfFonts } from './load-bundled-fonts';
 import { buildPdfDocument, MAX_BOOKMARK_LENGTH } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
-import { OwnPdfWriter } from './pdf-writer';
+import { PdfWriter } from './pdf-writer';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument } from '../../Header/pdf-document-model';
 
@@ -506,10 +506,10 @@ describe('generatePdf: file name and output', () =>
     {
         const seen: number[] = [];
         const backend = {
-            render: async (doc: Parameters<OwnPdfWriter['render']>[0], set: Parameters<OwnPdfWriter['render']>[1]) =>
+            render: async (doc: Parameters<PdfWriter['render']>[0], set: Parameters<PdfWriter['render']>[1]) =>
             {
                 seen.push(doc.pages.length);
-                return new OwnPdfWriter().render(doc, set);
+                return new PdfWriter().render(doc, set);
             },
         };
         await generatePdf(inputFor([make(0)], { backend }));
@@ -565,7 +565,7 @@ describe('generatePdf: time bound', () =>
         const start = performance.now();
         const doc = buildPdfDocument({ ...input, strings });
         const layout = layoutPdf(doc, fonts, { strings });
-        const bytes = await new OwnPdfWriter().render(layout.document, fonts);
+        const bytes = await new PdfWriter().render(layout.document, fonts);
         const ms = performance.now() - start;
         expect(ms).toBeLessThan(60_000); // about 1.5 s on a developer machine
         expect(indexPages(layout).length).toBeGreaterThanOrEqual(3);

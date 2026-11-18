@@ -32,7 +32,7 @@
 // depends on what was dropped. Pure (README.md, rule R7).
 import { isDrawnAsNothing, KEPT_FLAG_TAGS, SOFT_HYPHEN } from '../text';
 
-const REPLACEMENT = 0xfffd;
+const REPLACEMENT_CHARACTER = 0xfffd;
 const ZWJ = 0x200d;
 const VS15 = 0xfe0e;
 const VS16 = 0xfe0f;
@@ -40,11 +40,11 @@ const BLACK_FLAG = 0x1f3f4;
 const TAG_BASE = 0xe0000;
 const CANCEL_TAG = 0xe007f;
 
-const PICTOGRAPHIC = /^\p{Extended_Pictographic}$/u;
+const PICTOGRAPHIC_PATTERN = /^\p{Extended_Pictographic}$/u;
 
 function isPictographic(codePoint: number | undefined): boolean
 {
-    return codePoint !== undefined && codePoint <= 0x10ffff && PICTOGRAPHIC.test(String.fromCodePoint(codePoint));
+    return codePoint !== undefined && codePoint <= 0x10ffff && PICTOGRAPHIC_PATTERN.test(String.fromCodePoint(codePoint));
 }
 
 const isSkinTone = (codePoint: number | undefined): boolean => codePoint !== undefined && codePoint >= 0x1f3fb && codePoint <= 0x1f3ff;
@@ -102,24 +102,24 @@ function codePointsOf(text: string): number[]
     return result;
 }
 
-/** Length of the kept flag starting at `at` (7 code points), or 0. */
-function keptFlagAt(cps: readonly number[], at: number): number
+/** Length of the kept flag starting at `start` (7 code points), or 0. */
+function keptFlagLengthAt(codePoints: readonly number[], start: number): number
 {
-    if (cps[at] !== BLACK_FLAG || cps[at + 6] !== CANCEL_TAG)
+    if (codePoints[start] !== BLACK_FLAG || codePoints[start + 6] !== CANCEL_TAG)
     {
         return 0;
     }
-    let spelled = '';
-    for (let k = at + 1; k < at + 6; k++)
+    let tagLetters = '';
+    for (let position = start + 1; position < start + 6; position++)
     {
-        const cp = cps[k];
-        if (cp === undefined || cp < TAG_BASE + 0x61 || cp > TAG_BASE + 0x7a)
+        const codePoint = codePoints[position];
+        if (codePoint === undefined || codePoint < TAG_BASE + 0x61 || codePoint > TAG_BASE + 0x7a)
         {
             return 0;
         }
-        spelled += String.fromCharCode(cp - TAG_BASE);
+        tagLetters += String.fromCharCode(codePoint - TAG_BASE);
     }
-    return KEPT_FLAG_TAGS.includes(spelled) ? 7 : 0;
+    return KEPT_FLAG_TAGS.includes(tagLetters) ? 7 : 0;
 }
 
 /** An ordinary character: one a variation selector may follow (not a soft hyphen, which is dropped). */
@@ -128,55 +128,55 @@ function isOrdinary(codePoint: number | undefined): boolean
     return codePoint !== undefined && !isGroup1(codePoint) && !isDrawnAsNothing(codePoint) && codePoint !== SOFT_HYPHEN;
 }
 
-/** Is the code point before index `at` the end of an emoji (skipping one VS16, then one skin tone)? */
-function emojiEndsBefore(cps: readonly number[], at: number): boolean
+/** Is the code point before index `position` the end of an emoji (skipping one VS16, then one skin tone)? */
+function emojiEndsBefore(codePoints: readonly number[], position: number): boolean
 {
-    let j = at - 1;
-    if (cps[j] === VS16)
+    let last = position - 1;
+    if (codePoints[last] === VS16)
     {
-        j--;
+        last--;
     }
-    if (isSkinTone(cps[j]))
+    if (isSkinTone(codePoints[last]))
     {
         return true;
     }
-    return isPictographic(cps[j]);
+    return isPictographic(codePoints[last]);
 }
 
-/** Is the code point at `at` a ZWJ the copy layer keeps (between two emoji)? */
-function isKeptZwj(cps: readonly number[], at: number): boolean
+/** Is the code point at `position` a ZWJ the copy layer keeps (between two emoji)? */
+function isKeptZwj(codePoints: readonly number[], position: number): boolean
 {
-    return cps[at] === ZWJ && emojiEndsBefore(cps, at) && isPictographic(cps[at + 1]);
+    return codePoints[position] === ZWJ && emojiEndsBefore(codePoints, position) && isPictographic(codePoints[position + 1]);
 }
 
-/** Start of the emoji right before the ZWJ at `zwj` (base, then one skin tone, then one VS16). */
-function emojiStartBefore(cps: readonly number[], zwj: number): number
+/** Start of the emoji right before the ZWJ at `zwjPosition` (base, then one skin tone, then one VS16). */
+function emojiStartBefore(codePoints: readonly number[], zwjPosition: number): number
 {
-    let j = zwj - 1;
-    if (cps[j] === VS16)
+    let start = zwjPosition - 1;
+    if (codePoints[start] === VS16)
     {
-        j--;
+        start--;
     }
-    if (isSkinTone(cps[j]) && isPictographic(cps[j - 1]))
+    if (isSkinTone(codePoints[start]) && isPictographic(codePoints[start - 1]))
     {
-        j--;
+        start--;
     }
-    return j;
+    return start;
 }
 
-/** End (exclusive) of the emoji right after the ZWJ at `zwj` (base, then one skin tone, then one VS16). */
-function emojiEndAfter(cps: readonly number[], zwj: number): number
+/** End (exclusive) of the emoji right after the ZWJ at `zwjPosition` (base, then one skin tone, then one VS16). */
+function emojiEndAfter(codePoints: readonly number[], zwjPosition: number): number
 {
-    let j = zwj + 2;
-    if (isSkinTone(cps[j]))
+    let end = zwjPosition + 2;
+    if (isSkinTone(codePoints[end]))
     {
-        j++;
+        end++;
     }
-    if (cps[j] === VS16)
+    if (codePoints[end] === VS16)
     {
-        j++;
+        end++;
     }
-    return j;
+    return end;
 }
 
 /**
@@ -192,90 +192,91 @@ export function copyLayerCutIndex(text: string, maxUnits: number): number
         return text.length;
     }
     // A window a little past the limit is enough to see every sequence around it.
-    const cps = codePointsOf(text.slice(0, maxUnits + 32));
-    const unitsOf = (cp: number): number => (cp > 0xffff ? 2 : 1);
-    let cut = 0;
-    let units = 0;
-    while (cut < cps.length && units + unitsOf(cps[cut]!) <= maxUnits)
+    const codePoints = codePointsOf(text.slice(0, maxUnits + 32));
+    const codeUnitCount = (codePoint: number): number => (codePoint > 0xffff ? 2 : 1);
+    let cutPosition = 0;
+    let unitCount = 0;
+    while (cutPosition < codePoints.length && unitCount + codeUnitCount(codePoints[cutPosition]!) <= maxUnits)
     {
-        units += unitsOf(cps[cut++]!);
+        unitCount += codeUnitCount(codePoints[cutPosition++]!);
     }
 
     // Inside a kept flag (7 code points): back to its U+1F3F4.
-    for (let p = Math.max(0, cut - 6); p < cut; p++)
+    for (let flagStart = Math.max(0, cutPosition - 6); flagStart < cutPosition; flagStart++)
     {
-        if (keptFlagAt(cps, p) > 0)
+        if (keptFlagLengthAt(codePoints, flagStart) > 0)
         {
-            cut = p;
+            cutPosition = flagStart;
             break;
         }
     }
     // Inside a ZWJ sequence: back to the start of its first emoji.
-    for (let z = Math.max(0, cut - 4); z <= cut + 3; z++)
+    for (let zwjPosition = Math.max(0, cutPosition - 4); zwjPosition <= cutPosition + 3; zwjPosition++)
     {
-        if (isKeptZwj(cps, z) && emojiStartBefore(cps, z) < cut && cut < emojiEndAfter(cps, z))
+        if (isKeptZwj(codePoints, zwjPosition) && emojiStartBefore(codePoints, zwjPosition) < cutPosition &&
+            cutPosition < emojiEndAfter(codePoints, zwjPosition))
         {
-            let start = emojiStartBefore(cps, z);
-            while (isKeptZwj(cps, start - 1))
+            let sequenceStart = emojiStartBefore(codePoints, zwjPosition);
+            while (isKeptZwj(codePoints, sequenceStart - 1))
             {
-                start = emojiStartBefore(cps, start - 1);
+                sequenceStart = emojiStartBefore(codePoints, sequenceStart - 1);
             }
-            cut = start;
+            cutPosition = sequenceStart;
             break;
         }
     }
 
-    let index = 0;
-    for (let k = 0; k < cut; k++)
+    let unitIndex = 0;
+    for (let position = 0; position < cutPosition; position++)
     {
-        index += unitsOf(cps[k]!);
+        unitIndex += codeUnitCount(codePoints[position]!);
     }
-    return index;
+    return unitIndex;
 }
 
 /** The copy-layer form of a text (see the top of this file). Never throws. */
 export function copyLayerText(text: string): string
 {
-    const cps = codePointsOf(text);
-    const out: number[] = [];
-    for (let i = 0; i < cps.length; i++)
+    const codePoints = codePointsOf(text);
+    const kept: number[] = [];
+    for (let position = 0; position < codePoints.length; position++)
     {
-        const cp = cps[i]!;
-        const flag = keptFlagAt(cps, i);
-        if (flag > 0)
+        const codePoint = codePoints[position]!;
+        const flagLength = keptFlagLengthAt(codePoints, position);
+        if (flagLength > 0)
         {
-            out.push(...cps.slice(i, i + flag));
-            i += flag - 1;
+            kept.push(...codePoints.slice(position, position + flagLength));
+            position += flagLength - 1;
             continue;
         }
-        if (isGroup1(cp))
+        if (isGroup1(codePoint))
         {
-            out.push(REPLACEMENT);
+            kept.push(REPLACEMENT_CHARACTER);
         }
-        else if (cp === ZWJ)
+        else if (codePoint === ZWJ)
         {
-            if (isKeptZwj(cps, i))
+            if (isKeptZwj(codePoints, position))
             {
-                out.push(cp);
+                kept.push(codePoint);
             }
         }
-        else if (cp === VS15 || cp === VS16)
+        else if (codePoint === VS15 || codePoint === VS16)
         {
-            if (isOrdinary(cps[i - 1]))
+            if (isOrdinary(codePoints[position - 1]))
             {
-                out.push(cp);
+                kept.push(codePoint);
             }
         }
-        else if (!isDrawnAsNothing(cp) && cp !== SOFT_HYPHEN)
+        else if (!isDrawnAsNothing(codePoint) && codePoint !== SOFT_HYPHEN)
         {
-            out.push(cp);
+            kept.push(codePoint);
         }
     }
     let result = '';
     // In slices, so a long text never exceeds the argument limit.
-    for (let k = 0; k < out.length; k += 4096)
+    for (let sliceStart = 0; sliceStart < kept.length; sliceStart += 4096)
     {
-        result += String.fromCodePoint(...out.slice(k, k + 4096));
+        result += String.fromCodePoint(...kept.slice(sliceStart, sliceStart + 4096));
     }
     return result;
 }

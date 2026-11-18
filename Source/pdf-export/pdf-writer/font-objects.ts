@@ -4,7 +4,7 @@
 // widths (only the glyphs used) and its ToUnicode CMap (the copy layer, see
 // copy-layer-text.ts). Pure apart from deflate (README.md, rule R7).
 import { copyLayerText } from './copy-layer-text';
-import { fail, hex4, int, name, num, utf16Hex } from './pdf-syntax';
+import { throwWriteError, fourHexDigits, pdfInteger, pdfName, pdfNumber, utf16Hex } from './pdf-syntax';
 import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 /** fsType bit 1: "restricted license embedding", the font must not be embedded. */
@@ -14,7 +14,7 @@ const FS_TYPE_RESTRICTED = 0x0002;
 const MAX_GLYPH_TEXT_UNITS = 256;
 
 /** Entries per bfchar / bfrange block (the CMap format's limit). */
-const CMAP_BLOCK = 100;
+const CMAP_BLOCK_SIZE = 100;
 
 /** What the document uses of one font: glyphs, and the text each stands for (first one wins). */
 export class FontUsage
@@ -30,26 +30,26 @@ export class FontUsage
     }
 
     /** Records a glyph and, if it has none yet, the copy-layer text it stands for. */
-    use(glyph: number, text: string): void
+    recordGlyph(glyph: number, text: string): void
     {
         if (!Number.isInteger(glyph) || glyph < 0 || glyph >= this.font.numGlyphs)
         {
-            fail(`glyph id ${String(glyph)} is not in font ${this.font.postScriptName} (0 to ${this.font.numGlyphs - 1})`);
+            throwWriteError(`glyph id ${String(glyph)} is not in font ${this.font.postScriptName} (0 to ${this.font.numGlyphs - 1})`);
         }
         this.glyphs.add(glyph);
         if (this.toUnicode.has(glyph))
         {
             return;
         }
-        const copy = copyLayerText(text);
-        if (copy !== '' && copy.length <= MAX_GLYPH_TEXT_UNITS)
+        const copyText = copyLayerText(text);
+        if (copyText !== '' && copyText.length <= MAX_GLYPH_TEXT_UNITS)
         {
-            this.toUnicode.set(glyph, copy);
+            this.toUnicode.set(glyph, copyText);
         }
     }
 
     /** What a reader gets from ToUnicode for these glyphs. */
-    yields(glyphs: readonly number[]): string
+    toUnicodeTextOf(glyphs: readonly number[]): string
     {
         let text = '';
         for (const glyph of glyphs)
@@ -61,7 +61,7 @@ export class FontUsage
 }
 
 /** Font units to PDF glyph space (1000 per em). */
-function scale(font: ParsedFont, value: number): number
+function toGlyphSpace(font: ParsedFont, value: number): number
 {
     return (value * 1000) / font.unitsPerEm;
 }
@@ -71,7 +71,7 @@ export function checkEmbeddable(font: ParsedFont): void
 {
     if ((font.fsType & FS_TYPE_RESTRICTED) !== 0)
     {
-        fail(`font ${font.postScriptName} has a restricted license (fsType bit 0x0002): it may not be embedded`);
+        throwWriteError(`font ${font.postScriptName} has a restricted license (fsType bit 0x0002): it may not be embedded`);
     }
 }
 
@@ -88,7 +88,7 @@ export function checkEmbeddable(font: ParsedFont): void
  * - Flags: Nonsymbolic (32), plus FixedPitch (1) and Italic (64) from the
  *   font; never Serif (Plex Sans and Mono have none).
  */
-export function fontDescriptor(font: ParsedFont, fontFile: number): string
+export function fontDescriptor(font: ParsedFont, fontFileObjectNumber: number): string
 {
     const flags = 32 | (font.isFixedPitch ? 1 : 0) | (font.isItalic || font.italicAngle !== 0 ? 64 : 0);
     const { xMin, yMin, xMax, yMax } = font.bbox;
@@ -96,17 +96,17 @@ export function fontDescriptor(font: ParsedFont, fontFile: number): string
     const stemV = Math.round(50 + (font.weightClass / 65) ** 2);
     const entries = [
         '/Type /FontDescriptor',
-        `/FontName ${name(font.postScriptName)}`,
+        `/FontName ${pdfName(font.postScriptName)}`,
         `/Flags ${flags}`,
-        `/FontBBox [${[xMin, yMin, xMax, yMax].map((v) => num(scale(font, v))).join(' ')}]`,
-        `/ItalicAngle ${num(font.italicAngle)}`,
-        `/Ascent ${num(scale(font, font.hhea.ascender))}`,
-        `/Descent ${num(scale(font, font.hhea.descender))}`,
-        `/CapHeight ${num(scale(font, capHeight))}`,
-        ...(font.xHeight === null ? [] : [`/XHeight ${num(scale(font, font.xHeight))}`]),
-        `/StemV ${int(stemV)}`,
-        `/MissingWidth ${num(scale(font, font.advance(0)))}`,
-        `/FontFile2 ${fontFile} 0 R`,
+        `/FontBBox [${[xMin, yMin, xMax, yMax].map((coordinate) => pdfNumber(toGlyphSpace(font, coordinate))).join(' ')}]`,
+        `/ItalicAngle ${pdfNumber(font.italicAngle)}`,
+        `/Ascent ${pdfNumber(toGlyphSpace(font, font.hhea.ascender))}`,
+        `/Descent ${pdfNumber(toGlyphSpace(font, font.hhea.descender))}`,
+        `/CapHeight ${pdfNumber(toGlyphSpace(font, capHeight))}`,
+        ...(font.xHeight === null ? [] : [`/XHeight ${pdfNumber(toGlyphSpace(font, font.xHeight))}`]),
+        `/StemV ${pdfInteger(stemV)}`,
+        `/MissingWidth ${pdfNumber(toGlyphSpace(font, font.advance(0)))}`,
+        `/FontFile2 ${fontFileObjectNumber} 0 R`,
     ];
     return `<< ${entries.join(' ')} >>`;
 }
@@ -118,51 +118,51 @@ export function fontDescriptor(font: ParsedFont, fontFile: number): string
  */
 export function widthsArray(font: ParsedFont, glyphs: Iterable<number>): string
 {
-    const ids = [...glyphs].sort((a, b) => a - b);
+    const glyphIds = [...glyphs].sort((a, b) => a - b);
     const parts: string[] = [];
-    let i = 0;
-    while (i < ids.length)
+    let groupStart = 0;
+    while (groupStart < glyphIds.length)
     {
-        let end = i;
-        while (end + 1 < ids.length && ids[end + 1] === ids[end]! + 1)
+        let groupEnd = groupStart;
+        while (groupEnd + 1 < glyphIds.length && glyphIds[groupEnd + 1] === glyphIds[groupEnd]! + 1)
         {
-            end++;
+            groupEnd++;
         }
-        const widths = ids.slice(i, end + 1).map((id) => num(scale(font, font.advance(id))));
-        if (widths.length >= 3 && widths.every((w) => w === widths[0]))
+        const widths = glyphIds.slice(groupStart, groupEnd + 1).map((glyphId) => pdfNumber(toGlyphSpace(font, font.advance(glyphId))));
+        if (widths.length >= 3 && widths.every((width) => width === widths[0]))
         {
-            parts.push(`${ids[i]} ${ids[end]} ${widths[0]}`);
+            parts.push(`${glyphIds[groupStart]} ${glyphIds[groupEnd]} ${widths[0]}`);
         }
         else
         {
-            parts.push(`${ids[i]} [${widths.join(' ')}]`);
+            parts.push(`${glyphIds[groupStart]} [${widths.join(' ')}]`);
         }
-        i = end + 1;
+        groupStart = groupEnd + 1;
     }
     return `[${parts.join(' ')}]`;
 }
 
 /** The CIDFontType2 dictionary. */
-export function cidFont(font: ParsedFont, descriptor: number, widths: string): string
+export function cidFont(font: ParsedFont, descriptorObjectNumber: number, widths: string): string
 {
     return (
-        `<< /Type /Font /Subtype /CIDFontType2 /BaseFont ${name(font.postScriptName)}` +
+        `<< /Type /Font /Subtype /CIDFontType2 /BaseFont ${pdfName(font.postScriptName)}` +
         ` /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>` +
-        ` /FontDescriptor ${descriptor} 0 R /DW ${num(scale(font, font.advance(0)))} /W ${widths} /CIDToGIDMap /Identity >>`
+        ` /FontDescriptor ${descriptorObjectNumber} 0 R /DW ${pdfNumber(toGlyphSpace(font, font.advance(0)))} /W ${widths} /CIDToGIDMap /Identity >>`
     );
 }
 
 /** The Type0 font dictionary (what pages refer to). */
-export function type0Font(font: ParsedFont, descendant: number, toUnicode: number): string
+export function type0Font(font: ParsedFont, descendantObjectNumber: number, toUnicodeObjectNumber: number): string
 {
     return (
-        `<< /Type /Font /Subtype /Type0 /BaseFont ${name(font.postScriptName)} /Encoding /Identity-H` +
-        ` /DescendantFonts [${descendant} 0 R] /ToUnicode ${toUnicode} 0 R >>`
+        `<< /Type /Font /Subtype /Type0 /BaseFont ${pdfName(font.postScriptName)} /Encoding /Identity-H` +
+        ` /DescendantFonts [${descendantObjectNumber} 0 R] /ToUnicode ${toUnicodeObjectNumber} 0 R >>`
     );
 }
 
 /** One code unit when a text is a single BMP character (usable in a bfrange), else undefined. */
-function singleUnit(text: string): number | undefined
+function singleCodeUnit(text: string): number | undefined
 {
     if (text.length !== 1)
     {
@@ -179,54 +179,54 @@ function singleUnit(text: string): number | undefined
  * one bfrange entry; everything else (one glyph, a pair, several code
  * points) a bfchar entry. At most 100 entries per block.
  */
-export function toUnicodeCmap(map: ReadonlyMap<number, string>): string
+export function toUnicodeCmap(toUnicode: ReadonlyMap<number, string>): string
 {
-    const ids = [...map.keys()].sort((a, b) => a - b);
-    const ranges: string[] = [];
-    const chars: string[] = [];
-    let i = 0;
-    while (i < ids.length)
+    const glyphIds = [...toUnicode.keys()].sort((a, b) => a - b);
+    const rangeEntries: string[] = [];
+    const charEntries: string[] = [];
+    let runStart = 0;
+    while (runStart < glyphIds.length)
     {
-        const first = ids[i]!;
-        const start = singleUnit(map.get(first)!);
-        let end = i;
-        if (start !== undefined)
+        const firstGlyph = glyphIds[runStart]!;
+        const firstUnit = singleCodeUnit(toUnicode.get(firstGlyph)!);
+        let runEnd = runStart;
+        if (firstUnit !== undefined)
         {
-            while (end + 1 < ids.length)
+            while (runEnd + 1 < glyphIds.length)
             {
-                const next = ids[end + 1]!;
-                const step = next - first;
-                if (next !== ids[end]! + 1 || next >> 8 !== first >> 8)
+                const nextGlyph = glyphIds[runEnd + 1]!;
+                const step = nextGlyph - firstGlyph;
+                if (nextGlyph !== glyphIds[runEnd]! + 1 || nextGlyph >> 8 !== firstGlyph >> 8)
                 {
                     break;
                 }
-                if (singleUnit(map.get(next)!) !== start + step || (start & 0xff) + step > 0xff)
+                if (singleCodeUnit(toUnicode.get(nextGlyph)!) !== firstUnit + step || (firstUnit & 0xff) + step > 0xff)
                 {
                     break;
                 }
-                end++;
+                runEnd++;
             }
         }
-        if (end > i)
+        if (runEnd > runStart)
         {
-            ranges.push(`<${hex4(first)}> <${hex4(ids[end]!)}> <${hex4(start!)}>`);
+            rangeEntries.push(`<${fourHexDigits(firstGlyph)}> <${fourHexDigits(glyphIds[runEnd]!)}> <${fourHexDigits(firstUnit!)}>`);
         }
         else
         {
-            chars.push(`<${hex4(first)}> <${utf16Hex(map.get(first)!)}>`);
+            charEntries.push(`<${fourHexDigits(firstGlyph)}> <${utf16Hex(toUnicode.get(firstGlyph)!)}>`);
         }
-        i = end + 1;
+        runStart = runEnd + 1;
     }
     const blocks: string[] = [];
-    for (let k = 0; k < chars.length; k += CMAP_BLOCK)
+    for (let blockStart = 0; blockStart < charEntries.length; blockStart += CMAP_BLOCK_SIZE)
     {
-        const block = chars.slice(k, k + CMAP_BLOCK);
-        blocks.push(`${block.length} beginbfchar\n${block.join('\n')}\nendbfchar`);
+        const blockEntries = charEntries.slice(blockStart, blockStart + CMAP_BLOCK_SIZE);
+        blocks.push(`${blockEntries.length} beginbfchar\n${blockEntries.join('\n')}\nendbfchar`);
     }
-    for (let k = 0; k < ranges.length; k += CMAP_BLOCK)
+    for (let blockStart = 0; blockStart < rangeEntries.length; blockStart += CMAP_BLOCK_SIZE)
     {
-        const block = ranges.slice(k, k + CMAP_BLOCK);
-        blocks.push(`${block.length} beginbfrange\n${block.join('\n')}\nendbfrange`);
+        const blockEntries = rangeEntries.slice(blockStart, blockStart + CMAP_BLOCK_SIZE);
+        blocks.push(`${blockEntries.length} beginbfrange\n${blockEntries.join('\n')}\nendbfrange`);
     }
     return [
         '/CIDInit /ProcSet findresource begin',

@@ -12,7 +12,7 @@ export class PdfWriteError extends Error
     override name = 'PdfWriteError';
 }
 
-export function fail(message: string): never
+export function throwWriteError(message: string): never
 {
     throw new PdfWriteError(message);
 }
@@ -21,24 +21,24 @@ export function fail(message: string): never
 export const MAX_NUMBER = 1e7;
 
 /** Decimals kept in numbers: 1/1000 point is far below anything visible. */
-const DECIMALS = 3;
+const NUMBER_DECIMALS = 3;
 
 /**
  * A PDF number: finite, at most 3 decimals, never exponent notation (which
  * PDF does not have: "1e-7" would be a syntax error), never "-0". Throws for
  * NaN, Infinity, or a magnitude above MAX_NUMBER.
  */
-export function num(value: number): string
+export function pdfNumber(value: number): string
 {
     if (typeof value !== 'number' || !Number.isFinite(value))
     {
-        fail(`not a finite number: ${String(value)}`);
+        throwWriteError(`not a finite number: ${String(value)}`);
     }
     if (Math.abs(value) > MAX_NUMBER)
     {
-        fail(`number out of range: ${value}`);
+        throwWriteError(`number out of range: ${value}`);
     }
-    let text = value.toFixed(DECIMALS);
+    let text = value.toFixed(NUMBER_DECIMALS);
     if (text.includes('.'))
     {
         text = text.replace(/0+$/, '').replace(/\.$/, '');
@@ -47,11 +47,11 @@ export function num(value: number): string
 }
 
 /** A non-negative integer (object numbers, lengths, counts, glyph ids). */
-export function int(value: number): string
+export function pdfInteger(value: number): string
 {
     if (!Number.isSafeInteger(value) || value < 0)
     {
-        fail(`not a non-negative integer: ${String(value)}`);
+        throwWriteError(`not a non-negative integer: ${String(value)}`);
     }
     return String(value);
 }
@@ -60,17 +60,17 @@ export function int(value: number): string
 const NAME_PATTERN = /^[A-Za-z0-9._-]{1,127}$/;
 
 /** True for a string usable as a PDF name by our writer. */
-export function isValidName(value: string): boolean
+export function isValidPdfName(value: string): boolean
 {
     return typeof value === 'string' && NAME_PATTERN.test(value);
 }
 
 /** "/Name". Throws unless the name is 1 to 127 of A-Z a-z 0-9 . _ - */
-export function name(value: string): string
+export function pdfName(value: string): string
 {
-    if (!isValidName(value))
+    if (!isValidPdfName(value))
     {
-        fail(`invalid PDF name: ${JSON.stringify(String(value)).slice(0, 80)}`);
+        throwWriteError(`invalid PDF name: ${JSON.stringify(String(value)).slice(0, 80)}`);
     }
     return `/${value}`;
 }
@@ -81,12 +81,12 @@ export function name(value: string): string
  */
 export const MAX_TEXT_UNITS = 16000;
 
-const HEX = '0123456789ABCDEF';
+const HEX_DIGITS = '0123456789ABCDEF';
 
 /** Four hex digits of a 16-bit value. */
-export function hex4(value: number): string
+export function fourHexDigits(value: number): string
 {
-    return HEX[(value >> 12) & 15]! + HEX[(value >> 8) & 15]! + HEX[(value >> 4) & 15]! + HEX[value & 15]!;
+    return HEX_DIGITS[(value >> 12) & 15]! + HEX_DIGITS[(value >> 8) & 15]! + HEX_DIGITS[(value >> 4) & 15]! + HEX_DIGITS[value & 15]!;
 }
 
 /**
@@ -98,18 +98,18 @@ export function utf16Hex(text: string): string
     const parts: string[] = [];
     for (const character of text)
     {
-        const cp = character.codePointAt(0)!;
-        if (cp >= 0xd800 && cp <= 0xdfff)
+        const codePoint = character.codePointAt(0)!;
+        if (codePoint >= 0xd800 && codePoint <= 0xdfff)
         {
             parts.push('FFFD');
         }
-        else if (cp < 0x10000)
+        else if (codePoint < 0x10000)
         {
-            parts.push(hex4(cp));
+            parts.push(fourHexDigits(codePoint));
         }
         else
         {
-            parts.push(hex4(0xd800 + ((cp - 0x10000) >> 10)) + hex4(0xdc00 + ((cp - 0x10000) & 0x3ff)));
+            parts.push(fourHexDigits(0xd800 + ((codePoint - 0x10000) >> 10)) + fourHexDigits(0xdc00 + ((codePoint - 0x10000) & 0x3ff)));
         }
     }
     return parts.join('');
@@ -124,7 +124,7 @@ export function utf16Hex(text: string): string
  * input (README.md, rule R4). Cleaning never makes a text longer, so the
  * result stays within MAX_TEXT_UNITS.
  */
-export function hexText(text: string): string
+export function hexTextString(text: string): string
 {
     let value = text;
     if (value.length > MAX_TEXT_UNITS)
@@ -135,7 +135,7 @@ export function hexText(text: string): string
 }
 
 /** Bytes of a string of ASCII PDF syntax. Throws on anything else (defence in depth). */
-export function ascii(text: string): Uint8Array<ArrayBuffer>
+export function asciiBytes(text: string): Uint8Array<ArrayBuffer>
 {
     const bytes = new Uint8Array(text.length);
     for (let i = 0; i < text.length; i++)
@@ -143,7 +143,7 @@ export function ascii(text: string): Uint8Array<ArrayBuffer>
         const unit = text.charCodeAt(i);
         if (unit > 0x7e || (unit < 0x20 && unit !== 0x0a && unit !== 0x0d))
         {
-            fail('PDF syntax must be printable ASCII');
+            throwWriteError('PDF syntax must be printable ASCII');
         }
         bytes[i] = unit;
     }

@@ -7,8 +7,8 @@ import { DRAWN_AS_NOTHING, isDrawnAsNothing } from '../text';
 import { copyLayerCutIndex, copyLayerText, isGroup1 } from './copy-layer-text';
 
 const FFFD = '\u{FFFD}';
-const tags = (letters: string): string => [...letters].map((l) => String.fromCodePoint(0xe0000 + l.charCodeAt(0))).join('');
-const flag = (letters: string): string => `\u{1F3F4}${tags(letters)}\u{E007F}`;
+const tags = (letters: string): string => [...letters].map((letter) => String.fromCodePoint(0xe0000 + letter.charCodeAt(0))).join('');
+const tagFlag = (letters: string): string => `\u{1F3F4}${tags(letters)}\u{E007F}`;
 
 describe('copyLayerText', () =>
 {
@@ -46,15 +46,15 @@ describe('copyLayerText', () =>
         ['ZWJ from letter to emoji dropped', 'a\u{200D}\u{1F4BB}', 'a\u{1F4BB}'],
         ['ZWJ at the end dropped', '\u{1F469}\u{200D}', '\u{1F469}'],
         ['two ZWJ in a row both dropped', '\u{1F469}\u{200D}\u{200D}\u{1F4BB}', '\u{1F469}\u{1F4BB}'],
-        ['England flag kept whole', flag('gbeng'), flag('gbeng')],
-        ['Scotland flag kept whole', flag('gbsct'), flag('gbsct')],
-        ['Wales flag kept whole', flag('gbwls'), flag('gbwls')],
-        ['flag in text', `x${flag('gbeng')}y`, `x${flag('gbeng')}y`],
-        ['another subdivision: tags replaced', flag('gbfoo'), `\u{1F3F4}${FFFD.repeat(6)}`],
-        ['upper case tags replaced', flag('GBENG'), `\u{1F3F4}${FFFD.repeat(6)}`],
+        ['England flag kept whole', tagFlag('gbeng'), tagFlag('gbeng')],
+        ['Scotland flag kept whole', tagFlag('gbsct'), tagFlag('gbsct')],
+        ['Wales flag kept whole', tagFlag('gbwls'), tagFlag('gbwls')],
+        ['flag in text', `x${tagFlag('gbeng')}y`, `x${tagFlag('gbeng')}y`],
+        ['another subdivision: tags replaced', tagFlag('gbfoo'), `\u{1F3F4}${FFFD.repeat(6)}`],
+        ['upper case tags replaced', tagFlag('GBENG'), `\u{1F3F4}${FFFD.repeat(6)}`],
         ['tags without the black flag replaced', `x${tags('gbeng')}\u{E007F}`, `x${FFFD.repeat(6)}`],
         ['flag without cancel tag: tags replaced', `\u{1F3F4}${tags('gbeng')}`, `\u{1F3F4}${FFFD.repeat(5)}`],
-        ['VS16 after a kept flag dropped', `${flag('gbeng')}\u{FE0F}`, flag('gbeng')],
+        ['VS16 after a kept flag dropped', `${tagFlag('gbeng')}\u{FE0F}`, tagFlag('gbeng')],
         // U+10067... minus the tag base wraps around to "gbeng" in fromCharCode: only real tags spell a flag.
         [
             'non-tag code points that wrap around to "gbeng" are not a flag',
@@ -121,31 +121,31 @@ describe('copyLayerText', () =>
             const length = 1 + random(12);
             for (let i = 0; i < length; i++)
             {
-                input += String.fromCharCode(...codeUnits(pool[random(pool.length)]!));
+                input += String.fromCharCode(...codeUnitsOf(pool[random(pool.length)]!));
             }
             // Sometimes a whole kept flag.
             if (random(5) === 0)
             {
-                input += flag('gbeng');
+                input += tagFlag('gbeng');
             }
             const output = copyLayerText(input);
-            const cps = [...output].map((c) => c.codePointAt(0)!);
-            for (const [k, cp] of cps.entries())
+            const codePoints = [...output].map((character) => character.codePointAt(0)!);
+            for (const [position, codePoint] of codePoints.entries())
             {
-                if (cp >= 0xe0000 && cp <= 0xe007f)
+                if (codePoint >= 0xe0000 && codePoint <= 0xe007f)
                 {
                     // Only the tags of a kept flag: U+1F3F4 at most 6 code points before.
-                    expect(cp).toBeGreaterThanOrEqual(0xe0020);
-                    expect(cps.slice(Math.max(0, k - 6), k).includes(0x1f3f4)).toBe(true);
+                    expect(codePoint).toBeGreaterThanOrEqual(0xe0020);
+                    expect(codePoints.slice(Math.max(0, position - 6), position).includes(0x1f3f4)).toBe(true);
                     continue;
                 }
-                expect(isGroup1(cp)).toBe(false);
-                expect(cp).not.toBe(0xad);
-                if (cp === 0x200d || cp === 0xfe0e || cp === 0xfe0f)
+                expect(isGroup1(codePoint)).toBe(false);
+                expect(codePoint).not.toBe(0xad);
+                if (codePoint === 0x200d || codePoint === 0xfe0e || codePoint === 0xfe0f)
                 {
                     continue;
                 }
-                expect(isDrawnAsNothing(cp)).toBe(false);
+                expect(isDrawnAsNothing(codePoint)).toBe(false);
             }
             // Stable: the copy layer of copy-layer text is itself.
             expect(copyLayerText(output)).toBe(output);
@@ -156,22 +156,22 @@ describe('copyLayerText', () =>
     {
         for (const [from, to] of DRAWN_AS_NOTHING)
         {
-            for (const cp of [from, to].filter((c) => c !== 0xfe0e && c !== 0xfe0f))
+            for (const codePoint of [from, to].filter((rangeEnd) => rangeEnd !== 0xfe0e && rangeEnd !== 0xfe0f))
             {
-                expect(copyLayerText(`a${String.fromCodePoint(cp)}b`)).toMatch(/^a(\u{FFFD})?b$/u);
+                expect(copyLayerText(`a${String.fromCodePoint(codePoint)}b`)).toMatch(/^a(\u{FFFD})?b$/u);
             }
         }
     });
 });
 
 /** UTF-16 code units of a code point, or of a lone surrogate as itself. */
-function codeUnits(cp: number): number[]
+function codeUnitsOf(codePoint: number): number[]
 {
-    if (cp < 0x10000)
+    if (codePoint < 0x10000)
     {
-        return [cp];
+        return [codePoint];
     }
-    return [0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff)];
+    return [0xd800 + ((codePoint - 0x10000) >> 10), 0xdc00 + ((codePoint - 0x10000) & 0x3ff)];
 }
 
 describe('copyLayerCutIndex', () =>
@@ -200,10 +200,10 @@ describe('copyLayerCutIndex', () =>
 
     it('moves back to before a kept flag, and before a ZWJ chain the flag ends', () =>
     {
-        expect(copyLayerCutIndex('ab' + flag('gbeng') + 'cd', 10)).toBe(2);
-        expect(copyLayerCutIndex('ab' + flag('gbeng') + 'cd', 16)).toBe(16);
+        expect(copyLayerCutIndex('ab' + tagFlag('gbeng') + 'cd', 10)).toBe(2);
+        expect(copyLayerCutIndex('ab' + tagFlag('gbeng') + 'cd', 16)).toBe(16);
         // A ZWJ before the flag joins it to the emoji before (both are emoji).
-        expect(copyLayerCutIndex('ab\u{1F600}\u{200D}' + flag('gbeng') + 'cd', 10)).toBe(2);
+        expect(copyLayerCutIndex('ab\u{1F600}\u{200D}' + tagFlag('gbeng') + 'cd', 10)).toBe(2);
     });
 
     it('leaves a ZWJ that the copy layer drops alone (not between two emoji)', () =>

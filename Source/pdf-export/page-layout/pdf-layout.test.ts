@@ -15,7 +15,7 @@ import { PDF_FONTS } from '../bundled-fonts';
 import { buildPdfDocument, emailAnchor } from '../model';
 import { createPdfStrings } from '../strings';
 import { lineText, TAB_WIDTH } from '../text';
-import { OwnPdfWriter } from '../pdf-writer';
+import { PdfWriter } from '../pdf-writer';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, MAX_DIGIT_EM, SHORT_DATE_EM } from './layout-config';
 import { bodyIndentWidth, layoutPdf, type PdfLayout } from './pdf-layout';
 import { Typesetter } from './typesetter';
@@ -867,7 +867,7 @@ async function pageTexts(pdf: ParsedPdf): Promise<string[]>
     return texts;
 }
 
-describe('layoutPdf + OwnPdfWriter', () =>
+describe('layoutPdf + PdfWriter', () =>
 {
     it('gives a valid PDF whose copy text holds the original body texts', async () =>
     {
@@ -893,7 +893,7 @@ describe('layoutPdf + OwnPdfWriter', () =>
                 expect(run.copyText).not.toContain('\u{AD}');
             }
         }
-        const bytes = await new OwnPdfWriter().render(document, fonts);
+        const bytes = await new PdfWriter().render(document, fonts);
         const pdf = readPdf(bytes);
         expect(pdf.pages()).toHaveLength(document.pages.length);
         expect(document.pages.length).toBeGreaterThan(2);

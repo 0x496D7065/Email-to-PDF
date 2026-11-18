@@ -11,7 +11,7 @@
 import { layoutPdf } from './page-layout';
 import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
-import { OwnPdfWriter } from './pdf-writer';
+import { PdfWriter } from './pdf-writer';
 import type { LayoutConfig, PdfBackend } from '../../Header/laid-out-document';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { GeneratedPdf, PdfStrings } from '../../Header/pdf-document-model';
@@ -71,6 +71,6 @@ export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf
         strings,
     });
     const { document } = layoutPdf(doc, input.fonts, { strings, ...(input.config === undefined ? {} : { config: input.config }) });
-    const bytes = await (input.backend ?? new OwnPdfWriter()).render(document, input.fonts);
+    const bytes = await (input.backend ?? new PdfWriter()).render(document, input.fonts);
     return { bytes, fileName: doc.fileName, pageCount: document.pages.length };
 }

@@ -7,7 +7,7 @@
 // (README.md, rule R7).
 import { copyLayerText } from './copy-layer-text';
 import type { FontUsage } from './font-objects';
-import { fail, hex4, hexText, name, num } from './pdf-syntax';
+import { throwWriteError, fourHexDigits, hexTextString, pdfName, pdfNumber } from './pdf-syntax';
 import type { LaidOutColor, LaidOutPage, LaidOutTextRun } from '../../../Header/laid-out-document';
 
 /** Largest font size accepted, in points. */
@@ -19,13 +19,13 @@ function isObject(value: unknown): boolean
     return typeof value === 'object' && value !== null;
 }
 
-function unit(value: number, what: string): string
+function colorComponent(value: number, description: string): string
 {
     if (typeof value !== 'number' || !(value >= 0 && value <= 1))
     {
-        fail(`${what} must be between 0 and 1, not ${String(value)}`);
+        throwWriteError(`${description} must be between 0 and 1, not ${String(value)}`);
     }
-    return num(value);
+    return pdfNumber(value);
 }
 
 /** The colour operator: "g" / "rg" for filling, "G" / "RG" for stroking. */
@@ -33,13 +33,13 @@ export function colorOperator(color: LaidOutColor, stroke: boolean): string
 {
     if (typeof color === 'object' && color !== null && 'gray' in color)
     {
-        return `${unit(color.gray, 'grey level')} ${stroke ? 'G' : 'g'}`;
+        return `${colorComponent(color.gray, 'grey level')} ${stroke ? 'G' : 'g'}`;
     }
     if (typeof color === 'object' && color !== null && 'rgb' in color && Array.isArray(color.rgb) && color.rgb.length === 3)
     {
-        return `${color.rgb.map((c) => unit(c, 'colour component')).join(' ')} ${stroke ? 'RG' : 'rg'}`;
+        return `${color.rgb.map((component) => colorComponent(component, 'colour component')).join(' ')} ${stroke ? 'RG' : 'rg'}`;
     }
-    fail('a colour must be { gray } or { rgb: [r, g, b] }');
+    throwWriteError('a colour must be { gray } or { rgb: [r, g, b] }');
 }
 
 /** The ActualText a run needs, in copy-layer form, or undefined when ToUnicode already gives its copy text. */
@@ -49,66 +49,67 @@ export function actualTextFor(run: LaidOutTextRun, usage: FontUsage): string | u
     {
         return copyLayerText(run.actualText);
     }
-    const copy = copyLayerText(run.copyText);
-    return copy === usage.yields(run.glyphs) ? undefined : copy;
+    const copyText = copyLayerText(run.copyText);
+    return copyText === usage.toUnicodeTextOf(run.glyphs) ? undefined : copyText;
 }
 
 /**
  * The content stream of one page (ASCII). `usageOf` gives each font's usage
  * (already filled from every run of the document, so ToUnicode is final).
  */
-export function pageContent(page: LaidOutPage, pageHeight: number, usageOf: (run: LaidOutTextRun) => FontUsage): string
+export function pageContentStream(page: LaidOutPage, pageHeight: number, usageOf: (run: LaidOutTextRun) => FontUsage): string
 {
-    const out: string[] = [];
-    let fill = '';
-    let stroke = '';
-    let lineWidth = '';
+    const operations: string[] = [];
+    let currentFill = '';
+    let currentStroke = '';
+    let currentLineWidth = '';
     const setFill = (color: LaidOutColor): void =>
     {
-        const op = colorOperator(color, false);
-        if (op !== fill)
+        const operator = colorOperator(color, false);
+        if (operator !== currentFill)
         {
-            out.push(op);
+            operations.push(operator);
         }
-        fill = op;
+        currentFill = operator;
     };
 
     for (const rect of page.fills)
     {
         if (!isObject(rect))
         {
-            fail('a fill must be an object');
+            throwWriteError('a fill must be an object');
         }
         setFill(rect.color);
-        out.push(`${num(rect.x)} ${num(pageHeight - rect.y - rect.height)} ${num(rect.width)} ${num(rect.height)} re f`);
+        operations.push(
+            `${pdfNumber(rect.x)} ${pdfNumber(pageHeight - rect.y - rect.height)} ${pdfNumber(rect.width)} ${pdfNumber(rect.height)} re f`);
     }
     for (const line of page.lines)
     {
         if (!isObject(line))
         {
-            fail('a line must be an object');
+            throwWriteError('a line must be an object');
         }
-        const op = colorOperator(line.color, true);
-        if (op !== stroke)
+        const operator = colorOperator(line.color, true);
+        if (operator !== currentStroke)
         {
-            out.push(op);
+            operations.push(operator);
         }
-        stroke = op;
+        currentStroke = operator;
         if (!(line.width >= 0))
         {
-            fail(`line width must be 0 or more, not ${String(line.width)}`);
+            throwWriteError(`line width must be 0 or more, not ${String(line.width)}`);
         }
-        const width = `${num(line.width)} w`;
-        if (width !== lineWidth)
+        const widthOperator = `${pdfNumber(line.width)} w`;
+        if (widthOperator !== currentLineWidth)
         {
-            out.push(width);
+            operations.push(widthOperator);
         }
-        lineWidth = width;
-        out.push(`${num(line.x1)} ${num(pageHeight - line.y1)} m ${num(line.x2)} ${num(pageHeight - line.y2)} l S`);
+        currentLineWidth = widthOperator;
+        operations.push(`${pdfNumber(line.x1)} ${pdfNumber(pageHeight - line.y1)} m ${pdfNumber(line.x2)} ${pdfNumber(pageHeight - line.y2)} l S`);
     }
 
-    let font = '';
-    let inText = false;
+    let currentFont = '';
+    let inTextObject = false;
     for (const run of page.text)
     {
         if (run.glyphs.length === 0)
@@ -118,41 +119,41 @@ export function pageContent(page: LaidOutPage, pageHeight: number, usageOf: (run
         const usage = usageOf(run);
         if (!(run.size > 0 && run.size <= MAX_FONT_SIZE))
         {
-            fail(`font size must be above 0 and at most ${MAX_FONT_SIZE}, not ${String(run.size)}`);
+            throwWriteError(`font size must be above 0 and at most ${MAX_FONT_SIZE}, not ${String(run.size)}`);
         }
-        if (!inText)
+        if (!inTextObject)
         {
-            out.push('BT');
+            operations.push('BT');
         }
-        inText = true;
-        const actual = actualTextFor(run, usage);
-        if (actual !== undefined)
+        inTextObject = true;
+        const actualText = actualTextFor(run, usage);
+        if (actualText !== undefined)
         {
-            out.push(`/Span << /ActualText ${hexText(actual)} >> BDC`);
+            operations.push(`/Span << /ActualText ${hexTextString(actualText)} >> BDC`);
         }
-        const tf = `${name(usage.resourceName)} ${num(run.size)} Tf`;
-        if (tf !== font)
+        const fontOperator = `${pdfName(usage.resourceName)} ${pdfNumber(run.size)} Tf`;
+        if (fontOperator !== currentFont)
         {
-            out.push(tf);
+            operations.push(fontOperator);
         }
-        font = tf;
+        currentFont = fontOperator;
         setFill(run.color);
-        out.push(`1 0 0 1 ${num(run.x)} ${num(pageHeight - run.y)} Tm`);
-        let glyphs = '';
+        operations.push(`1 0 0 1 ${pdfNumber(run.x)} ${pdfNumber(pageHeight - run.y)} Tm`);
+        let glyphHex = '';
         for (const glyph of run.glyphs)
         {
-            glyphs += hex4(glyph);
+            glyphHex += fourHexDigits(glyph);
         }
-        out.push(`<${glyphs}> Tj`);
-        if (actual !== undefined)
+        operations.push(`<${glyphHex}> Tj`);
+        if (actualText !== undefined)
         {
-            out.push('EMC');
+            operations.push('EMC');
         }
     }
-    if (inText)
+    if (inTextObject)
     {
-        out.push('ET');
+        operations.push('ET');
     }
-    out.push('');
-    return out.join('\n');
+    operations.push('');
+    return operations.join('\n');
 }
