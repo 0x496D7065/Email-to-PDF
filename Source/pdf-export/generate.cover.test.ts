@@ -18,7 +18,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { CATALOG } from '../web-page/translations/catalog';
 import { isPluralForms, type Messages } from '../web-page/translations';
@@ -71,7 +71,7 @@ function messagesOf(set: SetName): NormalizedMessage[]
 /** The PDF of `set` (every email included, every rebuilt email chosen) read back, with the model behind it. */
 async function make(set: SetName, locale: Locale, full: boolean)
 {
-    const result = runEngine(messagesOf(set).map((message) => ({ ok: true as const, message })));
+    const result = analyzeThread(messagesOf(set).map((message) => ({ ok: true as const, message })));
     const before = JSON.stringify(result);
     const positions = result.messages.map((_, k) => k);
     const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: full };
@@ -181,7 +181,7 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
     {
         for (const set of Object.keys(SETS) as SetName[])
         {
-            const result = runEngine(messagesOf(set).map((message) => ({ ok: true as const, message })));
+            const result = analyzeThread(messagesOf(set).map((message) => ({ ok: true as const, message })));
             expect(rebuiltEntries(result).length, set).toBeGreaterThan(0);
         }
         for (const locale of LOCALES)

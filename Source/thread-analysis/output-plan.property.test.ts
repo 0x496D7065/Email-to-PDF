@@ -2,7 +2,7 @@
 //
 // Random synthetic emails (seeded, so every run is the same) get segments
 // either from random folds (buildSegments, any range, any reason) or from the
-// real engine (runEngine), and every plan is checked:
+// real engine (analyzeThread), and every plan is checked:
 // - the ranges cover [0, length) with no gap or overlap, and joining kept and
 //   left-out ranges gives the exact body back;
 // - every left-out range lies inside folded segments (text that is not
@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import { runEngine } from './analyze-thread';
+import { analyzeThread } from './analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput, type PlanInput } from './output-plan';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
@@ -342,7 +342,7 @@ function engineSet(seed: number): readonly PlanInput[]
     const random = makeRandom(seed);
     const count = 1 + Math.floor(random() * 5);
     const messages = Array.from({ length: count }, () => randomMessage(random));
-    return runEngine(messages.map((message) => ({ ok: true as const, message }))).messages;
+    return analyzeThread(messages.map((message) => ({ ok: true as const, message }))).messages;
 }
 
 /** An included subset of an engine set (every other email). */

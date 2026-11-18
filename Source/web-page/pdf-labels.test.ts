@@ -9,7 +9,7 @@ import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-bu
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { setLocale } from './translations';
 import { en } from './translations/en';
@@ -44,7 +44,7 @@ function make(from: EmailAddress, bodyText: string): NormalizedMessage
     };
 }
 const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
-    runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
+    analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 /** Alice twice with the same signature, Bob in between. */
 const threeEmails = (): EngineResult =>
     engineOf([make(ALICE, `The bench is green.\n${SIGNATURE}`), make(BOB, 'Thanks, noted.\n'), make(ALICE, `The bench is delivered.\n${SIGNATURE}`)]);

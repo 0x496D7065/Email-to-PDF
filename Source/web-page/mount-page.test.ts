@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import type { ListenerTarget } from './add-files';
 import { t } from './translations';
 import { focusedControlWasRemoved, mountPage, showResultInStep2, type Page } from './mount-page';
@@ -43,7 +43,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 }
 const failedFile = (fileName: string): ParseResult => ({ ok: false, fileName, sha256: null, error: 'unsupported-type', detail: 'not an email file' });
 const engineOf = (messages: readonly NormalizedMessage[], extra: readonly ParseResult[] = []): EngineResult =>
-    runEngine([...messages.map((message): ParseResult => ({ ok: true, message })), ...extra]);
+    analyzeThread([...messages.map((message): ParseResult => ({ ok: true, message })), ...extra]);
 
 function fakeFile(name: string): FileLike
 {

@@ -8,13 +8,13 @@
 // 2. parse it in its own Web Worker (parseFiles, Source/email-reading/parse-files.ts),
 //    which moves the bytes to the worker and so frees them on the page;
 // 3. report progress (files done / total).
-// Then the engine organizes every result in its own worker
-// (engine-runner.ts): de-duplication, order, folds.
+// Then the thread analysis organizes every result in its own worker
+// (thread-analysis-worker-runner.ts): de-duplication, order, folds.
 //
 // Failures (README.md, rule R4):
 // - one file that cannot be read or parsed is a failed result for that file
-//   only, listed by the engine like any other failed file;
-// - if the engine worker times out or fails, the whole batch gets a clear
+//   only, listed by the thread analysis like any other failed file;
+// - if the thread-analysis worker times out or fails, the whole batch gets a clear
 //   error (ok: false), with the parse results kept so the preview can still
 //   say what was read. This function never throws and never rejects, so the
 //   page always gets something to show.
@@ -25,7 +25,12 @@
 // Everything stays in memory only (README.md, rule R5).
 
 import { parseFiles, MAX_BATCH_BYTES, MAX_FILE_BYTES } from '../email-reading/parse-files';
-import { createBrowserEngineWorker, ENGINE_TIMEOUT_MS, runEngineInWorker, type EngineOutcome } from './engine-runner';
+import {
+    createBrowserThreadAnalysisWorker,
+    THREAD_ANALYSIS_TIMEOUT_MS,
+    runThreadAnalysisInWorker,
+    type ThreadAnalysisOutcome
+} from './thread-analysis-worker-runner';
 import { createFileReader } from './read-files';
 import type { FileLike, ProcessOptions, ProcessProgress, ProcessResult } from '../../Header/file-processing';
 import type { Limits } from '../../Header/parse-worker-messages';
@@ -42,14 +47,14 @@ export const UNEXPECTED_FILE_DETAIL = 'could not be read (unexpected error)';
 export interface ProcessSteps
 {
     readonly parse: (files: readonly InputFile[], signal?: AbortSignal) => Promise<ParseResult[]>;
-    readonly organize: (results: readonly ParseResult[], signal?: AbortSignal) => Promise<EngineOutcome>;
+    readonly organize: (results: readonly ParseResult[], signal?: AbortSignal) => Promise<ThreadAnalysisOutcome>;
     readonly limits: Limits;
 }
 
 const BROWSER_STEPS: ProcessSteps = {
     parse: parseFiles,
     organize: (results, signal) =>
-        runEngineInWorker(results, { createWorker: createBrowserEngineWorker, timeoutMs: ENGINE_TIMEOUT_MS, ...(signal === undefined ? {} : { signal }) }),
+        runThreadAnalysisInWorker(results, { createWorker: createBrowserThreadAnalysisWorker, timeoutMs: THREAD_ANALYSIS_TIMEOUT_MS, ...(signal === undefined ? {} : { signal }) }),
     limits: { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES },
 };
 
@@ -95,10 +100,10 @@ export async function processFilesWith(files: readonly FileLike[], steps: Proces
             return cancelledResult();
         }
         report('reading', 0);
-        const read = createFileReader(steps.limits);
+        const readFile = createFileReader(steps.limits);
         for (const file of files)
         {
-            const result = await readAndParse(file, read, steps, signal);
+            const result = await readAndParse(file, readFile, steps, signal);
             if (cancelled())
             {
                 return cancelledResult();
@@ -131,7 +136,7 @@ export async function processFilesWith(files: readonly FileLike[], steps: Proces
 /** One file: read, then parse. Never rejects: an unexpected error fails this file only. */
 async function readAndParse(
     file: FileLike,
-    read: ReturnType<typeof createFileReader>,
+    readFile: ReturnType<typeof createFileReader>,
     steps: ProcessSteps,
     signal: AbortSignal | undefined,
 ): Promise<ParseResult>
@@ -140,7 +145,7 @@ async function readAndParse(
     try
     {
         name = typeof file.name === 'string' ? file.name : '';
-        const outcome = await read(file);
+        const outcome = await readFile(file);
         if (!outcome.ok)
         {
             return outcome.result;

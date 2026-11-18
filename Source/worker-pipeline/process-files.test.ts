@@ -1,15 +1,15 @@
 // Unit tests for the UI's processing call (process-files.ts), in Node: fake
 // File-like objects, the real dispatcher and adapters (without workers), and
-// the real engine (without its worker). The browser version, with the real
+// the real thread analysis (without its worker). The browser version, with the real
 // workers, is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it, vi } from 'vitest';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { createMsgParser } from '../email-reading/msg-parser';
 import { FILE_TOO_LARGE_DETAIL, parseFilesWith } from '../email-reading/parse-files';
-import { ENGINE_TIMEOUT_DETAIL, type EngineOutcome } from './engine-runner';
+import { THREAD_ANALYSIS_TIMEOUT_DETAIL, type ThreadAnalysisOutcome } from './thread-analysis-worker-runner';
 import {
     CANCELLED_BATCH_DETAIL,
     processFilesWith,
@@ -47,7 +47,7 @@ const htmlToText = (html: string): HtmlToTextResult => ({ text: `[stub] ${html.l
 const parse = (inputs: readonly InputFile[]): Promise<ParseResult[]> =>
     parseFilesWith(inputs, (job) => (job.kind === 'eml' ? createEmlParser({ htmlToText }) : createMsgParser({ htmlToText })).parse(job));
 
-const organize = (results: readonly ParseResult[]): Promise<EngineOutcome> => Promise.resolve({ ok: true, result: runEngine(results) });
+const organize = (results: readonly ParseResult[]): Promise<ThreadAnalysisOutcome> => Promise.resolve({ ok: true, result: analyzeThread(results) });
 
 const STEPS: ProcessSteps = { parse, organize, limits: { maxFileBytes: 20_000, maxBatchBytes: 100_000 } };
 
@@ -88,13 +88,13 @@ describe('processFilesWith', () =>
 
     it('reads and parses one file at a time (the next file is read only after the previous one is parsed)', async () =>
     {
-        const log: string[] = [];
+        const callOrder: string[] = [];
         const files = ['a.eml', 'b.eml'].map((name) => ({
             name,
             size: 1,
             arrayBuffer: () =>
             {
-                log.push(`read ${name}`);
+                callOrder.push(`read ${name}`);
                 return Promise.resolve(new ArrayBuffer(1));
             },
         }));
@@ -102,17 +102,17 @@ describe('processFilesWith', () =>
             ...STEPS,
             parse: (inputs) =>
             {
-                log.push(`parse ${inputs.map((i) => i.name).join(',')}`);
-                return Promise.resolve(inputs.map((i): ParseResult => ({ ok: false, fileName: i.name, sha256: null, error: 'corrupt', detail: 'x' })));
+                callOrder.push(`parse ${inputs.map((input) => input.name).join(',')}`);
+                return Promise.resolve(inputs.map((input): ParseResult => ({ ok: false, fileName: input.name, sha256: null, error: 'corrupt', detail: 'x' })));
             },
         };
         await processFilesWith(files, steps);
-        expect(log).toEqual(['read a.eml', 'parse a.eml', 'read b.eml', 'parse b.eml']);
+        expect(callOrder).toEqual(['read a.eml', 'parse a.eml', 'read b.eml', 'parse b.eml']);
     });
 
     it('an engine timeout gives a batch-level error, with the parse results kept', async () =>
     {
-        const steps: ProcessSteps = { ...STEPS, organize: () => Promise.resolve({ ok: false, error: 'engine-timeout', detail: ENGINE_TIMEOUT_DETAIL }) };
+        const steps: ProcessSteps = { ...STEPS, organize: () => Promise.resolve({ ok: false, error: 'engine-timeout', detail: THREAD_ANALYSIS_TIMEOUT_DETAIL }) };
         const result = await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], steps);
         expect(result.ok).toBe(false);
         if (result.ok)
@@ -120,7 +120,7 @@ describe('processFilesWith', () =>
             return;
         }
         expect(result.error).toBe('engine-timeout');
-        expect(result.detail).toBe(ENGINE_TIMEOUT_DETAIL);
+        expect(result.detail).toBe(THREAD_ANALYSIS_TIMEOUT_DETAIL);
         expect(result.parsed.map((r) => r.ok)).toEqual([true]);
     });
 
@@ -169,7 +169,7 @@ describe('processFilesWith', () =>
 
     it('an HTML body the converter cannot handle: the message is listed with html-body-unreadable, not as a failed file', async () =>
     {
-        const failing = (inputs: readonly InputFile[]): Promise<ParseResult[]> =>
+        const failingParse = (inputs: readonly InputFile[]): Promise<ParseResult[]> =>
             parseFilesWith(inputs, (job) =>
                 createEmlParser({
                     htmlToText: () =>
@@ -178,7 +178,7 @@ describe('processFilesWith', () =>
                     },
                 }).parse(job),
             );
-        const result = await processFilesWith([textFile('html.eml', fixture('50-html-only.eml')).file], { ...STEPS, parse: failing });
+        const result = await processFilesWith([textFile('html.eml', fixture('50-html-only.eml')).file], { ...STEPS, parse: failingParse });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -207,13 +207,13 @@ describe('processFilesWith: cancelling ("Clear everything")', () =>
     {
         const controller = new AbortController();
         controller.abort();
-        const file = textFile('plain.eml', fixture('01-plain-english.eml'));
+        const fakeFile = textFile('plain.eml', fixture('01-plain-english.eml'));
         const parseSpy = vi.fn(parse);
         const organizeSpy = vi.fn(organize);
         const progress: ProcessProgress[] = [];
-        const result = await processFilesWith([file.file], { ...STEPS, parse: parseSpy, organize: organizeSpy }, { signal: controller.signal, onProgress: (p) => progress.push(p) });
+        const result = await processFilesWith([fakeFile.file], { ...STEPS, parse: parseSpy, organize: organizeSpy }, { signal: controller.signal, onProgress: (p) => progress.push(p) });
         expect(result).toEqual(CANCELLED);
-        expect(file.arrayBuffer).not.toHaveBeenCalled();
+        expect(fakeFile.arrayBuffer).not.toHaveBeenCalled();
         expect(parseSpy).not.toHaveBeenCalled();
         expect(organizeSpy).not.toHaveBeenCalled();
         expect(progress).toEqual([]);
@@ -222,7 +222,7 @@ describe('processFilesWith: cancelling ("Clear everything")', () =>
     it('aborted while a file is parsed: no further file is read, the engine never runs, nothing is kept', async () =>
     {
         const controller = new AbortController();
-        const files = [textFile('a.eml', fixture('10-order-1-alice.eml')), textFile('b.eml', fixture('11-order-2-bob-outlook-en.eml'))];
+        const fakeFiles = [textFile('a.eml', fixture('10-order-1-alice.eml')), textFile('b.eml', fixture('11-order-2-bob-outlook-en.eml'))];
         const organizeSpy = vi.fn(organize);
         const progress: ProcessProgress[] = [];
         const steps: ProcessSteps = {
@@ -236,12 +236,12 @@ describe('processFilesWith: cancelling ("Clear everything")', () =>
             },
         };
         const result = await processFilesWith(
-            files.map((f) => f.file),
+            fakeFiles.map((f) => f.file),
             steps,
             { signal: controller.signal, onProgress: (p) => progress.push(p) },
         );
         expect(result).toEqual(CANCELLED);
-        expect(files[1]?.arrayBuffer).not.toHaveBeenCalled();
+        expect(fakeFiles[1]?.arrayBuffer).not.toHaveBeenCalled();
         expect(organizeSpy).not.toHaveBeenCalled();
         // Only the start was reported: nothing after the abort.
         expect(progress).toEqual([{ stage: 'reading', filesDone: 0, filesTotal: 2 }]);

@@ -20,7 +20,7 @@
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from '../thread-analysis/analyze-thread';
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
@@ -238,8 +238,8 @@ function check(out: EngineResult, random: () => number, where: string, tally: Ta
 }
 
 /** The real overlap detector, told nothing about which email holds which (the engine fix of M1 undone). */
-const NO_HOLDS: EngineParts = {
-    ...DEFAULT_PARTS,
+const NO_HOLDS: ThreadAnalysisParts = {
+    ...DEFAULT_THREAD_ANALYSIS_PARTS,
     detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))),
 };
 
@@ -253,7 +253,7 @@ describe('collapse, never delete, with attached emails: random cases (task 8.13b
         {
             const random = makeRandom(seed);
             const c = randomCase(random, seed);
-            const out = runEngine(await parseAll(c.files));
+            const out = analyzeThread(await parseAll(c.files));
             if ((out.attached?.length ?? 0) > 0)
             {
                 withAttached++;
@@ -276,7 +276,7 @@ describe('collapse, never delete, with attached emails: random cases (task 8.13b
         {
             const random = makeRandom(seed);
             const c = randomCase(random, seed);
-            const out = runEngine(await parseAll(c.files), NO_HOLDS);
+            const out = analyzeThread(await parseAll(c.files), NO_HOLDS);
             check(out, random, `seed ${String(seed)} (no holds)`, tally);
         }
         console.log(`attached random cases, safety net alone: 400 cases, ${String(tally.checked)} ticked emails checked, printed twice: ${String(tally.twice)}`);

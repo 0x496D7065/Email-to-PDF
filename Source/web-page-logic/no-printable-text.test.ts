@@ -2,7 +2,7 @@
 // the PDF leaves out because they have no text. Synthetic data only.
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { hasNoPrintableText, pdfPositions, rebuiltHasNoPrintableText, UNREADABLE_BODY_WARNINGS } from './no-printable-text';
 import type { NormalizedMessage, ParseWarning } from '../../Header/parsed-email';
 
@@ -93,7 +93,7 @@ describe('pdfPositions', () =>
 {
     it('the ticked positions less the emails with no text, in the given order', () =>
     {
-        const result = runEngine([make(), make({ bodyText: '' }), make(), make({ bodyText: ' \n' }), make({ bodyText: '', warnings: ['rtf-only-body'] })].map((message) => ({ ok: true as const, message })));
+        const result = analyzeThread([make(), make({ bodyText: '' }), make(), make({ bodyText: ' \n' }), make({ bodyText: '', warnings: ['rtf-only-body'] })].map((message) => ({ ok: true as const, message })));
         const empties = result.messages.flatMap((m, k) => (hasNoPrintableText(m.message) ? [k] : []));
         expect(empties).toHaveLength(2);
         const all = result.messages.map((_, k) => k);

@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parseToUnicode, readContent, readDests, readPdf, type ParsedPdf, PdfString } from '../../../Helper/Test/test-support/pdf-reader';
 import { buildThread } from '../../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../../thread-analysis/analyze-thread';
+import { analyzeThread } from '../../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../../thread-analysis/output-plan';
 import { rebuiltEntries } from '../../web-page-logic/rebuilt-email-display';
 import { readWoffFont } from '../font-reader/font';
@@ -63,7 +63,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 function build(messages: readonly NormalizedMessage[]): PdfDocument
 {
     const results: ParseResult[] = messages.map((message) => ({ ok: true, message }));
-    const result = runEngine(results);
+    const result = analyzeThread(results);
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),
@@ -85,7 +85,7 @@ function buildRebuilt(earlier: number): PdfDocument
         subject: thread.subject,
         date: { utcMs: Date.parse(thread.instantUtc), original: '', offsetMinutes: 0, zoneKnown: true },
     });
-    const result = runEngine([{ ok: true, message }]);
+    const result = analyzeThread([{ ok: true, message }]);
     const rebuilt = rebuiltEntries(result).map((r) => r.id);
     expect(rebuilt).toHaveLength(earlier);
     return buildPdfDocument({
@@ -715,7 +715,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const body = 'My own answer.\n\n> First level.\n>> Second level.\n> > > Third level.\n>>>> Fourth level.\n>>>>>> Sixth level.\nBack to my text.\n';
         // "Print full original text": the whole body, quotes included.
         const results: ParseResult[] = [{ ok: true, message: make({ bodyText: body }) }];
-        const result = runEngine(results);
+        const result = analyzeThread(results);
         const doc = buildPdfDocument({
             result,
             positions: [0],

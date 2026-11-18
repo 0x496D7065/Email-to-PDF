@@ -1,8 +1,8 @@
 // TEST-ONLY entry point for Helper/Test/browser-tests/parse-files.spec.ts. Never part of the site:
 // Source/index.html and Source/main.ts do not import it, so `vite build` (dist/) never
 // contains it. The spec bundles it in memory with the project's own Vite
-// config, so the parse worker (Source/email-reading/parse-worker.ts), the engine
-// worker (Source/worker-pipeline/engine-worker.ts) and the PDF worker
+// config, so the parse worker (Source/email-reading/parse-worker.ts), the thread-analysis
+// worker (Source/worker-pipeline/thread-analysis-worker.ts) and the PDF worker
 // (Source/worker-pipeline/pdf-worker.ts) are inlined and started from blob:
 // URLs exactly as in the production build, and serves the bundle on the
 // site's own origin with the site's real security headers.
@@ -10,8 +10,8 @@
 import { buildMsg } from '../../test-data/msg/builder';
 import { MSG_SPECS } from '../../test-data/msg/specs';
 import { connectWorker, type WorkerFactory } from '../../../../Source/email-reading/parse-worker-runner';
-import type { EngineWorkerFactory } from '../../../../Source/worker-pipeline/engine-runner';
-import type { ToEngineWorker } from '../../../../Header/engine-worker-messages';
+import type { ThreadAnalysisWorkerFactory } from '../../../../Source/worker-pipeline/thread-analysis-worker-runner';
+import type { ToThreadAnalysisWorker } from '../../../../Header/thread-analysis-worker-messages';
 
 export {
     MAX_FILE_BYTES,
@@ -24,14 +24,14 @@ export { htmlToTextWithDomParser } from '../../../../Source/email-reading/browse
 export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../../../Source/email-reading/parse-worker-runner';
 export { processFiles, processFilesWith } from '../../../../Source/worker-pipeline/process-files';
 export {
-    createBrowserEngineWorker,
-    ENGINE_FAILED_DETAIL,
-    ENGINE_TIMEOUT_DETAIL,
-    ENGINE_TIMEOUT_MS,
-    runEngineInWorker,
-} from '../../../../Source/worker-pipeline/engine-runner';
+    createBrowserThreadAnalysisWorker,
+    THREAD_ANALYSIS_FAILED_DETAIL,
+    THREAD_ANALYSIS_TIMEOUT_DETAIL,
+    THREAD_ANALYSIS_TIMEOUT_MS,
+    runThreadAnalysisInWorker,
+} from '../../../../Source/worker-pipeline/thread-analysis-worker-runner';
 // Only to start an idle PDF worker for the CSP checks (Source/worker-pipeline/pdf-worker.ts).
-export { createBrowserPdfWorker } from '../../../../Source/worker-pipeline/pdf-runner';
+export { createBrowserPdfWorker } from '../../../../Source/worker-pipeline/pdf-worker-runner';
 
 // Synthetic fixtures, inlined by Vite's `?raw` (the test runner has no file
 // system types).
@@ -81,7 +81,7 @@ export const createMisbehavingWorker: WorkerFactory = (events) =>
  * request carries no file name, so `mode` is sent as the name the
  * misbehaving worker reads: 'hang' spins forever, anything else crashes.
  */
-export function createMisbehavingEngineWorker(mode: 'hang' | 'crash'): EngineWorkerFactory
+export function createMisbehavingEngineWorker(mode: 'hang' | 'crash'): ThreadAnalysisWorkerFactory
 {
     return (events) =>
     {
@@ -90,7 +90,7 @@ export function createMisbehavingEngineWorker(mode: 'hang' | 'crash'): EngineWor
             events,
         );
         return {
-            send: (_message: ToEngineWorker, transfer) => handle.send({ name: mode }, transfer),
+            send: (_message: ToThreadAnalysisWorker, transfer) => handle.send({ name: mode }, transfer),
             terminate: () => handle.terminate(),
         };
     };

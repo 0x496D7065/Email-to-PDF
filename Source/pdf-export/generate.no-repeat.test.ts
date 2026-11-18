@@ -30,7 +30,7 @@ import { instantOf, type ThreadMessage } from '../../Helper/Test/test-support/th
 import { buildThread } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
@@ -92,7 +92,7 @@ function sentences(c: ThreadCase): string[]
 async function emailTexts(c: ThreadCase, dropped: readonly number[], options: { rebuilt?: (result: EngineResult) => number[]; rebuildingOff?: boolean; policy?: OutputPolicy } = {})
 {
     const tag = c.id.replace(/[^a-z0-9]+/giu, '-');
-    const result = runEngine(dropped.map((i) => ({ ok: true as const, message: realFile(c.messages!, i, tag) })));
+    const result = analyzeThread(dropped.map((i) => ({ ok: true as const, message: realFile(c.messages!, i, tag) })));
     const positions = result.messages.map((_, k) => k);
     const policy = options.policy ?? DEFAULT_OUTPUT_POLICY;
     const plans = planOutput(

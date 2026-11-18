@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { buildSegments, type FoldRange } from '../thread-analysis/fold-segments';
 import { displayBlocks } from './display-blocks';
@@ -328,7 +328,7 @@ function make(from: EmailAddress, bodyText: string): NormalizedMessage
     };
 }
 const SIGNATURE = '\n-- \nAlice Example\nGarden Benches (fictional company)\n';
-const engineOf = (messages: readonly NormalizedMessage[]) => runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
+const engineOf = (messages: readonly NormalizedMessage[]) => analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 describe('signatureSources', () =>
 {
@@ -403,7 +403,7 @@ describe('every fixture, through the real engine and plan', () =>
     it('labels are never wrong, shown text is never left out, and the blocks give the body back', async () =>
     {
         const parsed = await parseAllFixtures();
-        const result = runEngine(parsed.map((message): ParseResult => ({ ok: true, message })));
+        const result = analyzeThread(parsed.map((message): ParseResult => ({ ok: true, message })));
         const all = result.messages.map((m, position) => ({ message: m.message, position }));
         for (const policy of [DEFAULT_OUTPUT_POLICY, { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true }])
         {

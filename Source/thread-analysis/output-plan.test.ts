@@ -1,11 +1,11 @@
 // Tests for the PDF output plan (output-plan.ts). The emails go through the
-// real engine (runEngine), so the plan sees the same segments as the app.
+// real engine (analyzeThread), so the plan sees the same segments as the app.
 // Synthetic data only: made-up names, *.test addresses; non-ASCII characters
 // are written as \u escapes.
 
 import { describe, expect, it } from 'vitest';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
-import { runEngine } from './analyze-thread';
+import { analyzeThread } from './analyze-thread';
 import {
     DEFAULT_OUTPUT_POLICY,
     normalizeLine,
@@ -62,7 +62,7 @@ function mail(spec: MailSpec): NormalizedMessage
 /** Runs the engine; the kept messages in chronological order. */
 function engine(...mails: NormalizedMessage[]): EngineMessage[]
 {
-    return [...runEngine(mails.map((message) => ({ ok: true as const, message }))).messages];
+    return [...analyzeThread(mails.map((message) => ({ ok: true as const, message }))).messages];
 }
 
 function byBody(messages: readonly EngineMessage[], snippet: string): EngineMessage

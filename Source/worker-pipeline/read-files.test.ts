@@ -56,70 +56,70 @@ describe('createFileReader', () =>
 
     it('rejects a file that would take the batch over its limit, without reading it; a smaller later file still fits', async () =>
     {
-        const read = createFileReader(LIMITS);
-        const a = fakeFile('a.eml', 10);
-        const b = fakeFile('b.eml', 10);
-        const c = fakeFile('c.eml', 10);
-        const d = fakeFile('d.eml', 5);
-        expect((await read(a.file)).ok).toBe(true);
-        expect((await read(b.file)).ok).toBe(true);
-        const third = await read(c.file);
+        const readFile = createFileReader(LIMITS);
+        const fileA = fakeFile('a.eml', 10);
+        const fileB = fakeFile('b.eml', 10);
+        const fileC = fakeFile('c.eml', 10);
+        const fileD = fakeFile('d.eml', 5);
+        expect((await readFile(fileA.file)).ok).toBe(true);
+        expect((await readFile(fileB.file)).ok).toBe(true);
+        const third = await readFile(fileC.file);
         expect(third).toEqual({
             ok: false,
             result: { ok: false, fileName: 'c.eml', sha256: null, error: 'too-large', detail: BATCH_TOO_LARGE_DETAIL },
         });
-        expect(c.arrayBuffer).not.toHaveBeenCalled();
-        expect((await read(d.file)).ok).toBe(true); // 10 + 10 + 5 = 25: exactly the limit
+        expect(fileC.arrayBuffer).not.toHaveBeenCalled();
+        expect((await readFile(fileD.file)).ok).toBe(true); // 10 + 10 + 5 = 25: exactly the limit
     });
 
     it('a file the browser cannot read (arrayBuffer rejects) fails alone, and does not use up the batch', async () =>
     {
-        const read = createFileReader(LIMITS);
+        const readFile = createFileReader(LIMITS);
         const gone = fakeFile('moved.eml', 10, () => Promise.reject(new Error('NotReadableError')));
-        expect(await read(gone.file)).toEqual({
+        expect(await readFile(gone.file)).toEqual({
             ok: false,
             result: { ok: false, fileName: 'moved.eml', sha256: null, error: 'unreadable', detail: UNREADABLE_DETAIL },
         });
         // Its 10 bytes were given back: two more 10-byte files and a 5-byte one fit.
         for (const name of ['x.eml', 'y.eml'])
         {
-            expect((await read(fakeFile(name, 10).file)).ok).toBe(true);
+            expect((await readFile(fakeFile(name, 10).file)).ok).toBe(true);
         }
-        expect((await read(fakeFile('z.eml', 5).file)).ok).toBe(true);
+        expect((await readFile(fakeFile('z.eml', 5).file)).ok).toBe(true);
     });
 
     it('a file that grew on disk after it was dropped is checked again on what was read', async () =>
     {
-        const read = createFileReader(LIMITS);
+        const readFile = createFileReader(LIMITS);
         const grown = fakeFile('grown.eml', 5, new Uint8Array(11).buffer);
-        expect(await read(grown.file)).toMatchObject({ ok: false, result: { error: 'too-large', detail: FILE_TOO_LARGE_DETAIL } });
+        expect(await readFile(grown.file)).toMatchObject({ ok: false, result: { error: 'too-large', detail: FILE_TOO_LARGE_DETAIL } });
         // Nothing of it counts towards the batch.
-        expect((await read(fakeFile('a.eml', 10).file)).ok).toBe(true);
-        expect((await read(fakeFile('b.eml', 10).file)).ok).toBe(true);
-        expect((await read(fakeFile('c.eml', 5).file)).ok).toBe(true);
+        expect((await readFile(fakeFile('a.eml', 10).file)).ok).toBe(true);
+        expect((await readFile(fakeFile('b.eml', 10).file)).ok).toBe(true);
+        expect((await readFile(fakeFile('c.eml', 5).file)).ok).toBe(true);
     });
 
     it('a file whose real size takes the batch over the limit is rejected after reading, and frees its share', async () =>
     {
-        const read = createFileReader(LIMITS);
-        expect((await read(fakeFile('a.eml', 10).file)).ok).toBe(true);
-        expect((await read(fakeFile('b.eml', 10).file)).ok).toBe(true);
+        const readFile = createFileReader(LIMITS);
+        expect((await readFile(fakeFile('a.eml', 10).file)).ok).toBe(true);
+        expect((await readFile(fakeFile('b.eml', 10).file)).ok).toBe(true);
         const grown = fakeFile('grown.eml', 5, new Uint8Array(6).buffer);
-        expect(await read(grown.file)).toMatchObject({ ok: false, result: { error: 'too-large', detail: BATCH_TOO_LARGE_DETAIL } });
-        expect((await read(fakeFile('c.eml', 5).file)).ok).toBe(true);
+        expect(await readFile(grown.file)).toMatchObject({ ok: false, result: { error: 'too-large', detail: BATCH_TOO_LARGE_DETAIL } });
+        expect((await readFile(fakeFile('c.eml', 5).file)).ok).toBe(true);
     });
 
     it('a file that shrank on disk after it was dropped counts only the bytes actually read', async () =>
     {
-        const read = createFileReader(LIMITS);
+        const readFile = createFileReader(LIMITS);
         const shrunk = fakeFile('shrunk.eml', 10, new Uint8Array(5).buffer);
-        const outcome = await read(shrunk.file);
+        const outcome = await readFile(shrunk.file);
         expect(outcome.ok).toBe(true);
         expect(outcome.ok && outcome.input.bytes.byteLength).toBe(5);
         // 5 bytes used: 10 + 10 more fit exactly (5 + 10 + 10 = 25), then not one byte more.
-        expect((await read(fakeFile('a.eml', 10).file)).ok).toBe(true);
-        expect((await read(fakeFile('b.eml', 10).file)).ok).toBe(true);
-        expect(await read(fakeFile('c.eml', 1).file)).toMatchObject({
+        expect((await readFile(fakeFile('a.eml', 10).file)).ok).toBe(true);
+        expect((await readFile(fakeFile('b.eml', 10).file)).ok).toBe(true);
+        expect(await readFile(fakeFile('c.eml', 1).file)).toMatchObject({
             ok: false,
             result: { error: 'too-large', detail: BATCH_TOO_LARGE_DETAIL },
         });

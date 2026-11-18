@@ -1,7 +1,7 @@
 // The page's side of the PDF worker: starts a worker for one PDF, sends it
 // the input and the font bytes, enforces a time limit, and always
-// terminates the worker. Same patterns as the engine worker
-// (engine-runner.ts).
+// terminates the worker. Same patterns as the thread-analysis worker
+// (thread-analysis-worker-runner.ts).
 //
 // Every way the worker can go wrong becomes an error code, never a thrown
 // error and never a page that waits forever:
@@ -18,7 +18,7 @@
 // fake worker.
 
 import { connectWorker } from '../email-reading/parse-worker-runner';
-import { isFromPdfWorker } from './pdf-protocol';
+import { isFromPdfWorker } from './pdf-worker-protocol';
 import PdfWorker from './pdf-worker?worker&inline';
 import type { WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
 import type { MakePdfRequest, PdfFailure, PdfOutcome, ToPdfWorker } from '../../Header/pdf-worker-messages';

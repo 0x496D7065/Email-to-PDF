@@ -7,7 +7,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { planPdfOrder } from '../pdf-export/model';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { setLocale, t } from './translations';
@@ -33,7 +33,7 @@ const fixture = (name: string): NormalizedMessage =>
     }
     return message;
 };
-const engineOf = (...names: string[]): EngineResult => runEngine(names.map((n) => ({ ok: true as const, message: fixture(n) })));
+const engineOf = (...names: string[]): EngineResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
 /** The last email of a thread alone: 3 earlier emails rebuilt from its quote. */
 const LAST = '13-order-4-bob-outlook-nl.eml';
 

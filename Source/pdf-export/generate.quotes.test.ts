@@ -18,7 +18,7 @@ import { quotePrefixProblems, referenceDisplayText } from '../../Helper/Test/tes
 import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { buildThread, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
@@ -94,7 +94,7 @@ interface ReadLine
 /** Every line of the email pages (footers left out), as read back from the file. */
 async function emailLines(messages: readonly NormalizedMessage[], policy: OutputPolicy): Promise<{ lines: ReadLine[]; result: EngineResult; rebuilt: number }>
 {
-    const result = runEngine(messages.map((m) => ({ ok: true as const, message: m })));
+    const result = analyzeThread(messages.map((m) => ({ ok: true as const, message: m })));
     const positions = result.messages.map((_, k) => k);
     const rebuilt = rebuiltEntries(result).map((r) => r.id);
     const made = await generatePdf({

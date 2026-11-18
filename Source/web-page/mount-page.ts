@@ -86,7 +86,7 @@
 
 import { PDF_FONTS } from '../pdf-export/fonts';
 import { pdfPositions } from '../web-page-logic/no-printable-text';
-import { createBrowserPdfWorker, pdfTimeoutMs, runPdfInWorker } from '../worker-pipeline/pdf-runner';
+import { createBrowserPdfWorker, pdfTimeoutMs, runPdfInWorker } from '../worker-pipeline/pdf-worker-runner';
 import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files';
 import { applyDocumentLanguage, mountPageShell, type PageShell } from './page-shell';
 import { mountDownloadStep, type DownloadStep, type DownloadStepOptions } from './download-step';

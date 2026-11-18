@@ -7,7 +7,7 @@
 //   made or is being made; its note (its accessible description) always
 //   says why, or what pressing it does.
 // - Pressing it: the time of the PDF is taken here, on the page; the PDF is
-//   made in a worker (Source/worker-pipeline/pdf-runner.ts), so the page never freezes.
+//   made in a worker (Source/worker-pipeline/pdf-worker-runner.ts), so the page never freezes.
 //   The status line (the page's one live region) says "Making your PDF...",
 //   then that it is ready (file name and page count), or a calm error.
 // - When the PDF is ready, its download starts once by itself (a click on

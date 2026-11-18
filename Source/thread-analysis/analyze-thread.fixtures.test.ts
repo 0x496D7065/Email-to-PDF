@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { FIXTURES } from '../../Helper/Test/test-data/manifest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { normalizeBody } from './dedupe';
-import { primaryReason, runEngine } from './analyze-thread';
+import { primaryReason, analyzeThread } from './analyze-thread';
 import { checkSegments, FOLD_REASONS, joinSegments, visibleView } from './fold-segments';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineMessage, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
@@ -66,7 +66,7 @@ describe('engine over the parsed fixtures', () =>
         {
             const messages = await parseAllFixtures();
             const results: ParseResult[] = messages.map((message) => ({ ok: true, message }));
-            cached = { messages, results, out: runEngine(results) };
+            cached = { messages, results, out: analyzeThread(results) };
         }
         return cached;
     }
@@ -223,7 +223,7 @@ describe('engine over the parsed fixtures', () =>
     {
         const { results, out } = await run();
         const broken: ParseResult = { ok: false, fileName: 'broken.eml', sha256: null, error: 'too-large', detail: 'over the size limit' };
-        const withFailure = runEngine([broken, ...results]);
+        const withFailure = analyzeThread([broken, ...results]);
         expect(withFailure.failed).toEqual([{ index: 0, fileName: 'broken.eml', sha256: null, error: 'too-large', detail: 'over the size limit' }]);
         expect(withFailure.counts).toEqual({ ...out.counts, filesGiven: out.counts.filesGiven + 1, filesFailed: 1 });
         // Same messages, same segments; only the input positions moved by one.

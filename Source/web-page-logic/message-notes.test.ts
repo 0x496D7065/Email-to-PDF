@@ -1,6 +1,6 @@
 // Unit tests for the notes of an email (message-notes.ts). Synthetic data only.
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { t } from '../web-page/translations';
 import { codedCharacters, DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
@@ -171,7 +171,7 @@ describe('messageNotes', () =>
     {
         const first = make({ messageId: 'same@example.test', bodyText: 'First text.\n' });
         const second = make({ messageId: 'same@example.test', bodyText: 'Another text.\n' });
-        const result = runEngine([first, second].map((message): ParseResult => ({ ok: true, message })));
+        const result = analyzeThread([first, second].map((message): ParseResult => ({ ok: true, message })));
         expect(result.messages).toHaveLength(2);
         const notes = result.messages.map((m, position) => messageNotes(m, position, result.positionByIndex));
         expect(notes[0]).toContainEqual({ kind: 'dedupe', code: 'same-id-different-content', related: [2], more: 0 });

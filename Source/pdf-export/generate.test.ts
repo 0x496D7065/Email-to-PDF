@@ -7,7 +7,7 @@
 // Special characters are written as braced escapes (ASCII file).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseToUnicode, type ParsedPdf, type PdfDict, PdfString, type PdfValue, readContent, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { type GeneratePdfInput, generatePdf, type PdfFonts } from './generate';
 import { COVER_DESTINATION, DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_DESTINATION, layoutPdf, MAX_FRONT_PASSES, type PdfLayout, settlePageCount } from './page-layout';
@@ -62,7 +62,7 @@ const many = (count: number, fields: (k: number) => Partial<NormalizedMessage> =
 function inputFor(messages: readonly NormalizedMessage[], extra: Partial<GeneratePdfInput> = {}): GeneratePdfInput
 {
     const results: ParseResult[] = messages.map((message) => ({ ok: true, message }));
-    const result = runEngine(results);
+    const result = analyzeThread(results);
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),

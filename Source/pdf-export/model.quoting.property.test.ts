@@ -27,7 +27,7 @@ import { describe, expect, it } from 'vitest';
 import { groupAsAttached } from '../../Helper/Test/test-support/attached-builder';
 import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { quotingCase, quotingSentence, type QuotingCase } from '../../Helper/Test/test-support/quoting-builder';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from '../thread-analysis/analyze-thread';
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -265,12 +265,12 @@ function check(c: QuotingCase, out: EngineResult, random: () => number, where: s
 }
 
 /** The real overlap detector, told nothing about which email holds which (the engine's fixes for attached emails undone). */
-const NO_HOLDS: EngineParts = {
-    ...DEFAULT_PARTS,
+const NO_HOLDS: ThreadAnalysisParts = {
+    ...DEFAULT_THREAD_ANALYSIS_PARTS,
     detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))),
 };
 
-function run(dropped: Dropped, seeds: number, quoteShare: number, parts: EngineParts = DEFAULT_PARTS, label = ''): Tally
+function run(dropped: Dropped, seeds: number, quoteShare: number, parts: ThreadAnalysisParts = DEFAULT_THREAD_ANALYSIS_PARTS, label = ''): Tally
 {
     const t = tally();
     for (let seed = 1; seed <= seeds; seed++)
@@ -286,7 +286,7 @@ function run(dropped: Dropped, seeds: number, quoteShare: number, parts: EngineP
                 missing.add(k);
             }
         });
-        const out = runEngine(filesOf(c, dropped, random, missing), parts);
+        const out = analyzeThread(filesOf(c, dropped, random, missing), parts);
         check(c, out, random, `${dropped}${label} share ${String(quoteShare)} seed ${String(seed)}`, t, missing);
     }
     console.log(
@@ -347,7 +347,7 @@ describe('collapse, never delete, with emails quoting each other: random cases (
                 warnings: [],
             });
         }
-        const out = runEngine(messages.map((message) => ({ ok: true as const, message })));
+        const out = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
         const positions = out.messages.map((_, k) => k);
         const plans = planOutput(out.messages, DEFAULT_OUTPUT_POLICY);
         const input = { result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings };

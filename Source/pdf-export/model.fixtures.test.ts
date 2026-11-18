@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { buildPdfDocument } from './model';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
@@ -25,7 +25,7 @@ describe('PDF document model over the parsed fixtures', () =>
     let result: EngineResult | undefined;
     async function engine(): Promise<EngineResult>
     {
-        result ??= runEngine((await parseAllFixtures()).map((message) => ({ ok: true as const, message })));
+        result ??= analyzeThread((await parseAllFixtures()).map((message) => ({ ok: true as const, message })));
         return result;
     }
     async function doc(policy: OutputPolicy): Promise<{ doc: PdfDocument; result: EngineResult }>

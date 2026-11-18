@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from './analyze-thread';
+import { analyzeThread } from './analyze-thread';
 import { comparableText } from './link-rebuilt-messages';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineRebuilt } from '../../Header/rebuilt-emails';
@@ -42,7 +42,7 @@ function email(from: EmailAddress, iso: string, body: string, offsetMinutes: num
     };
 }
 
-const run = (...messages: NormalizedMessage[]): EngineResult => runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
+const run = (...messages: NormalizedMessage[]): EngineResult => analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 /** Gmail-style reply: own text, then "On <date>, <who> wrote:" and the quoted lines. */
 const gmailReply = (own: string, date: string, who: string, quoted: string): string =>

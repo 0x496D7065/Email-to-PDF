@@ -35,7 +35,7 @@
 // Indices: every `index` and `related` number in the result (EngineMessage.index,
 // MergedCopy.index, DedupeWarning.related, Segment.related) is an INPUT
 // POSITION: for a file's own email, its position in the array given to
-// `runEngine`, i.e. the order the files were dropped in; for an attached
+// `analyzeThread`, i.e. the order the files were dropped in; for an attached
 // email, `results.length` plus its place among all attached emails (files in
 // drop order, each file's attached emails in ParseResult.attached order),
 // see EngineAttached. `positionByIndex` turns such a number into a position
@@ -133,10 +133,10 @@ export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, in
 
 /**
  * The replaceable parts of the pipeline. TESTS ONLY: the app always uses
- * DEFAULT_PARTS. Tests swap in a broken part to prove the safety net works,
+ * DEFAULT_THREAD_ANALYSIS_PARTS. Tests swap in a broken part to prove the safety net works,
  * and use `onStage` to time each stage (the engine itself reads no clock).
  */
-export interface EngineParts
+export interface ThreadAnalysisParts
 {
     readonly detectQuotedOverlap: typeof detectQuotedOverlap;
     readonly detectQuoteMarkers: typeof detectQuoteMarkers;
@@ -150,10 +150,10 @@ export interface EngineParts
     /** Optional, default: link-rebuilt-messages.ts. */
     readonly linkRebuilt?: typeof linkRebuilt;
     /** Called when a stage starts ('dedupe', 'order', ...) and with 'done' at the end. */
-    readonly onStage?: (stage: EngineStage) => void;
+    readonly onStage?: (stage: ThreadAnalysisStage) => void;
 }
 
-export type EngineStage =
+export type ThreadAnalysisStage =
     | 'dedupe'
     | 'order'
     | 'overlap'
@@ -165,7 +165,7 @@ export type EngineStage =
     | 'link-rebuilt'
     | 'done';
 
-export const DEFAULT_PARTS: EngineParts = Object.freeze({
+export const DEFAULT_THREAD_ANALYSIS_PARTS: ThreadAnalysisParts = Object.freeze({
     detectQuotedOverlap,
     detectQuoteMarkers,
     detectReplyHeaders,
@@ -935,9 +935,9 @@ function heldByKept(
 /**
  * Runs the whole engine (see the steps at the top of this file).
  * `results`: one parse result per dropped file, in drop order.
- * `parts`: tests only (see EngineParts).
+ * `parts`: tests only (see ThreadAnalysisParts).
  */
-export function runEngine(results: readonly ParseResult[], parts: EngineParts = DEFAULT_PARTS): EngineResult
+export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnalysisParts = DEFAULT_THREAD_ANALYSIS_PARTS): EngineResult
 {
     // 1. Split. `inputPosition[i]` = input position of the i-th parsed message.
     const parsed: NormalizedMessage[] = [];

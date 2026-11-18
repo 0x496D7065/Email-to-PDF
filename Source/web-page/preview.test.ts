@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
@@ -66,7 +66,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 }
 
 const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
-    runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
+    analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 const dateAt = (iso: string, offsetMinutes: number | null = -300, zoneKnown = true): NormalizedMessage['date'] => ({
     utcMs: Date.parse(iso),
@@ -564,7 +564,7 @@ describe('mountPreview', () =>
     it('keeps every character of every synthetic fixture, run through the engine', async () =>
     {
         const parsed = await parseAllFixtures();
-        const result = runEngine(parsed.map((message): ParseResult => ({ ok: true, message })));
+        const result = analyzeThread(parsed.map((message): ParseResult => ({ ok: true, message })));
         expect(result.counts.withFolds).toBeGreaterThan(5);
         mount({ chunkSize: result.messages.length });
         preview.show(result);

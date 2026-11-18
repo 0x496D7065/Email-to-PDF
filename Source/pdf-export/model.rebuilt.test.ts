@@ -10,7 +10,7 @@
 // without a time, no sender, a list read short).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../web-page/translations';
 import { previewOrder, rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -37,7 +37,7 @@ const fixture = (name: string): NormalizedMessage =>
     }
     return m;
 };
-const engineOf = (...names: string[]): EngineResult => runEngine(names.map((n) => ({ ok: true as const, message: fixture(n) })));
+const engineOf = (...names: string[]): EngineResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
 
 /** The last email of a synthetic thread: alone, it gives 3 rebuilt entries (ids 2, 1, 0, oldest first) before it. */
 const LAST = '13-order-4-bob-outlook-nl.eml';
@@ -366,7 +366,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
                 'Thanks, Bob.\n\nAlice\n\nOn Tue, 4 Mar 2025 at 09:00, Bob Sample <bob@furniture.example.test> wrote:\n> I agree with this point:\n>\n>> The desks are oak.\n>> They arrive on Monday.\n>\n> Bob\n',
             attachments: [],
         };
-        const result = runEngine([{ ok: true, message: reply }]);
+        const result = analyzeThread([{ ok: true, message: reply }]);
         const entry = rebuiltEntries(result)[0];
         expect(entry).toBeDefined();
         expect(entry!.rebuilt.reconstructedText).toBe('I agree with this point:\n\n> The desks are oak.\n> They arrive on Monday.\n\nBob\n');

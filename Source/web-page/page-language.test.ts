@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../Helper/Test/test-support/fake-dom';
 import { testLanguageName, TEST_LOCALE } from '../../Helper/Test/test-support/test-locale';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import type { ListenerTarget } from './add-files';
 import { en } from './translations/en';
 import { getLocale, isPluralForms, setLocale, SUPPORTED_LOCALES, t } from './translations';
@@ -90,7 +90,7 @@ function emails(): { messages: NormalizedMessage[]; result: EngineResult; standI
     const undated = make({ date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false }, warnings: ['missing-date'] });
     const broken = make({ subject: 'Broken item', bodyText: 'Text of the broken item.\n' });
     const messages = [first, reply, undated, broken];
-    const result = runEngine([
+    const result = analyzeThread([
         ...[...messages, copy].map((message): ParseResult => ({ ok: true, message })),
         { ok: false, fileName: 'notes.txt', sha256: null, error: 'unsupported-type', detail: 'not an email file' },
         { ok: false, fileName: '', sha256: null, error: 'corrupt', detail: 'damaged file structure: synthetic' },

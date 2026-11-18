@@ -7,7 +7,7 @@
 // rule R7: synthetic data only).
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { attachedCount, attachedLinks } from './attached-links';
@@ -51,7 +51,7 @@ async function run(...files: [string, string][]): Promise<EngineResult>
     {
         parsed.push(await eml.parse({ name, bytes: new TextEncoder().encode(text) }));
     }
-    return runEngine(parsed);
+    return analyzeThread(parsed);
 }
 const numberOf = (out: EngineResult, subject: string): number =>
 {

@@ -1,5 +1,5 @@
 // Browser test of step 3, "Make the PDF" (Source/web-page/download-step.ts,
-// Source/worker-pipeline/pdf-runner.ts; README.md, rules R1, R2, R4 and R5), in
+// Source/worker-pipeline/pdf-worker-runner.ts; README.md, rules R1, R2, R4 and R5), in
 // each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts), with the real pipeline and the real PDF worker:
 //

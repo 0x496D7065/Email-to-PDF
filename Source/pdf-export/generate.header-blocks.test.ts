@@ -31,7 +31,7 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readDests, readLinks, readPageRuns, readPdf, textLines, type PageRun, type ParsedPdf } from '../../Helper/Test/test-support/pdf-reader';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -83,7 +83,7 @@ function realFile(messages: readonly ThreadMessage[], i: number, tag: string): N
  */
 async function makePdf(messages: readonly NormalizedMessage[], policy: OutputPolicy, rebuilt?: (result: EngineResult) => number[], rebuildingOff = false)
 {
-    const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
+    const result = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),

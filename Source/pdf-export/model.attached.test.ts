@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from '../thread-analysis/analyze-thread';
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
@@ -97,7 +97,7 @@ const printedIn = (d: PdfDocument, text: string): number => d.emails.filter((e) 
 describe('PDF model: an inline forward (.eml) printed as an email of its own', () =>
 {
     const build = async (): Promise<EngineResult> =>
-        runEngine([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY))))]);
+        analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY))))]);
 
     it('folded: its own entry and page, its block cut from the parent ("printed as" it), never printed twice', async () =>
     {
@@ -164,7 +164,7 @@ describe('PDF model: other kinds of attached emails', () =>
 {
     it('sent as an attachment (.eml): printed on its own with its name; the parent body is untouched', async () =>
     {
-        const out = runEngine([
+        const out = analyzeThread([
             await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY), 'attachment; filename="figures.eml"'))),
         ]);
         const d = docOf(out);
@@ -190,7 +190,7 @@ describe('PDF model: other kinds of attached emails', () =>
         };
         const outer: MsgSpec = { ...inner, id: 'outer', subject: 'Outer item', bodyText: OWN, submitTime: '2025-06-03T08:00:00Z', messageId: '<outer-item@example.test>', attachedItems: [{ displayName: 'Inner item', message: inner }] };
         const parsed = await msg.parse({ name: 'outer.msg', bytes: buildMsg(outer) });
-        const out = runEngine([parsed]);
+        const out = analyzeThread([parsed]);
         const d = docOf(out);
         expect(d.emails.map((e) => fileRow(e))).toEqual([[`outer.msg${FILE_CHAIN_SEPARATOR}Inner item.msg`], ['outer.msg']]);
         expect(printedIn(d, B_BODY)).toBe(1);
@@ -201,7 +201,7 @@ describe('PDF model: other kinds of attached emails', () =>
     {
         const b = simple('carol', 'Sun, 1 Jun 2025 09:00:00 +0200', B_BODY);
         const a = holding('bob', MON, plain(A_BODY), crlf('Content-Type: message/rfc822; name="inner.eml"', '', b));
-        const out = runEngine([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a)))]);
+        const out = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a)))]);
         const all = docOf(out);
         expect(all.emails).toHaveLength(3);
         expect(printedIn(all, A_BODY)).toBe(1);
@@ -222,7 +222,7 @@ describe('PDF model: other kinds of attached emails', () =>
     it('a duplicate of a dropped file (Q8): the block is cut and printed as the dropped copy; unticked, left out', async () =>
     {
         const copy = simple('bob', MON, A_BODY);
-        const out = runEngine([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(copy))), await parseEml('bob.eml', copy)]);
+        const out = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(copy))), await parseEml('bob.eml', copy)]);
         expect(out.counts.duplicatesMerged).toBe(1);
         const d = docOf(out);
         expect(d.emails).toHaveLength(2);
@@ -238,7 +238,7 @@ describe('PDF model: other kinds of attached emails', () =>
     it('the same file added twice: each email once, the block cut once', async () =>
     {
         const text = holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY)));
-        const out = runEngine([await parseEml('one.eml', text), await parseEml('two.eml', text)]);
+        const out = analyzeThread([await parseEml('one.eml', text), await parseEml('two.eml', text)]);
         const d = docOf(out);
         expect(d.emails).toHaveLength(2);
         expect(printedIn(d, A_BODY)).toBe(1);
@@ -247,7 +247,7 @@ describe('PDF model: other kinds of attached emails', () =>
 
     it('an undated attached email comes just before its parent in the PDF, with "no date" in the index', async () =>
     {
-        const out = runEngine([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', null, A_BODY))))]);
+        const out = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', null, A_BODY))))]);
         const d = docOf(out);
         expect(d.emails.map((e) => out.messages[e.position!]!.message.subject)).toEqual(['bob subject', 'alice subject']);
         expect(d.emails[0]!.flags.undated).toBe(true);
@@ -268,7 +268,7 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
     // A reply header with neither a readable date nor a sender mailbox: the quote cannot be rebuilt
     // (reconstruct-quoted-messages.ts, R1), but Ben's plan still leaves it out as quoted history.
     const marksOnly = `${FINE}\r\n\r\nOn a quiet afternoon last spring, the old office team wrote:\r\n> ${OLD}\r\n`;
-    const build = async (benBody: string): Promise<EngineResult> => runEngine([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(simple('ben', TUE, benBody))))]);
+    const build = async (benBody: string): Promise<EngineResult> => analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(simple('ben', TUE, benBody))))]);
 
     /** The PDF and the preview's ranges for Cy, for one way of choosing rebuilt emails. */
     function both(out: EngineResult, extra: { readonly rebuilt?: number[]; readonly unticked?: number[]; readonly rebuildingOff?: boolean }, positions = out.messages.map((_, k) => k))
@@ -354,7 +354,7 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
         const BEA = 'Bea adds that the movers asked for the lift to be reserved from eight until noon on the day.';
         const dan = simple('dan', TUE, withHeader);
         const bea = holding('bea', TUE, plain(BEA), rfc822(dan));
-        const out = runEngine([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(bea)))]);
+        const out = analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(bea)))]);
         expect(out.messages.map((m) => m.message.subject).sort()).toEqual(['bea subject', 'cy subject', 'dan subject']);
         const cy = positionOf(out, 'cy subject');
         const positions = [cy, positionOf(out, 'dan subject')].sort((x, y) => x - y);
@@ -400,7 +400,7 @@ describe('PDF model: copies of the email holding an attached email, and copies o
             [noList, withList],
         ])
         {
-            const out = runEngine(files);
+            const out = analyzeThread(files);
             expect(out.counts.duplicatesMerged).toBe(1);
             expect(out.messages.find((m) => m.message.subject === 'alice subject')!.message.source.fileName).toBe('two.eml');
             const all = docOf(out);
@@ -414,7 +414,7 @@ describe('PDF model: copies of the email holding an attached email, and copies o
 
     it('D2: the dropped file wins over an attached copy with a Bcc line; that Bcc line stays printed in the holder (header lines only)', async () =>
     {
-        const out = runEngine([
+        const out = analyzeThread([
             await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY).replace('MIME-Version', 'Bcc: boss@example.test\r\nMIME-Version')))),
             await parseEml('bob.eml', simple('bob', MON, A_BODY)),
         ]);
@@ -427,7 +427,7 @@ describe('PDF model: copies of the email holding an attached email, and copies o
         expect(parent).toContain('Bcc: boss@example.test');
         expect(printedIn(d, A_BODY)).toBe(1);
         // The same header data: the header lines go too.
-        const same = runEngine([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY)))), await parseEml('bob.eml', simple('bob', MON, A_BODY))]);
+        const same = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY)))), await parseEml('bob.eml', simple('bob', MON, A_BODY))]);
         expect(bodyOf(emailOf(docOf(same), same, 'alice subject')!)).not.toContain(FORWARDED_SEPARATOR);
     });
 });
@@ -439,7 +439,7 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         const b = simple('carol', null, B_BODY);
         const a = holding('bob', MON, plain(A_BODY), rfc822(b));
         const dup = simple('dave', 'Wed, 4 Jun 2025 09:00:00 +0200', 'A copy also dropped on its own.');
-        const out = runEngine([
+        const out = analyzeThread([
             await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a), rfc822(dup, 'attachment; filename="dup.eml"'))),
             await parseEml('dup.eml', dup),
         ]);
@@ -467,7 +467,7 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
 
     it('an attached email dated after its holder (a date with no zone) keeps its own text in the PDF', async () =>
     {
-        const out = runEngine([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))]);
+        const out = analyzeThread([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))]);
         expect(out.messages.map((m) => m.message.subject)).toEqual(['carol subject', 'alice subject', 'bob subject']);
         const d = docOf(out);
         for (const text of [OWN, UNIQUE_A, B_BODY])
@@ -479,7 +479,7 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
 
     it('an undated attached email also dropped after its undated holder keeps its own text in the PDF', async () =>
     {
-        const out = runEngine([
+        const out = analyzeThread([
             await parseEml('parent.eml', holding('alice', null, plain(OWN), rfc822(aWithForward(null)))),
             await parseEml('a.eml', aWithForward(null)),
         ]);
@@ -495,8 +495,8 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
     it('safety net: if the engine ever folded an attached email\'s text as quoted from its holder, that text stays in the holder (never nowhere)', async () =>
     {
         // The overlap detector told nothing about which email holds which: the engine fix undone.
-        const noHolds: EngineParts = { ...DEFAULT_PARTS, detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))) };
-        const out = runEngine([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))], noHolds);
+        const noHolds: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))) };
+        const out = analyzeThread([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))], noHolds);
         const bob = out.messages[positionOf(out, 'bob subject')]!;
         // Bob's own text really is folded as quoted from Alice here.
         expect(bob.segments.some((s) => s.folded && s.related.includes(0))).toBe(true);
@@ -532,7 +532,7 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         // A hand-changed result: one word of the block in Alice's body differs from Bob's own body ("north"
         // became "south", same length so every offset stays valid). normalizeBody does not ignore that, so the
         // block cannot be matched to Bob's body for certain: no part of it may be left out of Alice's email.
-        const real = runEngine([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY))))]);
+        const real = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY))))]);
         const alice = positionOf(real, 'alice subject');
         const bob = positionOf(real, 'bob subject');
         const realBody = real.messages[alice]!.message.bodyText;

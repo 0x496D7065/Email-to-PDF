@@ -1,7 +1,7 @@
 // Property tests for the engine pipeline (README.md, rules R6 and R7).
 //
 // Random synthetic threads (seeded, so every run is the same) go through
-// runEngine, and the collapse-never-delete invariants are checked for every
+// analyzeThread, and the collapse-never-delete invariants are checked for every
 // one of them:
 // - the segments of every kept message are a valid cover of its body, and
 //   joining them (or the "unfold all" view) gives the body back exactly;
@@ -23,7 +23,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { normalizeBody } from './dedupe';
-import { DEFAULT_PARTS, runEngine, type EngineParts, type EngineStage } from './analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts, type ThreadAnalysisStage } from './analyze-thread';
 import { checkSegments, FOLD_REASONS, joinSegments, visibleView } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { DuplicateRule, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
@@ -449,7 +449,7 @@ function onlyMarksRemoved(slice: string, text: string): boolean
     return true;
 }
 
-const NO_REBUILD: EngineParts = { ...DEFAULT_PARTS, reconstructQuotedMessages: () => [] };
+const NO_REBUILD: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: () => [] };
 
 /** The rebuild invariants of one engine run (see the file comment); `baseline` = the same run with rebuilding off. */
 function checkRebuilt(out: EngineResult, baseline?: EngineResult): void
@@ -559,7 +559,7 @@ function firstLine(body: string): { offset: number; text: string } | null
 
 // ------------------------------------------------------------------ tests
 
-describe('runEngine: collapse-never-delete over random synthetic threads', () =>
+describe('analyzeThread: collapse-never-delete over random synthetic threads', () =>
 {
     it('keeps every invariant for 300 seeded batches', () =>
     {
@@ -578,14 +578,14 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
             const { results, copies, conflicts } = makeBatch(seed, SMALL);
             const snapshot = JSON.stringify(results);
             let out: EngineResult | undefined;
-            expect(() => (out = runEngine(results)), `seed ${seed}`).not.toThrow();
+            expect(() => (out = analyzeThread(results)), `seed ${seed}`).not.toThrow();
             if (out === undefined)
             {
                 throw new Error('no result');
             }
             expect(JSON.stringify(results), `seed ${seed}: input modified`).toBe(snapshot);
             checkInvariants(results, out, copies, conflicts);
-            checkRebuilt(out, seed % 5 === 0 ? runEngine(results, NO_REBUILD) : undefined);
+            checkRebuilt(out, seed % 5 === 0 ? analyzeThread(results, NO_REBUILD) : undefined);
             rebuilt += out.reconstructed.length;
             expect(wrongLinks(out), `seed ${seed}`).toEqual([]);
             for (const entry of out.reconstructed)
@@ -657,13 +657,13 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
     {
         const fail = (n: number): ParseResult => ({ ok: false, fileName: `bad-${n}.msg`, sha256: null, error: 'too-large', detail: 'over the size limit' });
         const allFailed = [fail(1), fail(2)];
-        checkInvariants(allFailed, runEngine(allFailed), []);
-        expect(runEngine(allFailed).messages).toEqual([]);
-        checkInvariants([], runEngine([]), []);
+        checkInvariants(allFailed, analyzeThread(allFailed), []);
+        expect(analyzeThread(allFailed).messages).toEqual([]);
+        checkInvariants([], analyzeThread([]), []);
         const empty = makeBatch(7, { ...SMALL, emptyBody: 1, duplicate: 0, failed: 0 });
-        const out = runEngine(empty.results);
+        const out = analyzeThread(empty.results);
         checkInvariants(empty.results, out, empty.copies, empty.conflicts);
-        checkRebuilt(out, runEngine(empty.results, NO_REBUILD));
+        checkRebuilt(out, analyzeThread(empty.results, NO_REBUILD));
         for (const message of out.messages)
         {
             expect(message.segments).toEqual([]);
@@ -671,7 +671,7 @@ describe('runEngine: collapse-never-delete over random synthetic threads', () =>
     });
 });
 
-describe('runEngine: speed on a large batch', () =>
+describe('analyzeThread: speed on a large batch', () =>
 {
     it('runs 2000 messages in 50 threads (about 5 MB) within a generous bound', () =>
     {
@@ -690,12 +690,12 @@ describe('runEngine: speed on a large batch', () =>
         });
         const chars = batch.results.reduce((n, r) => n + (r.ok ? r.message.bodyText.length : 0), 0);
 
-        const times = new Map<EngineStage, number>();
-        let current: EngineStage | null = null;
+        const times = new Map<ThreadAnalysisStage, number>();
+        let current: ThreadAnalysisStage | null = null;
         let since = 0;
         const startTime = performance.now();
-        const out = runEngine(batch.results, {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread(batch.results, {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             onStage: (stage) =>
             {
                 const now = performance.now();

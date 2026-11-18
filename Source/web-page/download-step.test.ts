@@ -6,7 +6,7 @@
 // Helper/Test/browser-tests/download.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import type { ListenerTarget } from './add-files';
 import { noteText } from './download-step';
 import { t } from './translations';
@@ -45,7 +45,8 @@ function make(): NormalizedMessage
         warnings: [],
     };
 }
-const engineOf = (messages: readonly NormalizedMessage[]): EngineResult => runEngine(messages.map((message): ParseResult => ({ ok: true, message })));
+const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
+    analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 function fakeFile(name: string): FileLike
 {

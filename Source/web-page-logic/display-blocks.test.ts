@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { primaryReason, runEngine } from '../thread-analysis/analyze-thread';
+import { primaryReason, analyzeThread } from '../thread-analysis/analyze-thread';
 import { buildSegments, FOLD_REASONS, type FoldRange } from '../thread-analysis/fold-segments';
 import { displayBlocks, MAX_ABSORBED_WHITESPACE } from './display-blocks';
 import type { DisplayBlock } from '../../Header/pdf-plan';
@@ -389,7 +389,7 @@ describe('every synthetic fixture through the real engine', () =>
     it('keeps every body complete, and gives one folded block where the engine had several fragments', async () =>
     {
         const messages = await parseAllFixtures();
-        const out = runEngine(messages.map((message) => ({ ok: true, message })));
+        const out = analyzeThread(messages.map((message) => ({ ok: true, message })));
         for (const email of out.messages)
         {
             checkBlocks(email.message.bodyText, email.segments, email.message.source.fileName);

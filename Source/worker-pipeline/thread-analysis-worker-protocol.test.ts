@@ -1,11 +1,11 @@
-// Unit tests for the engine worker's messages and its side of the
-// conversation (engine-protocol.ts), in Node without a browser. The real
+// Unit tests for the thread-analysis worker's messages and its side of the
+// conversation (thread-analysis-worker-protocol.ts), in Node without a browser. The real
 // worker is checked in Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/analyze-thread';
-import { createEngineWorkerSide, isFromEngineWorker, isToEngineWorker } from './engine-protocol';
-import type { FromEngineWorker } from '../../Header/engine-worker-messages';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
+import { createThreadAnalysisWorkerSide, isFromThreadAnalysisWorker, isToThreadAnalysisWorker } from './thread-analysis-worker-protocol';
+import type { FromThreadAnalysisWorker } from '../../Header/thread-analysis-worker-messages';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
 const FAILED_FILE: ParseResult = { ok: false, fileName: 'notes.txt', sha256: null, error: 'unsupported-type', detail: 'not an email file' };
@@ -27,14 +27,14 @@ const QUOTING: NormalizedMessage = {
     warnings: [],
 };
 const WITH_REBUILT: readonly ParseResult[] = [{ ok: true, message: QUOTING }, FAILED_FILE];
-const RESULT = runEngine(WITH_REBUILT);
+const RESULT = analyzeThread(WITH_REBUILT);
 
 describe('message checks', () =>
 {
     it('accepts a run request with parse results', () =>
     {
-        expect(isToEngineWorker({ type: 'run', results: [] })).toBe(true);
-        expect(isToEngineWorker({ type: 'run', results: [FAILED_FILE] })).toBe(true);
+        expect(isToThreadAnalysisWorker({ type: 'run', results: [] })).toBe(true);
+        expect(isToThreadAnalysisWorker({ type: 'run', results: [FAILED_FILE] })).toBe(true);
     });
 
     it.each([
@@ -46,16 +46,16 @@ describe('message checks', () =>
         ['a result that is not an object', { type: 'run', results: [1] }],
     ])('rejects %s as a request', (_label, data) =>
     {
-        expect(isToEngineWorker(data)).toBe(false);
+        expect(isToThreadAnalysisWorker(data)).toBe(false);
     });
 
     it('accepts a real engine result and a failure', () =>
     {
-        expect(isFromEngineWorker({ type: 'result', result: runEngine([FAILED_FILE]) })).toBe(true);
+        expect(isFromThreadAnalysisWorker({ type: 'result', result: analyzeThread([FAILED_FILE]) })).toBe(true);
         expect(RESULT.reconstructed.length).toBe(1);
         expect(RESULT.timeline.length).toBe(2);
-        expect(isFromEngineWorker({ type: 'result', result: RESULT })).toBe(true);
-        expect(isFromEngineWorker({ type: 'failed' })).toBe(true);
+        expect(isFromThreadAnalysisWorker({ type: 'result', result: RESULT })).toBe(true);
+        expect(isFromThreadAnalysisWorker({ type: 'failed' })).toBe(true);
     });
 
     it.each([
@@ -70,32 +70,32 @@ describe('message checks', () =>
         ['no reconstruction warnings', { type: 'result', result: { ...RESULT, reconstructionWarnings: null } }],
     ])('rejects %s as a reply', (_label, data) =>
     {
-        expect(isFromEngineWorker(data)).toBe(false);
+        expect(isFromThreadAnalysisWorker(data)).toBe(false);
     });
 });
 
-describe('createEngineWorkerSide', () =>
+describe('createThreadAnalysisWorkerSide', () =>
 {
     it('runs the engine once and posts its result', () =>
     {
-        const posted: FromEngineWorker[] = [];
-        const handle = createEngineWorkerSide((m) => posted.push(m));
+        const posted: FromThreadAnalysisWorker[] = [];
+        const handle = createThreadAnalysisWorkerSide((m) => posted.push(m));
         handle({ type: 'run', results: [FAILED_FILE] });
-        expect(posted).toEqual([{ type: 'result', result: runEngine([FAILED_FILE]) }]);
+        expect(posted).toEqual([{ type: 'result', result: analyzeThread([FAILED_FILE]) }]);
     });
 
     it('the result survives a structured clone unchanged (plain data only), rebuilt messages included', () =>
     {
         let result: unknown;
-        createEngineWorkerSide((m) => (result = m.type === 'result' ? m.result : undefined))({ type: 'run', results: WITH_REBUILT });
+        createThreadAnalysisWorkerSide((m) => (result = m.type === 'result' ? m.result : undefined))({ type: 'run', results: WITH_REBUILT });
         expect(result).toEqual(RESULT);
         expect(structuredClone(result)).toEqual(result);
     });
 
     it('ignores malformed messages and a second request', () =>
     {
-        const posted: FromEngineWorker[] = [];
-        const handle = createEngineWorkerSide((m) => posted.push(m));
+        const posted: FromThreadAnalysisWorker[] = [];
+        const handle = createThreadAnalysisWorkerSide((m) => posted.push(m));
         handle(null);
         handle({ type: 'run', results: 'nope' });
         expect(posted).toEqual([]);
@@ -106,8 +106,8 @@ describe('createEngineWorkerSide', () =>
 
     it('an engine that throws gives a bare failure message (no internals)', () =>
     {
-        const posted: FromEngineWorker[] = [];
-        const handle = createEngineWorkerSide(
+        const posted: FromThreadAnalysisWorker[] = [];
+        const handle = createThreadAnalysisWorkerSide(
             (m) => posted.push(m),
             () =>
             {
@@ -120,14 +120,14 @@ describe('createEngineWorkerSide', () =>
 
     it('a result that cannot be posted is followed by a failure message', () =>
     {
-        const posted: FromEngineWorker[] = [];
-        const handle = createEngineWorkerSide((m) =>
+        const posted: FromThreadAnalysisWorker[] = [];
+        const handle = createThreadAnalysisWorkerSide((message) =>
         {
-            if (m.type === 'result')
+            if (message.type === 'result')
             {
                 throw new Error('DataCloneError');
             }
-            posted.push(m);
+            posted.push(message);
         });
         handle({ type: 'run', results: [] });
         expect(posted).toEqual([{ type: 'failed' }]);

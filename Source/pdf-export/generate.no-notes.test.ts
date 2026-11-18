@@ -25,7 +25,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { CATALOG } from '../web-page/translations/catalog';
 import { isPluralForms } from '../web-page/translations';
@@ -234,7 +234,7 @@ function forbidden(locale: Locale): string[]
 
 async function make8(locale: Locale, timeZone: string)
 {
-    const result = runEngine(input().results);
+    const result = analyzeThread(input().results);
     const before = JSON.stringify(result);
     const positions = result.messages.map((_, k) => k);
     const plans = plansOf(result, positions);

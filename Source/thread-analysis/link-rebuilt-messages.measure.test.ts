@@ -1,6 +1,6 @@
 // Measurement of thread rebuilding INSIDE the engine (milestone 7, task 7.5):
 // every conversation of Helper/Test/test-support/thread-cases.ts is dropped as real
-// files in several ways, runEngine runs, and the timeline is compared with
+// files in several ways, analyzeThread runs, and the timeline is compared with
 // the ground truth of Helper/Test/test-support/thread-builder.ts. Targets:
 // 1. all messages dropped: 0 rebuilt entries in the timeline (each rebuilt
 //    message linked to its own real file);
@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, isForwardStyle, QUOTE_STYLES, type QuoteStyle, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { ALICE, BOB, CAROL, chain, DAVE, ERIN, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { DEFAULT_PARTS, runEngine } from './analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread } from './analyze-thread';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';
 
@@ -70,7 +70,7 @@ export function runScenario(threadCase: ThreadCase, dropped: readonly number[]):
     }
     const tag = threadCase.id.replace(/[^a-z0-9]+/giu, '-');
     const results: ParseResult[] = dropped.map((i) => ({ ok: true, message: realFile(messages, i, tag) }));
-    const result = runEngine(results);
+    const result = analyzeThread(results);
     const convOfInput = (index: number): number => dropped[index] ?? -1;
     // Ground truth of each dropped body: header start -> conversation index.
     const truthOf = new Map<number, Map<number, number>>();
@@ -237,8 +237,8 @@ describe('thread rebuilding in the engine: speed (task 7.5)', () =>
         let stageStart = 0;
         let rebuild = 0;
         const startTime = performance.now();
-        const out = runEngine(results, {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread(results, {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             onStage: (stage) =>
             {
                 const now = performance.now();

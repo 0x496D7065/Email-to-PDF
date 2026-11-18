@@ -211,7 +211,7 @@ export function pluralForm(forms: PluralForms, count: number, locale: string = a
 /**
  * The translator of one shipped language, made once and kept (see the top
  * of this file). Throws for a language the page does not ship (a bug: the
- * PDF worker checks its request first, Source/worker-pipeline/pdf-protocol.ts).
+ * PDF worker checks its request first, Source/worker-pipeline/pdf-worker-protocol.ts).
  */
 export function translator(locale: string): Translator
 {

@@ -1,24 +1,24 @@
 // Unit tests for the PDF worker's messages and its side of the conversation
-// (pdf-protocol.ts), in Node without a browser: the real makePdf (fonts
+// (pdf-worker-protocol.ts), in Node without a browser: the real makePdf (fonts
 // parsed from their bytes, as the worker does) and fakes. Synthetic emails
 // only (made-up names, *.test addresses). The real worker is
 // checked in Chromium by Helper/Test/browser-tests/download.spec.ts.
 
 import { describe, expect, it } from 'vitest';
 import { readPdf } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { PDF_FONTS } from '../pdf-export/fonts';
-import { createPdfWorkerSide, isFromPdfWorker, isToPdfWorker, makePdf, ownBuffer } from './pdf-protocol';
+import { createPdfWorkerSide, isFromPdfWorker, isToPdfWorker, makePdf, ownBuffer } from './pdf-worker-protocol';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { GeneratedPdf } from '../../Header/pdf-document-model';
 import type { FromPdfWorker, MakePdfRequest, PdfJobInput } from '../../Header/pdf-worker-messages';
 
-function make(k: number): NormalizedMessage
+function makeMessage(k: number): NormalizedMessage
 {
-    const n = String(k + 1);
+    const messageNumber = String(k + 1);
     return {
-        messageId: `protocol-${n}@example.test`,
+        messageId: `protocol-${messageNumber}@example.test`,
         inReplyTo: null,
         references: [],
         date: { utcMs: Date.UTC(2025, 2, 4, 8) + k * 3_600_000, original: 'Tue, 4 Mar 2025 08:00:00 +0000', offsetMinutes: 0, zoneKnown: true },
@@ -26,17 +26,17 @@ function make(k: number): NormalizedMessage
         to: [{ name: 'Bob Sample', address: 'bob@sample.test' }],
         cc: [],
         bcc: [],
-        subject: `Garden bench, part ${n}`,
-        bodyText: `Hello Bob,\n\nThe bench is painted green, note ${n}.\n\nAlice\n`,
+        subject: `Garden bench, part ${messageNumber}`,
+        bodyText: `Hello Bob,\n\nThe bench is painted green, note ${messageNumber}.\n\nAlice\n`,
         attachments: [],
-        source: { fileName: `bench-${n}.eml`, sha256: (k + 1).toString(16).padStart(64, '0'), kind: 'eml' },
+        source: { fileName: `bench-${messageNumber}.eml`, sha256: (k + 1).toString(16).padStart(64, '0'), kind: 'eml' },
         warnings: [],
     };
 }
 
 function inputFor(count: number): PdfJobInput
 {
-    const result = runEngine(Array.from({ length: count }, (_, k): ParseResult => ({ ok: true, message: make(k) })));
+    const result = analyzeThread(Array.from({ length: count }, (_, k): ParseResult => ({ ok: true, message: makeMessage(k) })));
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),
@@ -128,10 +128,10 @@ describe('ownBuffer', () =>
     {
         const whole = new Uint8Array([1, 2, 3]);
         expect(ownBuffer(whole).buffer).toBe(whole.buffer);
-        const big = new Uint8Array([9, 1, 2, 3, 9]);
-        const part = ownBuffer(big.subarray(1, 4));
+        const larger = new Uint8Array([9, 1, 2, 3, 9]);
+        const part = ownBuffer(larger.subarray(1, 4));
         expect([...part]).toEqual([1, 2, 3]);
-        expect(part.buffer).not.toBe(big.buffer);
+        expect(part.buffer).not.toBe(larger.buffer);
         expect(part.byteLength).toBe(part.buffer.byteLength);
     });
 });
@@ -156,9 +156,9 @@ describe('makePdf (the worker\'s work, fonts parsed from their bytes)', () =>
 
 describe('createPdfWorkerSide', () =>
 {
-    const FAKE: GeneratedPdf = { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]), fileName: 'correspondence-2025-06-01.pdf', pageCount: 2 };
+    const FAKE_PDF: GeneratedPdf = { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]), fileName: 'correspondence-2025-06-01.pdf', pageCount: 2 };
 
-    function side(make: (request: MakePdfRequest) => Promise<GeneratedPdf> = () => Promise.resolve(FAKE))
+    function workerSide(make: (request: MakePdfRequest) => Promise<GeneratedPdf> = () => Promise.resolve(FAKE_PDF))
     {
         const posted: { message: FromPdfWorker; transfer: Transferable[] }[] = [];
         const handle = createPdfWorkerSide((message, transfer) => posted.push({ message, transfer }), make);
@@ -167,17 +167,17 @@ describe('createPdfWorkerSide', () =>
 
     it('makes the PDF and MOVES its bytes to the page', async () =>
     {
-        const { posted, handle } = side();
+        const { posted, handle } = workerSide();
         await handle(REQUEST);
         expect(posted).toHaveLength(1);
         const [{ message, transfer } = { message: null, transfer: [] }] = posted;
-        expect(message).toEqual({ type: 'done', bytes: FAKE.bytes, fileName: FAKE.fileName, pageCount: 2 });
+        expect(message).toEqual({ type: 'done', bytes: FAKE_PDF.bytes, fileName: FAKE_PDF.fileName, pageCount: 2 });
         expect(transfer).toEqual([(message as { bytes: Uint8Array }).bytes.buffer]);
     });
 
     it('works end to end with the real makePdf', async () =>
     {
-        const { posted, handle } = side(makePdf);
+        const { posted, handle } = workerSide(makePdf);
         await handle(structuredClone(REQUEST));
         const message = posted[0]?.message;
         expect(message?.type).toBe('done');
@@ -191,7 +191,7 @@ describe('createPdfWorkerSide', () =>
 
     it('says "failed" (no details) when making the PDF throws', async () =>
     {
-        const { posted, handle } = side(() => Promise.reject(new Error('Bob Sample secret detail')));
+        const { posted, handle } = workerSide(() => Promise.reject(new Error('Bob Sample secret detail')));
         await handle(REQUEST);
         expect(posted).toEqual([{ message: { type: 'failed' }, transfer: [] }]);
     });
@@ -210,7 +210,7 @@ describe('createPdfWorkerSide', () =>
                 }
                 posted.push(message);
             },
-            () => Promise.resolve(FAKE),
+            () => Promise.resolve(FAKE_PDF),
         );
         await handle(REQUEST);
         expect(posted).toEqual([{ type: 'failed' }]);
@@ -218,18 +218,18 @@ describe('createPdfWorkerSide', () =>
 
     it('ignores malformed messages and a second request', async () =>
     {
-        let made = 0;
-        const { posted, handle } = side(() =>
+        let makeCalls = 0;
+        const { posted, handle } = workerSide(() =>
         {
-            made++;
-            return Promise.resolve(FAKE);
+            makeCalls++;
+            return Promise.resolve(FAKE_PDF);
         });
         await handle({ type: 'make' });
         await handle(null);
         expect(posted).toEqual([]);
         await handle(REQUEST);
         await handle(REQUEST);
-        expect(made).toBe(1);
+        expect(makeCalls).toBe(1);
         expect(posted).toHaveLength(1);
     });
 });

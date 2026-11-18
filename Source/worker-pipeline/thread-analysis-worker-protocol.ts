@@ -1,20 +1,20 @@
-// The messages between the page and the engine worker, and the worker's side
+// The messages between the page and the thread-analysis worker, and the worker's side
 // of the conversation.
 //
 // One worker organizes one batch:
 //   page   -> worker: { type: 'run', results }    (one ParseResult per file)
 //   worker -> page:   { type: 'result', result }  (or { type: 'failed' })
-// Then the page terminates the worker. See engine-runner.ts for the page's
-// side and engine-worker.ts for why the engine runs in a worker.
+// Then the page terminates the worker. See thread-analysis-worker-runner.ts for the page's
+// side and thread-analysis-worker.ts for why the thread analysis runs in a worker.
 //
 // Messages are copied by the browser (structured clone): plain data only.
-// The engine's result is plain data on purpose (see Source/thread-analysis/analyze-thread.ts),
+// The analysis result is plain data on purpose (see Source/thread-analysis/analyze-thread.ts),
 // including the messages rebuilt from quoted text and the timeline (task
 // 7.5: `reconstructed`, `timeline`, `reconstructionWarnings`).
 // Nothing is stored anywhere (README.md, rule R5).
 
-import { runEngine } from '../thread-analysis/analyze-thread';
-import type { FromEngineWorker, ToEngineWorker } from '../../Header/engine-worker-messages';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
+import type { FromThreadAnalysisWorker, ToThreadAnalysisWorker } from '../../Header/thread-analysis-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';
 
@@ -23,8 +23,8 @@ function isRecord(value: unknown): value is Record<string, unknown>
     return typeof value === 'object' && value !== null;
 }
 
-/** True if `data` is a well-formed page -> engine worker message. */
-export function isToEngineWorker(data: unknown): data is ToEngineWorker
+/** True if `data` is a well-formed page -> thread-analysis worker message. */
+export function isToThreadAnalysisWorker(data: unknown): data is ToThreadAnalysisWorker
 {
     return (
         isRecord(data) &&
@@ -35,13 +35,13 @@ export function isToEngineWorker(data: unknown): data is ToEngineWorker
 }
 
 /**
- * True if `data` is a well-formed engine worker -> page message. The result
+ * True if `data` is a well-formed thread-analysis worker -> page message. The result
  * is checked for its overall shape (the lists and counts the preview reads
  * first, and the lists of rebuilt messages, timeline and rebuild warnings);
  * the worker runs our own code, so this guards against bugs and stray
  * messages, not against a hostile worker.
  */
-export function isFromEngineWorker(data: unknown): data is FromEngineWorker
+export function isFromThreadAnalysisWorker(data: unknown): data is FromThreadAnalysisWorker
 {
     if (!isRecord(data))
     {
@@ -69,19 +69,19 @@ export function isFromEngineWorker(data: unknown): data is FromEngineWorker
 
 /**
  * The worker's side: returns the function to call with each message the
- * worker receives. `post` sends a message to the page; `run` is the engine
- * (tests pass a broken one). Kept apart from engine-worker.ts so it runs in
+ * worker receives. `post` sends a message to the page; `analyze` is the thread analysis
+ * (tests pass a broken one). Kept apart from thread-analysis-worker.ts so it runs in
  * unit tests without a browser.
  */
-export function createEngineWorkerSide(
-    post: (message: FromEngineWorker) => void,
-    run: (results: readonly ParseResult[]) => EngineResult = runEngine,
+export function createThreadAnalysisWorkerSide(
+    post: (message: FromThreadAnalysisWorker) => void,
+    analyze: (results: readonly ParseResult[]) => EngineResult = analyzeThread,
 ): (data: unknown) => void
 {
     let started = false;
     return (data) =>
     {
-        if (!isToEngineWorker(data))
+        if (!isToThreadAnalysisWorker(data))
         {
             return;
         }
@@ -94,7 +94,7 @@ export function createEngineWorkerSide(
         let result: EngineResult;
         try
         {
-            result = run(data.results);
+            result = analyze(data.results);
         }
         catch
         {

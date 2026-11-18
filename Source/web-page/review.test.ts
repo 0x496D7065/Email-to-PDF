@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS } from '../web-page-logic/message-notes';
 import { SAFE_TAGS } from './safe-dom';
 import { setLocale, t } from './translations';
@@ -48,7 +48,7 @@ const NO_DATE: NormalizedMessage['date'] = { utcMs: null, original: '', offsetMi
 const failedFile = (fileName: string): ParseResult => ({ ok: false, fileName, sha256: null, error: 'unsupported-type', detail: 'not an email file' });
 const ok = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
 const engineOf = (messages: readonly NormalizedMessage[], extra: readonly ParseResult[] = []): EngineResult =>
-    runEngine([...messages.map(ok), ...extra]);
+    analyzeThread([...messages.map(ok), ...extra]);
 
 // ------------------------------------------------------------------ fake page
 
@@ -280,7 +280,7 @@ describe('counts', () =>
     it('match the engine counts exactly, for every fixture plus a failed file', async () =>
     {
         const parsed = await parseAllFixtures();
-        const result = runEngine([...parsed.map(ok), failedFile('notes.txt')]);
+        const result = analyzeThread([...parsed.map(ok), failedFile('notes.txt')]);
         show(result);
         const counts = result.counts;
         expect(counts.filesFailed).toBe(1);
@@ -699,7 +699,7 @@ describe('emails attached inside other emails (task 8.13b-4)', () =>
     {
         const bob = make({ subject: 'Bob' });
         const carol = make({ subject: 'Carol' });
-        show(runEngine([attachedResult({ message: carol, children: [{ node: { message: bob }, inline: false, name: 'bob.eml' }] }), ok(make({ subject: 'Dan' }))]));
+        show(analyzeThread([attachedResult({ message: carol, children: [{ node: { message: bob }, inline: false, name: 'bob.eml' }] }), ok(make({ subject: 'Dan' }))]));
         expect(byId('review-messages').textContent).toBe('3 emails found (1 attached inside another email).');
         setLocale('fr');
         try
@@ -720,7 +720,8 @@ describe('emails attached inside other emails (task 8.13b-4)', () =>
     {
         const bob = make({ subject: 'Bob', attachments: [RFC822_FILE] });
         const carol = make({ subject: 'Carol' });
-        show(runEngine([attachedResult({ message: carol, children: [{ node: { message: bob }, inline: true }] }), ok(make({ subject: 'Plain' }))]));
+        show(analyzeThread(
+            [attachedResult({ message: carol, children: [{ node: { message: bob }, inline: true }] }), ok(make({ subject: 'Plain' }))]));
         const card = (subject: string): FakeElement => items()[subjects().indexOf(subject)]!;
         expect(notesOf(card('Bob'))).toEqual([t('warnings.attached.attached-unread')]);
         expect(notesOf(card('Carol'))).toEqual([t('warnings.attached.attached-unread-inside')]);

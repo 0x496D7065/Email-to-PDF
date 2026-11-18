@@ -40,7 +40,7 @@ import { describe, expect, it } from 'vitest';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
@@ -355,7 +355,7 @@ describe('PDF document model properties', () =>
             {
                 const random = makeRandom(seed);
                 const messages = Array.from({ length: 12 }, (_, k) => randomMessage(random, seed * 100 + k));
-                const result = runEngine(filesOf(messages, seed, grouping));
+                const result = analyzeThread(filesOf(messages, seed, grouping));
                 attachedSeen += result.attached?.length ?? 0;
                 const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
                 const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -403,7 +403,7 @@ describe('PDF document model properties', () =>
             {
                 const random = makeRandom(seed);
                 const messages = Array.from({ length: 12 }, (_, k) => randomMessage(random, seed * 100 + k));
-                const result = runEngine(filesOf(messages, seed, grouping));
+                const result = analyzeThread(filesOf(messages, seed, grouping));
                 attachedSeen += result.attached?.length ?? 0;
                 const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
                 const plans = planOutput(positions.map((p) => result.messages[p]!));
@@ -452,7 +452,7 @@ describe('PDF document model properties', () =>
                     const history = `\n\nOn Tue, 4 Mar 2025 at 09:${String(10 + (k % 50))}, ${pick(random, ['Bob Sample <bob@furniture.example.test>', 'Carol Test <carol@sample.test>'])} wrote:\n> The desks arrive on Monday morning.\n${quoted}\n`;
                     return random() < 0.7 ? { ...m, bodyText: m.bodyText + history } : m;
                 });
-                const result = runEngine(filesOf(messages, seed, grouping));
+                const result = analyzeThread(filesOf(messages, seed, grouping));
                 attachedSeen += result.attached?.length ?? 0;
                 const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
                 const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -618,7 +618,7 @@ describe('PDF document model properties', () =>
                     },
                 ];
             });
-            const result = runEngine(files.map((message) => ({ ok: true as const, message })));
+            const result = analyzeThread(files.map((message) => ({ ok: true as const, message })));
             const positions = result.messages.map((_, k) => k);
             const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
             const rebuilt = rebuiltEntries(result)
@@ -671,7 +671,7 @@ describe('PDF document model properties', () =>
             ...randomMessage(random, k),
             bodyText: `Hello,\n\n${paragraph.repeat(1 + (k % 12))}\n\t\u0000 note ${String(k)}\n\n\n\n-- \nSender ${String(k % 7)}\nExample Office Supplies\n`,
         }));
-        const result = runEngine(messages.map((message) => ({ ok: true as const, message })));
+        const result = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
         const positions = result.messages.map((_, k) => k);
         const plans = planOutput(result.messages);
         const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Australia/Sydney', generatedAt: 0, strings };

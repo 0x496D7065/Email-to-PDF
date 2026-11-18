@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/model';
@@ -105,7 +105,7 @@ function setUp(threadCase: ThreadCase, scenario: Scenario, policy: OutputPolicy 
 {
     const tag = threadCase.id.replace(/[^a-z0-9]+/giu, '-');
     const last = threadCase.messages!.length - 1;
-    const result: EngineResult = runEngine(scenario.dropped(last).map((i) => ({ ok: true as const, message: realFile(threadCase.messages!, i, tag) })));
+    const result: EngineResult = analyzeThread(scenario.dropped(last).map((i) => ({ ok: true as const, message: realFile(threadCase.messages!, i, tag) })));
     return prepare(result, result.messages.map((_, k) => k), scenario.rebuilt, policy);
 }
 
@@ -448,7 +448,7 @@ describe('"printed as email #N" labels with an email attached inside a dropped f
                             it(name, () =>
                             {
                                 const files: ParseResult[] = [forwarderFile(threadCase, tag, before), ...(alsoDropped ? threadCase.messages!.map((_, i) => ({ ok: true as const, message: realFile(threadCase.messages!, i, tag) })) : [])];
-                                const result = runEngine(files);
+                                const result = analyzeThread(files);
                                 expect(result.attached).toHaveLength(2);
                                 const lastAt = result.messages.findIndex((m) => m.message.messageId === `${tag}-${String(last)}@example.test`);
                                 const forwarderAt = result.messages.findIndex((m) => m.message.messageId === `${tag}-forwarder@example.test`);

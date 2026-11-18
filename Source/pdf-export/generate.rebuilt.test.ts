@@ -12,7 +12,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { type PdfValue, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../web-page/translations';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -39,7 +39,7 @@ beforeAll(async () =>
 /** The PDF of the last email alone, with the given rebuilt ids (default: every entry), read back as text. */
 async function pdfText(options: { rebuilt?: readonly number[]; positions?: readonly number[]; locale?: 'en' | 'fr' | 'nl' } = {})
 {
-    const result: EngineResult = runEngine([{ ok: true, message: last }]);
+    const result: EngineResult = analyzeThread([{ ok: true, message: last }]);
     const positions = options.positions ?? [0];
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),

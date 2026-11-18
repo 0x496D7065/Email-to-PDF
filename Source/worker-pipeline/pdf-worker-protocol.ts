@@ -4,7 +4,7 @@
 // One worker makes one PDF:
 //   page   -> worker: { type: 'make', input, fonts }
 //   worker -> page:   { type: 'done', bytes, fileName, pageCount }  (or { type: 'failed' })
-// Then the page terminates the worker. See pdf-runner.ts for the page's side
+// Then the page terminates the worker. See pdf-worker-runner.ts for the page's side
 // and pdf-worker.ts for why the PDF is made in a worker.
 //
 // `input` is everything generatePdf needs except the fonts, as plain data
@@ -122,10 +122,10 @@ export function createPdfWorkerSide(
             return;
         }
         started = true;
-        let made: GeneratedPdf;
+        let pdf: GeneratedPdf;
         try
         {
-            made = await make(data);
+            pdf = await make(data);
         }
         catch
         {
@@ -134,8 +134,8 @@ export function createPdfWorkerSide(
         }
         try
         {
-            const bytes = ownBuffer(made.bytes);
-            post({ type: 'done', bytes, fileName: made.fileName, pageCount: made.pageCount }, [bytes.buffer]);
+            const bytes = ownBuffer(pdf.bytes);
+            post({ type: 'done', bytes, fileName: pdf.fileName, pageCount: pdf.pageCount }, [bytes.buffer]);
         }
         catch
         {

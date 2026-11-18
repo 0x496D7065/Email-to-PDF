@@ -3,7 +3,7 @@
 // worker-pipeline/ (process-files, read-files) does the work; web-page/
 // (add-files, page, preview, review) starts it and shows the result.
 
-import type { EngineFailure } from './engine-worker-messages';
+import type { ThreadAnalysisFailure } from './thread-analysis-worker-messages';
 import type { ParseResult } from './parsed-email';
 import type { EngineResult } from './thread-analysis-result';
 
@@ -12,7 +12,7 @@ import type { EngineResult } from './thread-analysis-result';
  * never a bad file. 'cancelled': the page stopped the batch (its `signal`,
  * for "Clear everything").
  */
-export type ProcessErrorCode = EngineFailure | 'unexpected' | 'cancelled';
+export type ProcessErrorCode = ThreadAnalysisFailure | 'unexpected' | 'cancelled';
 
 /**
  * Progress for the UI: 'reading' after each file is read and parsed

@@ -251,7 +251,7 @@ export default defineConfig({
     // in dist/), which no build check sees. With it, the bytes would be a
     // long number array inside the page's script, outside the font chunk,
     // and the build check fails (Helper/build-checks/font-rules.mjs). The PDF worker
-    // gets the font bytes from the page instead (Source/worker-pipeline/pdf-protocol.ts).
+    // gets the font bytes from the page instead (Source/worker-pipeline/pdf-worker-protocol.ts).
     worker: { plugins: () => [bytesImport()] },
     resolve: {
         // @kenjiuno/msgreader (the .msg parser) requires 'iconv-lite', which needs

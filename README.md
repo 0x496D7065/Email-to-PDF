@@ -902,7 +902,7 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `Source/email-reading/` | Reading `.eml` and `.msg` files into messages (in a worker). |
 | `Source/thread-analysis/` | Duplicates, order, quoted history, signatures, earlier emails rebuilt from quotes. |
 | `Source/pdf-export/` | The PDF: its content, `font-reader/`, `page-layout/`, `pdf-writer/` and the bundled `fonts/`. |
-| `Source/worker-pipeline/` | Starts the analysis and PDF workers and chains all the steps (`process-files`). The reading worker lives in `Source/email-reading/`. |
+| `Source/worker-pipeline/` | Starts the thread-analysis and PDF workers and chains all the steps (`process-files`). The reading worker lives in `Source/email-reading/`. |
 | `Source/web-page/` | The page the user sees; `translations/` holds every visible word (English, French, Dutch). |
 | `Source/web-page-logic/` | What the page shows, as pure functions (no DOM). |
 | `Source/offline-copy/` | The service worker (offline copy of the site's own files). |

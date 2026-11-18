@@ -2,7 +2,7 @@
 // dropped file is parsed in its own Web Worker with a time limit, and broken,
 // huge or hostile files give a clear per-file result without ever crashing
 // the batch or the page. The engine then organizes the results in its own
-// worker (Source/worker-pipeline/engine-worker.ts), also with a time limit; processFiles
+// worker (Source/worker-pipeline/thread-analysis-worker.ts), also with a time limit; processFiles
 // (Source/worker-pipeline/process-files.ts) chains it all from browser File objects.
 // Runs in Chromium, Firefox and WebKit against the site served by
 // `vite preview` (see playwright.config.ts).
@@ -86,7 +86,7 @@ const BUNDLE_PATH = '/__e2e__/';
 const bundle = new Map<string, string>();
 let entryUrl = '';
 
-/** The code of each worker bundle Vite builds, by entry file name ('parse-worker', 'engine-worker', ...). */
+/** The code of each worker bundle Vite builds, by entry file name ('parse-worker', 'thread-analysis-worker', ...). */
 const workerSources = new Map<string, string>();
 
 /**
@@ -140,7 +140,7 @@ test.beforeAll(async () =>
     }
     expect(entryUrl).not.toBe('');
     expect(workerSources.get('parse-worker')?.length ?? 0).toBeGreaterThan(1000);
-    expect(workerSources.get('engine-worker')?.length ?? 0).toBeGreaterThan(1000);
+    expect(workerSources.get('thread-analysis-worker')?.length ?? 0).toBeGreaterThan(1000);
     expect(workerSources.get('pdf-worker')?.length ?? 0).toBeGreaterThan(1000);
 });
 
@@ -348,13 +348,13 @@ test('the parse, engine and PDF workers are inlined in the page script, and the 
 {
     // As in dist/: no separate parse, engine or PDF worker file. A worker file is
     // fetched each time a worker starts, which fails once the network is off.
-    expect([...bundle.keys()].filter((file) => /(parse|engine|pdf)-worker/.test(file))).toEqual([]);
+    expect([...bundle.keys()].filter((file) => /(parse|thread-analysis|pdf)-worker/.test(file))).toEqual([]);
     const allCode = [...bundle.entries()]
         .filter(([file]) => file.endsWith('.js'))
         .map(([, code]) => code)
         .join('BUNDLE-FILE-SEPARATOR');
     const decoded = decodeJsEscapes(allCode);
-    for (const name of ['parse-worker', 'engine-worker', 'pdf-worker'])
+    for (const name of ['parse-worker', 'thread-analysis-worker', 'pdf-worker'])
     {
         const workerCode = workerSources.get(name) ?? '';
         // The worker's own code passes the same scan as every dist/ file.
@@ -372,7 +372,7 @@ test('the parse, engine and PDF workers are inlined in the page script, and the 
     // real dist/ is scanned, raw and decoded, by the build check. The decoded
     // scan still flags network code hidden in the worker string:
     // (the worker's code plus one line, stored as a string the way Vite inlines it)
-    const planted = JSON.stringify([workerSources.get('engine-worker') ?? '', 'XMLHttpRequest;'].join(String.fromCharCode(10)));
+    const planted = JSON.stringify([workerSources.get('thread-analysis-worker') ?? '', 'XMLHttpRequest;'].join(String.fromCharCode(10)));
     expect(findViolations(planted, { isDist: true }).map((f) => f.match)).not.toContain('XMLHttpRequest');
     expect(findEmbeddedViolations(planted, { isDist: true }).map((f) => f.match)).toContain('XMLHttpRequest');
     // The only worker still started from a script file is the test's own
@@ -646,7 +646,8 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
         // that spins forever, with a 4 s limit instead of 60 s.
         const hang = await entry.processFilesWith(files, {
             parse: entry.parseFiles,
-            organize: (results) => entry.runEngineInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('hang'), timeoutMs: 4000 }),
+            organize: (results) =>
+                entry.runThreadAnalysisInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('hang'), timeoutMs: 4000 }),
             limits,
         });
         window.__e2eHang = 'settled';
@@ -654,11 +655,12 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
         const crash = await entry.processFilesWith(files, {
             parse: entry.parseFiles,
             organize: (results) =>
-                entry.runEngineInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('crash'), timeoutMs: entry.ENGINE_TIMEOUT_MS }),
+                entry.runThreadAnalysisInWorker(
+                    results, { createWorker: entry.createMisbehavingEngineWorker('crash'), timeoutMs: entry.THREAD_ANALYSIS_TIMEOUT_MS }),
             limits,
         });
         const summary = (r: ProcessResult) => (r.ok ? { ok: true } : { ok: false, error: r.error, detail: r.detail, parsed: r.parsed.map((p) => p.ok) });
-        return { elapsedMs, hang: summary(hang), crash: summary(crash), timeoutDetail: entry.ENGINE_TIMEOUT_DETAIL, failedDetail: entry.ENGINE_FAILED_DETAIL };
+        return { elapsedMs, hang: summary(hang), crash: summary(crash), timeoutDetail: entry.THREAD_ANALYSIS_TIMEOUT_DETAIL, failedDetail: entry.THREAD_ANALYSIS_FAILED_DETAIL };
     }, entryUrl);
 
     // While the engine worker spins, the page still answers at once (checked
@@ -695,7 +697,7 @@ async function startIdleWorker(page: Page, which: 'parse' | 'engine' | 'pdf'): P
                 kind === 'parse'
                     ? entry.createBrowserWorker(events)
                     : kind === 'engine'
-                        ? entry.createBrowserEngineWorker(events)
+                        ? entry.createBrowserThreadAnalysisWorker(events)
                         : entry.createBrowserPdfWorker(events);
         },
         { url: entryUrl, kind: which },

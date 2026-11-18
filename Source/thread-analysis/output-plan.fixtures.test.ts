@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { runEngine } from './analyze-thread';
+import { analyzeThread } from './analyze-thread';
 import { planOutput } from './output-plan';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { EngineMessage } from '../../Header/thread-analysis-result';
@@ -46,7 +46,7 @@ describe('output plan over the parsed fixtures', () =>
         if (cached === undefined)
         {
             const parsed = await parseAllFixtures();
-            const out = runEngine(parsed.map((message) => ({ ok: true as const, message })));
+            const out = analyzeThread(parsed.map((message) => ({ ok: true as const, message })));
             cached = { messages: out.messages, plans: planOutput(out.messages) };
         }
         return cached;

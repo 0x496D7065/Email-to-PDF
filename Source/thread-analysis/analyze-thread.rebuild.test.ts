@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread } from '../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../Helper/Test/test-support/thread-cases';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from './analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from './analyze-thread';
 import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages } from './reconstruct-quoted-messages';
 import { joinSegments } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
@@ -43,18 +43,18 @@ const ok = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
 const THREAD = buildThread(chain(['gmail-en', 'gmail-en', 'gmail-en']));
 const last = (): NormalizedMessage => make({ bodyText: THREAD.body, subject: THREAD.subject, date: { utcMs: Date.parse(THREAD.instantUtc), original: '', offsetMinutes: 0, zoneKnown: true } });
 
-const NO_REBUILD: EngineParts = { ...DEFAULT_PARTS, reconstructQuotedMessages: () => [] };
+const NO_REBUILD: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: () => [] };
 
 /** Everything the app used before task 7.5. */
 const realPart = (out: EngineResult): unknown => ({ messages: out.messages, failed: out.failed, counts: out.counts, positionByIndex: out.positionByIndex });
 
-describe('runEngine: rebuilt messages (step 6)', () =>
+describe('analyzeThread: rebuilt messages (step 6)', () =>
 {
     it('adds rebuilt messages and a timeline, and changes nothing else', () =>
     {
         const results = [ok(make()), { ok: false as const, fileName: 'x.eml', sha256: null, error: 'corrupt' as const, detail: 'synthetic' }, ok(last())];
-        const out = runEngine(results);
-        expect(realPart(out)).toEqual(realPart(runEngine(results, NO_REBUILD)));
+        const out = analyzeThread(results);
+        expect(realPart(out)).toEqual(realPart(analyzeThread(results, NO_REBUILD)));
         expect(out.reconstructed.map((r) => [r.sourceIndex, r.rebuilt.generation, r.link])).toEqual([
             [2, 1, 'entry'],
             [2, 2, 'entry'],
@@ -80,27 +80,28 @@ describe('runEngine: rebuilt messages (step 6)', () =>
     {
         const calls: unknown[] = [];
         const message = make({ subject: 'Fwd: Desks', date: { utcMs: 1, original: '', offsetMinutes: -330, zoneKnown: true } });
-        runEngine([ok(message)], { ...DEFAULT_PARTS, reconstructQuotedMessages: (body, options) => (calls.push([body, options]), []) });
+        analyzeThread(
+            [ok(message)], { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: (body, options) => (calls.push([body, options]), []) });
         expect(calls).toEqual([[message.bodyText, { subject: 'Fwd: Desks', sourceOffsetMinutes: -330 }]]);
     });
 
     it('keeps the incomplete fields of a header read short (for the preview and the PDF)', () =>
     {
         const wrapped = buildThread(chain(['outlook-nl', 'outlook-nl'], { quote: { people: 'name', wrapAt: 60 }, moreTo: [ALICE, ALICE, ALICE, ALICE] }));
-        const out = runEngine([ok(make({ bodyText: wrapped.body, subject: wrapped.subject }))]);
+        const out = analyzeThread([ok(make({ bodyText: wrapped.body, subject: wrapped.subject }))]);
         expect(out.reconstructed.some((r) => r.rebuilt.incomplete.length > 0)).toBe(true);
     });
 });
 
-describe('runEngine: rebuilding safety net', () =>
+describe('analyzeThread: rebuilding safety net', () =>
 {
     it('a rebuilder that throws for one email: a warning for it, the others rebuilt, the real messages unchanged', () =>
     {
         const bad = last();
         const good = make({ bodyText: THREAD.body.replace('Hello', 'Hi') });
         const results = [ok(good), ok(bad)];
-        const out = runEngine(results, {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread(results, {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             reconstructQuotedMessages: (body, options) =>
             {
                 if (body === bad.bodyText)
@@ -110,7 +111,7 @@ describe('runEngine: rebuilding safety net', () =>
                 return reconstructQuotedMessages(body, options);
             },
         });
-        expect(realPart(out)).toEqual(realPart(runEngine(results)));
+        expect(realPart(out)).toEqual(realPart(analyzeThread(results)));
         expect(out.reconstructionWarnings).toEqual([{ index: 1, code: 'reconstruct-failed' }]);
         expect(out.reconstructed.length).toBe(3);
         expect(out.reconstructed.every((r) => r.sourceIndex === 0)).toBe(true);
@@ -150,7 +151,7 @@ describe('runEngine: rebuilding safety net', () =>
         ['too many messages', () => Array.from({ length: MAX_RECONSTRUCTED + 1 }, () => first)],
     ])('an invalid rebuilder result (%s): nothing rebuilt from that email, a warning', (_label, result) =>
     {
-        const out = runEngine([ok(last())], { ...DEFAULT_PARTS, reconstructQuotedMessages: result as never });
+        const out = analyzeThread([ok(last())], { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: result as never });
         expect(out.reconstructed).toEqual([]);
         expect(out.timeline).toEqual([{ kind: 'message', position: 0 }]);
         expect(out.reconstructionWarnings).toEqual([{ index: 0, code: 'reconstruct-failed' }]);
@@ -159,7 +160,8 @@ describe('runEngine: rebuilding safety net', () =>
 
     it('copies only the known fields of a rebuilt message (plain data)', () =>
     {
-        const out = runEngine([ok(last())], { ...DEFAULT_PARTS, reconstructQuotedMessages: () => [{ ...first, extra: () => 1 }] as never });
+        const out = analyzeThread(
+            [ok(last())], { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: () => [{ ...first, extra: () => 1 }] as never });
         expect(out.reconstructed[0]?.rebuilt).toEqual(first);
         expect(structuredClone(out)).toEqual(out);
     });
@@ -168,7 +170,7 @@ describe('runEngine: rebuilding safety net', () =>
     {
         let called = false;
         const huge = make({ bodyText: 'a'.repeat(MAX_SOURCE_LENGTH + 1) });
-        const out = runEngine([ok(huge)], {
+        const out = analyzeThread([ok(huge)], {
             detectQuotedOverlap: (inputs) => inputs.map(() => []),
             detectQuoteMarkers: () => [],
             detectReplyHeaders: () => [],
@@ -184,7 +186,7 @@ describe('runEngine: rebuilding safety net', () =>
     it('MAX_RECONSTRUCTED messages rebuilt from one email: kept, with a limit warning (there may be more)', () =>
     {
         const long = buildThread(chain(Array.from({ length: MAX_RECONSTRUCTED + 1 }, () => 'outlook-en' as const)));
-        const out = runEngine([ok(make({ bodyText: long.body, subject: long.subject }))]);
+        const out = analyzeThread([ok(make({ bodyText: long.body, subject: long.subject }))]);
         expect(out.reconstructed.length).toBe(MAX_RECONSTRUCTED);
         expect(out.reconstructionWarnings).toEqual([{ index: 0, code: 'reconstruct-limit' }]);
         expect(out.timeline.length).toBe(MAX_RECONSTRUCTED + 1);
@@ -205,8 +207,8 @@ describe('runEngine: rebuilding safety net', () =>
     ])('linking that %s: nothing rebuilt, every message warned, the real messages unchanged', (_label, link) =>
     {
         const results = [ok(make()), ok(last())];
-        const out = runEngine(results, { ...DEFAULT_PARTS, linkRebuilt: link as never });
-        expect(realPart(out)).toEqual(realPart(runEngine(results)));
+        const out = analyzeThread(results, { ...DEFAULT_THREAD_ANALYSIS_PARTS, linkRebuilt: link as never });
+        expect(realPart(out)).toEqual(realPart(analyzeThread(results)));
         expect(out.reconstructed).toEqual([]);
         expect(out.timeline).toEqual([
             { kind: 'message', position: 0 },
@@ -220,7 +222,7 @@ describe('runEngine: rebuilding safety net', () =>
     });
 });
 
-describe('runEngine: quoted history the splitter did not rebuild (7.4 review note)', () =>
+describe('analyzeThread: quoted history the splitter did not rebuild (7.4 review note)', () =>
 {
     // The oldest quoted message gets a line one level less deep than its body:
     // the splitter refuses its header (rule R4) and drops the message holding
@@ -245,8 +247,8 @@ describe('runEngine: quoted history the splitter did not rebuild (7.4 review not
             make({ from: [messages[i]!.from], bodyText: buildThread(messages.slice(0, i + 1)).body, date: { utcMs: Date.parse('2025-03-03T08:15:00Z') + i * 18_420_000, original: '', offsetMinutes: 60, zoneKnown: true } }),
         );
         const results = [ok(source), ...older.map(ok)];
-        const out = runEngine(results);
-        expect(realPart(out)).toEqual(realPart(runEngine(results, NO_REBUILD)));
+        const out = analyzeThread(results);
+        expect(realPart(out)).toEqual(realPart(analyzeThread(results, NO_REBUILD)));
         const fromSource = out.reconstructed.filter((r) => r.sourceIndex === 0);
         expect(fromSource.length).toBe(1);
         for (const rebuilt of fromSource)

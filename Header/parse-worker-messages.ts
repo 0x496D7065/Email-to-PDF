@@ -57,8 +57,8 @@ export type ConversionOutcome =
 
 /**
  * What the page needs from a worker. `M` is the type of the messages the
- * page sends: parse requests for the reading worker, engine requests for the engine worker
- * (Source/worker-pipeline/engine-runner.ts), which reuses connectWorker (Source/email-reading/parse-worker-runner.ts).
+ * page sends: parse requests for the reading worker, thread-analysis requests for the thread-analysis worker
+ * (Source/worker-pipeline/thread-analysis-worker-runner.ts), which reuses connectWorker (Source/email-reading/parse-worker-runner.ts).
  */
 export interface WorkerHandle<M = ToWorker>
 {

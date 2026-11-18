@@ -13,7 +13,7 @@
 //   PDF can never be offered: an outcome is only used when its id is still
 //   the current one.
 // - Stopping a job aborts its signal: the runner terminates the worker at
-//   once (Source/worker-pipeline/pdf-runner.ts).
+//   once (Source/worker-pipeline/pdf-worker-runner.ts).
 // - The PDF lives in memory only (README.md, rule R5): as a Blob behind one
 //   blob: URL, made when the job ends (createUrl). The URL is revoked on
 //   every way out of 'ready': a new job, a changed input, reset ("Clear

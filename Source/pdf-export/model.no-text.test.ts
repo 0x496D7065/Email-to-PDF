@@ -17,7 +17,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedLinks } from '../web-page-logic/attached-links';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
@@ -101,7 +101,7 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
     const first = make('Oak');
     const blank = make('Only spaces', { bodyText: ' \t\n\n  \n﻿\n', from: [quiet], date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false } });
     const last = make('Pine');
-    const result = runEngine([empty, first, blank, last].map(ok));
+    const result = analyzeThread([empty, first, blank, last].map(ok));
 
     for (const [mode, policy] of POLICIES)
     {
@@ -161,7 +161,7 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
     {
         for (const body of ['>', '​', '\u000b', '\u000c', '\u0000', ' > ', '\n\n>\n'])
         {
-            const r = runEngine([ok(make('Odd', { bodyText: body }))]);
+            const r = analyzeThread([ok(make('Odd', { bodyText: body }))]);
             expect(hasNoPrintableText(r.messages[0]!.message), JSON.stringify(body)).toBe(false);
             for (const [, policy] of POLICIES)
             {
@@ -175,7 +175,7 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
         const warnings: readonly ParseWarning[] = ['html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'];
         for (const w of warnings)
         {
-            const r = runEngine([ok(make('Unread', { bodyText: '', warnings: ['no-body', w] }))]);
+            const r = analyzeThread([ok(make('Unread', { bodyText: '', warnings: ['no-body', w] }))]);
             for (const [, policy] of POLICIES)
             {
                 const doc = build(r, { policy });
@@ -188,7 +188,7 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
 
     it('every ticked email without text: a document with no email (generatePdf stays valid)', async () =>
     {
-        const r = runEngine([ok(make('A', { bodyText: '' })), ok(make('B', { bodyText: '  \n' }))]);
+        const r = analyzeThread([ok(make('A', { bodyText: '' })), ok(make('B', { bodyText: '  \n' }))]);
         const doc = build(r);
         expect(doc.emails).toEqual([]);
         expect(doc.index.entries).toEqual([]);
@@ -223,7 +223,8 @@ describe('attached emails with no text (task 8.14)', () =>
 {
     const holderMessage = make('Holder');
     const child = make('Header only child', { bodyText: '' });
-    const result = runEngine([attachedResult({ message: holderMessage, children: [{ node: { message: child }, inline: true, name: 'fwd.eml' }] })]);
+    const result = analyzeThread(
+        [attachedResult({ message: holderMessage, children: [{ node: { message: child }, inline: true, name: 'fwd.eml' }] })]);
     const holder = positionOf(result, 'Holder');
     const attached = positionOf(result, 'Header only child');
 
@@ -252,7 +253,7 @@ describe('attached emails with no text (task 8.14)', () =>
 
     it('a holder with no text and an email attached as a file: the attached email is printed on its own', () =>
     {
-        const r = runEngine([
+        const r = analyzeThread([
             attachedResult({ message: make('Empty holder', { bodyText: '' }), children: [{ node: { message: make('Attached item') }, inline: false, name: 'item.msg' }] }),
         ]);
         for (const [, policy] of POLICIES)
@@ -269,7 +270,7 @@ describe('attached emails with no text (task 8.14)', () =>
         // The .eml parser lists such a part as a message/rfc822 attachment with no warning (task 8.13b-1); the
         // preview's note (attached-links.ts) says it was not read. Only an INLINE forward that was not read gives
         // 'forwarded-message-not-expanded' and stays in with "(no text)" (see the Q2 test above).
-        const r = runEngine([
+        const r = analyzeThread([
             ok(make('Empty with unread file', { bodyText: '', warnings: ['no-body'], attachments: [{ fileName: 'lost-item.eml', size: 2_048, mimeType: 'message/rfc822' }] })),
             ok(make('Walnut')),
         ]);
@@ -304,7 +305,7 @@ describe('rebuilt emails with no text (task 8.14, Q4)', () =>
         '\n' +
         OUTLOOK('Carol Test <carol@sample.invalid>', 'Sunday, March 2, 2025 1:02 PM', 'Bob Sample <bob@furniture.example.test>') +
         'Old text from Carol about the twelve oak desks.\n';
-    const result = runEngine([ok(make('RE: Desks', { bodyText: body }))]);
+    const result = analyzeThread([ok(make('RE: Desks', { bodyText: body }))]);
     const entries = rebuiltEntries(result);
     const bob = entries.find((r) => r.rebuilt.from.some((m) => m.name === 'Bob Sample'));
     const carol = entries.find((r) => r.rebuilt.from.some((m) => m.name === 'Carol Test'));

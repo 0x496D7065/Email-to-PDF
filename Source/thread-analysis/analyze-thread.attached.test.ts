@@ -10,7 +10,7 @@ import { createEmlParser } from '../email-reading/eml-parser';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { createMsgParser } from '../email-reading/msg-parser';
-import { attachedAt, DEFAULT_PARTS, runEngine } from './analyze-thread';
+import { attachedAt, DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread } from './analyze-thread';
 import type { OverlapInput } from './overlap-quote-detection';
 import { checkSegments, joinSegments } from './fold-segments';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
@@ -94,12 +94,12 @@ function expectWhole(out: EngineResult): void
     expect(out.positionByIndex.filter((p) => p !== null)).toHaveLength(out.counts.messagesFound);
 }
 
-describe('runEngine: attached emails are messages of their own', () =>
+describe('analyzeThread: attached emails are messages of their own', () =>
 {
     it('an inline forward (.eml): own message after the file in input order, places on its parent, ordered by date', async () =>
     {
         const parent = ok(await parseEml('parent.eml', holding('alice', 'Tue, 3 Jun 2025 14:00:00 +0200', plain('See below.'), rfc822(simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY)))));
-        const out = runEngine([parent]);
+        const out = analyzeThread([parent]);
         expectWhole(out);
         expect(out.counts).toMatchObject({ filesGiven: 1, messagesFound: 2, duplicatesMerged: 0, filesFailed: 0, undated: 0 });
         expect(subjects(out)).toEqual(['bob subject', 'alice subject']);
@@ -125,7 +125,7 @@ describe('runEngine: attached emails are messages of their own', () =>
     it('an email sent as an attachment (.eml): own message, its name, no place', async () =>
     {
         const parent = ok(await parseEml('parent.eml', holding('alice', 'Tue, 3 Jun 2025 14:00:00 +0200', plain('Attached.'), rfc822(simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY), AS_FILE))));
-        const out = runEngine([parent]);
+        const out = analyzeThread([parent]);
         expectWhole(out);
         expect(subjects(out)).toEqual(['bob subject', 'alice subject']);
         expect(attachedAt(out, 1)).toMatchObject({ parentIndex: 0, path: [1], names: ['forwarded.eml'], places: [] });
@@ -145,7 +145,7 @@ describe('runEngine: attached emails are messages of their own', () =>
             messageId: '<inner-item@example.test>',
         };
         const outer: MsgSpec = { ...inner, id: 'outer', subject: 'Outer item', bodyText: 'See the attached email.', submitTime: '2025-06-03T08:00:00Z', messageId: '<outer-item@example.test>', attachedItems: [{ displayName: 'Inner item', message: inner }] };
-        const out = runEngine([ok(await parseMsg('outer.msg', outer))]);
+        const out = analyzeThread([ok(await parseMsg('outer.msg', outer))]);
         expectWhole(out);
         expect(subjects(out)).toEqual(['Inner item', 'Outer item']);
         expect(attachedAt(out, 1)).toMatchObject({ parentIndex: 0, fileIndex: 0, path: [1], names: ['Inner item.msg'], places: [] });
@@ -158,7 +158,7 @@ describe('runEngine: attached emails are messages of their own', () =>
         const b = simple('carol', 'Sun, 1 Jun 2025 09:00:00 +0200', B_BODY);
         const a = holding('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', plain(A_BODY), crlf('Content-Type: message/rfc822; name="inner.eml"', '', b));
         const parent = ok(await parseEml('parent.eml', holding('alice', 'Tue, 3 Jun 2025 14:00:00 +0200', plain('See below.'), rfc822(a))));
-        const out = runEngine([parent]);
+        const out = analyzeThread([parent]);
         expectWhole(out);
         expect(subjects(out)).toEqual(['carol subject', 'bob subject', 'alice subject']);
         expect(attachedAt(out, 1)).toMatchObject({ parentIndex: 0, path: [1], names: [''] });
@@ -182,7 +182,7 @@ describe('runEngine: attached emails are messages of their own', () =>
             [dropped, parent],
         ])
         {
-            const out = runEngine(results);
+            const out = analyzeThread(results);
             expectWhole(out);
             expect(out.counts).toMatchObject({ filesGiven: 2, messagesFound: 3, duplicatesMerged: 1 });
             const kept = bySubject(out, 'bob subject');
@@ -202,7 +202,7 @@ describe('runEngine: attached emails are messages of their own', () =>
             [parent, dropped],
         ])
         {
-            const out = runEngine(results);
+            const out = analyzeThread(results);
             expectWhole(out);
             expect(out.counts).toMatchObject({ messagesFound: 3, duplicatesMerged: 1 });
             const kept = bySubject(out, 'bob subject');
@@ -214,10 +214,10 @@ describe('runEngine: attached emails are messages of their own', () =>
             expect(out.attached?.[0]?.keptShowsHeader).toBe(false);
         }
         // The same header data: the dropped copy, and its rows show everything.
-        const same = runEngine([ok(await parseEml('parent.eml', holding('alice', 'Tue, 3 Jun 2025 14:00:00 +0200', plain('See below.'), rfc822(simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY))))), dropped]);
+        const same = analyzeThread([ok(await parseEml('parent.eml', holding('alice', 'Tue, 3 Jun 2025 14:00:00 +0200', plain('See below.'), rfc822(simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY))))), dropped]);
         expect(same.attached?.[0]?.keptShowsHeader).toBe(true);
         // Two attached copies (no dropped one): the general rule, the copy with the Bcc line is kept.
-        const twoAttached = runEngine([
+        const twoAttached = analyzeThread([
             parent,
             ok(await parseEml('other.eml', holding('dave', 'Wed, 4 Jun 2025 14:00:00 +0200', plain('Also below.'), rfc822(simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY))))),
         ]);
@@ -232,7 +232,7 @@ describe('runEngine: attached emails are messages of their own', () =>
         // written with LF line ends and trailing spaces: equal as de-duplication compares bodies.
         const body = withList.message.bodyText.replace(/\r\n/gu, '\n').replace(/\n/gu, '  \n');
         const noList: ParseResult = { ok: true, message: { ...withList.message, bodyText: body, bcc: [{ name: '', address: 'archive@example.test' }], source: { ...withList.message.source, fileName: 'two.eml', sha256: '0'.repeat(64) } } };
-        const out = runEngine([withList, noList]);
+        const out = analyzeThread([withList, noList]);
         expectWhole(out);
         const kept = bySubject(out, 'alice subject');
         // The copy with the Bcc line covers the other one: it is kept.
@@ -252,7 +252,7 @@ describe('runEngine: attached emails are messages of their own', () =>
         const later = ok(await parseEml('later.eml', simple('dave', 'Wed, 4 Jun 2025 09:00:00 +0200', 'A later email.')));
         const earlier = ok(await parseEml('earlier.eml', simple('erin', 'Sun, 1 Jun 2025 09:00:00 +0200', 'An earlier email.')));
         const undatedTop = ok(await parseEml('undated.eml', simple('frank', null, 'No date here.')));
-        const out = runEngine([later, parent, undatedTop, earlier]);
+        const out = analyzeThread([later, parent, undatedTop, earlier]);
         expectWhole(out);
         expect(subjects(out)).toEqual(['erin subject', 'carol subject', 'bob subject', 'alice subject', 'dave subject', 'frank subject']);
         expect(out.messages.map((m) => m.order)).toEqual(['by-date', 'before-parent', 'before-parent', 'by-date', 'by-date', 'file-order']);
@@ -266,7 +266,7 @@ describe('runEngine: attached emails are messages of their own', () =>
     {
         const parent = ok(await parseEml('parent.eml', holding('alice', null, plain('See below.'), rfc822(simple('bob', null, A_BODY), AS_FILE))));
         const dated = ok(await parseEml('dated.eml', simple('dave', 'Wed, 4 Jun 2025 09:00:00 +0200', 'A dated email.')));
-        const out = runEngine([parent, dated]);
+        const out = analyzeThread([parent, dated]);
         expect(subjects(out)).toEqual(['dave subject', 'bob subject', 'alice subject']);
         expect(out.messages.map((m) => m.order)).toEqual(['by-date', 'before-parent', 'file-order']);
     });
@@ -274,7 +274,7 @@ describe('runEngine: attached emails are messages of their own', () =>
     it('the same file added twice: one copy of each email, the attached copies merged', async () =>
     {
         const text = holding('alice', 'Tue, 3 Jun 2025 14:00:00 +0200', plain('See below.'), rfc822(simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY)));
-        const out = runEngine([ok(await parseEml('one.eml', text)), ok(await parseEml('two.eml', text))]);
+        const out = analyzeThread([ok(await parseEml('one.eml', text)), ok(await parseEml('two.eml', text))]);
         expectWhole(out);
         expect(subjects(out)).toEqual(['bob subject', 'alice subject']);
         expect(out.counts).toMatchObject({ filesGiven: 2, messagesFound: 4, duplicatesMerged: 2 });
@@ -286,7 +286,7 @@ describe('runEngine: attached emails are messages of their own', () =>
 
     it('no attached email: no `attached` key, positionByIndex as long as the input', async () =>
     {
-        const out = runEngine([ok(await parseEml('one.eml', simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY)))]);
+        const out = analyzeThread([ok(await parseEml('one.eml', simple('bob', 'Mon, 2 Jun 2025 10:00:00 +0200', A_BODY)))]);
         expect('attached' in out).toBe(false);
         expect(out.positionByIndex).toHaveLength(1);
     });
@@ -305,14 +305,14 @@ describe('runEngine: attached emails are messages of their own', () =>
         const child = { message: message('child', 'Child.'), parent: 1, path: [2, 1], name: '', places: [] };
         const wrongPath = { message: message('wrong path', 'Wrong.'), parent: 0, path: [9, 1], name: '', places: [] };
         const result = { ...top, attached: [good, bad, child, wrongPath] } as unknown as ParseResult;
-        const out = runEngine([result]);
+        const out = analyzeThread([result]);
         expectWhole(out);
         expect(out.messages.map((m) => m.message.subject).sort()).toEqual(['bob subject', 'good']);
         expect(out.attached).toEqual([{ index: 1, parentIndex: 0, fileIndex: 0, path: [1], names: ['g.eml'], places: [], keptShowsHeader: true }]);
     });
 });
 
-describe('runEngine: an email holding an attached email always quotes it (task 8.13b-3, review round 2, M1)', () =>
+describe('analyzeThread: an email holding an attached email always quotes it (task 8.13b-3, review round 2, M1)', () =>
 {
     const UNIQUE_A = 'UNIQUE-A the north warehouse inventory count finished early and every shelf label was replaced this week.';
     /** Bob's email: its own text, then an inline forward of Carol's. */
@@ -324,12 +324,12 @@ describe('runEngine: an email holding an attached email always quotes it (task 8
     const spied = (results: readonly ParseResult[]): { out: EngineResult; given: OverlapInput[] } =>
     {
         let given: OverlapInput[] = [];
-        const out = runEngine(results, {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread(results, {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             detectQuotedOverlap: (messages) =>
             {
                 given = [...messages];
-                return DEFAULT_PARTS.detectQuotedOverlap(messages);
+                return DEFAULT_THREAD_ANALYSIS_PARTS.detectQuotedOverlap(messages);
             },
         });
         return { out, given };
@@ -402,7 +402,7 @@ const TOP_RESULT: ParseResult = {
     },
 };
 
-describe('runEngine: attached emails and rebuilt emails', () =>
+describe('analyzeThread: attached emails and rebuilt emails', () =>
 {
     it('a parent never yields a rebuilt copy of its own inline forward; a reply quoting the attached email links to it', async () =>
     {
@@ -420,7 +420,7 @@ describe('runEngine: attached emails and rebuilt emails', () =>
                 ),
             ),
         );
-        const out = runEngine([parent, reply]);
+        const out = analyzeThread([parent, reply]);
         expectWhole(out);
         const parentPosition = out.messages.findIndex((m) => m.message.subject === 'alice subject');
         const attachedPosition = out.messages.findIndex((m) => m.message.subject === 'bob subject');

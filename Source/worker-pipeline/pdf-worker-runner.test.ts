@@ -1,10 +1,10 @@
-// Unit tests for the page's side of the PDF worker (pdf-runner.ts), with a
+// Unit tests for the page's side of the PDF worker (pdf-worker-runner.ts), with a
 // FAKE worker: time limit, terminate on every path, error events, bad and
 // late messages, cancel. The real worker is checked in Chromium by
 // Helper/Test/browser-tests/download.spec.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PDF_TIMEOUT_BASE_MS, PDF_TIMEOUT_PER_EMAIL_MS, pdfTimeoutMs, runPdfInWorker, type PdfWorkerFactory } from './pdf-runner';
+import { PDF_TIMEOUT_BASE_MS, PDF_TIMEOUT_PER_EMAIL_MS, pdfTimeoutMs, runPdfInWorker, type PdfWorkerFactory } from './pdf-worker-runner';
 import type { WorkerEvents } from '../../Header/parse-worker-messages';
 import type { MakePdfRequest, PdfOutcome, ToPdfWorker } from '../../Header/pdf-worker-messages';
 
@@ -26,13 +26,13 @@ function fakeWorker(options: { createThrows?: boolean; sendThrows?: boolean; ter
             throw new Error('terminate failed');
         }
     });
-    const factory: PdfWorkerFactory = (e) =>
+    const factory: PdfWorkerFactory = (workerEvents) =>
     {
         if (options.createThrows === true)
         {
             throw new Error('SecurityError');
         }
-        events = e;
+        events = workerEvents;
         return {
             send: (message, transfer) =>
             {
@@ -83,22 +83,22 @@ describe('runPdfInWorker', () =>
     it('sends the request (copied, nothing moved), returns the PDF and terminates the worker', async () =>
     {
         const fake = fakeWorker();
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
         expect(fake.sent).toEqual([{ message: REQUEST, transfer: [] }]);
         expect(fake.sent[0]?.message).toBe(REQUEST);
         fake.worker().message(DONE);
-        await expect(outcome).resolves.toEqual({ ok: true, bytes: BYTES, fileName: DONE.fileName, pageCount: 4 });
+        await expect(pending).resolves.toEqual({ ok: true, bytes: BYTES, fileName: DONE.fileName, pageCount: 4 });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
     });
 
     it('stops the worker at the time limit: "timeout", and ignores a late PDF', async () =>
     {
         const fake = fakeWorker();
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
         vi.advanceTimersByTime(TIMEOUT_MS - 1);
         expect(fake.terminate).not.toHaveBeenCalled();
         vi.advanceTimersByTime(1);
-        await expect(outcome).resolves.toEqual({ ok: false, error: 'timeout' });
+        await expect(pending).resolves.toEqual({ ok: false, error: 'timeout' });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
         fake.worker().message(DONE);
         expect(fake.terminate).toHaveBeenCalledTimes(1);
@@ -107,9 +107,9 @@ describe('runPdfInWorker', () =>
     it('clears the time limit once the PDF is there', async () =>
     {
         const fake = fakeWorker();
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
         fake.worker().message(DONE);
-        await expect(outcome).resolves.toMatchObject({ ok: true });
+        await expect(pending).resolves.toMatchObject({ ok: true });
         expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -122,9 +122,9 @@ describe('runPdfInWorker', () =>
     ])('turns %s into "tool-error" and terminates the worker', async (_label, act) =>
     {
         const fake = fakeWorker();
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
         act(fake.worker());
-        await expect(outcome).resolves.toEqual({ ok: false, error: 'tool-error' });
+        await expect(pending).resolves.toEqual({ ok: false, error: 'tool-error' });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
         expect(vi.getTimerCount()).toBe(0);
     });
@@ -132,16 +132,16 @@ describe('runPdfInWorker', () =>
     it('says "not-started" when the worker cannot be created (and starts no clock)', async () =>
     {
         const fake = fakeWorker({ createThrows: true });
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
-        await expect(outcome).resolves.toEqual({ ok: false, error: 'not-started' });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        await expect(pending).resolves.toEqual({ ok: false, error: 'not-started' });
         expect(vi.getTimerCount()).toBe(0);
     });
 
     it('says "tool-error" when the request cannot be sent, and terminates the worker', async () =>
     {
         const fake = fakeWorker({ sendThrows: true });
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
-        await expect(outcome).resolves.toEqual({ ok: false, error: 'tool-error' });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        await expect(pending).resolves.toEqual({ ok: false, error: 'tool-error' });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
         expect(vi.getTimerCount()).toBe(0);
     });
@@ -149,19 +149,19 @@ describe('runPdfInWorker', () =>
     it('still settles when terminate throws', async () =>
     {
         const fake = fakeWorker({ terminateThrows: true });
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
         fake.worker().message(DONE);
-        await expect(outcome).resolves.toMatchObject({ ok: true });
+        await expect(pending).resolves.toMatchObject({ ok: true });
     });
 
     it('uses only the first answer', async () =>
     {
         const fake = fakeWorker();
-        const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
+        const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });
         fake.worker().message({ type: 'failed' });
         fake.worker().message(DONE);
         fake.worker().failure();
-        await expect(outcome).resolves.toEqual({ ok: false, error: 'tool-error' });
+        await expect(pending).resolves.toEqual({ ok: false, error: 'tool-error' });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
     });
 
@@ -171,10 +171,10 @@ describe('runPdfInWorker', () =>
         {
             const fake = fakeWorker();
             const controller = new AbortController();
-            const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+            const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
             controller.abort();
             expect(fake.terminate).toHaveBeenCalledTimes(1);
-            await expect(outcome).resolves.toEqual({ ok: false, error: 'cancelled' });
+            await expect(pending).resolves.toEqual({ ok: false, error: 'cancelled' });
             expect(vi.getTimerCount()).toBe(0);
             fake.worker().message(DONE);
             expect(fake.terminate).toHaveBeenCalledTimes(1);
@@ -185,8 +185,8 @@ describe('runPdfInWorker', () =>
             const fake = fakeWorker();
             const controller = new AbortController();
             controller.abort();
-            const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
-            await expect(outcome).resolves.toEqual({ ok: false, error: 'cancelled' });
+            const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+            await expect(pending).resolves.toEqual({ ok: false, error: 'cancelled' });
             expect(fake.sent).toEqual([]);
             expect(() => fake.worker()).toThrow('worker not started');
         });
@@ -195,9 +195,9 @@ describe('runPdfInWorker', () =>
         {
             const fake = fakeWorker();
             const controller = new AbortController();
-            const outcome = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
+            const pending = runPdfInWorker(REQUEST, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS, signal: controller.signal });
             fake.worker().message(DONE);
-            const result: PdfOutcome = await outcome;
+            const result: PdfOutcome = await pending;
             controller.abort();
             expect(result.ok).toBe(true);
             expect(fake.terminate).toHaveBeenCalledTimes(1);

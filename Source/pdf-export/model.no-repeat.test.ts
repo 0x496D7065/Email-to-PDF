@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { hasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -82,7 +82,7 @@ function realFile(messages: readonly ThreadMessage[], i: number, body?: string):
 
 function engineOf(c: ThreadCase, dropped: readonly number[]): EngineResult
 {
-    return runEngine(dropped.map((i) => ({ ok: true as const, message: realFile(c.messages!, i) })));
+    return analyzeThread(dropped.map((i) => ({ ok: true as const, message: realFile(c.messages!, i) })));
 }
 
 function build(
@@ -360,7 +360,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 
     it('a forward whose quoted dates carry their own zone: its header lines are left out too', () =>
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
         const entries = rebuiltEntries(result);
         expect(entries).toHaveLength(2);
         expect(entries.every((r) => !r.rebuilt.dateApproximate)).toBe(true);
@@ -469,7 +469,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
     {
         const built = buildThread(FORWARD.messages!);
         const passedOn = exactDates(built.body.slice(built.headers[0]!.start));
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, passedOn) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, passedOn) }]);
         expect(rebuiltEntries(result)).toHaveLength(2);
         const doc = build(result);
         const forward = realOf(doc, 0);
@@ -531,7 +531,7 @@ describe('B1: an answer typed below an unmarked Outlook quote stays in the write
         'Hi Alice,\n\nSee my answer below the quote.\n\nBob\n\n' +
         '________________________________\nFrom: Alice Example <alice@example.test>\nSent: Monday, March 3, 2025 5:15 PM\nTo: Bob Sample <bob@example.test>\nSubject: Desks\n\n' +
         `${aliceText}\n${answer}\n`;
-    const result = runEngine([
+    const result = analyzeThread([
         { ok: true, message: file(1, ALICE, BOB, Date.UTC(2025, 2, 3, 17, 15), 'Desks', aliceText) },
         { ok: true, message: file(2, BOB, ALICE, Date.UTC(2025, 2, 4, 9, 0), 'RE: Desks', bobText) },
     ]);
@@ -599,7 +599,7 @@ describe('B1: an answer typed below an unmarked Outlook quote stays in the write
 describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the top of that rebuilt email (task 8.13a)', () =>
 {
     const exactBody = exactDates(buildThread(FORWARD.messages!).body);
-    const engineFor = (body: string): EngineResult => runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, body) }]);
+    const engineFor = (body: string): EngineResult => analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, body) }]);
     /** The header lines of the rebuilt message of `generation` in the forward, as written. */
     const headerOf = (result: EngineResult, generation: number): string =>
     {
@@ -728,7 +728,7 @@ describe('the cut places: CRLF bodies, touching and overlapping places', () =>
     it('a CRLF body: every cut starts and ends at a line start (after "\\r\\n"); the forward keeps only its own text', () =>
     {
         const body = exactDates(buildThread(FORWARD.messages!).body).replace(/\n/gu, '\r\n');
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, body) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, body) }]);
         const entries = rebuiltEntries(result);
         expect(entries).toHaveLength(2);
         const order = planPdfOrder(result, [0], entries.map((r) => r.id));
@@ -746,7 +746,7 @@ describe('the cut places: CRLF bodies, touching and overlapping places', () =>
 
     it('a place linked to a real file and a place of a rebuilt entry that touch in one body: one cut', () =>
     {
-        const result = runEngine([
+        const result = analyzeThread([
             { ok: true, message: realFile(FORWARD.messages!, 1) },
             { ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) },
         ]);
@@ -774,7 +774,7 @@ describe('the cut places: CRLF bodies, touching and overlapping places', () =>
 
     it('overlapping places (odd offsets) are merged into one cut', () =>
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
         const g1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!.rebuilt;
         const g2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!.rebuilt;
         const odd: EngineResult = {
@@ -824,7 +824,7 @@ describe('printedElsewhereParts, pdfRanges, noRepeat: where the PDF prints each 
 
     it('touching places of a real file and of a rebuilt entry: two parts (one per email), one cut', () =>
     {
-        const result = runEngine([
+        const result = analyzeThread([
             { ok: true, message: realFile(FORWARD.messages!, 1) },
             { ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) },
         ]);
@@ -843,7 +843,7 @@ describe('printedElsewhereParts, pdfRanges, noRepeat: where the PDF prints each 
 
     it('overlapping places (odd offsets): each piece goes to the innermost place, nothing covered twice', () =>
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
         const e1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!;
         const e2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!;
         const g1 = e1.rebuilt;
@@ -977,7 +977,7 @@ describe('attribution first: a place whose text holds own text or a kept signatu
     /** A forward whose quoted dates carry their zone, a plan for it with `reason` (kept) on `line` of the newer forwarded email's text. */
     function forwardWith(reason: PlanRange['reason'], keep = true)
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
         const body = result.messages[0]!.message.bodyText;
         const g1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!.rebuilt;
         const g2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!.rebuilt;
@@ -1019,7 +1019,7 @@ describe('attribution first: a place whose text holds own text or a kept signatu
 
     it('Q3 (task 8.13a): a place whose text is own text only, with no quoted range (the plan could not check any of it), IS cut whole', () =>
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
         const body = result.messages[0]!.message.bodyText;
         const g1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!.rebuilt;
         const g2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!.rebuilt;
@@ -1122,7 +1122,7 @@ describe('header lines against a real file: name-only recipients (S3), a strong 
 
     it('S3: a To / Cc mailbox read without an address matches the file\'s mailbox of the same name', () =>
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactBody) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactBody) }]);
         const body = result.messages[0]!.message.bodyText;
         const r = result.reconstructed.find((x) => x.rebuilt.generation === 1)!.rebuilt;
         const real = realFile(FORWARD.messages!, 1);
@@ -1143,7 +1143,7 @@ describe('header lines against a real file: name-only recipients (S3), a strong 
 
     it('G3 (task 8.11): a To / Cc mailbox read with a name and an address needs the same name when the file\'s mailbox of that address has one', () =>
     {
-        const result = runEngine([{ ok: true, message: realFile(FORWARD.messages!, 2, exactBody) }]);
+        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactBody) }]);
         const body = result.messages[0]!.message.bodyText;
         const r = result.reconstructed.find((x) => x.rebuilt.generation === 1)!.rebuilt;
         const real = realFile(FORWARD.messages!, 1);
@@ -1288,7 +1288,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
 
     it('the cases: the refused forward has a forwarded part and no rebuilt email; the other one has two', () =>
     {
-        const result = runEngine([{ ok: true, message: refused }]);
+        const result = analyzeThread([{ ok: true, message: refused }]);
         expect(result.reconstructed).toEqual([]);
         const plan = planOutput(result.messages, DEFAULT_OUTPUT_POLICY)[0]!;
         expect(plan.ranges.some((r) => r.reason === 'forwarded' && r.keep)).toBe(true);
@@ -1297,7 +1297,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
 
     it('both rebuilt emails unticked: the rebuildable forwarded emails are left out, the refused one stays inline; full text and the preview keep everything', () =>
     {
-        const result = runEngine([
+        const result = analyzeThread([
             { ok: true, message: refused },
             { ok: true, message: forward },
         ]);
@@ -1349,7 +1349,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
             'Hi Carol,\n\nSee the notes below.\n\nAlice\n\n---------- Forwarded message ---------\nFrom: Bob Sample <bob@example.test>\nDate: Tue, 4 Mar 2025 09:00:00 +0000\nSubject: Fwd: Desk invoice\nTo: Alice Example <alice@example.test>\n\n' +
             'Alice, the accounting team sent this note about the twelve oak desks.\n\n' +
             '> From: the accounting team\n> Date: sometime in March\n> Subject: Desk invoice\n>\n> The invoice for the twelve oak desks is attached.\n';
-        const result = runEngine([{ ok: true, message: file(42, ALICE, BOB, Date.UTC(2025, 2, 5, 9, 0), 'Fwd: Fwd: Desk invoice', nestedBody) }]);
+        const result = analyzeThread([{ ok: true, message: file(42, ALICE, BOB, Date.UTC(2025, 2, 5, 9, 0), 'Fwd: Fwd: Desk invoice', nestedBody) }]);
         const ids = rebuiltEntries(result).map((r) => r.id);
         expect(ids).toHaveLength(1);
         const place = result.reconstructed[ids[0]!]!.rebuilt;
@@ -1398,7 +1398,7 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
     // Carol's copy ends with Bob's signature block; Dave's has none but an exact date (more known fields: the best copy, the entry).
     const carolBody = `Hi Alice,\n\nThe chairs suit us too.\n\nCarol\n\n${bobQuote(true, 'Tuesday, March 4, 2025 9:00 AM')}`;
     const daveBody = `Hi Alice,\n\nThe desks suit us.\n\nDave\n\n${bobQuote(false, 'Tue, 4 Mar 2025 09:00:00 +0000')}`;
-    const result = runEngine([
+    const result = analyzeThread([
         { ok: true, message: file(50, ALICE, BOB, Date.UTC(2025, 2, 3, 17, 15), 'Desks', aliceText) },
         { ok: true, message: file(51, CAROL, ALICE, Date.UTC(2025, 2, 5, 9, 0), 'RE: Desks', carolBody) },
         { ok: true, message: file(52, DAVE, ALICE, Date.UTC(2025, 2, 5, 11, 0), 'RE: Desks', daveBody) },
@@ -1455,7 +1455,7 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
     it('the other way round (the copy printed has the block, the one cut has none): the whole place is cut, as before', () =>
     {
         // Carol's copy (the block) with the exact date: the entry; Dave's, without the block, is the copy cut.
-        const swapped = runEngine([
+        const swapped = analyzeThread([
             { ok: true, message: file(50, ALICE, BOB, Date.UTC(2025, 2, 3, 17, 15), 'Desks', aliceText) },
             { ok: true, message: file(51, CAROL, ALICE, Date.UTC(2025, 2, 5, 9, 0), 'RE: Desks', `Hi Alice,\n\nThe chairs suit us too.\n\nCarol\n\n${bobQuote(false, 'Tuesday, March 4, 2025 9:00 AM')}`) },
             { ok: true, message: file(52, DAVE, ALICE, Date.UTC(2025, 2, 5, 11, 0), 'RE: Desks', `Hi Alice,\n\nThe desks suit us.\n\nDave\n\n${bobQuote(true, 'Tue, 4 Mar 2025 09:00:00 +0000')}`) },
@@ -1479,7 +1479,7 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
         // a `>`-quoted reply reaches extraTail, but its block stays in the plan's folded quote).
         const bobBody = bobText + aliceQuote;
         const fwd = `Dave, see below.\n\n---------- Forwarded message ---------\nFrom: Bob Sample <bob@example.test>\nDate: Tue, 4 Mar 2025 at 09:00\nSubject: RE: Desks\nTo: Alice Example <alice@example.test>\n\n${bobText}${signature}${aliceQuote}`;
-        const real = runEngine([
+        const real = analyzeThread([
             { ok: true, message: file(50, ALICE, BOB, Date.UTC(2025, 2, 3, 17, 15), 'Desks', aliceText) },
             { ok: true, message: file(53, BOB, ALICE, Date.UTC(2025, 2, 4, 9, 0), 'RE: Desks', bobBody) },
             { ok: true, message: file(51, CAROL, DAVE, Date.UTC(2025, 2, 5, 9, 0), 'Fwd: RE: Desks', fwd) },
@@ -1510,7 +1510,7 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
     it('a CRLF body: the block\'s line is still found exactly, the block printed exactly once', () =>
     {
         const crlf = (s: string): string => s.replaceAll('\n', '\r\n');
-        const r2 = runEngine([
+        const r2 = analyzeThread([
             { ok: true, message: file(50, ALICE, BOB, Date.UTC(2025, 2, 3, 17, 15), 'Desks', crlf(aliceText)) },
             { ok: true, message: file(51, CAROL, ALICE, Date.UTC(2025, 2, 5, 9, 0), 'RE: Desks', crlf(carolBody)) },
             { ok: true, message: file(52, DAVE, ALICE, Date.UTC(2025, 2, 5, 11, 0), 'RE: Desks', crlf(daveBody)) },

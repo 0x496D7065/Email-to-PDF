@@ -3,7 +3,7 @@
 // output plan, as the app does.
 
 import { describe, expect, it } from 'vitest';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { sizeText } from '../web-page/preview';
 import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput } from './model';
@@ -54,7 +54,7 @@ function build(
     options: { positions?: (r: EngineResult) => number[]; policy?: OutputPolicy; timeZone?: string; generatedAt?: number; plans?: (r: EngineResult, p: number[]) => MessagePlan[] } = {},
 ): { doc: PdfDocument; result: EngineResult; input: BuildPdfInput }
 {
-    const result = runEngine(results);
+    const result = analyzeThread(results);
     const positions = options.positions?.(result) ?? result.messages.map((_, k) => k);
     const policy = options.policy ?? DEFAULT_OUTPUT_POLICY;
     const plans = options.plans?.(result, positions) ?? planOutput(positions.map((p) => result.messages[p]!), policy);
@@ -656,7 +656,7 @@ describe('purity', () =>
     it('never changes the result, the plans or the messages, and gives the same document twice', () =>
     {
         const msgs = [make({ bodyText: 'a\tb\r\nc\u0000\n\n\n\nd' }), make({ attachments: [{ fileName: 'x.txt', size: 3, mimeType: 'text/plain' }] })];
-        const result = runEngine(msgs.map(ok));
+        const result = analyzeThread(msgs.map(ok));
         const plans = planOutput(result.messages);
         const before = JSON.stringify({ result, plans });
         deepFreeze(result);

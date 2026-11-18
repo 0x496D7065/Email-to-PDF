@@ -1,7 +1,7 @@
 // Header: the thread analysis result (duplicates, order, folded parts,
 // warnings). Shared types only, no code (README.md, "Where things are").
-// thread-analysis/ (analyze-thread.ts, runEngine) produces EngineResult; it crosses
-// the engine worker (engine-worker-messages.ts) and is read by web-page-logic/,
+// thread-analysis/ (analyze-thread.ts, analyzeThread) produces EngineResult; it crosses
+// the thread-analysis worker (thread-analysis-worker-messages.ts) and is read by web-page-logic/,
 // web-page/ and pdf-export/.
 
 import type { NormalizedMessage, ParseErrorCode, ParseWarning } from './parsed-email';
@@ -38,7 +38,7 @@ export interface EngineMessage
 {
     /** The kept copy, unchanged (same object as in the input). */
     readonly message: NormalizedMessage;
-    /** Its position in the input of `runEngine`. */
+    /** Its position in the input of `analyzeThread`. */
     readonly index: number;
     /**
      * Placed by its date; or, date missing or unusable, after all dated
@@ -46,7 +46,7 @@ export interface EngineMessage
      * is attached to ('before-parent').
      */
     readonly order: OrderReason;
-    /** Merged copies (see dedupe.ts), `index` = position in the input of `runEngine`. */
+    /** Merged copies (see dedupe.ts), `index` = position in the input of `analyzeThread`. */
     readonly duplicates: readonly MergedCopy[];
     /** Why look-alike messages were NOT merged (see dedupe.ts), `related` = input positions. */
     readonly dedupeWarnings: readonly DedupeWarning[];
@@ -61,7 +61,7 @@ export interface EngineMessage
 /** A file that could not be read. */
 export interface FailedFile
 {
-    /** Its position in the input of `runEngine`. */
+    /** Its position in the input of `analyzeThread`. */
     readonly index: number;
     readonly fileName: string;
     readonly sha256: string | null;

@@ -1,8 +1,8 @@
 // Header: the messages between the page and the PDF worker, and the outcome
 // the page gets. Shared types only, no code (README.md, "Where things are").
 // The checks that every message really has this shape are isToPdfWorker /
-// isFromPdfWorker in Source/worker-pipeline/pdf-protocol.ts.
-// Used by worker-pipeline/ (pdf-protocol, pdf-worker, pdf-runner) and web-page/
+// isFromPdfWorker in Source/worker-pipeline/pdf-worker-protocol.ts.
+// Used by worker-pipeline/ (pdf-worker-protocol, pdf-worker, pdf-worker-runner) and web-page/
 // (pdf-job, download-step, page).
 
 import type { MessagePlan, OutputPolicy } from './output-plan';

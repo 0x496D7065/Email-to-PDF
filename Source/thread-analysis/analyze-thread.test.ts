@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { DedupeResult } from './dedupe';
-import { DEFAULT_PARTS, primaryReason, runEngine, type EngineParts } from './analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, primaryReason, analyzeThread, type ThreadAnalysisParts } from './analyze-thread';
 import { checkSegments, joinSegments, type FoldRange } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineMessage, EngineResult, FoldReason, Segment } from '../../Header/thread-analysis-result';
@@ -99,11 +99,11 @@ describe('primaryReason', () =>
     });
 });
 
-describe('runEngine: files, indices and counts', () =>
+describe('analyzeThread: files, indices and counts', () =>
 {
     it('returns an empty result for no input', () =>
     {
-        expect(runEngine([])).toEqual({
+        expect(analyzeThread([])).toEqual({
             messages: [],
             failed: [],
             counts: { filesGiven: 0, messagesFound: 0, duplicatesMerged: 0, filesFailed: 0, undated: 0, withFolds: 0 },
@@ -116,7 +116,7 @@ describe('runEngine: files, indices and counts', () =>
 
     it('counts every file given (filesGiven) and, separately, the ones that failed', () =>
     {
-        const out = runEngine([failure('a.eml'), ok(make()), failure('b.msg')]);
+        const out = analyzeThread([failure('a.eml'), ok(make()), failure('b.msg')]);
         expect(out.counts.filesGiven).toBe(3);
         expect(out.counts.filesFailed).toBe(2);
         expect(out.counts.messagesFound).toBe(1);
@@ -127,7 +127,7 @@ describe('runEngine: files, indices and counts', () =>
         const a = make();
         const b = make();
         const results = [failure('broken-1.eml'), ok(a), failure('broken-2.msg'), ok(b)];
-        const out = runEngine(results);
+        const out = analyzeThread(results);
         expect(out.failed).toEqual([
             { index: 0, fileName: 'broken-1.eml', sha256: 'f'.repeat(64), error: 'corrupt', detail: 'damaged file structure: synthetic' },
             { index: 2, fileName: 'broken-2.msg', sha256: 'f'.repeat(64), error: 'corrupt', detail: 'damaged file structure: synthetic' },
@@ -145,7 +145,7 @@ describe('runEngine: files, indices and counts', () =>
         const conflicting = make({ messageId: 'same@example.test', bodyText: 'Something else entirely.\n' });
         // A failed file first, so dedupe's own numbering (parsed messages only) would be off by one.
         const results = [failure('broken.eml'), ok(conflicting), ok(original), ok(copy)];
-        const out = runEngine(results);
+        const out = analyzeThread(results);
         const kept = byIndex(out, 2);
         expect(kept.duplicates).toEqual([{ source: copy.source, index: 3, rule: 'message-id' }]);
         expect(kept.dedupeWarnings).toEqual([{ code: 'same-id-different-content', related: [1], relatedTotal: 1 }]);
@@ -161,7 +161,7 @@ describe('runEngine: files, indices and counts', () =>
         const early = make({ date: { ...make().date, utcMs: DATE_MS - 86_400_000 } });
         const undatedA = make({ date: undatedDate, warnings: ['missing-date'] });
         const undatedB = make({ date: undatedDate, warnings: ['missing-date'] });
-        const out = runEngine([ok(undatedB), ok(late), ok(undatedA), ok(early)]);
+        const out = analyzeThread([ok(undatedB), ok(late), ok(undatedA), ok(early)]);
         expect(out.messages.map((m) => [m.index, m.order])).toEqual([
             [3, 'by-date'],
             [1, 'by-date'],
@@ -186,13 +186,13 @@ describe('runEngine: files, indices and counts', () =>
         });
         const results = [ok(reply), failure('x.eml'), ok(first)];
         const snapshot = JSON.stringify(results);
-        const out = runEngine(results);
+        const out = analyzeThread(results);
         expect(JSON.stringify(results)).toBe(snapshot);
         expect(structuredClone(out)).toEqual(out);
     });
 });
 
-describe('runEngine: detectors working together', () =>
+describe('analyzeThread: detectors working together', () =>
 {
     it('links quoted history to the input position of the quoted message', () =>
     {
@@ -202,7 +202,7 @@ describe('runEngine: detectors working together', () =>
             references: [first.messageId!],
             bodyText: `Yes, I can come on Wednesday.\n\n${first.bodyText}`,
         });
-        const out = runEngine([failure('x.eml'), ok(reply), ok(first)]);
+        const out = analyzeThread([failure('x.eml'), ok(reply), ok(first)]);
         const message = byIndex(out, 1);
         expect(reasonsAt(message, 'Yes, I can come')).toEqual([]);
         expect(reasonsAt(message, 'We are furnishing')).toEqual(['quoted-overlap']);
@@ -216,7 +216,7 @@ describe('runEngine: detectors working together', () =>
     {
         const one = make({ from: [BOB], bodyText: `Hello Alice,\n\nThe quote follows after the visit.\n\n${BOB_SIGNATURE}\n` });
         const two = make({ from: [BOB], bodyText: `Hello Alice,\n\nThe delivery is planned for Friday morning.\n\n${BOB_SIGNATURE}\n` });
-        const out = runEngine([ok(one), ok(two)]);
+        const out = analyzeThread([ok(one), ok(two)]);
         const second = byIndex(out, 1);
         expect(reasonsAt(second, 'Bob Sample\nSample Furniture')).toEqual(['quoted-overlap', 'signature']);
         expect(primaryReason(reasonsAt(second, 'DISCLAIMER: This e-mail'))).toBe('signature');
@@ -235,7 +235,7 @@ describe('runEngine: detectors working together', () =>
             from: [BOB],
             bodyText: `Hello Alice,\n\nFriday works.\n\n${BOB_SIGNATURE}\n\nOn Mon, 3 Mar 2025 at 14:02, Bob Sample <bob@furniture.example.test> wrote:\n> Old text here.\n${quoted}\n`,
         });
-        const out = runEngine([ok(one), ok(two)]);
+        const out = analyzeThread([ok(one), ok(two)]);
         const message = byIndex(out, 1);
         expect(primaryReason(reasonsAt(message, 'Met vriendelijke groeten,'))).toBe('signature');
         const quoteAt = message.message.bodyText.indexOf('On Mon, 3 Mar');
@@ -250,7 +250,7 @@ describe('runEngine: detectors working together', () =>
     });
 });
 
-describe('runEngine: safety net (never lose text, even with a broken detector)', () =>
+describe('analyzeThread: safety net (never lose text, even with a broken detector)', () =>
 {
     const body = 'Hello Bob,\n\nThe desks arrive on Monday.\n\nAlice\n';
 
@@ -258,7 +258,8 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
     {
         const dropsLastChar = (text: string): Segment[] =>
             text.length < 2 ? [] : [{ start: 0, end: text.length - 1, folded: false, reasons: [], related: [] }];
-        const out = runEngine([ok(make({ bodyText: body })), ok(make({ bodyText: '' }))], { ...DEFAULT_PARTS, buildSegments: dropsLastChar });
+        const out = analyzeThread(
+            [ok(make({ bodyText: body })), ok(make({ bodyText: '' }))], { ...DEFAULT_THREAD_ANALYSIS_PARTS, buildSegments: dropsLastChar });
         const message = byIndex(out, 0);
         expect(message.segments).toEqual([{ start: 0, end: body.length, folded: false, reasons: [], related: [] }]);
         expect(message.engineWarnings).toEqual(['folding-disabled']);
@@ -271,7 +272,7 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
     {
         // Covers the text, but folded without a reason: checkSegments rejects it.
         const badShape = (text: string): Segment[] => [{ start: 0, end: text.length, folded: true, reasons: [], related: [] }];
-        const message = runEngine([ok(make({ bodyText: body }))], { ...DEFAULT_PARTS, buildSegments: badShape }).messages[0]!;
+        const message = analyzeThread([ok(make({ bodyText: body }))], { ...DEFAULT_THREAD_ANALYSIS_PARTS, buildSegments: badShape }).messages[0]!;
         expect(message.segments.every((s) => !s.folded)).toBe(true);
         expect(message.engineWarnings).toEqual(['folding-disabled']);
     });
@@ -282,7 +283,7 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
         {
             throw new Error('synthetic bug');
         };
-        const message = runEngine([ok(make({ bodyText: body }))], { ...DEFAULT_PARTS, buildSegments: throws }).messages[0]!;
+        const message = analyzeThread([ok(make({ bodyText: body }))], { ...DEFAULT_THREAD_ANALYSIS_PARTS, buildSegments: throws }).messages[0]!;
         expect(joinSegments(body, message.segments)).toBe(body);
         expect(message.engineWarnings).toEqual(['folding-disabled']);
     });
@@ -291,8 +292,8 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
     {
         const quotedBody = `Thanks.\n\n> line one of the quote\n> line two of the quote\n`;
         const results = [ok(make({ bodyText: quotedBody })), ok(make({ bodyText: body }))];
-        const out = runEngine(results, {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread(results, {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             detectQuotedOverlap: () =>
             {
                 throw new Error('synthetic bug');
@@ -336,7 +337,7 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
             return fold as FoldRange;
         };
         const quoted = 'Thanks.\n\n> line one of the quote\n> line two of the quote\n';
-        const cases: { name: string; parts: Partial<EngineParts>; warnings: string[] }[] = [
+        const cases: { name: string; parts: Partial<ThreadAnalysisParts>; warnings: string[] }[] = [
             { name: 'overlap: undefined', parts: { detectQuotedOverlap: bad(() => undefined) }, warnings: ['detector-failed'] },
             { name: 'overlap: a number', parts: { detectQuotedOverlap: bad(() => 42) }, warnings: ['detector-failed'] },
             { name: 'overlap: entries null/undefined', parts: { detectQuotedOverlap: bad(() => [null, undefined]) }, warnings: ['detector-failed'] },
@@ -355,7 +356,7 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
         {
             const results = [ok(make({ bodyText: quoted })), ok(make({ bodyText: body }))];
             let out: EngineResult | undefined;
-            expect(() => (out = runEngine(results, { ...DEFAULT_PARTS, ...testCase.parts })), testCase.name).not.toThrow();
+            expect(() => (out = analyzeThread(results, { ...DEFAULT_THREAD_ANALYSIS_PARTS, ...testCase.parts })), testCase.name).not.toThrow();
             for (const message of out!.messages)
             {
                 expect(joinSegments(message.message.bodyText, message.segments), testCase.name).toBe(message.message.bodyText);
@@ -375,8 +376,8 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
                 throw new Error('synthetic bug');
             },
         });
-        const out = runEngine([ok(make({ bodyText: body }))], {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread([ok(make({ bodyText: body }))], {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             detectReplyHeaders: () => [{ start: 0, end: 10, reason: 'reply-header' }, throwing as FoldRange],
         });
         const message = out.messages[0]!;
@@ -390,8 +391,8 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
     it('does not let bad fold starts shrink ownTextEnd (the signature detector input)', () =>
     {
         let seen: readonly (number | undefined)[] = [];
-        runEngine([ok(make({ bodyText: body }))], {
-            ...DEFAULT_PARTS,
+        analyzeThread([ok(make({ bodyText: body }))], {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             detectQuoteMarkers: () => [
                 null as never,
                 { start: '5' as never, end: 9, reason: 'quote-marker' },
@@ -413,7 +414,7 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
         const original = make({ messageId: 'same@example.test' });
         const copy = { ...original, source: { ...original.source, fileName: 'copy.msg', kind: 'msg' as const } };
         const results = [ok(original), failure('x.eml'), ok(copy)];
-        expect(runEngine(results).counts.duplicatesMerged).toBe(1); // the real dedupe merges them
+        expect(analyzeThread(results).counts.duplicatesMerged).toBe(1); // the real dedupe merges them
         const broken: ((messages: readonly NormalizedMessage[]) => DedupeResult)[] = [
             () =>
             {
@@ -484,7 +485,7 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
         ];
         for (const dedupe of broken)
         {
-            const out = runEngine(results, { ...DEFAULT_PARTS, dedupe });
+            const out = analyzeThread(results, { ...DEFAULT_THREAD_ANALYSIS_PARTS, dedupe });
             expect(out.messages.map((m) => m.index).sort()).toEqual([0, 2]);
             expect(out.positionByIndex[1]).toBeNull();
             for (const message of out.messages)
@@ -500,8 +501,8 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
 
     it('ignores bad fold ranges from a detector without losing text', () =>
     {
-        const out = runEngine([ok(make({ bodyText: body }))], {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread([ok(make({ bodyText: body }))], {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             detectQuoteMarkers: () => [
                 { start: -5, end: 1e9, reason: 'quote-marker' },
                 { start: Number.NaN, end: 3, reason: 'quote-marker' },
@@ -514,14 +515,14 @@ describe('runEngine: safety net (never lose text, even with a broken detector)',
     });
 });
 
-describe('runEngine: very many folds (no stack overflow)', () =>
+describe('analyzeThread: very many folds (no stack overflow)', () =>
 {
     it('handles a 4.8 MB body of alternating quote blocks with the real detectors', () =>
     {
         const body = 'Hi\n' + '> qq\n> rr\nplain\n'.repeat(300_000);
         const startTime = performance.now();
         let out: EngineResult | undefined;
-        expect(() => (out = runEngine([ok(make({ bodyText: body }))]))).not.toThrow();
+        expect(() => (out = analyzeThread([ok(make({ bodyText: body }))]))).not.toThrow();
         const ms = performance.now() - startTime;
         console.log(`engine big body: ${(body.length / 1e6).toFixed(2)} MB, ${out!.messages[0]!.segments.length} segments, ${ms.toFixed(0)} ms`);
         const message = out!.messages[0]!;
@@ -537,8 +538,8 @@ describe('runEngine: very many folds (no stack overflow)', () =>
         const body = 'ab\n'.repeat(300_000);
         const ranges = (reason: FoldReason): FoldRange[] =>
             Array.from({ length: 300_000 }, (_, i) => ({ start: i * 3, end: i * 3 + 2, reason }));
-        const out = runEngine([ok(make({ bodyText: body }))], {
-            ...DEFAULT_PARTS,
+        const out = analyzeThread([ok(make({ bodyText: body }))], {
+            ...DEFAULT_THREAD_ANALYSIS_PARTS,
             detectQuotedOverlap: (inputs) => inputs.map(() => ranges('quoted-overlap')),
             detectQuoteMarkers: () => ranges('quote-marker'),
             detectReplyHeaders: () => ranges('reply-header'),

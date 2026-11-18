@@ -7,7 +7,7 @@
 // (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
-import { runEngine } from '../thread-analysis/analyze-thread';
+import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
@@ -58,7 +58,7 @@ const FILE = crlf(
 async function made(policy: OutputPolicy): Promise<{ texts: string[]; cover: string }>
 {
     const parsed = await createEmlParser({ htmlToText: stub }).parse({ name: 'forward.eml', bytes: new TextEncoder().encode(FILE) });
-    const result = runEngine([parsed]);
+    const result = analyzeThread([parsed]);
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),

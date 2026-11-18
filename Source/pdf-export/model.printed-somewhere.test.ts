@@ -9,7 +9,7 @@
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/analyze-thread';
+import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from '../thread-analysis/analyze-thread';
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
@@ -104,8 +104,8 @@ function previewOf(out: EngineResult)
 }
 
 /** The real overlap detector, told nothing about which email holds which: the engine's own fixes undone (holds and withHeldReferences). */
-const NO_HOLDS: EngineParts = {
-    ...DEFAULT_PARTS,
+const NO_HOLDS: ThreadAnalysisParts = {
+    ...DEFAULT_THREAD_ANALYSIS_PARTS,
     detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))),
 };
 
@@ -124,7 +124,7 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
 
     it('S is printed in Ann\'s email: the engine folds the forward, not Ann (Cy counts as referencing what Ben references)', async () =>
     {
-        const out = runEngine(await files());
+        const out = analyzeThread(await files());
         const ann = out.messages[positionOf(out, 'ann')]!;
         // Ann's own paragraph is not folded as quoted from Cy any more.
         const sAt = ann.message.bodyText.indexOf(S);
@@ -142,7 +142,7 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
 
     it('the engine fixes undone: S is still printed, once, in Cy\'s copy of Ben\'s block; nothing to restore', async () =>
     {
-        const out = runEngine(await files(), NO_HOLDS);
+        const out = analyzeThread(await files(), NO_HOLDS);
         const annPosition = positionOf(out, 'ann');
         const ann = out.messages[annPosition]!;
         const sAt = ann.message.bodyText.indexOf(S);
@@ -162,9 +162,9 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
 
     it('wrong clocks: Ann dated after Ben\'s reply (and after the forward), the same', async () =>
     {
-        for (const parts of [DEFAULT_PARTS, NO_HOLDS])
+        for (const parts of [DEFAULT_THREAD_ANALYSIS_PARTS, NO_HOLDS])
         {
-            const out = runEngine(
+            const out = analyzeThread(
                 [
                     await parse('cy.eml', holding({ name: 'cy', date: WED }, FORWARD, simple({ name: 'ben', date: TUE, inReplyTo: 'ann' }, benBody))),
                     await parse('ann.eml', simple({ name: 'ann', date: THU }, annBody)),
@@ -176,7 +176,7 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
             expect(printedIn(d, HELLO)).toBe(1);
             // Ben's quote of S stays in Cy's forward (round 4, M1).
             expect(bodyAt(d, out, 'cy')).toContain(squash(S));
-            if (parts === DEFAULT_PARTS)
+            if (parts === DEFAULT_THREAD_ANALYSIS_PARTS)
             {
                 expect(bodyAt(d, out, 'ann')).toContain(squash(S));
             }
@@ -186,9 +186,9 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
     it('nested: the quoting reply two levels down (Cy holds Dee\'s forward, which holds Ben\'s reply), the same', async () =>
     {
         const dee = holding({ name: 'dee', date: TUE }, 'Dee passes this on to the team without further comment for now.', simple({ name: 'ben', date: MON, inReplyTo: 'ann' }, benBody));
-        for (const parts of [DEFAULT_PARTS, NO_HOLDS])
+        for (const parts of [DEFAULT_THREAD_ANALYSIS_PARTS, NO_HOLDS])
         {
-            const out = runEngine([await parse('cy.eml', holding({ name: 'cy', date: WED }, FORWARD, dee)), await parse('ann.eml', simple({ name: 'ann', date: null }, annBody))], parts);
+            const out = analyzeThread([await parse('cy.eml', holding({ name: 'cy', date: WED }, FORWARD, dee)), await parse('ann.eml', simple({ name: 'ann', date: null }, annBody))], parts);
             expect(out.attached?.length).toBe(2);
             const d = docOf(out);
             expect(printedIn(d, S)).toBeGreaterThanOrEqual(1);
@@ -198,7 +198,7 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
             // page prints it, so it is cut from Cy's copy of Dee's block, printed as Dee.
             expect(bodyAt(d, out, 'dee')).toContain(squash(S));
             expect(bodyAt(d, out, 'cy')).not.toContain(squash(S));
-            if (parts === DEFAULT_PARTS)
+            if (parts === DEFAULT_THREAD_ANALYSIS_PARTS)
             {
                 expect(bodyAt(d, out, 'ann')).toContain(squash(S));
             }
@@ -219,7 +219,7 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
     {
         it(`${what}: X's paragraph is printed once, in X, and the preview says it is in the PDF`, async () =>
         {
-            const out = runEngine([await parse('x.eml', simple({ name: 'x', date: xDate }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
+            const out = analyzeThread([await parse('x.eml', simple({ name: 'x', date: xDate }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
             const xPosition = positionOf(out, 'x');
             const x = out.messages[xPosition]!;
             const sAt = x.message.bodyText.indexOf(S);
@@ -238,7 +238,7 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
 
     it('nothing is restored when the text is printed elsewhere (a normal reply: the quote left out, the quoted email printed)', async () =>
     {
-        const out = runEngine([
+        const out = analyzeThread([
             await parse('x.eml', simple({ name: 'x', date: MON }, xBody)),
             await parse('y.eml', simple({ name: 'y', date: TUE, inReplyTo: 'x' }, yBody)),
         ]);
@@ -250,7 +250,7 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
 
     it('a quote of an email that is not in the PDF stays left out (not justified by "printed elsewhere": no candidate)', async () =>
     {
-        const out = runEngine([
+        const out = analyzeThread([
             await parse('x.eml', simple({ name: 'x', date: MON }, xBody)),
             await parse('y.eml', simple({ name: 'y', date: TUE, inReplyTo: 'x' }, yBody)),
         ]);
@@ -265,7 +265,7 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
 
     it('"Print full original text": nothing to restore (every body whole)', async () =>
     {
-        const out = runEngine([await parse('x.eml', simple({ name: 'x', date: null }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
+        const out = analyzeThread([await parse('x.eml', simple({ name: 'x', date: null }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
         const positions = out.messages.map((_, k) => k);
         const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
         const plans = planOutput(
