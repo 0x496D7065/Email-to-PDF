@@ -13,7 +13,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/network-and-csp-watch.ts';
+import { watchPage, withoutSelectConsole, withoutSelectReports, type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -24,7 +24,7 @@ declare global
 }
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let problems: string[] = [];
 
 test.beforeEach(async ({ context, page, baseURL }) =>

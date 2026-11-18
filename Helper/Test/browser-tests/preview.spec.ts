@@ -13,7 +13,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
+import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+    type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -64,7 +65,7 @@ const SUBJECTS_IN_ORDER = [
 test.use({ timezoneId: 'Africa/Lagos' });
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 
@@ -121,7 +122,7 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     expect(withoutSelectReports(browserName, await page.evaluate(() => window.__previewViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     expect(withoutSelectConsole(browserName, problems)).toEqual([]);

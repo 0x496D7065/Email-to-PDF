@@ -7,14 +7,14 @@
 import { describe, expect, it } from 'vitest';
 import { readContent, readLinks, readPageRuns, readPdf, textLines } from './pdf-reader';
 
-const enc = (s: string): Uint8Array =>
+const latin1Bytes = (text: string): Uint8Array =>
 {
-    const b = new Uint8Array(s.length);
-    for (let i = 0; i < s.length; i++)
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++)
     {
-        b[i] = s.charCodeAt(i);
+        bytes[i] = text.charCodeAt(i);
     }
-    return b;
+    return bytes;
 };
 
 /** A tiny hand-made PDF in our writer's layout (objects, xref, trailer). */
@@ -30,19 +30,19 @@ function tinyPdf(options: { shift?: number; length?: number } = {}): Uint8Array
     ];
     let body = header;
     const offsets: number[] = [];
-    for (const o of objects)
+    for (const object of objects)
     {
         offsets.push(body.length);
-        body += o;
+        body += object;
     }
     const xrefAt = body.length;
     body += `xref\n0 6\n0000000000 65535 f \n`;
-    for (const [i, off] of offsets.entries())
+    for (const [i, offset] of offsets.entries())
     {
-        body += `${String(off + (i === 2 ? (options.shift ?? 0) : 0)).padStart(10, '0')} 00000 n \n`;
+        body += `${String(offset + (i === 2 ? (options.shift ?? 0) : 0)).padStart(10, '0')} 00000 n \n`;
     }
     body += `trailer\n<< /Size 6 /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
-    return enc(body);
+    return latin1Bytes(body);
 }
 
 describe('test PDF reader', () =>
@@ -101,10 +101,10 @@ function textPdf(content: string): Uint8Array
     ];
     let body = '%PDF-1.7\n%\u{E2}\u{E3}\u{CF}\u{D3}\n';
     const offsets: number[] = [];
-    for (const [i, o] of objects.entries())
+    for (const [i, object] of objects.entries())
     {
         offsets.push(body.length);
-        body += `${String(i + 1)} 0 obj\n${o}\nendobj\n`;
+        body += `${String(i + 1)} 0 obj\n${object}\nendobj\n`;
     }
     const xrefAt = body.length;
     body += `xref\n0 ${String(objects.length + 1)}\n0000000000 65535 f \n`;
@@ -113,7 +113,7 @@ function textPdf(content: string): Uint8Array
         body += `${String(off).padStart(10, '0')} 00000 n \n`;
     }
     body += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xrefAt)}\n%%EOF\n`;
-    return enc(body);
+    return latin1Bytes(body);
 }
 
 describe('test PDF reader: text and links', () =>
@@ -170,9 +170,9 @@ describe('test PDF reader: text and links', () =>
     it('rejects a text matrix that scales, rotates or skews', () =>
     {
         expect(readContent('BT /F1 10 Tf 1 0 0 1 72 200 Tm <0001> Tj ET').runs).toHaveLength(1);
-        for (const m of ['2 0 0 1', '1 0.5 0 1', '1 0 0.5 1', '1 0 0 -1', '0 1 -1 0'])
+        for (const matrix of ['2 0 0 1', '1 0.5 0 1', '1 0 0.5 1', '1 0 0 -1', '0 1 -1 0'])
         {
-            expect(() => readContent(`BT /F1 10 Tf ${m} 72 200 Tm <0001> Tj ET`), m).toThrow(/Tm must be 1 0 0 1/);
+            expect(() => readContent(`BT /F1 10 Tf ${matrix} 72 200 Tm <0001> Tj ET`), matrix).toThrow(/Tm must be 1 0 0 1/);
         }
     });
 

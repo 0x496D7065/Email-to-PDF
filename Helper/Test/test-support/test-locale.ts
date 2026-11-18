@@ -23,18 +23,18 @@ const LOWER = 'àƀçďéƒğĥîĵķļɱñöþʠŕšţüṽŵẋýž';
 const UPPER = 'ÀƁÇĎÉƑĞĤÎĴĶĻṀÑÖÞǪŔŠŢÜṼŴẊÝŽ';
 
 /** One letter's look-alike (anything that is not an ASCII letter is kept). */
-function swap(ch: string): string
+function swap(char: string): string
 {
-    const code = ch.charCodeAt(0);
+    const code = char.charCodeAt(0);
     if (code >= 97 && code <= 122)
     {
-        return LOWER[code - 97] ?? ch;
+        return LOWER[code - 97] ?? char;
     }
     if (code >= 65 && code <= 90)
     {
-        return UPPER[code - 65] ?? ch;
+        return UPPER[code - 65] ?? char;
     }
-    return ch;
+    return char;
 }
 
 /** "[...]" with every letter swapped, placeholders kept. */

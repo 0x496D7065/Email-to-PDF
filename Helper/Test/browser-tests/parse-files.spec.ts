@@ -1,7 +1,7 @@
 // Browser test of the parse pipeline (README.md, rules R1, R2 and R4): every
 // dropped file is parsed in its own Web Worker with a time limit, and broken,
 // huge or hostile files give a clear per-file result without ever crashing
-// the batch or the page. The engine then organizes the results in its own
+// the batch or the page. The thread analysis then organizes the results in its own
 // worker (Source/worker-pipeline/thread-analysis-worker.ts), also with a time limit; processFiles
 // (Source/worker-pipeline/process-files.ts) chains it all from browser File objects.
 // Runs in Chromium, Firefox and WebKit against the site served by
@@ -10,7 +10,7 @@
 // How the code gets into the page without shipping a test hook:
 // beforeAll bundles Helper/Test/browser-tests/support/parse-files-test-entry.ts IN MEMORY (`write: false`)
 // with the project's own vite.config.ts, the same configuration as the
-// production build. As in dist/, the parse, engine and PDF workers are
+// production build. As in dist/, the parse, thread-analysis and PDF workers are
 // inlined into that bundle (`?worker&inline`) and start from blob: URLs. A
 // small capture plugin also keeps each worker's own code, so the first test
 // can prove that the build check really sees that code inside the bundle.
@@ -32,7 +32,7 @@
 // - watchWorkers (Helper/Test/browser-tests/support/network-and-csp-watch.ts), in every browser: each blob: worker
 //   starts with a `securitypolicyviolation` listener put in front of its
 //   code, which passes every CSP report of that worker to the test; the name
-//   each worker is started with tells the parse, engine and PDF workers
+//   each worker is started with tells the parse, thread-analysis and PDF workers
 //   apart (their blob: URLs all look alike);
 // - in Chromium also, a CDP session that attaches to every worker of the
 //   page before its script runs and enables the `Log` domain, where Chromium
@@ -55,7 +55,7 @@ import type * as Entry from './support/parse-files-test-entry.ts';
 // at the document wherever it happens: never tolerated, see
 // Helper/Test/browser-tests/html-to-text.spec.ts.)
 import {
-    engineOf,
+    browserEngineOf,
     isWebKitBlobRead,
     untoleratedReports,
     watchWorkers,
@@ -165,7 +165,7 @@ let unwrappedWorkers: string[] = [];
  */
 async function watchNetwork(context: BrowserContext): Promise<void>
 {
-    const webkit = engineOf(context) === 'webkit';
+    const webkit = browserEngineOf(context) === 'webkit';
     context.on('request', (request) =>
     {
         if (!(webkit && isWebKitBlobRead(request, origin)))
@@ -305,8 +305,8 @@ function requestsAfterLoad(): string[]
 
 /** The parse workers (not the test's misbehaving worker) seen so far. */
 const parseWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => workerNames.get(w.url()) === 'parse-worker');
-/** The engine workers seen so far. */
-const engineWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => workerNames.get(w.url()) === 'engine-worker');
+/** The thread-analysis workers seen so far (runtime name 'engine-worker'). */
+const threadAnalysisWorkers = (list: readonly Worker[]): Worker[] => list.filter((w) => workerNames.get(w.url()) === 'engine-worker');
 
 /**
  * After processing has finished: waits a quiet period, then asserts that
@@ -324,7 +324,7 @@ async function expectNoNetworkAndPageAlive(page: Page): Promise<void>
     // CSP). Anything else, including the same directive fired at a live
     // element, would be an attempted load or execution.
     const pageViolations = await page.evaluate(() => window.__e2eViolations);
-    expect(untoleratedReports(engineOf(page.context()), withoutSelectReports(engineOf(page.context()), pageViolations))).toEqual([]);
+    expect(untoleratedReports(browserEngineOf(page.context()), withoutSelectReports(browserEngineOf(page.context()), pageViolations))).toEqual([]);
     expect(workerCspReports()).toEqual([]);
     expect(await page.title()).toBe('Email to PDF');
     expect(await page.evaluate(() => 6 * 7)).toBe(42);
@@ -344,9 +344,9 @@ interface Summary
     readonly hashed: boolean;
 }
 
-test('the parse, engine and PDF workers are inlined in the page script, and the build check sees their code', () =>
+test('the parse, thread-analysis and PDF workers are inlined in the page script, and the build check sees their code', () =>
 {
-    // As in dist/: no separate parse, engine or PDF worker file. A worker file is
+    // As in dist/: no separate parse, thread-analysis or PDF worker file. A worker file is
     // fetched each time a worker starts, which fails once the network is off.
     expect([...bundle.keys()].filter((file) => /(parse|thread-analysis|pdf)-worker/.test(file))).toEqual([]);
     const allCode = [...bundle.entries()]
@@ -504,7 +504,7 @@ test('a stuck worker is stopped at its time limit and a crashed one fails alone;
                 window.__e2eHang = 'running';
             }
             const result = await entry.runInWorker(job, {
-                createWorker: /hang|crash/.test(job.name) ? entry.createMisbehavingWorker : entry.createBrowserWorker,
+                createWorker: /hang|crash/.test(job.name) ? entry.createMisbehavingParseWorker : entry.createBrowserWorker,
                 htmlToText: (html) => entry.htmlToTextWithDomParser(html),
                 timeoutMs: hang ? 4000 : entry.PARSE_TIMEOUT_MS,
             });
@@ -620,16 +620,16 @@ test('processFiles: File objects in, organized messages out; every worker ends a
     expect(outcome.progress.at(-1)).toEqual({ stage: 'organizing', filesDone: 7, filesTotal: 7 });
 
     // One parse worker per email file that was read (not notes.txt, not the
-    // huge one), one engine worker, and every one of them terminated.
+    // huge one), one thread-analysis worker, and every one of them terminated.
     expect(parseWorkers(workers)).toHaveLength(5);
-    expect(engineWorkers(workers)).toHaveLength(1);
+    expect(threadAnalysisWorkers(workers)).toHaveLength(1);
     await expect.poll(() => closedWorkers.length).toBe(workers.length);
     expect(workers).toHaveLength(6);
 
     await expectNoNetworkAndPageAlive(page);
 });
 
-test('a stuck engine worker is stopped at its time limit and a crashed one fails cleanly: a batch error, never a frozen page', async ({ page }) =>
+test('a stuck thread-analysis worker is stopped at its time limit and a crashed one fails cleanly: a batch error, never a frozen page', async ({ page }) =>
 {
     test.setTimeout(60_000);
     await serveBundle(page);
@@ -643,12 +643,12 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
         const files = [new File([entry.FIXTURE_PLAIN], 'plain.eml')];
         const started = performance.now();
         window.__e2eHang = 'running';
-        // The real reading and parse workers; the engine worker replaced by one
+        // The real reading and parse workers; the thread-analysis worker replaced by one
         // that spins forever, with a 4 s limit instead of 60 s.
         const hang = await entry.processFilesWith(files, {
             parse: entry.parseFiles,
             organize: (results) =>
-                entry.runThreadAnalysisInWorker(results, { createWorker: entry.createMisbehavingEngineWorker('hang'), timeoutMs: 4000 }),
+                entry.runThreadAnalysisInWorker(results, { createWorker: entry.createMisbehavingThreadAnalysisWorker('hang'), timeoutMs: 4000 }),
             limits,
         });
         window.__e2eHang = 'settled';
@@ -657,14 +657,14 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
             parse: entry.parseFiles,
             organize: (results) =>
                 entry.runThreadAnalysisInWorker(
-                    results, { createWorker: entry.createMisbehavingEngineWorker('crash'), timeoutMs: entry.THREAD_ANALYSIS_TIMEOUT_MS }),
+                    results, { createWorker: entry.createMisbehavingThreadAnalysisWorker('crash'), timeoutMs: entry.THREAD_ANALYSIS_TIMEOUT_MS }),
             limits,
         });
         const summary = (r: ProcessResult) => (r.ok ? { ok: true } : { ok: false, error: r.error, detail: r.detail, parsed: r.parsed.map((p) => p.ok) });
         return { elapsedMs, hang: summary(hang), crash: summary(crash), timeoutDetail: entry.THREAD_ANALYSIS_TIMEOUT_DETAIL, failedDetail: entry.THREAD_ANALYSIS_FAILED_DETAIL };
     }, entryUrl);
 
-    // While the engine worker spins, the page still answers at once (checked
+    // While the thread-analysis worker spins, the page still answers at once (checked
     // about 1 s after that worker started, well before its 4 s limit).
     const stuck = await stuckStarted;
     await page.waitForTimeout(1000);
@@ -683,7 +683,7 @@ test('a stuck engine worker is stopped at its time limit and a crashed one fails
     await expectNoNetworkAndPageAlive(page);
 });
 
-/** Starts an idle parse, engine or PDF worker in the page (kept alive on window) and returns its Playwright handle. */
+/** Starts an idle parse, thread-analysis or PDF worker in the page (kept alive on window) and returns its Playwright handle. */
 async function startIdleWorker(page: Page, which: 'parse' | 'engine' | 'pdf'): Promise<Worker>
 {
     // Only one worker is started here, so the next one seen is it (its blob:
@@ -742,7 +742,7 @@ function tryFetchesInWorker(worker: Worker, siteOrigin: string): Promise<{ outco
 }
 
 // Positive controls for the checks above, for each kind of worker the
-// page starts (parse, engine and PDF). A blob: worker takes the CSP of the page
+// page starts (parse, thread analysis as 'engine' after its runtime name 'engine-worker', and PDF). A blob: worker takes the CSP of the page
 // that starts it, so these change the PAGE's CSP. Seen in Chromium: with the
 // header and the <meta> tag, the worker is bound by BOTH policies (each
 // reports the violation); with the <meta> tag alone, by that one. So unlike a

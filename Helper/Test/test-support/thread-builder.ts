@@ -242,8 +242,9 @@ export function instantOf(wall: WallTime, zone: Zone): number
 /** The wall time of an instant (milliseconds since the epoch) in a zone; the inverse of instantOf (seconds dropped). */
 export function wallTimeOf(instant: number, zone: Zone): WallTime
 {
-    const d = new Date(instant + zone.offsetMinutes * 60_000);
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+    const shifted = new Date(instant + zone.offsetMinutes * 60_000);
+    return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate(), hour: shifted.getUTCHours(),
+        minute: shifted.getUTCMinutes() };
 }
 
 /** The parts of an instant as seen in a zone. */
@@ -259,15 +260,16 @@ interface Shown
 
 function shownIn(instant: number, zone: Zone): Shown
 {
-    const d = new Date(instant + zone.offsetMinutes * 60_000);
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate(), weekday: d.getUTCDay(), hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+    const shifted = new Date(instant + zone.offsetMinutes * 60_000);
+    return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth(), day: shifted.getUTCDate(), weekday: shifted.getUTCDay(),
+        hour: shifted.getUTCHours(), minute: shifted.getUTCMinutes() };
 }
 
 /** "9:15 AM" */
-function clock12(s: Shown): string
+function clock12(shown: Shown): string
 {
-    const h = s.hour % 12 === 0 ? 12 : s.hour % 12;
-    return `${h}:${two(s.minute)} ${s.hour < 12 ? 'AM' : 'PM'}`;
+    const hour12 = shown.hour % 12 === 0 ? 12 : shown.hour % 12;
+    return `${hour12}:${two(shown.minute)} ${shown.hour < 12 ? 'AM' : 'PM'}`;
 }
 
 /** "14:02" */
@@ -299,39 +301,39 @@ type DateFormat =
 /** A date as a client writes it in a quote header. */
 export function formatQuotedDate(format: DateFormat, instant: number, zone: Zone): string
 {
-    const s = shownIn(instant, zone);
+    const shown = shownIn(instant, zone);
     switch (format)
     {
         case 'outlook-en': // "Monday, March 3, 2025 9:15 AM"
-            return `${pick(EN_DAYS, s.weekday)}, ${pick(EN_MONTHS, s.month)} ${s.day}, ${s.year} ${clock12(s)}`;
+            return `${pick(EN_DAYS, shown.weekday)}, ${pick(EN_MONTHS, shown.month)} ${shown.day}, ${shown.year} ${clock12(shown)}`;
         case 'outlook-fr': // "lundi 3 mars 2025 15:40"
-            return `${pick(FR_DAYS, s.weekday)} ${s.day} ${pick(FR_MONTHS, s.month)} ${s.year} ${clock24(s)}`;
+            return `${pick(FR_DAYS, shown.weekday)} ${shown.day} ${pick(FR_MONTHS, shown.month)} ${shown.year} ${clock24(shown)}`;
         case 'outlook-nl': // "maandag 3 maart 2025 15:40"
-            return `${pick(NL_DAYS, s.weekday)} ${s.day} ${pick(NL_MONTHS, s.month)} ${s.year} ${clock24(s)}`;
+            return `${pick(NL_DAYS, shown.weekday)} ${shown.day} ${pick(NL_MONTHS, shown.month)} ${shown.year} ${clock24(shown)}`;
         case 'gmail-en': // "Mon, Mar 3, 2025 at 2:02 PM"
-            return `${pick(EN_DAYS, s.weekday).slice(0, 3)}, ${pick(EN_MONTHS, s.month).slice(0, 3)} ${s.day}, ${s.year} at ${clock12(s)}`;
+            return `${pick(EN_DAYS, shown.weekday).slice(0, 3)}, ${pick(EN_MONTHS, shown.month).slice(0, 3)} ${shown.day}, ${shown.year} at ${clock12(shown)}`;
         case 'gmail-en-gb': // "Mon, 3 Mar 2025 at 14:02"
-            return `${pick(EN_DAYS, s.weekday).slice(0, 3)}, ${s.day} ${pick(EN_MONTHS, s.month).slice(0, 3)} ${s.year} at ${clock24(s)}`;
+            return `${pick(EN_DAYS, shown.weekday).slice(0, 3)}, ${shown.day} ${pick(EN_MONTHS, shown.month).slice(0, 3)} ${shown.year} at ${clock24(shown)}`;
         case 'gmail-fr': // "lun. 3 mars 2025 \u00e0 14:02"
-            return `${pick(FR_DAYS, s.weekday).slice(0, 3)}. ${s.day} ${pick(FR_MONTHS, s.month)} ${s.year} \u00e0 ${clock24(s)}`;
+            return `${pick(FR_DAYS, shown.weekday).slice(0, 3)}. ${shown.day} ${pick(FR_MONTHS, shown.month)} ${shown.year} \u00e0 ${clock24(shown)}`;
         case 'gmail-nl': // "ma 3 mrt 2025 om 14:02"
-            return `${pick(NL_DAYS_SHORT, s.weekday)} ${s.day} ${pick(NL_MONTHS_SHORT, s.month)} ${s.year} om ${clock24(s)}`;
+            return `${pick(NL_DAYS_SHORT, shown.weekday)} ${shown.day} ${pick(NL_MONTHS_SHORT, shown.month)} ${shown.year} om ${clock24(shown)}`;
         case 'apple-en': // "3 Mar 2025, at 14:02"
-            return `${s.day} ${pick(EN_MONTHS, s.month).slice(0, 3)} ${s.year}, at ${clock24(s)}`;
+            return `${shown.day} ${pick(EN_MONTHS, shown.month).slice(0, 3)} ${shown.year}, at ${clock24(shown)}`;
         case 'apple-fr': // "3 mars 2025 \u00e0 14:02"
-            return `${s.day} ${pick(FR_MONTHS, s.month)} ${s.year} \u00e0 ${clock24(s)}`;
+            return `${shown.day} ${pick(FR_MONTHS, shown.month)} ${shown.year} \u00e0 ${clock24(shown)}`;
         case 'apple-nl': // "3 mrt. 2025 om 14:02"
-            return `${s.day} ${pick(NL_MONTHS_SHORT, s.month)}. ${s.year} om ${clock24(s)}`;
+            return `${shown.day} ${pick(NL_MONTHS_SHORT, shown.month)}. ${shown.year} om ${clock24(shown)}`;
         case 'apple-forward-en': // "3 March 2025 at 14:02:00 GMT+9"
             // UNCERTAIN (not checked against a real Apple Mail): this is an
             // en-GB-like form; an en-US system would likely write
             // "March 3, 2025 at 2:02:00 PM GMT+9".
-            return `${s.day} ${pick(EN_MONTHS, s.month)} ${s.year} at ${clock24(s)}:00 ${gmtOffset(zone)}`;
+            return `${shown.day} ${pick(EN_MONTHS, shown.month)} ${shown.year} at ${clock24(shown)}:00 ${gmtOffset(zone)}`;
         case 'thunderbird': // "03/03/2025 14:02"
             // UNCERTAIN (not checked against a real Thunderbird): the date follows
             // the system locale; this is an en-GB-like form, en-US would be
             // "3/3/25 12:58 PM".
-            return `${two(s.day)}/${two(s.month + 1)}/${s.year} ${clock24(s)}`;
+            return `${two(shown.day)}/${two(shown.month + 1)}/${shown.year} ${clock24(shown)}`;
     }
 }
 
@@ -355,7 +357,7 @@ function wrapLine(text: string, wrapAt: number | undefined): string[]
     {
         return [text];
     }
-    const out: string[] = [];
+    const wrapped: string[] = [];
     let rest = text;
     while (rest.length > wrapAt)
     {
@@ -364,26 +366,26 @@ function wrapLine(text: string, wrapAt: number | undefined): string[]
         {
             break;
         }
-        out.push(rest.slice(0, cut));
+        wrapped.push(rest.slice(0, cut));
         rest = rest.slice(cut + 1);
     }
-    out.push(rest);
-    return out;
+    wrapped.push(rest);
+    return wrapped;
 }
 
 type PeopleStyle = NonNullable<QuoteOptions['people']>;
 
-function person(p: Person, how: PeopleStyle): string
+function person(who: Person, how: PeopleStyle): string
 {
     if (how === 'name')
     {
-        return p.name;
+        return who.name;
     }
     if (how === 'mailto')
     {
-        return `${p.name} [mailto:${p.address}]`;
+        return `${who.name} [mailto:${who.address}]`;
     }
-    return `${p.name} <${p.address}>`;
+    return `${who.name} <${who.address}>`;
 }
 
 interface BlockSpec
@@ -558,44 +560,44 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
     {
         throw new Error('empty conversation');
     }
-    for (const m of messages)
+    for (const message of messages)
     {
-        if (m.text.split('\n').some((line) => line.startsWith('>') || line.startsWith(' ')))
+        if (message.text.split('\n').some((line) => line.startsWith('>') || line.startsWith(' ')))
         {
-            throw new Error(`own text must not start a line with ">" or a space: ${m.text}`);
+            throw new Error(`own text must not start a line with ">" or a space: ${message.text}`);
         }
     }
     let lines: Line[] = ownLines(messages[0]?.text ?? '', 0);
     const fieldsOf = new Map<number, ExpectedFields>();
     for (let i = 1; i < messages.length; i++)
     {
-        const msg = messages[i];
-        const prev = messages[i - 1];
-        if (msg === undefined || prev === undefined)
+        const message = messages[i];
+        const previous = messages[i - 1];
+        if (message === undefined || previous === undefined)
         {
             throw new Error('unreachable');
         }
-        if (msg.quote === undefined)
+        if (message.quote === undefined)
         {
             throw new Error(`message ${i} has no quote style`);
         }
-        const style = msg.quote.style;
-        const { lines: head, fields } = headerFor(prev, msg.quote, msg.zone);
+        const style = message.quote.style;
+        const { lines: head, fields } = headerFor(previous, message.quote, message.zone);
         fieldsOf.set(i - 1, fields);
         const header: Line[] = head.map((text) => ({ text, depth: 0, owner: i - 1, part: 'header' }));
         const gap: Line = { text: '', depth: 0, owner: i, part: 'gap' };
         const layout = layoutOf(style);
         if (layout === 'block')
         {
-            lines = [...ownLines(msg.text, i), gap, ...header, { ...gap, owner: i - 1 }, ...lines];
+            lines = [...ownLines(message.text, i), gap, ...header, { ...gap, owner: i - 1 }, ...lines];
         }
         else if (layout === 'attribution')
         {
-            lines = [...ownLines(msg.text, i), gap, ...header, ...quoteLines(lines, style)];
+            lines = [...ownLines(message.text, i), gap, ...header, ...quoteLines(lines, style)];
         }
         else
         {
-            lines = [...ownLines(msg.text, i), gap, ...quoteLines([...header, { ...gap, owner: i - 1 }, ...lines], style)];
+            lines = [...ownLines(message.text, i), gap, ...quoteLines([...header, { ...gap, owner: i - 1 }, ...lines], style)];
         }
     }
 
@@ -612,41 +614,41 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
     const headers: ExpectedHeader[] = [];
     for (let j = messages.length - 2; j >= 0; j--)
     {
-        const msg = messages[j];
+        const quoted = messages[j];
         const quoting = messages[j + 1];
         const fields = fieldsOf.get(j);
-        if (msg === undefined || quoting?.quote === undefined || fields === undefined)
+        if (quoted === undefined || quoting?.quote === undefined || fields === undefined)
         {
             throw new Error('unreachable');
         }
-        const headIdx = lines.flatMap((l, k) => (l.owner === j && l.part === 'header' ? [k] : []));
-        const ownIdx = lines.flatMap((l, k) => (l.owner === j && l.part === 'own' ? [k] : []));
-        const h0 = headIdx[0];
-        const h1 = headIdx[headIdx.length - 1];
-        const o0 = ownIdx[0];
-        const o1 = ownIdx[ownIdx.length - 1];
-        if (h0 === undefined || h1 === undefined || o0 === undefined || o1 === undefined)
+        const headerLineIndexes = lines.flatMap((l, k) => (l.owner === j && l.part === 'header' ? [k] : []));
+        const ownLineIndexes = lines.flatMap((l, k) => (l.owner === j && l.part === 'own' ? [k] : []));
+        const firstHeaderLine = headerLineIndexes[0];
+        const lastHeaderLine = headerLineIndexes[headerLineIndexes.length - 1];
+        const firstOwnLine = ownLineIndexes[0];
+        const lastOwnLine = ownLineIndexes[ownLineIndexes.length - 1];
+        if (firstHeaderLine === undefined || lastHeaderLine === undefined || firstOwnLine === undefined || lastOwnLine === undefined)
         {
             throw new Error(`message ${j}: no header or no text`);
         }
         headers.push({
             index: j,
             generation: messages.length - 1 - j,
-            depth: lines[h0]?.depth ?? 0,
-            textDepth: lines[o0]?.depth ?? 0,
+            depth: lines[firstHeaderLine]?.depth ?? 0,
+            textDepth: lines[firstOwnLine]?.depth ?? 0,
             kind: isForwardStyle(quoting.quote.style) ? 'forward' : 'reply',
             style: quoting.quote.style,
-            start: starts[h0] ?? 0,
-            headEnd: endOf(h1) + 1,
-            ownStart: starts[o0] ?? 0,
-            ownEnd: endOf(o1),
-            ownText: msg.text,
+            start: starts[firstHeaderLine] ?? 0,
+            headEnd: endOf(lastHeaderLine) + 1,
+            ownStart: starts[firstOwnLine] ?? 0,
+            ownEnd: endOf(lastOwnLine),
+            ownText: quoted.text,
             fields,
-            sender: msg.from,
-            to: msg.to,
-            cc: msg.cc ?? [],
-            subject: msg.subject,
-            instantUtc: new Date(instantOf(msg.sent, msg.zone)).toISOString(),
+            sender: quoted.from,
+            to: quoted.to,
+            cc: quoted.cc ?? [],
+            subject: quoted.subject,
+            instantUtc: new Date(instantOf(quoted.sent, quoted.zone)).toISOString(),
             shownIn: quoting.zone,
         });
     }

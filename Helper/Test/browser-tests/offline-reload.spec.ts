@@ -36,14 +36,14 @@ import { expect, test, type BrowserContext, type Page, type Request, type Route 
 import { cspForHeader, cspForMeta, cspForServiceWorker, PERMISSIONS_POLICY, REFERRER_POLICY } from '../../../Source/security-headers/headers.ts';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import {
-    engineOf,
+    browserEngineOf,
     untoleratedReports,
     watchPage,
     withoutSelectConsole,
     withoutSelectReports,
     workerCspReports,
     workersNamed,
-    type Watch,
+    type PageWatch,
 } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -86,7 +86,7 @@ function expectedPaths(): string[]
 }
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 /** Every request of the context, as Playwright objects (watch.requests has only their URLs). */
 let requestObjects: Request[] = [];
 let problems: string[] = [];
@@ -160,7 +160,7 @@ async function expectCleanRun(page: Page, loads: number): Promise<void>
     await page.waitForTimeout(500);
     expect(watch.requests.filter((url) => !url.startsWith(`blob:${origin}/`) && new URL(url).origin !== origin)).toEqual([]);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     // One page load since the recorder was (re)installed: the reload starts it afresh.
     const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__offlineViolations));
     expect(untoleratedReports(browserName, violations)).toEqual([]);
@@ -186,7 +186,7 @@ const isBlob = (request: Request): boolean => request.url().startsWith(`blob:${o
  */
 async function goOffline(context: BrowserContext): Promise<void>
 {
-    if (engineOf(context) !== 'firefox')
+    if (browserEngineOf(context) !== 'firefox')
     {
         await context.setOffline(true);
         return;
@@ -199,7 +199,7 @@ const cutNetwork = (route: Route): Promise<void> => route.abort('internetdisconn
 
 async function goOnline(context: BrowserContext): Promise<void>
 {
-    if (engineOf(context) !== 'firefox')
+    if (browserEngineOf(context) !== 'firefox')
     {
         await context.setOffline(false);
     }
@@ -238,7 +238,7 @@ test('after one visit online, the page reloads offline and the whole tool works 
         expect(new URL(request.url()).search, request.url()).toBe('');
     }
     const workerPaths = [...new Set(fromWorker.map((request) => new URL(request.url()).pathname))].sort();
-    expect(workerPaths).toEqual(engineOf(context) === 'chromium' ? [...paths, '/sw.js'].sort() : []);
+    expect(workerPaths).toEqual(browserEngineOf(context) === 'chromium' ? [...paths, '/sw.js'].sort() : []);
 
     // 2. Offline: reload. The page and all its files come from the stored copy.
     await goOffline(context);
@@ -309,18 +309,18 @@ test('after one visit online, the page reloads offline and the whole tool works 
 test('/sw.js has its own CSP (only connect-src differs), every other file keeps the page CSP', async ({ page }) =>
 {
     // The headers as the server sends them (no browser involved).
-    const sw = await page.request.get('/sw.js');
-    expect(sw.status()).toBe(200);
-    expect(sw.headers()['content-type']).toMatch(/javascript/);
-    expect(sw.headers()['content-security-policy']).toBe(cspForServiceWorker());
-    expect(sw.headers()['referrer-policy']).toBe(REFERRER_POLICY);
-    expect(sw.headers()['permissions-policy']).toBe(PERMISSIONS_POLICY);
+    const serviceWorkerResponse = await page.request.get('/sw.js');
+    expect(serviceWorkerResponse.status()).toBe(200);
+    expect(serviceWorkerResponse.headers()['content-type']).toMatch(/javascript/);
+    expect(serviceWorkerResponse.headers()['content-security-policy']).toBe(cspForServiceWorker());
+    expect(serviceWorkerResponse.headers()['referrer-policy']).toBe(REFERRER_POLICY);
+    expect(serviceWorkerResponse.headers()['permissions-policy']).toBe(PERMISSIONS_POLICY);
     for (const path of ['/', '/index.html', '/THIRD_PARTY_NOTICES.txt', '/sw.js.map', '/assets/sw.js'])
     {
         expect((await page.request.get(path)).headers()['content-security-policy'], path).toBe(cspForHeader());
     }
     // The list written into sw.js is exactly the built files.
-    const listed = /"(\{\\"version\\":.*?\})"/.exec(await sw.text())?.[1] ?? '';
+    const listed = /"(\{\\"version\\":.*?\})"/.exec(await serviceWorkerResponse.text())?.[1] ?? '';
     const manifest = JSON.parse(JSON.parse(`"${listed}"`) as string) as { version: string; paths: string[] };
     expect(manifest.paths).toEqual(expectedPaths());
     expect(manifest.version).toMatch(/^[0-9a-f]{20}$/);

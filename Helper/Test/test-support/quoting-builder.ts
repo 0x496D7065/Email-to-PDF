@@ -60,12 +60,12 @@ const WORDS = ['north', 'warehouse', 'shelf', 'label', 'oak', 'desk', 'invoice',
 /** The sentence of its own of email `name`: 16 words, long enough to be matched as a quote, and unique. */
 export function quotingSentence(name: string): string
 {
-    let h = 0;
-    for (const c of name)
+    let hash = 0;
+    for (const char of name)
     {
-        h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+        hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
     }
-    const words = Array.from({ length: 10 }, (_, k) => WORDS[(h >>> (k * 3)) % WORDS.length]!);
+    const words = Array.from({ length: 10 }, (_, k) => WORDS[(hash >>> (k * 3)) % WORDS.length]!);
     return `Own words of ${name}: the ${words.join(' ')} were checked again this week.`;
 }
 
@@ -86,7 +86,7 @@ const STEP = 3 * 3_600_000;
 export function quotingCase(random: () => number, id: string, { quoteShare = 0.35 }: { readonly quoteShare?: number } = {}): QuotingCase
 {
     const pick = <V>(list: readonly V[]): V => list[Math.floor(random() * list.length)]!;
-    const n = 2 + Math.floor(random() * 6);
+    const emailCount = 2 + Math.floor(random() * 6);
     const names: string[] = [];
     const from: Person[] = [];
     const to: Person[] = [];
@@ -98,17 +98,17 @@ export function quotingCase(random: () => number, id: string, { quoteShare = 0.3
     const bodies: string[] = [];
     const messages: NormalizedMessage[] = [];
 
-    const threadMessage = (k: number, quote: QuoteStyle | null): ThreadMessage => ({
-        from: from[k]!,
-        to: [to[k]!],
-        sent: wallTimeOf(START + k * STEP, zone[k]!),
-        zone: zone[k]!,
-        subject: subject[k]!,
-        text: own[k]!,
+    const threadMessage = (index: number, quote: QuoteStyle | null): ThreadMessage => ({
+        from: from[index]!,
+        to: [to[index]!],
+        sent: wallTimeOf(START + index * STEP, zone[index]!),
+        zone: zone[index]!,
+        subject: subject[index]!,
+        text: own[index]!,
         ...(quote === null ? {} : { quote: { style: quote } }),
     });
 
-    for (let k = 0; k < n; k++)
+    for (let k = 0; k < emailCount; k++)
     {
         const name = `${id}e${String(k)}`;
         names.push(name);
@@ -121,61 +121,63 @@ export function quotingCase(random: () => number, id: string, { quoteShare = 0.3
         const opening = pick(['', `Hello ${to[k]!.name.split(' ')[0]!},\n\n`, `A short update from ${first} on the planning for the coming weeks.\n\n`]);
         const closing = pick(['', '', `\n\nKind regards,\n${first}`, `\n\nThanks,\n${first}`]);
         own.push(`${opening}${quotingSentence(name)}${closing}`);
-        const p = k > 0 && random() < quoteShare ? Math.floor(random() * k) : null;
-        parent.push(p);
-        const how = p === null ? null : pick(STYLES);
+        const parentIndex = k > 0 && random() < quoteShare ? Math.floor(random() * k) : null;
+        parent.push(parentIndex);
+        const how = parentIndex === null ? null : pick(STYLES);
         kind.push(how);
-        subject.push(p === null ? `Topic ${name}` : how === 'gmail-forward-en' ? `Fwd: ${subject[p]!}` : `Re: ${subject[p]!}`);
+        subject.push(parentIndex === null ? `Topic ${name}` : how === 'gmail-forward-en' ? `Fwd: ${subject[parentIndex]!}`
+            : `Re: ${subject[parentIndex]!}`);
 
         let body: string;
-        if (p === null || how === null)
+        if (parentIndex === null || how === null)
         {
             body = `${own[k]!}\n`;
         }
         else if (how === 'pasted')
         {
-            body = `${own[k]!}\n\n${bodies[p]!}`;
+            body = `${own[k]!}\n\n${bodies[parentIndex]!}`;
         }
         else if (how === 'pasted-partial')
         {
-            body = `${own[k]!}\n\n${quotingSentence(names[p]!)}\n`;
+            body = `${own[k]!}\n\n${quotingSentence(names[parentIndex]!)}\n`;
         }
         else if (how === 'partial')
         {
-            const date = formatQuotedDate('gmail-en-gb', START + p * STEP, zone[k]!);
-            body = `${own[k]!}\n\nOn ${date}, ${from[p]!.name} <${from[p]!.address}> wrote:\n> ${quotingSentence(names[p]!)}\n`;
+            const date = formatQuotedDate('gmail-en-gb', START + parentIndex * STEP, zone[k]!);
+            body = `${own[k]!}\n\nOn ${date}, ${from[parentIndex]!.name} <${from[parentIndex]!.address}> wrote:\n> ${quotingSentence(names[parentIndex]!)}\n`;
         }
         else
         {
             // The chain up to the nearest email that does not quote with a thread-builder style.
             const chain: number[] = [k];
-            let up: number = p;
+            let ancestor: number = parentIndex;
             for (;;)
             {
-                chain.unshift(up);
-                const above = parent[up];
-                const style = kind[up];
+                chain.unshift(ancestor);
+                const above = parent[ancestor];
+                const style = kind[ancestor];
                 if (above === null || above === undefined || style === null || style === undefined || ['partial', 'pasted', 'pasted-partial'].includes(style))
                 {
                     break;
                 }
-                up = above;
+                ancestor = above;
             }
             body = buildThread(chain.map((c, at) => threadMessage(c, at === 0 ? null : (kind[c] as QuoteStyle)))).body;
         }
         bodies.push(body);
 
         // Headers: right, missing, or wrong.
-        const r = random();
-        const inReplyTo = p !== null && r < 0.5 ? `${names[p]!}@example.test` : r > 0.9 ? `${names[Math.floor(random() * names.length)]!}@example.test` : null;
-        const d = random();
+        const headerDraw = random();
+        const inReplyTo = parentIndex !== null && headerDraw < 0.5 ? `${names[parentIndex]!}@example.test` : headerDraw > 0.9
+            ? `${names[Math.floor(random() * names.length)]!}@example.test` : null;
+        const dateDraw = random();
         const trueMs = START + k * STEP;
         const date =
-            d < 0.55
+            dateDraw < 0.55
                 ? { utcMs: trueMs, original: new Date(trueMs).toUTCString(), offsetMinutes: 0, zoneKnown: true }
-                : d < 0.7
+                : dateDraw < 0.7
                     ? { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false }
-                    : d < 0.8
+                    : dateDraw < 0.8
                         ? { utcMs: null, original: 'sometime last week', offsetMinutes: null, zoneKnown: false }
                         : { utcMs: trueMs - Math.floor(random() * 5 * STEP), original: 'wrong clock', offsetMinutes: 0, zoneKnown: true };
         messages.push({

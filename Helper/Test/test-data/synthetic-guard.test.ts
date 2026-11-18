@@ -118,7 +118,7 @@ describe('synthetic fixture guard rules (self-test)', () =>
     // so it proves each DECODING step on its own (the bare-host rule stays silent).
     const hidden = ['planted', 'example'].join('.');
     const hiddenAddress = `someone@${hidden}`;
-    const ip = (...parts: number[]): string => parts.join('.');
+    const ipv4Of = (...parts: number[]): string => parts.join('.');
 
     it('accepts reserved test hosts only', () =>
     {
@@ -127,8 +127,8 @@ describe('synthetic fixture guard rules (self-test)', () =>
         expect(isReservedTestHost(bad)).toBe(false);
         expect(isReservedTestHost('test.example')).toBe(false);
         expect(isAllowedHost('[2001:db8::1]')).toBe(true);
-        expect(isAllowedHost(ip(203, 0, 113, 9))).toBe(true);
-        expect(isAllowedHost(ip(10, 0, 0, 1))).toBe(false);
+        expect(isAllowedHost(ipv4Of(203, 0, 113, 9))).toBe(true);
+        expect(isAllowedHost(ipv4Of(10, 0, 0, 1))).toBe(false);
     });
 
     it('flags plain, URL and www hosts', () =>
@@ -160,10 +160,10 @@ describe('synthetic fixture guard rules (self-test)', () =>
 
     it('flags IPv4 addresses outside the documentation and loopback ranges', () =>
     {
-        expect(findForbiddenHosts(`Received: from [${ip(10, 1, 2, 3)}]`)).not.toEqual([]);
-        expect(findForbiddenHosts(`DNS ${ip(8, 8, 8, 8)}.`)).not.toEqual([]);
-        expect(findForbiddenHosts(`see ${'http:'}//${ip(198, 51, 101, 1)}:80/x`)).not.toEqual([]);
-        const allowed = [ip(192, 0, 2, 10), ip(198, 51, 100, 7), ip(203, 0, 113, 255), ip(127, 0, 0, 1)].join(' ');
+        expect(findForbiddenHosts(`Received: from [${ipv4Of(10, 1, 2, 3)}]`)).not.toEqual([]);
+        expect(findForbiddenHosts(`DNS ${ipv4Of(8, 8, 8, 8)}.`)).not.toEqual([]);
+        expect(findForbiddenHosts(`see ${'http:'}//${ipv4Of(198, 51, 101, 1)}:80/x`)).not.toEqual([]);
+        const allowed = [ipv4Of(192, 0, 2, 10), ipv4Of(198, 51, 100, 7), ipv4Of(203, 0, 113, 255), ipv4Of(127, 0, 0, 1)].join(' ');
         expect(findForbiddenHosts(`${allowed} at 10:00:00, version 1.2.3`)).toEqual([]);
     });
 
@@ -196,18 +196,19 @@ describe('synthetic fixture guard rules (self-test)', () =>
 
     it('decodes RFC 2047 words at the end of a line and words split over two encoded words', () =>
     {
-        const b = (s: string): string => `=?UTF-8?B?${btoa(s)}?=`;
-        const q = (s: string): string => `=?UTF-8?Q?${s.replace('@', '=40')}?=`;
+        const base64Word = (s: string): string => `=?UTF-8?B?${btoa(s)}?=`;
+        const qWord = (s: string): string => `=?UTF-8?Q?${s.replace('@', '=40')}?=`;
         // A word that ends the line: the "?=" + line end must not be taken for a QP soft break.
-        expect(findForbiddenHosts(`Subject: ${b(hiddenAddress)}\r\nX-A: 1\r\n`)).not.toEqual([]);
-        expect(findForbiddenHosts(`Subject: ${b(hiddenAddress)}\nX-A: 1\n`)).not.toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${base64Word(hiddenAddress)}\r\nX-A: 1\r\n`)).not.toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${base64Word(hiddenAddress)}\nX-A: 1\n`)).not.toEqual([]);
         // Whitespace between adjacent encoded words is dropped (RFC 2047 section 6.2).
-        expect(findForbiddenHosts(`Subject: ${b(hiddenAddress.slice(0, 10))} ${b(hiddenAddress.slice(10))}\n`)).not.toEqual([]);
-        expect(findForbiddenHosts(`Subject: ${q(hiddenAddress.slice(0, 11))} ${q(hiddenAddress.slice(11))}\n`)).not.toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${base64Word(hiddenAddress.slice(0, 10))} ${base64Word(hiddenAddress.slice(10))}\n`)).not.toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${qWord(hiddenAddress.slice(0, 11))} ${qWord(hiddenAddress.slice(11))}\n`)).not.toEqual([]);
         // Folded across two header lines.
-        expect(findForbiddenHosts(`Subject: ${b(hiddenAddress.slice(0, 10))}\r\n ${b(hiddenAddress.slice(10))}\r\n`)).not.toEqual([]);
+        expect(
+            findForbiddenHosts(`Subject: ${base64Word(hiddenAddress.slice(0, 10))}\r\n ${base64Word(hiddenAddress.slice(10))}\r\n`)).not.toEqual([]);
         // Clean folded words stay clean.
-        expect(findForbiddenHosts(`Subject: ${b('a@example')}\r\n ${q('.test')}\r\n`)).toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${base64Word('a@example')}\r\n ${qWord('.test')}\r\n`)).toEqual([]);
     });
 
     it('decodes an RFC 2047 word split by a QP soft break right after one of its own "?"', () =>
@@ -221,10 +222,10 @@ describe('synthetic fixture guard rules (self-test)', () =>
 
     it('decodes HTML references and percent-encoding inside RFC 2047 words', () =>
     {
-        const b = (s: string): string => `=?UTF-8?B?${btoa(s)}?=`;
-        expect(findForbiddenHosts(`Subject: ${b(hiddenAddress.replace('@', '&#64;'))}\n`)).not.toEqual([]);
-        expect(findForbiddenHosts(`Subject: ${b(hiddenAddress.replace('@', '%40'))}\n`)).not.toEqual([]);
-        expect(findForbiddenHosts(`Subject: ${b('a&#64;example.test 10%40off')}\n`)).toEqual([]);
+        const base64Word = (s: string): string => `=?UTF-8?B?${btoa(s)}?=`;
+        expect(findForbiddenHosts(`Subject: ${base64Word(hiddenAddress.replace('@', '&#64;'))}\n`)).not.toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${base64Word(hiddenAddress.replace('@', '%40'))}\n`)).not.toEqual([]);
+        expect(findForbiddenHosts(`Subject: ${base64Word('a&#64;example.test 10%40off')}\n`)).toEqual([]);
     });
 
     it('decodes layered encodings: HTML references or percent-encoding inside quoted-printable', () =>

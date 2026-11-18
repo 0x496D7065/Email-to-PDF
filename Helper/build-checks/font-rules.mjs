@@ -74,12 +74,12 @@ export function sha256Hex(bytes)
 // One number, written any way JavaScript allows: optional sign (-1, +1),
 // decimals and floats (104, 104.0, .5), exponents (1e2), hex, binary and
 // octal (0x68, 0b1, 0o7), BigInt (104n) and digit separators (1_04).
-const NUM = String.raw`[-+]?(?:0[xXbBoO][0-9a-fA-F_]+n?|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][-+]?\d+)?n?)`;
+const NUMBER_LITERAL = String.raw`[-+]?(?:0[xXbBoO][0-9a-fA-F_]+n?|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][-+]?\d+)?n?)`;
 // A run: one number, then any number of ", number" where the number may be
 // missing (a hole, as in [1,,2]). Not preceded by a word character, $ or
 // '.', so `a1,2` does not start a run inside a name. No trailing lookahead,
 // so the scan stays linear on a huge line.
-const NUMBER_RUN = new RegExp(String.raw`(?<![\w$.])${NUM}(?:\s*,\s*(?:${NUM})?)*`, 'g');
+const NUMBER_RUN = new RegExp(String.raw`(?<![\w$.])${NUMBER_LITERAL}(?:\s*,\s*(?:${NUMBER_LITERAL})?)*`, 'g');
 
 /**
  * The value of one item of a run: NaN for a hole or anything that is not a
@@ -88,25 +88,25 @@ const NUMBER_RUN = new RegExp(String.raw`(?<![\w$.])${NUM}(?:\s*,\s*(?:${NUM})?)
  */
 function numberValue(part)
 {
-    let s = part.trim().replace(/_/g, '');
-    if (s === '')
+    let literal = part.trim().replace(/_/g, '');
+    if (literal === '')
     {
         return NaN;
     }
     let sign = 1;
-    if (s[0] === '-' || s[0] === '+')
+    if (literal[0] === '-' || literal[0] === '+')
     {
-        if (s[0] === '-')
+        if (literal[0] === '-')
         {
             sign = -1;
         }
-        s = s.slice(1);
+        literal = literal.slice(1);
     }
-    if (s.endsWith('n'))
+    if (literal.endsWith('n'))
     {
-        s = s.slice(0, -1);
+        literal = literal.slice(0, -1);
     }
-    return sign * Number(s);
+    return sign * Number(literal);
 }
 
 /**
@@ -120,13 +120,13 @@ function numberValue(part)
 export function findNumberArrays(text, minLength = NUMBER_ARRAY_MIN_LENGTH)
 {
     const found = [];
-    for (const m of text.matchAll(NUMBER_RUN))
+    for (const run of text.matchAll(NUMBER_RUN))
     {
         // Cheap pre-filter: a run of minLength numbers has minLength - 1 commas.
         let commas = 0;
-        for (let i = 0; i < m[0].length && commas < minLength - 1; i += 1)
+        for (let i = 0; i < run[0].length && commas < minLength - 1; i += 1)
         {
-            if (m[0].charCodeAt(i) === 44)
+            if (run[0].charCodeAt(i) === 44)
             {
                 commas += 1;
             }
@@ -135,16 +135,16 @@ export function findNumberArrays(text, minLength = NUMBER_ARRAY_MIN_LENGTH)
         {
             continue;
         }
-        const values = m[0].split(',').map(numberValue);
+        const values = run[0].split(',').map(numberValue);
         let line = 1;
-        for (let i = 0; i < m.index; i += 1)
+        for (let i = 0; i < run.index; i += 1)
         {
             if (text.charCodeAt(i) === 10)
             {
                 line += 1;
             }
         }
-        found.push({ line, start: m.index, end: m.index + m[0].length, values });
+        found.push({ line, start: run.index, end: run.index + run[0].length, values });
     }
     return found;
 }
@@ -170,28 +170,28 @@ export function checkNumberArrays(files, fonts = PDF_FONT_FILES, minLength = NUM
         const arrays = findNumberArrays(text, minLength);
         if (!FONT_CHUNK_PATTERN.test(path))
         {
-            for (const a of arrays)
+            for (const array of arrays)
             {
                 problems.push(
-                    `dist/${path}:${a.line}: a ${a.values.length}-number array outside the font chunk: data hidden this way escapes every other check (README.md, rule R3)`,
+                    `dist/${path}:${array.line}: a ${array.values.length}-number array outside the font chunk: data hidden this way escapes every other check (README.md, rule R3)`,
                 );
             }
             continue;
         }
         let otherText = text.length;
-        for (const a of arrays)
+        for (const array of arrays)
         {
-            otherText -= a.end - a.start;
-            if (!a.values.every((v) => Number.isInteger(v) && v >= 0 && v <= 255))
+            otherText -= array.end - array.start;
+            if (!array.values.every((v) => Number.isInteger(v) && v >= 0 && v <= 255))
             {
-                problems.push(`dist/${path}:${a.line}: a number array in the font chunk holds values that are not bytes (README.md, rule R3)`);
+                problems.push(`dist/${path}:${array.line}: a number array in the font chunk holds values that are not bytes (README.md, rule R3)`);
                 continue;
             }
-            const hash = sha256Hex(Uint8Array.from(a.values));
+            const hash = sha256Hex(Uint8Array.from(array.values));
             if (!seen.has(hash))
             {
                 problems.push(
-                    `dist/${path}:${a.line}: a ${a.values.length}-byte array in the font chunk matches no committed font (SHA-256 ${hash}) (README.md, rule R3)`,
+                    `dist/${path}:${array.line}: a ${array.values.length}-byte array in the font chunk matches no committed font (SHA-256 ${hash}) (README.md, rule R3)`,
                 );
                 continue;
             }
@@ -297,10 +297,10 @@ export function checkSourceFonts(files, fonts = PDF_FONT_FILES)
  */
 export function isBytesImportAllowed(file, fontsDir)
 {
-    const norm = (p) => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `${d.toLowerCase()}:`);
-    const dir = norm(fontsDir).replace(/\/*$/, '/');
-    const f = norm(file);
-    return f.startsWith(dir) && /^[^/]+\.woff$/.test(f.slice(dir.length));
+    const normalizePath = (p) => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `${d.toLowerCase()}:`);
+    const fontsFolder = normalizePath(fontsDir).replace(/\/*$/, '/');
+    const normalizedFile = normalizePath(file);
+    return normalizedFile.startsWith(fontsFolder) && /^[^/]+\.woff$/.test(normalizedFile.slice(fontsFolder.length));
 }
 
 /** Is this file name a font file (checked by hash, not scanned as text)? */

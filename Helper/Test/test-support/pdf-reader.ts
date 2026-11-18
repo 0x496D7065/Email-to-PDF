@@ -34,21 +34,21 @@ export class PdfString
     /** The text: UTF-16BE when it starts with the FEFF byte order mark, else Latin-1. */
     get text(): string
     {
-        const b = this.bytes;
-        if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff)
+        const stringBytes = this.bytes;
+        if (stringBytes.length >= 2 && stringBytes[0] === 0xfe && stringBytes[1] === 0xff)
         {
-            if (b.length % 2 !== 0)
+            if (stringBytes.length % 2 !== 0)
             {
                 throw new Error('odd UTF-16 string');
             }
-            let s = '';
-            for (let i = 2; i < b.length; i += 2)
+            let decoded = '';
+            for (let i = 2; i < stringBytes.length; i += 2)
             {
-                s += String.fromCharCode((b[i]! << 8) | b[i + 1]!);
+                decoded += String.fromCharCode((stringBytes[i]! << 8) | stringBytes[i + 1]!);
             }
-            return s;
+            return decoded;
         }
-        return String.fromCharCode(...b);
+        return String.fromCharCode(...stringBytes);
     }
 }
 
@@ -90,35 +90,35 @@ export class PdfStream
     }
 }
 
-const WHITE = ' \t\r\n\f\0';
-const DELIM = '()<>[]{}/%';
+const WHITESPACE_CHARS = ' \t\r\n\f\0';
+const DELIMITER_CHARS = '()<>[]{}/%';
 
 /** A lexer + parser over a Latin-1 view of the bytes (one char per byte). */
 class Lexer
 {
-    pos: number;
+    position: number;
     constructor(
-        readonly src: string,
+        readonly source: string,
         readonly bytes: Uint8Array,
         start = 0,
     )
     {
-        this.pos = start;
+        this.position = start;
     }
 
     skipWhite(): void
     {
         for (;;)
         {
-            while (this.pos < this.src.length && WHITE.includes(this.src[this.pos]!))
+            while (this.position < this.source.length && WHITESPACE_CHARS.includes(this.source[this.position]!))
             {
-                this.pos++;
+                this.position++;
             }
-            if (this.src[this.pos] === '%')
+            if (this.source[this.position] === '%')
             {
-                while (this.pos < this.src.length && this.src[this.pos] !== '\n' && this.src[this.pos] !== '\r')
+                while (this.position < this.source.length && this.source[this.position] !== '\n' && this.source[this.position] !== '\r')
                 {
-                    this.pos++;
+                    this.position++;
                 }
             }
             else
@@ -131,31 +131,32 @@ class Lexer
     atEnd(): boolean
     {
         this.skipWhite();
-        return this.pos >= this.src.length;
+        return this.position >= this.source.length;
     }
 
     private word(): string
     {
-        const start = this.pos;
-        while (this.pos < this.src.length && !WHITE.includes(this.src[this.pos]!) && !DELIM.includes(this.src[this.pos]!))
+        const start = this.position;
+        while (this.position < this.source.length && !WHITESPACE_CHARS.includes(this.source[this.position]!)
+            && !DELIMITER_CHARS.includes(this.source[this.position]!))
         {
-            this.pos++;
+            this.position++;
         }
-        return this.src.slice(start, this.pos);
+        return this.source.slice(start, this.position);
     }
 
     /** One token as a value or an operator; `refs` turns "n 0 R" into a PdfRef. */
     value(refs = true): PdfValue | PdfOp
     {
         this.skipWhite();
-        const c = this.src[this.pos];
-        if (c === undefined)
+        const firstChar = this.source[this.position];
+        if (firstChar === undefined)
         {
             throw new Error('unexpected end of data');
         }
-        if (c === '/')
+        if (firstChar === '/')
         {
-            this.pos++;
+            this.position++;
             const raw = this.word();
             if (/#/.test(raw))
             {
@@ -163,16 +164,16 @@ class Lexer
             }
             return new PdfName(raw);
         }
-        if (c === '<' && this.src[this.pos + 1] === '<')
+        if (firstChar === '<' && this.source[this.position + 1] === '<')
         {
-            this.pos += 2;
+            this.position += 2;
             const entries = new Map<string, PdfValue>();
             for (;;)
             {
                 this.skipWhite();
-                if (this.src.startsWith('>>', this.pos))
+                if (this.source.startsWith('>>', this.position))
                 {
-                    this.pos += 2;
+                    this.position += 2;
                     return new PdfDict(entries);
                 }
                 const key = this.value(refs);
@@ -184,27 +185,27 @@ class Lexer
                 {
                     throw new Error(`duplicate key /${key.value}`);
                 }
-                const v = this.value(refs);
-                if (v instanceof PdfOp)
+                const entryValue = this.value(refs);
+                if (entryValue instanceof PdfOp)
                 {
-                    throw new Error(`operator ${v.op} inside a dictionary`);
+                    throw new Error(`operator ${entryValue.op} inside a dictionary`);
                 }
-                entries.set(key.value, v);
+                entries.set(key.value, entryValue);
             }
         }
-        if (c === '<')
+        if (firstChar === '<')
         {
-            const end = this.src.indexOf('>', this.pos);
+            const end = this.source.indexOf('>', this.position);
             if (end < 0)
             {
                 throw new Error('unterminated hex string');
             }
-            const digits = this.src.slice(this.pos + 1, end).replace(/\s/g, '');
+            const digits = this.source.slice(this.position + 1, end).replace(/\s/g, '');
             if (!/^[0-9A-Fa-f]*$/.test(digits) || digits.length % 2 !== 0)
             {
                 throw new Error(`bad hex string <${digits.slice(0, 20)}>`);
             }
-            this.pos = end + 1;
+            this.position = end + 1;
             const bytes = new Uint8Array(digits.length / 2);
             for (let i = 0; i < bytes.length; i++)
             {
@@ -212,122 +213,122 @@ class Lexer
             }
             return new PdfString(bytes, true);
         }
-        if (c === '(')
+        if (firstChar === '(')
         {
-            this.pos++;
+            this.position++;
             let depth = 1;
-            const out: number[] = [];
+            const literalBytes: number[] = [];
             while (depth > 0)
             {
-                const ch = this.src[this.pos++];
-                if (ch === undefined)
+                const char = this.source[this.position++];
+                if (char === undefined)
                 {
                     throw new Error('unterminated literal string');
                 }
-                if (ch === '\\')
+                if (char === '\\')
                 {
-                    const next = this.src[this.pos++]!;
-                    out.push(({ n: 10, r: 13, t: 9, b: 8, f: 12 } as Record<string, number>)[next] ?? next.charCodeAt(0));
+                    const next = this.source[this.position++]!;
+                    literalBytes.push(({ n: 10, r: 13, t: 9, b: 8, f: 12 } as Record<string, number>)[next] ?? next.charCodeAt(0));
                     continue;
                 }
-                if (ch === '(')
+                if (char === '(')
                 {
                     depth++;
                 }
-                if (ch === ')' && --depth === 0)
+                if (char === ')' && --depth === 0)
                 {
                     break;
                 }
-                out.push(ch.charCodeAt(0));
+                literalBytes.push(char.charCodeAt(0));
             }
-            return new PdfString(new Uint8Array(out), false);
+            return new PdfString(new Uint8Array(literalBytes), false);
         }
-        if (c === '[')
+        if (firstChar === '[')
         {
-            this.pos++;
+            this.position++;
             const items: PdfValue[] = [];
             for (;;)
             {
                 this.skipWhite();
-                if (this.src[this.pos] === ']')
+                if (this.source[this.position] === ']')
                 {
-                    this.pos++;
+                    this.position++;
                     return items;
                 }
-                const v = this.value(refs);
-                if (v instanceof PdfOp)
+                const item = this.value(refs);
+                if (item instanceof PdfOp)
                 {
-                    throw new Error(`operator ${v.op} inside an array`);
+                    throw new Error(`operator ${item.op} inside an array`);
                 }
-                items.push(v);
+                items.push(item);
             }
         }
-        if (c === ']' || c === '>' || c === ')' || c === '{' || c === '}')
+        if (firstChar === ']' || firstChar === '>' || firstChar === ')' || firstChar === '{' || firstChar === '}')
         {
-            throw new Error(`unexpected "${c}" at ${this.pos}`);
+            throw new Error(`unexpected "${firstChar}" at ${this.position}`);
         }
-        const w = this.word();
-        if (w === '')
+        const token = this.word();
+        if (token === '')
         {
-            throw new Error(`empty token at ${this.pos}`);
+            throw new Error(`empty token at ${this.position}`);
         }
-        if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w))
+        if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(token))
         {
-            const n = Number(w);
-            if (refs && /^\d+$/.test(w))
+            const parsedNumber = Number(token);
+            if (refs && /^\d+$/.test(token))
             {
-                const save = this.pos;
-                const m = /^\s+(\d+)\s+R(?![^\s()<>[\]{}/%])/.exec(this.src.slice(this.pos, this.pos + 24));
-                if (m)
+                const savedPosition = this.position;
+                const refMatch = /^\s+(\d+)\s+R(?![^\s()<>[\]{}/%])/.exec(this.source.slice(this.position, this.position + 24));
+                if (refMatch)
                 {
-                    if (m[1] !== '0')
+                    if (refMatch[1] !== '0')
                     {
                         throw new Error('generation must be 0');
                     }
-                    this.pos += m[0].length;
-                    return new PdfRef(n);
+                    this.position += refMatch[0].length;
+                    return new PdfRef(parsedNumber);
                 }
-                this.pos = save;
+                this.position = savedPosition;
             }
-            return n;
+            return parsedNumber;
         }
-        if (/[eE]/.test(w) && /^[+-]?[\d.]+[eE]/.test(w))
+        if (/[eE]/.test(token) && /^[+-]?[\d.]+[eE]/.test(token))
         {
-            throw new Error(`exponent notation is not PDF: ${w}`);
+            throw new Error(`exponent notation is not PDF: ${token}`);
         }
-        if (w === 'true')
+        if (token === 'true')
         {
             return true;
         }
-        if (w === 'false')
+        if (token === 'false')
         {
             return false;
         }
-        if (w === 'null')
+        if (token === 'null')
         {
             return null;
         }
-        return new PdfOp(w);
+        return new PdfOp(token);
     }
 
     expectValue(): PdfValue
     {
-        const v = this.value();
-        if (v instanceof PdfOp)
+        const parsed = this.value();
+        if (parsed instanceof PdfOp)
         {
-            throw new Error(`expected a value, got operator ${v.op} at ${this.pos}`);
+            throw new Error(`expected a value, got operator ${parsed.op} at ${this.position}`);
         }
-        return v;
+        return parsed;
     }
 
     expect(text: string): void
     {
         this.skipWhite();
-        if (!this.src.startsWith(text, this.pos))
+        if (!this.source.startsWith(text, this.position))
         {
-            throw new Error(`expected "${text}" at ${this.pos}, got ${JSON.stringify(this.src.slice(this.pos, this.pos + 20))}`);
+            throw new Error(`expected "${text}" at ${this.position}, got ${JSON.stringify(this.source.slice(this.position, this.position + 20))}`);
         }
-        this.pos += text.length;
+        this.position += text.length;
     }
 }
 
@@ -347,12 +348,12 @@ export class ParsedPdf
     constructor(readonly bytes: Uint8Array)
     {
         // TextDecoder('latin1') is windows-1252, which changes 0x80-0x9F: build Latin-1 by hand.
-        let s = '';
+        let latin1 = '';
         for (let i = 0; i < bytes.length; i += 8192)
         {
-            s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+            latin1 += String.fromCharCode(...bytes.subarray(i, i + 8192));
         }
-        this.text = s;
+        this.text = latin1;
     }
 
     resolve(value: PdfValue | undefined): PdfValue | undefined
@@ -370,40 +371,40 @@ export class ParsedPdf
 
     dict(value: PdfValue | undefined): PdfDict
     {
-        const v = this.resolve(value);
-        if (v instanceof PdfDict)
+        const resolved = this.resolve(value);
+        if (resolved instanceof PdfDict)
         {
-            return v;
+            return resolved;
         }
-        if (v instanceof PdfStream)
+        if (resolved instanceof PdfStream)
         {
-            return v.dict;
+            return resolved.dict;
         }
         throw new Error('not a dictionary');
     }
 
     stream(value: PdfValue | undefined): PdfStream
     {
-        const v = this.resolve(value);
-        if (!(v instanceof PdfStream))
+        const resolved = this.resolve(value);
+        if (!(resolved instanceof PdfStream))
         {
             throw new Error('not a stream');
         }
-        return v;
+        return resolved;
     }
 
     /** The decoded data of a stream (inflated when /FlateDecode). */
     async data(value: PdfValue | undefined): Promise<Uint8Array>
     {
-        const s = this.stream(value);
-        const filter = s.dict.get('Filter');
+        const streamObject = this.stream(value);
+        const filter = streamObject.dict.get('Filter');
         if (filter === undefined)
         {
-            return s.raw;
+            return streamObject.raw;
         }
         if (filter instanceof PdfName && filter.value === 'FlateDecode')
         {
-            return inflate(s.raw);
+            return inflate(streamObject.raw);
         }
         throw new Error('unsupported filter');
     }
@@ -411,12 +412,12 @@ export class ParsedPdf
     async dataText(value: PdfValue | undefined): Promise<string>
     {
         const bytes = await this.data(value);
-        let s = '';
+        let text = '';
         for (let i = 0; i < bytes.length; i += 8192)
         {
-            s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+            text += String.fromCharCode(...bytes.subarray(i, i + 8192));
         }
-        return s;
+        return text;
     }
 
     get catalog(): PdfDict
@@ -432,7 +433,7 @@ export class ParsedPdf
     /** The page dictionaries in order, walking the page tree. */
     pages(): PdfDict[]
     {
-        const out: PdfDict[] = [];
+        const pageDicts: PdfDict[] = [];
         const walk = (node: PdfDict, depth: number): void =>
         {
             if (depth > 64)
@@ -442,7 +443,7 @@ export class ParsedPdf
             const type = node.get('Type');
             if (type instanceof PdfName && type.value === 'Page')
             {
-                out.push(node);
+                pageDicts.push(node);
                 return;
             }
             const kids = node.get('Kids');
@@ -450,18 +451,18 @@ export class ParsedPdf
             {
                 throw new Error('Pages without Kids');
             }
-            const before = out.length;
+            const before = pageDicts.length;
             for (const kid of kids)
             {
                 walk(this.dict(kid), depth + 1);
             }
-            if (node.get('Count') !== out.length - before)
+            if (node.get('Count') !== pageDicts.length - before)
             {
                 throw new Error('Pages /Count does not match its kids');
             }
         };
         walk(this.dict(this.catalog.get('Pages')), 0);
-        return out;
+        return pageDicts;
     }
 
     /** Object number of a page (to match destinations). */
@@ -473,12 +474,12 @@ export class ParsedPdf
 
     name(value: PdfValue | undefined): string
     {
-        const v = this.resolve(value);
-        if (!(v instanceof PdfName))
+        const resolved = this.resolve(value);
+        if (!(resolved instanceof PdfName))
         {
             throw new Error('not a name');
         }
-        return v.value;
+        return resolved.value;
     }
 }
 
@@ -486,8 +487,8 @@ export class ParsedPdf
 export function readPdf(bytes: Uint8Array): ParsedPdf
 {
     const pdf = new ParsedPdf(bytes);
-    const src = pdf.text;
-    if (!src.startsWith('%PDF-1.7\n%'))
+    const pdfText = pdf.text;
+    if (!pdfText.startsWith('%PDF-1.7\n%'))
     {
         throw new Error('header is not %PDF-1.7 + binary comment');
     }
@@ -498,43 +499,43 @@ export function readPdf(bytes: Uint8Array): ParsedPdf
             throw new Error('binary comment needs 4 bytes above 127');
         }
     }
-    if (src[14] !== '\n')
+    if (pdfText[14] !== '\n')
     {
         throw new Error('binary comment line must end after 4 bytes');
     }
-    if (!src.endsWith('%%EOF\n'))
+    if (!pdfText.endsWith('%%EOF\n'))
     {
         throw new Error('file must end with %%EOF');
     }
-    const sx = src.lastIndexOf('startxref\n');
-    const m = /^startxref\n(\d+)\n%%EOF\n$/.exec(src.slice(sx));
-    if (!m)
+    const startxrefAt = pdfText.lastIndexOf('startxref\n');
+    const startxrefMatch = /^startxref\n(\d+)\n%%EOF\n$/.exec(pdfText.slice(startxrefAt));
+    if (!startxrefMatch)
     {
         throw new Error('bad startxref');
     }
-    const xrefAt = Number(m[1]);
+    const xrefAt = Number(startxrefMatch[1]);
     pdf.xrefOffset = xrefAt;
-    if (!src.startsWith('xref\n', xrefAt))
+    if (!pdfText.startsWith('xref\n', xrefAt))
     {
         throw new Error('startxref does not point at "xref"');
     }
-    const head = /^xref\n0 (\d+)\n/.exec(src.slice(xrefAt, xrefAt + 40));
+    const head = /^xref\n0 (\d+)\n/.exec(pdfText.slice(xrefAt, xrefAt + 40));
     if (!head)
     {
         throw new Error('bad xref subsection header');
     }
     const count = Number(head[1]);
-    let at = xrefAt + head[0].length;
+    let entryAt = xrefAt + head[0].length;
     const offsets: number[] = [];
-    for (let n = 0; n < count; n++)
+    for (let objectNumber = 0; objectNumber < count; objectNumber++)
     {
-        const entry = src.slice(at, at + 20);
-        const e = /^(\d{10}) (\d{5}) ([nf]) \n$/.exec(entry);
-        if (!e)
+        const entry = pdfText.slice(entryAt, entryAt + 20);
+        const entryMatch = /^(\d{10}) (\d{5}) ([nf]) \n$/.exec(entry);
+        if (!entryMatch)
         {
-            throw new Error(`bad xref entry ${n}: ${JSON.stringify(entry)}`);
+            throw new Error(`bad xref entry ${objectNumber}: ${JSON.stringify(entry)}`);
         }
-        if (n === 0)
+        if (objectNumber === 0)
         {
             if (entry !== '0000000000 65535 f \n')
             {
@@ -543,15 +544,15 @@ export function readPdf(bytes: Uint8Array): ParsedPdf
         }
         else
         {
-            if (e[3] !== 'n' || e[2] !== '00000')
+            if (entryMatch[3] !== 'n' || entryMatch[2] !== '00000')
             {
-                throw new Error(`xref entry ${n} must be in use, generation 0`);
+                throw new Error(`xref entry ${objectNumber} must be in use, generation 0`);
             }
-            offsets[n] = Number(e[1]);
+            offsets[objectNumber] = Number(entryMatch[1]);
         }
-        at += 20;
+        entryAt += 20;
     }
-    const lexer = new Lexer(src, bytes, at);
+    const lexer = new Lexer(pdfText, bytes, entryAt);
     lexer.expect('trailer');
     const trailer = lexer.expectValue();
     if (!(trailer instanceof PdfDict))
@@ -565,24 +566,24 @@ export function readPdf(bytes: Uint8Array): ParsedPdf
         throw new Error('trailer /Size does not match the xref');
     }
 
-    for (let n = 1; n < count; n++)
+    for (let objectNumber = 1; objectNumber < count; objectNumber++)
     {
-        const offset = offsets[n]!;
-        const prefix = `${n} 0 obj\n`;
-        if (!src.startsWith(prefix, offset))
+        const offset = offsets[objectNumber]!;
+        const prefix = `${objectNumber} 0 obj\n`;
+        if (!pdfText.startsWith(prefix, offset))
         {
-            throw new Error(`xref offset of object ${n} does not point at "${n} 0 obj"`);
+            throw new Error(`xref offset of object ${objectNumber} does not point at "${objectNumber} 0 obj"`);
         }
-        const lx = new Lexer(src, bytes, offset + prefix.length);
-        let value = lx.expectValue();
-        lx.skipWhite();
-        if (src.startsWith('stream', lx.pos))
+        const objectLexer = new Lexer(pdfText, bytes, offset + prefix.length);
+        let value = objectLexer.expectValue();
+        objectLexer.skipWhite();
+        if (pdfText.startsWith('stream', objectLexer.position))
         {
             if (!(value instanceof PdfDict))
             {
                 throw new Error('stream without dictionary');
             }
-            if (!src.startsWith('stream\n', lx.pos))
+            if (!pdfText.startsWith('stream\n', objectLexer.position))
             {
                 throw new Error('"stream" must be followed by LF');
             }
@@ -591,16 +592,16 @@ export function readPdf(bytes: Uint8Array): ParsedPdf
             {
                 throw new Error('stream /Length must be a direct integer');
             }
-            const start = lx.pos + 'stream\n'.length;
-            if (!src.startsWith('\nendstream', start + length))
+            const start = objectLexer.position + 'stream\n'.length;
+            if (!pdfText.startsWith('\nendstream', start + length))
             {
-                throw new Error(`object ${n}: stream /Length does not match (no endstream after it)`);
+                throw new Error(`object ${objectNumber}: stream /Length does not match (no endstream after it)`);
             }
             value = new PdfStream(value, bytes.subarray(start, start + length));
-            lx.pos = start + length + '\nendstream'.length;
+            objectLexer.position = start + length + '\nendstream'.length;
         }
-        lx.expect('endobj');
-        pdf.objects.set(n, value);
+        objectLexer.expect('endobj');
+        pdf.objects.set(objectNumber, value);
     }
     return pdf;
 }
@@ -611,12 +612,12 @@ export function parseToUnicode(cmap: string): Map<number, string>
     const map = new Map<number, string>();
     const utf16 = (hex: string): string =>
     {
-        let s = '';
+        let text = '';
         for (let i = 0; i < hex.length; i += 4)
         {
-            s += String.fromCharCode(parseInt(hex.slice(i, i + 4), 16));
+            text += String.fromCharCode(parseInt(hex.slice(i, i + 4), 16));
         }
-        return s;
+        return text;
     };
     if (!/1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange/.test(cmap))
     {
@@ -631,17 +632,17 @@ export function parseToUnicode(cmap: string): Map<number, string>
         }
         for (const line of lines)
         {
-            const m = /^<([0-9A-F]{4})> <([0-9A-F]+)>$/.exec(line);
-            if (!m || m[2]!.length % 4 !== 0)
+            const bfcharMatch = /^<([0-9A-F]{4})> <([0-9A-F]+)>$/.exec(line);
+            if (!bfcharMatch || bfcharMatch[2]!.length % 4 !== 0)
             {
                 throw new Error(`bad bfchar ${line}`);
             }
-            const gid = parseInt(m[1]!, 16);
+            const gid = parseInt(bfcharMatch[1]!, 16);
             if (map.has(gid))
             {
                 throw new Error(`glyph ${gid} mapped twice`);
             }
-            map.set(gid, utf16(m[2]!));
+            map.set(gid, utf16(bfcharMatch[2]!));
         }
     }
     for (const block of cmap.matchAll(/(\d+) beginbfrange\n([\s\S]*?)\nendbfrange/g))
@@ -653,25 +654,25 @@ export function parseToUnicode(cmap: string): Map<number, string>
         }
         for (const line of lines)
         {
-            const m = /^<([0-9A-F]{4})> <([0-9A-F]{4})> <([0-9A-F]{4})>$/.exec(line);
-            if (!m)
+            const bfrangeMatch = /^<([0-9A-F]{4})> <([0-9A-F]{4})> <([0-9A-F]{4})>$/.exec(line);
+            if (!bfrangeMatch)
             {
                 throw new Error(`bad bfrange ${line}`);
             }
-            const lo = parseInt(m[1]!, 16);
-            const hi = parseInt(m[2]!, 16);
-            const dst = parseInt(m[3]!, 16);
-            if (hi < lo || lo >> 8 !== hi >> 8 || (dst & 0xff) + (hi - lo) > 0xff)
+            const firstGlyph = parseInt(bfrangeMatch[1]!, 16);
+            const lastGlyph = parseInt(bfrangeMatch[2]!, 16);
+            const firstCode = parseInt(bfrangeMatch[3]!, 16);
+            if (lastGlyph < firstGlyph || firstGlyph >> 8 !== lastGlyph >> 8 || (firstCode & 0xff) + (lastGlyph - firstGlyph) > 0xff)
             {
                 throw new Error(`bfrange crosses a byte boundary: ${line}`);
             }
-            for (let g = lo; g <= hi; g++)
+            for (let glyph = firstGlyph; glyph <= lastGlyph; glyph++)
             {
-                if (map.has(g))
+                if (map.has(glyph))
                 {
-                    throw new Error(`glyph ${g} mapped twice`);
+                    throw new Error(`glyph ${glyph} mapped twice`);
                 }
-                map.set(g, String.fromCharCode(dst + g - lo));
+                map.set(glyph, String.fromCharCode(firstCode + glyph - firstGlyph));
             }
         }
     }
@@ -699,20 +700,20 @@ export interface ContentSummary
 /** Tokenizes a content stream into operators and reads its text runs back. */
 export function readContent(content: string): ContentSummary
 {
-    const lx = new Lexer(content, new Uint8Array(0));
+    const lexer = new Lexer(content, new Uint8Array(0));
     const ops: { op: string; operands: PdfValue[] }[] = [];
     let operands: PdfValue[] = [];
-    while (!lx.atEnd())
+    while (!lexer.atEnd())
     {
-        const v = lx.value(false);
-        if (v instanceof PdfOp)
+        const token = lexer.value(false);
+        if (token instanceof PdfOp)
         {
-            ops.push({ op: v.op, operands });
+            ops.push({ op: token.op, operands });
             operands = [];
         }
         else
         {
-            operands.push(v);
+            operands.push(token);
         }
     }
     if (operands.length > 0)
@@ -728,7 +729,7 @@ export function readContent(content: string): ContentSummary
     let fill = [0];
     let inText = false;
     const spans: (string | undefined)[] = [];
-    for (const { op, operands: o } of ops)
+    for (const { op, operands: opOperands } of ops)
     {
         if (!allowed.has(op))
         {
@@ -752,37 +753,37 @@ export function readContent(content: string): ContentSummary
         }
         else if (op === 'Tf')
         {
-            font = (o[0] as PdfName).value;
-            size = o[1] as number;
+            font = (opOperands[0] as PdfName).value;
+            size = opOperands[1] as number;
         }
         else if (op === 'Tm')
         {
             // Positions only: a scaled, rotated or skewed matrix would make x, y and the run widths wrong.
-            if (o[0] !== 1 || o[1] !== 0 || o[2] !== 0 || o[3] !== 1)
+            if (opOperands[0] !== 1 || opOperands[1] !== 0 || opOperands[2] !== 0 || opOperands[3] !== 1)
             {
                 throw new Error('Tm must be 1 0 0 1 x y');
             }
-            x = o[4] as number;
-            y = o[5] as number;
+            x = opOperands[4] as number;
+            y = opOperands[5] as number;
         }
         else if (op === 'g' || op === 'rg')
         {
-            fill = o as number[];
+            fill = opOperands as number[];
         }
         else if (op === 'BDC')
         {
-            const tag = o[0] as PdfName;
-            const props = o[1] as PdfDict;
+            const tag = opOperands[0] as PdfName;
+            const props = opOperands[1] as PdfDict;
             if (tag.value !== 'Span')
             {
                 throw new Error('only /Span marked content');
             }
-            const at = props.get('ActualText');
-            if (!(at instanceof PdfString) || !at.hex)
+            const actualTextValue = props.get('ActualText');
+            if (!(actualTextValue instanceof PdfString) || !actualTextValue.hex)
             {
                 throw new Error('ActualText must be a hex string');
             }
-            spans.push(at.text);
+            spans.push(actualTextValue.text);
         }
         else if (op === 'EMC')
         {
@@ -797,15 +798,15 @@ export function readContent(content: string): ContentSummary
             {
                 throw new Error('Tj outside BT');
             }
-            const s = o[0] as PdfString;
-            if (!s.hex || s.bytes.length % 2 !== 0)
+            const hexString = opOperands[0] as PdfString;
+            if (!hexString.hex || hexString.bytes.length % 2 !== 0)
             {
                 throw new Error('Tj needs a 2-byte hex string');
             }
             const glyphs: number[] = [];
-            for (let i = 0; i < s.bytes.length; i += 2)
+            for (let i = 0; i < hexString.bytes.length; i += 2)
             {
-                glyphs.push((s.bytes[i]! << 8) | s.bytes[i + 1]!);
+                glyphs.push((hexString.bytes[i]! << 8) | hexString.bytes[i + 1]!);
             }
             runs.push({ font, size, x, y, glyphs, actualText: spans.at(-1), fill });
         }
@@ -887,17 +888,17 @@ export function readDests(pdf: ParsedPdf): Map<string, { page: number; top: numb
     const pages = pdf.pageRefs();
     for (const [key, value] of pdf.dict(ref).entries)
     {
-        const arr = value as PdfValue[];
-        if (!(arr[1] instanceof PdfName) || arr[1].value !== 'XYZ' || arr[4] !== null)
+        const destArray = value as PdfValue[];
+        if (!(destArray[1] instanceof PdfName) || destArray[1].value !== 'XYZ' || destArray[4] !== null)
         {
             throw new Error('dest must be [page /XYZ left top null]');
         }
-        const page = pages.indexOf((arr[0] as PdfRef).num);
+        const page = pages.indexOf((destArray[0] as PdfRef).num);
         if (page < 0)
         {
             throw new Error('dest to a non-page');
         }
-        result.set(key, { page, top: arr[3] as number });
+        result.set(key, { page, top: destArray[3] as number });
     }
     return result;
 }
@@ -969,9 +970,9 @@ function cidWidths(pdf: ParsedPdf, type0: PdfDict): { dw: number; w: Map<number,
             {
                 throw new Error('bad /W range');
             }
-            for (let g = first; g <= next; g++)
+            for (let glyph = first; glyph <= next; glyph++)
             {
-                w.set(g, width);
+                w.set(glyph, width);
             }
             i += 3;
         }
@@ -983,7 +984,7 @@ function cidWidths(pdf: ParsedPdf, type0: PdfDict): { dw: number; w: Map<number,
 export async function readPageRuns(pdf: ParsedPdf): Promise<PageRun[][]>
 {
     const cmaps = new Map<number, Map<number, string>>();
-    const out: PageRun[][] = [];
+    const allPageRuns: PageRun[][] = [];
     for (const pageDict of pdf.pages())
     {
         const fontDict = pdf.dict(pdf.dict(pageDict.get('Resources')).get('Font'));
@@ -1005,7 +1006,7 @@ export async function readPageRuns(pdf: ParsedPdf): Promise<PageRun[][]>
             fonts.set(key, { map, widths: cidWidths(pdf, type0) });
         }
         const { runs } = readContent(await pdf.dataText(pageDict.get('Contents')));
-        out.push(
+        allPageRuns.push(
             runs.map((r) =>
             {
                 const font = fonts.get(r.font);
@@ -1029,7 +1030,7 @@ export async function readPageRuns(pdf: ParsedPdf): Promise<PageRun[][]>
             }),
         );
     }
-    return out;
+    return allPageRuns;
 }
 
 /**
@@ -1102,7 +1103,7 @@ export interface ReadLink
 /** Every link annotation of every page, in page order. Anything but a /Link with a /Rect and a named /Dest throws. */
 export function readLinks(pdf: ParsedPdf): ReadLink[]
 {
-    const out: ReadLink[] = [];
+    const links: ReadLink[] = [];
     for (const [page, pageDict] of pdf.pages().entries())
     {
         const annots = pdf.resolve(pageDict.get('Annots'));
@@ -1114,9 +1115,9 @@ export function readLinks(pdf: ParsedPdf): ReadLink[]
         {
             throw new Error('/Annots is not an array');
         }
-        for (const a of annots)
+        for (const annotation of annots)
         {
-            const link = pdf.dict(a);
+            const link = pdf.dict(annotation);
             if (pdf.name(link.get('Subtype')) !== 'Link')
             {
                 throw new Error('an annotation that is not a link');
@@ -1127,8 +1128,8 @@ export function readLinks(pdf: ParsedPdf): ReadLink[]
                 throw new Error('bad link /Rect');
             }
             const [x1, y1, x2, y2] = rect;
-            out.push({ page, rect: [x1!, y1!, x2!, y2!], dest: pdf.name(link.get('Dest')) });
+            links.push({ page, rect: [x1!, y1!, x2!, y2!], dest: pdf.name(link.get('Dest')) });
         }
     }
-    return out;
+    return links;
 }

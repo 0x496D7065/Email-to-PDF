@@ -55,7 +55,9 @@ describe('test code guard', () =>
 {
     it('finds the test code in every scanned folder, and no app code or fixture', () =>
     {
-        for (const path of ['/Source/web-page/page-shell.test.ts', '/Helper/Test/browser-tests/no-network.spec.ts', '/Helper/Test/browser-tests/support/network-and-csp-watch.ts', '/Helper/Test/test-support/pdf-reader.ts', '/Helper/build-checks/no-network-rules.test.ts', '/Helper/lint-rules/body-brace-style.test.ts'])
+        for (const path of ['/Source/web-page/page-shell.test.ts', '/Helper/Test/browser-tests/no-network.spec.ts',
+            '/Helper/Test/browser-tests/support/network-and-csp-watch.ts', '/Helper/Test/test-support/pdf-reader.ts',
+            '/Helper/build-checks/no-network-rules.test.ts', '/Helper/lint-rules/body-brace-style.test.ts'])
         {
             expect(codePaths, path).toContain(path);
         }

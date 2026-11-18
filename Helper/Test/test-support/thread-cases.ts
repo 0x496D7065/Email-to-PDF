@@ -43,10 +43,10 @@ const SENTENCES: readonly string[] = [
     'Glad to hear it. The invoice will follow by post.',
 ];
 
-function ownText(k: number, from: Person, to: Person): string
+function ownText(messageIndex: number, from: Person, to: Person): string
 {
     const first = to.name.split(' ')[0] ?? 'there';
-    const sentence = SENTENCES[k % SENTENCES.length] ?? '';
+    const sentence = SENTENCES[messageIndex % SENTENCES.length] ?? '';
     return `Hello ${first},\n\n${sentence}\n\nBest regards,\n${from.name.split(' ')[0] ?? ''}`;
 }
 
@@ -156,72 +156,81 @@ const REPLY_STYLES: readonly QuoteStyle[] = ['outlook-en', 'gmail-fr', 'apple-en
 
 function makeCases(): ThreadCase[]
 {
-    const c = (group: string, id: string, messages: readonly ThreadMessage[]): ThreadCase => ({ id, group, thread: buildThread(messages), messages });
+    const threadCase = (group: string, id: string, messages: readonly ThreadMessage[]): ThreadCase =>
+        ({ id, group, thread: buildThread(messages), messages });
     return [
         // Outlook classic, one language per chain, no ">".
-        c('outlook-en', 'outlook-en x3', chain(repeat('outlook-en', 3))),
-        c('outlook-en', 'outlook-en names only', chain(repeat('outlook-en', 2), { quote: { people: 'name' } })),
-        c('outlook-en', 'outlook-en mailto + cc', chain(repeat('outlook-en', 2), { quote: { people: 'mailto' }, cc: [CAROL] })),
-        c('outlook-en', 'outlook-original-en x2', chain(repeat('outlook-original-en', 2))),
-        c('outlook-fr', 'outlook-fr x3', chain(repeat('outlook-fr', 3), { cc: [CAROL] })),
-        c('outlook-fr', 'outlook-fr names only', chain(repeat('outlook-fr', 2), { quote: { people: 'name' } })),
-        c('outlook-fr', 'outlook-original-fr x2', chain(repeat('outlook-original-fr', 2))),
-        c('outlook-nl', 'outlook-nl x3', chain(repeat('outlook-nl', 3))),
-        c('outlook-nl', 'outlook-nl names only + cc', chain(repeat('outlook-nl', 2), { quote: { people: 'name' }, cc: [DAVE] })),
-        c('outlook-nl', 'outlook-original-nl x2', chain(repeat('outlook-original-nl', 2))),
+        threadCase('outlook-en', 'outlook-en x3', chain(repeat('outlook-en', 3))),
+        threadCase('outlook-en', 'outlook-en names only', chain(repeat('outlook-en', 2), { quote: { people: 'name' } })),
+        threadCase('outlook-en', 'outlook-en mailto + cc', chain(repeat('outlook-en', 2), { quote: { people: 'mailto' }, cc: [CAROL] })),
+        threadCase('outlook-en', 'outlook-original-en x2', chain(repeat('outlook-original-en', 2))),
+        threadCase('outlook-fr', 'outlook-fr x3', chain(repeat('outlook-fr', 3), { cc: [CAROL] })),
+        threadCase('outlook-fr', 'outlook-fr names only', chain(repeat('outlook-fr', 2), { quote: { people: 'name' } })),
+        threadCase('outlook-fr', 'outlook-original-fr x2', chain(repeat('outlook-original-fr', 2))),
+        threadCase('outlook-nl', 'outlook-nl x3', chain(repeat('outlook-nl', 3))),
+        threadCase('outlook-nl', 'outlook-nl names only + cc', chain(repeat('outlook-nl', 2), { quote: { people: 'name' }, cc: [DAVE] })),
+        threadCase('outlook-nl', 'outlook-original-nl x2', chain(repeat('outlook-original-nl', 2))),
         // Long To/Cc values wrapped over several lines.
-        c('outlook-wrapped', 'outlook-en wrapped to/cc', chain(repeat('outlook-en', 3), { moreTo: CROWD, cc: [CAROL, DAVE, ERIN], quote: { wrapAt: 76 } })),
-        c('outlook-wrapped', 'outlook-fr wrapped to/cc', chain(repeat('outlook-fr', 2), { moreTo: CROWD.slice(0, 3), cc: [ERIN, ...CROWD.slice(3)], quote: { wrapAt: 76 } })),
-        c('outlook-wrapped', 'outlook-nl wrapped names only', chain(repeat('outlook-nl', 2), { moreTo: CROWD, quote: { people: 'name', wrapAt: 60 } })),
+        threadCase('outlook-wrapped', 'outlook-en wrapped to/cc',
+            chain(repeat('outlook-en', 3), { moreTo: CROWD, cc: [CAROL, DAVE, ERIN], quote: { wrapAt: 76 } })),
+        threadCase('outlook-wrapped', 'outlook-fr wrapped to/cc',
+            chain(repeat('outlook-fr', 2), { moreTo: CROWD.slice(0, 3), cc: [ERIN, ...CROWD.slice(3)], quote: { wrapAt: 76 } })),
+        threadCase('outlook-wrapped', 'outlook-nl wrapped names only',
+            chain(repeat('outlook-nl', 2), { moreTo: CROWD, quote: { people: 'name', wrapAt: 60 } })),
         // Gmail: attribution line + ">" quote, nested ">>".
-        c('gmail-en', 'gmail-en x3', chain(repeat('gmail-en', 3))),
-        c('gmail-en', 'gmail-en wrapped attribution', chain(repeat('gmail-en', 2), { quote: { wrapAt: 60 } })),
-        c('gmail-en', 'gmail-en-gb x3', chain(repeat('gmail-en-gb', 3))),
-        c('gmail-fr', 'gmail-fr x3', chain(repeat('gmail-fr', 3))),
-        c('gmail-fr', 'gmail-fr wrapped attribution', chain(repeat('gmail-fr', 2), { quote: { wrapAt: 60 } })),
-        c('gmail-nl', 'gmail-nl x3', chain(repeat('gmail-nl', 3))),
+        threadCase('gmail-en', 'gmail-en x3', chain(repeat('gmail-en', 3))),
+        threadCase('gmail-en', 'gmail-en wrapped attribution', chain(repeat('gmail-en', 2), { quote: { wrapAt: 60 } })),
+        threadCase('gmail-en', 'gmail-en-gb x3', chain(repeat('gmail-en-gb', 3))),
+        threadCase('gmail-fr', 'gmail-fr x3', chain(repeat('gmail-fr', 3))),
+        threadCase('gmail-fr', 'gmail-fr wrapped attribution', chain(repeat('gmail-fr', 2), { quote: { wrapAt: 60 } })),
+        threadCase('gmail-nl', 'gmail-nl x3', chain(repeat('gmail-nl', 3))),
         // Apple Mail: attribution inside the quote.
-        c('apple', 'apple-en x3', chain(repeat('apple-en', 3))),
-        c('apple', 'apple-fr x2', chain(repeat('apple-fr', 2))),
-        c('apple', 'apple-nl x2', chain(repeat('apple-nl', 2))),
+        threadCase('apple', 'apple-en x3', chain(repeat('apple-en', 3))),
+        threadCase('apple', 'apple-fr x2', chain(repeat('apple-fr', 2))),
+        threadCase('apple', 'apple-nl x2', chain(repeat('apple-nl', 2))),
         // Thunderbird: numeric date, name only.
-        c('thunderbird', 'thunderbird-en x3', chain(repeat('thunderbird-en', 3))),
+        threadCase('thunderbird', 'thunderbird-en x3', chain(repeat('thunderbird-en', 3))),
         // Mixed clients. The first one has the shape of fixture 13 (Outlook NL
         // over a Gmail quote over an Outlook EN block).
-        c('mixed', 'fixture-13 shape', chain(['outlook-en', 'gmail-en', 'outlook-nl'])),
-        c('mixed', 'gmail-fr/apple/outlook-fr/thunderbird', chain(['gmail-fr', 'apple-en', 'outlook-fr', 'thunderbird-en'], { people: [ALICE, BOB, CAROL] })),
-        c('mixed', 'apple-nl/outlook-en/gmail-nl', chain(['apple-nl', 'outlook-en', 'gmail-nl'], { people: [CAROL, DAVE] })),
-        c('mixed', 'outlook over gmail over outlook (original)', chain(['gmail-en', 'outlook-original-en', 'gmail-en', 'outlook-fr'], { people: [ALICE, BOB, ERIN] })),
+        threadCase('mixed', 'fixture-13 shape', chain(['outlook-en', 'gmail-en', 'outlook-nl'])),
+        threadCase('mixed', 'gmail-fr/apple/outlook-fr/thunderbird',
+            chain(['gmail-fr', 'apple-en', 'outlook-fr', 'thunderbird-en'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('mixed', 'apple-nl/outlook-en/gmail-nl', chain(['apple-nl', 'outlook-en', 'gmail-nl'], { people: [CAROL, DAVE] })),
+        threadCase('mixed', 'outlook over gmail over outlook (original)',
+            chain(['gmail-en', 'outlook-original-en', 'gmail-en', 'outlook-fr'], { people: [ALICE, BOB, ERIN] })),
         // Deep nesting.
-        c('deep', 'gmail-en 6 generations', chain(repeat('gmail-en', 6), { people: PEOPLE })),
-        c('deep', 'outlook-en 7 generations', chain(repeat('outlook-en', 7), { people: PEOPLE })),
-        c('deep', 'mixed 8 generations', chain(REPLY_STYLES.slice(0, 8), { people: PEOPLE })),
-        c('deep', 'apple-en 5 generations', chain(repeat('apple-en', 5), { people: [ALICE, BOB, CAROL] })),
+        threadCase('deep', 'gmail-en 6 generations', chain(repeat('gmail-en', 6), { people: PEOPLE })),
+        threadCase('deep', 'outlook-en 7 generations', chain(repeat('outlook-en', 7), { people: PEOPLE })),
+        threadCase('deep', 'mixed 8 generations', chain(REPLY_STYLES.slice(0, 8), { people: PEOPLE })),
+        threadCase('deep', 'apple-en 5 generations', chain(repeat('apple-en', 5), { people: [ALICE, BOB, CAROL] })),
         // Forwards.
-        c('forward', 'gmail forward of an outlook thread', chain(['outlook-en', 'gmail-forward-en'], { people: [ALICE, BOB, CAROL] })),
-        c('forward', 'apple forward of a gmail thread', chain(['gmail-en', 'apple-forward-en'], { people: [ALICE, BOB, CAROL] })),
-        c('forward', 'outlook forward (FW: subject)', chain(['outlook-en', 'outlook-forward-en'], { people: [ALICE, BOB, DAVE] })),
-        c('forward', 'gmail-fr forward, then outlook-fr reply', chain(['gmail-forward-fr', 'outlook-fr'], { people: [ALICE, BOB, CAROL] })),
-        c('forward', 'gmail-nl forward', chain(['gmail-en', 'gmail-forward-nl'], { people: [ALICE, BOB, DAVE] })),
-        c('forward', 'forward in the middle', chain(['gmail-en', 'gmail-forward-en', 'gmail-en'], { people: [ALICE, BOB, CAROL] })),
-        c('forward', 'outlook forward in the middle', chain(['outlook-en', 'outlook-forward-en', 'outlook-en'], { people: [ALICE, BOB, CAROL] })),
-        c('forward', 'outlook-fr forward (TR : subject)', chain(['outlook-fr', 'outlook-forward-fr'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('forward', 'gmail forward of an outlook thread', chain(['outlook-en', 'gmail-forward-en'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('forward', 'apple forward of a gmail thread', chain(['gmail-en', 'apple-forward-en'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('forward', 'outlook forward (FW: subject)', chain(['outlook-en', 'outlook-forward-en'], { people: [ALICE, BOB, DAVE] })),
+        threadCase('forward', 'gmail-fr forward, then outlook-fr reply', chain(['gmail-forward-fr', 'outlook-fr'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('forward', 'gmail-nl forward', chain(['gmail-en', 'gmail-forward-nl'], { people: [ALICE, BOB, DAVE] })),
+        threadCase('forward', 'forward in the middle', chain(['gmail-en', 'gmail-forward-en', 'gmail-en'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('forward', 'outlook forward in the middle',
+            chain(['outlook-en', 'outlook-forward-en', 'outlook-en'], { people: [ALICE, BOB, CAROL] })),
+        threadCase('forward', 'outlook-fr forward (TR : subject)', chain(['outlook-fr', 'outlook-forward-fr'], { people: [ALICE, BOB, CAROL] })),
         // Other dates: accented months (f\u00e9vrier, ao\u00fbt, d\u00e9cembre) and a
         // conversation running from 31 December 2025 into 1 January 2026. The
         // zones have no daylight saving time, so their offsets hold all year.
-        c('dates', 'outlook-fr in February', chain(repeat('outlook-fr', 2), { start: Date.UTC(2025, 1, 14, 9, 30) })),
-        c('dates', 'gmail-fr and apple-fr in August', chain(['gmail-fr', 'apple-fr', 'gmail-fr'], { start: Date.UTC(2025, 7, 15, 6, 45), people: [ALICE, BOB, CAROL] })),
-        c('dates', 'mixed, 31 December into 1 January', chain(['outlook-fr', 'gmail-nl', 'thunderbird-en', 'apple-en', 'gmail-en-gb'], { start: Date.UTC(2025, 11, 31, 13, 40), people: PEOPLE })),
+        threadCase('dates', 'outlook-fr in February', chain(repeat('outlook-fr', 2), { start: Date.UTC(2025, 1, 14, 9, 30) })),
+        threadCase('dates', 'gmail-fr and apple-fr in August',
+            chain(['gmail-fr', 'apple-fr', 'gmail-fr'], { start: Date.UTC(2025, 7, 15, 6, 45), people: [ALICE, BOB, CAROL] })),
+        threadCase('dates', 'mixed, 31 December into 1 January', chain(['outlook-fr', 'gmail-nl', 'thunderbird-en', 'apple-en', 'gmail-en-gb'],
+            { start: Date.UTC(2025, 11, 31, 13, 40), people: PEOPLE })),
     ];
 }
 
 export const THREAD_CASES: readonly ThreadCase[] = makeCases();
 
-/** Shifts every offset of a header at or after `at` by `delta` (the text before `at` is unchanged). */
-function shiftHeader(h: ExpectedHeader, at: number, delta: number): ExpectedHeader
+/** Shifts every offset of a header at or after `fromOffset` by `delta` (the text before `fromOffset` is unchanged). */
+function shiftHeader(header: ExpectedHeader, fromOffset: number, delta: number): ExpectedHeader
 {
-    const s = (n: number): number => (n >= at ? n + delta : n);
-    return { ...h, start: s(h.start), headEnd: s(h.headEnd), ownStart: s(h.ownStart), ownEnd: s(h.ownEnd) };
+    const shift = (n: number): number => (n >= fromOffset ? n + delta : n);
+    return { ...header, start: shift(header.start), headEnd: shift(header.headEnd), ownStart: shift(header.ownStart), ownEnd: shift(header.ownEnd) };
 }
 
 /**
@@ -245,31 +254,31 @@ function makeRefusalCostCases(): ThreadCase[]
     const listed = chain(repeat('gmail-en', 2)).map((m, i) =>
         i === 1 ? { ...m, text: 'Hello Alice,\n\nHere is what the agent wrote:\n@ keys for the side door\n@ parking card\n\nBest regards,\nBob' } : m,
     );
-    const a = buildThread(listed);
-    const listBody = a.body.replace(/^> @ /gmu, '> > ');
+    const listBuilt = buildThread(listed);
+    const listBody = listBuilt.body.replace(/^> @ /gmu, '> > ');
     const listThread: BuiltThread = {
-        ...a,
+        ...listBuilt,
         body: listBody,
-        headers: a.headers.map((h) => ({ ...h, ownText: h.ownText.replace(/^@ /gmu, '> ') })),
+        headers: listBuilt.headers.map((h) => ({ ...h, ownText: h.ownText.replace(/^@ /gmu, '> ') })),
     };
 
     // (b) Message 1 forwards message 0 with no comment: its own text (a placeholder line and the gap after it) is cut out.
     const placeholder = 'PLACEHOLDER-NO-COMMENT';
     const passed = chain(['outlook-original-en', 'gmail-en']).map((m, i) => (i === 1 ? { ...m, text: placeholder } : m));
-    const b = buildThread(passed);
+    const passedBuilt = buildThread(passed);
     const cut = `> ${placeholder}\n>\n`;
-    const at = b.body.indexOf(cut);
-    if (at < 0 || b.body.indexOf(cut, at + 1) >= 0)
+    const cutAt = passedBuilt.body.indexOf(cut);
+    if (cutAt < 0 || passedBuilt.body.indexOf(cut, cutAt + 1) >= 0)
     {
         throw new Error('refusal-cost: placeholder not found once');
     }
     const passedThread: BuiltThread = {
-        ...b,
-        body: b.body.slice(0, at) + b.body.slice(at + cut.length),
-        headers: b.headers.map((h) =>
+        ...passedBuilt,
+        body: passedBuilt.body.slice(0, cutAt) + passedBuilt.body.slice(cutAt + cut.length),
+        headers: passedBuilt.headers.map((h) =>
         {
-            const moved = shiftHeader(h, at + cut.length, -cut.length);
-            return h.ownText === placeholder ? { ...moved, ownStart: at, ownEnd: at, ownText: '' } : moved;
+            const moved = shiftHeader(h, cutAt + cut.length, -cut.length);
+            return h.ownText === placeholder ? { ...moved, ownStart: cutAt, ownEnd: cutAt, ownText: '' } : moved;
         }),
     };
 
@@ -302,12 +311,12 @@ function negative(id: string, expect: NegativeCase['expect'], lines: readonly st
     const body = `${lines.join('\n')}\n`;
     const realHeaders = headerLines.map((h) =>
     {
-        const at = body.indexOf(`${h}\n`);
-        if (at < 0)
+        const headerStart = body.indexOf(`${h}\n`);
+        if (headerStart < 0)
         {
             throw new Error(`${id}: header line not found: ${h}`);
         }
-        return at;
+        return headerStart;
     });
     return { id, expect, body, subject: 'Re: Office desks and chairs', realHeaders };
 }

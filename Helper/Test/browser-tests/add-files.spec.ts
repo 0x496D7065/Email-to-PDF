@@ -1,6 +1,6 @@
 // Browser test of step 1, adding email files (README.md, rules R1, R2, R4
 // and R5), in each test browser against the BUILT site served by `vite preview` (see
-// playwright.config.ts). The real pipeline runs: the parse and engine
+// playwright.config.ts). The real pipeline runs: the parse and thread-analysis
 // workers are inlined in the page's script and started from blob: URLs, under
 // the page's own CSP.
 //
@@ -25,7 +25,8 @@ import { en } from '../../../Source/web-page/translations/en.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/network-and-csp-watch.ts';
+import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed,
+    type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -41,7 +42,7 @@ declare global
 const ROOT = decodeURIComponent(new URL('../../..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
 const fixture = (name: string): string => `${ROOT}Helper/Test/test-data/eml/${name}`;
 
-// A short order thread (10 -> 11) and an exact copy of 11 (merged by the engine).
+// A short order thread (10 -> 11) and an exact copy of 11 (merged by the thread analysis).
 const ORDER_1 = fixture('10-order-1-alice.eml');
 const ORDER_2 = fixture('11-order-2-bob-outlook-en.eml');
 const ORDER_2_COPY = fixture('30-dup-order-2-copy.eml');
@@ -93,7 +94,7 @@ const NodeBuffer = (globalThis as unknown as { Buffer: { from(bytes: number[]): 
 type ExtraFile = { readonly name: string; readonly bytes: number[] } | { readonly name: string; readonly hugeMegabytes: number };
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 
@@ -239,15 +240,15 @@ async function dropFiles(page: Page, selector: string, paths: readonly string[],
 /** Requests since the page loaded. */
 const requestsAfterLoad = (): string[] => watch.requests.slice(loadedAt);
 
-/** The parse / engine workers started so far. */
+/** The parse / thread-analysis workers started so far (the latter by their runtime name 'engine-worker'). */
 const parseWorkers = (): number => workersNamed(watch, watch.workers, 'parse-worker').length;
-const engineWorkers = (): number => workersNamed(watch, watch.workers, 'engine-worker').length;
+const threadAnalysisWorkers = (): number => workersNamed(watch, watch.workers, 'engine-worker').length;
 
 /**
  * After processing has settled (a quiet period): the only "requests" after
  * load are the blob: URLs the inlined workers start from (on the site's own
  * origin, read from memory), nothing else; no WebSocket; no CSP violation in
- * the page or any worker; every worker ended and is a parse or engine
+ * the page or any worker; every worker ended and is a parse or thread-analysis
  * worker; no console error; the page is still the app.
  */
 async function expectNothingLeftThePage(page: Page): Promise<void>
@@ -259,10 +260,10 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
         expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
     }
     expect(requestsAfterLoad().filter((url) => !workerUrls.has(url))).toEqual([]);
-    expect(parseWorkers() + engineWorkers()).toBe(watch.workers.length);
+    expect(parseWorkers() + threadAnalysisWorkers()).toBe(watch.workers.length);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     expect(withoutSelectReports(browserName, await page.evaluate(() => window.__addViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
@@ -297,9 +298,9 @@ test('choose files: progress is shown, the summary is right and step 2 opens', a
     expect(seen.statuses).toContain(en.drop.readingMany.replace('{total}', '4'));
     expect(seen.statuses.filter((s) => s.startsWith('Reading file'))).toEqual([]);
     expect(seen.statuses).toContain(en.drop.organizing);
-    // One parse worker per file read (3, then all 4 again), one engine worker per round.
+    // One parse worker per file read (3, then all 4 again), one thread-analysis worker per round.
     expect(parseWorkers()).toBe(7);
-    expect(engineWorkers()).toBe(2);
+    expect(threadAnalysisWorkers()).toBe(2);
     expect(page.url()).toBe(url);
 
     await expectNothingLeftThePage(page);
@@ -485,9 +486,9 @@ test.describe('offline right after the page has loaded', () =>
         await expectCheckReady(page);
         await expect(page.locator('#add-failed')).toBeHidden();
         await expect(page.locator('#add-batch-error')).toBeHidden();
-        // Every worker really started: one parse worker per file read, one engine worker per round.
+        // Every worker really started: one parse worker per file read, one thread-analysis worker per round.
         expect(parseWorkers()).toBe(7);
-        expect(engineWorkers()).toBe(2);
+        expect(threadAnalysisWorkers()).toBe(2);
         // Nothing after load but the workers' blob: URLs (never the network).
         expect(requestsAfterLoad().every((url) => url.startsWith(`blob:${origin}/`))).toBe(true);
         await expectNothingLeftThePage(page);

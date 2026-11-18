@@ -31,10 +31,10 @@ const rule = {
         const sourceCode = context.sourceCode;
         const sameLine = (a, b) => a.loc.end.line === b.loc.start.line;
         /** The line break the file already uses, so a fix never mixes CRLF and LF. */
-        const eol = sourceCode.text.includes('\r\n') ? '\r\n' : '\n';
+        const lineBreak = sourceCode.text.includes('\r\n') ? '\r\n' : '\n';
         /** Fix: the spaces between `token` and the token or comment before it become one line break. */
         const breakBefore = (token) => (fixer) =>
-            fixer.replaceTextRange([sourceCode.getTokenBefore(token, { includeComments: true }).range[1], token.range[0]], eol);
+            fixer.replaceTextRange([sourceCode.getTokenBefore(token, { includeComments: true }).range[1], token.range[0]], lineBreak);
 
         /** `{` and `}` of an empty body on one line (a comment inside still counts as empty). */
         function checkEmpty(open, close)

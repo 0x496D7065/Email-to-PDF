@@ -27,9 +27,10 @@ export function isAllowedIPv4(ip: string): boolean
     {
         return false;
     }
-    const [a, b, c] = octets;
+    const [firstOctet, secondOctet, thirdOctet] = octets;
     return (
-        a === 127 || (a === 192 && b === 0 && c === 2) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)
+        firstOctet === 127 || (firstOctet === 192 && secondOctet === 0 && thirdOctet === 2)
+            || (firstOctet === 198 && secondOctet === 51 && thirdOctet === 100) || (firstOctet === 203 && secondOctet === 0 && thirdOctet === 113)
     );
 }
 
@@ -67,10 +68,10 @@ export function hasHiddenSegment(path: string): boolean
 }
 
 /** The header marker every .eml fixture must carry in its top-level header block. */
-export function hasSyntheticMarker(eml: string): boolean
+export function hasSyntheticMarker(emlText: string): boolean
 {
-    const end = eml.search(/\r?\n\r?\n/);
-    const headers = end === -1 ? eml : eml.slice(0, end);
+    const end = emlText.search(/\r?\n\r?\n/);
+    const headers = end === -1 ? emlText : emlText.slice(0, end);
     return /^X-Synthetic-Fixture:[ \t]*true[ \t]*\r?$/im.test(headers);
 }
 
@@ -190,7 +191,7 @@ export function decodedViews(text: string, depth = 0): string[]
 {
     // QP soft line breaks: "=" at the end of a line joins it to the next one.
     const joined = text.replace(/=\r?\n/g, '');
-    const qp = decodeQpEscapes(joined);
+    const qpDecoded = decodeQpEscapes(joined);
     // The main RFC 2047 view is NOT decoded from `joined`: joining soft breaks there
     // eats the "=" of a closing "?=" at the end of a line. Here soft breaks are
     // joined except right after "?" (a "?=" line end closes an encoded word;
@@ -214,7 +215,7 @@ export function decodedViews(text: string, depth = 0): string[]
     const joinedWords = decodeEncodedWords(joined.replace(/\r?\n[ \t]+/g, ' ').replace(/(\?=)\s+(?==\?)/g, '$1'));
     const views = [
         joined,
-        qp,
+        qpDecoded,
         words,
         joinedWords,
         decodeHtmlEntities(words),
@@ -224,8 +225,8 @@ export function decodedViews(text: string, depth = 0): string[]
         decodeHtmlEntities(joined),
         decodePercent(joined),
         // Layered encodings: QP first, then entities or percent (`a=26#64;b` is QP for `a&#64;b`).
-        decodeHtmlEntities(qp),
-        decodePercent(qp),
+        decodeHtmlEntities(qpDecoded),
+        decodePercent(qpDecoded),
     ];
     if (depth < MAX_DEPTH)
     {
@@ -284,41 +285,41 @@ export function findForbiddenHosts(text: string, mode: ScanMode = 'fixture'): st
     {
         // Email addresses (also catches Message-IDs and cid: references, which use the same form).
         // Finds `a@mail.example.test` and `<id.1@host.invalid>` (then checks the domain), not a lone `@`.
-        for (const m of view.matchAll(new RegExp(`[A-Za-z0-9._%+-]+@(${LABEL}(?:\\.${LABEL})+)`, 'g')))
+        for (const addressMatch of view.matchAll(new RegExp(`[A-Za-z0-9._%+-]+@(${LABEL}(?:\\.${LABEL})+)`, 'g')))
         {
-            const domain = m[1] ?? '';
+            const domain = addressMatch[1] ?? '';
             if (!isAllowedHost(domain))
             {
-                problems.add(`email domain "${domain}" in "${m[0]}"`);
+                problems.add(`email domain "${domain}" in "${addressMatch[0]}"`);
             }
         }
         // URLs with a scheme: host after "://", without user info and port.
         // In `https://user@cdn.invalid:8080/x` it checks `cdn.invalid`; `cid:part1` has no "//", so it is skipped.
-        for (const m of view.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/([^\s/?#"'<>()\\]+)/gi))
+        for (const urlMatch of view.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/([^\s/?#"'<>()\\]+)/gi))
         {
-            const host = (m[1] ?? '').replace(/^.*@/, '').replace(/:\d*$/, '');
+            const host = (urlMatch[1] ?? '').replace(/^.*@/, '').replace(/:\d*$/, '');
             if (!isAllowedHost(host))
             {
-                problems.add(`URL host "${host}" in "${m[0]}"`);
+                problems.add(`URL host "${host}" in "${urlMatch[0]}"`);
             }
         }
         // Protocol-relative URLs "//host/...": not after a scheme colon, a word char or another slash.
         // Finds `src="//cdn.invalid/p.png"` (checks `cdn.invalid`), not `// a comment` (no dotted host).
-        for (const m of view.matchAll(new RegExp(`(?<![\\w:/])//(?:[^\\s/@]*@)?(\\[[0-9A-Fa-f:.]+\\]|${LABEL}(?:\\.${LABEL})+)`, 'g')))
+        for (const hostMatch of view.matchAll(new RegExp(`(?<![\\w:/])//(?:[^\\s/@]*@)?(\\[[0-9A-Fa-f:.]+\\]|${LABEL}(?:\\.${LABEL})+)`, 'g')))
         {
-            const host = m[1] ?? '';
+            const host = hostMatch[1] ?? '';
             if (!isAllowedHost(host))
             {
-                problems.add(`protocol-relative URL host "${host}" in "${m[0]}"`);
+                problems.add(`protocol-relative URL host "${host}" in "${hostMatch[0]}"`);
             }
         }
         // Bare host names: any dotted name starting with "www", or ending in a common real TLD.
         // Flags `shop.example` + `.de` written together; allows `www.shop.test`, `manifest.ts` and `version 1.2`.
-        for (const m of view.matchAll(/(?<![\w.-])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?![\w-]|\.[A-Za-z0-9])/g))
+        for (const bareHostMatch of view.matchAll(/(?<![\w.-])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?![\w-]|\.[A-Za-z0-9])/g))
         {
-            const host = m[0];
+            const host = bareHostMatch[0];
             const tld = host.slice(host.lastIndexOf('.') + 1);
-            const next = view.charAt(m.index + host.length);
+            const next = view.charAt(bareHostMatch.index + host.length);
             const realTld = REAL_TLDS.test(tld) && !(mode === 'code' && isCodeMemberAccess(host, next));
             if ((/^www\./i.test(host) || realTld) && !isReservedTestHost(host))
             {
@@ -326,18 +327,18 @@ export function findForbiddenHosts(text: string, mode: ScanMode = 'fixture'): st
             }
         }
         // Bare IPv4 literals. Finds `192.0.2.10` (then checks the range), not `1.2.3` or `1.2.3.4.5`.
-        for (const m of view.matchAll(/(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w]|\.\d)/g))
+        for (const ipv4Match of view.matchAll(/(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w]|\.\d)/g))
         {
-            if (m[0].split('.').every((o) => Number(o) <= 255) && !isAllowedIPv4(m[0]))
+            if (ipv4Match[0].split('.').every((o) => Number(o) <= 255) && !isAllowedIPv4(ipv4Match[0]))
             {
-                problems.add(`IPv4 address "${m[0]}"`);
+                problems.add(`IPv4 address "${ipv4Match[0]}"`);
             }
         }
         // Bare IPv6 literals: compressed ("::") with a hex digit, or the full 8-group form (times like 10:00:00 never match).
         // Finds `2001:db8::25` and `[::1]` (then checks the prefix), not `10:00:00`.
-        for (const m of view.matchAll(/(?<![\w:])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![\w:])/g))
+        for (const ipv6Match of view.matchAll(/(?<![\w:])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![\w:])/g))
         {
-            const ip = m[0];
+            const ip = ipv6Match[0];
             const full = /^[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}$/.test(ip);
             const compressed = ip.includes('::') && /[0-9A-Fa-f]/.test(ip);
             if ((full || compressed) && !isAllowedIPv6(ip))
@@ -377,12 +378,12 @@ export function findPersonalPaths(text: string): string[]
     const problems = new Set<string>();
     for (const view of decodedViews(text))
     {
-        for (const m of view.matchAll(HOME_PATH))
+        for (const pathMatch of view.matchAll(HOME_PATH))
         {
-            const name = (m[1] ?? '').replace(/\.+$/, '');
+            const name = (pathMatch[1] ?? '').replace(/\.+$/, '');
             if (!PLACEHOLDER_USER_NAMES.has(name.toLowerCase()))
             {
-                problems.add(`home-folder path "${m[0]}"`);
+                problems.add(`home-folder path "${pathMatch[0]}"`);
             }
         }
     }
@@ -443,12 +444,12 @@ export function findUnlistedTimeZones(text: string): string[]
     const problems = new Set<string>();
     for (const view of decodedViews(text))
     {
-        for (const m of view.matchAll(ZONE_START))
+        for (const zoneMatch of view.matchAll(ZONE_START))
         {
-            ALLOWED_ZONE_AT.lastIndex = m.index;
+            ALLOWED_ZONE_AT.lastIndex = zoneMatch.index;
             if (!ALLOWED_ZONE_AT.test(view))
             {
-                problems.add(`time zone "${m[0]}" (not in the allowed list)`);
+                problems.add(`time zone "${zoneMatch[0]}" (not in the allowed list)`);
             }
         }
     }

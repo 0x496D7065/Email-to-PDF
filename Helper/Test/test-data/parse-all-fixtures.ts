@@ -1,5 +1,5 @@
 // Parses every synthetic fixture (this folder) with the real .eml and .msg
-// adapters, in manifest order. Shared by the engine's fixture tests
+// adapters, in manifest order. Shared by the thread analysis's fixture tests
 // (Source/thread-analysis/*.fixtures.test.ts) so they all see the same parsed messages.
 // Test-only: never imported by the app.
 
@@ -28,32 +28,32 @@ const emlFiles = import.meta.glob<string>('./eml/*.eml', {
 export async function parseAllFixtures(): Promise<NormalizedMessage[]>
 {
     const messages: NormalizedMessage[] = [];
-    for (const f of FIXTURES)
+    for (const fixture of FIXTURES)
     {
         let bytes: Uint8Array;
-        if (f.kind === 'eml')
+        if (fixture.kind === 'eml')
         {
-            const raw = emlFiles[`./${f.id}`];
+            const raw = emlFiles[`./${fixture.id}`];
             if (raw === undefined)
             {
-                throw new Error(`missing file for ${f.id}`);
+                throw new Error(`missing file for ${fixture.id}`);
             }
             bytes = new TextEncoder().encode(raw); // fixtures are 7-bit ASCII
         }
         else
         {
-            const spec = MSG_SPECS.find((s) => s.id === f.id);
+            const spec = MSG_SPECS.find((s) => s.id === fixture.id);
             if (spec === undefined)
             {
-                throw new Error(`missing spec for ${f.id}`);
+                throw new Error(`missing spec for ${fixture.id}`);
             }
             bytes = buildMsg(spec);
         }
-        const parser = f.kind === 'eml' ? emlParser : msgParser;
-        const result = await parser.parse({ name: f.id, bytes });
+        const parser = fixture.kind === 'eml' ? emlParser : msgParser;
+        const result = await parser.parse({ name: fixture.id, bytes });
         if (!result.ok)
         {
-            throw new Error(`${f.id} failed to parse: ${result.detail}`);
+            throw new Error(`${fixture.id} failed to parse: ${result.detail}`);
         }
         messages.push(result.message);
     }

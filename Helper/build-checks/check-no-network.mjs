@@ -53,8 +53,8 @@ import { checkFontChunkLoadedAtStartup, checkNumberArrays, checkSourceFonts, fin
 import { checkBuiltHtml, checkHeadersFile, findEmbeddedViolations, findOpaquePayloads, findViolations } from './no-network-rules.mjs';
 import { manifestVersion, readBuiltManifest } from './service-worker-version.mjs';
 
-const root = fileURLToPath(new URL('../..', import.meta.url));
-const dist = join(root, 'dist');
+const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
+const distDir = join(projectRoot, 'dist');
 
 /** All files under `dir`, recursively. */
 function listFiles(dir)
@@ -67,12 +67,12 @@ function listFiles(dir)
 }
 
 /** Path relative to the project root, with forward slashes for readability. */
-function display(path)
+function displayPath(path)
 {
-    return relative(root, path).split(sep).join('/');
+    return relative(projectRoot, path).split(sep).join('/');
 }
 
-if (!existsSync(dist))
+if (!existsSync(distDir))
 {
     console.error('check-no-network: dist/ does not exist. Run "npm run build" first.');
     process.exit(1);
@@ -85,11 +85,12 @@ if (!existsSync(dist))
 // Source/index.html is scanned here like any other Source/ file.
 // Header/ (the shared type definitions) is scanned as source too: it holds
 // types only, but a comment or a string type could still hold a URL.
-const publicDir = join(root, 'Source', 'public');
-const srcFiles = [...listFiles(join(root, 'Source')), ...listFiles(join(root, 'Header'))].filter((path) => !path.endsWith('.test.ts') && !path.startsWith(publicDir + sep));
-const fontFiles = srcFiles.filter((path) => isFontFile(path));
-const sourceFiles = srcFiles.filter((path) => !isFontFile(path));
-const distFiles = listFiles(dist);
+const publicDir = join(projectRoot, 'Source', 'public');
+const sourceAndHeaderFiles = [...listFiles(join(projectRoot, 'Source')), ...listFiles(join(projectRoot, 'Header'))].filter((path) =>
+    !path.endsWith('.test.ts') && !path.startsWith(publicDir + sep));
+const fontFiles = sourceAndHeaderFiles.filter((path) => isFontFile(path));
+const sourceFiles = sourceAndHeaderFiles.filter((path) => !isFontFile(path));
+const distFiles = listFiles(distDir);
 
 const errors = [];
 
@@ -106,8 +107,8 @@ for (const [files, isDist] of [
         // For dist/ files: the path inside dist/ (e.g. 'THIRD_PARTY_NOTICES.txt'),
         // used by the per-file URL allowlist. For source files: the path from
         // the project root (e.g. 'Source/pdf-export/fonts/LICENSE.txt'), same purpose.
-        const distFile = isDist ? relative(dist, path).split(sep).join('/') : undefined;
-        const sourceFile = isDist ? undefined : display(path);
+        const distFile = isDist ? relative(distDir, path).split(sep).join('/') : undefined;
+        const sourceFile = isDist ? undefined : displayPath(path);
         const text = readFileSync(path, 'utf8');
         if (isDist)
         {
@@ -119,7 +120,8 @@ for (const [files, isDist] of [
         {
             for (const array of findNumberArrays(text))
             {
-                errors.push(`${display(path)}:${array.line}: a ${array.values.length}-number array: data hidden this way escapes every other check (README.md, rule R3)`);
+                errors.push(
+                    `${displayPath(path)}:${array.line}: a ${array.values.length}-number array: data hidden this way escapes every other check (README.md, rule R3)`);
             }
         }
         const findings = findViolations(text, { isDist, distFile, sourceFile });
@@ -137,8 +139,8 @@ for (const [files, isDist] of [
         for (const { line, match, reason } of findings)
         {
             // Minified lines can be huge; cap what we print.
-            const shown = match.length > 80 ? `${match.slice(0, 80)}...` : match;
-            errors.push(`${display(path)}:${line}: "${shown}" -> ${reason}`);
+            const shownMatch = match.length > 80 ? `${match.slice(0, 80)}...` : match;
+            errors.push(`${displayPath(path)}:${line}: "${shownMatch}" -> ${reason}`);
         }
     }
 }
@@ -146,16 +148,16 @@ for (const [files, isDist] of [
 // The bundled PDF fonts (Helper/build-checks/font-rules.mjs): the committed files are the
 // official ones, long number arrays appear only in the font chunk and are
 // exactly those fonts, and the page loads that chunk at startup.
-errors.push(...checkSourceFonts(fontFiles.map((path) => ({ path: display(path), bytes: readFileSync(path) }))));
+errors.push(...checkSourceFonts(fontFiles.map((path) => ({ path: displayPath(path), bytes: readFileSync(path) }))));
 errors.push(...checkNumberArrays(distTexts));
-if (existsSync(join(dist, 'index.html')))
+if (existsSync(join(distDir, 'index.html')))
 {
-    errors.push(...checkFontChunkLoadedAtStartup(readFileSync(join(dist, 'index.html'), 'utf8'), distTexts));
+    errors.push(...checkFontChunkLoadedAtStartup(readFileSync(join(distDir, 'index.html'), 'utf8'), distTexts));
 }
 
 // Structural checks on the built security headers.
-const indexHtml = join(dist, 'index.html');
-const headersFile = join(dist, '_headers');
+const indexHtml = join(distDir, 'index.html');
+const headersFile = join(distDir, '_headers');
 for (const [path, check] of [
     [indexHtml, checkBuiltHtml],
     [headersFile, checkHeadersFile],
@@ -163,18 +165,18 @@ for (const [path, check] of [
 {
     if (!existsSync(path))
     {
-        errors.push(`${display(path)}: file is missing (README.md, rule R2)`);
+        errors.push(`${displayPath(path)}: file is missing (README.md, rule R2)`);
         continue;
     }
     for (const problem of check(readFileSync(path, 'utf8')))
     {
-        errors.push(`${display(path)}: ${problem}`);
+        errors.push(`${displayPath(path)}: ${problem}`);
     }
 }
 
 // The service worker script must be there: dist/_headers has a rule for it
 // (checked above), and its two rule exceptions (RULE_EXEMPTIONS) are for it.
-if (!existsSync(join(dist, 'sw.js')))
+if (!existsSync(join(distDir, 'sw.js')))
 {
     errors.push('dist/sw.js: file is missing (README.md, "How the privacy model works")');
 }
@@ -187,10 +189,10 @@ else
     // returning visitors would then keep an old copy.
     try
     {
-        const swJs = readFileSync(join(dist, 'sw.js'), 'utf8');
-        const { version, paths } = readBuiltManifest(swJs);
-        const files = paths.map((path) => ({ path, bytes: readFileSync(join(dist, path === '/' ? 'index.html' : path.slice(1))) }));
-        const expected = manifestVersion(files, swJs, readFileSync(headersFile));
+        const serviceWorkerJs = readFileSync(join(distDir, 'sw.js'), 'utf8');
+        const { version, paths } = readBuiltManifest(serviceWorkerJs);
+        const files = paths.map((path) => ({ path, bytes: readFileSync(join(distDir, path === '/' ? 'index.html' : path.slice(1))) }));
+        const expected = manifestVersion(files, serviceWorkerJs, readFileSync(headersFile));
         if (version !== expected)
         {
             errors.push(`dist/sw.js: version ${version} is not the one computed from dist/ (${expected}): the build left something out of it`);

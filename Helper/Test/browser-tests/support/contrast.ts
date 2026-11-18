@@ -18,27 +18,27 @@ export async function contrastFailures(page: Page, rootSelector = 'body', minChe
             type Rgba = [number, number, number, number];
             const parse = (color: string): Rgba =>
             {
-                const n = color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
-                return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1];
+                const numbers = color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
+                return [numbers[0] ?? 0, numbers[1] ?? 0, numbers[2] ?? 0, numbers[3] ?? 1];
             };
             const luminance = ([r, g, b]: Rgba): number =>
             {
-                const channel = (v: number): number =>
+                const channel = (channelValue: number): number =>
                 {
-                    const s = v / 255;
-                    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                    const scaled = channelValue / 255;
+                    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
                 };
                 return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
             };
             // The first ancestor with an opaque background colour (white if none).
             const background = (start: Element): Rgba =>
             {
-                for (let e: Element | null = start; e; e = e.parentElement)
+                for (let element: Element | null = start; element; element = element.parentElement)
                 {
-                    const bg = parse(getComputedStyle(e).backgroundColor);
-                    if (bg[3] > 0)
+                    const backgroundRgba = parse(getComputedStyle(element).backgroundColor);
+                    if (backgroundRgba[3] > 0)
                     {
-                        return bg;
+                        return backgroundRgba;
                     }
                 }
                 return [255, 255, 255, 1];
@@ -54,9 +54,9 @@ export async function contrastFailures(page: Page, rootSelector = 'body', minChe
                     continue;
                 }
                 const style = getComputedStyle(element);
-                const fg = luminance(parse(style.color));
-                const bg = luminance(background(element));
-                const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+                const textLuminance = luminance(parse(style.color));
+                const backgroundLuminance = luminance(background(element));
+                const ratio = (Math.max(textLuminance, backgroundLuminance) + 0.05) / (Math.min(textLuminance, backgroundLuminance) + 0.05);
                 const size = Number.parseFloat(style.fontSize);
                 const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
                 checked++;

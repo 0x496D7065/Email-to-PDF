@@ -15,7 +15,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
+import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+    type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -35,13 +36,13 @@ const payload = (name: string, bytes: Uint8Array) => ({ name, mimeType: 'message
 const fixture = (name: string) => payload(name, NodeBuffer.from(readFileSync(`${ROOT}Helper/Test/test-data/eml/${name}`, 'utf8'), 'utf8'));
 
 /** A synthetic plain-text .eml (reserved test domains, made-up people). */
-function eml(headers: Readonly<Record<string, string>>, body: string): string
+function emlText(headers: Readonly<Record<string, string>>, body: string): string
 {
     const lines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`);
     return `${[...lines, 'X-Synthetic-Fixture: true', 'MIME-Version: 1.0', 'Content-Type: text/plain; charset="us-ascii"', 'Content-Transfer-Encoding: 7bit'].join('\r\n')}\r\n\r\n${body.replaceAll('\n', '\r\n')}`;
 }
 
-const FORWARD = eml(
+const FORWARD = emlText(
     {
         Date: 'Mon, 24 Mar 2025 10:00:00 +0100',
         From: 'Carol Test <carol@example.test>',
@@ -64,7 +65,7 @@ The driver will ring at the side door.
 `,
 );
 
-const WRITER_QUOTE = eml(
+const WRITER_QUOTE = emlText(
     {
         Date: 'Tue, 25 Mar 2025 11:30:00 +0100',
         From: 'Dave Sample <dave@example.test>',
@@ -104,7 +105,7 @@ const SUBJECTS_IN_ORDER = [
     'Re: Chair colours',
 ];
 
-const R = en.pdf.reason;
+const REASON = en.pdf.reason;
 const IN = (reasons: string): string => en.pdf.label.in.replace('{reasons}', reasons);
 const OUT = (reasons: string): string => en.pdf.label.out.replace('{reasons}', reasons);
 const SAME_SIGNATURE = (n: number): string => en.pdf.repeatedFrom.replace('{number}', `#${String(n)}`);
@@ -113,7 +114,7 @@ const PRINTED_AS_REBUILT = (n: number): string => en.pdf.printedAs.rebuilt.repla
 test.use({ timezoneId: 'Africa/Lagos' });
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 
@@ -186,7 +187,7 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     expect(withoutSelectReports(browserName, await page.evaluate(() => window.__labelViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     expect(withoutSelectConsole(browserName, problems)).toEqual([]);
@@ -198,17 +199,17 @@ test('each folded part says whether it will be in the PDF', async ({ page }) =>
     const items = await openWithEmails(page);
 
     // #1, Alice's first email: her signature, kept the first time.
-    expect(await labelsOf(items.nth(0))).toEqual([IN(R.signature)]);
+    expect(await labelsOf(items.nth(0))).toEqual([IN(REASON.signature)]);
     // #2, Bob's Outlook-style reply: his first signature is kept, the quoted
     // email below it is not. The two were one folded part; it is cut in two
     // so that each label is right for all of its text.
-    expect(await labelsOf(items.nth(1))).toEqual([IN(R.signature), OUT(R['app-quoted-history'])]);
+    expect(await labelsOf(items.nth(1))).toEqual([IN(REASON.signature), OUT(REASON['app-quoted-history'])]);
     await expect(items.nth(1).locator('details.fold').nth(0).locator('.body-folded')).toContainText('DISCLAIMER');
     await expect(items.nth(1).locator('details.fold').nth(1).locator('.body-folded')).toContainText('From: Alice Example');
     // #3, Alice's Gmail-style reply: the same signature as in #1, and the quote, both left out.
-    expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${REASON['app-quoted-history']}`)]);
     // #4, Bob's second Outlook reply: his signature again (as in #2) and the quote.
-    expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${REASON['app-quoted-history']}`)]);
     // #5, a forward: the forwarded email is rebuilt from it and printed as an
     // email of its own (Email 5 in the PDF, before the forward), so its text is
     // not in the forward in the PDF (task 8.11); its header lines go too (task
@@ -230,7 +231,7 @@ test('each folded part says whether it will be in the PDF', async ({ page }) =>
     expect(writerLabels.length).toBeGreaterThan(0);
     for (const text of writerLabels)
     {
-        expect(text).toBe(IN(R['writer-quote']));
+        expect(text).toBe(IN(REASON['writer-quote']));
     }
 
     // Labels are text in the summary, so screen readers read them with the fold.
@@ -249,7 +250,7 @@ test('each folded part says whether it will be in the PDF', async ({ page }) =>
     // forwarded email stays in the forward; on again: printed as its own email again.
     await page.locator('#rebuilt-include-all').uncheck();
     await expectReady(page);
-    expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);
+    expect(await labelsOf(items.nth(4))).toEqual([IN(REASON.forwarded)]);
     await page.locator('#rebuilt-include-all').check();
     await expectReady(page);
     expect(await labelsOf(items.nth(4))).toEqual([PRINTED_AS_REBUILT(5)]);
@@ -286,14 +287,14 @@ test('unticking an email moves the "first" signature; ticking it back restores t
     await expect(items.nth(0)).toHaveAttribute('data-included', 'false');
     expect(await labelsOf(items.nth(0))).toEqual([]);
     // #3 now has the first copy of Alice's signature: kept, cut apart from the quote.
-    expect(await labelsOf(items.nth(2))).toEqual([IN(R.signature), OUT(R['app-quoted-history'])]);
+    expect(await labelsOf(items.nth(2))).toEqual([IN(REASON.signature), OUT(REASON['app-quoted-history'])]);
     // Bob's labels do not change.
-    expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${REASON['app-quoted-history']}`)]);
 
     await page.locator('#include-0').check();
     await expectReady(page);
     expect(await labelsOf(items.nth(2))).toEqual(before);
-    expect(await labelsOf(items.nth(0))).toEqual([IN(R.signature)]);
+    expect(await labelsOf(items.nth(0))).toEqual([IN(REASON.signature)]);
 
     await expectNothingLeftThePage(page);
 });
@@ -311,12 +312,12 @@ test('ticking an email never moves the list: the status line keeps its place', a
     const updating = await page.evaluate(() =>
     {
         document.querySelector<HTMLInputElement>('#include-0')?.click();
-        const at = (id: string): number => document.querySelector(id)?.getBoundingClientRect().top ?? Number.NaN;
+        const topOf = (id: string): number => document.querySelector(id)?.getBoundingClientRect().top ?? Number.NaN;
         return {
             state: document.querySelector('#preview-list')?.getAttribute('data-pdf-labels'),
             status: document.querySelector('#pdf-labels-status')?.textContent,
-            first: at('#include-0'),
-            third: at('#include-2'),
+            first: topOf('#include-0'),
+            third: topOf('#include-2'),
         };
     });
     expect(updating.state).toBe('updating');
@@ -349,7 +350,7 @@ test('unticking an email in the middle never moves the emails below, nor does ti
     // (#4 names #2's signature), so only #3's own labels could move the list.
     const third = items.nth(2);
     const thirdLabels = await labelsOf(third);
-    expect(thirdLabels).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+    expect(thirdLabels).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${REASON['app-quoted-history']}`)]);
     const labelCount = await third.locator('.pdf-label').count();
 
     /**
@@ -402,7 +403,7 @@ test('unticking an email in the middle never moves the emails below, nor does ti
     }
     await expect(third.locator('summary').first()).not.toHaveAccessibleName(new RegExp(en.pdf.label.out.replace('{reasons}', '').trim()));
     // The other emails' labels did not change.
-    expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(3))).toEqual([OUT(`${SAME_SIGNATURE(2)}, ${REASON['app-quoted-history']}`)]);
 
     // Ticked back: "updating", then the same labels; nothing below moved at any point.
     const ticked = await clickThird();
@@ -549,13 +550,13 @@ test('"Print full original text" makes every label say so, and Clear everything 
     {
         expect(text.trim().startsWith(en.pdf.label.in.replace('{reasons}', ''))).toBe(true);
     }
-    expect(await labelsOf(items.nth(2))).toEqual([IN(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(2))).toEqual([IN(`${SAME_SIGNATURE(1)}, ${REASON['app-quoted-history']}`)]);
     // The forward is printed whole: its forwarded email is in it (task 8.11: no "printed as" label).
-    expect(await labelsOf(items.nth(4))).toEqual([IN(R.forwarded)]);
+    expect(await labelsOf(items.nth(4))).toEqual([IN(REASON.forwarded)]);
 
     await everything.uncheck();
     await expectReady(page);
-    expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${REASON['app-quoted-history']}`)]);
     expect(await labelsOf(items.nth(4))).toEqual([PRINTED_AS_REBUILT(5)]);
 
     await everything.check();
@@ -567,7 +568,7 @@ test('"Print full original text" makes every label say so, and Clear everything 
     await page.locator('#file-input').setInputFiles(FILES);
     await expect(items).toHaveCount(6, { timeout: 30_000 });
     await expectReady(page);
-    expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${R['app-quoted-history']}`)]);
+    expect(await labelsOf(items.nth(2))).toEqual([OUT(`${SAME_SIGNATURE(1)}, ${REASON['app-quoted-history']}`)]);
 
     await expectNothingLeftThePage(page);
 });

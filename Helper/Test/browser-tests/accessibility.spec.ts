@@ -37,7 +37,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
+import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+    type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -48,7 +49,7 @@ declare global
         __a11yStatuses: string[];
         /** Every text the visible progress line showed, in order. */
         __a11yProgress: string[];
-        /** Long-batch test only: lets the held engine worker start (see that test). */
+        /** Long-batch test only: lets the held thread-analysis worker start (see that test). */
         __a11yRelease: () => void;
     }
 }
@@ -111,20 +112,20 @@ const FILES = [
 const EMAILS = 5;
 
 /** One small made-up email of the long batch. */
-function batchEmail(i: number): InputFile
+function batchEmail(emailNumber: number): InputFile
 {
-    const n = String(i);
+    const numberText = String(emailNumber);
     return textFile(
-        `batch-${n}.eml`,
+        `batch-${numberText}.eml`,
         [
             'From: Alice Example <alice@example.test>',
             'To: Bob Sample <bob@example.test>',
-            `Subject: Bench note ${n}`,
-            `Date: ${new Date(Date.UTC(2024, 0, 1) + i * 3_600_000).toUTCString().replace('GMT', '+0000')}`,
-            `Message-ID: <bench-note-${n}@example.test>`,
+            `Subject: Bench note ${numberText}`,
+            `Date: ${new Date(Date.UTC(2024, 0, 1) + emailNumber * 3_600_000).toUTCString().replace('GMT', '+0000')}`,
+            `Message-ID: <bench-note-${numberText}@example.test>`,
             'Content-Type: text/plain; charset=utf-8',
             '',
-            `Note ${n} about the garden benches.`,
+            `Note ${numberText} about the garden benches.`,
             '',
         ].join('\r\n'),
     );
@@ -133,7 +134,7 @@ function batchEmail(i: number): InputFile
 test.use({ timezoneId: 'Africa/Lagos' });
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 
@@ -217,14 +218,14 @@ async function expectNoRequestLeftThePage(page: Page, cspPolicies = 2): Promise<
     }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    expect(withoutSelectConsole(engineOf(page.context()), problems, cspPolicies)).toEqual([]);
+    expect(withoutSelectConsole(browserEngineOf(page.context()), problems, cspPolicies)).toEqual([]);
 }
 
 /** Nothing left the page, no CSP violation, no console error (see Helper/Test/browser-tests/preview.spec.ts). */
 async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await expectNoRequestLeftThePage(page);
-    expect(withoutSelectReports(engineOf(page.context()), await page.evaluate(() => window.__a11yViolations))).toEqual([]);
+    expect(withoutSelectReports(browserEngineOf(page.context()), await page.evaluate(() => window.__a11yViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
 }
 
@@ -261,22 +262,22 @@ async function measureControls(page: Page): Promise<Control[]>
         const parse = (color: string): number[] => color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
         const luminance = (rgb: number[]): number =>
         {
-            const channel = (v: number): number =>
+            const channel = (channelValue: number): number =>
             {
-                const s = v / 255;
-                return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                const scaled = channelValue / 255;
+                return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
             };
             return 0.2126 * channel(rgb[0] ?? 0) + 0.7152 * channel(rgb[1] ?? 0) + 0.0722 * channel(rgb[2] ?? 0);
         };
         // The outline is drawn outside the control (outline-offset), over its parent's background.
         const background = (start: Element | null): number[] =>
         {
-            for (let e = start; e; e = e.parentElement)
+            for (let element = start; element; element = element.parentElement)
             {
-                const bg = parse(getComputedStyle(e).backgroundColor);
-                if ((bg[3] ?? 1) > 0)
+                const backgroundRgba = parse(getComputedStyle(element).backgroundColor);
+                if ((backgroundRgba[3] ?? 1) > 0)
                 {
-                    return bg;
+                    return backgroundRgba;
                 }
             }
             return [255, 255, 255, 1];
@@ -447,7 +448,7 @@ for (const width of [1280, 320])
 test('a long batch: the progress line follows every file, the status line has one stable text and is not read out file by file', async ({ page }) =>
 {
     test.setTimeout(180_000);
-    // Test only: the batch's "putting in order" step (the engine worker) waits
+    // Test only: the batch's "putting in order" step (the thread-analysis worker, runtime name 'engine-worker') waits
     // until the test releases it, so the busy state is checked while it is
     // surely still going. Its own time limit (60 s) is far away.
     await page.addInitScript(() =>
@@ -502,7 +503,7 @@ test('a long batch: the progress line follows every file, the status line has on
     await expect(choose).toHaveAccessibleDescription(new RegExp(`^${progressLine} ${en.drop.accepted.replaceAll('.', '\\.')}$`));
     await expect(page.locator('#add-progress-bar')).toHaveAccessibleName(new RegExp(`^${progressLine}$`));
     await expectAccessibleStateWhileBusy(page);
-    // Still busy after the checks (the engine is held): they did check the busy state.
+    // Still busy after the checks (the thread analysis is held): they did check the busy state.
     await expect(page.locator('#add-progress')).toBeVisible();
     await expect(choose).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('#add-summary')).toBeHidden();

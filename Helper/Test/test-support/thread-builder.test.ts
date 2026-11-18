@@ -10,15 +10,15 @@ import { buildThread, formatQuotedDate, instantOf, QUOTE_STYLES, unquote, type E
 /** Number of ">" markers at the start of a line ("> > x" and ">> x" both give 2). */
 function markers(line: string): number
 {
-    const m = /^[> ]*/.exec(line)?.[0] ?? '';
-    return [...m].filter((ch) => ch === '>').length;
+    const prefix = /^[> ]*/.exec(line)?.[0] ?? '';
+    return [...prefix].filter((ch) => ch === '>').length;
 }
 
 /** Header text with line breaks and quote markers removed (wrapped lines joined by one space). */
-function joinedHeader(body: string, h: ExpectedHeader): string
+function joinedHeader(body: string, header: ExpectedHeader): string
 {
     return body
-        .slice(h.start, h.headEnd)
+        .slice(header.start, header.headEnd)
         .split('\n')
         .map((line) => line.replace(/^(?:> ?)*/, ''))
         .filter((line) => line !== '')
@@ -28,7 +28,7 @@ function joinedHeader(body: string, h: ExpectedHeader): string
 describe('thread builder: localized quote dates', () =>
 {
     // 2025-03-03 is a Monday.
-    const at = instantOf({ year: 2025, month: 3, day: 3, hour: 14, minute: 2 }, LAGOS);
+    const instant = instantOf({ year: 2025, month: 3, day: 3, hour: 14, minute: 2 }, LAGOS);
     it.each([
         ['outlook-en', 'Monday, March 3, 2025 2:02 PM'],
         ['outlook-fr', 'lundi 3 mars 2025 14:02'],
@@ -44,12 +44,12 @@ describe('thread builder: localized quote dates', () =>
         ['thunderbird', '03/03/2025 14:02'],
     ] as const)('%s: %s', (format, expected) =>
     {
-        expect(formatQuotedDate(format, at, LAGOS)).toBe(expected);
+        expect(formatQuotedDate(format, instant, LAGOS)).toBe(expected);
     });
 
     it('shows the moment in the quoting zone (another day and a 12-hour clock past midnight)', () =>
     {
-        expect(formatQuotedDate('outlook-en', at, TOKYO)).toBe('Monday, March 3, 2025 10:02 PM');
+        expect(formatQuotedDate('outlook-en', instant, TOKYO)).toBe('Monday, March 3, 2025 10:02 PM');
         const late = instantOf({ year: 2025, month: 3, day: 3, hour: 23, minute: 30 }, LAGOS);
         expect(formatQuotedDate('outlook-en', late, TOKYO)).toBe('Tuesday, March 4, 2025 7:30 AM');
         expect(formatQuotedDate('outlook-fr', late, TOKYO)).toBe('mardi 4 mars 2025 07:30');
@@ -86,22 +86,22 @@ describe('thread builder: exact rendering', () =>
 {
     it('writes the shape of fixture 13 (Outlook NL over a Gmail quote over an Outlook EN block)', () =>
     {
-        const t = buildThread(chain(['outlook-en', 'gmail-en', 'outlook-nl'], { zones: [LAGOS] }));
-        const lines = t.body.split('\n');
-        const at = (text: string): number => lines.indexOf(text);
-        expect(at('________________________________')).toBeGreaterThan(0);
-        expect(lines.slice(at('________________________________'), at('________________________________') + 5)).toEqual([
+        const thread = buildThread(chain(['outlook-en', 'gmail-en', 'outlook-nl'], { zones: [LAGOS] }));
+        const lines = thread.body.split('\n');
+        const lineIndex = (text: string): number => lines.indexOf(text);
+        expect(lineIndex('________________________________')).toBeGreaterThan(0);
+        expect(lines.slice(lineIndex('________________________________'), lineIndex('________________________________') + 5)).toEqual([
             '________________________________',
             'Van: Alice Example <alice@example.test>',
             'Verzonden: maandag 3 maart 2025 19:29',
             'Aan: Bob Sample <bob@furniture.example.test>',
             'Onderwerp: RE: Office desks and chairs',
         ]);
-        expect(at('On Mon, Mar 3, 2025 at 2:22 PM Bob Sample <bob@furniture.example.test> wrote:')).toBeGreaterThan(0);
-        expect(at('> ________________________________')).toBeGreaterThan(0);
-        expect(at('> Sent: Monday, March 3, 2025 9:15 AM')).toBeGreaterThan(0);
-        expect(at('> Hello Bob,')).toBeGreaterThan(0);
-        expect(t.headers.map((h) => [h.generation, h.depth, h.textDepth, h.style])).toEqual([
+        expect(lineIndex('On Mon, Mar 3, 2025 at 2:22 PM Bob Sample <bob@furniture.example.test> wrote:')).toBeGreaterThan(0);
+        expect(lineIndex('> ________________________________')).toBeGreaterThan(0);
+        expect(lineIndex('> Sent: Monday, March 3, 2025 9:15 AM')).toBeGreaterThan(0);
+        expect(lineIndex('> Hello Bob,')).toBeGreaterThan(0);
+        expect(thread.headers.map((h) => [h.generation, h.depth, h.textDepth, h.style])).toEqual([
             [1, 0, 0, 'outlook-nl'],
             [2, 0, 1, 'gmail-en'],
             [3, 1, 1, 'outlook-en'],
@@ -120,17 +120,17 @@ describe('thread builder: exact rendering', () =>
 
     it('wraps long To/Cc values without a label on the continuation lines', () =>
     {
-        const t = THREAD_CASES.find((c) => c.id === 'outlook-en wrapped to/cc')?.thread;
-        expect(t).toBeDefined();
-        const h = t?.headers[0];
-        if (t === undefined || h === undefined)
+        const thread = THREAD_CASES.find((c) => c.id === 'outlook-en wrapped to/cc')?.thread;
+        expect(thread).toBeDefined();
+        const header = thread?.headers[0];
+        if (thread === undefined || header === undefined)
         {
             return;
         }
-        const block = t.body.slice(h.start, h.headEnd).split('\n');
+        const block = thread.body.slice(header.start, header.headEnd).split('\n');
         expect(block.length).toBeGreaterThan(7); // intro + 5 labels + at least 2 continuation lines + ''
         expect(block.every((line) => line.length <= 76)).toBe(true);
-        expect(joinedHeader(t.body, h)).toContain(`To: ${h.fields.to ?? ''} Cc: ${h.fields.cc ?? ''} Subject: `);
+        expect(joinedHeader(thread.body, header)).toContain(`To: ${header.fields.to ?? ''} Cc: ${header.fields.cc ?? ''} Subject: `);
     });
 });
 
@@ -157,11 +157,11 @@ describe('thread builder: ground truth over every case', () =>
 
     it('writes French Outlook subjects with "RE :" and "TR :"', () =>
     {
-        const fr = THREAD_CASES.find((c) => c.id === 'outlook-fr x3')?.thread;
-        expect(fr?.subject).toBe('RE : Office desks and chairs');
-        const fwd = THREAD_CASES.find((c) => c.id === 'outlook-fr forward (TR : subject)')?.thread;
-        expect(fwd?.subject).toBe('TR : RE : Office desks and chairs');
-        expect(fwd?.headers[0]?.kind).toBe('forward');
+        const frenchThread = THREAD_CASES.find((c) => c.id === 'outlook-fr x3')?.thread;
+        expect(frenchThread?.subject).toBe('RE : Office desks and chairs');
+        const forwardThread = THREAD_CASES.find((c) => c.id === 'outlook-fr forward (TR : subject)')?.thread;
+        expect(forwardThread?.subject).toBe('TR : RE : Office desks and chairs');
+        expect(forwardThread?.headers[0]?.kind).toBe('forward');
     });
 
     it.each(THREAD_CASES.map((c) => [c.id, c] as const))('%s', (_, c) =>
@@ -214,13 +214,13 @@ describe('thread builder: ground truth over every case', () =>
 
     it('records the instant in UTC and the zone the header is shown in', () =>
     {
-        const t = buildThread([
+        const thread = buildThread([
             { from: ALICE, to: [BOB], sent: { year: 2025, month: 3, day: 3, hour: 9, minute: 15 }, zone: TOKYO, subject: 'Desks', text: 'Hello Bob,\n\nA quote please.' },
             { from: BOB, to: [ALICE], sent: { year: 2025, month: 3, day: 3, hour: 8, minute: 0 }, zone: LAGOS, subject: 'RE: Desks', text: 'Sure.', quote: { style: 'outlook-en' } },
         ]);
-        expect(t.headers[0]?.instantUtc).toBe('2025-03-03T00:15:00.000Z');
-        expect(t.headers[0]?.shownIn).toEqual(LAGOS);
-        expect(t.headers[0]?.fields.date).toBe('Monday, March 3, 2025 1:15 AM');
+        expect(thread.headers[0]?.instantUtc).toBe('2025-03-03T00:15:00.000Z');
+        expect(thread.headers[0]?.shownIn).toEqual(LAGOS);
+        expect(thread.headers[0]?.fields.date).toBe('Monday, March 3, 2025 1:15 AM');
     });
 });
 
@@ -230,9 +230,9 @@ describe('thread builder: negative cases', () =>
     {
         expect(c.body.endsWith('\n')).toBe(true);
         expect(c.realHeaders.length > 0).toBe(c.expect === 'refuse');
-        for (const at of c.realHeaders)
+        for (const headerStart of c.realHeaders)
         {
-            expect(at === 0 || c.body.charAt(at - 1) === '\n').toBe(true);
+            expect(headerStart === 0 || c.body.charAt(headerStart - 1) === '\n').toBe(true);
         }
     });
 });

@@ -6,42 +6,42 @@
 // Test-only: never imported by the app.
 
 /** Spaces per tab, as documented in Source/pdf-export/pdf-text-transforms.ts. */
-const TAB = '    ';
+const TAB_SPACES = '    ';
 
-function isHigh(c: number): boolean
+function isHigh(codeUnit: number): boolean
 {
-    return c >= 0xd800 && c <= 0xdbff;
+    return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
 }
 
-function isLow(c: number): boolean
+function isLow(codeUnit: number): boolean
 {
-    return c >= 0xdc00 && c <= 0xdfff;
+    return codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
 }
 
 /** Group 1 of the contract in Source/pdf-export/pdf-text-transforms.ts, for one whole code point (tags handled by the caller). */
-function isCoded(cp: number): boolean
+function isCoded(codePoint: number): boolean
 {
-    if (cp < 0x20)
+    if (codePoint < 0x20)
     {
         return true; // tab and line breaks never get here
     }
-    if (cp >= 0x7f && cp <= 0x9f)
+    if (codePoint >= 0x7f && codePoint <= 0x9f)
     {
         return true;
     }
-    if ((cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069))
+    if ((codePoint >= 0x202a && codePoint <= 0x202e) || (codePoint >= 0x2066 && codePoint <= 0x2069))
     {
         return true;
     }
-    if (cp >= 0xfff9 && cp <= 0xfffb)
+    if (codePoint >= 0xfff9 && codePoint <= 0xfffb)
     {
         return true;
     }
-    if (cp >= 0xfdd0 && cp <= 0xfdef)
+    if (codePoint >= 0xfdd0 && codePoint <= 0xfdef)
     {
         return true;
     }
-    if ((cp & 0xfffe) === 0xfffe)
+    if ((codePoint & 0xfffe) === 0xfffe)
     {
         return true; // U+nFFFE and U+nFFFF in every plane
     }
@@ -51,60 +51,60 @@ function isCoded(cp: number): boolean
 const isTag = (cp: number): boolean => cp >= 0xe0000 && cp <= 0xe007f;
 
 /** The tags of the only flags kept whole, written out here again (not imported). */
-const KEPT = ['gbeng', 'gbsct', 'gbwls'];
+const KEPT_FLAG_TAGS = ['gbeng', 'gbsct', 'gbwls'];
 
-const code = (cp: number): string => `[U+${cp.toString(16).toUpperCase().padStart(4, '0')}]`;
+const codeLabel = (cp: number): string => `[U+${cp.toString(16).toUpperCase().padStart(4, '0')}]`;
 
 /** One line: tabs as 4 spaces, the characters of group 1 as "[U+XXXX]". */
 function displayLine(line: string): { text: string; codes: number }
 {
     // Code points, lone surrogates as themselves.
-    const cps: number[] = [];
+    const codePoints: number[] = [];
     for (let i = 0; i < line.length; i++)
     {
-        const c = line.charCodeAt(i);
-        if (isHigh(c) && i + 1 < line.length && isLow(line.charCodeAt(i + 1)))
+        const codeUnit = line.charCodeAt(i);
+        if (isHigh(codeUnit) && i + 1 < line.length && isLow(line.charCodeAt(i + 1)))
         {
-            cps.push(0x10000 + ((c - 0xd800) << 10) + (line.charCodeAt(i + 1) - 0xdc00));
+            codePoints.push(0x10000 + ((codeUnit - 0xd800) << 10) + (line.charCodeAt(i + 1) - 0xdc00));
             i++;
         }
         else
         {
-            cps.push(c);
+            codePoints.push(codeUnit);
         }
     }
     let text = '';
     let codes = 0;
-    for (let k = 0; k < cps.length; k++)
+    for (let k = 0; k < codePoints.length; k++)
     {
-        const cp = cps[k]!;
-        if (cp === 0x1f3f4)
+        const codePoint = codePoints[k]!;
+        if (codePoint === 0x1f3f4)
         {
             // Only the England, Scotland and Wales flags are kept: U+1F3F4, the
             // tags "gbeng" / "gbsct" / "gbwls" (exactly 5), then U+E007F.
-            const spelled = cps
+            const spelled = codePoints
                 .slice(k + 1, k + 6)
                 .map((t) => String.fromCharCode(t - 0xe0000))
                 .join('');
-            if (KEPT.includes(spelled) && cps.slice(k + 1, k + 6).every(isTag) && cps[k + 6] === 0xe007f)
+            if (KEPT_FLAG_TAGS.includes(spelled) && codePoints.slice(k + 1, k + 6).every(isTag) && codePoints[k + 6] === 0xe007f)
             {
-                text += String.fromCodePoint(...cps.slice(k, k + 7));
+                text += String.fromCodePoint(...codePoints.slice(k, k + 7));
                 k += 6;
                 continue;
             }
         }
-        if (cp === 9)
+        if (codePoint === 9)
         {
-            text += TAB;
+            text += TAB_SPACES;
         }
-        else if (isHigh(cp) || isLow(cp) || isTag(cp) || isCoded(cp))
+        else if (isHigh(codePoint) || isLow(codePoint) || isTag(codePoint) || isCoded(codePoint))
         {
-            text += code(cp);
+            text += codeLabel(codePoint);
             codes++;
         }
         else
         {
-            text += String.fromCodePoint(cp);
+            text += String.fromCodePoint(codePoint);
         }
     }
     return { text, codes };
@@ -122,21 +122,22 @@ function displayLine(line: string): { text: string; codes: number }
  * as codes (Hangul fillers U+115F, U+1160, U+3164, U+FFA0, braille blank
  * U+2800, U+180E), not a lone surrogate.
  */
-function inPrefix(c: number): boolean
+function inPrefix(codePoint: number): boolean
 {
-    if (c === 0x0b || c === 0x0c)
+    if (codePoint === 0x0b || codePoint === 0x0c)
     {
         return false;
     }
-    if (c === 0xad || c === 0x34f || c === 0x61c || (c >= 0x200b && c <= 0x200f) || (c >= 0x2060 && c <= 0x2064) || (c >= 0xfe00 && c <= 0xfe0f))
+    if (codePoint === 0xad || codePoint === 0x34f || codePoint === 0x61c || (codePoint >= 0x200b && codePoint <= 0x200f)
+        || (codePoint >= 0x2060 && codePoint <= 0x2064) || (codePoint >= 0xfe00 && codePoint <= 0xfe0f))
     {
         return true;
     }
-    if (c >= 0xe0100 && c <= 0xe01ef)
+    if (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
     {
         return true;
     }
-    return c <= 0xffff && /\s/u.test(String.fromCharCode(c));
+    return codePoint <= 0xffff && /\s/u.test(String.fromCharCode(codePoint));
 }
 
 /**
@@ -148,16 +149,16 @@ function inPrefix(c: number): boolean
  */
 function splitQuote(line: string): { quoted: boolean; rest: string }
 {
-    let ok = 0; // line[0, ok) holds only ">" and inPrefix characters
-    for (const ch of line)
+    let prefixEnd = 0; // line[0, prefixEnd) holds only ">" and inPrefix characters
+    for (const char of line)
     {
-        if (ch !== '>' && !inPrefix(ch.codePointAt(0)!))
+        if (char !== '>' && !inPrefix(char.codePointAt(0)!))
         {
             break;
         }
-        ok += ch.length;
+        prefixEnd += char.length;
     }
-    const end = ok === 0 ? 0 : line.lastIndexOf('>', ok - 1) + 1;
+    const end = prefixEnd === 0 ? 0 : line.lastIndexOf('>', prefixEnd - 1) + 1;
     if (end === 0)
     {
         return { quoted: false, rest: line };
@@ -185,8 +186,8 @@ export function referenceDisplayLines(body: string, options: { quotes?: boolean 
     const lines: { text: string; codes: number; quoted: boolean }[] = [];
     for (let k = 0; k < pieces.length; k += 2)
     {
-        const q = quotes ? splitQuote(pieces[k]!) : { quoted: false, rest: pieces[k]! };
-        lines.push({ ...displayLine(q.rest), quoted: q.quoted });
+        const split = quotes ? splitQuote(pieces[k]!) : { quoted: false, rest: pieces[k]! };
+        lines.push({ ...displayLine(split.rest), quoted: split.quoted });
     }
     const blank = (l: { text: string; codes: number; quoted: boolean }): boolean => !l.quoted && l.codes === 0 && l.text.trim() === '';
     let from = 0;
@@ -199,25 +200,25 @@ export function referenceDisplayLines(body: string, options: { quotes?: boolean 
     {
         to--;
     }
-    const out: string[] = [];
+    const shownLines: string[] = [];
     let run = 0;
-    for (const l of lines.slice(from, to))
+    for (const line of lines.slice(from, to))
     {
-        if (blank(l))
+        if (blank(line))
         {
             run++;
             if (run <= 2)
             {
-                out.push('');
+                shownLines.push('');
             }
         }
         else
         {
             run = 0;
-            out.push(l.quoted && l.codes === 0 && l.text.trim() === '' ? '' : l.text);
+            shownLines.push(line.quoted && line.codes === 0 && line.text.trim() === '' ? '' : line.text);
         }
     }
-    return out;
+    return shownLines;
 }
 
 /** referenceDisplayLines joined with LF. */

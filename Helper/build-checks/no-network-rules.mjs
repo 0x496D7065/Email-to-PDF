@@ -206,14 +206,14 @@ export function findViolations(text, { isDist, distFile, sourceFile })
             {
                 continue;
             }
-            for (const m of lineText.matchAll(rule.pattern))
+            for (const ruleMatch of lineText.matchAll(rule.pattern))
             {
-                findings.push({ line: index + 1, match: m[0], reason: rule.reason });
+                findings.push({ line: index + 1, match: ruleMatch[0], reason: rule.reason });
             }
         }
-        for (const m of lineText.matchAll(URL_PATTERN))
+        for (const urlMatch of lineText.matchAll(URL_PATTERN))
         {
-            const url = normalizeUrl(m[0]);
+            const url = normalizeUrl(urlMatch[0]);
             // A dist/ file-scoped entry only counts for dist/ files, a source
             // file-scoped entry only for source files.
             if (!isUrlAllowed(url, isDist ? distFile : undefined, isDist ? undefined : sourceFile))
@@ -286,27 +286,27 @@ export function findEmbeddedViolations(text, options)
     {
         return [];
     }
-    const key = (finding) => `${finding.reason}\u0000${finding.match}`;
+    const countKey = (finding) => `${finding.reason}\u0000${finding.match}`;
     // How many times each (reason, match) is already reported in the raw text.
     const seen = new Map();
     for (const finding of findViolations(text, options))
     {
-        seen.set(key(finding), (seen.get(key(finding)) ?? 0) + 1);
+        seen.set(countKey(finding), (seen.get(countKey(finding)) ?? 0) + 1);
     }
-    const extra = [];
+    const decodedOnly = [];
     for (const finding of findViolations(decoded, options))
     {
-        const left = seen.get(key(finding)) ?? 0;
-        if (left > 0)
+        const rawCountLeft = seen.get(countKey(finding)) ?? 0;
+        if (rawCountLeft > 0)
         {
-            seen.set(key(finding), left - 1);
+            seen.set(countKey(finding), rawCountLeft - 1);
         }
         else
         {
-            extra.push({ ...finding, reason: `${finding.reason} [inside a string, e.g. inlined worker code; decoded line ${finding.line}]` });
+            decodedOnly.push({ ...finding, reason: `${finding.reason} [inside a string, e.g. inlined worker code; decoded line ${finding.line}]` });
         }
     }
-    return extra;
+    return decodedOnly;
 }
 
 /** Shortest run of base64 characters treated as an opaque payload. */
@@ -424,25 +424,25 @@ export function checkHeadersFile(text)
     // Rules: a path line (not indented), then its indented header lines.
     /** @type {{ path: string, lines: string[] }[]} */
     const rules = [];
-    for (const raw of text.split(/\r?\n/))
+    for (const rawLine of text.split(/\r?\n/))
     {
-        if (raw.trim() === '' || raw.trim().startsWith('#'))
+        if (rawLine.trim() === '' || rawLine.trim().startsWith('#'))
         {
             continue;
         }
-        if (/^\s/.test(raw))
+        if (/^\s/.test(rawLine))
         {
-            rules.at(-1)?.lines.push(raw.trim());
+            rules.at(-1)?.lines.push(rawLine.trim());
         }
         else
         {
-            rules.push({ path: raw.trim(), lines: [] });
+            rules.push({ path: rawLine.trim(), lines: [] });
         }
     }
     const cspOf = (rule) => rule.lines.filter((line) => line.startsWith('Content-Security-Policy:'));
-    const all = rules.find((rule) => rule.path === '/*');
-    const lines = all?.lines ?? [];
-    const csp = all === undefined ? [] : cspOf(all);
+    const siteWideRule = rules.find((rule) => rule.path === '/*');
+    const siteWideLines = siteWideRule?.lines ?? [];
+    const csp = siteWideRule === undefined ? [] : cspOf(siteWideRule);
     if (csp.length !== 1)
     {
         problems.push('missing Content-Security-Policy: header (README.md, rule R2)');
@@ -457,11 +457,11 @@ export function checkHeadersFile(text)
             }
         }
     }
-    if (!lines.includes('Referrer-Policy: no-referrer'))
+    if (!siteWideLines.includes('Referrer-Policy: no-referrer'))
     {
         problems.push('missing "Referrer-Policy: no-referrer" header (README.md, rule R2)');
     }
-    if (!lines.some((line) => line.startsWith('Permissions-Policy:')))
+    if (!siteWideLines.some((line) => line.startsWith('Permissions-Policy:')))
     {
         problems.push('missing Permissions-Policy: header (README.md, rule R2)');
     }
@@ -469,7 +469,7 @@ export function checkHeadersFile(text)
     // works"): exactly the page's policy with connect-src 'self' instead of
     // 'none', after detaching the page's (Cloudflare would otherwise send
     // both, comma-joined). No other rule may set or remove a CSP.
-    const sw = rules.filter((rule) => rule.path === '/sw.js');
+    const serviceWorkerRules = rules.filter((rule) => rule.path === '/sw.js');
     for (const rule of rules)
     {
         if (rule.path === '/*' || rule.path === '/sw.js')
@@ -481,25 +481,25 @@ export function checkHeadersFile(text)
             problems.push(`the rule for ${rule.path} changes the Content-Security-Policy: only /sw.js may (README.md, rule R2)`);
         }
     }
-    if (sw.length !== 1)
+    if (serviceWorkerRules.length !== 1)
     {
         problems.push('needs exactly one rule for /sw.js, with its own Content-Security-Policy (README.md, rule R2)');
     }
     else
     {
-        const swLines = sw[0].lines;
-        const detach = swLines.indexOf('! Content-Security-Policy');
-        const swCsp = cspOf(sw[0]);
+        const serviceWorkerLines = serviceWorkerRules[0].lines;
+        const detachIndex = serviceWorkerLines.indexOf('! Content-Security-Policy');
+        const serviceWorkerCsp = cspOf(serviceWorkerRules[0]);
         const expected = csp.length === 1 ? csp[0].replace("connect-src 'none'", "connect-src 'self'") : undefined;
-        if (detach === -1 || swCsp.length !== 1 || swLines.indexOf(swCsp[0]) < detach)
+        if (detachIndex === -1 || serviceWorkerCsp.length !== 1 || serviceWorkerLines.indexOf(serviceWorkerCsp[0]) < detachIndex)
         {
             problems.push('the /sw.js rule must remove the page CSP ("! Content-Security-Policy") and then set exactly one of its own (README.md, rule R2)');
         }
-        else if (expected === undefined || swCsp[0] !== expected || expected === csp[0])
+        else if (expected === undefined || serviceWorkerCsp[0] !== expected || expected === csp[0])
         {
             problems.push("the /sw.js Content-Security-Policy must be the page's with only connect-src 'self' instead of 'none' (README.md, rule R2)");
         }
-        if (swLines.some((line) => !line.startsWith('Content-Security-Policy:') && line !== '! Content-Security-Policy'))
+        if (serviceWorkerLines.some((line) => !line.startsWith('Content-Security-Policy:') && line !== '! Content-Security-Policy'))
         {
             problems.push('the /sw.js rule may only replace the Content-Security-Policy (README.md, rule R2)');
         }

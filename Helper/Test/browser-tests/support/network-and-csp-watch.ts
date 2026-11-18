@@ -2,16 +2,16 @@
 // every request (pages AND their workers), WebSockets, the workers
 // themselves (with their names), and the CSP reports of each worker.
 //
-// The parse and engine workers are inlined in the page's script and start
+// The parse and thread-analysis workers are inlined in the page's script and start
 // from `blob:` URLs (see Source/email-reading/parse-worker-runner.ts). Chromium lists the
 // loading of a blob: worker script as a request to that blob: URL; it never
 // goes to the network (Firefox and WebKit do not list it). Every blob: URL
 // looks alike, so workers are told apart by the name they are started with
-// ('parse-worker', 'engine-worker', 'pdf-worker').
+// ('parse-worker', 'engine-worker' for the thread-analysis worker, 'pdf-worker').
 //
 // These are the same detectors as in Helper/Test/browser-tests/parse-files.spec.ts, which also
 // holds their positive controls (proof that they really see a request or a
-// CSP violation made inside a parse, engine or PDF worker), in every browser:
+// CSP violation made inside a parse, thread-analysis or PDF worker), in every browser:
 // - context-level request tracking includes requests made by workers;
 // - the page-level `securitypolicyviolation` listener does NOT see a
 //   worker's violations. So a test-only init script (watchWorkers) starts
@@ -53,7 +53,7 @@ export interface WorkerWatch
     readonly unwrappedWorkers: string[];
 }
 
-export interface Watch extends WorkerWatch
+export interface PageWatch extends WorkerWatch
 {
     /** URL of every request of the context, in order (WebKit's in-memory blob reads left out, see isWebKitBlobRead). */
     readonly requests: string[];
@@ -81,7 +81,7 @@ export function isWebKitBlobRead(request: Request, origin: string): boolean
 }
 
 /** The name of the browser engine of `context` ('chromium', 'firefox' or 'webkit'). */
-export const engineOf = (context: BrowserContext): string => context.browser()?.browserType().name() ?? '';
+export const browserEngineOf = (context: BrowserContext): string => context.browser()?.browserType().name() ?? '';
 
 /** BroadcastChannel name between the worker prelude and the page (test-only). */
 const REPORT_CHANNEL = '__e2e-worker-csp';
@@ -175,7 +175,7 @@ export async function watchWorkers(context: BrowserContext, page: Page, sink: Wo
         { channelName: REPORT_CHANNEL, prelude: WORKER_PRELUDE },
     );
 
-    if (engineOf(context) !== 'chromium')
+    if (browserEngineOf(context) !== 'chromium')
     {
         return;
     }
@@ -212,11 +212,12 @@ export async function watchWorkers(context: BrowserContext, page: Page, sink: Wo
 }
 
 /** Starts watching. Call before the page is opened. `origin` is the preview server's origin. */
-export async function watchPage(context: BrowserContext, page: Page, origin: string): Promise<Watch>
+export async function watchPage(context: BrowserContext, page: Page, origin: string): Promise<PageWatch>
 {
-    const watch: Watch = { requests: [], websockets: [], workers: [], closedWorkers: [], workerLog: [], workerNames: new Map(), unwrappedWorkers: [] };
+    const watch: PageWatch = { requests: [], websockets: [], workers: [], closedWorkers: [], workerLog: [], workerNames: new Map(),
+        unwrappedWorkers: [] };
 
-    const webkit = engineOf(context) === 'webkit';
+    const webkit = browserEngineOf(context) === 'webkit';
     context.on('request', (request) =>
     {
         if (!(webkit && isWebKitBlobRead(request, origin)))

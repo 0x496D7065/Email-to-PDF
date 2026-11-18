@@ -6,6 +6,7 @@ export const MANIFEST_PLACEHOLDER: string;
 
 export const VERSION_LENGTH: number;
 
-export function manifestVersion(files: readonly { path: string; bytes: Uint8Array }[], swCode: string, headersFile: string | Uint8Array): string;
+export function manifestVersion(files: readonly { path: string; bytes: Uint8Array }[], serviceWorkerCode: string,
+    headersFile: string | Uint8Array): string;
 
-export function readBuiltManifest(swJs: string): { version: string; paths: string[] };
+export function readBuiltManifest(serviceWorkerJs: string): { version: string; paths: string[] };

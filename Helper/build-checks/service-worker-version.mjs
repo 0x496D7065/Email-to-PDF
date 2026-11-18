@@ -30,14 +30,14 @@ const BUILT_LITERAL = /"\{\\"version\\":(?:[^"\\]|\\")*\}"/g;
  * dist/sw.js) becomes "". So the version can be computed from either
  * form, and the same code gives the same version before and after.
  */
-function withoutManifest(swCode)
+function withoutManifest(serviceWorkerCode)
 {
-    return swCode.replace(PLACEHOLDER_LITERAL, '""').replace(BUILT_LITERAL, '""');
+    return serviceWorkerCode.replace(PLACEHOLDER_LITERAL, '""').replace(BUILT_LITERAL, '""');
 }
 
 /**
  * The cache version: a content hash of every listed file (path and bytes),
- * of the service worker's own code (`swCode`, without the precache list,
+ * of the service worker's own code (`serviceWorkerCode`, without the precache list,
  * see withoutManifest) and of the site's HTTP headers file (`headersFile`,
  * dist/_headers). Any change to a file, to the list, to the service worker
  * or to a header gives a new version, hence a new cache; the same build
@@ -49,14 +49,14 @@ function withoutManifest(swCode)
  * header-only change (no file changed) must still give a new sw.js, or a
  * returning visitor would keep the old headers.
  */
-export function manifestVersion(files, swCode, headersFile)
+export function manifestVersion(files, serviceWorkerCode, headersFile)
 {
     const lines = [];
     for (const { path, bytes } of [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)))
     {
         lines.push(`${path} ${sha256Hex(bytes)}`);
     }
-    lines.push(`sw.js ${sha256Hex(new TextEncoder().encode(withoutManifest(swCode)))}`);
+    lines.push(`sw.js ${sha256Hex(new TextEncoder().encode(withoutManifest(serviceWorkerCode)))}`);
     lines.push(`_headers ${sha256Hex(typeof headersFile === 'string' ? new TextEncoder().encode(headersFile) : headersFile)}`);
     return sha256Hex(new TextEncoder().encode(lines.join('\n'))).slice(0, VERSION_LENGTH);
 }
@@ -65,15 +65,15 @@ export function manifestVersion(files, swCode, headersFile)
  * The precache list written into a built sw.js: { version, paths }.
  * Throws unless it is there exactly once, in the expected shape.
  */
-export function readBuiltManifest(swJs)
+export function readBuiltManifest(serviceWorkerJs)
 {
-    const found = swJs.match(BUILT_LITERAL) ?? [];
+    const found = serviceWorkerJs.match(BUILT_LITERAL) ?? [];
     if (found.length !== 1)
     {
         throw new Error(`sw.js must hold the precache list exactly once (found ${String(found.length)})`);
     }
-    const value = JSON.parse(JSON.parse(found[0]));
-    const { version, paths } = value;
+    const parsedManifest = JSON.parse(JSON.parse(found[0]));
+    const { version, paths } = parsedManifest;
     if (typeof version !== 'string' || !/^[0-9a-f]+$/.test(version))
     {
         throw new Error('sw.js: the precache list has a bad version');

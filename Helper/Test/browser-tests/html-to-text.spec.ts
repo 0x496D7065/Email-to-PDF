@@ -55,7 +55,7 @@ import { build, type Rolldown } from 'vite';
 import { FIXTURES } from '../test-data/manifest.ts';
 import type * as Entry from './support/html-to-text-test-entry.ts';
 import {
-    engineOf,
+    browserEngineOf,
     isWebKitBlobRead,
     parseTimeReportFilter,
     untoleratedReports,
@@ -114,7 +114,8 @@ test.beforeAll(async () =>
             write: false, // in memory only: dist/ is never touched
             emptyOutDir: false,
             copyPublicDir: false,
-            lib: { entry: `${ROOT}Helper/Test/browser-tests/support/html-to-text-test-entry.ts`, formats: ['es'], fileName: 'html-to-text-test-entry' },
+            lib: { entry: `${ROOT}Helper/Test/browser-tests/support/html-to-text-test-entry.ts`, formats: ['es'],
+                fileName: 'html-to-text-test-entry' },
         },
     });
     const outputs = (Array.isArray(output) ? output : [output]) as Rolldown.RolldownOutput[];
@@ -143,7 +144,7 @@ let dialogs: string[] = [];
 /** Records every request (WebKit's in-memory blob reads aside, see isWebKitBlobRead); aborts anything that leaves the preview server (safety net). */
 async function watchNetwork(context: BrowserContext): Promise<void>
 {
-    const webkit = engineOf(context) === 'webkit';
+    const webkit = browserEngineOf(context) === 'webkit';
     context.on('request', (request) =>
     {
         if (!(webkit && isWebKitBlobRead(request, origin)))
@@ -259,7 +260,7 @@ async function expectNothingHappened(page: Page): Promise<void>
     expect(page.url()).toBe(`${origin}/`);
     expect(requestsAfterLoad()).toEqual([]);
     expect(websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), cspPolicies);
     expect(untoleratedReports(browserName, violations, isParseTimeReport)).toEqual([]);
 }

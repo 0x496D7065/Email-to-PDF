@@ -73,15 +73,15 @@ export function loopingMsg(): Uint8Array
 }
 
 /** A worker that hangs or crashes (misbehaving-worker.ts), wired like the real one. */
-export const createMisbehavingWorker: WorkerFactory = (events) =>
+export const createMisbehavingParseWorker: WorkerFactory = (events) =>
     connectWorker(new Worker(new URL('./misbehaving-worker.ts', import.meta.url), { type: 'module' }), events);
 
 /**
- * The misbehaving test worker standing in for the engine worker. The engine
+ * The misbehaving test worker standing in for the thread-analysis worker. The thread-analysis
  * request carries no file name, so `mode` is sent as the name the
  * misbehaving worker reads: 'hang' spins forever, anything else crashes.
  */
-export function createMisbehavingEngineWorker(mode: 'hang' | 'crash'): ThreadAnalysisWorkerFactory
+export function createMisbehavingThreadAnalysisWorker(mode: 'hang' | 'crash'): ThreadAnalysisWorkerFactory
 {
     return (events) =>
     {

@@ -3,7 +3,7 @@
 // One entry per .eml file in Helper/Test/test-data/eml/ and per .msg builder spec in
 // Helper/Test/test-data/msg/specs.ts; synthetic-guard.test.ts fails if they drift
 // apart. The parser tasks (.eml 2.4, .msg 2.5) assert their output against
-// these values; the engine (Milestone 3) uses `thread`, `duplicateGroup` and
+// these values; the thread analysis (Milestone 3) uses `thread`, `duplicateGroup` and
 // `tags` for ordering, de-duplication and folding tests.
 //
 // Conventions (same as Header/parsed-email.ts):
@@ -94,7 +94,7 @@ const BOB_BLOCKS = ['signature:bob', 'disclaimer:bob'] as const;
 const NO_THREAD_IDS = { inReplyTo: null, references: [] } as const;
 
 /** A plain .eml entry: most fields shared, overrides per fixture. */
-function eml(
+function emlFixture(
     file: string,
     fields: Omit<FixtureExpectation, 'id' | 'kind' | 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'> &
         Partial<Pick<FixtureExpectation, 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'>>,
@@ -103,7 +103,7 @@ function eml(
     return { id: `eml/${file}`, kind: 'eml', attachments: [], cc: [], bcc: [], warnings: [], tags: [], ...fields };
 }
 
-function msg(
+function msgFixture(
     id: string,
     fields: Omit<FixtureExpectation, 'id' | 'kind' | 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'> &
         Partial<Pick<FixtureExpectation, 'attachments' | 'cc' | 'bcc' | 'warnings' | 'tags'>>,
@@ -113,7 +113,7 @@ function msg(
 }
 
 /** Zone known, with its offset in minutes. */
-const at = (iso: string, offsetMinutes: number) => ({ utcMs: utc(iso), zoneKnown: true, offsetMinutes });
+const emlAt = (iso: string, offsetMinutes: number) => ({ utcMs: utc(iso), zoneKnown: true, offsetMinutes });
 /** .msg time: exact UTC instant, offset not asserted. */
 const msgAt = (iso: string) => ({ utcMs: utc(iso), zoneKnown: true });
 
@@ -131,7 +131,7 @@ const ORDER_2_FIELDS = {
 
 const CONFIRM_FIELDS = {
     ...NO_THREAD_IDS,
-    date: at('2025-03-04T07:00:00Z', 60),
+    date: emlAt('2025-03-04T07:00:00Z', 60),
     from: [PLANNING],
     to: [ALICE],
     subject: 'Appointment confirmed',
@@ -141,11 +141,11 @@ const CONFIRM_FIELDS = {
 
 export const FIXTURES: readonly FixtureExpectation[] = [
     // ------------------------------------------------------------------ .eml
-    eml('01-plain-english.eml', {
+    emlFixture('01-plain-english.eml', {
         description: 'Plain UTF-8 (ASCII-only) English message, all common headers, CRLF line ends.',
         messageId: 'plain-1.alice@example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-02-28T17:45:10Z', 60),
+        date: emlAt('2025-02-28T17:45:10Z', 60),
         from: [ALICE],
         to: [BOB],
         cc: [{ name: 'Carol Test', address: 'carol@sample.invalid' }],
@@ -155,11 +155,11 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Thread "order": EN, Outlook EN block, Gmail quote, Outlook NL block.
-    eml('10-order-1-alice.eml', {
+    emlFixture('10-order-1-alice.eml', {
         description: 'Thread order 1/4: first message.',
         messageId: 'order-1.alice@example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-03T08:15:00Z', 60),
+        date: emlAt('2025-03-03T08:15:00Z', 60),
         from: [ALICE],
         to: [BOB],
         subject: 'Office desks and chairs',
@@ -167,18 +167,18 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'order', position: 1 },
         tags: ['signature:alice-dashdash'],
     }),
-    eml('11-order-2-bob-outlook-en.eml', {
+    emlFixture('11-order-2-bob-outlook-en.eml', {
         description: 'Thread order 2/4: Outlook-style English header block (From/Sent/To/Subject), signature + disclaimer.',
         ...ORDER_2_FIELDS,
-        date: at('2025-03-03T13:02:00Z', 60),
+        date: emlAt('2025-03-03T13:02:00Z', 60),
         thread: { id: 'order', position: 2 },
     }),
-    eml('12-order-3-alice-gmail.eml', {
+    emlFixture('12-order-3-alice-gmail.eml', {
         description: 'Thread order 3/4: Gmail-style "On ... wrote:" with > quotes of the whole previous message.',
         messageId: 'order-3.alice@example.test',
         inReplyTo: 'order-2.bob@furniture.example.test',
         references: ['order-1.alice@example.test', 'order-2.bob@furniture.example.test'],
-        date: at('2025-03-03T14:40:12Z', 60),
+        date: emlAt('2025-03-03T14:40:12Z', 60),
         from: [ALICE],
         to: [BOB],
         subject: 'Re: Office desks and chairs',
@@ -186,12 +186,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'order', position: 3 },
         tags: ['quote:gmail-en', 'quote:outlook-en', 'signature:alice-dashdash', ...BOB_BLOCKS],
     }),
-    eml('13-order-4-bob-outlook-nl.eml', {
+    emlFixture('13-order-4-bob-outlook-nl.eml', {
         description: 'Thread order 4/4: Dutch Outlook header block (Van/Verzonden/Aan/Onderwerp), deep nesting.',
         messageId: 'order-4.bob@furniture.example.test',
         inReplyTo: 'order-3.alice@example.test',
         references: ['order-1.alice@example.test', 'order-2.bob@furniture.example.test', 'order-3.alice@example.test'],
-        date: at('2025-03-06T15:20:00Z', 60),
+        date: emlAt('2025-03-06T15:20:00Z', 60),
         from: [BOB],
         to: [ALICE],
         subject: 'RE: Office desks and chairs',
@@ -203,11 +203,11 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     // Thread "delivery": French, Apple Mail, Gmail FR, Outlook FR. UTF-8 quoted-printable.
     // It delivers TRIAL desks and chairs (6 Mar); the real order is confirmed in 40
     // (10 Mar), planned in 41 and delivered on Monday 17 Mar (see 72, 60).
-    eml('20-delivery-1-carol.eml', {
+    emlFixture('20-delivery-1-carol.eml', {
         description: 'Thread delivery 1/4: French, UTF-8 quoted-printable, Q-encoded sender name.',
         messageId: 'delivery-1.carol@sample.invalid',
         ...NO_THREAD_IDS,
-        date: at('2025-03-04T10:20:00Z', 60),
+        date: emlAt('2025-03-04T10:20:00Z', 60),
         from: [CAROL],
         to: [ALICE],
         cc: [BOB],
@@ -216,12 +216,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'delivery', position: 1 },
         tags: ['signature:carol'],
     }),
-    eml('21-delivery-2-alice-apple.eml', {
+    emlFixture('21-delivery-2-alice-apple.eml', {
         description: 'Thread delivery 2/4: Apple Mail style, attribution line inside the quote ("> On ... wrote:").',
         messageId: 'delivery-2.alice@example.test',
         inReplyTo: 'delivery-1.carol@sample.invalid',
         references: ['delivery-1.carol@sample.invalid'],
-        date: at('2025-03-04T12:05:30Z', 60),
+        date: emlAt('2025-03-04T12:05:30Z', 60),
         from: [ALICE],
         to: [CAROL],
         cc: [BOB],
@@ -230,12 +230,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'delivery', position: 2 },
         tags: ['quote:apple-en', 'signature:alice-dashdash', 'signature:carol'],
     }),
-    eml('22-delivery-3-carol-gmail-fr.eml', {
+    emlFixture('22-delivery-3-carol-gmail-fr.eml', {
         description: 'Thread delivery 3/4: French Gmail attribution "Le ... a écrit :" with nested > quotes.',
         messageId: 'delivery-3.carol@sample.invalid',
         inReplyTo: 'delivery-2.alice@example.test',
         references: ['delivery-1.carol@sample.invalid', 'delivery-2.alice@example.test'],
-        date: at('2025-03-04T13:31:00Z', 60),
+        date: emlAt('2025-03-04T13:31:00Z', 60),
         from: [CAROL],
         to: [ALICE],
         cc: [BOB],
@@ -244,12 +244,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'delivery', position: 3 },
         tags: ['quote:gmail-fr', 'quote:apple-en', 'signature:carol', 'signature:alice-dashdash'],
     }),
-    eml('23-delivery-4-alice-outlook-fr.eml', {
+    emlFixture('23-delivery-4-alice-outlook-fr.eml', {
         description: 'Thread delivery 4/4: French Outlook header block (De/Envoyé/À/Cc/Objet).',
         messageId: 'delivery-4.alice@example.test',
         inReplyTo: 'delivery-3.carol@sample.invalid',
         references: ['delivery-1.carol@sample.invalid', 'delivery-2.alice@example.test', 'delivery-3.carol@sample.invalid'],
-        date: at('2025-03-06T11:10:00Z', 60),
+        date: emlAt('2025-03-06T11:10:00Z', 60),
         from: [ALICE],
         to: [CAROL],
         cc: [BOB],
@@ -260,23 +260,23 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Duplicates.
-    eml('30-dup-order-2-copy.eml', {
+    emlFixture('30-dup-order-2-copy.eml', {
         description: 'Duplicate of 11 (same Message-ID and body), as received: extra Received/Delivered-To headers.',
         ...ORDER_2_FIELDS,
-        date: at('2025-03-03T13:02:00Z', 60),
+        date: emlAt('2025-03-03T13:02:00Z', 60),
         thread: { id: 'order', position: 2 },
     }),
-    eml('31-dup-confirm-a.eml', {
+    emlFixture('31-dup-confirm-a.eml', {
         description: 'Duplicate pair by sender + date + body: this copy has a Message-ID.',
         ...CONFIRM_FIELDS,
         messageId: 'confirm-0305@furniture.example.test',
     }),
-    eml('32-dup-confirm-b-other-id.eml', {
+    emlFixture('32-dup-confirm-b-other-id.eml', {
         description: 'Same sender + date + body as 31, but a DIFFERENT Message-ID (re-sent through a relay).',
         ...CONFIRM_FIELDS,
         messageId: 'confirm-0305.resent@relay.example.invalid',
     }),
-    eml('33-dup-confirm-c-no-id.eml', {
+    emlFixture('33-dup-confirm-c-no-id.eml', {
         description: 'Same sender + date + body as 31, with NO Message-ID.',
         ...CONFIRM_FIELDS,
         messageId: null,
@@ -284,45 +284,45 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Encodings.
-    eml('40-enc-latin1-qp.eml', {
+    emlFixture('40-enc-latin1-qp.eml', {
         description: 'ISO-8859-1 quoted-printable body; ISO-8859-1 Q-encoded sender name.',
         messageId: 'confirmation-1.carol@sample.invalid',
         ...NO_THREAD_IDS,
-        date: at('2025-03-10T09:00:00Z', 60),
+        date: emlAt('2025-03-10T09:00:00Z', 60),
         from: [CAROL],
         to: [ALICE],
         subject: 'Confirmation de commande',
         bodyContains: ['Nous avons bien reçu votre commande', 'coloris « gris clair »', 'est prêt (entrée côté cour)'],
         tags: ['signature:carol'],
     }),
-    eml('41-enc-utf8-base64.eml', {
+    emlFixture('41-enc-utf8-base64.eml', {
         description: 'UTF-8 base64 body (Dutch, euro sign, diaeresis), signature + disclaimer.',
         messageId: 'plan-1.bob@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-11T08:00:00Z', 60),
+        date: emlAt('2025-03-11T08:00:00Z', 60),
         from: [BOB],
         to: [ALICE],
         subject: 'Planning van de levering',
         bodyContains: ['€ 1.250 (incl. btw)', 'Eén dag werk', 'coördinatie', 'Groeten ook aan Carol (Équipe Livraisons).'],
         tags: [...BOB_BLOCKS],
     }),
-    eml('42-enc-rfc2047.eml', {
+    emlFixture('42-enc-rfc2047.eml', {
         description:
             'RFC 2047: subject folded over two encoded words (B then Q), B-encoded sender name, Q-encoded recipient (all UTF-8).',
         messageId: 'meeting-1.carol@sample.invalid',
         ...NO_THREAD_IDS,
-        date: at('2025-03-12T16:05:00Z', 60),
+        date: emlAt('2025-03-12T16:05:00Z', 60),
         from: [CAROL],
         to: [BOB],
         subject: 'Réunion de livraison – vendredi',
         bodyContains: ['faire le point vendredi à 9h'],
         tags: ['signature:carol'],
     }),
-    eml('43-enc-windows1252.eml', {
+    emlFixture('43-enc-windows1252.eml', {
         description: 'windows-1252 quoted-printable body; only bytes 0xA0-0xFF (no 0x80-0x9F), so Node and browsers agree.',
         messageId: 'billing-1.bob@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-13T10:30:00Z', 60),
+        date: emlAt('2025-03-13T10:30:00Z', 60),
         from: [BOB],
         to: [ALICE],
         subject: 'Factuurgegevens',
@@ -331,11 +331,11 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // HTML.
-    eml('50-html-only.eml', {
+    emlFixture('50-html-only.eml', {
         description: 'HTML-only body (no text/plain) with inert script, onload/onclick/onerror, tracking pixel, javascript: link.',
         messageId: 'news-2025-03@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-12T07:30:00Z', 0),
+        date: emlAt('2025-03-12T07:30:00Z', 0),
         from: [NEWS],
         to: [ALICE],
         subject: 'Spring offer: office chairs',
@@ -343,11 +343,11 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyContains: ['Dear Alice,', 'Spring offer on office chairs', 'Book a visit'],
         bodyExcludes: ['SCRIPT-RAN', 'ONLOAD-RAN', 'CLICK-RAN', 'ONERROR-RAN', 'JS-LINK-RAN', 'tracker.invalid', 'font-family', '<p>'],
     }),
-    eml('51-html-alternative.eml', {
+    emlFixture('51-html-alternative.eml', {
         description: 'multipart/alternative (text + HTML); HTML has script, iframe, form, remote CSS/background/pixel.',
         messageId: 'catalogue-1.carol@sample.invalid',
         ...NO_THREAD_IDS,
-        date: at('2025-03-14T08:45:00Z', 60),
+        date: emlAt('2025-03-14T08:45:00Z', 60),
         from: [CAROL],
         to: [ALICE],
         subject: 'Nouveau catalogue',
@@ -357,11 +357,11 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Attachment.
-    eml('60-attachment.eml', {
+    emlFixture('60-attachment.eml', {
         description: 'multipart/mixed with one small base64 text attachment (metadata only), signature + disclaimer.',
         messageId: 'deliverynote-2025-017.bob@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-21T10:00:00Z', 60),
+        date: emlAt('2025-03-21T10:00:00Z', 60),
         from: [BOB],
         to: [ALICE],
         subject: 'Delivery note 2025-017',
@@ -372,7 +372,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Missing / broken headers.
-    eml('70-no-date.eml', {
+    emlFixture('70-no-date.eml', {
         description: 'No Date header at all.',
         messageId: 'nodate-1.alice@example.test',
         ...NO_THREAD_IDS,
@@ -383,7 +383,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         warnings: ['missing-date'],
         bodyContains: ['leave the spare chair in the storage room'],
     }),
-    eml('71-bad-date.eml', {
+    emlFixture('71-bad-date.eml', {
         description: 'Unparseable Date header ("not a date"): no date at all, so it can never become parseable.',
         messageId: 'baddate-1.alice@example.test',
         ...NO_THREAD_IDS,
@@ -394,18 +394,18 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         warnings: ['unparseable-date'],
         bodyContains: ['look at the cable trays'],
     }),
-    eml('72-no-message-id.eml', {
+    emlFixture('72-no-message-id.eml', {
         description: 'No Message-ID header.',
         messageId: null,
         ...NO_THREAD_IDS,
-        date: at('2025-03-15T09:20:00Z', 60),
+        date: emlAt('2025-03-15T09:20:00Z', 60),
         from: [ALICE],
         to: [BOB],
         subject: 'Thank you',
         warnings: ['missing-message-id'],
         bodyContains: ['See you on Monday for the delivery'],
     }),
-    eml('73-date-no-zone.eml', {
+    emlFixture('73-date-no-zone.eml', {
         description: 'Date without a time zone: read as UTC for sorting only and flagged.',
         messageId: 'nozone-1.alice@example.test',
         ...NO_THREAD_IDS,
@@ -416,21 +416,21 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         warnings: ['unknown-time-zone'],
         bodyContains: ['The old desks can stay until Friday'],
     }),
-    eml('74-date-localized-weekday.eml', {
+    emlFixture('74-date-localized-weekday.eml', {
         description: 'Date with a French weekday ("mer.,"), otherwise valid.',
         messageId: 'frweekday-1.alice@example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-12T09:30:00Z', 60),
+        date: emlAt('2025-03-12T09:30:00Z', 60),
         from: [ALICE],
         to: [BOB],
         subject: 'Parking',
         bodyContains: ['park the van in front of the office on Monday'],
     }),
-    eml('75-missing-from-to-subject.eml', {
+    emlFixture('75-missing-from-to-subject.eml', {
         description: 'No From, no To and no Subject header (Date and Message-ID present).',
         messageId: 'noheaders-1@example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-14T14:00:00Z', 60),
+        date: emlAt('2025-03-14T14:00:00Z', 60),
         from: [],
         to: [],
         subject: null,
@@ -438,12 +438,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Thread "setup": three time zones; file order (a, b, c, d) != chronological order (b, d, a, c).
-    eml('80-setup-a-carol.eml', {
+    emlFixture('80-setup-a-carol.eml', {
         description: 'Thread setup 3/4 (+0000): French Gmail attribution; local time 13:45 looks earlier than it is.',
         messageId: 'setup-3.carol@sample.invalid',
         inReplyTo: 'setup-2.alice@example.test',
         references: ['setup-1.bob@furniture.example.test', 'setup-2.alice@example.test'],
-        date: at('2025-06-10T13:45:00Z', 0),
+        date: emlAt('2025-06-10T13:45:00Z', 0),
         from: [CAROL],
         to: [ALICE, BOB],
         subject: 'Re: Setup check on Thursday',
@@ -451,11 +451,11 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'setup', position: 3 },
         tags: ['quote:gmail-fr', 'quote:gmail-en', 'signature:carol', 'signature:alice-dashdash', ...BOB_BLOCKS],
     }),
-    eml('81-setup-b-bob.eml', {
+    emlFixture('81-setup-b-bob.eml', {
         description: 'Thread setup 1/4 (+0200): first message, signature + disclaimer.',
         messageId: 'setup-1.bob@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-06-10T13:00:00Z', 120),
+        date: emlAt('2025-06-10T13:00:00Z', 120),
         from: [BOB],
         to: [ALICE, CAROL],
         subject: 'Setup check on Thursday',
@@ -463,12 +463,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'setup', position: 1 },
         tags: [...BOB_BLOCKS],
     }),
-    eml('82-setup-c-bob.eml', {
+    emlFixture('82-setup-c-bob.eml', {
         description: 'Thread setup 4/4 (+0200): Dutch attribution "Op ... schreef ...:", three quote levels.',
         messageId: 'setup-4.bob@furniture.example.test',
         inReplyTo: 'setup-3.carol@sample.invalid',
         references: ['setup-1.bob@furniture.example.test', 'setup-2.alice@example.test', 'setup-3.carol@sample.invalid'],
-        date: at('2025-06-10T14:10:00Z', 120),
+        date: emlAt('2025-06-10T14:10:00Z', 120),
         from: [BOB],
         to: [ALICE, CAROL],
         subject: 'Re: Setup check on Thursday',
@@ -476,12 +476,12 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'setup', position: 4 },
         tags: ['quote:dutch-op-schreef', 'quote:gmail-fr', 'quote:gmail-en', ...BOB_BLOCKS, 'signature:carol', 'signature:alice-dashdash'],
     }),
-    eml('83-setup-d-alice.eml', {
+    emlFixture('83-setup-d-alice.eml', {
         description: 'Thread setup 2/4 (-0500): US-style Gmail attribution; local time 08:30 looks earliest but is not.',
         messageId: 'setup-2.alice@example.test',
         inReplyTo: 'setup-1.bob@furniture.example.test',
         references: ['setup-1.bob@furniture.example.test'],
-        date: at('2025-06-10T13:30:00Z', -300),
+        date: emlAt('2025-06-10T13:30:00Z', -300),
         from: [ALICE],
         to: [BOB, CAROL],
         subject: 'Re: Setup check on Thursday',
@@ -491,45 +491,45 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // Sender and Bcc.
-    eml('90-sender-on-behalf.eml', {
+    emlFixture('90-sender-on-behalf.eml', {
         description: 'Sent on behalf of: Sender (the planning mailbox) differs from From (Bob), so `sender` is kept.',
         messageId: 'slot-1.planning@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-18T07:30:00Z', 60),
+        date: emlAt('2025-03-18T07:30:00Z', 60),
         from: [BOB],
         sender: PLANNING,
         to: [ALICE],
         subject: 'Delivery slot confirmed',
         bodyContains: ['On behalf of Bob: the delivery slot for the remaining chairs'],
     }),
-    eml('91-sender-same-as-from.eml', {
+    emlFixture('91-sender-same-as-from.eml', {
         description: 'Sender header naming the From mailbox in other letter case: no `sender`.',
         messageId: 'slot-2.alice@example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-18T09:05:00Z', 60),
+        date: emlAt('2025-03-18T09:05:00Z', 60),
         from: [ALICE],
         to: [BOB],
         subject: 'Delivery slot on Thursday',
         bodyContains: ['Thursday afternoon is fine'],
     }),
-    eml('92-bcc-own-copy.eml', {
+    emlFixture('92-bcc-own-copy.eml', {
         description: "The sender's own copy with a Bcc header folded over two lines (two mailboxes).",
         messageId: 'keys-1.alice@example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-19T15:20:00Z', 60),
+        date: emlAt('2025-03-19T15:20:00Z', 60),
         from: [ALICE],
         to: [BOB],
         bcc: [{ name: 'Carol Test', address: 'carol@sample.invalid' }, PLANNING],
         subject: 'Spare keys for the delivery team',
         bodyContains: ['The spare keys for the delivery team are at the front desk.'],
     }),
-    eml('93-answers-between-lines.eml', {
+    emlFixture('93-answers-between-lines.eml', {
         description:
             'Answers written between the quoted lines (no quoted tail to fold); a Sender and a Cc mailbox found in no other fixture; ' +
             'quoted-printable body with an emoji, a tab, a control character (BEL) and accents.',
         messageId: 'answers-1.bob@furniture.example.test',
         ...NO_THREAD_IDS,
-        date: at('2025-03-11T16:20:00Z', 0),
+        date: emlAt('2025-03-11T16:20:00Z', 0),
         from: [BOB],
         sender: { name: 'Erin Test', address: 'erin@furniture.example.test' },
         to: [ALICE],
@@ -546,7 +546,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
     }),
 
     // ------------------------------------------------------------------ .msg (built from msg/specs.ts)
-    msg('msg-01-plain-unicode', {
+    msgFixture('msg-01-plain-unicode', {
         description: 'Plain Unicode .msg, To + Cc.',
         messageId: 'msg-plain-1.alice@example.test',
         ...NO_THREAD_IDS,
@@ -558,7 +558,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyContains: ['mercredi à 9h, café prévu.', '(één uur, € 0 extra)'],
         tags: ['signature:alice-dashdash'],
     }),
-    msg('msg-02-chain-1-bob', {
+    msgFixture('msg-02-chain-1-bob', {
         description: 'Chain 1/3, Exchange sender: from.address must be the SMTP fallback, not the X.500 DN.',
         messageId: 'msg-chain-1.bob@furniture.example.test',
         ...NO_THREAD_IDS,
@@ -570,7 +570,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'msg-chain', position: 1 },
         tags: [...BOB_BLOCKS],
     }),
-    msg('msg-03-chain-2-alice-fr', {
+    msgFixture('msg-03-chain-2-alice-fr', {
         description: 'Chain 2/3, French Outlook block; In-Reply-To/References from raw properties 0x1042/0x1039.',
         messageId: 'msg-chain-2.alice@example.test',
         inReplyTo: 'msg-chain-1.bob@furniture.example.test',
@@ -583,7 +583,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'msg-chain', position: 2 },
         tags: ['quote:outlook-fr', ...BOB_BLOCKS],
     }),
-    msg('msg-04-chain-3-bob-nl', {
+    msgFixture('msg-04-chain-3-bob-nl', {
         description: 'Chain 3/3, Dutch Outlook block, transport headers (agree with the properties).',
         messageId: 'msg-chain-3.bob@furniture.example.test',
         inReplyTo: 'msg-chain-2.alice@example.test',
@@ -596,7 +596,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         thread: { id: 'msg-chain', position: 3 },
         tags: ['quote:outlook-nl', 'quote:outlook-fr', ...BOB_BLOCKS],
     }),
-    msg('msg-05-html-and-plain', {
+    msgFixture('msg-05-html-and-plain', {
         description: 'Plain + HTML bodies: the plain body is used; the HTML never runs or loads.',
         messageId: 'msg-catalogue-1.carol@sample.invalid',
         ...NO_THREAD_IDS,
@@ -608,7 +608,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyExcludes: ['MSG-SCRIPT-RAN', 'MSG-ONLOAD-RAN', 'tracker.invalid', '<b>'],
         tags: ['signature:carol'],
     }),
-    msg('msg-06-attachment', {
+    msgFixture('msg-06-attachment', {
         description: 'One text attachment (metadata only).',
         messageId: 'msg-pakbon-2025-021.bob@furniture.example.test',
         ...NO_THREAD_IDS,
@@ -621,7 +621,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyExcludes: ['SYNTHETIC TEST DOCUMENT'],
         tags: [...BOB_BLOCKS],
     }),
-    msg('msg-07-no-sent-time', {
+    msgFixture('msg-07-no-sent-time', {
         description: 'No sent/received time: date missing, never invented.',
         messageId: 'msg-draft-1.alice@example.test',
         ...NO_THREAD_IDS,
@@ -632,7 +632,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         warnings: ['missing-date'],
         bodyContains: ['the spare chair is in the storage room'],
     }),
-    msg('msg-08-ansi-cp1252', {
+    msgFixture('msg-08-ansi-cp1252', {
         description: 'ANSI strings, code page 1252 (read with ansiEncoding "windows-1252").',
         messageId: 'msg-ack-1.carol@sample.invalid',
         ...NO_THREAD_IDS,
@@ -643,13 +643,13 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyContains: ['Nous accusons réception de votre commande.', 'Crème, château, Noël, ça va.'],
         tags: ['signature:carol'],
     }),
-    msg('msg-09-dup-of-eml-order-2', {
+    msgFixture('msg-09-dup-of-eml-order-2', {
         description: 'Cross-format duplicate of eml 11/30 (same Message-ID; body identical up to CRLF line ends and the final line break).',
         ...ORDER_2_FIELDS,
         date: msgAt('2025-03-03T13:02:00Z'),
         thread: { id: 'order', position: 2 },
     }),
-    msg('msg-10-on-behalf', {
+    msgFixture('msg-10-on-behalf', {
         description: 'Sent on behalf of: from = the represented mailbox (Bob), sender = the planning mailbox; both via the SMTP fallback.',
         messageId: 'msg-levering-1.planning@furniture.example.test',
         ...NO_THREAD_IDS,
@@ -661,7 +661,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyContains: ['worden op maandag 5 mei tussen 9:00 en'],
         tags: [...BOB_BLOCKS],
     }),
-    msg('msg-11-bcc-own-copy', {
+    msgFixture('msg-11-bcc-own-copy', {
         description: "Sender's own copy: one Bcc recipient kept, the empty Bcc row skipped; represented = sender, so no `sender`.",
         messageId: 'msg-chairs-1.alice@example.test',
         ...NO_THREAD_IDS,
@@ -673,7 +673,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyContains: ['two extra chairs for the meeting room'],
         tags: ['signature:alice-dashdash'],
     }),
-    msg('msg-12-represented-is-sender', {
+    msgFixture('msg-12-represented-is-sender', {
         description: 'Represented mailbox = sender (same X.500 address): no `sender`; from borrows the sender SMTP address.',
         messageId: 'msg-stoelen-1.bob@furniture.example.test',
         ...NO_THREAD_IDS,
@@ -684,7 +684,7 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         bodyContains: ['Twee extra stoelen zijn geen probleem.'],
         tags: [...BOB_BLOCKS],
     }),
-    msg('msg-13-html-only', {
+    msgFixture('msg-13-html-only', {
         description: 'HTML-only body: converted to plain text; script, handler, stylesheet, pixel and link URL never reach the text.',
         messageId: 'msg-showroom-1.carol@sample.invalid',
         ...NO_THREAD_IDS,

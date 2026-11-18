@@ -61,8 +61,8 @@ const TAG_EVIDENCE: Readonly<Record<string, string>> = {
  */
 function checkTags(expected: FixtureExpectation, body: string): void
 {
-    const lf = body.replace(/\r\n/g, '\n');
-    const text = `${lf}\n\n${lf.replace(/^(?:> ?)+/gm, '')}`;
+    const lfBody = body.replace(/\r\n/g, '\n');
+    const text = `${lfBody}\n\n${lfBody.replace(/^(?:> ?)+/gm, '')}`;
     for (const tag of expected.tags)
     {
         if (/^signature:.+-dashdash$/.test(tag))
@@ -285,22 +285,22 @@ describe('manifest structure', () =>
     it('each thread has positions 1..n in chronological (utcMs) order', () =>
     {
         const threads = new Map<string, FixtureExpectation[]>();
-        for (const f of FIXTURES)
+        for (const fixture of FIXTURES)
         {
-            if (f.thread && f.duplicateGroup === undefined)
+            if (fixture.thread && fixture.duplicateGroup === undefined)
             {
-                threads.set(f.thread.id, [...(threads.get(f.thread.id) ?? []), f]);
+                threads.set(fixture.thread.id, [...(threads.get(fixture.thread.id) ?? []), fixture]);
             }
         }
         // Duplicates share their original's position; compare one per position.
-        for (const f of FIXTURES)
+        for (const fixture of FIXTURES)
         {
-            if (f.thread && f.duplicateGroup !== undefined)
+            if (fixture.thread && fixture.duplicateGroup !== undefined)
             {
-                const list = threads.get(f.thread.id) ?? [];
-                if (!list.some((g) => g.thread?.position === f.thread?.position))
+                const list = threads.get(fixture.thread.id) ?? [];
+                if (!list.some((g) => g.thread?.position === fixture.thread?.position))
                 {
-                    threads.set(f.thread.id, [...list, f]);
+                    threads.set(fixture.thread.id, [...list, fixture]);
                 }
             }
         }
@@ -314,20 +314,20 @@ describe('manifest structure', () =>
     it('in each thread, In-Reply-To is the Message-ID of the previous position', () =>
     {
         const threaded = FIXTURES.filter((f) => f.thread !== undefined);
-        for (const f of threaded)
+        for (const fixture of threaded)
         {
-            const position = f.thread?.position ?? 0;
-            const previous = threaded.filter((g) => g.thread?.id === f.thread?.id && g.thread?.position === position - 1);
+            const position = fixture.thread?.position ?? 0;
+            const previous = threaded.filter((g) => g.thread?.id === fixture.thread?.id && g.thread?.position === position - 1);
             if (position === 1)
             {
-                expect(f.inReplyTo, `${f.id}: first in thread`).toBeNull();
+                expect(fixture.inReplyTo, `${fixture.id}: first in thread`).toBeNull();
             }
             else
             {
-                expect(previous.length, `${f.id}: no message at position ${position - 1}`).toBeGreaterThan(0);
-                for (const p of previous)
+                expect(previous.length, `${fixture.id}: no message at position ${position - 1}`).toBeGreaterThan(0);
+                for (const earlier of previous)
                 {
-                    expect(f.inReplyTo, `${f.id} should reply to ${p.id}`).toBe(p.messageId);
+                    expect(fixture.inReplyTo, `${fixture.id} should reply to ${earlier.id}`).toBe(earlier.messageId);
                 }
             }
         }

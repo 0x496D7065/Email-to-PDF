@@ -56,7 +56,7 @@
 // PDF's (the "Download again" link; all in memory), no
 // WebSocket, no CSP violation in the page or a worker (the parse-time
 // reports of DOMParser for the HTML fixtures are tolerated, with their
-// console lines, as in Helper/Test/browser-tests/full-flow.spec.ts), every worker a parse, engine
+// console lines, as in Helper/Test/browser-tests/full-flow.spec.ts), every worker a parse, thread-analysis
 // or PDF worker that ended, nothing stored.
 //
 // Test data is made up (README.md, rule R7): the shared fixtures only.
@@ -74,7 +74,7 @@ import type * as Specs from '../test-data/msg/specs.ts';
 import { readDests, readLinks, readOutline, readPageRuns, readPdf, textLines, type PageRun, type TextLine } from '../test-support/pdf-reader.ts';
 import { referenceDisplayText } from '../test-support/reference-pdf-text-transforms.ts';
 import {
-    engineOf,
+    browserEngineOf,
     isParseTimeReport,
     PARSE_TIME_CONSOLE,
     untoleratedReports,
@@ -83,7 +83,7 @@ import {
     withoutSelectReports,
     workerCspReports,
     workersNamed,
-    type Watch,
+    type PageWatch,
 } from './support/network-and-csp-watch.ts';
 import type { EmailParser } from '../../../Header/parsed-email.ts';
 
@@ -157,16 +157,16 @@ async function sha256(bytes: Uint8Array): Promise<string>
 const authorOf = (from: readonly ExpectedAddress[], sender: ExpectedAddress | undefined): string =>
 {
     const shown = from.filter((m) => m.name.trim() !== '' || m.address.trim() !== '');
-    const m = shown[0] ?? sender;
+    const firstShown = shown[0] ?? sender;
     if (shown.length > 1)
     {
         throw new Error('the expected author of several From mailboxes is not written here');
     }
-    if (m === undefined)
+    if (firstShown === undefined)
     {
         return en.preview.author.none;
     }
-    return m.name.trim() !== '' ? m.name : m.address;
+    return firstShown.name.trim() !== '' ? firstShown.name : firstShown.address;
 };
 
 test.beforeAll(async () =>
@@ -209,39 +209,39 @@ test.beforeAll(async () =>
             return result.message.bodyText.includes(HTML) ? null : result.message.bodyText;
         };
 
-        for (const f of FIXTURES)
+        for (const fixture of FIXTURES)
         {
-            const name = f.kind === 'eml' ? f.id.slice('eml/'.length) : `${f.id}.msg`;
+            const name = fixture.kind === 'eml' ? fixture.id.slice('eml/'.length) : `${fixture.id}.msg`;
             let bytes: Uint8Array;
-            if (f.kind === 'eml')
+            if (fixture.kind === 'eml')
             {
                 // The fixtures are 7-bit ASCII text.
-                bytes = new TextEncoder().encode(readFileSync(`${ROOT}Helper/Test/test-data/${f.id}`, 'utf8'));
+                bytes = new TextEncoder().encode(readFileSync(`${ROOT}Helper/Test/test-data/${fixture.id}`, 'utf8'));
             }
             else
             {
-                const spec = MSG_SPECS.find((s) => s.id === f.id);
+                const spec = MSG_SPECS.find((s) => s.id === fixture.id);
                 if (spec === undefined)
                 {
-                    throw new Error(`no .msg spec ${f.id}`);
+                    throw new Error(`no .msg spec ${fixture.id}`);
                 }
                 bytes = buildMsg(spec);
             }
             built.push({
-                id: f.id,
+                id: fixture.id,
                 name,
-                type: f.kind === 'eml' ? 'message/rfc822' : 'application/vnd.ms-outlook',
+                type: fixture.kind === 'eml' ? 'message/rfc822' : 'application/vnd.ms-outlook',
                 bytes: Array.from(bytes),
                 sha256: await sha256(bytes),
-                group: f.duplicateGroup ?? f.id,
-                utcMs: f.date.utcMs,
-                subject: f.subject === null || f.subject.trim() === '' ? en.preview.noSubject : f.subject,
-                author: authorOf(f.from, f.sender),
-                fromAddress: f.from[0]?.address ?? '',
-                people: [...f.from, ...(f.sender === undefined ? [] : [f.sender]), ...f.to, ...f.cc],
-                attachments: f.attachments,
-                snippets: f.bodyContains,
-                body: await bodyOf(f.kind, name, bytes),
+                group: fixture.duplicateGroup ?? fixture.id,
+                utcMs: fixture.date.utcMs,
+                subject: fixture.subject === null || fixture.subject.trim() === '' ? en.preview.noSubject : fixture.subject,
+                author: authorOf(fixture.from, fixture.sender),
+                fromAddress: fixture.from[0]?.address ?? '',
+                people: [...fixture.from, ...(fixture.sender === undefined ? [] : [fixture.sender]), ...fixture.to, ...fixture.cc],
+                attachments: fixture.attachments,
+                snippets: fixture.bodyContains,
+                body: await bodyOf(fixture.kind, name, bytes),
             });
         }
     }
@@ -262,9 +262,9 @@ test.beforeAll(async () =>
 function expectedEmails(): { readonly first: Source; readonly files: readonly Source[] }[]
 {
     const groups = new Map<string, Source[]>();
-    for (const s of sources)
+    for (const source of sources)
     {
-        groups.set(s.group, [...(groups.get(s.group) ?? []), s]);
+        groups.set(source.group, [...(groups.get(source.group) ?? []), source]);
     }
     const list = [...groups.values()].map((files) => ({ first: files[0]!, files }));
     const dated = list.filter((e) => e.first.utcMs !== null).sort((a, b) => (a.first.utcMs ?? 0) - (b.first.utcMs ?? 0));
@@ -294,7 +294,7 @@ const fill = (template: string, values: Record<string, string | number>): string
     });
 
 /** A moment in the chosen zone, with Intl in Node: "YYYY-MM-DD", "YYYY-MM-DD HH:mm", "YYYY-MM-DD HH:mm:ss UTC-04:00". */
-function inZone(ms: number): { day: string; short: string; full: string }
+function inZone(utcMs: number): { day: string; short: string; full: string }
 {
     const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: ZONE,
@@ -306,7 +306,7 @@ function inZone(ms: number): { day: string; short: string; full: string }
         second: '2-digit',
         hourCycle: 'h23',
         timeZoneName: 'longOffset',
-    }).formatToParts(new Date(ms));
+    }).formatToParts(new Date(utcMs));
     const part = (type: Intl.DateTimeFormatPartTypes): string => parts.find((p) => p.type === type)?.value ?? '';
     const day = `${part('year')}-${part('month')}-${part('day')}`;
     const offset = part('timeZoneName').replace('GMT', '') || '+00:00';
@@ -320,8 +320,8 @@ const bare = (text: string): string => text.replace(/\s+/g, '');
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const count = (text: string, part: string): number => text.split(part).length - 1;
 
-const attachmentText = (a: ExpectedAttachment): string =>
-    `${a.fileName} ${fill(en.pdf.document.attachment, { size: fill(a.size === 1 ? en.preview.size.bytes.one : en.preview.size.bytes.other, { count: a.size }), type: a.mimeType })}`;
+const attachmentText = (attachment: ExpectedAttachment): string =>
+    `${attachment.fileName} ${fill(en.pdf.document.attachment, { size: fill(attachment.size === 1 ? en.preview.size.bytes.one : en.preview.size.bytes.other, { count: attachment.size }), type: attachment.mimeType })}`;
 
 // ---------------------------------------------------------------- reading the PDF back
 
@@ -357,12 +357,13 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
     const pageCount = pdf.pages().length;
     const runs = await readPageRuns(pdf);
     const pages: TextLine[][] = [];
-    for (const [p, pageRuns] of runs.entries())
+    for (const [pageIndex, pageRuns] of runs.entries())
     {
         const lines = textLines(pageRuns);
         // "Page X of Y" on every page, at the very bottom, and nowhere else.
         const footer = lines.at(-1);
-        expect(footer?.copied, `footer of page ${String(p + 1)}`).toBe(fill(en.pdf.document.pageFooter, { page: p + 1, total: pageCount }));
+        expect(footer?.copied, `footer of page ${String(pageIndex + 1)}`).toBe(
+            fill(en.pdf.document.pageFooter, { page: pageIndex + 1, total: pageCount }));
         expect(footer?.shown).toBe(footer?.copied);
         const body = lines.slice(0, -1);
         expect(body.filter((l) => /^Page \d+ of \d+$/.test(l.copied))).toEqual([]);
@@ -408,10 +409,10 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
         {
             throw new Error(`no destination email-${String(k)}`);
         }
-        const at = flat.findIndex((x) => x.page === dest.page && x.line.y < dest.top);
-        expect(flat[at]?.line.copied, `heading of email ${String(k)}`).toBe(fill(en.pdf.document.emailHeading, { number: k }));
-        expect(dest.top - (flat[at]?.line.y ?? 0)).toBeLessThan(30);
-        starts.push(at);
+        const headingIndex = flat.findIndex((x) => x.page === dest.page && x.line.y < dest.top);
+        expect(flat[headingIndex]?.line.copied, `heading of email ${String(k)}`).toBe(fill(en.pdf.document.emailHeading, { number: k }));
+        expect(dest.top - (flat[headingIndex]?.line.y ?? 0)).toBeLessThan(30);
+        starts.push(headingIndex);
     }
     expect(dests.has(`email-${String(emails + 1)}`)).toBe(false);
     const sections = starts.map((start, k): Section =>
@@ -423,9 +424,11 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
     // Spaces put between runs (see the top): on the cover and in the emails,
     // only one, after the label of a label/value row or the bullet of a list
     // item. (The index table is read by column instead.)
-    const d = en.pdf.document;
-    const v = en.preview;
-    const labels = new Set([d.dates, d.emails, d.generated, d.timeZone, v.from, v.author.sender, v.to, v.cc, v.bcc, v.date, v.subject, d.file, '\u{2022}']);
+    const documentText = en.pdf.document;
+    const previewText = en.preview;
+    const labels = new Set([documentText.dates, documentText.emails, documentText.generated, documentText.timeZone, previewText.from,
+        previewText.author.sender, previewText.to, previewText.cc, previewText.bcc, previewText.date, previewText.subject, documentText.file,
+        '\u{2022}']);
     for (const line of [...coverLines, ...flat.map((x) => x.line)])
     {
         if (line.insertedSpaces === 0)
@@ -473,21 +476,21 @@ function cellText(lines: readonly TextLine[], from: number, to: number, expected
 /** Cover, index, bookmarks, links, and the unticked email absent: the same in both PDFs. */
 function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, made: string): void
 {
-    const E = emails.length;
-    const d = en.pdf.document;
+    const emailCount = emails.length;
+    const documentText = en.pdf.document;
 
     // --- Cover -------------------------------------------------------------
     const cover = doc.cover.map((l) => l.copied).join('\n');
     const coverText = norm(cover);
-    expect(doc.cover[0]?.copied).toBe(d.title);
+    expect(doc.cover[0]?.copied).toBe(documentText.title);
     const dated = emails.map((e) => e.first.utcMs).filter((ms): ms is number => ms !== null);
-    const range = fill(d.dateRange, { first: inZone(Math.min(...dated)).full, last: inZone(Math.max(...dated)).full });
-    expect(coverText).toContain(`${d.dates} ${range}`);
-    const undated = E - dated.length;
+    const range = fill(documentText.dateRange, { first: inZone(Math.min(...dated)).full, last: inZone(Math.max(...dated)).full });
+    expect(coverText).toContain(`${documentText.dates} ${range}`);
+    const undated = emailCount - dated.length;
     expect(undated).toBe(3);
-    expect(coverText).toContain(`${d.emails} ${fill(d.emailCount.other, { count: E })}`);
-    expect(coverText).toContain(`${d.timeZone} ${ZONE.replaceAll('_', ' ')}`);
-    expect(coverText).toContain(`${d.generated} ${made}`);
+    expect(coverText).toContain(`${documentText.emails} ${fill(documentText.emailCount.other, { count: emailCount })}`);
+    expect(coverText).toContain(`${documentText.timeZone} ${ZONE.replaceAll('_', ' ')}`);
+    expect(coverText).toContain(`${documentText.generated} ${made}`);
     // No notes on the cover (task 8.8): not about the undated emails, nor about
     // ANSWERS's control character (a BEL, quoted-printable encoded), which the
     // app notes on its card instead.
@@ -497,7 +500,7 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     }
 
     // People: exactly the addresses of From, Sender, To and Cc of the included emails, each with a name it was given.
-    const peopleAt = doc.cover.findIndex((l) => l.copied === d.people);
+    const peopleAt = doc.cover.findIndex((l) => l.copied === documentText.people);
     expect(peopleAt).toBeGreaterThan(0);
     // The People list is the last part of the cover (task 8.12: no source files after it).
     const peopleText = doc.cover
@@ -505,16 +508,16 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
         .map((l) => l.copied)
         .join('\n');
     const names = new Map<string, Set<string>>();
-    for (const e of emails)
+    for (const email of emails)
     {
-        for (const p of e.first.people)
+        for (const person of email.first.people)
         {
-            if (p.address === '')
+            if (person.address === '')
             {
                 continue;
             }
-            const key = p.address.toLowerCase();
-            names.set(key, new Set([...(names.get(key) ?? []), ...(p.name === '' ? [] : [p.name])]));
+            const key = person.address.toLowerCase();
+            names.set(key, new Set([...(names.get(key) ?? []), ...(person.name === '' ? [] : [person.name])]));
         }
     }
     const shownAddresses = [...peopleText.matchAll(/[\w.+-]+@[\w.-]+\.(?:test|invalid)/g)].map((m) => m[0].toLowerCase());
@@ -553,22 +556,22 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     expect(everything).not.toContain('Source files');
     expect(bare(everything)).not.toMatch(/[0-9a-f]{64}/);
     const frontBare = bare([...doc.cover, ...doc.indexLines].map((l) => l.copied).join('\n'));
-    for (const [k, e] of emails.entries())
+    for (const [k, email] of emails.entries())
     {
-        expect(e.files.length, `${e.first.id}: at least its kept file`).toBeGreaterThanOrEqual(1);
-        for (const f of e.files)
+        expect(email.files.length, `${email.first.id}: at least its kept file`).toBeGreaterThanOrEqual(1);
+        for (const file of email.files)
         {
-            expect(bare(everything), `${f.name}: its SHA-256`).not.toContain(f.sha256);
-            expect(frontBare, `${f.name}: not before the emails`).not.toContain(bare(f.name));
+            expect(bare(everything), `${file.name}: its SHA-256`).not.toContain(file.sha256);
+            expect(frontBare, `${file.name}: not before the emails`).not.toContain(bare(file.name));
             // Collapse, never delete: still named, merged copies too, in the File row of its email.
-            expect(bare(doc.sections[k]?.copied ?? ''), `${f.name} in email ${String(k + 1)}`).toContain(bare(f.name));
+            expect(bare(doc.sections[k]?.copied ?? ''), `${file.name} in email ${String(k + 1)}`).toContain(bare(file.name));
         }
     }
 
     // --- Index ---------------------------------------------------------------
     const indexLines = doc.indexLines;
-    expect(indexLines[0]?.copied).toBe(d.index);
-    const titleLine = indexLines.find((l) => l.runs[0]?.copied === d.column.number);
+    expect(indexLines[0]?.copied).toBe(documentText.index);
+    const titleLine = indexLines.find((l) => l.runs[0]?.copied === documentText.column.number);
     if (titleLine === undefined)
     {
         throw new Error('no column titles');
@@ -584,33 +587,34 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     };
     const columns = {
         number: -Infinity,
-        date: titleX(d.column.date),
-        from: titleX(d.column.from),
-        subject: titleX(d.column.subject),
-        page: titleX(d.column.page),
+        date: titleX(documentText.column.date),
+        from: titleX(documentText.column.from),
+        subject: titleX(documentText.column.subject),
+        page: titleX(documentText.column.page),
     };
     const firstRow = doc.links.find((l) => l.dest === 'email-1');
     const headerLines = (doc.pages[doc.indexPages[0]!] ?? []).filter((l) => l.y <= titleLine.y && l.y > (firstRow?.rect[3] ?? 0));
-    const dateTitle = fill(d.column.dateInZone, { zone: ZONE.replaceAll('_', ' ') });
+    const dateTitle = fill(documentText.column.dateInZone, { zone: ZONE.replaceAll('_', ' ') });
     expect(cellText(headerLines, columns.date, columns.from, dateTitle)).toBe(dateTitle);
 
     const rowLinks = doc.links.filter((l) => l.dest.startsWith('email-'));
-    expect(new Set(rowLinks.map((l) => l.dest)).size).toBe(E);
+    expect(new Set(rowLinks.map((l) => l.dest)).size).toBe(emailCount);
     expect(doc.links.every((l) => doc.indexPages.includes(l.page))).toBe(true);
-    for (const [k, e] of emails.entries())
+    for (const [k, email] of emails.entries())
     {
         const anchor = `email-${String(k + 1)}`;
         const lines = rowLinks
             .filter((l) => l.dest === anchor)
             .flatMap((l) => (doc.pages[l.page] ?? []).filter((line) => line.y > l.rect[1] && line.y < l.rect[3]));
-        const extrasAt = lines.findIndex((l) => l.runs.some((r) => r.x >= columns.date - 0.01 && r.copied.startsWith(d.column.attachments)));
+        const extrasAt = lines.findIndex((l) =>
+            l.runs.some((r) => r.x >= columns.date - 0.01 && r.copied.startsWith(documentText.column.attachments)));
         const bands = extrasAt < 0 ? lines : lines.slice(0, extrasAt);
-        const ms = e.first.utcMs;
+        const utcMs = email.first.utcMs;
         const want = {
             number: String(k + 1),
-            date: ms === null ? en.preview.noDate : inZone(ms).short,
-            from: norm(e.first.author),
-            subject: norm(e.first.subject),
+            date: utcMs === null ? en.preview.noDate : inZone(utcMs).short,
+            from: norm(email.first.author),
+            subject: norm(email.first.subject),
             // The page where that email's heading really is.
             page: String((doc.sections[k]?.headingPage ?? -2) + 1),
         };
@@ -621,7 +625,7 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
             subject: cellText(bands, columns.subject, columns.page, want.subject),
             page: cellText(bands, columns.page, Infinity, want.page),
         };
-        expect(row, `index row ${String(k + 1)} (${e.first.id})`).toEqual(want);
+        expect(row, `index row ${String(k + 1)} (${email.first.id})`).toEqual(want);
         // One line each for the number, the date and the page.
         for (const [from, to] of [
             [columns.number, columns.date],
@@ -633,25 +637,26 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
         }
         // Attachments under the row: name, size, type.
         const extras = norm(extrasAt < 0 ? '' : lines.slice(extrasAt).map((l) => l.copied).join(' '));
-        if (e.first.attachments.length === 0)
+        if (email.first.attachments.length === 0)
         {
-            expect(extrasAt, e.first.id).toBe(-1);
+            expect(extrasAt, email.first.id).toBe(-1);
         }
-        for (const a of e.first.attachments)
+        for (const attachment of email.first.attachments)
         {
-            expect(extras).toContain(attachmentText(a));
+            expect(extras).toContain(attachmentText(attachment));
         }
     }
 
     // --- Bookmarks: Cover, Index, then one per email, in order. ---------------
     expect(doc.outline.items.map((i) => [i.title, i.dest])).toEqual([
-        [d.coverBookmark, 'cover'],
-        [d.index, 'index'],
+        [documentText.coverBookmark, 'cover'],
+        [documentText.index, 'index'],
         ...emails.map((e, k) =>
         {
-            const ms = e.first.utcMs;
-            const day = ms === null ? en.preview.noDate : inZone(ms).day;
-            return [fill(d.emailBookmark, { number: k + 1, date: day, from: e.first.author, subject: e.first.subject }), `email-${String(k + 1)}`];
+            const utcMs = e.first.utcMs;
+            const day = utcMs === null ? en.preview.noDate : inZone(utcMs).day;
+            return [fill(documentText.emailBookmark, { number: k + 1, date: day, from: e.first.author, subject: e.first.subject }),
+                `email-${String(k + 1)}`];
         }),
     ]);
     expect(doc.outline.items.every((i) => i.children.length === 0)).toBe(true);
@@ -669,7 +674,7 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
 // ---------------------------------------------------------------- the page
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 let downloads: Download[] = [];
@@ -720,9 +725,9 @@ async function prepare(page: Page): Promise<ReturnType<typeof expectedEmails>>
     const transfer = await page.evaluateHandle((list) =>
     {
         const data = new DataTransfer();
-        for (const f of list)
+        for (const file of list)
         {
-            data.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+            data.items.add(new File([new Uint8Array(file.bytes)], file.name, { type: file.type }));
         }
         return data;
     }, sources.map((s) => ({ name: s.name, type: s.type, bytes: s.bytes })));
@@ -793,7 +798,7 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(others.filter((url) => url !== pdfUrl)).toEqual([]);
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__contentViolations));
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
@@ -841,19 +846,20 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     const sectionText = doc.sections.map((s) => norm(s.copied));
 
     // Each email: its first own line (the first line of its body with text; the manifest's first snippet for the HTML-only ones).
-    for (const [k, e] of emails.entries())
+    for (const [k, email] of emails.entries())
     {
-        const firstLine = e.first.body === null ? e.first.snippets[0] : e.first.body.split('\n').find((line) => line.trim() !== '');
-        expect(firstLine, e.first.id).toBeDefined();
-        expect(sectionText[k], e.first.id).toContain(norm(referenceDisplayText(firstLine ?? '')));
+        const firstLine = email.first.body === null ? email.first.snippets[0] : email.first.body.split('\n').find((line) => line.trim() !== '');
+        expect(firstLine, email.first.id).toBeDefined();
+        expect(sectionText[k], email.first.id).toContain(norm(referenceDisplayText(firstLine ?? '')));
         // Attachments, in the email too: the label, then name, size and type.
-        for (const a of e.first.attachments)
+        for (const attachment of email.first.attachments)
         {
             const text = sectionText[k] ?? '';
-            expect(text).toContain(attachmentText(a));
-            expect(text.lastIndexOf(en.preview.attachments, text.indexOf(attachmentText(a)))).toBeGreaterThan(text.indexOf(e.first.snippets[0] ?? '?'));
+            expect(text).toContain(attachmentText(attachment));
+            expect(text.lastIndexOf(en.preview.attachments, text.indexOf(attachmentText(attachment)))).toBeGreaterThan(
+                text.indexOf(email.first.snippets[0] ?? '?'));
         }
-        if (e.first.attachments.length === 0)
+        if (email.first.attachments.length === 0)
         {
             expect(sectionText[k]).not.toContain(`${en.preview.attachments} `);
         }
@@ -904,14 +910,14 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
         'Price list: desk[U+0007]chair',
         'Caf\u{E9} cr\u{E8}me \u{E0} c\u{F4}t\u{E9}.',
     ];
-    let at = -1;
+    let foundAt = -1;
     for (const text of inOrder)
     {
-        const found = answers.indexOf(text, at + 1);
-        expect(found, text).toBeGreaterThan(at);
-        at = found;
+        const found = answers.indexOf(text, foundAt + 1);
+        expect(found, text).toBeGreaterThan(foundAt);
+        foundAt = found;
     }
-    const xOf = (text: string): number =>
+    const lineStartX = (text: string): number =>
     {
         const line = answersSection.lines.find((l) => norm(l.copied).startsWith(norm(text)));
         if (line === undefined)
@@ -920,20 +926,20 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
         }
         return line.runs[0]!.x;
     };
-    const own = xOf('My answers are between your lines.');
-    expect(xOf('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
+    const own = lineStartX('My answers are between your lines.');
+    expect(lineStartX('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
     // No step per quote level: the quoted lines at the same x as the own text,
     // which is one tab (4 spaces of the body font) in from the header labels
     // (Source/pdf-export/page-layout/layout-config.ts, bodyIndentSpaces; task 8.9).
     for (const text of quotedLines)
     {
-        expect(xOf(text), text).toBeCloseTo(own, 2);
+        expect(lineStartX(text), text).toBeCloseTo(own, 2);
     }
     expect(bodyIndent).toBeGreaterThan(5);
-    expect(own - xOf('From')).toBeCloseTo(bodyIndent, 2);
-    for (const l of answersSection.lines)
+    expect(own - lineStartX('From')).toBeCloseTo(bodyIndent, 2);
+    for (const line of answersSection.lines)
     {
-        expect(l.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
+        expect(line.copied, 'no quote mark at a line start').not.toMatch(/^\s*>/u);
     }
 
     // ANSWERS' header rows, from the manifest: each label, then its value, in
@@ -944,20 +950,22 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     {
         throw new Error(`${ANSWERS_ID}: no date or no Sender`);
     }
-    const v = en.preview;
-    const mailboxes = (list: readonly ExpectedAddress[]): string => list.map((m) => fill(v.mailbox, { name: m.name, address: m.address })).join(', ');
+    const previewText = en.preview;
+    const mailboxes = (list: readonly ExpectedAddress[]): string =>
+        list.map((m) => fill(previewText.mailbox, { name: m.name, address: m.address })).join(', ');
     expect([fixture.sender, ...fixture.cc]).toEqual([ANSWERS_SENDER, ANSWERS_CC]);
-    const rowLabels = new Set([v.from, v.author.sender, v.to, v.cc, v.bcc, v.date, v.subject]);
+    const rowLabels = new Set(
+        [previewText.from, previewText.author.sender, previewText.to, previewText.cc, previewText.bcc, previewText.date, previewText.subject]);
     const headerRows = sectionOf(doc, emails, ANSWERS_ID)
         .lines.filter((l) => l.insertedSpaces > 0 && rowLabels.has(l.runs[0]?.copied ?? ''))
         .map((l) => l.copied);
     expect(headerRows, `${ANSWERS_ID}: header rows`).toEqual([
-        `${v.from} ${mailboxes(fixture.from)}`,
-        `${v.author.sender} ${mailboxes([fixture.sender])}`,
-        `${v.to} ${mailboxes(fixture.to)}`,
-        `${v.cc} ${mailboxes(fixture.cc)}`,
-        `${v.date} ${inZone(answersMs).full}`,
-        `${v.subject} ${fixture.subject ?? '?'}`,
+        `${previewText.from} ${mailboxes(fixture.from)}`,
+        `${previewText.author.sender} ${mailboxes([fixture.sender])}`,
+        `${previewText.to} ${mailboxes(fixture.to)}`,
+        `${previewText.cc} ${mailboxes(fixture.cc)}`,
+        `${previewText.date} ${inZone(answersMs).full}`,
+        `${previewText.subject} ${fixture.subject ?? '?'}`,
     ]);
 
     // Accents are real glyphs: shown as they are copied. The only codes drawn
@@ -1011,18 +1019,18 @@ test('"Print full original text": every email\'s whole text, in order', async ({
             .filter((c) => !INVISIBLE.some(([lo, hi]) => (c.codePointAt(0) ?? 0) >= lo && (c.codePointAt(0) ?? 0) <= hi))
             .join('');
     let htmlOnly = 0;
-    for (const [k, e] of emails.entries())
+    for (const [k, email] of emails.entries())
     {
         const section = norm(doc.sections[k]?.copied ?? '');
         // Every email: the manifest's hand-written snippets, in order, as the PDF writes them.
-        let at = -1;
-        for (const snippet of e.first.snippets)
+        let foundAt = -1;
+        for (const snippet of email.first.snippets)
         {
-            const found = section.indexOf(norm(visible(referenceDisplayText(snippet))), at + 1);
-            expect(found, `${e.first.id}: ${snippet}`).toBeGreaterThan(at);
-            at = found;
+            const found = section.indexOf(norm(visible(referenceDisplayText(snippet))), foundAt + 1);
+            expect(found, `${email.first.id}: ${snippet}`).toBeGreaterThan(foundAt);
+            foundAt = found;
         }
-        const bodies = e.files.map((f) => f.body);
+        const bodies = email.files.map((f) => f.body);
         if (bodies.every((b) => b === null))
         {
             // From HTML (no DOMParser here): the snippets only.
@@ -1031,8 +1039,8 @@ test('"Print full original text": every email\'s whole text, in order', async ({
         }
         // The whole body, as the PDF writes it. The files of a duplicate group are identical emails: one body for all.
         const shown = bodies.map((b) => (b === null ? null : norm(visible(referenceDisplayText(b)))));
-        expect(new Set(shown).size, `${e.first.id}: the bodies of its duplicate group`).toBe(1);
-        expect(section, `${e.first.id}: the whole body is in its part of the PDF`).toContain(shown[0] ?? '?');
+        expect(new Set(shown).size, `${email.first.id}: the bodies of its duplicate group`).toBe(1);
+        expect(section, `${email.first.id}: the whole body is in its part of the PDF`).toContain(shown[0] ?? '?');
     }
     expect(htmlOnly).toBe(2);
 
@@ -1056,12 +1064,12 @@ test('"Print full original text": every email\'s whole text, in order', async ({
 // why. Same watch as above: nothing leaves the page, no CSP violation.
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
-const NO_TEXT_HEAD = (n: number, subject: string, day: number): string[] => [
+const NO_TEXT_HEAD = (emailNumber: number, subject: string, day: number): string[] => [
     'From: Erin Sample <erin@example.test>',
     'To: Finn Example <finn@example.test>',
     `Subject: ${subject}`,
     `Date: Thu, ${String(day)} Apr 2025 09:00:00 +0000`,
-    `Message-ID: <no-text-${String(n)}@example.test>`,
+    `Message-ID: <no-text-${String(emailNumber)}@example.test>`,
     'MIME-Version: 1.0',
 ];
 const EMPTY_SUBJECT = 'Nothing written here';
@@ -1103,9 +1111,9 @@ async function prepareNoText(page: Page): Promise<void>
     const transfer = await page.evaluateHandle((list) =>
     {
         const data = new DataTransfer();
-        for (const f of list)
+        for (const file of list)
         {
-            data.items.add(new File([f.text], f.name, { type: 'message/rfc822' }));
+            data.items.add(new File([file.text], file.name, { type: 'message/rfc822' }));
         }
         return data;
     }, NO_TEXT_FILES);
@@ -1210,7 +1218,7 @@ test('emails with no text: only those ticked, no PDF can be made and the page sa
     }
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     expect(untoleratedReports(browserName, withoutSelectReports(browserName, await page.evaluate(() => window.__contentViolations)))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     expect(withoutSelectConsole(browserName, problems)).toEqual([]);

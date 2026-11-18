@@ -18,7 +18,7 @@
 //
 // Throughout both tests (see Helper/Test/browser-tests/support/network-and-csp-watch.ts): no request after the
 // page's own files other than the inlined workers' blob: URLs, no WebSocket,
-// no console error, no dialog, every worker a parse or engine worker that
+// no console error, no dialog, every worker a parse or thread-analysis worker that
 // ended. CSP: no violation in any worker. In the page, the only reports
 // tolerated are those Chromium makes while DOMParser PARSES email HTML with
 // inline handlers or <style> blocks (nothing runs or loads;
@@ -48,7 +48,7 @@ import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
 import {
-    engineOf,
+    browserEngineOf,
     isParseTimeReport,
     PARSE_TIME_CONSOLE,
     untoleratedReports,
@@ -57,7 +57,7 @@ import {
     withoutSelectReports,
     workerCspReports,
     workersNamed,
-    type Watch,
+    type PageWatch,
 } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -78,12 +78,12 @@ const ROOT = decodeURIComponent(new URL('../../..', import.meta.url).pathname).r
  */
 const HTML_ONLY = ((): FixtureExpectation =>
 {
-    const f = FIXTURES.find((x) => x.id === 'msg-13-html-only');
-    if (f === undefined)
+    const htmlOnlyFixture = FIXTURES.find((x) => x.id === 'msg-13-html-only');
+    if (htmlOnlyFixture === undefined)
     {
         throw new Error('no fixture msg-13-html-only');
     }
-    return f;
+    return htmlOnlyFixture;
 })();
 /** What its item must show (the manifest's snippets, and the sign-off) and must never show, on top of the manifest's exclusions. */
 const HTML_ONLY_SHOWS = [...HTML_ONLY.bodyContains, 'Carol'];
@@ -130,20 +130,21 @@ test.beforeAll(async () =>
     {
         const { buildMsg } = (await server.ssrLoadModule('/Helper/Test/test-data/msg/builder.ts')) as typeof Builder;
         const { MSG_SPECS } = (await server.ssrLoadModule('/Helper/Test/test-data/msg/specs.ts')) as typeof Specs;
-        for (const f of FIXTURES)
+        for (const fixture of FIXTURES)
         {
-            const name = fileNameOf(f);
-            if (f.kind === 'eml')
+            const name = fileNameOf(fixture);
+            if (fixture.kind === 'eml')
             {
                 // The fixtures are 7-bit ASCII text.
-                files.push({ name, type: 'message/rfc822', bytes: Array.from(new TextEncoder().encode(readFileSync(`${ROOT}Helper/Test/test-data/${f.id}`, 'utf8'))) });
+                files.push({ name, type: 'message/rfc822',
+                    bytes: Array.from(new TextEncoder().encode(readFileSync(`${ROOT}Helper/Test/test-data/${fixture.id}`, 'utf8'))) });
             }
             else
             {
-                const spec = MSG_SPECS.find((s) => s.id === f.id);
+                const spec = MSG_SPECS.find((s) => s.id === fixture.id);
                 if (spec === undefined)
                 {
-                    throw new Error(`no .msg spec ${f.id}`);
+                    throw new Error(`no .msg spec ${fixture.id}`);
                 }
                 files.push({ name, type: 'application/vnd.ms-outlook', bytes: Array.from(buildMsg(spec)) });
             }
@@ -175,11 +176,11 @@ test.beforeAll(async () =>
 function expectedList(): Expected[]
 {
     const kept = new Map<string, Expected>();
-    for (const e of expected)
+    for (const expectedEmail of expected)
     {
-        if (!kept.has(e.group))
+        if (!kept.has(expectedEmail.group))
         {
-            kept.set(e.group, e);
+            kept.set(expectedEmail.group, expectedEmail);
         }
     }
     const list = [...kept.values()];
@@ -213,7 +214,7 @@ const BROWSER_OFFSET = 570;
 test.use({ timezoneId: BROWSER_ZONE });
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 
@@ -268,9 +269,9 @@ async function drop(page: Page, selector: string, files: readonly DropFile[]): P
     const data = await page.evaluateHandle((list) =>
     {
         const transfer = new DataTransfer();
-        for (const f of list)
+        for (const file of list)
         {
-            transfer.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+            transfer.items.add(new File([new Uint8Array(file.bytes)], file.name, { type: file.type }));
         }
         return transfer;
     }, files);
@@ -303,7 +304,7 @@ async function pageTextAndValues(page: Page): Promise<{ text: string; values: st
 /**
  * Once everything has settled: nothing left the page, no WebSocket, no CSP
  * violation (beyond DOMParser's parse-time reports, fired at the document,
- * see the top of this file), every worker a parse or engine worker that ended, no console error,
+ * see the top of this file), every worker a parse or thread-analysis worker that ended, no console error,
  * no dialog, no download, and no script from an email ran.
  */
 async function expectNothingLeftThePage(page: Page): Promise<void>
@@ -317,7 +318,7 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__flowViolations));
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
@@ -369,7 +370,7 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     await expect(page.locator('#add-failed')).toBeHidden();
     await expect(page.locator('#add-batch-error')).toBeHidden();
 
-    // Counts: the engine's, matching the manifest.
+    // Counts: the thread analysis's, matching the manifest.
     await expect(page.locator('#review-files-text')).toHaveText(`${String(filesTotal)} files.`);
     await expect(page.locator('#review-failed-pointer')).toBeHidden();
     await expect(page.locator('#review-messages')).toHaveText(`${String(filesTotal)} emails found, ${String(merged)} identical copies merged.`);
@@ -388,18 +389,18 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     // Every email's text is in the page (folded or not), and no element was
     // made from email content: no link, image, frame, script or style.
     const before = await pageTextAndValues(page);
-    for (const f of FIXTURES)
+    for (const fixture of FIXTURES)
     {
-        for (const snippet of f.bodyContains)
+        for (const snippet of fixture.bodyContains)
         {
-            expect(before.text, f.id).toContain(snippet);
+            expect(before.text, fixture.id).toContain(snippet);
         }
     }
-    for (const f of FIXTURES)
+    for (const fixture of FIXTURES)
     {
-        for (const never of f.bodyExcludes ?? [])
+        for (const never of fixture.bodyExcludes ?? [])
         {
-            expect(before.text, f.id).not.toContain(never);
+            expect(before.text, fixture.id).not.toContain(never);
         }
     }
     await expect(page.locator('#preview-list :is(a, img, iframe, object, embed, script, style, link, form, b, p:not(.note))')).toHaveCount(0);
@@ -489,9 +490,9 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     await expect(page.locator('#add-failed-list > li')).toHaveCount(0);
     const alsoIn = page.locator('#preview-list dd.meta-also-in');
     const groups = new Map<string, string[]>();
-    for (const e of expected)
+    for (const expectedEmail of expected)
     {
-        groups.set(e.group, [...(groups.get(e.group) ?? []), e.fileName]);
+        groups.set(expectedEmail.group, [...(groups.get(expectedEmail.group) ?? []), expectedEmail.fileName]);
     }
     const merges = [...groups.values()].filter((names) => names.length > 1);
     await expect(alsoIn).toHaveCount(merges.length);
@@ -813,10 +814,10 @@ test('keyboard only: every control is reached in order, shows its focus and work
     expect(languageRadios).toBe(3);
     expect(walk.length).toBe(controlCount - (languageRadios - 1) - (linksSkipped ? 1 : 0));
     // Every stop shows a clear outline.
-    for (const f of walk)
+    for (const tabStop of walk)
     {
-        expect(f.outlineStyle, f.key).not.toBe('none');
-        expect(f.outlineWidth, f.key).toBeGreaterThanOrEqual(2);
+        expect(tabStop.outlineStyle, tabStop.key).not.toBe('none');
+        expect(tabStop.outlineWidth, tabStop.key).toBeGreaterThanOrEqual(2);
     }
     // The order follows the page: the header, then step by step, email by email, top to bottom
     // (a stop may share a line with the one before, never sit above it).

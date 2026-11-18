@@ -42,18 +42,18 @@ interface Rendered
     }[];
 }
 
-/** The header lines of a forwarded block for `m` (no trailing line break). */
-function blockHeader(m: NormalizedMessage): string
+/** The header lines of a forwarded block for `message` (no trailing line break). */
+function blockHeader(message: NormalizedMessage): string
 {
-    const from = m.from.map((a) => (a.name === '' ? a.address : `${a.name} <${a.address}>`)).join(', ');
+    const from = message.from.map((a) => (a.name === '' ? a.address : `${a.name} <${a.address}>`)).join(', ');
     const lines = [FORWARDED_SEPARATOR, ...(from === '' ? [] : [`From: ${from}`])];
-    if (m.date.original !== '')
+    if (message.date.original !== '')
     {
-        lines.push(`Date: ${m.date.original}`);
+        lines.push(`Date: ${message.date.original}`);
     }
-    if (m.subject !== '')
+    if (message.subject !== '')
     {
-        lines.push(`Subject: ${m.subject}`);
+        lines.push(`Subject: ${message.subject}`);
     }
     return lines.join('\n');
 }
@@ -91,9 +91,9 @@ export function attachedResult(root: AttachedNode): Extract<ParseResult, { ok: t
     const attached: AttachedMessage[] = [];
     // `ups`: the emails above `self`, nearest first: their attached index (-1: the file's email) and where the
     // text of the email below them starts in their body (null: that one is not printed inline there).
-    const walk = (r: Rendered, self: number, path: readonly number[], ups: readonly { readonly holder: number; readonly offset: number | null }[]): void =>
+    const walk = (rendered: Rendered, self: number, path: readonly number[], ups: readonly { readonly holder: number; readonly offset: number | null }[]): void =>
     {
-        r.kids.forEach((kid, k) =>
+        rendered.kids.forEach((kid, k) =>
         {
             const ownPath = [...path, k + 1];
             // Places: in the parent, then each email above while the one below it is printed inline there.
@@ -103,21 +103,21 @@ export function attachedResult(root: AttachedNode): Extract<ParseResult, { ok: t
                 let start = kid.block.start;
                 let end = kid.block.end;
                 places.push({ holder: self, start, end });
-                for (const up of ups)
+                for (const ancestor of ups)
                 {
-                    if (up.offset === null)
+                    if (ancestor.offset === null)
                     {
                         break;
                     }
-                    start += up.offset;
-                    end += up.offset;
-                    places.push({ holder: up.holder, start, end });
+                    start += ancestor.offset;
+                    end += ancestor.offset;
+                    places.push({ holder: ancestor.holder, start, end });
                 }
             }
             const index = attached.length;
-            const m = kid.rendered.node.message;
+            const kidMessage = kid.rendered.node.message;
             attached.push({
-                message: { ...m, bodyText: kid.rendered.body, source: { ...root.message.source, attachedPath: ownPath } },
+                message: { ...kidMessage, bodyText: kid.rendered.body, source: { ...root.message.source, attachedPath: ownPath } },
                 parent: self,
                 places,
                 path: ownPath,

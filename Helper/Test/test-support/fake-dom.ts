@@ -187,18 +187,18 @@ export class FakeElement
     /** Like the real insertBefore(): `node` goes before `reference`, or at the end when it is null. */
     insertBefore(node: FakeNode, reference: FakeNode | null): FakeNode
     {
-        const at = reference === null ? -1 : this.children.indexOf(reference);
-        if (reference !== null && at < 0)
+        const referenceIndex = reference === null ? -1 : this.children.indexOf(reference);
+        if (reference !== null && referenceIndex < 0)
         {
             throw new Error('fake DOM: insertBefore reference is not a child');
         }
-        if (at < 0)
+        if (referenceIndex < 0)
         {
             this.children.push(node);
         }
         else
         {
-            this.children.splice(at, 0, node);
+            this.children.splice(referenceIndex, 0, node);
         }
         return node;
     }

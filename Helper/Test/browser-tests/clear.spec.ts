@@ -13,7 +13,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/network-and-csp-watch.ts';
+import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed,
+    type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -53,28 +54,28 @@ const FILES = [
 ];
 
 /** One made-up email of the large batch. */
-function syntheticEmail(i: number): InputFile
+function syntheticEmail(emailNumber: number): InputFile
 {
-    const n = String(i);
-    const minute = String(i % 60).padStart(2, '0');
-    const hour = String(8 + Math.floor(i / 60) % 10).padStart(2, '0');
+    const numberText = String(emailNumber);
+    const minute = String(emailNumber % 60).padStart(2, '0');
+    const hour = String(8 + Math.floor(emailNumber / 60) % 10).padStart(2, '0');
     const text = [
         'From: Garden Club Example <club@example.test>',
-        `To: Member ${n} <member${n}@example.test>`,
-        `Subject: Bench painting slot ${n}`,
+        `To: Member ${numberText} <member${numberText}@example.test>`,
+        `Subject: Bench painting slot ${numberText}`,
         `Date: Mon, 3 Mar 2025 ${hour}:${minute}:00 +0000`,
-        `Message-ID: <bench-slot-${n}@example.test>`,
+        `Message-ID: <bench-slot-${numberText}@example.test>`,
         'MIME-Version: 1.0',
         'Content-Type: text/plain; charset=utf-8',
         '',
-        `Hello member ${n},`,
+        `Hello member ${numberText},`,
         '',
-        `Your bench painting slot number ${n} is on Saturday morning.`,
+        `Your bench painting slot number ${numberText} is on Saturday morning.`,
         '',
         'Garden Club Example',
         '',
     ].join('\r\n');
-    return textFile(`bench-slot-${n}.eml`, text);
+    return textFile(`bench-slot-${numberText}.eml`, text);
 }
 
 /** A batch large enough to take several seconds (one parse worker per file). */
@@ -83,7 +84,7 @@ const LARGE_BATCH = Array.from({ length: 300 }, (_, i) => syntheticEmail(i + 1))
 test.use({ timezoneId: 'America/New_York' });
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 
@@ -187,7 +188,7 @@ async function expectNothingLeftThePage(page: Page, loads = 1): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     // The recorder starts again with each load; the console lines add up.
     expect(withoutSelectReports(browserName, await page.evaluate(() => window.__clearViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);

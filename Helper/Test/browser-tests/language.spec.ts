@@ -28,14 +28,14 @@ import { nl } from '../../../Source/web-page/translations/nl.ts';
 import { readOutline, readPdf } from '../test-support/pdf-reader.ts';
 import { contrastFailures } from './support/contrast.ts';
 import {
-    engineOf,
+    browserEngineOf,
     untoleratedReports,
     watchPage,
     withoutSelectConsole,
     withoutSelectReports,
     workerCspReports,
     workersNamed,
-    type Watch,
+    type PageWatch,
 } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -69,7 +69,7 @@ test.use({ timezoneId: ZONE });
 const FIXED_NOW = new Date('2025-06-01T20:00:00Z');
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 let downloads: Download[] = [];
@@ -140,7 +140,7 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__languageViolations));
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);

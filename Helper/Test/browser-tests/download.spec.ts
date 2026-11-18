@@ -24,7 +24,7 @@
 // (both in memory, never the network), no WebSocket, no console error, no
 // CSP violation in the page or a worker (the page's parse-time reports of
 // DOMParser are tolerated as in Helper/Test/browser-tests/full-flow.spec.ts; these emails are
-// plain text, so none is expected), and every worker a parse, engine or PDF
+// plain text, so none is expected), and every worker a parse, thread-analysis or PDF
 // worker that ended.
 //
 // Test data is made up: Helper/Test/test-data/eml and emails written here
@@ -35,14 +35,14 @@ import { en } from '../../../Source/web-page/translations/en.ts';
 import { readOutline, readPdf } from '../test-support/pdf-reader.ts';
 // untoleratedReports: all but the CSP reports Chromium makes while DOMParser PARSES email HTML (see Helper/Test/browser-tests/full-flow.spec.ts).
 import {
-    engineOf,
+    browserEngineOf,
     untoleratedReports,
     watchPage,
     withoutSelectConsole,
     withoutSelectReports,
     workerCspReports,
     workersNamed,
-    type Watch,
+    type PageWatch,
 } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -81,29 +81,29 @@ const FILES = [
 const FILE_COUNT = FILES.length;
 
 /** One made-up email of the big batch: one a day, from Alice or Carol in turn. */
-function syntheticEmail(i: number): InputFile
+function syntheticEmail(emailNumber: number): InputFile
 {
-    const n = String(i);
-    const day = new Date(Date.UTC(2024, 0, 1, 9, i % 60) + i * 86_400_000).toUTCString().replace('GMT', '+0000');
-    const from = i % 2 === 0 ? 'Alice Example <alice@example.test>' : 'Carol Test <carol@other.test>';
+    const numberText = String(emailNumber);
+    const day = new Date(Date.UTC(2024, 0, 1, 9, emailNumber % 60) + emailNumber * 86_400_000).toUTCString().replace('GMT', '+0000');
+    const from = emailNumber % 2 === 0 ? 'Alice Example <alice@example.test>' : 'Carol Test <carol@other.test>';
     const text = [
         `From: ${from}`,
         'To: Bob Sample <bob@sample.test>',
-        `Subject: Garden bench order ${n}`,
+        `Subject: Garden bench order ${numberText}`,
         `Date: ${day}`,
-        `Message-ID: <bench-order-${n}@example.test>`,
+        `Message-ID: <bench-order-${numberText}@example.test>`,
         'MIME-Version: 1.0',
         'Content-Type: text/plain; charset=utf-8',
         '',
         'Hello Bob,',
         '',
-        `This is note ${n} about the garden benches: the wood is oak, the paint is green,`,
+        `This is note ${numberText} about the garden benches: the wood is oak, the paint is green,`,
         'and the delivery van comes on a weekday morning between eight and ten.',
         '',
         'Kind regards',
         '',
     ].join('\r\n');
-    return textFile(`bench-order-${n}.eml`, text);
+    return textFile(`bench-order-${numberText}.eml`, text);
 }
 
 // The browser's zone: Tokyo (UTC+9, no daylight saving time), so the day of
@@ -115,7 +115,7 @@ const FIXED_NOW = new Date('2025-06-01T20:00:00Z');
 const FILE_NAME = 'correspondence-2025-06-02.pdf';
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 let downloads: Download[] = [];
@@ -205,7 +205,7 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__downloadViolations));
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
@@ -372,21 +372,21 @@ test('a big batch: the page stays responsive while the PDF is made', async ({ pa
     // 50 ms on the main thread), recorded from the press until the PDF is ready.
     await page.evaluate(() =>
     {
-        const w = window as unknown as { __beat: { last: number; maxGap: number; timer: number }; __long: number[] };
-        w.__long = [];
+        const pageWindow = window as unknown as { __beat: { last: number; maxGap: number; timer: number }; __long: number[] };
+        pageWindow.__long = [];
         new PerformanceObserver((list) =>
         {
             for (const entry of list.getEntries())
             {
-                w.__long.push(entry.duration);
+                pageWindow.__long.push(entry.duration);
             }
         }).observe({ type: 'longtask' });
-        w.__beat = { last: performance.now(), maxGap: 0, timer: 0 };
-        w.__beat.timer = window.setInterval(() =>
+        pageWindow.__beat = { last: performance.now(), maxGap: 0, timer: 0 };
+        pageWindow.__beat.timer = window.setInterval(() =>
         {
             const now = performance.now();
-            w.__beat.maxGap = Math.max(w.__beat.maxGap, now - w.__beat.last);
-            w.__beat.last = now;
+            pageWindow.__beat.maxGap = Math.max(pageWindow.__beat.maxGap, now - pageWindow.__beat.last);
+            pageWindow.__beat.last = now;
         }, 10);
     });
     const next = page.waitForEvent('download', { timeout: 300_000 });
@@ -395,17 +395,17 @@ test('a big batch: the page stays responsive while the PDF is made', async ({ pa
     // (the browser copies the emails, plans and fonts during postMessage).
     const handOffMs = await page.evaluate(() =>
     {
-        const t0 = performance.now();
+        const pressedAt = performance.now();
         document.querySelector<HTMLButtonElement>('#download-button')?.click();
-        return performance.now() - t0;
+        return performance.now() - pressedAt;
     });
     const download = await next;
     const makeMs = Date.now() - clickedAt;
     const responsiveness = await page.evaluate(() =>
     {
-        const w = window as unknown as { __beat: { last: number; maxGap: number; timer: number }; __long: number[] };
-        window.clearInterval(w.__beat.timer);
-        return { maxGap: w.__beat.maxGap, longTasks: w.__long };
+        const pageWindow = window as unknown as { __beat: { last: number; maxGap: number; timer: number }; __long: number[] };
+        window.clearInterval(pageWindow.__beat.timer);
+        return { maxGap: pageWindow.__beat.maxGap, longTasks: pageWindow.__long };
     });
     const bytes = await bytesOf(download);
     const pdf = readPdf(bytes);
@@ -424,7 +424,7 @@ test('a big batch: the page stays responsive while the PDF is made', async ({ pa
 
     // "Clear everything" while this big PDF is being made again, its worker
     // really running: it is stopped, and nothing more is downloaded.
-    const pdfWorkers = (list: Watch['workers']): number => workersNamed(watch, list, 'pdf-worker').length;
+    const pdfWorkers = (list: PageWatch['workers']): number => workersNamed(watch, list, 'pdf-worker').length;
     const started = pdfWorkers(watch.workers);
     await makeButton(page).click();
     await expect.poll(() => pdfWorkers(watch.workers), { intervals: [10] }).toBe(started + 1);

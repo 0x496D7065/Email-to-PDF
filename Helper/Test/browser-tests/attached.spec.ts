@@ -16,7 +16,8 @@ import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts'
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { fr } from '../../../Source/web-page/translations/fr.ts';
 import { nl } from '../../../Source/web-page/translations/nl.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
+import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+    type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -66,7 +67,7 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 test.use({ timezoneId: 'Africa/Lagos' });
 
 let origin = '';
-let watch: Watch;
+let watch: PageWatch;
 let loadedAt = 0;
 let problems: string[] = [];
 let downloads: Download[] = [];
@@ -155,7 +156,7 @@ test('an attached email is an email of its own in the preview and in the PDF', a
     expect(others).toEqual([]);
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     expect(withoutSelectReports(browserName, await page.evaluate(() => window.__attachedViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     expect(withoutSelectConsole(browserName, problems)).toEqual([]);
@@ -300,7 +301,7 @@ test('attached emails: where they come from, the unread note and the counts, in 
     const others = watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url));
     expect(others).toEqual([]);
     expect(watch.websockets).toEqual([]);
-    const browserName = engineOf(page.context());
+    const browserName = browserEngineOf(page.context());
     expect(withoutSelectReports(browserName, await page.evaluate(() => window.__attachedViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     expect(withoutSelectConsole(browserName, problems)).toEqual([]);
