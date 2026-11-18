@@ -1,6 +1,6 @@
 // The page's side of the engine worker: starts a worker for one batch, sends
 // it the parse results, enforces a time limit, and always terminates the
-// worker. Same patterns as the parse workers (Source/email-reading/worker-runner.ts).
+// worker. Same patterns as the parse workers (Source/email-reading/parse-worker-runner.ts).
 //
 // Every way the worker can go wrong becomes a batch-level failure with a
 // plain detail, never a thrown error and never a page that waits forever:
@@ -16,7 +16,7 @@
 // The worker is hidden behind a factory so this logic is unit tested with a
 // fake worker.
 
-import { connectWorker } from '../email-reading/worker-runner';
+import { connectWorker } from '../email-reading/parse-worker-runner';
 import { isFromEngineWorker } from './engine-protocol';
 import EngineWorker from './engine-worker?worker&inline';
 import type { EngineFailure, ToEngineWorker } from '../../Header/engine-worker-messages';
@@ -138,7 +138,7 @@ export function runEngineInWorker(results: readonly ParseResult[], options: Engi
  * The browser's engine worker: a new worker per batch, started from
  * engine-worker.ts. Inlined in the page's script and started from a `blob:`
  * URL, so it also starts with the network switched off; see
- * createBrowserWorker in Source/email-reading/worker-runner.ts for why, and for how
+ * createBrowserWorker in Source/email-reading/parse-worker-runner.ts for why, and for how
  * the blob: URLs are cleaned up. A fresh worker per batch: one that timed out
  * or failed must be terminated anyway, and no state from an earlier batch can
  * leak into the next.

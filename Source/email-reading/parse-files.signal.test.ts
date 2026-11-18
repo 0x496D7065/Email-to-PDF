@@ -1,17 +1,17 @@
 // Unit test: parseFiles hands its cancel signal ("Clear everything") to the
-// worker runner. It lives in its own file because it mocks ./worker-runner:
+// worker runner. It lives in its own file because it mocks ./parse-worker-runner:
 // every other test uses the real module. Synthetic data only (README.md,
 // rule R7).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseFiles, PARSE_TIMEOUT_MS } from './parse-files';
-import { runInWorker } from './worker-runner';
+import { runInWorker } from './parse-worker-runner';
 
 // runInWorker is replaced by a spy (no worker in Node); everything else in
 // the module stays real.
-vi.mock('./worker-runner', async (importOriginal) =>
+vi.mock('./parse-worker-runner', async (importOriginal) =>
 {
-    const original = await importOriginal<typeof import('./worker-runner')>();
+    const original = await importOriginal<typeof import('./parse-worker-runner')>();
     return {
         ...original,
         runInWorker: vi.fn((job: { name: string; sha256: string }) =>

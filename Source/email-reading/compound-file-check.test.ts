@@ -1,9 +1,9 @@
-// Unit tests for the Compound File pre-check (cfb-check.ts). Every .msg is
+// Unit tests for the Compound File pre-check (compound-file-check.ts). Every .msg is
 // built in memory from synthetic specs (Helper/Test/test-data/msg/builder.ts), then
 // damaged byte by byte here. Nothing is read from disk.
 //
 // The damaged files below are exactly the kind that make msgreader loop
-// forever or reserve gigabytes. They are only ever handed to findCfbDamage
+// forever or reserve gigabytes. They are only ever handed to findCompoundFileDamage
 // and parseWithDeferredHtml (which checks first), NEVER to msgreader
 // directly: that would hang the test run. The browser test
 // (Helper/Test/browser-tests/parse-files.spec.ts) checks the same protection in a real worker.
@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
-import { findCfbDamage } from './cfb-check';
+import { findCompoundFileDamage } from './compound-file-check';
 import { parseWithDeferredHtml } from './deferred-html';
 
 const BASE: MsgSpec = {
@@ -48,9 +48,9 @@ function layout(bytes: Uint8Array)
     const directorySectors = (): number[] =>
     {
         const sectors: number[] = [];
-        for (let s = u32(0x30); s !== 0xfffffffe; s = u32(fatEntry(s)))
+        for (let sector = u32(0x30); sector !== 0xfffffffe; sector = u32(fatEntry(sector)))
         {
-            sectors.push(s);
+            sectors.push(sector);
         }
         return sectors;
     };
@@ -79,30 +79,30 @@ function layout(bytes: Uint8Array)
     return { view, u32, setU32, fatEntry, miniFatEntry, entry, entryCount, findStream };
 }
 
-describe('findCfbDamage: well-formed files pass', () =>
+describe('findCompoundFileDamage: well-formed files pass', () =>
 {
     it.each(MSG_SPECS.map((s) => [s.id, s] as const))('%s', (_id, spec) =>
     {
-        expect(findCfbDamage(buildMsg(spec))).toBeNull();
+        expect(findCompoundFileDamage(buildMsg(spec))).toBeNull();
     });
 
     it('a file with a regular (non-mini) stream passes', () =>
     {
-        expect(findCfbDamage(buildMsg(WITH_BIG_STREAM))).toBeNull();
+        expect(findCompoundFileDamage(buildMsg(WITH_BIG_STREAM))).toBeNull();
     });
 
     it('a file given as a view into a larger buffer passes', () =>
     {
-        const data = buildMsg(BASE);
-        const big = new Uint8Array(data.length + 64);
-        big.set(data, 16);
-        expect(findCfbDamage(big.subarray(16, 16 + data.length))).toBeNull();
+        const fileBytes = buildMsg(BASE);
+        const largerBuffer = new Uint8Array(fileBytes.length + 64);
+        largerBuffer.set(fileBytes, 16);
+        expect(findCompoundFileDamage(largerBuffer.subarray(16, 16 + fileBytes.length))).toBeNull();
     });
 });
 
-describe('findCfbDamage: damaged files are rejected', () =>
+describe('findCompoundFileDamage: damaged files are rejected', () =>
 {
-    const damaged = (spec: MsgSpec, damage: (l: ReturnType<typeof layout>, bytes: Uint8Array) => void): Uint8Array =>
+    const damaged = (spec: MsgSpec, damage: (structure: ReturnType<typeof layout>, bytes: Uint8Array) => void): Uint8Array =>
     {
         const bytes = buildMsg(spec);
         damage(layout(bytes), bytes);
@@ -112,19 +112,19 @@ describe('findCfbDamage: damaged files are rejected', () =>
     it('a stream declared larger than the file (msgreader would reserve ~2 GB)', () =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(l.entry(l.findStream((size) => size > 0)) + 0x78, 0x7ffffff0));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
     });
 
     it('a stream declared one byte larger than the file', () =>
     {
         const bytes = damaged(BASE, (l, b) => l.setU32(l.entry(l.findStream((size) => size > 0)) + 0x78, b.length + 1));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
     });
 
     it('a mini stream (root entry) declared larger than the file', () =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(l.entry(0) + 0x78, 0xfffffff0));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
     });
 
     it.each([
@@ -136,13 +136,13 @@ describe('findCfbDamage: damaged files are rejected', () =>
     ])('a bogus sector size shift: %s', (_label, shift) =>
     {
         const bytes = damaged(BASE, (l) => l.view.setUint16(0x1e, shift, true));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: impossible sector size');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: impossible sector size');
     });
 
     it('a bogus mini sector size shift', () =>
     {
         const bytes = damaged(BASE, (l) => l.view.setUint16(0x20, 12, true));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: impossible mini sector size');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: impossible mini sector size');
     });
 
     it.each([
@@ -152,198 +152,198 @@ describe('findCfbDamage: damaged files are rejected', () =>
     ])('more %s than the file has sectors', (_label, offset) =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(offset, 0x7fffffff));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: impossible sector count');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: impossible sector count');
     });
 
     it('a directory chain that loops back on itself (msgreader would loop forever)', () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
-            const first = l.u32(0x30);
-            l.setU32(l.fatEntry(first), first);
+            const first = structure.u32(0x30);
+            structure.setU32(structure.fatEntry(first), first);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
     });
 
     it('a mini stream chain that loops back on itself', () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
-            const start = l.u32(l.entry(0) + 0x74);
-            l.setU32(l.fatEntry(start), start);
+            const start = structure.u32(structure.entry(0) + 0x74);
+            structure.setU32(structure.fatEntry(start), start);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
     });
 
     it("a small stream's chain that loops back on itself (msgreader would loop forever)", () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
-            const stream = l.findStream((size) => size > 64 && size < 4096);
-            const start = l.u32(l.entry(stream) + 0x74);
-            l.setU32(l.miniFatEntry(start), start);
+            const stream = structure.findStream((size) => size > 64 && size < 4096);
+            const start = structure.u32(structure.entry(stream) + 0x74);
+            structure.setU32(structure.miniFatEntry(start), start);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
     });
 
     it("a regular stream's chain that loops back on itself", () =>
     {
-        const bytes = damaged(WITH_BIG_STREAM, (l) =>
+        const bytes = damaged(WITH_BIG_STREAM, (structure) =>
         {
-            const stream = l.findStream((size) => size >= 4096);
-            const start = l.u32(l.entry(stream) + 0x74);
-            l.setU32(l.fatEntry(start + 1), start);
+            const stream = structure.findStream((size) => size >= 4096);
+            const start = structure.u32(structure.entry(stream) + 0x74);
+            structure.setU32(structure.fatEntry(start + 1), start);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
     });
 
     it('two streams sharing sectors', () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
-            const a = l.findStream((size) => size > 0 && size < 4096);
-            const b = l.findStream((size) => size > 0 && size < 4096 && size !== l.u32(l.entry(a) + 0x78));
-            l.setU32(l.entry(b) + 0x74, l.u32(l.entry(a) + 0x74));
+            const firstStream = structure.findStream((size) => size > 0 && size < 4096);
+            const secondStream = structure.findStream((size) => size > 0 && size < 4096 && size !== structure.u32(structure.entry(firstStream) + 0x78));
+            structure.setU32(structure.entry(secondStream) + 0x74, structure.u32(structure.entry(firstStream) + 0x74));
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a sector chain loops back on itself');
     });
 
     it('a chain that points outside the file', () =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(l.fatEntry(l.u32(0x30)), 0x00ffffff));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a sector chain points outside the file');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a sector chain points outside the file');
     });
 
     it('a directory tree that loops back on itself (msgreader would loop forever)', () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
-            const child = l.u32(l.entry(0) + 0x4c);
-            l.setU32(l.entry(child) + 0x44, child); // its left sibling is itself
+            const child = structure.u32(structure.entry(0) + 0x4c);
+            structure.setU32(structure.entry(child) + 0x44, child); // its left sibling is itself
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: the directory tree loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: the directory tree loops back on itself');
     });
 
     it('a directory tree that links back to the root', () =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(l.entry(l.u32(l.entry(0) + 0x4c)) + 0x48, 0));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: the directory tree loops back on itself');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: the directory tree loops back on itself');
     });
 
     it('a second root entry whose sibling link loops (msgreader would grow an array until it fails)', () =>
     {
         // The reviewed case: the first synthetic spec, the root's child turned
         // into a root-type entry whose right sibling is itself.
-        const bytes = damaged(MSG_SPECS[0] as MsgSpec, (l, b) =>
+        const bytes = damaged(MSG_SPECS[0] as MsgSpec, (structure, fileBytes) =>
         {
-            const child = l.u32(l.entry(0) + 0x4c);
-            b[l.entry(child) + 0x42] = 5;
-            l.setU32(l.entry(child) + 0x48, child);
+            const child = structure.u32(structure.entry(0) + 0x4c);
+            fileBytes[structure.entry(child) + 0x42] = 5;
+            structure.setU32(structure.entry(child) + 0x48, child);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a second root entry');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a second root entry');
     });
 
     it('a second root entry with harmless links is still rejected', () =>
     {
-        const bytes = damaged(BASE, (l, b) =>
+        const bytes = damaged(BASE, (structure, fileBytes) =>
         {
-            b[l.entry(l.u32(l.entry(0) + 0x4c)) + 0x42] = 5;
+            fileBytes[structure.entry(structure.u32(structure.entry(0) + 0x4c)) + 0x42] = 5;
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a second root entry');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a second root entry');
     });
 
     it('a second root entry that the tree does not reach is rejected too', () =>
     {
-        const bytes = damaged(BASE, (l, b) =>
+        const bytes = damaged(BASE, (structure, fileBytes) =>
         {
             // The last directory entry of the file: unused (type 0) in these
             // synthetic files, so not linked from the tree.
-            const last = l.entryCount() - 1;
-            expect(b[l.entry(last) + 0x42]).toBe(0);
-            b[l.entry(last) + 0x42] = 5;
+            const last = structure.entryCount() - 1;
+            expect(fileBytes[structure.entry(last) + 0x42]).toBe(0);
+            fileBytes[structure.entry(last) + 0x42] = 5;
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a second root entry');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a second root entry');
     });
 
     it('a small stream whose chain is shorter than its declared size', () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
-            const stream = l.findStream((size) => size > 64 && size < 4096);
+            const stream = structure.findStream((size) => size > 64 && size < 4096);
             // Cut its mini chain after the first mini sector.
-            l.setU32(l.miniFatEntry(l.u32(l.entry(stream) + 0x74)), 0xfffffffe);
+            structure.setU32(structure.miniFatEntry(structure.u32(structure.entry(stream) + 0x74)), 0xfffffffe);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
     });
 
     it('a small stream with a size but no chain', () =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(l.entry(l.findStream((size) => size > 0 && size < 4096)) + 0x74, 0xfffffffe));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
     });
 
     it('a regular stream whose chain is shorter than its declared size', () =>
     {
-        const bytes = damaged(WITH_BIG_STREAM, (l) =>
+        const bytes = damaged(WITH_BIG_STREAM, (structure) =>
         {
-            const stream = l.findStream((size) => size >= 4096);
-            l.setU32(l.fatEntry(l.u32(l.entry(stream) + 0x74)), 0xfffffffe);
+            const stream = structure.findStream((size) => size >= 4096);
+            structure.setU32(structure.fatEntry(structure.u32(structure.entry(stream) + 0x74)), 0xfffffffe);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
     });
 
     it('a regular stream declared one byte larger than its chain holds', () =>
     {
-        const bytes = damaged(WITH_BIG_STREAM, (l) =>
+        const bytes = damaged(WITH_BIG_STREAM, (structure) =>
         {
-            const stream = l.findStream((size) => size >= 4096);
+            const stream = structure.findStream((size) => size >= 4096);
             let length = 0;
-            for (let s = l.u32(l.entry(stream) + 0x74); s !== 0xfffffffe; s = l.u32(l.fatEntry(s)))
+            for (let sector = structure.u32(structure.entry(stream) + 0x74); sector !== 0xfffffffe; sector = structure.u32(structure.fatEntry(sector)))
             {
                 length++;
             }
-            l.setU32(l.entry(stream) + 0x78, length * SECTOR + 1);
+            structure.setU32(structure.entry(stream) + 0x78, length * SECTOR + 1);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
     });
 
     it('a mini stream (root entry) longer than its sector chain', () =>
     {
-        const bytes = damaged(BASE, (l) =>
+        const bytes = damaged(BASE, (structure) =>
         {
             let length = 0;
-            for (let s = l.u32(l.entry(0) + 0x74); s !== 0xfffffffe; s = l.u32(l.fatEntry(s)))
+            for (let sector = structure.u32(structure.entry(0) + 0x74); sector !== 0xfffffffe; sector = structure.u32(structure.fatEntry(sector)))
             {
                 length++;
             }
-            l.setU32(l.entry(0) + 0x78, length * SECTOR + 1);
+            structure.setU32(structure.entry(0) + 0x78, length * SECTOR + 1);
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is longer than its sector chain');
     });
 
     it('a directory link outside the directory', () =>
     {
         const bytes = damaged(BASE, (l) => l.setU32(l.entry(0) + 0x4c, 0x100000));
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a directory entry points outside the directory');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a directory entry points outside the directory');
     });
 
     it('no root entry', () =>
     {
-        const bytes = damaged(BASE, (l, b) =>
+        const bytes = damaged(BASE, (structure, fileBytes) =>
         {
-            b[l.entry(0) + 0x42] = 1;
+            fileBytes[structure.entry(0) + 0x42] = 1;
         });
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: the root entry is missing');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: the root entry is missing');
     });
 
     it('a file cut off after the header', () =>
     {
-        expect(findCfbDamage(buildMsg(BASE).slice(0, 600))).toMatch(/^damaged file structure: /);
+        expect(findCompoundFileDamage(buildMsg(BASE).slice(0, 600))).toMatch(/^damaged file structure: /);
     });
 
     it('a file shorter than the header', () =>
     {
-        expect(findCfbDamage(buildMsg(BASE).slice(0, 300))).toBe('damaged file structure: the file is too short');
+        expect(findCompoundFileDamage(buildMsg(BASE).slice(0, 300))).toBe('damaged file structure: the file is too short');
     });
 
     it('a version 4 file (4096-byte sectors) with a size over 4 GB', () =>
@@ -365,18 +365,18 @@ describe('findCfbDamage: damaged files are rejected', () =>
         view.setUint32(0x30, 1, true); // directory: sector 1
         view.setUint32(0x3c, 0xfffffffe, true);
         view.setUint32(0x44, 0xfffffffe, true);
-        const fat = 4096; // sector 0
-        view.setUint32(fat, 0xfffffffd, true); // FAT sector
-        view.setUint32(fat + 4, 0xfffffffe, true); // directory: one sector
+        const fatSectorOffset = 4096; // sector 0
+        view.setUint32(fatSectorOffset, 0xfffffffd, true); // FAT sector
+        view.setUint32(fatSectorOffset + 4, 0xfffffffe, true); // directory: one sector
         const root = 2 * 4096; // sector 1, entry 0
         bytes[root + 0x42] = 5;
         view.setUint32(root + 0x44, 0xffffffff, true);
         view.setUint32(root + 0x48, 0xffffffff, true);
         view.setUint32(root + 0x4c, 0xffffffff, true);
         view.setUint32(root + 0x74, 0xfffffffe, true);
-        expect(findCfbDamage(bytes)).toBeNull();
+        expect(findCompoundFileDamage(bytes)).toBeNull();
         view.setUint32(root + 0x7c, 1, true); // high 32 bits of the size
-        expect(findCfbDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
+        expect(findCompoundFileDamage(bytes)).toBe('damaged file structure: a stream is declared larger than the file');
     });
 });
 
@@ -385,9 +385,9 @@ describe('the parse path checks the structure before msgreader reads the file', 
     it('a looping directory chain becomes a corrupt result, quickly, with the hash', async () =>
     {
         const bytes = buildMsg(BASE);
-        const l = layout(bytes);
-        const first = l.u32(0x30);
-        l.setU32(l.fatEntry(first), first);
+        const structure = layout(bytes);
+        const first = structure.u32(0x30);
+        structure.setU32(structure.fatEntry(first), first);
         const started = Date.now();
         const result = await parseWithDeferredHtml({ name: 'loop.msg', bytes }, 'msg', () =>
         {

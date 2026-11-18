@@ -3,7 +3,7 @@
 // themselves (with their names), and the CSP reports of each worker.
 //
 // The parse and engine workers are inlined in the page's script and start
-// from `blob:` URLs (see Source/email-reading/worker-runner.ts). Chromium lists the
+// from `blob:` URLs (see Source/email-reading/parse-worker-runner.ts). Chromium lists the
 // loading of a blob: worker script as a request to that blob: URL; it never
 // goes to the network (Firefox and WebKit do not list it). Every blob: URL
 // looks alike, so workers are told apart by the name they are started with

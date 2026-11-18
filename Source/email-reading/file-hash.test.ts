@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sha256Hex } from './hash';
+import { sha256Hex } from './file-hash';
 
 // Known test vectors (FIPS 180-2 / NIST examples).
 describe('sha256Hex', () =>

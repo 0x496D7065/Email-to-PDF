@@ -8,11 +8,11 @@
 import type { FieldsData } from '@kenjiuno/msgreader';
 import { describe, expect, it } from 'vitest';
 import { buildMsg, type MsgAttachedItemSpec, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
-import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
-import { sha256Hex } from './hash';
+import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-email-limits';
+import { sha256Hex } from './file-hash';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser, resultFromFields } from './msg';
-import { isFromWorker } from './worker-protocol';
+import { createMsgParser, resultFromFields } from './msg-parser';
+import { isFromWorker } from './parse-worker-protocol';
 import type { AttachedMessage, ParseResult } from '../../Header/parsed-email';
 
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -46,11 +46,11 @@ const inner = (name: string, extra: Partial<MsgSpec> = {}): MsgSpec => ({
     ...extra,
 });
 
-const item = (message: MsgSpec): MsgAttachedItemSpec => ({ displayName: message.subject, message });
+const attachedItem = (message: MsgSpec): MsgAttachedItemSpec => ({ displayName: message.subject, message });
 
 /** A chain of items L1 > L2 > ... > L`levels`, each attached to the one before. */
 const chain = (level: number, levels: number): MsgSpec =>
-    inner(`L${String(level)}`, level === levels ? {} : { attachedItems: [item(chain(level + 1, levels))] });
+    inner(`L${String(level)}`, level === levels ? {} : { attachedItems: [attachedItem(chain(level + 1, levels))] });
 
 type OkResult = Extract<ParseResult, { ok: true }>;
 
@@ -82,14 +82,14 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
 {
     it('reads one attached item from its own properties, with the dropped file as its source', async () =>
     {
-        const spec: MsgSpec = { ...OUTER, attachedItems: [item(inner('A', { inReplyTo: '<outer@example.test>' }))] };
+        const spec: MsgSpec = { ...OUTER, attachedItems: [attachedItem(inner('A', { inReplyTo: '<outer@example.test>' }))] };
         const result = await parseOk(spec, 'outer.msg');
         expect(result.attached).toHaveLength(1);
-        const a = entry(result, 0);
-        expect(a.parent).toBe(-1);
-        expect(a.places).toEqual([]);
-        expect(a.path).toEqual([1]);
-        expect(a.message).toEqual({
+        const firstEntry = entry(result, 0);
+        expect(firstEntry.parent).toBe(-1);
+        expect(firstEntry.places).toEqual([]);
+        expect(firstEntry.path).toEqual([1]);
+        expect(firstEntry.message).toEqual({
             messageId: 'A@example.test',
             inReplyTo: 'outer@example.test',
             references: [],
@@ -108,7 +108,7 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
 
     it('leaves the file\'s own email as it was: listed item, no text of the item; no warning once the item is read (8.13b-3)', async () =>
     {
-        const result = await parseOk({ ...OUTER, attachedItems: [item(inner('A', { bodyText: 'INNER-BODY-MARKER' }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(inner('A', { bodyText: 'INNER-BODY-MARKER' }))] });
         expect(result.message.bodyText).toBe('Outer body.');
         expect(result.message.attachments).toEqual([{ fileName: 'A.msg', size: null, mimeType: 'application/vnd.ms-outlook' }]);
         expect(result.message.warnings).toEqual([]);
@@ -130,8 +130,8 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
             ...OUTER,
             attachments: [{ fileName: 'plan.txt', content: 'plan' }],
             attachedItems: [
-                item(inner('A', { attachments: [{ fileName: 'a.txt', content: 'a' }], attachedItems: [item(inner('A1')), item(inner('A2'))] })),
-                item(inner('B', { attachedItems: [item(inner('B1', { attachedItems: [item(inner('B11'))] }))] })),
+                attachedItem(inner('A', { attachments: [{ fileName: 'a.txt', content: 'a' }], attachedItems: [attachedItem(inner('A1')), attachedItem(inner('A2'))] })),
+                attachedItem(inner('B', { attachedItems: [attachedItem(inner('B1', { attachedItems: [attachedItem(inner('B11'))] }))] })),
             ],
         });
         expect(shape(result)).toEqual([
@@ -142,10 +142,10 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
             ['B1', 3, [2, 1]],
             ['B11', 4, [2, 1, 1]],
         ]);
-        for (const e of result.attached ?? [])
+        for (const attachedEntry of result.attached ?? [])
         {
-            expect(e.places).toEqual([]);
-            expect(e.message.source.attachedPath).toEqual(e.path);
+            expect(attachedEntry.places).toEqual([]);
+            expect(attachedEntry.message.source.attachedPath).toEqual(attachedEntry.path);
         }
         // A holder lists its own items (and only them), like the file's own email.
         expect(entry(result, 0).message.attachments.map((a) => a.fileName)).toEqual(['a.txt', 'A1.msg', 'A2.msg']);
@@ -158,7 +158,7 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
 
     it(`reads ${String(MAX_FORWARD_DEPTH)} levels of items, no deeper; the deepest one stays listed`, async () =>
     {
-        const result = await parseOk({ ...OUTER, attachedItems: [item(chain(1, MAX_FORWARD_DEPTH + 2))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(chain(1, MAX_FORWARD_DEPTH + 2))] });
         expect(shape(result)).toEqual([
             ['L1', -1, [1]],
             ['L2', 0, [1, 1]],
@@ -175,10 +175,10 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
     {
         // 198 items at the top, the first holding 5: the top level is read
         // first (198), then the first 2 of the 5 inside.
-        const top = Array.from({ length: 198 }, (_, i) =>
-            item(inner(`N${String(i + 1)}`, i === 0 ? { attachedItems: Array.from({ length: 5 }, (_, j) => item(inner(`C${String(j + 1)}`))) } : {})),
+        const topItems = Array.from({ length: 198 }, (_, i) =>
+            attachedItem(inner(`N${String(i + 1)}`, i === 0 ? { attachedItems: Array.from({ length: 5 }, (_, j) => attachedItem(inner(`C${String(j + 1)}`))) } : {})),
         );
-        const result = await parseOk({ ...OUTER, attachedItems: top });
+        const result = await parseOk({ ...OUTER, attachedItems: topItems });
         expect(result.attached).toHaveLength(MAX_EXPANDED_FORWARDS);
         expect(shape(result).slice(0, 4)).toEqual([
             ['N1', -1, [1]],
@@ -197,7 +197,7 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
         const result = await parseOk({
             ...OUTER,
             attachments: [{ fileName: 'outer.pdf', mimeType: 'application/pdf', content: 'OUTER-CONTENT-MARKER' }],
-            attachedItems: [item(inner('A', { attachments: [{ fileName: 'invoice.txt', mimeType: 'text/plain', content: 'INNER-CONTENT-MARKER' }] }))],
+            attachedItems: [attachedItem(inner('A', { attachments: [{ fileName: 'invoice.txt', mimeType: 'text/plain', content: 'INNER-CONTENT-MARKER' }] }))],
         });
         expect(result.message.attachments).toEqual([
             { fileName: 'outer.pdf', size: 20, mimeType: 'application/pdf' },
@@ -205,9 +205,9 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
         ]);
         expect(entry(result, 0).message.attachments).toEqual([{ fileName: 'invoice.txt', size: 20, mimeType: 'text/plain' }]);
         // No line is marked as belonging to an attached email: none is printed in a body.
-        for (const a of [...result.message.attachments, ...entry(result, 0).message.attachments])
+        for (const attachment of [...result.message.attachments, ...entry(result, 0).message.attachments])
         {
-            expect('attachedIndex' in a).toBe(false);
+            expect('attachedIndex' in attachment).toBe(false);
         }
         const json = JSON.stringify(result);
         expect(json).not.toContain('OUTER-CONTENT-MARKER');
@@ -216,7 +216,7 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
 
     it('converts an HTML-only item with the injected converter', async () =>
     {
-        const result = await parseOk({ ...OUTER, attachedItems: [item(inner('A', { bodyText: undefined, bodyHtml: '<p>Inner</p>' }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(inner('A', { bodyText: undefined, bodyHtml: '<p>Inner</p>' }))] });
         expect(entry(result, 0).message.bodyText).toBe('[html 12]');
         expect(entry(result, 0).message.warnings).toEqual(['html-converted-body']);
         // The item was read as an email of its own (task 8.13b-3).
@@ -227,7 +227,7 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
     {
         // msgreader reads an embedded message's property stream from offset 8,
         // not 24: with no recipients the first "entry" it sees is 0 and it stops.
-        const result = await parseOk({ ...OUTER, attachedItems: [item(inner('A', { recipients: [] }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(inner('A', { recipients: [] }))] });
         expect(entry(result, 0).message.date.utcMs).toBeNull();
         expect(entry(result, 0).message.warnings).toEqual(['missing-date']);
         expect(entry(result, 0).message.bodyText).toBe('A body.');
@@ -250,14 +250,14 @@ describe('createMsgParser: attached Outlook items as emails of their own', () =>
 
     it('an HTML-only item with no recipients loses its code pages too: its HTML bytes are read as UTF-8 and flagged', async () =>
     {
-        const result = await parseIdentity({ ...OUTER, attachedItems: [item(htmlItem({ recipients: [] }))] });
+        const result = await parseIdentity({ ...OUTER, attachedItems: [attachedItem(htmlItem({ recipients: [] }))] });
         expect(entry(result, 0).message.bodyText).toBe('<p>caf�</p>');
         expect(entry(result, 0).message.warnings).toEqual(['missing-date', 'html-converted-body', 'text-encoding-uncertain']);
     });
 
     it('the same HTML-only item with recipients keeps its code page: read correctly, not flagged', async () =>
     {
-        const result = await parseIdentity({ ...OUTER, attachedItems: [item(htmlItem({}))] });
+        const result = await parseIdentity({ ...OUTER, attachedItems: [attachedItem(htmlItem({}))] });
         expect(entry(result, 0).message.bodyText).toBe('<p>café</p>');
         expect(entry(result, 0).message.warnings).toEqual(['html-converted-body']);
     });
@@ -272,7 +272,7 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
 
     it('reads an item with its own code page, not the file\'s, with no warning', async () =>
     {
-        const result = await parseOk({ ...OUTER, attachedItems: [item(ansi('A', { message: 1251 }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(ansi('A', { message: 1251 }))] });
         expect(entry(result, 0).message.bodyText).toBe('cafй');
         expect(entry(result, 0).message.warnings).toEqual([]);
         // The file's own email is not affected.
@@ -285,7 +285,7 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
             ...OUTER,
             strings: 'ansi-1252',
             bodyText: 'Outer café',
-            attachedItems: [item(ansi('A', { message: 1251 })), item(ansi('B', { message: 1252 }))],
+            attachedItems: [attachedItem(ansi('A', { message: 1251 })), attachedItem(ansi('B', { message: 1252 }))],
         });
         expect(result.message.bodyText).toBe('Outer café');
         expect(entry(result, 0).message.bodyText).toBe('cafй');
@@ -297,21 +297,21 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
     it('an item naming no code page is read with windows-1252 (never the UTF-8 body code page) and flagged', async () =>
     {
         // The outer file names only an internet (body) code page, UTF-8.
-        const result = await parseOk({ ...OUTER, attachedItems: [item(ansi('A', { message: null, internet: null }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(ansi('A', { message: null, internet: null }))] });
         expect(entry(result, 0).message.bodyText).toBe('café');
         expect(entry(result, 0).message.warnings).toEqual(['text-encoding-uncertain']);
     });
 
     it('an item with only a UTF-8 internet code page is not read as UTF-8: windows-1252, flagged', async () =>
     {
-        const result = await parseOk({ ...OUTER, attachedItems: [item(ansi('A', { message: null, internet: 65001 }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(ansi('A', { message: null, internet: 65001 }))] });
         expect(entry(result, 0).message.bodyText).toBe('café');
         expect(entry(result, 0).message.warnings).toEqual(['text-encoding-uncertain']);
     });
 
     it('an item with only an 8-bit internet code page is read with it, but flagged (no PidTagMessageCodepage)', async () =>
     {
-        const result = await parseOk({ ...OUTER, attachedItems: [item(ansi('A', { message: null, internet: 1251 }))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(ansi('A', { message: null, internet: 1251 }))] });
         expect(entry(result, 0).message.bodyText).toBe('cafй');
         expect(entry(result, 0).message.warnings).toEqual(['text-encoding-uncertain']);
     });
@@ -320,7 +320,7 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
     {
         const result = await parseOk({
             ...OUTER,
-            attachedItems: [item(ansi('A', { message: 1251 }, { attachedItems: [item(ansi('A1', { message: null, internet: null }))] }))],
+            attachedItems: [attachedItem(ansi('A', { message: 1251 }, { attachedItems: [attachedItem(ansi('A1', { message: null, internet: null }))] }))],
         });
         expect(entry(result, 1).message.subject).toBe('A1');
         expect(entry(result, 1).message.bodyText).toBe('cafй');
@@ -333,7 +333,7 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
     {
         const result = await parseOk({
             ...OUTER,
-            attachedItems: [item(ansi('A', { message: 1251 }, { attachedItems: [item(inner('A1', { bodyText: 'Unicode café', codepages: { internet: null } }))] }))],
+            attachedItems: [attachedItem(ansi('A', { message: 1251 }, { attachedItems: [attachedItem(inner('A1', { bodyText: 'Unicode café', codepages: { internet: null } }))] }))],
         });
         expect(entry(result, 1).message.bodyText).toBe('Unicode café');
         expect(entry(result, 1).message.warnings).toEqual([]);
@@ -344,7 +344,7 @@ describe('createMsgParser: 8-bit (ANSI) text in attached items', () =>
         const codepages = [1250, 1251, 1253, 1255, 1256, 1257];
         const result = await parseOk({
             ...OUTER,
-            attachedItems: codepages.map((cp) => item(ansi(`cp${String(cp)}`, { message: cp }))),
+            attachedItems: codepages.map((cp) => attachedItem(ansi(`cp${String(cp)}`, { message: cp }))),
         });
         expect(result.attached?.map((e) => [e.message.subject, e.message.warnings])).toEqual([
             ['cp1250', []],
@@ -437,15 +437,15 @@ describe('createMsgParser: only attached emails are read, other Outlook items st
             ...OUTER,
             attachments: [{ fileName: 'plan.txt', content: 'plan' }],
             attachedItems: [
-                item(inner('Meeting', { messageClass: 'IPM.Appointment' })),
-                item(inner('Mail', { messageClass: 'IPM.Note' })),
-                item(inner('Signed', { messageClass: 'ipm.note.SMIME.MultipartSigned' })),
-                item(inner('Contact', { messageClass: 'IPM.Contact' })),
-                item(inner('Nameless', { messageClass: null })),
-                item(inner('Bounce', { messageClass: 'REPORT.IPM.Note.NDR' })),
-                item(inner('Lookalike', { messageClass: 'IPM.NoteBook' })),
-                item(inner('Task', { messageClass: 'IPM.Task' })),
-                item(inner('Last', { messageClass: 'IPM.NOTE' })),
+                attachedItem(inner('Meeting', { messageClass: 'IPM.Appointment' })),
+                attachedItem(inner('Mail', { messageClass: 'IPM.Note' })),
+                attachedItem(inner('Signed', { messageClass: 'ipm.note.SMIME.MultipartSigned' })),
+                attachedItem(inner('Contact', { messageClass: 'IPM.Contact' })),
+                attachedItem(inner('Nameless', { messageClass: null })),
+                attachedItem(inner('Bounce', { messageClass: 'REPORT.IPM.Note.NDR' })),
+                attachedItem(inner('Lookalike', { messageClass: 'IPM.NoteBook' })),
+                attachedItem(inner('Task', { messageClass: 'IPM.Task' })),
+                attachedItem(inner('Last', { messageClass: 'IPM.NOTE' })),
             ],
         });
         // path = the n-th Outlook item line of the holder (plan.txt is not counted).
@@ -474,15 +474,15 @@ describe('createMsgParser: only attached emails are read, other Outlook items st
     {
         const result = await parseOk({
             ...OUTER,
-            attachedItems: [item(inner('Meeting', { messageClass: 'IPM.Schedule.Meeting.Request', attachedItems: [item(inner('Agenda mail'))] })), item(inner('B'))],
+            attachedItems: [attachedItem(inner('Meeting', { messageClass: 'IPM.Schedule.Meeting.Request', attachedItems: [attachedItem(inner('Agenda mail'))] })), attachedItem(inner('B'))],
         });
         expect(shape(result)).toEqual([['B', -1, [2]]]);
     });
 
     it(`a skipped non-email does not use up the budget of ${String(MAX_EXPANDED_FORWARDS)} read items`, async () =>
     {
-        const calendars = Array.from({ length: MAX_EXPANDED_FORWARDS }, (_, i) => item(inner(`Cal${String(i + 1)}`, { messageClass: 'IPM.Appointment' })));
-        const result = await parseOk({ ...OUTER, attachedItems: [...calendars, item(inner('Mail'))] });
+        const calendars = Array.from({ length: MAX_EXPANDED_FORWARDS }, (_, i) => attachedItem(inner(`Cal${String(i + 1)}`, { messageClass: 'IPM.Appointment' })));
+        const result = await parseOk({ ...OUTER, attachedItems: [...calendars, attachedItem(inner('Mail'))] });
         expect(shape(result)).toEqual([['Mail', -1, [MAX_EXPANDED_FORWARDS + 1]]]);
     });
 
@@ -499,7 +499,7 @@ describe('createMsgParser: an attached item that cannot be read stays listed onl
     it('a damaged item (body of the wrong type) is skipped; the file and the next item still load', async () =>
     {
         const damaged = inner('A', { bodyText: undefined, extraBinaries: [{ propId: 0x1000, bytes: new Uint8Array([1, 2, 3]) }] });
-        const result = await parseOk({ ...OUTER, attachedItems: [item(damaged), item(inner('B'))] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(damaged), attachedItem(inner('B'))] });
         expect(result.message.bodyText).toBe('Outer body.');
         expect(result.message.attachments.map((a) => a.fileName)).toEqual(['A.msg', 'B.msg']);
         // B keeps its number: the damaged one still counts.
@@ -509,7 +509,7 @@ describe('createMsgParser: an attached item that cannot be read stays listed onl
     it('an item with nothing to show gives no empty email', async () =>
     {
         const empty = inner('', { recipients: [], bodyText: undefined, submitTime: undefined, messageId: undefined, sender: { name: '', smtp: '' } });
-        const result = await parseOk({ ...OUTER, attachedItems: [item(empty)] });
+        const result = await parseOk({ ...OUTER, attachedItems: [attachedItem(empty)] });
         expect('attached' in result).toBe(false);
         expect(result.message.attachments).toHaveLength(1);
     });

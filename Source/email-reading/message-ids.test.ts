@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseIdList, parseSingleId } from './ids';
+import { parseIdList, parseSingleId } from './message-ids';
 
 describe('parseIdList', () =>
 {

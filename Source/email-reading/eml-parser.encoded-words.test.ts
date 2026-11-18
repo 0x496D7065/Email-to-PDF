@@ -10,7 +10,7 @@
 // task 9.5).
 
 import { describe, expect, it } from 'vitest';
-import { createEmlParser } from './eml';
+import { createEmlParser } from './eml-parser';
 import type { HtmlToTextResult } from './html-to-text';
 
 const htmlToText = (html: string): HtmlToTextResult => ({ text: html, truncated: false });
@@ -32,7 +32,7 @@ describe('createEmlParser: a header of very many joinable base64 encoded words',
 {
     it('is decoded in full and in linear time, not quadratic', async () =>
     {
-        // 100,000 words: a 1.7 MB header, under postal-mime's 2 MiB header limit (eml.ts).
+        // 100,000 words: a 1.7 MB header, under postal-mime's 2 MiB header limit (eml-parser.ts).
         const COUNT = 100_000;
         const { header, decoded } = joinableWords(COUNT);
         const file = new TextEncoder().encode(

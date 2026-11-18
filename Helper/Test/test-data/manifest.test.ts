@@ -11,7 +11,7 @@
 import MsgReader, { type FieldsData } from '@kenjiuno/msgreader';
 import PostalMime, { type Address } from 'postal-mime';
 import { describe, expect, it } from 'vitest';
-import { parseEmailDate } from '../../../Source/email-reading/date';
+import { parseEmailDate } from '../../../Source/email-reading/date-header';
 import { FIXTURES, type ExpectedAddress, type FixtureExpectation } from './manifest';
 import { buildMsgView } from './msg/builder';
 import { MSG_SPECS } from './msg/specs';
@@ -158,7 +158,7 @@ describe('manifest matches the .eml fixtures', () =>
         // shape. It converts an HTML part next to a text part in multipart/mixed
         // with its own converter, and puts text parts ahead of
         // inline forwarded messages, while the adapter keeps file order and uses
-        // our converter (see Source/email-reading/eml.ts). A fixture of either shape must
+        // our converter (see Source/email-reading/eml-parser.ts). A fixture of either shape must
         // get an explicit expected body instead of this comparison.
         if (email.text !== undefined)
         {

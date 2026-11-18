@@ -7,7 +7,7 @@
 //   page   -> worker: { type: 'conversions', outcomes }
 //   worker -> page:   { type: 'result', result }       (or { type: 'failed' })
 // Then the page terminates the worker. See deferred-html.ts for why HTML
-// goes to the page, and worker-runner.ts for the page's side.
+// goes to the page, and parse-worker-runner.ts for the page's side.
 //
 // Messages are copied between the two by the browser (structured clone), so
 // they hold plain data only. The file's bytes are MOVED (transferred) to the
@@ -99,11 +99,11 @@ export function hasWellFormedAttached(result: Record<string, unknown>): boolean
     const isMsg = file.kind === 'msg';
 
     const entries: { parent: number; path: readonly number[]; body: string }[] = [];
-    const isAncestor = (ancestor: number, of: number): boolean =>
+    const isAncestor = (ancestor: number, descendant: number): boolean =>
     {
-        for (let at = entries[of]?.parent ?? -1; at !== -1; at = entries[at]?.parent ?? -1)
+        for (let candidate = entries[descendant]?.parent ?? -1; candidate !== -1; candidate = entries[candidate]?.parent ?? -1)
         {
-            if (at === ancestor)
+            if (candidate === ancestor)
             {
                 return true;
             }
@@ -182,7 +182,10 @@ function attachmentsPointInto(attachments: unknown, allowed: (target: number) =>
         return false;
     }
     return attachments.every(
-        (a) => isRecord(a) && (!('attachedIndex' in a) || (isInteger(a.attachedIndex) && a.attachedIndex >= 0 && allowed(a.attachedIndex))),
+        (attachment) =>
+            isRecord(attachment) &&
+            (!('attachedIndex' in attachment) ||
+                (isInteger(attachment.attachedIndex) && attachment.attachedIndex >= 0 && allowed(attachment.attachedIndex))),
     );
 }
 

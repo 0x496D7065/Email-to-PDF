@@ -4,9 +4,9 @@
 // is built in memory from synthetic text (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { createEmlParser } from './eml';
+import { createEmlParser } from './eml-parser';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
-import { sha256Hex } from './hash';
+import { sha256Hex } from './file-hash';
 import type { HtmlToTextResult } from './html-to-text';
 import type { AttachedMessage, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
@@ -22,9 +22,9 @@ const OUTER_HEADERS = crlf(
     'MIME-Version: 1.0',
 );
 
-/** A multipart/mixed body holding `parts`, with boundary `b`. */
-const mixed = (b: string, ...parts: string[]): string =>
-    crlf(`Content-Type: multipart/mixed; boundary="${b}"`, '', ...parts.flatMap((p) => [`--${b}`, p]), `--${b}--`, '');
+/** A multipart/mixed body holding `parts`, with boundary `boundary`. */
+const mixed = (boundary: string, ...parts: string[]): string =>
+    crlf(`Content-Type: multipart/mixed; boundary="${boundary}"`, '', ...parts.flatMap((p) => [`--${boundary}`, p]), `--${boundary}--`, '');
 
 /** A whole file: the outer headers, then a multipart/mixed body. */
 const file = (...parts: string[]): Uint8Array => encode(crlf(OUTER_HEADERS, mixed('outer', ...parts)));
@@ -54,9 +54,9 @@ const parser = createEmlParser({ htmlToText: stub });
 
 type OkResult = Extract<ParseResult, { ok: true }>;
 
-async function parseOk(data: Uint8Array, name = 'attached-test.eml'): Promise<OkResult>
+async function parseOk(fileBytes: Uint8Array, name = 'attached-test.eml'): Promise<OkResult>
 {
-    const result = await parser.parse({ name, bytes: data });
+    const result = await parser.parse({ name, bytes: fileBytes });
     if (!result.ok)
     {
         throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
@@ -114,8 +114,8 @@ describe('attached emails: inline (no Content-Disposition)', () =>
 
     it('the parent body is exactly as before, and the inner email becomes an AttachedMessage from its own headers', async () =>
     {
-        const data = file(plain('See below.'), rfc822(INNER));
-        const result = await parseOk(data);
+        const fileBytes = file(plain('See below.'), rfc822(INNER));
+        const result = await parseOk(fileBytes);
         const header = [
             FORWARDED_SEPARATOR,
             'From: Café Owner <carol@example.test>',
@@ -129,7 +129,7 @@ describe('attached emails: inline (no Content-Disposition)', () =>
         expect(result.message.bodyText).toBe(`See below.\n\n${header}\n\nInner body text.\n`);
         expect(result.message.attachments).toEqual([]);
         expect(result.message.warnings).toEqual([]);
-        expect(result.message.source).toEqual({ fileName: 'attached-test.eml', sha256: await sha256Hex(data), kind: 'eml' });
+        expect(result.message.source).toEqual({ fileName: 'attached-test.eml', sha256: await sha256Hex(fileBytes), kind: 'eml' });
 
         expect(result.attached).toHaveLength(1);
         const entry = attachedAt(result, 0);
@@ -163,7 +163,7 @@ describe('attached emails: inline (no Content-Disposition)', () =>
             bodyText: 'Inner body text.\n',
             attachments: [],
             // fileName and sha256 stay the dropped file's.
-            source: { fileName: 'attached-test.eml', sha256: await sha256Hex(data), kind: 'eml', attachedPath: [1] },
+            source: { fileName: 'attached-test.eml', sha256: await sha256Hex(fileBytes), kind: 'eml', attachedPath: [1] },
             warnings: [],
         };
         expect(entry.message).toEqual(expected);
@@ -262,15 +262,15 @@ describe('attached emails: sent as an attachment (Content-Disposition: attachmen
      * looked like before attached emails were read.
      */
     const OPAQUE = 'image/x-opaque';
-    const asOpaque = (data: Uint8Array): Uint8Array =>
-        encode(new TextDecoder().decode(data).replaceAll('Content-Type: message/rfc822', `Content-Type: ${OPAQUE}`));
+    const asOpaque = (fileBytes: Uint8Array): Uint8Array =>
+        encode(new TextDecoder().decode(fileBytes).replaceAll('Content-Type: message/rfc822', `Content-Type: ${OPAQUE}`));
 
-    async function expectParentUnchanged(data: Uint8Array): Promise<OkResult>
+    async function expectParentUnchanged(fileBytes: Uint8Array): Promise<OkResult>
     {
-        const result = await parseOk(data);
-        const control = await parseOk(asOpaque(data));
-        const relabel = (m: NormalizedMessage) =>
-            m.attachments.map((a) => ({ ...a, mimeType: a.mimeType === 'message/rfc822' ? OPAQUE : a.mimeType }));
+        const result = await parseOk(fileBytes);
+        const control = await parseOk(asOpaque(fileBytes));
+        const relabel = (message: NormalizedMessage) =>
+            message.attachments.map((a) => ({ ...a, mimeType: a.mimeType === 'message/rfc822' ? OPAQUE : a.mimeType }));
         expect(result.message.bodyText).toBe(control.message.bodyText);
         expect(relabel(result.message)).toEqual(control.message.attachments);
         expect(result.message.warnings).toEqual(control.message.warnings);
@@ -299,11 +299,11 @@ describe('attached emails: sent as an attachment (Content-Disposition: attachmen
         const calls: string[] = [];
         const htmlToText = (html: string): HtmlToTextResult => ({ text: `[html ${String(calls.push(html))}]`, truncated: false });
         const htmlPart = (html: string): string => crlf('Content-Type: text/html', '', html);
-        const data = file(
+        const fileBytes = file(
             rfc822(crlf('From: a@example.test', htmlPart('<p>attached</p>')), AS_FILE),
             rfc822(crlf('From: b@example.test', htmlPart('<p>inline</p>'))),
         );
-        const result = await createEmlParser({ htmlToText }).parse({ name: 'h.eml', bytes: data });
+        const result = await createEmlParser({ htmlToText }).parse({ name: 'h.eml', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -337,10 +337,10 @@ describe('attached emails: sent as an attachment (Content-Disposition: attachmen
     it('nested 3 deep, mixing both kinds: places only in the bodies that print the block', async () =>
     {
         // top --inline--> A --attachment--> B --inline--> C
-        const c = inner('cc', 'C body.');
-        const b = crlf('From: bb@example.test', 'Subject: B', mixed('b', plain('B body.'), rfc822(c)));
-        const a = crlf('From: aa@example.test', 'Subject: A', mixed('a', plain('A body.'), rfc822(b, AS_FILE)));
-        const result = await parseOk(file(plain('Top.'), rfc822(a)));
+        const emailC = inner('cc', 'C body.');
+        const emailB = crlf('From: bb@example.test', 'Subject: B', mixed('b', plain('B body.'), rfc822(emailC)));
+        const emailA = crlf('From: aa@example.test', 'Subject: A', mixed('a', plain('A body.'), rfc822(emailB, AS_FILE)));
+        const result = await parseOk(file(plain('Top.'), rfc822(emailA)));
         expect(result.attached?.map((e) => [e.message.subject, e.parent, e.path])).toEqual([
             ['A', -1, [1]],
             ['B', 0, [1, 1]],
@@ -354,18 +354,18 @@ describe('attached emails: sent as an attachment (Content-Disposition: attachmen
         expect(result.message.bodyText).not.toContain('C body.');
         expect(attachedAt(result, 0).message.bodyText).not.toContain('C body.');
         // B is listed by name in A, and so in the top's flat list, marked as A's.
-        expect(result.message.attachments).toEqual([{ fileName: 'attached.eml', size: b.length, mimeType: 'message/rfc822', attachedIndex: 0 }]);
-        expect(attachedAt(result, 0).message.attachments).toEqual([{ fileName: 'attached.eml', size: b.length, mimeType: 'message/rfc822' }]);
+        expect(result.message.attachments).toEqual([{ fileName: 'attached.eml', size: emailB.length, mimeType: 'message/rfc822', attachedIndex: 0 }]);
+        expect(attachedAt(result, 0).message.attachments).toEqual([{ fileName: 'attached.eml', size: emailB.length, mimeType: 'message/rfc822' }]);
         // B's own list holds nothing: C was expanded into its body.
         expect(attachedAt(result, 1).message.attachments).toEqual([]);
     });
 
     it('the other way round: top --attachment--> A --inline--> B --attachment--> C', async () =>
     {
-        const c = inner('cc', 'C body.');
-        const b = crlf('From: bb@example.test', 'Subject: B', mixed('b', plain('B body.'), rfc822(c, AS_FILE)));
-        const a = crlf('From: aa@example.test', 'Subject: A', mixed('a', plain('A body.'), rfc822(b)));
-        const result = await expectParentUnchanged(file(plain('Top.'), rfc822(a, AS_FILE)));
+        const emailC = inner('cc', 'C body.');
+        const emailB = crlf('From: bb@example.test', 'Subject: B', mixed('b', plain('B body.'), rfc822(emailC, AS_FILE)));
+        const emailA = crlf('From: aa@example.test', 'Subject: A', mixed('a', plain('A body.'), rfc822(emailB)));
+        const result = await expectParentUnchanged(file(plain('Top.'), rfc822(emailA, AS_FILE)));
         expect(result.attached?.map((e) => [e.message.subject, e.parent, e.places.map((p) => p.holder)])).toEqual([
             ['A', -1, []],
             ['B', 0, [0]],

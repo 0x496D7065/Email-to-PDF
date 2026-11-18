@@ -13,9 +13,9 @@
 //    file further down the list can still fit.
 // 4. SHA-256 of the bytes (Web Crypto), so every file that was read, even
 //    one that then fails, has its hash (the app's key for the file, see
-//    hash.ts).
-// 5. Parsed in its own Web Worker with a time limit (worker-runner.ts). A
-//    .msg file is checked by cfb-check.ts before msgreader reads it.
+//    file-hash.ts).
+// 5. Parsed in its own Web Worker with a time limit (parse-worker-runner.ts). A
+//    .msg file is checked by compound-file-check.ts before msgreader reads it.
 // Files are parsed one after another, never at the same time: only one
 // file's parse uses memory at any moment.
 //
@@ -27,8 +27,8 @@
 // Message data stays in memory only (README.md, rule R5).
 
 import { detectFileType } from './file-type';
-import { sha256Hex } from './hash';
-import { htmlToTextWithDomParser } from './html-dom';
+import { sha256Hex } from './file-hash';
+import { htmlToTextWithDomParser } from './browser-html-to-text';
 import {
     coversWholeBuffer,
     createBrowserWorker,
@@ -36,7 +36,7 @@ import {
     isDetached,
     runInWorker,
     type WorkerJob,
-} from './worker-runner';
+} from './parse-worker-runner';
 import type { Limits } from '../../Header/parse-worker-messages';
 import type { InputFile, ParseErrorCode, ParseResult } from '../../Header/parsed-email';
 

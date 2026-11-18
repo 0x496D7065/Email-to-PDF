@@ -33,7 +33,7 @@ import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/te
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';

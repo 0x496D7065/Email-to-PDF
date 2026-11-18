@@ -9,7 +9,7 @@
 
 import { buildMsg } from '../../test-data/msg/builder';
 import { MSG_SPECS } from '../../test-data/msg/specs';
-import { connectWorker, type WorkerFactory } from '../../../../Source/email-reading/worker-runner';
+import { connectWorker, type WorkerFactory } from '../../../../Source/email-reading/parse-worker-runner';
 import type { EngineWorkerFactory } from '../../../../Source/worker-pipeline/engine-runner';
 import type { ToEngineWorker } from '../../../../Header/engine-worker-messages';
 
@@ -20,8 +20,8 @@ export {
     parseFiles,
     parseFilesWith,
 } from '../../../../Source/email-reading/parse-files';
-export { htmlToTextWithDomParser } from '../../../../Source/email-reading/html-dom';
-export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../../../Source/email-reading/worker-runner';
+export { htmlToTextWithDomParser } from '../../../../Source/email-reading/browser-html-to-text';
+export { createBrowserWorker, runInWorker, TIMEOUT_DETAIL, WORKER_FAILED_DETAIL } from '../../../../Source/email-reading/parse-worker-runner';
 export { processFiles, processFilesWith } from '../../../../Source/worker-pipeline/process-files';
 export {
     createBrowserEngineWorker,
@@ -59,7 +59,7 @@ export function goodMsg(): Uint8Array
 /**
  * A synthetic .msg whose directory sector chain points back to itself: the
  * kind of file that makes msgreader loop forever. The Compound File check
- * (cfb-check.ts) must reject it before msgreader reads it.
+ * (compound-file-check.ts) must reject it before msgreader reads it.
  */
 export function loopingMsg(): Uint8Array
 {

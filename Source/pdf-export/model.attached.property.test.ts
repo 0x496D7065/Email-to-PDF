@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument } from './model';

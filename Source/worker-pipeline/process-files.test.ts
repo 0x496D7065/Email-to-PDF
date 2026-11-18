@@ -5,9 +5,9 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import { createMsgParser } from '../email-reading/msg';
+import { createMsgParser } from '../email-reading/msg-parser';
 import { FILE_TOO_LARGE_DETAIL, parseFilesWith } from '../email-reading/parse-files';
 import { ENGINE_TIMEOUT_DETAIL, type EngineOutcome } from './engine-runner';
 import {

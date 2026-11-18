@@ -7,7 +7,7 @@
 // - the unit tests can hand it small trees built by hand, in Node, without a
 //   DOM library (README.md, rule R7);
 // - in the browser, the tree comes from DOMParser, which is inert (see
-//   html-dom.ts), and is passed in as it is.
+//   browser-html-to-text.ts), and is passed in as it is.
 //
 // What it keeps and drops:
 // - Visible text is kept. Only code and content that is never shown is
@@ -331,7 +331,7 @@ class TextWriter
         {
             this.pushLine();
         }
-        const out: string[] = [];
+        const outputLines: string[] = [];
         let previousBlank = true; // drops blank lines at the start
         for (const line of this.lines)
         {
@@ -341,21 +341,21 @@ class TextWriter
             {
                 if (!previousBlank)
                 {
-                    out.push(prefix.trimEnd());
+                    outputLines.push(prefix.trimEnd());
                 }
                 previousBlank = true;
             }
             else
             {
-                out.push(`${prefix}${line.lead}${content}`);
+                outputLines.push(`${prefix}${line.lead}${content}`);
                 previousBlank = false;
             }
         }
-        if (previousBlank && out.length > 0)
+        if (previousBlank && outputLines.length > 0)
         {
-            out.pop(); // a blank line at the end
+            outputLines.pop(); // a blank line at the end
         }
-        return out.join('\n');
+        return outputLines.join('\n');
     }
 
     private append(piece: string, pre: boolean): void

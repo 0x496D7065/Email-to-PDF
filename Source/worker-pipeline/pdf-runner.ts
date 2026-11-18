@@ -17,7 +17,7 @@
 // The worker is hidden behind a factory so this logic is unit tested with a
 // fake worker.
 
-import { connectWorker } from '../email-reading/worker-runner';
+import { connectWorker } from '../email-reading/parse-worker-runner';
 import { isFromPdfWorker } from './pdf-protocol';
 import PdfWorker from './pdf-worker?worker&inline';
 import type { WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
@@ -134,7 +134,7 @@ export function runPdfInWorker(request: MakePdfRequest, options: PdfRunOptions):
  * The browser's PDF worker: a new worker per PDF, started from
  * pdf-worker.ts. Inlined in the page's script and started from a `blob:`
  * URL, so it also starts with the network switched off; see
- * createBrowserWorker in Source/email-reading/worker-runner.ts for why, and for how
+ * createBrowserWorker in Source/email-reading/parse-worker-runner.ts for why, and for how
  * the blob: URLs of the workers are cleaned up.
  */
 export const createBrowserPdfWorker: PdfWorkerFactory = (events) =>

@@ -61,7 +61,7 @@
 //   expression runs on one short token or is a single linear pass, and the
 //   function never throws.
 
-import { parseEmailDate } from '../email-reading/date';
+import { parseEmailDate } from '../email-reading/date-header';
 import { DATE_LANGUAGES } from './date-words';
 import type { QuotedDate } from '../../Header/rebuilt-emails';
 

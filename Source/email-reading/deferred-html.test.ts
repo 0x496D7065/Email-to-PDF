@@ -10,9 +10,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { convertHtmlList, MISMATCH_DETAIL, parseWithDeferredHtml } from './deferred-html';
-import { createEmlParser } from './eml';
+import { createEmlParser } from './eml-parser';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser } from './msg';
+import { createMsgParser } from './msg-parser';
 import type { ConversionOutcome, FileKind } from '../../Header/parse-worker-messages';
 import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
@@ -137,10 +137,10 @@ const CONVERTERS: Record<string, () => (html: string) => HtmlToTextResult> = {
     'returns no result': () => () => null as unknown as HtmlToTextResult,
 };
 
-function directParse(c: Case, htmlToText: (html: string) => HtmlToTextResult): Promise<ParseResult>
+function directParse(testCase: Case, htmlToText: (html: string) => HtmlToTextResult): Promise<ParseResult>
 {
-    const parser = c.kind === 'eml' ? createEmlParser({ htmlToText }) : createMsgParser({ htmlToText });
-    return parser.parse(c.file);
+    const parser = testCase.kind === 'eml' ? createEmlParser({ htmlToText }) : createMsgParser({ htmlToText });
+    return parser.parse(testCase.file);
 }
 
 describe('parseWithDeferredHtml gives exactly the direct result', () =>
@@ -149,11 +149,11 @@ describe('parseWithDeferredHtml gives exactly the direct result', () =>
     {
         describe(converterLabel, () =>
         {
-            it.each(CASES.map((c) => [c.label, c] as const))('%s', async (_label, c) =>
+            it.each(CASES.map((c) => [c.label, c] as const))('%s', async (_label, testCase) =>
             {
-                const direct = await directParse(c, makeConverter());
+                const direct = await directParse(testCase, makeConverter());
                 const pageConverter = makeConverter();
-                const deferred = await parseWithDeferredHtml(c.file, c.kind, (htmls) => Promise.resolve(convertHtmlList(htmls, pageConverter)));
+                const deferred = await parseWithDeferredHtml(testCase.file, testCase.kind, (htmls) => Promise.resolve(convertHtmlList(htmls, pageConverter)));
                 expect(deferred).toEqual(direct);
             });
         });
@@ -179,25 +179,25 @@ describe('parseWithDeferredHtml: the page round trip', () =>
     it('a message without HTML to convert never asks the page', async () =>
     {
         const convertOnPage = vi.fn();
-        const c = CASES.find((x) => x.label === 'plain and html alternative (no conversion)');
-        if (c === undefined)
+        const testCase = CASES.find((x) => x.label === 'plain and html alternative (no conversion)');
+        if (testCase === undefined)
         {
             throw new Error('missing case');
         }
-        const result = await parseWithDeferredHtml(c.file, 'eml', convertOnPage);
+        const result = await parseWithDeferredHtml(testCase.file, 'eml', convertOnPage);
         expect(result.ok).toBe(true);
         expect(convertOnPage).not.toHaveBeenCalled();
     });
 
     it('asks the page once, with every HTML string in file order', async () =>
     {
-        const c = CASES.find((x) => x.label === 'html, forwarded message with html, html');
-        if (c === undefined)
+        const testCase = CASES.find((x) => x.label === 'html, forwarded message with html, html');
+        if (testCase === undefined)
         {
             throw new Error('missing case');
         }
         const asked: (readonly string[])[] = [];
-        const result = await parseWithDeferredHtml(c.file, 'eml', (htmls) =>
+        const result = await parseWithDeferredHtml(testCase.file, 'eml', (htmls) =>
         {
             asked.push(htmls);
             return Promise.resolve(htmls.map((h): ConversionOutcome => ({ ok: true, text: h.replace(/<[^>]*>/g, ''), truncated: false })));
@@ -212,9 +212,9 @@ describe('parseWithDeferredHtml: the page round trip', () =>
 
     it("propagates the page's cut flag as 'html-body-truncated' (.eml and .msg)", async () =>
     {
-        for (const c of CASES.filter((x) => x.label === 'html-only' || x.label === HTML_ONLY_MSG.id))
+        for (const testCase of CASES.filter((x) => x.label === 'html-only' || x.label === HTML_ONLY_MSG.id))
         {
-            const result = await parseWithDeferredHtml(c.file, c.kind, (htmls) =>
+            const result = await parseWithDeferredHtml(testCase.file, testCase.kind, (htmls) =>
                 Promise.resolve(htmls.map((): ConversionOutcome => ({ ok: true, text: 'Cut text\n\n[Text cut here]', truncated: true }))),
             );
             expect(result.ok && result.message.bodyText).toBe('Cut text\n\n[Text cut here]');
@@ -224,9 +224,9 @@ describe('parseWithDeferredHtml: the page round trip', () =>
 
     it("a page failure leaves the HTML body out with 'html-body-unreadable', never a failed file (.eml and .msg)", async () =>
     {
-        for (const c of CASES.filter((x) => x.label === 'html-only' || x.label === HTML_ONLY_MSG.id))
+        for (const testCase of CASES.filter((x) => x.label === 'html-only' || x.label === HTML_ONLY_MSG.id))
         {
-            const result = await parseWithDeferredHtml(c.file, c.kind, () => Promise.resolve([{ ok: false, reason: 'too deep' }]));
+            const result = await parseWithDeferredHtml(testCase.file, testCase.kind, () => Promise.resolve([{ ok: false, reason: 'too deep' }]));
             expect(result.ok && result.message.bodyText).toBe('');
             expect(result.ok && result.message.warnings).toContain('html-body-unreadable');
             expect(result.ok && result.message.warnings).not.toContain('html-converted-body');
@@ -235,12 +235,12 @@ describe('parseWithDeferredHtml: the page round trip', () =>
 
     it('a page failure on one part only: the other parts are kept, in order', async () =>
     {
-        const c = CASES.find((x) => x.label === 'html, forwarded message with html, html');
-        if (c === undefined)
+        const testCase = CASES.find((x) => x.label === 'html, forwarded message with html, html');
+        if (testCase === undefined)
         {
             throw new Error('missing case');
         }
-        const result = await parseWithDeferredHtml(c.file, 'eml', (htmls) =>
+        const result = await parseWithDeferredHtml(testCase.file, 'eml', (htmls) =>
             Promise.resolve(
                 htmls.map((h, i): ConversionOutcome => (i === 1 ? { ok: false, reason: 'too deep' } : { ok: true, text: h.replace(/<[^>]*>/g, '').trim(), truncated: false })),
             ),
@@ -256,26 +256,26 @@ describe('parseWithDeferredHtml: the page round trip', () =>
 
     it('a page answer with missing conversions fails the file with a plain detail (a bug, never a silent gap)', async () =>
     {
-        const c = CASES.find((x) => x.label === 'plain, html, plain');
-        if (c === undefined)
+        const testCase = CASES.find((x) => x.label === 'plain, html, plain');
+        if (testCase === undefined)
         {
             throw new Error('missing case');
         }
-        const result = await parseWithDeferredHtml(c.file, 'eml', () => Promise.resolve([]));
+        const result = await parseWithDeferredHtml(testCase.file, 'eml', () => Promise.resolve([]));
         expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: MISMATCH_DETAIL });
         expect(MISMATCH_DETAIL).toBe('HTML body could not be converted: the converted text did not come back from the page');
     });
 
     it('a page answer missing only its last conversion still fails the whole file, never one silent gap', async () =>
     {
-        const c = CASES.find((x) => x.label === 'html, forwarded message with html, html');
-        if (c === undefined)
+        const testCase = CASES.find((x) => x.label === 'html, forwarded message with html, html');
+        if (testCase === undefined)
         {
             throw new Error('missing case');
         }
         // Two answers for three HTML strings: the first two are used during the
         // replay, then the third has none. That is a bug, not an unreadable part.
-        const result = await parseWithDeferredHtml(c.file, 'eml', (htmls) =>
+        const result = await parseWithDeferredHtml(testCase.file, 'eml', (htmls) =>
             Promise.resolve(htmls.slice(0, 2).map((): ConversionOutcome => ({ ok: true, text: 'x', truncated: false }))),
         );
         expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: MISMATCH_DETAIL });
@@ -308,13 +308,13 @@ describe('convertHtmlList (on the page)', () =>
 
     it('goes on after a failure (the adapter leaves only that part out), with the bare reason', () =>
     {
-        const converter = vi.fn((h: string): HtmlToTextResult =>
+        const converter = vi.fn((html: string): HtmlToTextResult =>
         {
-            if (h === 'bad')
+            if (html === 'bad')
             {
                 throw new TypeError('broken');
             }
-            return { text: h, truncated: false };
+            return { text: html, truncated: false };
         });
         expect(convertHtmlList(['ok', 'bad', 'after'], converter)).toEqual([
             { ok: true, text: 'ok', truncated: false },

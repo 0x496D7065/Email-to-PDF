@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
 import { convertHtmlList, parseWithDeferredHtml } from './deferred-html';
-import { sha256Hex } from './hash';
+import { sha256Hex } from './file-hash';
 import {
     BATCH_TOO_LARGE_DETAIL,
     FILE_TOO_LARGE_DETAIL,
@@ -19,7 +19,7 @@ import {
     parseFilesWith,
     type JobRunner,
 } from './parse-files';
-import { DETACHED_DETAIL, type WorkerJob } from './worker-runner';
+import { DETACHED_DETAIL, type WorkerJob } from './parse-worker-runner';
 import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 const fixtureFiles = import.meta.glob<string>('../../Helper/Test/test-data/eml/*.eml', { query: '?raw', import: 'default', eager: true });
@@ -189,12 +189,12 @@ describe('parseFilesWith: file type and hashing', () =>
         const { jobs, runJob } = recordingRunner();
         const eml = encode(fixture('01-plain-english.eml'));
         const msg = buildMsg(msgSpec(0));
-        const cfbNamedEml = buildMsg(msgSpec(0));
+        const compoundFileNamedEml = buildMsg(msgSpec(0));
         await parseFilesWith(
             [
                 { name: 'a.eml', bytes: eml },
                 { name: 'b.MSG', bytes: msg },
-                { name: 'renamed.eml', bytes: cfbNamedEml },
+                { name: 'renamed.eml', bytes: compoundFileNamedEml },
             ],
             runJob,
         );
@@ -336,11 +336,11 @@ describe('parseFilesWith: never throws, keeps going, keeps order', () =>
             ],
             runJob,
         );
-        const sha = await sha256Hex(bytes);
+        const fileSha256 = await sha256Hex(bytes);
         expect(results.map((r) => (r.ok ? r.message.source.fileName : r.fileName))).toEqual(['throws.eml', 'ok-1.eml', 'rejects.eml', 'ok-2.eml']);
         for (const index of [0, 2])
         {
-            expect(results[index]).toMatchObject({ ok: false, error: 'tool-error', detail: 'could not be read (unexpected error)', sha256: sha });
+            expect(results[index]).toMatchObject({ ok: false, error: 'tool-error', detail: 'could not be read (unexpected error)', sha256: fileSha256 });
         }
         expect(results[1]?.ok && results[3]?.ok).toBe(true);
     });

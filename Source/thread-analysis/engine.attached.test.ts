@@ -6,10 +6,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import { createMsgParser } from '../email-reading/msg';
+import { createMsgParser } from '../email-reading/msg-parser';
 import { attachedAt, DEFAULT_PARTS, runEngine } from './engine';
 import type { OverlapInput } from './overlap';
 import { checkSegments, reconstruct } from './segments';

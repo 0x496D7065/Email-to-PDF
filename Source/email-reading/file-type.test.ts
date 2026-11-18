@@ -1,10 +1,10 @@
 // Unit tests for the file type decision (file-type.ts). Synthetic bytes only.
 
 import { describe, expect, it } from 'vitest';
-import { detectFileType, extensionOf, hasCfbSignature, startsLikeEmailHeader } from './file-type';
+import { detectFileType, extensionOf, hasCompoundFileSignature, startsLikeEmailHeader } from './file-type';
 
-const CFB = Uint8Array.of(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0);
-const EML = new TextEncoder().encode('From: Alice Example <alice@example.test>\r\nSubject: Hi\r\n\r\nBody\r\n');
+const COMPOUND_FILE_START = Uint8Array.of(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0);
+const EMAIL_START = new TextEncoder().encode('From: Alice Example <alice@example.test>\r\nSubject: Hi\r\n\r\nBody\r\n');
 const TEXT_NOT_HEADER = new TextEncoder().encode('Just some notes, not an email.\n');
 const BINARY = Uint8Array.of(0x50, 0x4b, 0x03, 0x04, 0, 0, 0x14, 0); // starts like a zip
 
@@ -17,9 +17,9 @@ describe('extensionOf', () =>
         ['no-extension', ''],
         ['trailing.', ''],
         ['.eml', 'eml'],
-    ])('%s -> "%s"', (name, ext) =>
+    ])('%s -> "%s"', (name, extension) =>
     {
-        expect(extensionOf(name)).toBe(ext);
+        expect(extensionOf(name)).toBe(extension);
     });
 });
 
@@ -27,9 +27,9 @@ describe('sniffing', () =>
 {
     it('recognizes the Compound File signature, and only all 8 bytes of it', () =>
     {
-        expect(hasCfbSignature(CFB)).toBe(true);
-        expect(hasCfbSignature(CFB.subarray(0, 7))).toBe(false);
-        expect(hasCfbSignature(Uint8Array.of(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe0))).toBe(false);
+        expect(hasCompoundFileSignature(COMPOUND_FILE_START)).toBe(true);
+        expect(hasCompoundFileSignature(COMPOUND_FILE_START.subarray(0, 7))).toBe(false);
+        expect(hasCompoundFileSignature(Uint8Array.of(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe0))).toBe(false);
     });
 
     it.each([
@@ -50,12 +50,12 @@ describe('sniffing', () =>
 describe('detectFileType', () =>
 {
     it.each([
-        ['a .eml with email text', 'mail.eml', EML, { kind: 'eml' }],
-        ['an upper-case .EML', 'MAIL.EML', EML, { kind: 'eml' }],
-        ['a .msg Compound File', 'mail.msg', CFB, { kind: 'msg' }],
-        ['a mixed-case .Msg Compound File', 'mail.Msg', CFB, { kind: 'msg' }],
-        ['a Compound File named .eml (read as .msg)', 'mail.eml', CFB, { kind: 'msg' }],
-        ['a .msg holding internet message text (read as .eml)', 'mail.msg', EML, { kind: 'eml' }],
+        ['a .eml with email text', 'mail.eml', EMAIL_START, { kind: 'eml' }],
+        ['an upper-case .EML', 'MAIL.EML', EMAIL_START, { kind: 'eml' }],
+        ['a .msg Compound File', 'mail.msg', COMPOUND_FILE_START, { kind: 'msg' }],
+        ['a mixed-case .Msg Compound File', 'mail.Msg', COMPOUND_FILE_START, { kind: 'msg' }],
+        ['a Compound File named .eml (read as .msg)', 'mail.eml', COMPOUND_FILE_START, { kind: 'msg' }],
+        ['a .msg holding internet message text (read as .eml)', 'mail.msg', EMAIL_START, { kind: 'eml' }],
         ['a .eml with plain text that is not a header (postal-mime decides)', 'notes.eml', TEXT_NOT_HEADER, { kind: 'eml' }],
     ] as const)('%s', (_label, name, bytes, expected) =>
     {
@@ -63,10 +63,10 @@ describe('detectFileType', () =>
     });
 
     it.each([
-        ['a .pdf', 'scan.pdf', EML],
-        ['a Compound File named .doc', 'report.doc', CFB],
-        ['no extension', 'mail', EML],
-        ['an .mbox (not supported yet)', 'box.mbox', EML],
+        ['a .pdf', 'scan.pdf', EMAIL_START],
+        ['a Compound File named .doc', 'report.doc', COMPOUND_FILE_START],
+        ['no extension', 'mail', EMAIL_START],
+        ['an .mbox (not supported yet)', 'box.mbox', EMAIL_START],
     ])('%s -> unsupported-type', (_label, name, bytes) =>
     {
         expect(detectFileType(name, bytes)).toEqual({
@@ -85,7 +85,7 @@ describe('detectFileType', () =>
 
     it('a .msg that is neither a Compound File nor email text -> corrupt', () =>
     {
-        for (const bytes of [BINARY, TEXT_NOT_HEADER, CFB.subarray(0, 4)])
+        for (const bytes of [BINARY, TEXT_NOT_HEADER, COMPOUND_FILE_START.subarray(0, 4)])
         {
             expect(detectFileType('mail.msg', bytes)).toEqual({
                 error: 'corrupt',

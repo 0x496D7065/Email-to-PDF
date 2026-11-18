@@ -26,13 +26,13 @@
 //   ...) is never read, only listed.
 
 import MsgReaderImport, { type FieldsData } from '@kenjiuno/msgreader';
-import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
-import { encodingForCodepage } from './codepages';
-import { parseEmailDate } from './date';
-import { sha256Hex } from './hash';
+import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-email-limits';
+import { encodingForCodepage } from './codepage-encodings';
+import { parseEmailDate } from './date-header';
+import { sha256Hex } from './file-hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
-import { parseIdList, parseSingleId } from './ids';
+import { parseIdList, parseSingleId } from './message-ids';
 import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
 import type { AttachedMessage, AttachmentInfo, EmailAddress, EmailDate, EmailParser, InputFile, NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
@@ -56,7 +56,7 @@ export interface MsgParserOptions
      * plain-text body but has an HTML one. It must be inert: no rendering, no
      * script execution, no loading of images or styles (README.md, rule R4).
      * Injected so that this adapter stays testable in Node without a DOM. In
-     * the browser this is htmlToTextWithDomParser (html-dom.ts, see
+     * the browser this is htmlToTextWithDomParser (browser-html-to-text.ts, see
      * browser-parsers.ts).
      *
      * It returns the text and whether it was cut at the converter's length
@@ -95,7 +95,7 @@ const FALLBACK_ANSI_ENCODING = 'windows-1252';
  * up to this many more, so at most 5 full msgreader results at once). That is
  * acceptable because a dropped file is at most 50 MB (MAX_FILE_BYTES,
  * parse-files.ts) and parsing runs in an isolated worker that is terminated
- * at its time limit (PARSE_TIMEOUT_MS, worker-runner.ts).
+ * at its time limit (PARSE_TIMEOUT_MS, parse-worker-runner.ts).
  */
 const MAX_ENCODING_READS = 4;
 
@@ -343,7 +343,7 @@ interface ItemHolder
     /** Its properties, as read by the read made with `readEncoding`. */
     readonly fields: FieldsData;
     /** Where it sits in msgreader's result: its index in `attachments` at each level, [] for the file's own email. */
-    readonly at: readonly number[];
+    readonly indexPath: readonly number[];
     /** The encoding the read that `fields` comes from used (see FieldReads.encoding). */
     readonly readEncoding: string | null;
     /**
@@ -389,13 +389,13 @@ interface ItemHolder
  * Outlook item attachment of the holder, read or not, so [2] is always the
  * holder's second Outlook item line.
  *
- * Limits, shared with the .eml adapter (attached-limits.ts):
+ * Limits, shared with the .eml adapter (attached-email-limits.ts):
  * - MAX_FORWARD_DEPTH: items up to that many levels down are read; deeper
  *   ones stay listed in the item holding them and get no AttachedMessage.
  * - MAX_EXPANDED_FORWARDS: how many items are read per file, all levels
  *   together, counted before an item is read (an unreadable one counts too).
  *   Items are read level by level, in attachment-list order, like the .eml
- *   adapter's emails sent as attachments (eml.ts, readDeferred).
+ *   adapter's emails sent as attachments (eml-parser.ts, readDeferred).
  * An item over a limit, unreadable (any error while reading it), not an
  * Outlook message, or with nothing to show (no body, no subject, no sender,
  * no recipient, no date and no attachment) gets no AttachedMessage: it stays
@@ -430,7 +430,7 @@ interface ItemHolder
  * items (they all stay listed, `allRead` false), never a failed file.
  */
 function readAttachedItems(
-    top: FieldsData,
+    ownFields: FieldsData,
     reads: FieldReads,
     file: { readonly fileName: string; readonly sha256: string },
     options: MsgParserOptions,
@@ -442,15 +442,15 @@ function readAttachedItems(
         const byEncoding = new Map<string, FieldsData | null>();
         if (reads.encoding !== null)
         {
-            byEncoding.set(reads.encoding, top);
+            byEncoding.set(reads.encoding, ownFields);
         }
         let extraReads = 0;
         const fieldsWith = (encoding: string): FieldsData | null =>
         {
-            const known = byEncoding.get(encoding);
-            if (known !== undefined)
+            const earlierRead = byEncoding.get(encoding);
+            if (earlierRead !== undefined)
             {
-                return known;
+                return earlierRead;
             }
             if (reads.reread === undefined || extraReads >= MAX_ENCODING_READS)
             {
@@ -460,10 +460,10 @@ function readAttachedItems(
             let fields: FieldsData | null = null;
             try
             {
-                const again = reads.reread(encoding);
-                if (again.error === undefined)
+                const rereadFields = reads.reread(encoding);
+                if (rereadFields.error === undefined)
                 {
-                    fields = again;
+                    fields = rereadFields;
                 }
             }
             catch
@@ -478,10 +478,10 @@ function readAttachedItems(
         const roots: ItemSlot[] = [];
         const queue: ItemHolder[] = [
             {
-                fields: top,
-                at: [],
+                fields: ownFields,
+                indexPath: [],
                 readEncoding: reads.encoding,
-                inheritedEncoding: encodingForCodepage(top.messageCodepage) ?? FALLBACK_ANSI_ENCODING,
+                inheritedEncoding: encodingForCodepage(ownFields.messageCodepage) ?? FALLBACK_ANSI_ENCODING,
                 depth: 0,
                 path: [],
                 slots: roots,
@@ -586,22 +586,22 @@ function readAttachedItem(
             return null;
         }
         let fields = first;
-        const at = [...holder.at, index];
+        const indexPath = [...holder.indexPath, index];
         const path = [...holder.path, number];
-        const own = encodingForCodepage(fields.messageCodepage);
-        const ansiEncoding = own ?? eightBitEncoding(encodingForCodepage(fields.internetCodepage)) ?? holder.inheritedEncoding;
-        const inheritedEncoding = own ?? holder.inheritedEncoding;
+        const ownEncoding = encodingForCodepage(fields.messageCodepage);
+        const ansiEncoding = ownEncoding ?? eightBitEncoding(encodingForCodepage(fields.internetCodepage)) ?? holder.inheritedEncoding;
+        const inheritedEncoding = ownEncoding ?? holder.inheritedEncoding;
         let readEncoding = holder.readEncoding;
         let uncertain = false;
         if (hasAnsiStrings(fields))
         {
             // Only PidTagMessageCodepage names the code page of 8-bit strings:
             // without it, any choice is a guess.
-            uncertain = own === null;
+            uncertain = ownEncoding === null;
             if (ansiEncoding !== readEncoding)
             {
-                const again = fieldsWith(ansiEncoding);
-                const found = again === null ? undefined : fieldsAt(again, at);
+                const rereadFields = fieldsWith(ansiEncoding);
+                const found = rereadFields === null ? undefined : fieldsAt(rereadFields, indexPath);
                 if (found === undefined)
                 {
                     uncertain = true;
@@ -628,7 +628,7 @@ function readAttachedItem(
             uncertain = true;
         }
         const message = uncertain ? { ...built, warnings: [...built.warnings, 'text-encoding-uncertain' as const] } : built;
-        return { message, holder: { fields, at, readEncoding, inheritedEncoding, path } };
+        return { message, holder: { fields, indexPath, readEncoding, inheritedEncoding, path } };
     }
     catch
     {
@@ -637,11 +637,11 @@ function readAttachedItem(
     }
 }
 
-/** The properties of the attached item at `at` (see ItemHolder.at) in another read of the same file, if it is there. */
-function fieldsAt(fields: FieldsData, at: readonly number[]): FieldsData | undefined
+/** The properties of the attached item at `indexPath` (see ItemHolder.indexPath) in another read of the same file, if it is there. */
+function fieldsAt(fields: FieldsData, indexPath: readonly number[]): FieldsData | undefined
 {
     let current: FieldsData | undefined = fields;
-    for (const index of at)
+    for (const index of indexPath)
     {
         const attachment: FieldsData | undefined = current?.attachments?.[index];
         if (attachment?.innerMsgContent !== true)
@@ -718,7 +718,7 @@ function isFieldsData(value: unknown): value is FieldsData
 /**
  * True if an attached item holds nothing at all to show: no body, and no
  * subject, sender, recipient, date or attachment. Like the .eml adapter's
- * rule for an attached email with no body and no header lines (eml.ts,
+ * rule for an attached email with no body and no header lines (eml-parser.ts,
  * readAttachedEmail): no empty email is made of it.
  */
 function hasNothingToShow(message: NormalizedMessage): boolean
@@ -762,9 +762,9 @@ function flattenItems(roots: readonly ItemSlot[]): AttachedMessage[]
 }
 
 /** A string property from msgreader's raw list, by its 4-hex-digit id (Unicode or 8-bit). */
-function rawString(fields: FieldsData, propId: string): string | undefined
+function rawString(fields: FieldsData, propertyId: string): string | undefined
 {
-    const tags = [`${propId}001f`, `${propId}001e`];
+    const tags = [`${propertyId}001f`, `${propertyId}001e`];
     const prop = (fields.rawProps ?? []).find((p) => p.propertyTag !== undefined && tags.includes(p.propertyTag));
     return typeof prop?.value === 'string' ? prop.value : undefined;
 }
@@ -911,10 +911,10 @@ function readSenders(fields: FieldsData): Senders
 {
     const senderEmail = asString(fields.senderEmail);
     const senderName = asString(fields.senderName);
-    const repName = rawString(fields, '0042'); // PidTagSentRepresentingName
-    const repEmail = rawString(fields, '0065'); // PidTagSentRepresentingEmailAddress
+    const representingName = rawString(fields, '0042'); // PidTagSentRepresentingName
+    const representingEmail = rawString(fields, '0065'); // PidTagSentRepresentingEmailAddress
 
-    if (repName === undefined && repEmail === undefined)
+    if (representingName === undefined && representingEmail === undefined)
     {
         const mailbox = {
             name: senderName ?? '',
@@ -927,11 +927,11 @@ function readSenders(fields: FieldsData): Senders
     }
 
     const sameAsSender =
-        repEmail !== undefined && senderEmail !== undefined && repEmail.toLowerCase() === senderEmail.toLowerCase();
+        representingEmail !== undefined && senderEmail !== undefined && representingEmail.toLowerCase() === senderEmail.toLowerCase();
     const represented = {
-        name: repName ?? (sameAsSender ? (senderName ?? '') : ''),
+        name: representingName ?? (sameAsSender ? (senderName ?? '') : ''),
         // 0x0064: PidTagSentRepresentingAddressType.
-        address: smtpAddress(repEmail, rawString(fields, '0064'), [
+        address: smtpAddress(representingEmail, rawString(fields, '0064'), [
             asString(fields.sentRepresentingSmtpAddress),
             sameAsSender ? asString(fields.senderSmtpAddress) : undefined,
         ]),

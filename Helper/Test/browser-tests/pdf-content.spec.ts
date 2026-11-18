@@ -65,8 +65,8 @@ import { expect, test, type Download, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import type * as FontModule from '../../../Source/pdf-export/font-reader/font.ts';
 import type * as ConfigModule from '../../../Source/pdf-export/page-layout/config.ts';
-import type * as EmlModule from '../../../Source/email-reading/eml.ts';
-import type * as MsgModule from '../../../Source/email-reading/msg.ts';
+import type * as EmlModule from '../../../Source/email-reading/eml-parser.ts';
+import type * as MsgModule from '../../../Source/email-reading/msg-parser.ts';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../test-data/manifest.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
@@ -185,8 +185,8 @@ test.beforeAll(async () =>
     {
         const { buildMsg } = (await server.ssrLoadModule('/Helper/Test/test-data/msg/builder.ts')) as typeof Builder;
         const { MSG_SPECS } = (await server.ssrLoadModule('/Helper/Test/test-data/msg/specs.ts')) as typeof Specs;
-        const { createEmlParser } = (await server.ssrLoadModule('/Source/email-reading/eml.ts')) as typeof EmlModule;
-        const { createMsgParser } = (await server.ssrLoadModule('/Source/email-reading/msg.ts')) as typeof MsgModule;
+        const { createEmlParser } = (await server.ssrLoadModule('/Source/email-reading/eml-parser.ts')) as typeof EmlModule;
+        const { createMsgParser } = (await server.ssrLoadModule('/Source/email-reading/msg-parser.ts')) as typeof MsgModule;
         // The body indent expected in the PDF: one tab, 4 normal spaces of the body font at the body size (task 8.9),
         // measured here from the bundled font file's own tables.
         const { readWoffFont } = (await server.ssrLoadModule('/Source/pdf-export/font-reader/font.ts')) as typeof FontModule;

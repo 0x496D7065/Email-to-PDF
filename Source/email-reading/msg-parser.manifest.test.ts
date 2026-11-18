@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { FIXTURES, type FixtureExpectation } from '../../Helper/Test/test-data/manifest';
 import { buildMsg } from '../../Helper/Test/test-data/msg/builder';
 import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
-import { createEmlParser } from './eml';
+import { createEmlParser } from './eml-parser';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser } from './msg';
+import { createMsgParser } from './msg-parser';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 
 // The real HTML-to-text converter needs the browser's DOMParser, which Node
@@ -17,7 +17,7 @@ import type { NormalizedMessage } from '../../Header/parsed-email';
 // checked in Chromium by Helper/Test/browser-tests/html-to-text.spec.ts. The stub is NOT a
 // converter and must never be used outside tests.
 const STUB_PREFIX = '[stub html-to-text]';
-/** Every HTML string handed to the stub; the stub's output names the index (as in eml.manifest.test.ts). */
+/** Every HTML string handed to the stub; the stub's output names the index (as in eml-parser.manifest.test.ts). */
 const htmlCalls: string[] = [];
 const htmlToText = (html: string): HtmlToTextResult => ({ text: `${STUB_PREFIX} #${String(htmlCalls.push(html) - 1)}`, truncated: false });
 const msgParser = createMsgParser({ htmlToText });
@@ -137,9 +137,9 @@ describe('.msg adapter matches the manifest', () =>
 // `duplicateGroup`.
 describe('cross-format duplicates normalize alike', () =>
 {
-    const pairs = msgFixtures.flatMap((m) =>
-        FIXTURES.filter((e) => e.kind === 'eml' && m.duplicateGroup !== undefined && e.duplicateGroup === m.duplicateGroup).map(
-            (e) => [m.id, e.id] as const,
+    const pairs = msgFixtures.flatMap((fixture) =>
+        FIXTURES.filter((e) => e.kind === 'eml' && fixture.duplicateGroup !== undefined && e.duplicateGroup === fixture.duplicateGroup).map(
+            (e) => [fixture.id, e.id] as const,
         ),
     );
 

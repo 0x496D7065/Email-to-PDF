@@ -1,6 +1,6 @@
 // Limits for reading the emails attached inside a dropped file (.eml:
-// message/rfc822 parts, see eml.ts; .msg: attached Outlook items, see
-// msg.ts), shared by both adapters so the two formats are read with the same
+// message/rfc822 parts, see eml-parser.ts; .msg: attached Outlook items, see
+// msg-parser.ts), shared by both adapters so the two formats are read with the same
 // bounds (README.md, rule R4: guard against malformed or hostile files).
 // Each adapter's own comments say how it applies them.
 

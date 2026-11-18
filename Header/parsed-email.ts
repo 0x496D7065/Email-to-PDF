@@ -93,7 +93,7 @@ export type ParseWarning =
     // Some text may show wrong letters: it is stored as 8-bit ("ANSI") text
     // whose character set (code page) could not be applied with certainty.
     // Today only an attached Outlook item read from a .msg file gets it (see
-    // msg.ts, readAttachedItems): the item names no code page of its own, or
+    // msg-parser.ts, readAttachedItems): the item names no code page of its own, or
     // the one it names could not be used. Nothing is dropped, every byte is
     // still shown as some character.
     | 'text-encoding-uncertain';
@@ -144,7 +144,7 @@ export interface NormalizedMessage
      */
     readonly bodyText: string;
     readonly attachments: readonly AttachmentInfo[];
-    /** Which dropped file this came from, and the SHA-256 of that file's bytes (the app's key for the file: Source/email-reading/hash.ts; not printed in the PDF). */
+    /** Which dropped file this came from, and the SHA-256 of that file's bytes (the app's key for the file: Source/email-reading/file-hash.ts; not printed in the PDF). */
     readonly source: {
         readonly fileName: string;
         readonly sha256: string;

@@ -5,7 +5,7 @@
 // only (README.md, rule R7).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEmlParser } from './eml';
+import { createEmlParser } from './eml-parser';
 import { parseEmlTree, PostalMimeInternalsError } from './eml-tree';
 
 // parseEmlTree is wrapped in a spy that calls the real function, so each test

@@ -292,7 +292,7 @@ export default defineConfig({
     // The security headers of `npm run preview` are set by previewHeaders()
     // above (per path, so /sw.js gets its own CSP), not by `preview.headers`.
     test: {
-        // Unit tests sit next to the code they test, e.g. Source/email-reading/date.test.ts.
+        // Unit tests sit next to the code they test, e.g. Source/email-reading/date-header.test.ts.
         // They run in Node (no browser DOM): detection and parsing logic is kept
         // as pure functions (README.md, rule R7). The production build never
         // includes them because nothing in index.html/main.ts imports them.

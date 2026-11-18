@@ -7,10 +7,10 @@ import { burn } from '@kenjiuno/msgreader/lib/Burner';
 import { TypeEnum } from '@kenjiuno/msgreader/lib/Reader';
 import { describe, expect, it, vi } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
-import { sha256Hex } from './hash';
+import { sha256Hex } from './file-hash';
 import { HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser, errorDetail, resultFromFields } from './msg';
+import { createMsgParser, errorDetail, resultFromFields } from './msg-parser';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
 /** A stub, NOT a converter: it only shows that the HTML path was taken. */
@@ -21,7 +21,7 @@ const ALICE = { name: 'Alice Example', smtp: 'alice@example.test' };
 const BOB = { name: 'Bob Sample', smtp: 'bob@example.test' };
 const CAROL = { name: 'Carol Test', smtp: 'carol@example.test' };
 const DAVE = { name: 'Dave Demo', smtp: 'dave@example.test' };
-const DN = (cn: string): string => `/O=EXAMPLE TEST ORGANIZATION/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=${cn}`;
+const exchangeDn = (cn: string): string => `/O=EXAMPLE TEST ORGANIZATION/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=${cn}`;
 
 const BASE: MsgSpec = {
     id: 'unit',
@@ -37,14 +37,14 @@ const BASE: MsgSpec = {
 
 const spec = (overrides: Partial<MsgSpec>): MsgSpec => ({ ...BASE, ...overrides });
 
-async function parse(data: Uint8Array, name = 'test.msg'): Promise<ParseResult>
+async function parse(fileBytes: Uint8Array, name = 'test.msg'): Promise<ParseResult>
 {
-    return parser.parse({ name, bytes: data });
+    return parser.parse({ name, bytes: fileBytes });
 }
 
-async function parseOk(s: MsgSpec): Promise<NormalizedMessage>
+async function parseOk(msgSpec: MsgSpec): Promise<NormalizedMessage>
 {
-    const result = await parse(buildMsg(s));
+    const result = await parse(buildMsg(msgSpec));
     if (!result.ok)
     {
         throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
@@ -56,13 +56,13 @@ describe('createMsgParser: basic fields', () =>
 {
     it('fills source with the file name, the SHA-256 of the bytes and kind "msg"', async () =>
     {
-        const data = buildMsg(BASE);
-        const result = await parse(data);
+        const fileBytes = buildMsg(BASE);
+        const result = await parse(fileBytes);
         if (!result.ok)
         {
             throw new Error(result.detail);
         }
-        expect(result.message.source).toEqual({ fileName: 'test.msg', sha256: await sha256Hex(data), kind: 'msg' });
+        expect(result.message.source).toEqual({ fileName: 'test.msg', sha256: await sha256Hex(fileBytes), kind: 'msg' });
         expect(result.message.subject).toBe('Test message');
         expect(result.message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
         expect(result.message.to).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
@@ -79,17 +79,17 @@ describe('createMsgParser: basic fields', () =>
 
     it('reads a file given as a view into a larger buffer (non-zero byteOffset)', async () =>
     {
-        const data = buildMsg(BASE);
-        const big = new Uint8Array(data.length + 100);
-        big.set(data, 37);
-        const view = big.subarray(37, 37 + data.length);
+        const fileBytes = buildMsg(BASE);
+        const largerBuffer = new Uint8Array(fileBytes.length + 100);
+        largerBuffer.set(fileBytes, 37);
+        const view = largerBuffer.subarray(37, 37 + fileBytes.length);
         const result = await parse(view);
         if (!result.ok)
         {
             throw new Error(result.detail);
         }
         expect(result.message.subject).toBe('Test message');
-        expect(result.message.source.sha256).toBe(await sha256Hex(data));
+        expect(result.message.source.sha256).toBe(await sha256Hex(fileBytes));
     });
 
     it('an empty subject stays ""', async () =>
@@ -233,7 +233,7 @@ describe('createMsgParser: sender and recipients', () =>
 {
     it('replaces an Exchange X.500 sender address with the SMTP fallback property', async () =>
     {
-        const message = await parseOk(spec({ sender: { ...BOB, exchangeDn: DN('BOB') } }));
+        const message = await parseOk(spec({ sender: { ...BOB, exchangeDn: exchangeDn('BOB') } }));
         expect(message.from).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
     });
 
@@ -241,19 +241,19 @@ describe('createMsgParser: sender and recipients', () =>
     {
         const message = await parseOk(
             spec({
-                sender: { ...BOB, exchangeDn: DN('BOB'), smtpFallback: false },
-                recipients: [{ ...CAROL, exchangeDn: DN('CAROL'), smtpFallback: false, type: 'to' }],
+                sender: { ...BOB, exchangeDn: exchangeDn('BOB'), smtpFallback: false },
+                recipients: [{ ...CAROL, exchangeDn: exchangeDn('CAROL'), smtpFallback: false, type: 'to' }],
             }),
         );
-        expect(message.from).toEqual([{ name: 'Bob Sample', address: DN('BOB') }]);
-        expect(message.to).toEqual([{ name: 'Carol Test', address: DN('CAROL') }]);
+        expect(message.from).toEqual([{ name: 'Bob Sample', address: exchangeDn('BOB') }]);
+        expect(message.to).toEqual([{ name: 'Carol Test', address: exchangeDn('CAROL') }]);
     });
 
     it('uses PR_SENT_REPRESENTING_SMTP_ADDRESS when PR_SENDER_SMTP_ADDRESS is missing', async () =>
     {
         const message = await parseOk(
             spec({
-                sender: { ...BOB, exchangeDn: DN('BOB'), smtpFallback: false },
+                sender: { ...BOB, exchangeDn: exchangeDn('BOB'), smtpFallback: false },
                 extraStrings: [{ propId: 0x5d02, value: 'bob@example.test' }],
             }),
         );
@@ -264,11 +264,11 @@ describe('createMsgParser: sender and recipients', () =>
     {
         const message = await parseOk(
             spec({
-                sender: { ...DAVE, exchangeDn: DN('DAVE') }, // the assistant who pressed Send
+                sender: { ...DAVE, exchangeDn: exchangeDn('DAVE') }, // the assistant who pressed Send
                 extraStrings: [
                     { propId: 0x0042, value: 'Carol Test' }, // PR_SENT_REPRESENTING_NAME
                     { propId: 0x0064, value: 'EX' }, // PR_SENT_REPRESENTING_ADDRTYPE
-                    { propId: 0x0065, value: DN('CAROL') }, // PR_SENT_REPRESENTING_EMAIL_ADDRESS
+                    { propId: 0x0065, value: exchangeDn('CAROL') }, // PR_SENT_REPRESENTING_EMAIL_ADDRESS
                     { propId: 0x5d02, value: 'carol@example.test' }, // PR_SENT_REPRESENTING_SMTP_ADDRESS
                 ],
             }),
@@ -282,12 +282,12 @@ describe('createMsgParser: sender and recipients', () =>
     {
         const message = await parseOk(
             spec({
-                sender: { ...DAVE, exchangeDn: DN('DAVE'), smtpFallback: false },
-                sentRepresenting: { ...CAROL, exchangeDn: DN('CAROL') },
+                sender: { ...DAVE, exchangeDn: exchangeDn('DAVE'), smtpFallback: false },
+                sentRepresenting: { ...CAROL, exchangeDn: exchangeDn('CAROL') },
             }),
         );
         expect(message.from).toEqual([{ name: 'Carol Test', address: 'carol@example.test' }]);
-        expect(message.sender).toEqual({ name: 'Dave Demo', address: DN('DAVE') });
+        expect(message.sender).toEqual({ name: 'Dave Demo', address: exchangeDn('DAVE') });
     });
 
     it('no sender key without "sent representing" properties: the sender is the From', async () =>
@@ -306,7 +306,7 @@ describe('createMsgParser: sender and recipients', () =>
 
     it('no sender key when the Exchange sender resolves to the represented SMTP address', async () =>
     {
-        const message = await parseOk(spec({ sender: { ...BOB, exchangeDn: DN('BOB') }, sentRepresenting: BOB }));
+        const message = await parseOk(spec({ sender: { ...BOB, exchangeDn: exchangeDn('BOB') }, sentRepresenting: BOB }));
         expect(message.from).toEqual([{ name: 'Bob Sample', address: 'bob@example.test' }]);
         expect('sender' in message).toBe(false);
     });
@@ -322,11 +322,11 @@ describe('createMsgParser: sender and recipients', () =>
     {
         const message = await parseOk(
             spec({
-                sender: { ...BOB, exchangeDn: DN('BOB') },
+                sender: { ...BOB, exchangeDn: exchangeDn('BOB') },
                 extraStrings: [
                     { propId: 0x0042, value: 'Bob Sample' },
                     { propId: 0x0064, value: 'EX' },
-                    { propId: 0x0065, value: DN('BOB').toLowerCase() },
+                    { propId: 0x0065, value: exchangeDn('BOB').toLowerCase() },
                 ],
             }),
         );
@@ -340,11 +340,11 @@ describe('createMsgParser: sender and recipients', () =>
             spec({
                 recipients: [
                     { ...BOB, type: 'to' },
-                    { ...CAROL, exchangeDn: DN('CAROL'), type: 'cc' },
+                    { ...CAROL, exchangeDn: exchangeDn('CAROL'), type: 'cc' },
                     { ...DAVE, type: 'to' },
                     { name: 'Hidden Copy', smtp: 'hidden@example.test', type: 'bcc' },
                     { name: '', smtp: 'noname@example.test', type: 'cc' },
-                    { name: 'Erin Archive', smtp: 'erin@example.test', exchangeDn: DN('ERIN'), type: 'bcc' },
+                    { name: 'Erin Archive', smtp: 'erin@example.test', exchangeDn: exchangeDn('ERIN'), type: 'bcc' },
                 ],
             }),
         );
@@ -552,13 +552,13 @@ describe('createMsgParser: body', () =>
 
         it('the SHA-256 is still the one of the file bytes', async () =>
         {
-            const data = buildMsg(spec({ bodyText: 'one\rtwo' }));
-            const result = await parse(data);
+            const fileBytes = buildMsg(spec({ bodyText: 'one\rtwo' }));
+            const result = await parse(fileBytes);
             if (!result.ok)
             {
                 throw new Error(result.detail);
             }
-            expect(result.message.source.sha256).toBe(await sha256Hex(data));
+            expect(result.message.source.sha256).toBe(await sha256Hex(fileBytes));
         });
     });
 });
@@ -603,7 +603,7 @@ describe('createMsgParser: attachments (metadata only, README.md rule R4)', () =
         expect(message.bodyText).toBe('Hello.\nSecond line.');
         expect(message.subject).toBe('Test message');
         expect(JSON.stringify(message)).not.toContain('INNER-SUBJECT-MARKER');
-        // Task 8.13b-3: the item is read as an email of its own (msg.attached.test.ts), so its text is shown there.
+        // Task 8.13b-3: the item is read as an email of its own (msg-parser.attached.test.ts), so its text is shown there.
         expect(message.warnings).toEqual([]);
     });
 
@@ -628,9 +628,9 @@ describe('createMsgParser: attachments (metadata only, README.md rule R4)', () =
 
 describe('createMsgParser: broken files never throw', () =>
 {
-    async function expectCorrupt(data: Uint8Array, name = 'bad.msg'): Promise<string>
+    async function expectCorrupt(fileBytes: Uint8Array, name = 'bad.msg'): Promise<string>
     {
-        const result = await parse(data, name);
+        const result = await parse(fileBytes, name);
         expect(result.ok).toBe(false);
         if (result.ok)
         {
@@ -638,7 +638,7 @@ describe('createMsgParser: broken files never throw', () =>
         }
         expect(result.error).toBe('corrupt');
         expect(result.fileName).toBe(name);
-        expect(result.sha256).toBe(await sha256Hex(data));
+        expect(result.sha256).toBe(await sha256Hex(fileBytes));
         expect(result.detail.length).toBeGreaterThan(0);
         expect(result.detail.length).toBeLessThanOrEqual(200);
         expect(result.detail).not.toMatch(/[\r\n]/);
@@ -678,11 +678,11 @@ describe('createMsgParser: broken files never throw', () =>
     it('a valid Compound File that is not an Outlook message (e.g. a renamed .doc)', async () =>
     {
         const stream = new TextEncoder().encode('not a message');
-        const data = burn([
+        const fileBytes = burn([
             { name: 'Root Entry', type: TypeEnum.ROOT, children: [1], length: 0 },
             { name: 'WordDocument', type: TypeEnum.DOCUMENT, binaryProvider: () => stream, length: stream.length },
         ]);
-        const detail = await expectCorrupt(data);
+        const detail = await expectCorrupt(fileBytes);
         expect(detail).toBe('not an Outlook message: no message properties found');
     });
 
@@ -697,8 +697,8 @@ describe('createMsgParser: broken files never throw', () =>
                 throw new Error('converter failed\non two lines');
             },
         });
-        const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>', attachments: [{ fileName: 'plan.pdf', content: 'x' }] }));
-        const result = await throwing.parse({ name: 'x.msg', bytes: data });
+        const fileBytes = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>', attachments: [{ fileName: 'plan.pdf', content: 'x' }] }));
+        const result = await throwing.parse({ name: 'x.msg', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -707,7 +707,7 @@ describe('createMsgParser: broken files never throw', () =>
         expect(result.message.warnings).toEqual(['html-body-unreadable']);
         expect(result.message.subject).toBe('Test message');
         expect(result.message.attachments.map((a) => a.fileName)).toEqual(['plan.pdf']);
-        expect(result.message.source).toEqual({ fileName: 'x.msg', sha256: await sha256Hex(data), kind: 'msg' });
+        expect(result.message.source).toEqual({ fileName: 'x.msg', sha256: await sha256Hex(fileBytes), kind: 'msg' });
     });
 
     it.each([
@@ -721,8 +721,8 @@ describe('createMsgParser: broken files never throw', () =>
                 throw thrown;
             },
         });
-        const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
-        const result = await throwing.parse({ name: 'x.msg', bytes: data });
+        const fileBytes = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
+        const result = await throwing.parse({ name: 'x.msg', bytes: fileBytes });
         expect(result.ok && result.message.warnings).toEqual(['html-body-unreadable']);
         expect(result.ok && result.message.bodyText).toBe('');
     });
@@ -730,26 +730,26 @@ describe('createMsgParser: broken files never throw', () =>
     it('an htmlToText that returns something other than a { text, truncated } result gives html-body-unreadable', async () =>
     {
         const broken = createMsgParser({ htmlToText: () => null as unknown as HtmlToTextResult });
-        const data = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
-        const result = await broken.parse({ name: 'x.msg', bytes: data });
+        const fileBytes = buildMsg(spec({ bodyText: undefined, bodyHtml: '<p>x</p>' }));
+        const result = await broken.parse({ name: 'x.msg', bytes: fileBytes });
         expect(result.ok && result.message.warnings).toEqual(['html-body-unreadable']);
         expect(result.ok && result.message.bodyText).toBe('');
     });
 
     it('a damaged directory entry (msgreader fails inside with a TypeError) gives a plain detail', async () =>
     {
-        const data = buildMsg(BASE);
-        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const fileBytes = buildMsg(BASE);
+        const view = new DataView(fileBytes.buffer, fileBytes.byteOffset, fileBytes.byteLength);
         const directoryAt = (view.getUint32(0x30, true) + 1) * 512; // first directory sector (512-byte sectors)
         view.setUint32(directoryAt + 0x4c, 0x1000, true); // Root Entry's child -> an entry that does not exist
-        const detail = await expectCorrupt(data);
+        const detail = await expectCorrupt(fileBytes);
         expect(detail).toBe('damaged property: unreadable file structure');
     });
 
     it('a plain-text body stored with the wrong type is reported, never silently dropped', async () =>
     {
-        const data = buildMsg(spec({ bodyText: undefined, extraBinaries: [{ propId: 0x1000, bytes: Uint8Array.of(1, 2, 3) }] }));
-        const detail = await expectCorrupt(data);
+        const fileBytes = buildMsg(spec({ bodyText: undefined, extraBinaries: [{ propId: 0x1000, bytes: Uint8Array.of(1, 2, 3) }] }));
+        const detail = await expectCorrupt(fileBytes);
         expect(detail).toBe('damaged property: plain-text body');
     });
 
@@ -771,9 +771,9 @@ describe('createMsgParser: broken files never throw', () =>
     // second is not rare: in a fuzzing run, about 3 in 560 randomly damaged .msg
     // files did it. This adapter does not guard against them itself: files
     // reach it through the dispatcher (parse-files.ts), which first runs the
-    // Compound File check (cfb-check.ts, tested in cfb-check.test.ts) and
-    // parses each file in a Web Worker with a time limit (worker-runner.ts,
-    // tested in worker-runner.test.ts and Helper/Test/browser-tests/parse-files.spec.ts).
+    // Compound File check (compound-file-check.ts, tested in compound-file-check.test.ts) and
+    // parses each file in a Web Worker with a time limit (parse-worker-runner.ts,
+    // tested in parse-worker-runner.test.ts and Helper/Test/browser-tests/parse-files.spec.ts).
 });
 
 describe('resultFromFields: wrongly typed properties from a damaged file', () =>
@@ -796,10 +796,10 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
     };
     const options = { htmlToText: stubHtmlToText };
     const damaged = (overrides: Record<string, unknown>): FieldsData => ({ ...GOOD, ...overrides });
-    const map = (fields: FieldsData): ParseResult => resultFromFields(fields, 'd.msg', 'f'.repeat(64), options);
-    const ok = (fields: FieldsData): NormalizedMessage =>
+    const resultOf = (fields: FieldsData): ParseResult => resultFromFields(fields, 'd.msg', 'f'.repeat(64), options);
+    const messageOf = (fields: FieldsData): NormalizedMessage =>
     {
-        const result = map(fields);
+        const result = resultOf(fields);
         if (!result.ok)
         {
             throw new Error(`expected ok, got ${result.detail}`);
@@ -809,7 +809,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('the undamaged object maps normally (control)', () =>
     {
-        const message = ok(GOOD);
+        const message = messageOf(GOOD);
         expect(message.subject).toBe('Good subject');
         expect(message.bodyText).toBe('Body text.\n');
         expect(message.from).toEqual([{ name: 'Alice Example', address: 'alice@example.test' }]);
@@ -822,7 +822,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('header-like fields of the wrong type are treated as absent', () =>
     {
-        const message = ok(
+        const message = messageOf(
             damaged({
                 subject: 42,
                 messageId: BYTES,
@@ -843,7 +843,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('one wrongly typed sender field does not hide the others', () =>
     {
-        const message = ok(damaged({ senderName: BYTES }));
+        const message = messageOf(damaged({ senderName: BYTES }));
         expect(message.from).toEqual([{ name: '', address: 'alice@example.test' }]);
     });
 
@@ -853,16 +853,16 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
             { propertyTag: '0042001f', value: 'Carol Test' },
             { propertyTag: '0065001f', value: 'carol@example.test' },
         ];
-        const message = ok(damaged({ rawProps: represented, senderName: BYTES }));
+        const message = messageOf(damaged({ rawProps: represented, senderName: BYTES }));
         expect(message.from).toEqual([{ name: 'Carol Test', address: 'carol@example.test' }]);
         expect(message.sender).toEqual({ name: '', address: 'alice@example.test' });
-        const noSender = ok(damaged({ rawProps: represented, senderName: BYTES, senderEmail: 7 }));
+        const noSender = messageOf(damaged({ rawProps: represented, senderName: BYTES, senderEmail: 7 }));
         expect('sender' in noSender).toBe(false);
     });
 
     it('a recipient type msgreader did not map (a raw number) is listed under To, never dropped', () =>
     {
-        const message = ok(
+        const message = messageOf(
             damaged({ recipients: [{ dataType: 'recipient', name: 'Odd Type', email: 'odd@example.test', recipType: 7 as unknown as 'to' }] }),
         );
         expect(message.to).toEqual([{ name: 'Odd Type', address: 'odd@example.test' }]);
@@ -871,7 +871,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('recipient fields of the wrong type are treated as absent; an empty recipient is skipped', () =>
     {
-        const message = ok(
+        const message = messageOf(
             damaged({
                 recipients: [
                     { dataType: 'recipient', name: BYTES, email: 'bob@example.test', addressType: 'SMTP', recipType: 'to' },
@@ -886,7 +886,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('attachment fields of the wrong type are treated as absent', () =>
     {
-        const message = ok(
+        const message = messageOf(
             damaged({
                 attachments: [{ dataType: 'attachment', fileName: BYTES, fileNameShort: 9, name: 'shown.txt', attachMimeTag: BYTES, contentLength: 4 }],
             }),
@@ -896,7 +896,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('a sent time of the wrong type counts as an unreadable date, not a missing one', () =>
     {
-        const message = ok(damaged({ clientSubmitTime: BYTES }));
+        const message = messageOf(damaged({ clientSubmitTime: BYTES }));
         expect(message.date).toEqual({ utcMs: null, original: '', offsetMinutes: null, zoneKnown: false });
         expect(message.warnings).toEqual(['unparseable-date']);
     });
@@ -909,7 +909,7 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
         ['RTF body', { body: undefined, compressedRtf: 'not bytes' }],
     ])('a %s of the wrong type makes the file "corrupt" (%o), never an empty body', (field, overrides) =>
     {
-        expect(map(damaged(overrides))).toEqual({
+        expect(resultOf(damaged(overrides))).toEqual({
             ok: false,
             error: 'corrupt',
             detail: `damaged property: ${field}`,
@@ -920,13 +920,13 @@ describe('resultFromFields: wrongly typed properties from a damaged file', () =>
 
     it('any other TypeError becomes "damaged property: ...", not a JavaScript message', () =>
     {
-        const result = map(damaged({ recipients: [null] }));
+        const result = resultOf(damaged({ recipients: [null] }));
         expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: 'damaged property: unexpected value type' });
     });
 
     it('a reader error is passed on as a short single line', () =>
     {
-        const result = map({ dataType: null, error: 'Unsupported file type!' });
+        const result = resultOf({ dataType: null, error: 'Unsupported file type!' });
         expect(result).toMatchObject({ ok: false, error: 'corrupt', detail: 'Unsupported file type!' });
     });
 });

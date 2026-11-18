@@ -1,6 +1,6 @@
-// Unit tests for the page <-> worker messages (worker-protocol.ts): the
+// Unit tests for the page <-> worker messages (parse-worker-protocol.ts): the
 // message checks, the worker's side, and a full round trip with
-// runInWorker (worker-runner.ts) over an in-memory fake channel that copies
+// runInWorker (parse-worker-runner.ts) over an in-memory fake channel that copies
 // every message with structuredClone, like the browser does.
 //
 // The HTML converter here is a stub (Node has no DOMParser); the real one
@@ -9,12 +9,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { MSG_SPECS } from '../../Helper/Test/test-data/msg/specs';
-import { createEmlParser } from './eml';
-import { sha256Hex } from './hash';
+import { createEmlParser } from './eml-parser';
+import { sha256Hex } from './file-hash';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser } from './msg';
-import { createWorkerSide, isFromWorker, isToWorker } from './worker-protocol';
-import { runInWorker, type WorkerFactory } from './worker-runner';
+import { createMsgParser } from './msg-parser';
+import { createWorkerSide, isFromWorker, isToWorker } from './parse-worker-protocol';
+import { runInWorker, type WorkerFactory } from './parse-worker-runner';
 import type { FromWorker } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 
@@ -177,28 +177,28 @@ describe('isFromWorker: attached emails (strict)', () =>
         message?: LooseMessage;
         attached?: unknown;
     }
-    function at<T>(list: unknown, index: number): T
+    function itemAt<T>(items: unknown, index: number): T
     {
-        const value = (list as T[])[index];
+        const value = (items as T[])[index];
         if (value === undefined)
         {
             throw new Error(`nothing at ${String(index)}`);
         }
         return value;
     }
-    const entry = (r: LooseResult, i: number): LooseEntry => at<LooseEntry>(r.attached, i);
-    const place = (r: LooseResult, i: number): LoosePlace => at<LoosePlace>(entry(r, i).places, 0);
-    const ownMessage = (r: LooseResult): LooseMessage =>
+    const entry = (r: LooseResult, i: number): LooseEntry => itemAt<LooseEntry>(r.attached, i);
+    const place = (r: LooseResult, i: number): LoosePlace => itemAt<LoosePlace>(entry(r, i).places, 0);
+    const ownMessage = (result: LooseResult): LooseMessage =>
     {
-        if (r.message === undefined)
+        if (result.message === undefined)
         {
             throw new Error('no message');
         }
-        return r.message;
+        return result.message;
     };
-    const pushAttachment = (m: LooseMessage, attachedIndex: number): void =>
+    const pushAttachment = (message: LooseMessage, attachedIndex: number): void =>
     {
-        (m.attachments as unknown[]).push({ fileName: '', size: 1, mimeType: 'x/y', attachedIndex });
+        (message.attachments as unknown[]).push({ fileName: '', size: 1, mimeType: 'x/y', attachedIndex });
     };
 
     it.each<[string, (r: LooseResult) => void]>([
@@ -224,8 +224,8 @@ describe('isFromWorker: attached emails (strict)', () =>
         ['a place ending before it starts', (r) => (place(r, 0).end = place(r, 0).start - 1)],
         ['a place not at a forwarded separator', (r) => (place(r, 0).start += 1)],
         ['a body that is not text', (r) => (entry(r, 2).message.bodyText = 1)],
-        ['an attachedIndex out of range', (r) => (at<{ attachedIndex: number }>(ownMessage(r).attachments, 0).attachedIndex = 4)],
-        ['a negative attachedIndex', (r) => (at<{ attachedIndex: number }>(ownMessage(r).attachments, 0).attachedIndex = -1)],
+        ['an attachedIndex out of range', (r) => (itemAt<{ attachedIndex: number }>(ownMessage(r).attachments, 0).attachedIndex = 4)],
+        ['a negative attachedIndex', (r) => (itemAt<{ attachedIndex: number }>(ownMessage(r).attachments, 0).attachedIndex = -1)],
         ['an attachedIndex that is not a descendant', (r) => pushAttachment(entry(r, 0).message, 2)],
         ['an attachedIndex pointing to itself', (r) => pushAttachment(entry(r, 0).message, 0)],
         ['an attachedIndex with no attached list', (r) => delete r.attached],
@@ -303,9 +303,9 @@ describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
         message: { attachments: Record<string, unknown>[]; source: Record<string, unknown> };
         attached: { places: unknown[]; parent: unknown; message: { attachments: Record<string, unknown>[]; source: Record<string, unknown> } }[];
     }
-    const entry = (r: LooseMsgResult, i: number): LooseMsgResult['attached'][number] =>
+    const entry = (result: LooseMsgResult, i: number): LooseMsgResult['attached'][number] =>
     {
-        const value = r.attached[i];
+        const value = result.attached[i];
         if (value === undefined)
         {
             throw new Error(`nothing at ${String(i)}`);
@@ -403,9 +403,9 @@ describe('createWorkerSide', () =>
     {
         const side = workerSide();
         side.handle({ type: 'parse', name: 'html.eml', kind: 'eml', bytes: encode(HTML_EML) });
-        const ask = await side.next();
+        const htmlRequest = await side.next();
         // postal-mime ends the decoded part with a line break.
-        expect(ask).toEqual({ type: 'html', htmls: ['<p>Three chair models</p>\n'] });
+        expect(htmlRequest).toEqual({ type: 'html', htmls: ['<p>Three chair models</p>\n'] });
         side.handle({ type: 'conversions', outcomes: [{ ok: true, text: 'Three chair models', truncated: true }] });
         const answer = await side.next();
         expect(answer.type === 'result' && answer.result.ok && answer.result.message.bodyText).toBe('Three chair models');

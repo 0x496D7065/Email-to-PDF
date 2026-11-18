@@ -32,22 +32,22 @@ export type FileTypeDecision =
     | { readonly error: ParseErrorCode; readonly detail: string };
 
 /** Compound File signature ([MS-CFB] 2.2, "Header Signature"). */
-const CFB_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] as const;
+const COMPOUND_FILE_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] as const;
 
 /** How many leading bytes are looked at to tell text from binary. */
 const SNIFF_LENGTH = 4096;
 
 /** True if `bytes` starts with the Compound File signature. */
-export function hasCfbSignature(bytes: Uint8Array): boolean
+export function hasCompoundFileSignature(bytes: Uint8Array): boolean
 {
-    return bytes.length >= CFB_SIGNATURE.length && CFB_SIGNATURE.every((b, i) => bytes[i] === b);
+    return bytes.length >= COMPOUND_FILE_SIGNATURE.length && COMPOUND_FILE_SIGNATURE.every((b, i) => bytes[i] === b);
 }
 
 /** The lower-case extension after the last dot ("" if none): "Mail.EML" -> "eml". */
 export function extensionOf(name: string): string
 {
-    const dot = name.lastIndexOf('.');
-    return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+    const dotIndex = name.lastIndexOf('.');
+    return dotIndex === -1 ? '' : name.slice(dotIndex + 1).toLowerCase();
 }
 
 /**
@@ -62,12 +62,12 @@ export function startsLikeEmailHeader(bytes: Uint8Array): boolean
     // A field name is at most a few dozen characters; 256 is generous.
     while (i < bytes.length && i - start < 256)
     {
-        const b = bytes[i] ?? 0;
-        if (b === 0x3a)
+        const byte = bytes[i] ?? 0;
+        if (byte === 0x3a)
         {
             return i > start; // ':' after at least one name character
         }
-        if (b < 0x21 || b > 0x7e)
+        if (byte < 0x21 || byte > 0x7e)
         {
             return false;
         }
@@ -94,7 +94,7 @@ export function detectFileType(name: string, bytes: Uint8Array): FileTypeDecisio
     {
         return { error: 'corrupt', detail: 'the file is empty' };
     }
-    if (hasCfbSignature(bytes))
+    if (hasCompoundFileSignature(bytes))
     {
         return { kind: 'msg' };
     }

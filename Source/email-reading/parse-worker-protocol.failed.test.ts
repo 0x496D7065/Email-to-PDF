@@ -1,11 +1,11 @@
-// The worker side's last line of defence (worker-protocol.ts): if parsing
+// The worker side's last line of defence (parse-worker-protocol.ts): if parsing
 // ever rejects (a bug: the adapters turn every bad file into a result), the
 // worker answers 'failed' instead of going silent, so the page can fail that
 // one file at once. Kept in its own file because it replaces deferred-html.ts
 // with a mock for the whole file.
 
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkerSide } from './worker-protocol';
+import { createWorkerSide } from './parse-worker-protocol';
 import type { FromWorker } from '../../Header/parse-worker-messages';
 
 vi.mock('./deferred-html', () => ({

@@ -27,14 +27,14 @@
 //   only listed.
 
 import { addressParser, decodeWords, type Address, type Attachment, type Email, type PostalMimeOptions } from 'postal-mime';
-import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-limits';
-import { parseEmailDate } from './date';
+import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-email-limits';
+import { parseEmailDate } from './date-header';
 import { parseEmlTree, PostalMimeInternalsError, type EmlPart, type EmlTree } from './eml-tree';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
-import { sha256Hex } from './hash';
+import { sha256Hex } from './file-hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
-import { parseIdList, parseSingleId } from './ids';
+import { parseIdList, parseSingleId } from './message-ids';
 import { toLfLineEndings } from './line-endings';
 import { senderIfDifferent } from './mailbox';
 import type { AttachedMessage, AttachedPlace, AttachmentInfo, EmailAddress, EmailDate, EmailParser, InputFile, NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
@@ -54,7 +54,7 @@ export interface EmlParserOptions
      * inert: no rendering, no script execution, no loading of images or styles
      * (README.md, rule R4). Injected so that this adapter stays testable in Node
      * without a DOM. In the browser this is htmlToTextWithDomParser
-     * (html-dom.ts, see browser-parsers.ts).
+     * (browser-html-to-text.ts, see browser-parsers.ts).
      *
      * It returns the text and whether it was cut at the converter's length
      * limit; a cut adds the 'html-body-truncated' warning. If it throws or
@@ -93,7 +93,7 @@ const POSTAL_MIME_OPTIONS: PostalMimeOptions = {
 };
 
 // The limits on attached emails, MAX_FORWARD_DEPTH and MAX_EXPANDED_FORWARDS
-// (attached-limits.ts, shared with the .msg adapter), apply here like this:
+// (attached-email-limits.ts, shared with the .msg adapter), apply here like this:
 // - MAX_FORWARD_DEPTH: how many levels of attached emails are read (inline
 //   ones expanded into the body, ones sent as attachments read on their
 //   own), both kinds counted together. Deeper inline ones are listed as
@@ -354,14 +354,14 @@ function flattenAttached(
             const ownPath = [...path, slot.number];
             const { block } = node;
             const places =
-                block === null ? [] : frames.map((f) => ({ holder: f.holder, start: f.offset + block.start, end: f.offset + block.end }));
+                block === null ? [] : frames.map((frame) => ({ holder: frame.holder, start: frame.offset + block.start, end: frame.offset + block.end }));
             entries.push({ node, parent, places, path: ownPath, name: slot.name });
             const inner: Frame[] = [{ holder: index, offset: 0 }];
             if (block !== null)
             {
-                for (const f of frames)
+                for (const frame of frames)
                 {
-                    inner.push({ holder: f.holder, offset: f.offset + block.start + block.bodyStart });
+                    inner.push({ holder: frame.holder, offset: frame.offset + block.start + block.bodyStart });
                 }
             }
             walk(node.content.children, index, inner, ownPath);
@@ -456,9 +456,9 @@ function readSender(email: Email): EmailAddress | undefined
  * Flattens address groups ("Team: carol@example.test, dave@example.test;")
  * into their members. Missing -> [].
  */
-function mailboxes(list: readonly Address[] | undefined): EmailAddress[]
+function mailboxes(addresses: readonly Address[] | undefined): EmailAddress[]
 {
-    return (list ?? [])
+    return (addresses ?? [])
         .flatMap((entry) => (entry.group ? entry.group : [entry]))
         .map((mailbox) => ({ name: mailbox.name ?? '', address: mailbox.address ?? '' }));
 }
@@ -640,9 +640,9 @@ async function readContent(tree: EmlTree, context: ReadContext, depth: number): 
         // One by one: a spread into push overflows the stack for very long lists.
         // Its lines are listed here too, marked as belonging to it (or to an
         // email inside it).
-        for (const item of inner.content.attachments)
+        for (const innerAttachment of inner.content.attachments)
         {
-            attachments.push({ info: item.info, owner: item.owner ?? node });
+            attachments.push({ info: innerAttachment.info, owner: innerAttachment.owner ?? node });
         }
         for (const warning of inner.warnings)
         {
@@ -840,11 +840,11 @@ async function expandForwarded(
         // against a body warning being added later without deciding whether it
         // applies to the outer message.
         warnings: body.warnings.filter(
-            (w) =>
-                w === 'html-converted-body' ||
-                w === 'html-body-truncated' ||
-                w === 'html-body-unreadable' ||
-                w === 'forwarded-message-not-expanded',
+            (warning) =>
+                warning === 'html-converted-body' ||
+                warning === 'html-body-truncated' ||
+                warning === 'html-body-unreadable' ||
+                warning === 'forwarded-message-not-expanded',
         ),
     };
 }
@@ -947,14 +947,14 @@ async function readAttachedEmail(
  */
 function forwardedHeaderLines(email: Email): string[]
 {
-    const first = (key: string): string | undefined => email.headers.find((h) => h.key === key)?.value;
-    const all = (key: string): string | undefined =>
+    const firstHeader = (key: string): string | undefined => email.headers.find((h) => h.key === key)?.value;
+    const allHeaders = (key: string): string | undefined =>
     {
         const values = email.headers.filter((h) => h.key === key && h.value !== '').map((h) => h.value);
         return values.length > 0 ? values.join(', ') : undefined;
     };
     const lines: string[] = [];
-    const add = (label: string, value: string | undefined, decode: boolean): void =>
+    const addLine = (label: string, value: string | undefined, decode: boolean): void =>
     {
         if (value === undefined)
         {
@@ -965,16 +965,16 @@ function forwardedHeaderLines(email: Email): string[]
         const shown = (decode ? decodeWords(value) : value).replace(/[\r\n]+/g, ' ');
         lines.push(`${label}: ${shown}`);
     };
-    add('From', first('from'), true);
+    addLine('From', firstHeader('from'), true);
     if (senderIfDifferent(readSender(email), readFrom(email)) !== undefined)
     {
-        add('Sender', first('sender'), true);
+        addLine('Sender', firstHeader('sender'), true);
     }
-    add('Date', first('date'), false);
-    add('Subject', first('subject'), true);
-    add('To', all('to'), true);
-    add('Cc', all('cc'), true);
-    add('Bcc', all('bcc'), true);
+    addLine('Date', firstHeader('date'), false);
+    addLine('Subject', firstHeader('subject'), true);
+    addLine('To', allHeaders('to'), true);
+    addLine('Cc', allHeaders('cc'), true);
+    addLine('Bcc', allHeaders('bcc'), true);
     return lines;
 }
 

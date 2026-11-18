@@ -1,5 +1,5 @@
 // The production parsers: both adapters wired to the browser's inert HTML
-// converter (html-dom.ts). Unit tests create the adapters with their own
+// converter (browser-html-to-text.ts). Unit tests create the adapters with their own
 // converter instead, since Node has no DOMParser.
 //
 // The page must not read dropped files with these directly: use parseFiles
@@ -7,10 +7,10 @@
 // Compound File check before msgreader, and a Web Worker with a time limit
 // (README.md, rule R4). These run on the page's own thread, unguarded.
 
-import { createEmlParser } from './eml';
-import { htmlToTextWithDomParser } from './html-dom';
+import { createEmlParser } from './eml-parser';
+import { htmlToTextWithDomParser } from './browser-html-to-text';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser } from './msg';
+import { createMsgParser } from './msg-parser';
 import type { EmailParser } from '../../Header/parsed-email';
 
 /** The parsers the page uses, one per supported file type. */

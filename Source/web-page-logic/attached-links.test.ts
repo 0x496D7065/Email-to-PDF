@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { runEngine } from '../thread-analysis/engine';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { attachedCount, attachedLinks } from './attached-links';
 import type { ParseResult } from '../../Header/parsed-email';

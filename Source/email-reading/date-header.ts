@@ -32,31 +32,31 @@ const NAMED_ZONES: Readonly<Record<string, number>> = {
 /** Removes (comments), which may be nested, e.g. "+0900 (JST)" -> "+0900 ". */
 function stripComments(text: string): string
 {
-    let out = '';
+    let withoutComments = '';
     let depth = 0;
-    for (const ch of text)
+    for (const character of text)
     {
-        if (ch === '(')
+        if (character === '(')
         {
             depth++;
         }
-        else if (ch === ')' && depth > 0)
+        else if (character === ')' && depth > 0)
         {
             depth--;
         }
         else if (depth === 0)
         {
-            out += ch;
+            withoutComments += character;
         }
         // Inside a comment: the character is dropped.
     }
-    return out;
+    return withoutComments;
 }
 
 /** Parses a whole number made only of digits, with a length between min and max. */
-function readInt(token: string | undefined, minLen: number, maxLen: number): number | null
+function readInt(token: string | undefined, minDigits: number, maxDigits: number): number | null
 {
-    if (token === undefined || token.length < minLen || token.length > maxLen)
+    if (token === undefined || token.length < minDigits || token.length > maxDigits)
     {
         return null;
     }
@@ -80,9 +80,9 @@ function readZone(token: string | undefined): { offset: number | null } | null
     const numeric = /^([+-])(\d\d)(\d\d)$/.exec(token);
     if (numeric)
     {
-        const [, sign, hh, mm] = numeric;
-        const hours = Number(hh);
-        const minutes = Number(mm);
+        const [, sign, hoursDigits, minutesDigits] = numeric;
+        const hours = Number(hoursDigits);
+        const minutes = Number(minutesDigits);
         if (hours > 23 || minutes > 59)
         {
             return null;
@@ -93,10 +93,10 @@ function readZone(token: string | undefined): { offset: number | null } | null
         }
         return { offset: (sign === '-' ? -1 : 1) * (hours * 60 + minutes) };
     }
-    const named = NAMED_ZONES[token.toLowerCase()];
-    if (named !== undefined)
+    const namedOffset = NAMED_ZONES[token.toLowerCase()];
+    if (namedOffset !== undefined)
     {
-        return { offset: named };
+        return { offset: namedOffset };
     }
     if (/^[a-z]+$/i.test(token))
     {
@@ -200,7 +200,7 @@ export function parseEmailDate(raw: string | null | undefined): EmailDate
     }
 
     // Date.UTC accepts "31 Feb" and silently moves it to March, so check the day exists.
-    const local = Date.UTC(year, month, day, hour, minute, second);
+    const localTimeMs = Date.UTC(year, month, day, hour, minute, second);
     if (new Date(Date.UTC(year, month, day)).getUTCDate() !== day)
     {
         return failed;
@@ -208,6 +208,6 @@ export function parseEmailDate(raw: string | null | undefined): EmailDate
 
     // The header shows local time at `offset`; subtract the offset to get UTC.
     // Example: 10:00 +0200 is 08:00 UTC.
-    const utcMs = local - (offset ?? 0) * 60_000;
+    const utcMs = localTimeMs - (offset ?? 0) * 60_000;
     return { utcMs, original, offsetMinutes: offset, zoneKnown };
 }

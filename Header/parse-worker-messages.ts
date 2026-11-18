@@ -1,8 +1,8 @@
 // Header: the messages between the page and the reading worker, and the
 // handle that starts a worker. Shared types only, no code (README.md, "Where
 // things are"). The checks that every message really has this shape are
-// isToWorker / isFromWorker in Source/email-reading/worker-protocol.ts.
-// Used by email-reading/ (worker-protocol, parse-worker, worker-runner,
+// isToWorker / isFromWorker in Source/email-reading/parse-worker-protocol.ts.
+// Used by email-reading/ (parse-worker-protocol, parse-worker, parse-worker-runner,
 // parse-files) and worker-pipeline/ (its runners reuse WorkerHandle and
 // WorkerEvents; read-files and process-files use Limits).
 
@@ -58,7 +58,7 @@ export type ConversionOutcome =
 /**
  * What the page needs from a worker. `M` is the type of the messages the
  * page sends: parse requests for the reading worker, engine requests for the engine worker
- * (Source/worker-pipeline/engine-runner.ts), which reuses connectWorker (Source/email-reading/worker-runner.ts).
+ * (Source/worker-pipeline/engine-runner.ts), which reuses connectWorker (Source/email-reading/parse-worker-runner.ts).
  */
 export interface WorkerHandle<M = ToWorker>
 {

@@ -14,10 +14,10 @@ import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder'
 import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import { createMsgParser } from '../email-reading/msg';
+import { createMsgParser } from '../email-reading/msg-parser';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, FILE_CHAIN_SEPARATOR, noRepeat } from './model';

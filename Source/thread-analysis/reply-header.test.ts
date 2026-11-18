@@ -2,7 +2,7 @@
 // synthetic. Non-ASCII letters are written as \u escapes (files stay ASCII).
 
 import { describe, expect, it } from 'vitest';
-import { createEmlParser } from '../email-reading/eml';
+import { createEmlParser } from '../email-reading/eml-parser';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { htmlTreeToText, type HtmlNode, type HtmlToTextResult } from '../email-reading/html-to-text';
 import {

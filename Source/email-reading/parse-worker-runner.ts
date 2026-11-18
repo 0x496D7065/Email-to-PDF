@@ -20,7 +20,7 @@
 // array-length overflows become catchable errors inside the worker (so a
 // 'failed' message). A real heap exhaustion (many objects) fires no event the
 // page can count on and can still freeze, then kill, the whole tab before the
-// time limit. That is why the .msg structure check (cfb-check.ts) runs
+// time limit. That is why the .msg structure check (compound-file-check.ts) runs
 // before msgreader: it rejects the files known to make msgreader grow memory
 // without bound.
 //
@@ -30,7 +30,7 @@
 import { convertHtmlList } from './deferred-html';
 import type { HtmlToTextResult } from './html-to-text';
 import ParseWorker from './parse-worker?worker&inline';
-import { isFromWorker } from './worker-protocol';
+import { isFromWorker } from './parse-worker-protocol';
 import type { FileKind, ToWorker, WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 

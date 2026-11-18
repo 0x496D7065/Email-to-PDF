@@ -1,4 +1,4 @@
-// Unit tests for the page's side of a parse worker (worker-runner.ts), with a
+// Unit tests for the page's side of a parse worker (parse-worker-runner.ts), with a
 // FAKE worker: time limits, terminate, error events, bad messages and the HTML
 // round trip run in Node without a browser. The real Worker is checked in
 // Chromium by Helper/Test/browser-tests/parse-files.spec.ts.
@@ -15,11 +15,11 @@ import {
     WORKER_START_DETAIL,
     type WorkerFactory,
     type WorkerJob,
-} from './worker-runner';
+} from './parse-worker-runner';
 import type { ToWorker, WorkerEvents } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 
-const SHA = 'a'.repeat(64);
+const FILE_SHA256 = 'a'.repeat(64);
 const TIMEOUT_MS = 1000;
 
 /** A fake worker: records what the page sends, lets the test play the worker's part. */
@@ -34,9 +34,9 @@ function fakeWorker(options: { onSend?: (message: ToWorker) => void; sendThrows?
             throw new Error('terminate failed');
         }
     });
-    const factory: WorkerFactory = (e) =>
+    const factory: WorkerFactory = (givenEvents) =>
     {
-        events = e;
+        events = givenEvents;
         return {
             send: (message, transfer) =>
             {
@@ -63,7 +63,7 @@ function fakeWorker(options: { onSend?: (message: ToWorker) => void; sendThrows?
 
 function job(bytes: Uint8Array = new Uint8Array([1, 2, 3])): WorkerJob
 {
-    return { name: 'order.eml', kind: 'eml', bytes, sha256: SHA };
+    return { name: 'order.eml', kind: 'eml', bytes, sha256: FILE_SHA256 };
 }
 
 const neverConvert = (): HtmlToTextResult =>
@@ -71,7 +71,7 @@ const neverConvert = (): HtmlToTextResult =>
     throw new Error('no HTML expected');
 };
 
-const FAILED_IN_WORKER: ParseResult = { ok: false, fileName: 'order.eml', sha256: SHA, error: 'corrupt', detail: 'damaged file structure: x' };
+const FAILED_IN_WORKER: ParseResult = { ok: false, fileName: 'order.eml', sha256: FILE_SHA256, error: 'corrupt', detail: 'damaged file structure: x' };
 
 /** True once `promise` has settled (fake timers: microtasks only). */
 async function settled(promise: Promise<unknown>): Promise<boolean>
@@ -118,13 +118,13 @@ describe('runInWorker: normal end', () =>
     it('copies bytes that are a view into a larger buffer, so the rest of that buffer is never moved', () =>
     {
         const fake = fakeWorker();
-        const big = new Uint8Array([9, 9, 1, 2, 3, 9]);
-        const view = big.subarray(2, 5);
+        const largerBuffer = new Uint8Array([9, 9, 1, 2, 3, 9]);
+        const view = largerBuffer.subarray(2, 5);
         void runInWorker(job(view), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
         const sent = fake.sent[0];
         const moved = sent?.message.type === 'parse' ? sent.message.bytes : undefined;
         expect(moved && [...moved]).toEqual([1, 2, 3]);
-        expect(moved?.buffer).not.toBe(big.buffer);
+        expect(moved?.buffer).not.toBe(largerBuffer.buffer);
         expect(sent?.transfer).toEqual([moved?.buffer]);
     });
 
@@ -151,7 +151,7 @@ describe('runInWorker: time limit', () =>
         expect(await settled(pending)).toBe(false);
         expect(fake.terminate).not.toHaveBeenCalled();
         vi.advanceTimersByTime(1);
-        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'timeout', detail: TIMEOUT_DETAIL });
+        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: FILE_SHA256, error: 'timeout', detail: TIMEOUT_DETAIL });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
     });
 
@@ -182,12 +182,12 @@ describe('runInWorker: worker failures', () =>
         ['an unknown message type', (e) => e.message({ type: 'progress' })],
     ];
 
-    it.each(failures)('%s -> tool-error (not corrupt), worker failed, terminated', async (_label, act) =>
+    it.each(failures)('%s -> tool-error (not corrupt), worker failed, terminated', async (_label, causeFailure) =>
     {
         const fake = fakeWorker();
         const pending = runInWorker(job(), { createWorker: fake.factory, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
-        act(fake.worker());
-        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: WORKER_FAILED_DETAIL });
+        causeFailure(fake.worker());
+        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: FILE_SHA256, error: 'tool-error', detail: WORKER_FAILED_DETAIL });
         expect(fake.terminate).toHaveBeenCalledTimes(1);
     });
 
@@ -201,7 +201,7 @@ describe('runInWorker: worker failures', () =>
             htmlToText: neverConvert,
             timeoutMs: TIMEOUT_MS,
         });
-        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: WORKER_START_DETAIL });
+        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: FILE_SHA256, error: 'tool-error', detail: WORKER_START_DETAIL });
     });
 
     it('a request that cannot be sent -> tool-error, and the worker is terminated', async () =>
@@ -219,7 +219,7 @@ describe('runInWorker: worker failures', () =>
         expect(isDetached(bytes)).toBe(true);
         const createWorker = vi.fn<WorkerFactory>();
         const pending = runInWorker(job(bytes), { createWorker, htmlToText: neverConvert, timeoutMs: TIMEOUT_MS });
-        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: DETACHED_DETAIL });
+        await expect(pending).resolves.toEqual({ ok: false, fileName: 'order.eml', sha256: FILE_SHA256, error: 'tool-error', detail: DETACHED_DETAIL });
         expect(createWorker).not.toHaveBeenCalled();
     });
 
@@ -338,7 +338,7 @@ describe('runInWorker: HTML converted on the page', () =>
 
 describe('runInWorker: cancelled by the page ("Clear everything")', () =>
 {
-    const CANCELLED: ParseResult = { ok: false, fileName: 'order.eml', sha256: SHA, error: 'tool-error', detail: CANCELLED_DETAIL };
+    const CANCELLED: ParseResult = { ok: false, fileName: 'order.eml', sha256: FILE_SHA256, error: 'tool-error', detail: CANCELLED_DETAIL };
 
     it('terminates the worker at once and clears the clock; a late result or request is ignored', async () =>
     {

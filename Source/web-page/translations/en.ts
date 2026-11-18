@@ -591,7 +591,7 @@ export const en = {
         } satisfies Record<ReconstructionWarningCode, string>,
         // An .eml email sent as an attachment (not printed inline) that was not
         // read as an email of its own, because it could not be read or because
-        // the depth/count limits skipped it (Source/email-reading/attached-limits.ts)
+        // the depth/count limits skipped it (Source/email-reading/attached-email-limits.ts)
         // (task 8.13b-4, P3): on the email it
         // is attached to, and on every email that shows that one inside it
         // (Source/web-page-logic/attached-links.ts). It stays listed as an attachment.

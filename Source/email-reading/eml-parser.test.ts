@@ -3,8 +3,8 @@
 
 import { decodeWords } from 'postal-mime';
 import { describe, expect, it, vi } from 'vitest';
-import { createEmlParser } from './eml';
-import { sha256Hex } from './hash';
+import { createEmlParser } from './eml-parser';
+import { sha256Hex } from './file-hash';
 import type { HtmlToTextResult } from './html-to-text';
 import type { EmailParser, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 
@@ -20,14 +20,14 @@ vi.mock('postal-mime', async (importOriginal) =>
 function bytes(...parts: (string | readonly number[])[]): Uint8Array
 {
     const chunks = parts.map((p) => (typeof p === 'string' ? new TextEncoder().encode(p) : Uint8Array.from(p)));
-    const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    const joined = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
     let offset = 0;
     for (const chunk of chunks)
     {
-        out.set(chunk, offset);
+        joined.set(chunk, offset);
         offset += chunk.length;
     }
-    return out;
+    return joined;
 }
 
 /** Lines joined with CRLF, as in a real .eml file. */
@@ -46,14 +46,14 @@ const HEADERS = crlf(
 const stubHtmlToText = (html: string): HtmlToTextResult => ({ text: `[stub] ${html.length}`, truncated: false });
 const parser = createEmlParser({ htmlToText: stubHtmlToText });
 
-async function parse(data: Uint8Array, name = 'test.eml'): Promise<ParseResult>
+async function parse(fileBytes: Uint8Array, name = 'test.eml'): Promise<ParseResult>
 {
-    return parser.parse({ name, bytes: data });
+    return parser.parse({ name, bytes: fileBytes });
 }
 
-async function parseOk(data: Uint8Array): Promise<NormalizedMessage>
+async function parseOk(fileBytes: Uint8Array): Promise<NormalizedMessage>
 {
-    const result = await parse(data);
+    const result = await parse(fileBytes);
     if (!result.ok)
     {
         throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
@@ -65,16 +65,16 @@ describe('createEmlParser: basic fields', () =>
 {
     it('fills source with the file name, the SHA-256 of the bytes and kind "eml"', async () =>
     {
-        const data = bytes(HEADERS, '\r\n\r\nHello.\r\n');
-        const message = await parseOk(data);
-        expect(message.source).toEqual({ fileName: 'test.eml', sha256: await sha256Hex(data), kind: 'eml' });
+        const fileBytes = bytes(HEADERS, '\r\n\r\nHello.\r\n');
+        const message = await parseOk(fileBytes);
+        expect(message.source).toEqual({ fileName: 'test.eml', sha256: await sha256Hex(fileBytes), kind: 'eml' });
         expect(message.bodyText).toBe('Hello.\n');
         expect(message.warnings).toEqual([]);
     });
 
     it('normalizes ids: no < >, trimmed, References in order across folded lines', async () =>
     {
-        const data = bytes(
+        const fileBytes = bytes(
             crlf(
                 'From: alice@example.test',
                 'Date: Tue, 3 Jun 2025 14:05:09 +0200',
@@ -85,7 +85,7 @@ describe('createEmlParser: basic fields', () =>
             ),
             '\r\n\r\nBody\r\n',
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.messageId).toBe('m3@example.test');
         expect(message.inReplyTo).toBe('m2@example.test');
         expect(message.references).toEqual(['m1@example.test', 'm2@example.test']);
@@ -124,7 +124,7 @@ describe('createEmlParser: basic fields', () =>
 
     it('flattens address groups and keeps every From mailbox', async () =>
     {
-        const data = bytes(
+        const fileBytes = bytes(
             crlf(
                 'From: Alice Example <alice@example.test>, bob@example.test',
                 'To: Team: Carol Test <carol@example.test>, dave@example.test;, Erin <erin@example.test>',
@@ -134,7 +134,7 @@ describe('createEmlParser: basic fields', () =>
             ),
             '\r\n\r\nx\r\n',
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.from).toEqual([
             { name: 'Alice Example', address: 'alice@example.test' },
             { name: '', address: 'bob@example.test' },
@@ -223,7 +223,7 @@ describe('createEmlParser: charsets', () =>
 {
     it('reads raw 8-bit UTF-8 headers and body (RFC 6532)', async () =>
     {
-        const data = bytes(
+        const fileBytes = bytes(
             crlf(
                 'From: Équipe Livraisons <equipe@example.test>',
                 'To: bob@example.test',
@@ -236,7 +236,7 @@ describe('createEmlParser: charsets', () =>
             ),
             '\r\n\r\nEén coördinatie, € 1.250, naïve.\r\n',
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.from).toEqual([{ name: 'Équipe Livraisons', address: 'equipe@example.test' }]);
         expect(message.subject).toBe('Réunion – café à 9h €');
         expect(message.bodyText).toContain('Eén coördinatie, € 1.250, naïve.');
@@ -248,7 +248,7 @@ describe('createEmlParser: charsets', () =>
         // 0x80-0x9F of windows-1252 to C1 control characters, while browsers map
         // them correctly (0x80 is the euro sign, 0x93/0x94 curly quotes...).
         // That range is covered by the browser tests later.
-        const data = bytes(
+        const fileBytes = bytes(
             crlf(
                 'From: bob@example.test',
                 'Date: Tue, 3 Jun 2025 14:05:09 +0200',
@@ -267,7 +267,7 @@ describe('createEmlParser: charsets', () =>
             [0xe9],
             'n bureau\r\n',
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.bodyText).toContain('café naïve, één bureau');
     });
 });
@@ -280,7 +280,7 @@ describe('createEmlParser: body', () =>
     it('uses the text/plain part of multipart/alternative and never calls htmlToText', async () =>
     {
         const htmlToText = vi.fn(stubHtmlToText);
-        const data = bytes(
+        const fileBytes = bytes(
             HEADERS,
             '\r\nContent-Type: multipart/alternative; boundary="b1"\r\n\r\n',
             multipart(
@@ -289,7 +289,7 @@ describe('createEmlParser: body', () =>
                 'Content-Type: text/html; charset=utf-8\r\n\r\n<p>HTML <b>version</b></p>',
             ),
         );
-        const result = await createEmlParser({ htmlToText }).parse({ name: 'alt.eml', bytes: data });
+        const result = await createEmlParser({ htmlToText }).parse({ name: 'alt.eml', bytes: fileBytes });
         expect(result.ok && result.message.bodyText).toContain('Plain version.');
         expect(result.ok && result.message.warnings).toEqual([]);
         expect(htmlToText).not.toHaveBeenCalled();
@@ -299,8 +299,8 @@ describe('createEmlParser: body', () =>
     {
         const htmlToText = vi.fn(() => ({ text: 'converted text', truncated: false }));
         const html = '<p>Hello <script>window.SCRIPT_RAN = 1</script></p>';
-        const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n', html, '\r\n');
-        const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: data });
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n', html, '\r\n');
+        const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -314,8 +314,8 @@ describe('createEmlParser: body', () =>
     it('a converter result cut at its length limit adds html-body-truncated (the note stays in the text)', async () =>
     {
         const htmlToText = (): HtmlToTextResult => ({ text: 'start\n\n[Text cut here: ...]', truncated: true });
-        const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>long</p>\r\n');
-        const result = await createEmlParser({ htmlToText }).parse({ name: 'cut.eml', bytes: data });
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>long</p>\r\n');
+        const result = await createEmlParser({ htmlToText }).parse({ name: 'cut.eml', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -364,20 +364,20 @@ describe('createEmlParser: line ends in bodyText are LF only (only CR is changed
 
     it('a CR from quoted-printable (=0D) becomes LF; other characters stay as they are', async () =>
     {
-        const data = bytes(
+        const fileBytes = bytes(
             HEADERS,
             '\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n',
             'caf=C3=A9=0Dna=C3=AFve\t=E2=80=A8end\r\n',
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.bodyText).toBe('café\nnaïve\t\u2028end\n');
     });
 
     it('converted HTML text with CR becomes LF', async () =>
     {
         const htmlToText = (): HtmlToTextResult => ({ text: 'a\rb\r\nc', truncated: false });
-        const data = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>x</p>\r\n');
-        const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: data });
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>x</p>\r\n');
+        const result = await createEmlParser({ htmlToText }).parse({ name: 'html.eml', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -388,7 +388,7 @@ describe('createEmlParser: line ends in bodyText are LF only (only CR is changed
     it('in an inline forwarded message, and before its block: the blank line around the block stays one blank line', async () =>
     {
         const inner = crlf('From: carol@example.test', 'Subject: Inner', 'Content-Type: text/plain', '', 'inner one\rinner two\r');
-        const data = bytes(
+        const fileBytes = bytes(
             HEADERS,
             '\r\nContent-Type: multipart/mixed; boundary="fw"\r\n\r\n',
             crlf(
@@ -404,7 +404,7 @@ describe('createEmlParser: line ends in bodyText are LF only (only CR is changed
                 '',
             ),
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.bodyText).toBe(
             [
                 'outer one',
@@ -423,13 +423,13 @@ describe('createEmlParser: line ends in bodyText are LF only (only CR is changed
 
     it('the SHA-256 is still the one of the file bytes', async () =>
     {
-        const data = plainBody('one\rtwo\r\n');
-        const result = await parse(data);
+        const fileBytes = plainBody('one\rtwo\r\n');
+        const result = await parse(fileBytes);
         if (!result.ok)
         {
             throw new Error(result.detail);
         }
-        expect(result.message.source.sha256).toBe(await sha256Hex(data));
+        expect(result.message.source.sha256).toBe(await sha256Hex(fileBytes));
     });
 });
 
@@ -437,7 +437,7 @@ describe('createEmlParser: attachments (metadata only)', () =>
 {
     const SECRET = 'ATTACHMENT-CONTENT-MUST-NOT-BE-KEPT';
     const FORWARDED = crlf('From: carol@example.test', 'Subject: Forwarded', '', 'Forwarded body.');
-    const data = bytes(
+    const fileBytes = bytes(
         HEADERS,
         '\r\nContent-Type: multipart/mixed; boundary="mix"\r\n\r\n',
         crlf(
@@ -477,7 +477,7 @@ describe('createEmlParser: attachments (metadata only)', () =>
 
     it('lists every part with name, decoded size and type, and nothing else', async () =>
     {
-        const result = await parse(data);
+        const result = await parse(fileBytes);
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -668,18 +668,18 @@ describe('createEmlParser: inline forwarded messages', () =>
         {
             return crlf(...head, '', `Body of level ${level}.`);
         }
-        const b = `l${level}`;
+        const boundary = `l${level}`;
         return crlf(
             ...head,
-            `Content-Type: multipart/mixed; boundary="${b}"`,
+            `Content-Type: multipart/mixed; boundary="${boundary}"`,
             '',
-            `--${b}`,
+            `--${boundary}`,
             'Content-Type: text/plain',
             '',
             `Body of level ${level}.`,
-            `--${b}`,
+            `--${boundary}`,
             rfc822Part(chain(level + 1, levels)),
-            `--${b}--`,
+            `--${boundary}--`,
         );
     }
 
@@ -720,8 +720,8 @@ describe('createEmlParser: inline forwarded messages', () =>
 
     it('a message whose only content is a forwarded message has no no-body warning', async () =>
     {
-        const data = bytes(HEADERS, '\r\nContent-Type: message/rfc822\r\n\r\n', INNER);
-        const message = await parseOk(data);
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: message/rfc822\r\n\r\n', INNER);
+        const message = await parseOk(fileBytes);
         expect(message.bodyText.startsWith('---------- Forwarded message ----------\n')).toBe(true);
         expect(message.bodyText).toContain('Inner body text.');
         expect(message.warnings).toEqual([]);
@@ -970,9 +970,9 @@ describe('createEmlParser: body built from the MIME parts tree', () =>
         return { calls, htmlToText: (html) => ({ text: `[html ${String(calls.push(html))}]`, truncated: false }) };
     }
 
-    async function parseWith(data: Uint8Array, htmlToText: (html: string) => HtmlToTextResult): Promise<NormalizedMessage>
+    async function parseWith(fileBytes: Uint8Array, htmlToText: (html: string) => HtmlToTextResult): Promise<NormalizedMessage>
     {
-        const result = await createEmlParser({ htmlToText }).parse({ name: 'tree.eml', bytes: data });
+        const result = await createEmlParser({ htmlToText }).parse({ name: 'tree.eml', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -1016,14 +1016,14 @@ describe('createEmlParser: body built from the MIME parts tree', () =>
     {
         const forward = (name: string): string =>
             crlf('Content-Type: message/rfc822', '', `From: ${name}@example.test`, `Subject: ${name}`, '', `Body of ${name}.`);
-        const data = mixed(
+        const fileBytes = mixed(
             'Content-Type: text/plain\r\n\r\nT1',
             forward('fwa'),
             'Content-Type: text/plain\r\n\r\nT2 about FW-B below',
             forward('fwb'),
             'Content-Type: text/plain\r\n\r\nT3',
         );
-        const message = await parseOk(data);
+        const message = await parseOk(fileBytes);
         expect(message.bodyText).toBe(
             [
                 'T1',
@@ -1558,14 +1558,14 @@ describe('createEmlParser: malformed input never throws', () =>
     /** Deterministic pseudo-random bytes (a tiny LCG), so the test is repeatable. */
     function pseudoRandomBytes(length: number, seed: number): Uint8Array
     {
-        const out = new Uint8Array(length);
+        const randomBytes = new Uint8Array(length);
         let state = seed;
         for (let i = 0; i < length; i++)
         {
             state = (state * 1103515245 + 12345) >>> 0;
-            out[i] = state >>> 24;
+            randomBytes[i] = state >>> 24;
         }
-        return out;
+        return randomBytes;
     }
 
     /** Nested multiparts, `depth` levels deep. */
@@ -1607,24 +1607,24 @@ describe('createEmlParser: malformed input never throws', () =>
         ],
     ];
 
-    it.each(cases)('%s', async (_label, data) =>
+    it.each(cases)('%s', async (_label, fileBytes) =>
     {
-        const result = await parse(data, 'broken.eml');
+        const result = await parse(fileBytes, 'broken.eml');
         // Either outcome is fine; what matters is a result instead of an exception.
         if (result.ok)
         {
-            expect(result.message.source.sha256).toBe(await sha256Hex(data));
+            expect(result.message.source.sha256).toBe(await sha256Hex(fileBytes));
         }
         else
         {
-            expect(result).toMatchObject({ error: 'corrupt', fileName: 'broken.eml', sha256: await sha256Hex(data) });
+            expect(result).toMatchObject({ error: 'corrupt', fileName: 'broken.eml', sha256: await sha256Hex(fileBytes) });
         }
     });
 
     it('an invalid charset name still gives the ASCII text (best effort)', async () =>
     {
-        const data = bytes(HEADERS, '\r\nContent-Type: text/plain; charset="no-such-charset-%%"\r\n\r\nPlain ASCII text.\r\n');
-        expect((await parseOk(data)).bodyText).toContain('Plain ASCII text.');
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: text/plain; charset="no-such-charset-%%"\r\n\r\nPlain ASCII text.\r\n');
+        expect((await parseOk(fileBytes)).bodyText).toContain('Plain ASCII text.');
     });
 
     it('bare LF line endings are read like CRLF', async () =>
@@ -1640,32 +1640,32 @@ describe('createEmlParser: malformed input never throws', () =>
 
     it('a 3 MB header line is over the header size limit: corrupt, with the hash', async () =>
     {
-        const data = bytes(HEADERS, `\r\nX-Long: ${'a'.repeat(3 * 1024 * 1024)}\r\n\r\nx\r\n`);
-        const result = await parse(data, 'long-header.eml');
-        expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(data) });
+        const fileBytes = bytes(HEADERS, `\r\nX-Long: ${'a'.repeat(3 * 1024 * 1024)}\r\n\r\nx\r\n`);
+        const result = await parse(fileBytes, 'long-header.eml');
+        expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(fileBytes) });
         expect(!result.ok && result.detail).toMatch(/header size/i);
     });
 
     it('more than about 32,768 tiny header lines across parts is over the header limit: corrupt, not a partial parse', async () =>
     {
         // postal-mime counts every header line as at least 64 bytes against the
-        // 2 MiB limit (eml.ts), so 1000 parts of 40 four-byte lines (40,000 lines,
+        // 2 MiB limit (eml-parser.ts), so 1000 parts of 40 four-byte lines (40,000 lines,
         // well under 1 MB of actual bytes) are rejected as a whole.
         const lines = Array.from({ length: 40 }, () => 'X: a\r\n').join('');
         const parts = Array.from({ length: 1000 }, () => `--p\r\nContent-Type: text/plain\r\n${lines}\r\nx\r\n`).join('');
-        const data = bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="p"\r\n\r\n', parts, '--p--\r\n');
-        expect(data.length).toBeLessThan(1024 * 1024);
-        const result = await parse(data, 'many-header-lines.eml');
-        expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(data) });
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="p"\r\n\r\n', parts, '--p--\r\n');
+        expect(fileBytes.length).toBeLessThan(1024 * 1024);
+        const result = await parse(fileBytes, 'many-header-lines.eml');
+        expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(fileBytes) });
         expect(!result.ok && result.detail).toMatch(/header size/i);
     });
 
     it('more than 2000 MIME parts is over the part limit: corrupt, with the hash', async () =>
     {
         const parts = Array.from({ length: 2001 }, () => '--p\r\nContent-Type: text/plain\r\n\r\nx\r\n').join('');
-        const data = bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="p"\r\n\r\n', parts, '--p--\r\n');
-        const result = await parse(data, 'many-parts.eml');
-        expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(data) });
+        const fileBytes = bytes(HEADERS, '\r\nContent-Type: multipart/mixed; boundary="p"\r\n\r\n', parts, '--p--\r\n');
+        const result = await parse(fileBytes, 'many-parts.eml');
+        expect(result).toMatchObject({ ok: false, error: 'corrupt', sha256: await sha256Hex(fileBytes) });
         expect(!result.ok && result.detail).toMatch(/part count/i);
     });
 
@@ -1678,9 +1678,9 @@ describe('createEmlParser: malformed input never throws', () =>
 
     it('too deeply nested multiparts are reported as corrupt, with the hash', async () =>
     {
-        const data = bytes(HEADERS, '\r\n', nested(100));
-        const result = await parse(data, 'deep.eml');
-        expect(result).toMatchObject({ ok: false, error: 'corrupt', fileName: 'deep.eml', sha256: await sha256Hex(data) });
+        const fileBytes = bytes(HEADERS, '\r\n', nested(100));
+        const result = await parse(fileBytes, 'deep.eml');
+        expect(result).toMatchObject({ ok: false, error: 'corrupt', fileName: 'deep.eml', sha256: await sha256Hex(fileBytes) });
         expect(!result.ok && result.detail.length).toBeGreaterThan(0);
     });
 
@@ -1697,10 +1697,10 @@ describe('createEmlParser: malformed input never throws', () =>
         });
     const HTML_ONLY = bytes(HEADERS, '\r\nContent-Type: text/html\r\n\r\n<p>x</p>\r\n');
 
-    /** Parses `data` and returns the message, failing the test if the file failed. */
-    async function readWith(p: EmailParser, data: Uint8Array): Promise<NormalizedMessage>
+    /** Parses `fileBytes` and returns the message, failing the test if the file failed. */
+    async function readWith(emailParser: EmailParser, fileBytes: Uint8Array): Promise<NormalizedMessage>
     {
-        const result = await p.parse({ name: 'h.eml', bytes: data });
+        const result = await emailParser.parse({ name: 'h.eml', bytes: fileBytes });
         if (!result.ok)
         {
             throw new Error(`unexpected failure: ${result.detail}`);
@@ -1721,7 +1721,7 @@ describe('createEmlParser: malformed input never throws', () =>
 
     it('only the failed HTML part is missing: other text parts and attachments stay', async () =>
     {
-        const data = bytes(
+        const fileBytes = bytes(
             HEADERS,
             '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n',
             '--b\r\nContent-Type: text/plain\r\n\r\nIntro\r\n',
@@ -1730,7 +1730,7 @@ describe('createEmlParser: malformed input never throws', () =>
             '--b\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename="plan.pdf"\r\n',
             'Content-Transfer-Encoding: base64\r\n\r\nAAEC\r\n--b--\r\n',
         );
-        const message = await readWith(throwingParser(new RangeError('Maximum call stack size exceeded')), data);
+        const message = await readWith(throwingParser(new RangeError('Maximum call stack size exceeded')), fileBytes);
         expect(message.bodyText).toBe('Intro\nOutro');
         expect(message.attachments.map((a) => a.fileName)).toEqual(['plan.pdf']);
         expect(message.warnings).toEqual(['html-body-unreadable']);
@@ -1749,13 +1749,13 @@ describe('createEmlParser: malformed input never throws', () =>
                 return { text: `[stub] ${html.length}`, truncated: false };
             },
         });
-        const data = bytes(
+        const fileBytes = bytes(
             HEADERS,
             '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n',
             '--b\r\nContent-Type: text/html\r\n\r\n<p>one</p>\r\n',
             '--b\r\nContent-Type: text/html\r\n\r\n<p>two</p>\r\n--b--\r\n',
         );
-        const message = await readWith(flaky, data);
+        const message = await readWith(flaky, fileBytes);
         expect(message.bodyText).toMatch(/^\[stub\] \d+$/);
         expect(message.warnings).toEqual(['html-converted-body', 'html-body-unreadable']);
     });
@@ -1788,12 +1788,12 @@ describe('createEmlParser: malformed input never throws', () =>
     it('a failing htmlToText inside an inline forwarded message: the block stays, the warning reaches the outer message', async () =>
     {
         const inner = crlf('From: carol@example.test', 'Subject: inner', 'Content-Type: text/html', '', '<p>inner</p>');
-        const data = bytes(
+        const fileBytes = bytes(
             HEADERS,
             '\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nouter\r\n',
             `--b\r\nContent-Type: message/rfc822\r\n\r\n${inner}\r\n--b--\r\n`,
         );
-        const message = await readWith(throwingParser(new TypeError('inner failure')), data);
+        const message = await readWith(throwingParser(new TypeError('inner failure')), fileBytes);
         expect(message.bodyText).toContain('outer');
         expect(message.bodyText).toContain('Subject: inner');
         expect(message.bodyText).not.toContain('<p>');

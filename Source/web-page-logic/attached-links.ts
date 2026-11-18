@@ -21,14 +21,14 @@
 //   more than its attached emails read as emails of their own without a
 //   place in its text (EngineAttached with no places). It is NOT said:
 //   - for a .msg file: an attached Outlook item that was not read already
-//     gives the 'forwarded-message-not-expanded' warning (msg.ts);
+//     gives the 'forwarded-message-not-expanded' warning (msg-parser.ts);
 //   - for an email that already has 'forwarded-message-not-expanded': an
 //     inline forward that could not be read is listed the same way, so the
 //     count cannot tell the two apart, and that note already says an
 //     attached email is only listed (never a second, possibly wrong note);
 //   - for a bounce or feedback report (it lists a message/delivery-status
 //     or message/feedback-report part): the parser never reads the original
-//     email such a report carries (eml.ts, readContent), it is evidence.
+//     email such a report carries (eml-parser.ts, readContent), it is evidence.
 //   An email that is both a holder and inside one gets the holder note only.
 //
 // Pure functions, no DOM (README.md, rule R7). Never throws for a broken
@@ -40,7 +40,7 @@ import type { EngineAttached, EngineAttachedPlace, EngineResult } from '../../He
 
 /** The attachment type of an email inside an .eml file. */
 const RFC822 = 'message/rfc822';
-/** The parts that make an email a bounce or feedback report (as in Source/email-reading/eml.ts, REPORT_TYPES). */
+/** The parts that make an email a bounce or feedback report (as in Source/email-reading/eml-parser.ts, REPORT_TYPES). */
 const REPORT_TYPES: ReadonlySet<string> = new Set(['message/delivery-status', 'message/feedback-report']);
 
 type LinkInput = Pick<EngineResult, 'messages' | 'positionByIndex' | 'attached' | 'counts'>;

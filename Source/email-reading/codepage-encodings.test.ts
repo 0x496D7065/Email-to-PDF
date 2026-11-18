@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allCodepageLabels, encodingForCodepage } from './codepages';
+import { allCodepageLabels, encodingForCodepage } from './codepage-encodings';
 
 describe('encodingForCodepage', () =>
 {
@@ -34,9 +34,9 @@ describe('encodingForCodepage', () =>
 
     it('the UTF-16 code pages decode in the right byte order', () =>
     {
-        const le = new TextDecoder(encodingForCodepage(1200) ?? '').decode(Uint8Array.of(0x41, 0x00, 0xe9, 0x00));
-        const be = new TextDecoder(encodingForCodepage(1201) ?? '').decode(Uint8Array.of(0x00, 0x41, 0x00, 0xe9));
-        expect(le).toBe('Aé');
-        expect(be).toBe('Aé');
+        const littleEndianText = new TextDecoder(encodingForCodepage(1200) ?? '').decode(Uint8Array.of(0x41, 0x00, 0xe9, 0x00));
+        const bigEndianText = new TextDecoder(encodingForCodepage(1201) ?? '').decode(Uint8Array.of(0x00, 0x41, 0x00, 0xe9));
+        expect(littleEndianText).toBe('Aé');
+        expect(bigEndianText).toBe('Aé');
     });
 });

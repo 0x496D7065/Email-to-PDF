@@ -3,9 +3,9 @@
 // (Source/thread-analysis/*.fixtures.test.ts) so they all see the same parsed messages.
 // Test-only: never imported by the app.
 
-import { createEmlParser } from '../../../Source/email-reading/eml';
+import { createEmlParser } from '../../../Source/email-reading/eml-parser';
 import type { HtmlToTextResult } from '../../../Source/email-reading/html-to-text';
-import { createMsgParser } from '../../../Source/email-reading/msg';
+import { createMsgParser } from '../../../Source/email-reading/msg-parser';
 import { FIXTURES } from './manifest';
 import { buildMsg } from './msg/builder';
 import { MSG_SPECS } from './msg/specs';

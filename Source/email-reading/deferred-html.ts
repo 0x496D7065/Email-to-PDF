@@ -1,7 +1,7 @@
 // Parsing in a Web Worker while converting HTML on the page.
 //
-// The problem: files are parsed in a Web Worker (see worker-runner.ts), but
-// the inert HTML-to-text converter needs DOMParser (html-dom.ts), which only
+// The problem: files are parsed in a Web Worker (see parse-worker-runner.ts), but
+// the inert HTML-to-text converter needs DOMParser (browser-html-to-text.ts), which only
 // exists on the page, not inside workers.
 //
 // The solution, "record, then replay" (two passes, both inside the worker):
@@ -31,16 +31,16 @@
 // is never empty, so the page would have to redo those rules. Record and
 // replay needs none of that, and no marker can ever collide with email text.
 // The cost: a message whose body needs HTML conversion is parsed twice.
-// Since emails sent as attachments are read too (eml.ts, readDeferred), a
+// Since emails sent as attachments are read too (eml-parser.ts, readDeferred), a
 // file whose only HTML sits inside such an email now takes this two-pass
 // path as well.
 
-import { findCfbDamage } from './cfb-check';
-import { createEmlParser } from './eml';
-import { sha256Hex } from './hash';
+import { findCompoundFileDamage } from './compound-file-check';
+import { createEmlParser } from './eml-parser';
+import { sha256Hex } from './file-hash';
 import { convertHtmlBody, HtmlConversionError } from './html-conversion';
 import type { HtmlToTextResult } from './html-to-text';
-import { createMsgParser } from './msg';
+import { createMsgParser } from './msg-parser';
 import type { ConversionOutcome, FileKind } from '../../Header/parse-worker-messages';
 import type { EmailParser, InputFile, ParseResult } from '../../Header/parsed-email';
 
@@ -58,14 +58,14 @@ function parserFor(kind: FileKind, htmlToText: (html: string) => HtmlToTextResul
 /**
  * Parses one file of a known kind (inside the worker). HTML conversions are
  * done by `convertOnPage`, see the top of this file. A .msg file first goes
- * through the Compound File check (cfb-check.ts). Never throws for a bad
+ * through the Compound File check (compound-file-check.ts). Never throws for a bad
  * file: like the adapters, any failure becomes a 'corrupt' result.
  */
 export async function parseWithDeferredHtml(file: InputFile, kind: FileKind, convertOnPage: ConvertOnPage): Promise<ParseResult>
 {
     if (kind === 'msg')
     {
-        const damage = findCfbDamage(file.bytes);
+        const damage = findCompoundFileDamage(file.bytes);
         if (damage !== null)
         {
             return { ok: false, error: 'corrupt', detail: damage, fileName: file.name, sha256: await sha256Hex(file.bytes) };
