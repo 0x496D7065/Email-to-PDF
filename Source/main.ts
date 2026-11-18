@@ -5,7 +5,7 @@
 // Nothing is logged and nothing is stored (README.md, rule R5).
 import './web-page/app.css';
 import { pdfFontsReady } from './pdf-export/bundled-fonts';
-import { registerWhenLoaded } from './offline-copy/register';
+import { registerWhenLoaded } from './offline-copy/register-service-worker';
 import { pickLocale, setLocale } from './web-page/translations';
 import { mountPage } from './web-page/mount-page';
 

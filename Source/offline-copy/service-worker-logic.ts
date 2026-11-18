@@ -1,7 +1,7 @@
 // Pure logic of the service worker (Source/offline-copy/service-worker.ts): which
 // requests it may answer from its copy of the site's own files, and which
 // caches are its own. No browser API is used here, so every rule is unit
-// tested in Node (sw-logic.test.ts; README.md, rule R7).
+// tested in Node (service-worker-logic.test.ts; README.md, rule R7).
 //
 // What the service worker keeps (README.md, rule R5): ONLY the site's own
 // static files listed at build time (the precache list, see

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SERVICE_WORKER_PATH } from '../security-headers/headers';
 import { SW_FILE_NAME } from './precache-list';
-import { registerServiceWorker, registerWhenLoaded, SERVICE_WORKER_SCOPE, SERVICE_WORKER_URL, type LoadTarget } from './register';
+import { registerServiceWorker, registerWhenLoaded, SERVICE_WORKER_SCOPE, SERVICE_WORKER_URL, type LoadTarget } from './register-service-worker';
 
 /** Lets pending promise callbacks run. */
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));

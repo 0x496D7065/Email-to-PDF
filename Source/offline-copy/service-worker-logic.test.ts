@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CACHE_PREFIX, cacheNameFor, isOldCacheOfOurs, isPlainPath, parseManifest, precachedPathFor } from './sw-logic';
+import { CACHE_PREFIX, cacheNameFor, isOldCacheOfOurs, isPlainPath, parseManifest, precachedPathFor } from './service-worker-logic';
 
 const ORIGIN = 'https://tool.example.test';
 const PATHS: ReadonlySet<string> = new Set(['/', '/assets/index-abc123.js', '/assets/index-def456.css', '/THIRD_PARTY_NOTICES.txt']);

@@ -13,7 +13,7 @@
 // With its extension: vite.config.ts loads this file, and Vite's future
 // native config loader needs it (as for Source/security-headers/headers.ts).
 import { MANIFEST_PLACEHOLDER } from '../../Helper/build-checks/sw-version.mjs';
-import { isPlainPath, type PrecacheManifest } from './sw-logic.ts';
+import { isPlainPath, type PrecacheManifest } from './service-worker-logic.ts';
 
 // The version and the placeholder live in a plain-JS module shared with the
 // build check, which computes the version again from dist/

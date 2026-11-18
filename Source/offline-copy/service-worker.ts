@@ -1,5 +1,5 @@
 // The service worker (built as dist/sw.js by the offline-copy plugin in
-// vite.config.ts; registered by Source/offline-copy/register.ts in the built site only).
+// vite.config.ts; registered by Source/offline-copy/register-service-worker.ts in the built site only).
 //
 // What it is for: after the page has been opened once with the internet
 // on, the page can be opened (or reloaded) again while offline. For that it
@@ -11,7 +11,7 @@
 // - activate: deletes the older caches of this service worker (and only
 //   those), then takes charge of the open page;
 // - fetch: answers ONLY a GET of this site for a listed path, from that
-//   copy (rules in sw-logic.ts). Every other request is left to the
+//   copy (rules in service-worker-logic.ts). Every other request is left to the
 //   browser (no respondWith), and the page's CSP still blocks what it
 //   blocks. Nothing is ever added to the cache here: no email, no PDF, no
 //   file you add ever reaches this worker (they never leave the page's
@@ -27,7 +27,7 @@
 // This file is a classic script once built (no import or export left; the
 // plugin checks it), so no browser needs module service workers.
 
-import { cacheNameFor, isOldCacheOfOurs, parseManifest, precachedPathFor } from './sw-logic';
+import { cacheNameFor, isOldCacheOfOurs, parseManifest, precachedPathFor } from './service-worker-logic';
 
 /**
  * The parts of a service worker's global scope used here. The project's

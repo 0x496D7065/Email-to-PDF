@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cloudflareHeadersFile, PERMISSIONS_POLICY } from '../security-headers/headers';
 import { injectManifest, MANIFEST_PLACEHOLDER, manifestVersion, precachePaths, readBuiltManifest, SW_FILE_NAME, VERSION_LENGTH } from './precache-list';
 import swSource from './service-worker.ts?raw';
-import { parseManifest } from './sw-logic';
+import { parseManifest } from './service-worker-logic';
 
 const DIST = ['index.html', 'assets/index-abc123.js', 'assets/index-def456.css', 'assets/pdf-fonts-ghi789.js', 'THIRD_PARTY_NOTICES.txt', '_headers', 'sw.js'];
 

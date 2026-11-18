@@ -457,7 +457,7 @@ describe('rule exceptions (the service worker only)', () =>
             { isDist: true, distFile: 'assets/sw.js' },
             { isDist: true, distFile: 'index.html' },
             { isDist: true },
-            { isDist: false, sourceFile: 'Source/offline-copy/sw-logic.ts' },
+            { isDist: false, sourceFile: 'Source/offline-copy/service-worker-logic.ts' },
             { isDist: false, sourceFile: 'Source/main.ts' },
             { isDist: false },
             // The two scopes never mix: the dist name for a source file, and the reverse.
