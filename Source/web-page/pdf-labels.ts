@@ -173,12 +173,12 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         return Object.freeze({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: checkbox.checked });
     }
 
-    function inputsNow(result: ThreadAnalysisResult): Inputs
+    function inputsNow(analysisResult: ThreadAnalysisResult): Inputs
     {
         const outputPolicy = policy();
         const positions = [...options.includedPositions()];
         const key = `${outputPolicy.appQuotedHistory}|${outputPolicy.signatures}|${outputPolicy.unfoldEverything ? 'all' : ''}|${positions.join(',')}`;
-        return { result: result, policy: outputPolicy, positions, key };
+        return { result: analysisResult, policy: outputPolicy, positions, key };
     }
 
     function stopJob(): void

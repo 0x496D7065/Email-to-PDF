@@ -891,7 +891,7 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `npm run test:e2e:install` | Download Chromium, Firefox and WebKit into Playwright's own folder, outside the project (once, and after a Playwright update). On Linux, add `-- --with-deps` for the system packages. One browser only: `test:e2e:install:chromium`, `:firefox` or `:webkit`. |
 | `npm run test:e2e` | Build, serve with the real headers, and run the browser tests in all three engines. |
 | `npm run test:e2e:chromium` | The same in one engine (also `test:e2e:firefox`, `test:e2e:webkit`). |
-| `npm run lint` | ESLint, including the privacy rules. |
+| `npm run lint` | ESLint, including the privacy rules, the layout and the naming rules (camelCase names, PascalCase types, no name hiding an outer one). |
 | `npm run typecheck` | TypeScript type check. |
 
 **Where things are.** Unit tests (`*.test.ts`) sit next to the code they test.
@@ -912,7 +912,7 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `Header/` | The shared type definitions: the data shapes several `Source/` folders agree on (the parsed email, the worker messages, the analysis result, the PDF model, ...), and the `.d.ts` declarations (`?bytes` font imports, `node:fs` for the browser tests). TypeScript has no real header files, so this is the closest thing: types only, no code, erased at build time (a lint rule enforces it). Types used inside one folder only stay next to their code. |
 | `Helper/` | Everything that is not the site: build checks, lint rules and tests. Never shipped. |
 | `Helper/build-checks/` | The no-network build check (font, URL and service-worker version rules). |
-| `Helper/lint-rules/` | The project's own lint rules. |
+| `Helper/lint-rules/` | The project's own lint rules, and the file-name check (lowercase kebab-case names, e.g. `pdf-job.test.ts`; runs with `npm test`). |
 | `Helper/Test/` | All tests that are not next to the code they test: browser tests, synthetic test emails, test helpers. |
 | `Helper/Test/browser-tests/` | Browser tests (Playwright); `support/` holds their shared helpers. |
 | `Helper/Test/test-data/` | Synthetic test emails, the `.msg` builder, the manifest and the privacy guards. |

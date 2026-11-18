@@ -671,10 +671,10 @@ describe('layoutPdf: config and footer checks', () =>
 
 describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and 8.9)', () =>
 {
-    let STEP = Number.NaN;
+    let tabPoints = Number.NaN;
     beforeAll(() =>
     {
-        STEP = fourSpaces();
+        tabPoints = fourSpaces();
     });
     const LEFT = CONFIG.margin.left;
     /** The body runs (regular body text) of the first email page, in order. */
@@ -695,20 +695,20 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         expect(CONFIG.bodyIndentSpaces).toBe(4);
         // A real width, measured from the font, not the old fixed 14 pt.
         // IBM Plex Sans Regular's space is 236/1000 em: 4 x 0.236 x 10 pt.
-        expect(STEP).toBeCloseTo(9.44, 9);
+        expect(tabPoints).toBeCloseTo(9.44, 9);
         const typesetter = new Typesetter(fonts, CONFIG);
-        expect(bodyIndentWidth(typesetter, CONFIG)).toBeCloseTo(STEP, 9);
-        expect(layOut(syntheticDoc([syntheticEmail(1, ['Body.'])])).bodyIndent).toBeCloseTo(STEP, 9);
+        expect(bodyIndentWidth(typesetter, CONFIG)).toBeCloseTo(tabPoints, 9);
+        expect(layOut(syntheticDoc([syntheticEmail(1, ['Body.'])])).bodyIndent).toBeCloseTo(tabPoints, 9);
         // The same as 4 spaces in a line of body text: "x    x" is 4 spaces wider than "xx".
         const width = (text: string): number => typesetter.wrap([{ role: 'body', text }], 1e6, 'body')[0]!.width;
-        expect(width('x    x') - width('xx')).toBeCloseTo(STEP, 9);
+        expect(width('x    x') - width('xx')).toBeCloseTo(tabPoints, 9);
         // And as a tab in the text (printed as 4 spaces, Source/pdf-export/pdf-text-transforms.ts transform b).
-        expect(width(`x${' '.repeat(TAB_WIDTH)}x`) - width('xx')).toBeCloseTo(STEP, 9);
+        expect(width(`x${' '.repeat(TAB_WIDTH)}x`) - width('xx')).toBeCloseTo(tabPoints, 9);
         // It follows the body style: twice the size, twice the indent; the other roles do not count.
         const bigBody: LayoutConfig = { ...CONFIG, roles: { ...CONFIG.roles, body: { ...CONFIG.roles.body, size: 20 } }, index: { ...CONFIG.index, pageWidth: 80, dateWidth: 180 } };
-        expect(bodyIndentWidth(new Typesetter(fonts, bigBody), bigBody)).toBeCloseTo(2 * STEP, 9);
+        expect(bodyIndentWidth(new Typesetter(fonts, bigBody), bigBody)).toBeCloseTo(2 * tabPoints, 9);
         const bigHeading: LayoutConfig = { ...CONFIG, roles: { ...CONFIG.roles, heading: { ...CONFIG.roles.heading, size: 30 } } };
-        expect(bodyIndentWidth(new Typesetter(fonts, bigHeading), bigHeading)).toBeCloseTo(STEP, 9);
+        expect(bodyIndentWidth(new Typesetter(fonts, bigHeading), bigHeading)).toBeCloseTo(tabPoints, 9);
     });
 
     it('places every body line of a real email one step in, quoted or not, whatever its level; the header rows at the margin', () =>
@@ -731,7 +731,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const runs = bodyRuns(document, frontPages);
         for (const text of ['My own answer.', 'First level.', 'Second level.', 'Third level.', 'Fourth level.', 'Sixth level.', 'Back to my text.'])
         {
-            expect(xOf(runs, text), text).toBeCloseTo(LEFT + STEP, 6);
+            expect(xOf(runs, text), text).toBeCloseTo(LEFT + tabPoints, 6);
         }
         // No ">" drawn at the start of any body line.
         for (const run of runs)
@@ -763,12 +763,12 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         }
         const lineStarts = [...lineStartByY.values()];
         const typesetter = new Typesetter(fonts, CONFIG);
-        const count = typesetter.wrap([{ role: 'body', text: long }], width - STEP, 'body').length;
+        const count = typesetter.wrap([{ role: 'body', text: long }], width - tabPoints, 'body').length;
         expect(count).toBeGreaterThan(1);
         expect(lineStarts).toHaveLength(1 + 2 * count);
         for (const lineStart of lineStarts)
         {
-            expect(lineStart).toBeCloseTo(LEFT + STEP, 6);
+            expect(lineStart).toBeCloseTo(LEFT + tabPoints, 6);
         }
         expectInsideTextArea(document);
     });
@@ -802,7 +802,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         expect(run('Alice Example <alice@example.test>').x).toBeCloseTo(LEFT + CONFIG.fields.labelWidth + CONFIG.fields.gap, 6);
         for (const text of ['Own text.', 'More text.'])
         {
-            expect(run(text).x, text).toBeCloseTo(LEFT + STEP, 6);
+            expect(run(text).x, text).toBeCloseTo(LEFT + tabPoints, 6);
         }
     });
 
@@ -812,7 +812,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const { document, frontPages } = layOut(syntheticDoc([email, syntheticEmail(2, ['Own text.'])]));
         const placeholder = document.pages[frontPages]!.text.find((r) => r.copyText === strings.noText);
         expect(placeholder).toBeDefined();
-        expect(placeholder!.x).toBeCloseTo(LEFT + STEP, 6);
+        expect(placeholder!.x).toBeCloseTo(LEFT + tabPoints, 6);
         // The header rows of that email stay at the margin.
         expect(document.pages[frontPages]!.text.find((r) => r.copyText === 'From')!.x).toBeCloseTo(LEFT, 6);
         // A long placeholder (another language, a big font) wraps to the width left.
@@ -823,7 +823,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         expect(new Set(runs.map((r) => r.y)).size).toBeGreaterThan(1);
         for (const run of runs)
         {
-            expect(run.x).toBeGreaterThanOrEqual(LEFT + STEP - 1e-6);
+            expect(run.x).toBeGreaterThanOrEqual(LEFT + tabPoints - 1e-6);
         }
         expectInsideTextArea(laid.document);
     });
@@ -834,12 +834,12 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         const config: LayoutConfig = { ...CONFIG, bodyIndentSpaces: 8 };
         const doc = syntheticDoc([syntheticEmail(1, ['Own.', 'One.', '', 'Two.', 'Three.'])]);
         const { document, frontPages, bodyIndent } = layoutPdf(doc, fonts, { strings, config });
-        expect(bodyIndent).toBeCloseTo(2 * STEP, 9);
+        expect(bodyIndent).toBeCloseTo(2 * tabPoints, 9);
         const runs = bodyRuns(document, frontPages);
         expect(runs.map((r) => r.copyText)).toEqual(['Own.', 'One.', 'Two.', 'Three.']);
         for (const run of runs)
         {
-            expect(run.x - LEFT, run.copyText).toBeCloseTo(2 * STEP, 6);
+            expect(run.x - LEFT, run.copyText).toBeCloseTo(2 * tabPoints, 6);
         }
         // The empty line takes its line height: "Two." is two lines below "One.".
         const yOf = (text: string): number => runs.find((r) => r.copyText === text)!.y;

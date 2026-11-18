@@ -637,11 +637,11 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
 {
     const LEFT = CONFIG.margin.left;
     /** One tab: 4 normal spaces of the body font at the body size, straight from the font's tables. */
-    let STEP = Number.NaN;
+    let tabPoints = Number.NaN;
     beforeAll(() =>
     {
         const font = fonts[CONFIG.roles.body.font];
-        STEP = (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
+        tabPoints = (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
     });
     const long = 'alpha beta gamma delta epsilon zeta eta theta '.repeat(8).trim();
     const quoted =
@@ -674,14 +674,14 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
         // Own text and every quote level: the same single step in.
         for (const text of ['Hello Bob,', 'Yes, Monday works.', 'Alice', 'Can the desks come on Monday?', 'And the chairs, Alice?', 'They come later.', 'Bob', '-> a mark inside: kept', 'Seven levels deep.'])
         {
-            expect(lineX(text), text).toBeCloseTo(LEFT + STEP, 3);
+            expect(lineX(text), text).toBeCloseTo(LEFT + tabPoints, 3);
         }
         // The long quoted line wraps; every piece keeps the step, and together they are the text as written.
         const pieces = lines.filter((l) => l.text.includes('alpha') || l.text.includes('theta'));
         expect(pieces.length).toBeGreaterThan(1);
         for (const piece of pieces)
         {
-            expect(piece.x).toBeCloseTo(LEFT + STEP, 3);
+            expect(piece.x).toBeCloseTo(LEFT + tabPoints, 3);
         }
         expect(pieces.map((p) => p.text.trim()).join(' ')).toBe(long);
         // No ">" at the start of any line (the text copied out follows the printed text), none added inside one.
@@ -704,6 +704,6 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
         const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
         const lines = await bodyLinesOf(inputFor([message], { policy }));
         check(lines);
-        expect(lines.find((l) => l.text.startsWith('On Tue, 4 Mar 2025'))!.x).toBeCloseTo(LEFT + STEP, 3);
+        expect(lines.find((l) => l.text.startsWith('On Tue, 4 Mar 2025'))!.x).toBeCloseTo(LEFT + tabPoints, 3);
     });
 });

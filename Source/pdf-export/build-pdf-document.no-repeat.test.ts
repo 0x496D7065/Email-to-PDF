@@ -987,18 +987,18 @@ describe('attribution first: a place whose text holds own text or a kept signatu
     function forwardWith(reason: PlanRange['reason'], keep = true)
     {
         const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
-        const body = result.messages[0]!.message.bodyText;
+        const forwardBody = result.messages[0]!.message.bodyText;
         const g1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!.rebuilt;
         const g2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!.rebuilt;
-        const lineStart = body.indexOf(FORWARD.messages![1]!.text.split('\n\n')[1]!.split('\n')[0]!, g1.headerEnd);
+        const lineStart = forwardBody.indexOf(FORWARD.messages![1]!.text.split('\n\n')[1]!.split('\n')[0]!, g1.headerEnd);
         expect(lineStart > g1.headerEnd && lineStart < g1.end).toBe(true);
-        const lineEnd = body.indexOf('\n', lineStart) + 1;
+        const lineEnd = forwardBody.indexOf('\n', lineStart) + 1;
         const plan: MessagePlan = {
             ranges: [
                 { start: 0, end: g1.start, keep: true, reason: 'text' },
                 { start: g1.start, end: lineStart, keep: true, reason: 'forwarded' },
                 { start: lineStart, end: lineEnd, keep, reason },
-                { start: lineEnd, end: body.length, keep: true, reason: 'forwarded' },
+                { start: lineEnd, end: forwardBody.length, keep: true, reason: 'forwarded' },
             ],
             tailStart: null,
             omittedSignatures: 0,
@@ -1029,7 +1029,7 @@ describe('attribution first: a place whose text holds own text or a kept signatu
     it('Q3 (task 8.13a): a place whose text is own text only, with no quoted range (the plan could not check any of it), IS cut whole', () =>
     {
         const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
-        const body = result.messages[0]!.message.bodyText;
+        const forwardBody = result.messages[0]!.message.bodyText;
         const g1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!.rebuilt;
         const g2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!.rebuilt;
         // The newer forwarded email's whole place labelled 'text' (as rule 2b labels an unmarked Outlook quote it cannot check).
@@ -1037,7 +1037,7 @@ describe('attribution first: a place whose text holds own text or a kept signatu
             ranges: [
                 { start: 0, end: g1.start, keep: true, reason: 'text' },
                 { start: g1.start, end: g1.end, keep: true, reason: 'text' },
-                { start: g1.end, end: body.length, keep: true, reason: 'forwarded' },
+                { start: g1.end, end: forwardBody.length, keep: true, reason: 'forwarded' },
             ],
             tailStart: null,
             omittedSignatures: 0,
@@ -1059,8 +1059,8 @@ describe('attribution first: a place whose text holds own text or a kept signatu
         const { result, plan, g1 } = forwardWith('text');
         const pdfDocument = build(result, { plans: [plan] });
         const forward = bodyOf(realOf(pdfDocument, 0));
-        const body = result.messages[0]!.message.bodyText;
-        expect(squash(forward)).toContain(squash(body.slice(g1.start, g1.end)));
+        const forwardBody = result.messages[0]!.message.bodyText;
+        expect(squash(forward)).toContain(squash(forwardBody.slice(g1.start, g1.end)));
         expect(squash(forward)).not.toContain(sentence(FORWARD, 0));
     });
 });
@@ -1373,10 +1373,10 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         // The case: the refused part lies inside the rebuilt email's place (its text runs on to the end).
         expect(nestedBody.slice(place.headerEnd, place.end)).toContain(refusedText);
         const pdfDocument = build(result, { rebuilt: [], unticked: ids });
-        const forward = squash(bodyOf(realOf(pdfDocument, 0)));
-        expect(forward).toContain('See the notes below.');
-        expect(forward).not.toContain('the accounting team sent this note');
-        expect(forward).not.toContain(refusedText);
+        const forwardText = squash(bodyOf(realOf(pdfDocument, 0)));
+        expect(forwardText).toContain('See the notes below.');
+        expect(forwardText).not.toContain('the accounting team sent this note');
+        expect(forwardText).not.toContain(refusedText);
         // Ticked: printed once, in its rebuilt email, refused part included.
         const ticked = build(result);
         expect(ticked.emails.filter((e) => squash(bodyOf(e)).includes(refusedText)).map((e) => e.rebuilt?.id)).toEqual([ids[0]]);

@@ -257,7 +257,7 @@ async function measureControls(page: Page): Promise<Control[]>
     // Where the focus was is noted first, so it is put back there.
     const before = await page.evaluateHandle(() => document.activeElement);
     await page.keyboard.press('Tab');
-    return page.evaluate(([selector, before]) =>
+    return page.evaluate(([selector, previouslyFocused]) =>
     {
         const parse = (color: string): number[] => color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
         const luminance = (rgb: number[]): number =>
@@ -303,9 +303,9 @@ async function measureControls(page: Page): Promise<Control[]>
                     outlineContrast: (Math.max(outline, around) + 0.05) / (Math.min(outline, around) + 0.05),
                 };
             });
-        if (before instanceof HTMLElement)
+        if (previouslyFocused instanceof HTMLElement)
         {
-            before.focus();
+            previouslyFocused.focus();
         }
         else
         {

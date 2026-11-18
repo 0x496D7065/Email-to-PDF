@@ -269,10 +269,10 @@ async function expectNothingHappened(page: Page): Promise<void>
 function convertInPage(page: Page, html: string, limits?: Entry.HtmlToTextLimits): Promise<Entry.HtmlToTextResult>
 {
     return page.evaluate(
-        async ({ url, html, limits }) =>
+        async ({ url, html: htmlInPage, limits: limitsInPage }) =>
         {
             const entry = (await import(url)) as typeof Entry;
-            return entry.htmlToTextWithDomParser(html, limits);
+            return entry.htmlToTextWithDomParser(htmlInPage, limitsInPage);
         },
         { url: `${BUNDLE_PATH}${entryFile}`, html, limits },
     );

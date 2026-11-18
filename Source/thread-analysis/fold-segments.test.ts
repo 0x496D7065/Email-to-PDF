@@ -312,8 +312,8 @@ describe('checkSegments', () =>
 
     it('reports a segment boundary inside an emoji', () =>
     {
-        const text = `a${EMOJI}b`;
-        expect(checkSegments(text, [shown(0, 2), folded(2, 4, ['signature'])])).not.toEqual([]);
+        const emojiText = `a${EMOJI}b`;
+        expect(checkSegments(emojiText, [shown(0, 2), folded(2, 4, ['signature'])])).not.toEqual([]);
     });
 
     it('reports inconsistent reasons, related and unmerged neighbours', () =>
@@ -525,14 +525,14 @@ function expectedCover(text: string, folds: readonly FoldRange[]): Expected
     const reasons = Array.from({ length: text.length }, () => new Set<FoldReason>());
     const related = Array.from({ length: text.length }, () => new Set<number>());
     let snapped = 0;
-    for (const fold of folds)
+    for (const foldRange of folds)
     {
-        if (Number.isNaN(fold.start) || Number.isNaN(fold.end))
+        if (Number.isNaN(foldRange.start) || Number.isNaN(foldRange.end))
         {
             continue;
         }
-        let start = Math.min(Math.max(Math.floor(fold.start), 0), text.length);
-        let end = Math.min(Math.max(Math.ceil(fold.end), 0), text.length);
+        let start = Math.min(Math.max(Math.floor(foldRange.start), 0), text.length);
+        let end = Math.min(Math.max(Math.ceil(foldRange.end), 0), text.length);
         if (start >= end)
         {
             continue; // empty or reversed: ignored, before any snapping
@@ -555,10 +555,10 @@ function expectedCover(text: string, folds: readonly FoldRange[]): Expected
             snapped++;
         }
         const link =
-            fold.related !== undefined && Number.isSafeInteger(fold.related) && fold.related >= 0 ? fold.related : null;
+            foldRange.related !== undefined && Number.isSafeInteger(foldRange.related) && foldRange.related >= 0 ? foldRange.related : null;
         for (let i = start; i < end; i++)
         {
-            reasons[i]!.add(fold.reason);
+            reasons[i]!.add(foldRange.reason);
             if (link !== null)
             {
                 related[i]!.add(link);

@@ -297,7 +297,7 @@ export default defineConfig({
         // as pure functions (README.md, rule R7). The production build never
         // includes them because nothing in index.html/main.ts imports them.
         // Helper/build-checks/ holds the self-test of the "no network" build check,
-        // Helper/lint-rules/ the self-test of the project's own lint rules.
+        // Helper/lint-rules/ the self-test of the project's own lint rules and the file-name check.
         // Helper/Test/test-data/ holds the synthetic fixture set and its privacy guard
         // test, Helper/Test/test-support/ the shared test helpers (and their tests).
         // root: the project folder, not Vite's root (Source/), so these paths

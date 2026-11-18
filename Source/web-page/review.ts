@@ -647,10 +647,10 @@ export function createReview(options: ReviewOptions = {}): Review
             return;
         }
         let shown = 0;
-        for (const { element, note } of parts.notes)
+        for (const { element: noteElement, note } of parts.notes)
         {
             const visible = on || !isRebuildNote(note);
-            setSafeAttribute(element, 'hidden', !visible);
+            setSafeAttribute(noteElement, 'hidden', !visible);
             if (visible)
             {
                 shown++;
@@ -773,9 +773,9 @@ export function createReview(options: ReviewOptions = {}): Review
         {
             setSafeAttribute(parts.notesList, 'aria-label', t('review.notesLabel'));
         }
-        for (const { element, note } of parts.notes)
+        for (const { element: noteElement, note } of parts.notes)
         {
-            element.textContent = noteText(note);
+            noteElement.textContent = noteText(note);
         }
     }
 

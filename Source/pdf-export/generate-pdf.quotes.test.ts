@@ -33,14 +33,14 @@ import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const LEFT = CONFIG.margin.left;
 /** Where every body line starts: one tab (4 normal spaces of the body font at the body size, from the font's tables) in from the margin. */
-let BODY_X = Number.NaN;
+let bodyX = Number.NaN;
 
 let fonts: PdfFonts;
 beforeAll(async () =>
 {
     fonts = await loadPdfFonts();
     const font = fonts[CONFIG.roles.body.font];
-    BODY_X = LEFT + (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
+    bodyX = LEFT + (4 * font.advance(font.glyphFor(0x20)) * CONFIG.roles.body.size) / font.unitsPerEm;
 });
 /** Where a header row's value starts (a wrapped value or a note under it). */
 const VALUE_X = LEFT + CONFIG.fields.labelWidth + CONFIG.fields.gap;
@@ -155,7 +155,7 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
                     // Only three x positions: the margin (heading, header labels, notes), a header value, the body step.
                     for (const line of lines)
                     {
-                        expect([LEFT, VALUE_X, BODY_X].some((x) => Math.abs(line.x - x) < 1e-3), `${line.text} at ${String(line.x)}`).toBe(true);
+                        expect([LEFT, VALUE_X, bodyX].some((x) => Math.abs(line.x - x) < 1e-3), `${line.text} at ${String(line.x)}`).toBe(true);
                     }
                     expect(lines.find((l) => l.text.startsWith('Email 1'))!.x).toBeCloseTo(LEFT, 3);
                     for (const line of lines.filter((r) => /^(From|Date|Subject) /u.test(r.text)))
@@ -169,13 +169,13 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
                     expect(new Set(notes.map((l) => l.text)).size).toBe(styles.length + 1);
                     for (const note of notes)
                     {
-                        expect(note.x).toBeCloseTo(BODY_X, 3);
+                        expect(note.x).toBeCloseTo(bodyX, 3);
                     }
                     const pieces = lines.filter((l) => /delivery van|side street|hall free of boxes/u.test(l.text));
                     expect(pieces.length).toBeGreaterThanOrEqual(2 * total);
                     for (const piece of pieces)
                     {
-                        expect(piece.x).toBeCloseTo(BODY_X, 3);
+                        expect(piece.x).toBeCloseTo(bodyX, 3);
                     }
 
                     // Collapse, never delete: the messages are unchanged; the full text keeps every body whole (only quote prefixes left out).
@@ -209,7 +209,7 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
     {
         const body = 'Own text, a > b.\n> \f> after a form feed\n\v> after a vertical tab\n>> deep > inside\n';
         const { lines } = await emailLines([message(body, 'Codes', '2025-03-04T08:00:00Z')], { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true });
-        const body2 = lines.filter((l) => Math.abs(l.x - BODY_X) < 1e-3).map((l) => l.text);
+        const body2 = lines.filter((l) => Math.abs(l.x - bodyX) < 1e-3).map((l) => l.text);
         expect(body2).toEqual(['Own text, a > b.', '[U+000C]> after a form feed', '[U+000B]> after a vertical tab', 'deep > inside']);
     });
 
@@ -227,7 +227,7 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
             '',
         ].join('\n');
         const { lines } = await emailLines([message(body, 'Invisible', '2025-03-04T09:00:00Z')], { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true });
-        const shown = lines.filter((l) => Math.abs(l.x - BODY_X) < 1e-3).map((l) => l.text);
+        const shown = lines.filter((l) => Math.abs(l.x - bodyX) < 1e-3).map((l) => l.text);
         expect(shown).toEqual([
             'Own text.',
             'supplement selector first',

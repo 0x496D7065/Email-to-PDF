@@ -260,14 +260,14 @@ describe('helpers', () =>
     it('writes a fold label in French as parts, not as a list joined with "et"; only the email numbers are a list', () =>
     {
         const block: DisplayBlock = { start: 0, end: 4, text: 'a\nb\n', folded: true, reasons: ['quote-marker'], related: [0], label: 'quote-marker', collapsed: true };
-        const list = (items: string[]): string => new Intl.ListFormat('fr', { style: 'short', type: 'unit' }).format(items);
+        const frenchList = (texts: string[]): string => new Intl.ListFormat('fr', { style: 'short', type: 'unit' }).format(texts);
         setLocale('fr');
         try
         {
             const quoted = t('preview.fold.quote-marker');
             expect(foldSummaryText({ ...block, related: [] }, 0, [])).toBe(`${quoted}, 2 lignes`);
             expect(foldSummaryText(block, 5, [1])).toBe(`${quoted}, 2 lignes, de l’e-mail #2`);
-            expect(foldSummaryText({ ...block, related: [0, 1] }, 5, [0, 2])).toBe(`${quoted}, 2 lignes, des e-mails ${list(['#1', '#3'])}`);
+            expect(foldSummaryText({ ...block, related: [0, 1] }, 5, [0, 2])).toBe(`${quoted}, 2 lignes, des e-mails ${frenchList(['#1', '#3'])}`);
         }
         finally
         {
@@ -1260,12 +1260,12 @@ describe('PDF labels', () =>
 
     it('helpers: in French the reasons are joined with ", " (only the email numbers are a list)', () =>
     {
-        const list = (items: string[]): string => new Intl.ListFormat('fr', { style: 'short', type: 'unit' }).format(items);
+        const frenchList = (texts: string[]): string => new Intl.ListFormat('fr', { style: 'short', type: 'unit' }).format(texts);
         setLocale('fr');
         try
         {
             const signature = t('pdf.reason.signature');
-            const same = t('pdf.repeatedFromMany', { list: list(['#1', '#3']) });
+            const same = t('pdf.repeatedFromMany', { list: frenchList(['#1', '#3']) });
             expect(pdfLabelText({ status: 'out', reasons: ['signature', 'repeated-signature'], signaturesFrom: [1, 3] })).toBe(
                 t('pdf.label.out', { reasons: `${signature}, ${same}` }),
             );
@@ -1512,7 +1512,7 @@ describe('PDF labels', () =>
         preview.setPdfPlans(plansFor(result, [0, 1, 2]));
         runAll();
         const reply = items()[1]!;
-        const folds = withClass(reply, 'fold');
+        const replyFolds = withClass(reply, 'fold');
         const marks = withClass(reply, 'pdf-label');
         const body = one(reply, 'message-body');
         const note = one(reply, 'pdf-note');
@@ -1525,7 +1525,7 @@ describe('PDF labels', () =>
         preview.setPdfPlans(plansFor(result, [0, 2]));
         runAll();
         expect(state()).toBe('ready');
-        expect(withClass(reply, 'fold')).toEqual(folds);
+        expect(withClass(reply, 'fold')).toEqual(replyFolds);
         expect(withClass(reply, 'pdf-label')).toEqual(marks);
         expect(labelsOf(reply)).toEqual(['In the PDF: signature', 'Not in the PDF: earlier email quoted by the mail app']);
         expect(body.hasAttribute('data-pdf-out')).toBe(true);
@@ -1541,7 +1541,7 @@ describe('PDF labels', () =>
         preview.setPdfPlans(null);
         preview.setPdfPlans(plansFor(result, [0, 1, 2]));
         runAll();
-        expect(withClass(reply, 'fold')).toEqual(folds);
+        expect(withClass(reply, 'fold')).toEqual(replyFolds);
         expect(withClass(reply, 'pdf-label')).toEqual(marks);
         expect(body.hasAttribute('data-pdf-out')).toBe(false);
         expect(note.hasAttribute('data-pdf-out')).toBe(false);

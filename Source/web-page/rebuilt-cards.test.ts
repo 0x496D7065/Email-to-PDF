@@ -532,9 +532,9 @@ describe('the switch, the checkboxes and the counts', () =>
         const line = one(card, 'rebuilt-pdf-source');
         // Both emails ticked: the PDF takes it from its own email, the one its card names; no line.
         expect(isHidden(line)).toBe(true);
-        for (const card of rebuiltItems())
+        for (const rebuiltCard of rebuiltItems())
         {
-            expect(isHidden(one(card, 'rebuilt-pdf-source'))).toBe(true);
+            expect(isHidden(one(rebuiltCard, 'rebuilt-pdf-source'))).toBe(true);
         }
         // Its own email unticked: still in the PDF, taken from the other email; the card says which.
         tick(boxOf(own), false);

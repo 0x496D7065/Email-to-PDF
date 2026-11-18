@@ -75,25 +75,25 @@ function byBody(messages: readonly AnalyzedMessage[], snippet: string): Analyzed
     return message;
 }
 
-function kept(input: PlanInput, plan: MessagePlan): string
+function kept(input: PlanInput, messagePlan: MessagePlan): string
 {
-    return plan.ranges.filter((r) => r.keep).map((r) => input.message.bodyText.slice(r.start, r.end)).join('');
+    return messagePlan.ranges.filter((r) => r.keep).map((r) => input.message.bodyText.slice(r.start, r.end)).join('');
 }
 
-function omitted(input: PlanInput, plan: MessagePlan): string
+function omitted(input: PlanInput, messagePlan: MessagePlan): string
 {
-    return plan.ranges.filter((r) => !r.keep).map((r) => input.message.bodyText.slice(r.start, r.end)).join('');
+    return messagePlan.ranges.filter((r) => !r.keep).map((r) => input.message.bodyText.slice(r.start, r.end)).join('');
 }
 
 /** The reasons of the ranges overlapping `snippet` (first occurrence). */
-function reasonsAt(input: PlanInput, plan: MessagePlan, snippet: string): PlanReason[]
+function reasonsAt(input: PlanInput, messagePlan: MessagePlan, snippet: string): PlanReason[]
 {
     const offset = input.message.bodyText.indexOf(snippet);
     if (offset < 0)
     {
         throw new Error(`snippet not found: ${snippet}`);
     }
-    return [...new Set(plan.ranges.filter((r) => r.start < offset + snippet.length && r.end > offset).map((r) => r.reason))];
+    return [...new Set(messagePlan.ranges.filter((r) => r.start < offset + snippet.length && r.end > offset).map((r) => r.reason))];
 }
 
 /** Plans `messages` and checks the cover of every plan. */

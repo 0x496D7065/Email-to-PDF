@@ -362,11 +362,11 @@ describe('signatureSources', () =>
 });
 
 /** For every block: each non-space character of it is kept exactly when its label says "in". */
-function expectLabelsTrue(email: AnalyzedMessage, plan: MessagePlan, blocks: readonly LabeledBlock[]): void
+function expectLabelsTrue(email: AnalyzedMessage, messagePlan: MessagePlan, blocks: readonly LabeledBlock[]): void
 {
     const body = email.message.bodyText;
     const keep = new Array<boolean>(body.length).fill(true);
-    for (const range of plan.ranges)
+    for (const range of messagePlan.ranges)
     {
         for (let i = range.start; i < range.end; i++)
         {
@@ -414,10 +414,10 @@ describe('every fixture, through the real thread analysis and plan', () =>
             let repeatedWithSource = 0;
             result.messages.forEach((email, k) =>
             {
-                const plan = plans[k]!;
-                const blocks = pdfBlocks(email.message.bodyText, email.segments, { plan: plan, signatureFrom: sources.get(k) ?? new Map() });
+                const messagePlan = plans[k]!;
+                const blocks = pdfBlocks(email.message.bodyText, email.segments, { plan: messagePlan, signatureFrom: sources.get(k) ?? new Map() });
                 expect(blocks.map((b) => b.block.text).join('')).toBe(email.message.bodyText);
-                expectLabelsTrue(email, plan, blocks);
+                expectLabelsTrue(email, messagePlan, blocks);
                 // Shown text is never left out (output-plan.ts, rule 4): no shown block carries a label.
                 expect(blocks.filter((b) => !b.block.folded && b.label !== null)).toEqual([]);
                 if (policy.unfoldEverything)

@@ -89,6 +89,45 @@ const headerTypesOnly = [
 ];
 const headerImports = 'A Header/ file imports only other Header/ files (./name), never Source/, Helper/ or a package.';
 
+// Names (task 9.6): options of '@typescript-eslint/naming-convention'. A
+// named list because the browser tests block below adds two entries to it
+// (flat config REPLACES a rule's options in each block that sets it).
+// When several entries fit a name, the most specific one applies.
+const namingConvention = [
+    // Everything not listed below: camelCase (variables, functions,
+    // parameters, methods, properties, enum members).
+    { selector: 'default', format: ['camelCase'] },
+    // A const may also be UPPER_CASE (a fixed value or test fixture, also
+    // inside a function or describe block) or PascalCase: that one exists
+    // for a class value kept in a const (MsgReader, NodeBuffer, RealWorker).
+    { selector: 'variable', modifiers: ['const'], format: ['camelCase', 'UPPER_CASE', 'PascalCase'] },
+    // `_` or `_name`: a parameter that is deliberately not used.
+    { selector: 'parameter', format: ['camelCase'], leadingUnderscore: 'allow' },
+    // An import keeps the name the package gives it (a class or a namespace).
+    { selector: 'import', format: ['camelCase', 'PascalCase'] },
+    // Types, interfaces, classes, enums and type parameters (T, K, ...).
+    { selector: 'typeLike', format: ['PascalCase'] },
+    // A readonly property may describe a module's UPPER_CASE export: only the
+    // two that need it (CATALOG and LANGUAGE_NAMES in
+    // Helper/Test/test-support/test-locale.ts); every other one is camelCase.
+    {
+        selector: 'typeProperty',
+        modifiers: ['readonly'],
+        filter: { regex: '^(CATALOG|LANGUAGE_NAMES)$', match: true },
+        format: ['UPPER_CASE'],
+    },
+    // Object literal keys often follow an outside format (HTTP header and CSP
+    // names, ARIA and data- attributes, translation keys, PDF names, email
+    // header names, ESLint rule names, test titles): not checked.
+    { selector: ['objectLiteralProperty', 'objectLiteralMethod'], format: null },
+    // The same for any other name that needs quotes ('Content-Type').
+    {
+        selector: ['typeProperty', 'typeMethod', 'classProperty', 'classMethod', 'accessor'],
+        modifiers: ['requiresQuotes'],
+        format: null,
+    },
+];
+
 const forbiddenGlobals = {
     fetch: network,
     XMLHttpRequest: network,
@@ -143,6 +182,21 @@ export default defineConfig(
             '@stylistic/no-trailing-spaces': 'error',
             '@stylistic/eol-last': ['error', 'always'],
             '@stylistic/no-tabs': 'error',
+        },
+    },
+
+    // Names (task 9.6): see namingConvention above. no-shadow: a name declared
+    // again in an inner scope (hiding the outer one) is refused, except `_`
+    // (an unused parameter) and a type and a value of the same name. The
+    // TypeScript version replaces the core rule, which misreads types.
+    {
+        rules: {
+            '@typescript-eslint/naming-convention': ['error', ...namingConvention],
+            'no-shadow': 'off',
+            '@typescript-eslint/no-shadow': [
+                'error',
+                { ignoreTypeValueShadow: true, ignoreFunctionTypeParameterNameValueShadow: true, allow: ['_'] },
+            ],
         },
     },
 
@@ -242,6 +296,21 @@ export default defineConfig(
             'no-restricted-globals': 'off',
             'no-restricted-properties': 'off',
             'no-restricted-syntax': 'off',
+            // window.__e2eViolations and the like: test hooks that the test
+            // scripts put on the page's window (the two underscores keep them
+            // apart from the page's own names), and Node's global Buffer,
+            // read through globalThis.
+            '@typescript-eslint/naming-convention': [
+                'error',
+                ...namingConvention,
+                {
+                    selector: ['typeProperty', 'typeMethod'],
+                    filter: { regex: '^__', match: true },
+                    format: ['camelCase'],
+                    leadingUnderscore: 'allowDouble',
+                },
+                { selector: 'typeProperty', filter: { regex: '^Buffer$', match: true }, format: null },
+            ],
         },
     },
 );
