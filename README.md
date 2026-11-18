@@ -843,7 +843,7 @@ web address or host name that is not a reserved test name (`*.test`,
 ranges, any home-folder path that could name a person, and any time-zone
 name outside a short list of neutral zones. The few real addresses the
 build-check tests need are listed one by one, with a reason, in
-`Helper/Test/test-data/guard-exemptions.ts`. See `Helper/Test/test-data/README.md`.
+`Helper/Test/test-data/privacy-guard-exemptions.ts`. See `Helper/Test/test-data/README.md`.
 
 ## Offline copy (service worker)
 

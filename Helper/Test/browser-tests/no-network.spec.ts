@@ -17,7 +17,7 @@ interface Violation
     blockedURI: string;
     /** The policy that was violated: tells the header CSP and the meta CSP apart. */
     policy: string;
-    /** Fired at a <select>: WebKit's report about its own <select> parts (see withoutSelectReports in Helper/Test/browser-tests/support/watch.ts). */
+    /** Fired at a <select>: WebKit's report about its own <select> parts (see withoutSelectReports in Helper/Test/browser-tests/support/network-and-csp-watch.ts). */
     select: boolean;
 }
 
@@ -105,7 +105,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
 /**
  * The violations without WebKit's <select> reports, after checking there is
  * exactly one per policy in force (`policies`) in WebKit and none elsewhere
- * (see withoutSelectReports in Helper/Test/browser-tests/support/watch.ts).
+ * (see withoutSelectReports in Helper/Test/browser-tests/support/network-and-csp-watch.ts).
  */
 function withoutSelect(browserName: string, list: readonly Violation[], policies: string[]): Omit<Violation, 'select'>[]
 {

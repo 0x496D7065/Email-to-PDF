@@ -10,7 +10,7 @@
 // pipeline will make that choice properly; this test uses the simple rule.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { dedupe } from './dedupe';
 import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';

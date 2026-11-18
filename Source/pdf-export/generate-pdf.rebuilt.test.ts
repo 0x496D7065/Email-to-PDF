@@ -10,7 +10,7 @@
 // (Helper/Test/test-data/eml/13-order-4-bob-outlook-nl.eml: the last email of a
 // thread, whose quote holds 3 earlier emails).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { type PdfValue, readDests, readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';

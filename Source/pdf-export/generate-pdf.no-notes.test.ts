@@ -23,7 +23,7 @@
 // - collapse, never delete: the thread analysis result is the same after the PDF is
 //   made, and the model still holds the data behind the removed notes.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';

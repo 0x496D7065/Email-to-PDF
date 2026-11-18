@@ -6,12 +6,12 @@
 //
 // Every test also checks, once everything has settled, that nothing left the
 // page (only the inlined workers' blob: URLs), that there was no CSP
-// violation (page or worker) and no console error. See Helper/Test/browser-tests/support/watch.ts.
+// violation (page or worker) and no console error. See Helper/Test/browser-tests/support/network-and-csp-watch.ts.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

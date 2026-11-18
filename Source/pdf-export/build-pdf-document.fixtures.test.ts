@@ -4,11 +4,11 @@
 // file is a source, and with "include everything" every body is complete.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { buildPdfDocument } from './build-pdf-document';
-import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/reference-pdf-text-transforms';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';

@@ -4,7 +4,7 @@
 //
 // How the code gets into the page without shipping a test hook:
 // the converter is not wired into the page yet, so the built site does not
-// contain it. beforeAll bundles Helper/Test/browser-tests/support/html-entry.ts IN MEMORY
+// contain it. beforeAll bundles Helper/Test/browser-tests/support/html-to-text-test-entry.ts IN MEMORY
 // (`write: false`) with the project's own vite.config.ts, and a Playwright
 // route serves that bundle at /__e2e__/... on the site's own origin. The page
 // then loads it with a dynamic import() inside page.evaluate. Nothing is
@@ -41,7 +41,7 @@
 // frame-src, ...) would mean a load or an execution was attempted, and fails
 // the test. Firefox and WebKit make none of these parse-time reports, so
 // there nothing at all is tolerated (untoleratedReports in
-// Helper/Test/browser-tests/support/watch.ts).
+// Helper/Test/browser-tests/support/network-and-csp-watch.ts).
 //
 // Why BOTH runs must stay: the with-CSP run tells a parse-time check apart
 // from a blocked attempt in the live page only by where the report is fired
@@ -53,7 +53,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { build, type Rolldown } from 'vite';
 import { FIXTURES } from '../test-data/manifest.ts';
-import type * as Entry from './support/html-entry.ts';
+import type * as Entry from './support/html-to-text-test-entry.ts';
 import {
     engineOf,
     isWebKitBlobRead,
@@ -61,7 +61,7 @@ import {
     untoleratedReports,
     withoutSelectReports,
     type ExactParseTimeReport,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -94,7 +94,7 @@ const PARSE_TIME_REPORTS: ReadonlySet<ExactParseTimeReport> = new Set([
 /**
  * True for a recorded report ("directive blockedURI parse|live") that
  * DOMParser makes while parsing (see the header): the shared inline
- * parse-time reports (Helper/Test/browser-tests/support/watch.ts), and the two above exactly.
+ * parse-time reports (Helper/Test/browser-tests/support/network-and-csp-watch.ts), and the two above exactly.
  */
 const isParseTimeReport = parseTimeReportFilter(PARSE_TIME_REPORTS);
 
@@ -114,7 +114,7 @@ test.beforeAll(async () =>
             write: false, // in memory only: dist/ is never touched
             emptyOutDir: false,
             copyPublicDir: false,
-            lib: { entry: `${ROOT}Helper/Test/browser-tests/support/html-entry.ts`, formats: ['es'], fileName: 'html-entry' },
+            lib: { entry: `${ROOT}Helper/Test/browser-tests/support/html-to-text-test-entry.ts`, formats: ['es'], fileName: 'html-to-text-test-entry' },
         },
     });
     const outputs = (Array.isArray(output) ? output : [output]) as Rolldown.RolldownOutput[];

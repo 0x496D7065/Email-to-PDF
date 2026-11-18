@@ -4,7 +4,7 @@
 // messages only. The real page is checked in Chromium by Helper/Test/browser-tests/review.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEDUPE_WARNINGS, THREAD_ANALYSIS_WARNINGS, PARSE_WARNINGS } from '../web-page-logic/message-notes';

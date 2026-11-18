@@ -35,7 +35,7 @@
 //    code "[U+1F600]" while the copy layer holds the emoji itself.
 // 2. "Print full original text": the full body of every email is in its
 //    own part of the PDF, in order (rule R6, collapse never delete), after
-//    the documented display transforms only (Helper/Test/test-support/pdf-reference.ts:
+//    the documented display transforms only (Helper/Test/test-support/reference-pdf-text-transforms.ts:
 //    tabs as 4 spaces, at most 2 blank lines, outer blank lines trimmed,
 //    control characters as "[U+XXXX]", quote marks at line starts removed),
 //    compared with white space
@@ -51,7 +51,7 @@
 // index table and in label/value rows ("From" + its value), never inside a
 // line of email text.
 //
-// Throughout (see Helper/Test/browser-tests/support/watch.ts): after the page's own files, only
+// Throughout (see Helper/Test/browser-tests/support/network-and-csp-watch.ts): after the page's own files, only
 // the own-origin blob: URLs of the inlined workers and, at most once, the
 // PDF's (the "Download again" link; all in memory), no
 // WebSocket, no CSP violation in the page or a worker (the parse-time
@@ -72,7 +72,7 @@ import { FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../test
 import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';
 import { readDests, readLinks, readOutline, readPageRuns, readPdf, textLines, type PageRun, type TextLine } from '../test-support/pdf-reader.ts';
-import { referenceDisplayText } from '../test-support/pdf-reference.ts';
+import { referenceDisplayText } from '../test-support/reference-pdf-text-transforms.ts';
 import {
     engineOf,
     isParseTimeReport,
@@ -84,7 +84,7 @@ import {
     workerCspReports,
     workersNamed,
     type Watch,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 import type { EmailParser } from '../../../Header/parsed-email.ts';
 
 declare global

@@ -12,13 +12,13 @@
 
 // With its extension: vite.config.ts loads this file, and Vite's future
 // native config loader needs it (as for Source/security-headers/headers.ts).
-import { MANIFEST_PLACEHOLDER } from '../../Helper/build-checks/sw-version.mjs';
+import { MANIFEST_PLACEHOLDER } from '../../Helper/build-checks/service-worker-version.mjs';
 import { isPlainPath, type PrecacheManifest } from './service-worker-logic.ts';
 
 // The version and the placeholder live in a plain-JS module shared with the
 // build check, which computes the version again from dist/
 // (Helper/build-checks/check-no-network.mjs): one function, so the two cannot drift.
-export { MANIFEST_PLACEHOLDER, manifestVersion, readBuiltManifest, VERSION_LENGTH } from '../../Helper/build-checks/sw-version.mjs';
+export { MANIFEST_PLACEHOLDER, manifestVersion, readBuiltManifest, VERSION_LENGTH } from '../../Helper/build-checks/service-worker-version.mjs';
 
 /** File name of the service worker script in dist/ (served as /sw.js). */
 export const SERVICE_WORKER_FILE_NAME = 'sw.js';

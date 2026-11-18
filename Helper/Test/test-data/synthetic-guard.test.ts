@@ -17,7 +17,7 @@
 //   6. a home-folder path with a real-looking name, or a time zone outside
 //      the short allowed list (the same checks as for the test code, see
 //      test-code-guard.test.ts).
-// The only accepted exceptions are the exact strings in guard-exemptions.ts.
+// The only accepted exceptions are the exact strings in privacy-guard-exemptions.ts.
 //
 // Files are read with Vite's import.meta.glob + "?raw" (no Node types needed).
 // `exhaustive: true` makes the glob include dot-files and dot-folders, which it
@@ -25,7 +25,7 @@
 
 import MsgReader from '@kenjiuno/msgreader';
 import { describe, expect, it } from 'vitest';
-import { exemptionsFor } from './guard-exemptions';
+import { exemptionsFor } from './privacy-guard-exemptions';
 import {
     findForbiddenHosts,
     findPrivacyProblems,
@@ -35,7 +35,7 @@ import {
     isReservedTestHost,
     isSevenBitAscii,
     withoutExemptions,
-} from './guard-rules';
+} from './privacy-guard-rules';
 import { FIXTURES } from './manifest';
 import { buildMsgView, SYNTHETIC_MARKER_PROP_ID, SYNTHETIC_MARKER_VALUE } from './msg/builder';
 import { MSG_SPECS } from './msg/specs';
@@ -76,7 +76,7 @@ describe('synthetic fixture guard', () =>
         expect(hasSyntheticMarker(text), `${path}: missing "X-Synthetic-Fixture: true" header`).toBe(true);
     });
 
-    /** The file's text with its exempted strings (guard-exemptions.ts) blanked out. */
+    /** The file's text with its exempted strings (privacy-guard-exemptions.ts) blanked out. */
     const scanned = (path: string): string => withoutExemptions(files[path] ?? '', exemptionsFor(`Helper/Test/test-data/${path.slice(2)}`));
 
     // fixtureProblems runs every rule (hosts, home-folder paths, time zones); its self-test below proves all three are on.

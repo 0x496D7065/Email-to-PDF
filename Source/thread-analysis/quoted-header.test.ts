@@ -7,8 +7,8 @@
 // \u00c9 = capital E acute, \u00a0 = no-break space.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
-import { expectedFields, fieldDiffs } from '../../Helper/Test/test-support/quoted-header-truth';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
+import { expectedFields, fieldDiffs } from '../../Helper/Test/test-support/quoted-header-expected-fields';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { headerLabelCounts, MAX_MAILBOXES, parseMailboxList, readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
 import { findReplyHeaders } from './reply-header';

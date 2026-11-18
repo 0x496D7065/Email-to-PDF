@@ -51,7 +51,7 @@ import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
 import { checkFontChunkLoadedAtStartup, checkNumberArrays, checkSourceFonts, findNumberArrays, isFontFile } from './font-rules.mjs';
 import { checkBuiltHtml, checkHeadersFile, findEmbeddedViolations, findOpaquePayloads, findViolations } from './no-network-rules.mjs';
-import { manifestVersion, readBuiltManifest } from './sw-version.mjs';
+import { manifestVersion, readBuiltManifest } from './service-worker-version.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const dist = join(root, 'dist');
@@ -182,7 +182,7 @@ else
 {
     // Its version must be the one computed from what dist/ really holds: the
     // listed files, the service worker's code and dist/_headers (the same
-    // manifestVersion the build uses, Helper/build-checks/sw-version.mjs). A build that
+    // manifestVersion the build uses, Helper/build-checks/service-worker-version.mjs). A build that
     // left a file or the real headers out of the version fails here, because
     // returning visitors would then keep an old copy.
     try

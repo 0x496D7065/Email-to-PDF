@@ -1,4 +1,4 @@
-// Type declarations for sw-version.mjs, so TypeScript (vite.config.ts,
+// Type declarations for service-worker-version.mjs, so TypeScript (vite.config.ts,
 // Source/offline-copy/precache-list.ts and the tests) can import that plain-JS module
 // under strict type checking. Keep in sync with it.
 

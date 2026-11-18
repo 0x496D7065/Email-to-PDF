@@ -6,17 +6,17 @@ bundled into the published site.
 
 ## What lives here
 
-| Path                      | What it is                                                         |
-| ------------------------- | ------------------------------------------------------------------ |
-| `eml/*.eml`               | Hand-written `.eml` test emails, stored on disk.                   |
-| `msg/specs.ts`            | `.msg` test emails as plain data (one spec per message).           |
-| `msg/builder.ts`          | Turns a spec into real `.msg` bytes **in memory** at test time.    |
-| `manifest.ts`             | The expected parse result of every fixture (`.eml` and `.msg`).    |
-| `manifest.test.ts`        | Checks that `manifest.ts` matches the fixtures.                    |
-| `guard-rules.ts`          | The privacy checks (pure functions).                               |
-| `guard-exemptions.ts`     | The few exact strings the checks accept, each with its reason.     |
-| `synthetic-guard.test.ts` | Runs the privacy checks on every file here, plus their self-tests. |
-| `test-code-guard.test.ts` | Runs the privacy checks on the test code, plus their self-tests.   |
+| Path                          | What it is                                                         |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `eml/*.eml`                   | Hand-written `.eml` test emails, stored on disk.                   |
+| `msg/specs.ts`                | `.msg` test emails as plain data (one spec per message).           |
+| `msg/builder.ts`              | Turns a spec into real `.msg` bytes **in memory** at test time.    |
+| `manifest.ts`                 | The expected parse result of every fixture (`.eml` and `.msg`).    |
+| `manifest.test.ts`            | Checks that `manifest.ts` matches the fixtures.                    |
+| `privacy-guard-rules.ts`      | The privacy checks (pure functions).                               |
+| `privacy-guard-exemptions.ts` | The few exact strings the checks accept, each with its reason.     |
+| `synthetic-guard.test.ts`     | Runs the privacy checks on every file here, plus their self-tests. |
+| `test-code-guard.test.ts`     | Runs the privacy checks on the test code, plus their self-tests.   |
 
 There are **no `.msg` files on disk**, and there must never be: `.gitignore`
 ignores `.msg` everywhere, including here. Only `.eml` has an exception, and
@@ -92,7 +92,7 @@ either:
   `dev`, `user`, `username`, `example` or `test`. Placeholders such as
   `<name>` or `%USERPROFILE%` are fine.
 - Time zones: tests use only `UTC` and a short list of neutral zones
-  (`ALLOWED_TIME_ZONES` in `guard-rules.ts`, e.g. `America/New_York`,
+  (`ALLOWED_TIME_ZONES` in `privacy-guard-rules.ts`, e.g. `America/New_York`,
   `Asia/Tokyo`). Any other zone name (`Area/Location`) in test code or
   fixtures fails the check, in any case and with `/`, `\`, `_` or `-`
   between its parts. Single-word names (abbreviations such as JST or EST)
@@ -105,6 +105,6 @@ These checks also run on every file in this folder.
 A test that must contain a real web address (today only the self-test of
 the no-network build check, which proves its allowlist accepts the approved
 license links and rejects everything else) lists each one in
-`guard-exemptions.ts`: one exact string, in one named file, with its reason.
+`privacy-guard-exemptions.ts`: one exact string, in one named file, with its reason.
 Never a pattern. The guard fails if an exemption is not needed or no longer
 found in its file.

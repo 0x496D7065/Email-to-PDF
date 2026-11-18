@@ -19,7 +19,7 @@
 //   made (no long main-thread task); the main-thread cost of handing the
 //   job to the worker and the total time are printed.
 //
-// Throughout (see Helper/Test/browser-tests/support/watch.ts): after the page's own files, the
+// Throughout (see Helper/Test/browser-tests/support/network-and-csp-watch.ts): after the page's own files, the
 // only requests are the blob: URLs of the inlined workers and of the PDF
 // (both in memory, never the network), no WebSocket, no console error, no
 // CSP violation in the page or a worker (the page's parse-time reports of
@@ -43,7 +43,7 @@ import {
     workerCspReports,
     workersNamed,
     type Watch,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 
 declare global
 {

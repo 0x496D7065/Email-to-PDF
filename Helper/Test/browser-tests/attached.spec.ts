@@ -9,14 +9,14 @@
 // the email printing that one inline), the counts line, all written again
 // on a language switch. Against the BUILT site, with the real pipeline.
 // Synthetic files written here, in memory. Nothing may leave the page, no
-// CSP violation, no console error (Helper/Test/browser-tests/support/watch.ts).
+// CSP violation, no console error (Helper/Test/browser-tests/support/network-and-csp-watch.ts).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Locator, type Page } from '@playwright/test';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { fr } from '../../../Source/web-page/translations/fr.ts';
 import { nl } from '../../../Source/web-page/translations/nl.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

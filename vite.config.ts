@@ -78,7 +78,7 @@ function previewHeaders(): Plugin
 // its precache list is made from them (Source/offline-copy/precache-list.ts): every
 // file of dist/ except the host settings files, source maps and sw.js,
 // with index.html as "/", sorted, plus a version (a content hash of the
-// files, of the service worker's code and of _headers; Helper/build-checks/sw-version.mjs,
+// files, of the service worker's code and of _headers; Helper/build-checks/service-worker-version.mjs,
 // shared with the build check), and written into
 // sw.js in place of its placeholder. The same build always gives the same
 // sw.js. No library is used for this.

@@ -29,7 +29,7 @@
 // 5. That note and the disabled switch at 320 px wide and at 200% zoom:
 //    they wrap, no sideways scrolling.
 //
-// Throughout (see Helper/Test/browser-tests/support/watch.ts): after the page's own files, only
+// Throughout (see Helper/Test/browser-tests/support/network-and-csp-watch.ts): after the page's own files, only
 // the own-origin blob: URLs of the inlined workers and, at most once, the
 // PDF's; no WebSocket, no CSP violation in the page or a worker, no console
 // error, nothing stored. Test data is made up (README.md, rule R7).
@@ -37,7 +37,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

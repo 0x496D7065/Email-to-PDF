@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { FIXTURES } from '../../Helper/Test/test-data/manifest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { dedupe, normalizeBody } from './dedupe';
 
 describe('dedupe over the parsed fixtures', () =>

@@ -16,7 +16,7 @@
 //    on each, in the order the steps are shown; every control has a name and
 //    the heading levels do not skip.
 //
-// Throughout both tests (see Helper/Test/browser-tests/support/watch.ts): no request after the
+// Throughout both tests (see Helper/Test/browser-tests/support/network-and-csp-watch.ts): no request after the
 // page's own files other than the inlined workers' blob: URLs, no WebSocket,
 // no console error, no dialog, every worker a parse or engine worker that
 // ended. CSP: no violation in any worker. In the page, the only reports
@@ -58,7 +58,7 @@ import {
     workerCspReports,
     workersNamed,
     type Watch,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 
 declare global
 {

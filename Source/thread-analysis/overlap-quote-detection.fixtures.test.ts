@@ -4,7 +4,7 @@
 // each message is folded and checks the key expectations (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { dedupe } from './dedupe';
 import { orderMessages } from './chronological-order';
 import { detectQuotedOverlap } from './overlap-quote-detection';

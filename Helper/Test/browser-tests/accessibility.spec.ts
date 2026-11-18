@@ -26,7 +26,7 @@
 // motion. The keyboard order of every control is checked in
 // Helper/Test/browser-tests/full-flow.spec.ts.
 //
-// Throughout (Helper/Test/browser-tests/support/watch.ts): nothing leaves the page but the page's
+// Throughout (Helper/Test/browser-tests/support/network-and-csp-watch.ts): nothing leaves the page but the page's
 // own files and the inlined workers' blob: URLs, no CSP violation, no
 // console error. Only the text-spacing test turns the CSP off (bypassCSP):
 // it must add a stylesheet of its own, as a user's browser extension would.
@@ -37,7 +37,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

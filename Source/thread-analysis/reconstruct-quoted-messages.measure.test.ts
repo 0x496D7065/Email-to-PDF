@@ -30,7 +30,7 @@
 import { describe, expect, it } from 'vitest';
 import { NEGATIVE_CASES, REFUSAL_COST_CASES, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import type { QuoteStyle } from '../../Helper/Test/test-support/thread-builder';
-import { fieldDiffs } from '../../Helper/Test/test-support/quoted-header-truth';
+import { fieldDiffs } from '../../Helper/Test/test-support/quoted-header-expected-fields';
 import { readQuotedHeader, type QuotedHeaderFields } from './quoted-header';
 import { reconstructQuotedMessages } from './reconstruct-quoted-messages';
 import { findReplyHeaders } from './reply-header';

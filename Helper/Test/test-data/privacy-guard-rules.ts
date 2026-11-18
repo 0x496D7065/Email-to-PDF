@@ -458,7 +458,7 @@ export function findUnlistedTimeZones(text: string): string[]
 /**
  * The text with every exempted string blanked out (longest first, so a
  * shorter exempted string inside a longer one does not cut it in two).
- * Exemptions are exact, case-sensitive strings: see guard-exemptions.ts.
+ * Exemptions are exact, case-sensitive strings: see privacy-guard-exemptions.ts.
  * An exempted string that ends like a host name is only blanked where the
  * host really ends there: exempting a URL `U` that ends in its host does
  * not blank the start of `U` + `.more.labels` or `U` + `x`, which name a

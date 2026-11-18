@@ -44,7 +44,7 @@ import {
     workerCspReports,
     workersNamed,
     type Watch,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 
 declare global
 {

@@ -4,7 +4,7 @@
 // checks the key expectations on the known fixture threads.
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { analyzeThread } from './analyze-thread';
 import { planOutput } from './output-plan';
 import type { MessagePlan } from '../../Header/output-plan';

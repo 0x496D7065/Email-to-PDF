@@ -23,7 +23,7 @@ export interface GuardExemption
 }
 
 /** This file, as a path from the repository root. */
-export const EXEMPTIONS_FILE = 'Helper/Test/test-data/guard-exemptions.ts';
+export const EXEMPTIONS_FILE = 'Helper/Test/test-data/privacy-guard-exemptions.ts';
 
 const NO_NETWORK_TEST = 'Helper/build-checks/no-network-rules.test.ts';
 const REJECTED = 'a URL the no-network build check must REJECT (not on its allowlist)';

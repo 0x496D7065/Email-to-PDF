@@ -13,7 +13,7 @@
 // Every test also checks, once processing has settled, that nothing (page or
 // worker) made a request other than starting the inlined workers from their
 // blob: URLs (memory, not network), that there was no CSP violation (page or
-// worker), and that there was no console error. See Helper/Test/browser-tests/support/watch.ts for
+// worker), and that there was no console error. See Helper/Test/browser-tests/support/network-and-csp-watch.ts for
 // the detectors.
 //
 // The offline tests at the end switch the network off right after the page
@@ -25,7 +25,7 @@ import { en } from '../../../Source/web-page/translations/en.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

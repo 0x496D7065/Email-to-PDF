@@ -26,7 +26,7 @@
 //
 // Synthetic data only (README.md, rule R7): invented people, example.test
 // and sample.invalid addresses, time zones from ALLOWED_TIME_ZONES
-// (Helper/Test/test-data/guard-rules.ts). Fixed UTC offsets, no daylight saving
+// (Helper/Test/test-data/privacy-guard-rules.ts). Fixed UTC offsets, no daylight saving
 // rules: pick a zone and a date where the offset given is correct.
 //
 // Non-ASCII letters are written as \u escapes so this file stays ASCII:

@@ -7,7 +7,7 @@
 // signatures), are run through the real thread analysis and output plan, and:
 // - with "include everything" (README.md, rule R6), every email's body in
 //   the model is the full body after the documented display transforms only
-//   (checked against the independent Helper/Test/test-support/pdf-reference.ts); and
+//   (checked against the independent Helper/Test/test-support/reference-pdf-text-transforms.ts); and
 //   compared with the body with every quote mark kept, the ONLY characters
 //   missing are the quote prefixes at line starts (tasks 8.1 and 8.6,
 //   quotePrefixProblems): every other character of the message is in the
@@ -37,7 +37,7 @@
 // special character is written as a \u escape.
 
 import { describe, expect, it } from 'vitest';
-import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/reference-pdf-text-transforms';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { analyzeThread } from '../thread-analysis/analyze-thread';

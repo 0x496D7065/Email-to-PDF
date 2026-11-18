@@ -25,7 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { groupAsAttached } from '../../Helper/Test/test-support/attached-builder';
-import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { referenceDisplayText } from '../../Helper/Test/test-support/reference-pdf-text-transforms';
 import { quotingCase, quotingSentence, type QuotingCase } from '../../Helper/Test/test-support/quoting-builder';
 import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from '../thread-analysis/analyze-thread';
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';

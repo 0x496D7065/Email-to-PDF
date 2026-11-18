@@ -10,12 +10,12 @@
 // synthetic emails written here, in memory: a forward and a reply that
 // quotes with "> " and answers between the quoted lines. Every test also
 // checks that nothing left the page, no CSP violation and no console error
-// (Helper/Test/browser-tests/support/watch.ts).
+// (Helper/Test/browser-tests/support/network-and-csp-watch.ts).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
+import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

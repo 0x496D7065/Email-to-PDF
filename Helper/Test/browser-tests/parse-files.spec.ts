@@ -8,7 +8,7 @@
 // `vite preview` (see playwright.config.ts).
 //
 // How the code gets into the page without shipping a test hook:
-// beforeAll bundles Helper/Test/browser-tests/support/parse-entry.ts IN MEMORY (`write: false`)
+// beforeAll bundles Helper/Test/browser-tests/support/parse-files-test-entry.ts IN MEMORY (`write: false`)
 // with the project's own vite.config.ts, the same configuration as the
 // production build. As in dist/, the parse, engine and PDF workers are
 // inlined into that bundle (`?worker&inline`) and start from blob: URLs. A
@@ -29,7 +29,7 @@
 //   (proved by a positive control below);
 // - page.on('worker') to follow every worker and its 'close' event
 //   (terminated);
-// - watchWorkers (Helper/Test/browser-tests/support/watch.ts), in every browser: each blob: worker
+// - watchWorkers (Helper/Test/browser-tests/support/network-and-csp-watch.ts), in every browser: each blob: worker
 //   starts with a `securitypolicyviolation` listener put in front of its
 //   code, which passes every CSP report of that worker to the test; the name
 //   each worker is started with tells the parse, engine and PDF workers
@@ -47,7 +47,7 @@ import { expect, test, type BrowserContext, type Page, type Worker } from '@play
 import { build, type Plugin, type Rolldown } from 'vite';
 import { decodeJsEscapes, findEmbeddedViolations, findViolations } from '../../build-checks/no-network-rules.mjs';
 import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../../../Source/security-headers/headers.ts';
-import type * as Entry from './support/parse-entry.ts';
+import type * as Entry from './support/parse-files-test-entry.ts';
 // The page's CSP reports are filtered with untoleratedReports: in Chromium
 // only, the inline reports DOMParser makes while it PARSES handlers and
 // styles, fired at the document, are tolerated. The HTML parsed here has no
@@ -61,7 +61,7 @@ import {
     watchWorkers,
     withoutSelectReports,
     workerCspReports as sharedWorkerCspReports,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 import type { ProcessProgress, ProcessResult } from '../../../Header/file-processing.ts';
 import type { InputFile } from '../../../Header/parsed-email.ts';
 
@@ -125,7 +125,7 @@ test.beforeAll(async () =>
             write: false, // in memory only: dist/ is never touched
             emptyOutDir: false,
             copyPublicDir: false,
-            rolldownOptions: { input: `${ROOT}Helper/Test/browser-tests/support/parse-entry.ts`, preserveEntrySignatures: 'exports-only' },
+            rolldownOptions: { input: `${ROOT}Helper/Test/browser-tests/support/parse-files-test-entry.ts`, preserveEntrySignatures: 'exports-only' },
         },
     });
     const outputs = (Array.isArray(output) ? output : [output]) as Rolldown.RolldownOutput[];
@@ -151,7 +151,7 @@ let loadedAt = 0;
 let websockets: string[] = [];
 let workers: Worker[] = [];
 let closedWorkers: Worker[] = [];
-/** CSP reports of every worker (see WorkerWatch in Helper/Test/browser-tests/support/watch.ts). */
+/** CSP reports of every worker (see WorkerWatch in Helper/Test/browser-tests/support/network-and-csp-watch.ts). */
 let workerLog: string[] = [];
 /** Worker URL -> the name it was started with; blob: URLs all look alike. */
 let workerNames = new Map<string, string>();
@@ -240,7 +240,7 @@ async function servePageWith(page: Page, csp: PageCsp): Promise<void>
 }
 
 /**
- * Worker log entries that report a CSP violation (see Helper/Test/browser-tests/support/watch.ts).
+ * Worker log entries that report a CSP violation (see Helper/Test/browser-tests/support/network-and-csp-watch.ts).
  * Every worker must run with the report prelude, except the test's own
  * misbehaving worker (exact URL of that file in the test bundle): it is
  * started from its script file, served with the site's headers, and only
@@ -267,7 +267,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     unwrappedWorkers = [];
     await watchNetwork(context);
     // Follows every worker the page starts: its end (page.on('worker')), its
-    // name and its CSP reports (see Helper/Test/browser-tests/support/watch.ts).
+    // name and its CSP reports (see Helper/Test/browser-tests/support/network-and-csp-watch.ts).
     await watchWorkers(context, page, { workers, closedWorkers, workerLog, workerNames, unwrappedWorkers });
     await page.addInitScript(() =>
     {

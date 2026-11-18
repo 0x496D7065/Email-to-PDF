@@ -7,13 +7,13 @@
 // stop after the header's top row (the language picker and the Ko-fi
 // button), opened and closed with Enter or Space, with headings that
 // fit the page's levels. Opening it loads nothing and triggers no CSP
-// violation (Helper/Test/browser-tests/support/watch.ts). No accessibility library is used (no new
+// violation (Helper/Test/browser-tests/support/network-and-csp-watch.ts). No accessibility library is used (no new
 // dependency): names, focus, headings and contrast are checked explicitly.
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/watch.ts';
+import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/network-and-csp-watch.ts';
 
 declare global
 {

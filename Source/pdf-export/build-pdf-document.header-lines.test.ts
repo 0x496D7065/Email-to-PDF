@@ -33,7 +33,7 @@
 // checked on the written file (Source/pdf-export/generate-pdf.header-blocks.test.ts).
 // Synthetic data only (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { analyzeThread } from '../thread-analysis/analyze-thread';

@@ -2,7 +2,7 @@
 // mailboxes and the parsed synthetic fixtures (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { displayAuthor } from './display-author';
 import type { EmailAddress } from '../../Header/parsed-email';
 

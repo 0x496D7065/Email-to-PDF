@@ -6,7 +6,7 @@
 // page is checked in the browsers by Helper/Test/browser-tests/rebuilt.spec.ts.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { planPdfOrder } from '../pdf-export/build-pdf-document';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';

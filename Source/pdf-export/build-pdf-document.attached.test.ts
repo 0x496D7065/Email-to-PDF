@@ -9,7 +9,7 @@
 // parsers (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
+import { referenceDisplayText } from '../../Helper/Test/test-support/reference-pdf-text-transforms';
 import { buildMsg, type MsgSpec } from '../../Helper/Test/test-data/msg/builder';
 import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts } from '../thread-analysis/analyze-thread';
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';

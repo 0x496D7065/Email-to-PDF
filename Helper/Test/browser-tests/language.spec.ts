@@ -14,7 +14,7 @@
 //   switches to French and back, and the PDF is made in Dutch, with its
 //   Dutch file name.
 //
-// Throughout (see Helper/Test/browser-tests/support/watch.ts): after the page's own files, the
+// Throughout (see Helper/Test/browser-tests/support/network-and-csp-watch.ts): after the page's own files, the
 // only requests are the blob: URLs of the inlined workers and of the PDF (in
 // memory, never the network), no WebSocket, no console error, no CSP
 // violation in the page or a worker, and nothing stored (not the language
@@ -36,7 +36,7 @@ import {
     workerCspReports,
     workersNamed,
     type Watch,
-} from './support/watch.ts';
+} from './support/network-and-csp-watch.ts';
 
 declare global
 {

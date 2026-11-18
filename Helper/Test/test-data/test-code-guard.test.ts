@@ -10,14 +10,14 @@
 //   1. an email address, URL (also "//host"), www host or bare host with a
 //      common real TLD that is not a reserved test name (*.test, *.invalid),
 //      or an IP outside the documentation and loopback ranges. Same rules
-//      and decoding as for the fixtures (guard-rules.ts), in 'code' mode:
+//      and decoding as for the fixtures (privacy-guard-rules.ts), in 'code' mode:
 //      member accesses ending in `.at` or `.info` are not taken for bare hosts,
 //   2. a home-folder path (Windows, macOS, Linux, also Git Bash `/c/Users/`
 //      and WSL `/mnt/c/Users/`) whose folder name is not a generic
 //      placeholder (dev, user, username, example, test),
 //   3. a time-zone name (`Area/Location`) that is not in the short list of
-//      neutral zones the tests use (ALLOWED_TIME_ZONES in guard-rules.ts).
-// The only accepted exceptions are the exact strings in guard-exemptions.ts.
+//      neutral zones the tests use (ALLOWED_TIME_ZONES in privacy-guard-rules.ts).
+// The only accepted exceptions are the exact strings in privacy-guard-exemptions.ts.
 // Also scanned: Header/node-fs-for-browser-tests.d.ts, the test-only
 // declaration file that lives with the shared types. App code (Source/
 // files that are not tests) and the other shared types (Header/) are not
@@ -28,7 +28,7 @@
 // with "/" is relative to the repository root.
 
 import { describe, expect, it } from 'vitest';
-import { EXEMPTIONS_FILE, exemptionsFor, GUARD_EXEMPTIONS } from './guard-exemptions';
+import { EXEMPTIONS_FILE, exemptionsFor, GUARD_EXEMPTIONS } from './privacy-guard-exemptions';
 import {
     ALLOWED_TIME_ZONES,
     findForbiddenHosts,
@@ -36,7 +36,7 @@ import {
     findPrivacyProblems,
     findUnlistedTimeZones,
     withoutExemptions,
-} from './guard-rules';
+} from './privacy-guard-rules';
 
 /** Test code as text, keyed by its path from the repository root with a leading "/", e.g. "/Helper/Test/browser-tests/clear.spec.ts". */
 // Each Helper/ subfolder is listed by name: add any new Helper/ folder with
@@ -55,7 +55,7 @@ describe('test code guard', () =>
 {
     it('finds the test code in every scanned folder, and no app code or fixture', () =>
     {
-        for (const path of ['/Source/web-page/page-shell.test.ts', '/Helper/Test/browser-tests/no-network.spec.ts', '/Helper/Test/browser-tests/support/watch.ts', '/Helper/Test/test-support/pdf-reader.ts', '/Helper/build-checks/no-network-rules.test.ts', '/Helper/lint-rules/body-brace-style.test.ts'])
+        for (const path of ['/Source/web-page/page-shell.test.ts', '/Helper/Test/browser-tests/no-network.spec.ts', '/Helper/Test/browser-tests/support/network-and-csp-watch.ts', '/Helper/Test/test-support/pdf-reader.ts', '/Helper/build-checks/no-network-rules.test.ts', '/Helper/lint-rules/body-brace-style.test.ts'])
         {
             expect(codePaths, path).toContain(path);
         }

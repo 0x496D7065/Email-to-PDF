@@ -27,7 +27,7 @@
 // header lines stay is checked in Source/pdf-export/build-pdf-document.header-lines.test.ts).
 // Synthetic data only (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
-import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { readDests, readLinks, readPageRuns, readPdf, textLines, type PageRun, type ParsedPdf } from '../../Helper/Test/test-support/pdf-reader';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';

@@ -11,7 +11,7 @@ import { DONATION_IMAGE, DONATION_URL } from '../../../Source/web-page/safe-dom.
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { withoutSelectConsole, withoutSelectReports } from './support/watch.ts';
+import { withoutSelectConsole, withoutSelectReports } from './support/network-and-csp-watch.ts';
 
 declare global
 {
