@@ -45,7 +45,7 @@
 // decideSignature, keepsKind), so a rule can be changed on its own.
 //
 // Input: the INCLUDED emails, in their final (PDF) order, each with its
-// engine segments (fold-segments.ts) and its input position (`index`). The result
+// thread analysis segments (fold-segments.ts) and its input position (`index`). The result
 // depends on that list (which emails are included, which one is the "first"
 // with a signature), so call it again whenever the selection changes. No
 // hidden state.
@@ -196,13 +196,13 @@ export const DEFAULT_OUTPUT_POLICY: OutputPolicy = Object.freeze({
     unfoldEverything: false,
 });
 
-/** What the plan needs per email (an EngineMessage fits). */
+/** What the plan needs per email (an AnalyzedMessage fits). */
 export interface PlanInput
 {
     readonly message: NormalizedMessage;
     readonly segments: readonly Segment[];
     /**
-     * Input position (EngineMessage.index). The `related` links of the
+     * Input position (AnalyzedMessage.index). The `related` links of the
      * segments use these numbers: an email whose index is in the list is
      * INCLUDED (rule 2). Without it, the email is never the target of a link.
      */

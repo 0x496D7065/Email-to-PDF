@@ -1,4 +1,4 @@
-// The engine pipeline: from parsed files to the ordered, folded messages the
+// The thread analysis pipeline: from parsed files to the ordered, folded messages the
 // preview and the PDF will show (README.md, rules R6 and R7).
 //
 // Steps:
@@ -32,13 +32,13 @@
 //    what they would be without it. A rebuilt message is a view of a slice
 //    of its source body; the source body stays whole in `messages`.
 //
-// Indices: every `index` and `related` number in the result (EngineMessage.index,
+// Indices: every `index` and `related` number in the result (AnalyzedMessage.index,
 // MergedCopy.index, DedupeWarning.related, Segment.related) is an INPUT
 // POSITION: for a file's own email, its position in the array given to
 // `analyzeThread`, i.e. the order the files were dropped in; for an attached
 // email, `results.length` plus its place among all attached emails (files in
 // drop order, each file's attached emails in ParseResult.attached order),
-// see EngineAttached. `positionByIndex` turns such a number into a position
+// see AnalyzedAttachedMessage. `positionByIndex` turns such a number into a position
 // in `messages`, so the preview can resolve "quoted from message N" or
 // "duplicate of ..." directly.
 //
@@ -48,7 +48,7 @@
 //   copies, the dropped file's copy is ALWAYS kept (Q8; D2, user decision
 //   2026-11-13, review round 4: even when the attached copy holds strictly
 //   more header data, say a Bcc line or a date; dedupe.ts, `firstAttached`),
-//   and the attached copy is listed as merged. EngineAttached.keptShowsHeader
+//   and the attached copy is listed as merged. AnalyzedAttachedMessage.keptShowsHeader
 //   says when the kept copy's header rows lack something the attached copy
 //   had: the PDF then leaves that copy's block header lines where they are
 //   printed (an inline forward), so they are still printed there. A holder
@@ -68,16 +68,16 @@
 //   adapter's own forwarded block is never rebuilt (reconstruct-quoted-messages.ts stops
 //   there), so a parent never yields a rebuilt copy of its own inline
 //   forward.
-// - `attached` (EngineAttached) keeps where each one came from (its parent,
+// - `attached` (AnalyzedAttachedMessage) keeps where each one came from (its parent,
 //   its file, its attachment names for the PDF's File row) and its printed
 //   blocks in the bodies holding it (places), for the PDF's no-repeat rule
-//   (Source/pdf-export/build-pdf-document.ts): the engine itself never cuts any body.
+//   (Source/pdf-export/build-pdf-document.ts): the thread analysis itself never cuts any body.
 // Attached entries that break ParseResult's contract (normally rejected by
 // the worker validator already) are skipped, with the ones attached inside
 // them: their text then simply stays where its parent prints it.
 //
 // Safety net (README.md, rule R6: collapse, never delete): the detectors are
-// tested, but the engine does not rely on them being bug-free. If a detector
+// tested, but the thread analysis does not rely on them being bug-free. If a detector
 // throws, or returns something that is not the expected list (or list of
 // lists), its folds are skipped for the messages concerned and they get a
 // 'detector-failed' warning; entries that are not objects are ignored, and
@@ -101,7 +101,7 @@
 // Not solved here (notes for the preview milestone):
 // - dedupe.ts has a known worst case (thousands of copies of one message with
 //   differing recipients make grouping quadratic). Together with the size of
-//   the overlap index, this means the preview should run the engine off the
+//   the overlap index, this means the preview should run the thread analysis off the
 //   main thread (in a worker) or behind a time/size limit. The result is
 //   plain data (no classes, no functions, no Maps), so it can be sent from a
 //   worker with postMessage (structured clone).
@@ -121,11 +121,12 @@ import { detectSignatures, senderKeyOf } from './signature-detection';
 import { linkRebuilt, type LinkSource } from './link-rebuilt-messages';
 import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct-quoted-messages';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineRebuilt, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
-import type { DedupeWarning, EngineAttached, EngineAttachedPlace, EngineMessage, EngineResult, EngineWarningCode, FailedFile, FoldReason, MergedCopy, OrderReason, ReconstructionWarning, Segment } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
+import type { DedupeWarning, AnalyzedAttachedMessage, AnalyzedAttachedPlace, AnalyzedMessage, ThreadAnalysisResult, ThreadAnalysisWarningCode,
+    FailedFile, FoldReason, MergedCopy, OrderReason, ReconstructionWarning, Segment } from '../../Header/thread-analysis-result';
 
-/** The EngineAttached entry of input position `index`, or undefined (a file's own email, or no such entry). */
-export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, index: number): EngineAttached | undefined
+/** The AnalyzedAttachedMessage entry of input position `index`, or undefined (a file's own email, or no such entry). */
+export function attachedAt(result: Pick<ThreadAnalysisResult, 'attached' | 'counts'>, index: number): AnalyzedAttachedMessage | undefined
 {
     const entry = result.attached?.[index - result.counts.filesGiven];
     return entry !== undefined && entry.index === index ? entry : undefined;
@@ -134,7 +135,7 @@ export function attachedAt(result: Pick<EngineResult, 'attached' | 'counts'>, in
 /**
  * The replaceable parts of the pipeline. TESTS ONLY: the app always uses
  * DEFAULT_THREAD_ANALYSIS_PARTS. Tests swap in a broken part to prove the safety net works,
- * and use `onStage` to time each stage (the engine itself reads no clock).
+ * and use `onStage` to time each stage (the thread analysis itself reads no clock).
  */
 export interface ThreadAnalysisParts
 {
@@ -207,7 +208,7 @@ interface Work
     readonly duplicates: readonly MergedCopy[];
     readonly dedupeWarnings: readonly DedupeWarning[];
     readonly folds: FoldRange[];
-    readonly warnings: Set<EngineWarningCode>;
+    readonly warnings: Set<ThreadAnalysisWarningCode>;
 }
 
 /** Runs `detect`; if it throws, marks every message in `targets` and returns null. */
@@ -436,7 +437,7 @@ function mailboxes(value: unknown): ReconstructedMessage['from'] | null
  * reconstruct-quoted-messages.ts: offsets inside the body, in order, after `minStart`;
  * `generation` = its rank; and its text exactly the body slice
  * [headerEnd, end) with `depth` quote marks removed (checked by recomputing
- * it). The engine never trusts the part blindly (README.md, rule R6).
+ * it). The thread analysis never trusts the part blindly (README.md, rule R6).
  */
 function validRebuilt(body: string, entry: unknown, minStart: number, generation: number): ReconstructedMessage | null
 {
@@ -598,10 +599,10 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * is not the next email up, is dropped (its block then stays printed in that
  * body). A result whose list cannot be read at all gives none. Never throws.
  */
-function readAttached(results: readonly ParseResult[]): { readonly messages: NormalizedMessage[]; readonly entries: EngineAttached[] }
+function readAttached(results: readonly ParseResult[]): { readonly messages: NormalizedMessage[]; readonly entries: AnalyzedAttachedMessage[] }
 {
     const messages: NormalizedMessage[] = [];
-    const entries: EngineAttached[] = [];
+    const entries: AnalyzedAttachedMessage[] = [];
     const base = results.length;
     results.forEach((result, fileIndex) =>
     {
@@ -610,7 +611,7 @@ function readAttached(results: readonly ParseResult[]): { readonly messages: Nor
             return;
         }
         const fileMessages: NormalizedMessage[] = [];
-        const fileEntries: EngineAttached[] = [];
+        const fileEntries: AnalyzedAttachedMessage[] = [];
         try
         {
             const list: unknown = result.attached;
@@ -622,7 +623,7 @@ function readAttached(results: readonly ParseResult[]): { readonly messages: Nor
             // skipped), and its parent in the file's numbering (-1: the file's own email).
             const kept: (number | undefined)[] = [];
             const parents: number[] = [];
-            const entryOf = (k: number): EngineAttached | undefined => fileEntries[kept[k] ?? -1];
+            const entryOf = (k: number): AnalyzedAttachedMessage | undefined => fileEntries[kept[k] ?? -1];
             // The body text of entry `holder` of the file's list (-1: the file's own email); undefined when skipped.
             const bodyOf = (holder: number): string | undefined =>
             {
@@ -663,7 +664,7 @@ function readAttached(results: readonly ParseResult[]): { readonly messages: Nor
                 }
                 const index = base + entries.length + fileEntries.length;
                 // Places: nearest holder first (its parent, then the parent's parent, ...); stop at the first one out of line.
-                const okPlaces: EngineAttachedPlace[] = [];
+                const okPlaces: AnalyzedAttachedPlace[] = [];
                 let holder = parent;
                 for (const place of Array.isArray(places) ? (places as readonly unknown[]) : [])
                 {
@@ -731,11 +732,11 @@ function readAttached(results: readonly ParseResult[]): { readonly messages: Nor
  * keptShowsHeader false (its header lines then stay where they are printed).
  */
 function settleAttached(
-    read: { readonly messages: readonly NormalizedMessage[]; readonly entries: readonly EngineAttached[] },
+    read: { readonly messages: readonly NormalizedMessage[]; readonly entries: readonly AnalyzedAttachedMessage[] },
     parsed: readonly NormalizedMessage[],
     inputPosition: readonly number[],
     keptIndexOf: (index: number) => number | undefined,
-): EngineAttached[]
+): AnalyzedAttachedMessage[]
 {
     const messageAt = new Map<number, NormalizedMessage>();
     inputPosition.forEach((index, k) =>
@@ -754,7 +755,7 @@ function settleAttached(
             const keptIndex = keptIndexOf(entry.index);
             const kept = keptIndex === undefined ? undefined : messageAt.get(keptIndex);
             const keptShowsHeader = keptIndex === entry.index || (own !== undefined && kept !== undefined && keepsHeaderData(kept, own));
-            const places = entry.places.map((place): EngineAttachedPlace =>
+            const places = entry.places.map((place): AnalyzedAttachedPlace =>
             {
                 const holderKept = keptIndexOf(place.holderIndex);
                 if (holderKept === undefined || holderKept === place.holderIndex)
@@ -898,8 +899,8 @@ function placeUndatedAttached<T extends { readonly index: number }>(
  * are always earlier entries). No entry for a message that holds none.
  */
 function heldByKept(
-    entries: readonly EngineAttached[],
-    byIndex: ReadonlyMap<number, EngineAttached>,
+    entries: readonly AnalyzedAttachedMessage[],
+    byIndex: ReadonlyMap<number, AnalyzedAttachedMessage>,
     keptIndexOf: (index: number) => number | undefined,
 ): Map<number, Set<number>>
 {
@@ -933,11 +934,11 @@ function heldByKept(
 }
 
 /**
- * Runs the whole engine (see the steps at the top of this file).
+ * Runs the whole thread analysis (see the steps at the top of this file).
  * `results`: one parse result per dropped file, in drop order.
  * `parts`: tests only (see ThreadAnalysisParts).
  */
-export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnalysisParts = DEFAULT_THREAD_ANALYSIS_PARTS): EngineResult
+export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnalysisParts = DEFAULT_THREAD_ANALYSIS_PARTS): ThreadAnalysisResult
 {
     // 1. Split. `inputPosition[i]` = input position of the i-th parsed message.
     const parsed: NormalizedMessage[] = [];
@@ -963,7 +964,7 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
         parsed.push(message);
         inputPosition.push(read.entries[k]!.index);
     });
-    const attachedByIndex = new Map<number, EngineAttached>();
+    const attachedByIndex = new Map<number, AnalyzedAttachedMessage>();
     for (const entry of read.entries)
     {
         attachedByIndex.set(entry.index, entry);
@@ -1023,7 +1024,7 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
         ...item,
         order,
         folds: [],
-        warnings: new Set<EngineWarningCode>(dedupeFailed ? ['dedupe-failed'] : []),
+        warnings: new Set<ThreadAnalysisWarningCode>(dedupeFailed ? ['dedupe-failed'] : []),
     }));
 
     // 4a. Overlap, over the ordered set (it needs chronological order). A holder
@@ -1074,7 +1075,7 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
 
     // 5. Segments, with the safety net.
     parts.onStage?.('segments');
-    const messages: EngineMessage[] = work.map((item) =>
+    const messages: AnalyzedMessage[] = work.map((item) =>
     {
         const body = item.message.bodyText;
         let segments: Segment[];
@@ -1099,7 +1100,7 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
             duplicates: item.duplicates,
             dedupeWarnings: item.dedupeWarnings,
             parserWarnings: item.message.warnings,
-            engineWarnings: [...item.warnings].sort(),
+            threadAnalysisWarnings: [...item.warnings].sort(),
             segments,
         };
     });
@@ -1126,7 +1127,7 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
         return { index: item.index, message: item.message, utcMs: item.order === 'by-date' ? item.message.date.utcMs : null, ownEnd, rebuilt };
     });
     parts.onStage?.('link-rebuilt');
-    let reconstructed: readonly EngineRebuilt[];
+    let reconstructed: readonly AnalyzedRebuiltMessage[];
     let timeline: readonly TimelineEntry[];
     try
     {
@@ -1175,7 +1176,7 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
  * linking never removes or reorders a real message. Called inside a try: an
  * entry that is not an object throws, which counts as invalid.
  */
-function isValidTimeline(timeline: readonly TimelineEntry[], reconstructed: readonly EngineRebuilt[], count: number): boolean
+function isValidTimeline(timeline: readonly TimelineEntry[], reconstructed: readonly AnalyzedRebuiltMessage[], count: number): boolean
 {
     // A plain boolean check: Array.isArray as a type guard would turn the lists into any[].
     const isList = (v: unknown): boolean => Array.isArray(v);

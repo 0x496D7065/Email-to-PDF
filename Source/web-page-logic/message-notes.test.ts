@@ -2,9 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { t } from '../web-page/translations';
-import { codedCharacters, DEDUPE_WARNINGS, ENGINE_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS, relatedListNumbers } from './message-notes';
+import { codedCharacters, DEDUPE_WARNINGS, THREAD_ANALYSIS_WARNINGS, messageNotes, PARSE_WARNINGS, PDF_NOTES, pdfPlanNote, REBUILD_WARNINGS,
+    relatedListNumbers } from './message-notes';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { DedupeWarning, EngineMessage } from '../../Header/thread-analysis-result';
+import type { DedupeWarning, AnalyzedMessage } from '../../Header/thread-analysis-result';
 
 let counter = 0;
 function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
@@ -29,7 +30,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 }
 
 /** A kept email with the given warnings, for messageNotes directly. */
-function engineMessage(fields: Partial<EngineMessage> = {}): EngineMessage
+function analyzedMessage(fields: Partial<AnalyzedMessage> = {}): AnalyzedMessage
 {
     const message = make();
     return {
@@ -39,7 +40,7 @@ function engineMessage(fields: Partial<EngineMessage> = {}): EngineMessage
         duplicates: [],
         dedupeWarnings: [],
         parserWarnings: [],
-        engineWarnings: [],
+        threadAnalysisWarnings: [],
         segments: [],
         ...fields,
     };
@@ -49,7 +50,7 @@ describe('code lists', () =>
 {
     it('name each code once', () =>
     {
-        for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, ENGINE_WARNINGS, REBUILD_WARNINGS])
+        for (const list of [PARSE_WARNINGS, DEDUPE_WARNINGS, THREAD_ANALYSIS_WARNINGS, REBUILD_WARNINGS])
         {
             expect(new Set(list).size).toBe(list.length);
         }
@@ -97,15 +98,15 @@ describe('messageNotes', () =>
 {
     it('gives no notes to an email without warnings', () =>
     {
-        expect(messageNotes(engineMessage(), 0, [0])).toEqual([]);
+        expect(messageNotes(analyzedMessage(), 0, [0])).toEqual([]);
     });
 
     it('lists the date notes, then "placed at the end", then the other notes, in a fixed order', () =>
     {
-        const email = engineMessage({
+        const email = analyzedMessage({
             order: 'file-order',
             parserWarnings: ['missing-message-id', 'html-converted-body', 'missing-date'],
-            engineWarnings: ['folding-disabled', 'detector-failed'],
+            threadAnalysisWarnings: ['folding-disabled', 'detector-failed'],
         });
         expect(messageNotes(email, 0, [0])).toEqual([
             { kind: 'parse', code: 'missing-date' },
@@ -119,7 +120,7 @@ describe('messageNotes', () =>
 
     it('says an undated attached email is placed just before the email it is attached to (task 8.13b-3, Q7)', () =>
     {
-        const email = engineMessage({ order: 'before-parent', parserWarnings: ['missing-date'] });
+        const email = analyzedMessage({ order: 'before-parent', parserWarnings: ['missing-date'] });
         expect(messageNotes(email, 0, [0])).toEqual([
             { kind: 'parse', code: 'missing-date' },
             { kind: 'order', code: 'before-parent' },
@@ -128,7 +129,7 @@ describe('messageNotes', () =>
 
     it('adds the problems while rebuilding earlier emails from the quote of THIS email, last, each once', () =>
     {
-        const email = engineMessage({ index: 3, engineWarnings: ['detector-failed'] });
+        const email = analyzedMessage({ index: 3, threadAnalysisWarnings: ['detector-failed'] });
         const warnings = [
             { index: 2, code: 'reconstruct-failed' as const },
             { index: 3, code: 'reconstruct-limit' as const },
@@ -149,7 +150,7 @@ describe('messageNotes', () =>
 
     it('shows each code once even if it is repeated', () =>
     {
-        const email = engineMessage({ parserWarnings: ['no-body', 'no-body'], engineWarnings: ['dedupe-failed', 'dedupe-failed'] });
+        const email = analyzedMessage({ parserWarnings: ['no-body', 'no-body'], threadAnalysisWarnings: ['dedupe-failed', 'dedupe-failed'] });
         expect(messageNotes(email, 0, [0]).map((n) => n.code)).toEqual(['no-body', 'dedupe-failed']);
     });
 
@@ -160,14 +161,14 @@ describe('messageNotes', () =>
             { code: 'possible-duplicate-not-merged', related: [1, 2, 3], relatedTotal: 7 },
             { code: 'same-id-different-content', related: [2], relatedTotal: 1 },
         ];
-        const email = engineMessage({ dedupeWarnings: warnings });
+        const email = analyzedMessage({ dedupeWarnings: warnings });
         expect(messageNotes(email, 0, [null, 0, 2, 1])).toEqual([
             { kind: 'dedupe', code: 'same-id-different-content', related: [3], more: 0 },
             { kind: 'dedupe', code: 'possible-duplicate-not-merged', related: [2, 3], more: 4 },
         ]);
     });
 
-    it('works on a real engine result: same id, different content, each points to the other', () =>
+    it('works on a real thread analysis result: same id, different content, each points to the other', () =>
     {
         const first = make({ messageId: 'same@example.test', bodyText: 'First text.\n' });
         const second = make({ messageId: 'same@example.test', bodyText: 'Another text.\n' });
@@ -183,8 +184,9 @@ describe('codedCharacters (task 8.8: the PDF shows them as codes without a note,
 {
     it('counts what the PDF writes as a code, in every text the PDF can show of the email', () =>
     {
-        expect(codedCharacters(engineMessage())).toBe(0);
-        const at = (fields: Partial<NormalizedMessage>, extra: Partial<EngineMessage> = {}): number => codedCharacters(engineMessage({ message: make(fields), ...extra }));
+        expect(codedCharacters(analyzedMessage())).toBe(0);
+        const at = (fields: Partial<NormalizedMessage>, extra: Partial<AnalyzedMessage> = {}): number =>
+            codedCharacters(analyzedMessage({ message: make(fields), ...extra }));
         // Body: a NUL and a lone surrogate; tabs, line breaks, U+2028 and emoji are not codes.
         expect(at({ bodyText: 'a\u0000b\tc\r\nd\u2028e \u{1F600} \uD800' })).toBe(2);
         expect(at({ subject: 'Re\u0007' })).toBe(1);
@@ -203,8 +205,9 @@ describe('codedCharacters (task 8.8: the PDF shows them as codes without a note,
 
     it('gives an email with such characters one note, after the look-alike notes; none without', () =>
     {
-        expect(messageNotes(engineMessage(), 0, [0])).toEqual([]);
-        const notes = messageNotes(engineMessage({ message: make({ bodyText: 'a\u0000b\u0000c' }), parserWarnings: ['missing-message-id'] }), 0, [0]);
+        expect(messageNotes(analyzedMessage(), 0, [0])).toEqual([]);
+        const notes = messageNotes(analyzedMessage({ message: make({ bodyText: 'a\u0000b\u0000c' }), parserWarnings: ['missing-message-id'] }), 0,
+            [0]);
         expect(notes).toEqual([
             { kind: 'parse', code: 'missing-message-id' },
             { kind: 'chars', code: 'coded-characters' },
@@ -217,15 +220,15 @@ describe('the unread-attached note (task 8.13b-4, P3)', () =>
 {
     it('is shown right after the parser notes, before the look-alike and character notes; none by default', () =>
     {
-        expect(messageNotes(engineMessage(), 0, [0], [], null)).toEqual([]);
-        const email = engineMessage({ message: make({ bodyText: 'a\u{0}b' }), parserWarnings: ['missing-date', 'missing-message-id'] });
+        expect(messageNotes(analyzedMessage(), 0, [0], [], null)).toEqual([]);
+        const email = analyzedMessage({ message: make({ bodyText: 'a\u{0}b' }), parserWarnings: ['missing-date', 'missing-message-id'] });
         expect(messageNotes(email, 0, [0], [], 'attached-unread')).toEqual([
             { kind: 'parse', code: 'missing-date' },
             { kind: 'parse', code: 'missing-message-id' },
             { kind: 'attached', code: 'attached-unread' },
             { kind: 'chars', code: 'coded-characters' },
         ]);
-        expect(messageNotes(engineMessage(), 0, [0], [], 'attached-unread-inside')).toEqual([{ kind: 'attached', code: 'attached-unread-inside' }]);
+        expect(messageNotes(analyzedMessage(), 0, [0], [], 'attached-unread-inside')).toEqual([{ kind: 'attached', code: 'attached-unread-inside' }]);
     });
 
     it('has calm words for both places', () =>

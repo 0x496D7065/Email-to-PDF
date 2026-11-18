@@ -20,7 +20,7 @@
 // escapes (Helper/build-checks/check-no-network.mjs).
 
 import { createWorkerSide } from './parse-worker-protocol';
-import type { FromWorker } from '../../Header/parse-worker-messages';
+import type { FromParseWorker } from '../../Header/parse-worker-messages';
 
 /**
  * The part of a dedicated worker's global scope used here. The project's
@@ -30,7 +30,7 @@ import type { FromWorker } from '../../Header/parse-worker-messages';
 interface WorkerScope
 {
     onmessage: ((event: MessageEvent<unknown>) => void) | null;
-    postMessage(message: FromWorker): void;
+    postMessage(message: FromParseWorker): void;
 }
 
 const scope = self as unknown as WorkerScope;

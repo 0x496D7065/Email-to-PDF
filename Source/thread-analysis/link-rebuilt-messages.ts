@@ -159,7 +159,7 @@
 //    entries are compared. A rebuilt message without a sender is never
 //    linked; one without any date text is never merged with another copy.
 // 3. Timeline (TimelineEntry). Real messages keep their order (the order of
-//    EngineResult.messages, dated first, then undated by file order). Each
+//    ThreadAnalysisResult.messages, dated first, then undated by file order). Each
 //    rebuilt message with a readable date gets a time KEY from its own
 //    estimate, kept inside the order of its own chain (a message is written
 //    after the one it quotes, before the one that quotes it):
@@ -192,7 +192,8 @@ import { isPlainName } from './quoted-header';
 import { hasWrittenZone, parseQuotedDate } from './quoted-date';
 import { LABEL_HEAD_LENGTH, LABEL_PATTERN, LABEL_ROLE_OF, labelKey } from './reply-header';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineRebuilt, QuotedDate, RealMatch, RebuiltPlacement, ReconstructedMessage, TimelineEntry } from '../../Header/rebuilt-emails';
+import type { AnalyzedRebuiltMessage, QuotedDate, RealMatch, RebuiltPlacement, ReconstructedMessage,
+    TimelineEntry } from '../../Header/rebuilt-emails';
 
 /** Dates further apart than this never match (26 h; the zone ranges of the file comment, 1b, are narrower still). */
 export const MATCH_WINDOW_MS = 26 * 60 * 60_000;
@@ -221,10 +222,10 @@ const DAY_MS = 24 * 60 * 60_000;
 /** Most candidates compared per rebuilt message (the closest in time first). */
 export const MAX_CANDIDATES = 64;
 
-/** One kept real message, in EngineResult.messages order. */
+/** One kept real message, in ThreadAnalysisResult.messages order. */
 export interface LinkSource
 {
-    /** Input position (EngineMessage.index). */
+    /** Input position (AnalyzedMessage.index). */
     readonly index: number;
     readonly message: NormalizedMessage;
     /** Its date when it is placed by date; null when placed by file order. */
@@ -244,7 +245,7 @@ export type DateAgreement = 'exact' | 'strong' | 'zone' | 'strict';
 
 export interface RebuildLinks
 {
-    readonly reconstructed: EngineRebuilt[];
+    readonly reconstructed: AnalyzedRebuiltMessage[];
     readonly timeline: TimelineEntry[];
 }
 
@@ -1497,7 +1498,7 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         emit(anchor);
     }
 
-    const reconstructed: EngineRebuilt[] = items.map((item) =>
+    const reconstructed: AnalyzedRebuiltMessage[] = items.map((item) =>
     {
         const source = sources[item.pos] as LinkSource;
         if (item.realPos !== null)

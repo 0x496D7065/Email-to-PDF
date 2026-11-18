@@ -5,7 +5,7 @@
 // files only. USER DECISION 2026-11-02 (task 8.3, PDF only): a rebuilt email
 // looks and is numbered exactly like a real one; nothing in the PDF says it
 // was rebuilt (the preview still does). Synthetic fixtures only
-// (Helper/Test/test-data/eml), run through the real engine and output plan, as the
+// (Helper/Test/test-data/eml), run through the real thread analysis and output plan, as the
 // app does; a few results are edited by hand to reach rare cases (a day
 // without a time, no sender, a list read short).
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -20,8 +20,8 @@ import { bodyLines, lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfBlock, PdfDocument, PdfEmail, PdfLine, PdfStrings } from '../../Header/pdf-document-model';
-import type { EngineRebuilt, QuotedDate } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage, QuotedDate } from '../../Header/rebuilt-emails';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 let fixtures: Map<string, NormalizedMessage>;
 beforeAll(async () =>
@@ -37,7 +37,7 @@ const fixture = (name: string): NormalizedMessage =>
     }
     return message;
 };
-const engineOf = (...names: string[]): EngineResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
+const analysisOf = (...names: string[]): ThreadAnalysisResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
 
 /** The last email of a synthetic thread: alone, it gives 3 rebuilt entries (ids 2, 1, 0, oldest first) before it. */
 const LAST = '13-order-4-bob-outlook-nl.eml';
@@ -46,14 +46,15 @@ const THIRD = '12-order-3-alice-gmail.eml';
 const EN = createPdfStrings('en');
 
 /** A copy of `result` with rebuilt message `rebuiltId` changed by `edit`. */
-function withRebuilt(result: EngineResult, rebuiltId: number, edit: (rebuiltEntry: EngineRebuilt) => EngineRebuilt): EngineResult
+function withRebuilt(
+    result: ThreadAnalysisResult, rebuiltId: number, edit: (rebuiltEntry: AnalyzedRebuiltMessage) => AnalyzedRebuiltMessage): ThreadAnalysisResult
 {
     return { ...result, reconstructed: result.reconstructed.map((r) => (r.id === rebuiltId ? edit(r) : r)) };
 }
 
 /** Builds the document of `result` with the given real positions (default all) and rebuilt ids (default every entry). */
 function build(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     options: { positions?: readonly number[]; rebuilt?: readonly number[] | null; timeZone?: string; strings?: PdfStrings; policy?: OutputPolicy } = {},
 ): PdfDocument
 {
@@ -154,7 +155,7 @@ function removedTexts(locale: 'en' | 'fr' | 'nl'): { fragments: string[]; word: 
 }
 
 /** Entries with a copy in the other email, and where each copy was read (list positions). */
-function sharedEntries(result: EngineResult): { entry: EngineRebuilt; own: number; other: number; copy: EngineRebuilt }[]
+function sharedEntries(result: ThreadAnalysisResult): { entry: AnalyzedRebuiltMessage; own: number; other: number; copy: AnalyzedRebuiltMessage }[]
 {
     return rebuiltEntries(result)
         .filter((e) => e.copies.length > 0)
@@ -171,7 +172,7 @@ describe('planPdfOrder', () =>
 {
     it('puts each rebuilt email chosen at its place in the timeline, before the email it was taken from, numbered with the real ones', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const order = planPdfOrder(result, [0], [0, 1, 2]);
         expect(order.slots.map((s) => `${s.kind === 'email' ? 'email' : `rebuilt ${String(s.entry.id)}`} #${String(s.number)}`)).toEqual([
             'rebuilt 2 #1',
@@ -196,7 +197,7 @@ describe('planPdfOrder', () =>
 
     it('gives none with the switch off ([] or nothing given), and the real emails exactly as before', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         for (const ids of [[], undefined])
         {
             const order = planPdfOrder(result, [0], ids);
@@ -207,19 +208,19 @@ describe('planPdfOrder', () =>
 
     it('follows the source email: none when the email they were taken from is not in the PDF (user decision Q1 (a))', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         expect(planPdfOrder(result, [], [0, 1, 2]).slots).toEqual([]);
         expect(planPdfOrder(result, [], [0, 1, 2]).pdfNumberByPosition).toEqual([null]);
     });
 
     it('ignores unknown, repeated and non-entry ids', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const order = planPdfOrder(result, [0], [99, -1, 1.5, 1, 1, Number.NaN]);
         expect(order.slots.map((s) => (s.kind === 'email' ? 'email' : s.entry.id))).toEqual([1, 'email']);
         expect(order.slots.map((s) => s.number)).toEqual([1, 2]);
         // A copy ('same-as') or a rebuilt email matched to a real file ('real') never gets a place of its own.
-        const two = engineOf(THIRD, LAST);
+        const two = analysisOf(THIRD, LAST);
         const all = two.reconstructed.map((r) => r.id);
         const ids = planPdfOrder(two, [0, 1], all).slots.flatMap((s) => (s.kind === 'rebuilt' ? [s.entry.id] : []));
         expect(ids.length).toBeGreaterThan(0);
@@ -228,7 +229,7 @@ describe('planPdfOrder', () =>
             expect(two.reconstructed[id]!.link).toBe('entry');
         }
         expect(new Set(ids).size).toBe(ids.length);
-        const files = engineOf('10-order-1-alice.eml', '11-order-2-bob-outlook-en.eml', THIRD, LAST);
+        const files = analysisOf('10-order-1-alice.eml', '11-order-2-bob-outlook-en.eml', THIRD, LAST);
         const real = planPdfOrder(files, [0, 1, 2, 3], files.reconstructed.map((r) => r.id));
         expect(real.slots.every((s) => s.kind === 'email')).toBe(true);
         expect(real.pdfNumberByPosition).toEqual([1, 2, 3, 4]);
@@ -236,7 +237,7 @@ describe('planPdfOrder', () =>
 
     it('gives no rebuilt email when the timeline is not valid (the real emails alone, as given)', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const order = planPdfOrder({ ...result, timeline: [] }, [0], [0, 1, 2]);
         expect(order.slots.map((s) => s.kind)).toEqual(['email']);
         expect(order.pdfNumberByPosition).toEqual([1]);
@@ -244,7 +245,7 @@ describe('planPdfOrder', () =>
 
     it('numbers by place IN THE PDF, which differs from the preview number once an email is left out or a rebuilt one comes first', () =>
     {
-        const result = engineOf(THIRD, LAST);
+        const result = analysisOf(THIRD, LAST);
         expect(result.messages).toHaveLength(2);
         expect(sharedEntries(result).length).toBeGreaterThan(0);
         // Only the second email (preview #2) in the PDF: after its rebuilt emails.
@@ -263,7 +264,7 @@ describe('planPdfOrder', () =>
 
     it('keeps a text quoted in several emails while one of them is in the PDF, taken from one in the PDF (follow-source rule)', () =>
     {
-        const result = engineOf(THIRD, LAST);
+        const result = analysisOf(THIRD, LAST);
         expect(sharedEntries(result).length).toBeGreaterThan(0);
         for (const { entry, copy, own, other } of sharedEntries(result))
         {
@@ -293,7 +294,7 @@ describe('planPdfOrder', () =>
 
     it('keeps the real emails in the order given (positions not in list order), the rebuilt ones placed before the first later email', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const order = planPdfOrder(result, [0, 0, 7], [2]);
         expect(order.slots.map((s) => s.kind)).toEqual(['rebuilt', 'email']);
         expect(order.slots.map((s) => s.number)).toEqual([1, 2]);
@@ -307,7 +308,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 {
     it('is numbered 1..n with the real ones, in timeline order, with the same heading and an "email-N" anchor', () =>
     {
-        const pdfDocument = build(engineOf(LAST));
+        const pdfDocument = build(analysisOf(LAST));
         expect(pdfDocument.emails.map((e) => e.heading)).toEqual(['Email 1', 'Email 2', 'Email 3', 'Email 4']);
         expect(pdfDocument.emails.map((e) => e.number)).toEqual([1, 2, 3, 4]);
         expect(pdfDocument.emails.map((e) => e.position)).toEqual([null, null, null, 0]);
@@ -321,7 +322,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 
     it('shows the fields read from the quote as a real email does: no "Taken from" row, no File row (it has no file)', () =>
     {
-        const pdfDocument = build(engineOf(LAST));
+        const pdfDocument = build(analysisOf(LAST));
         const [, gmail, outlookNl] = rebuiltOf(pdfDocument);
         expect(outlookNl!.fields.map((f) => f.label)).toEqual(['From', 'To', 'Date', 'Subject']);
         expect(fieldOf(outlookNl!, 'From')).toEqual(['Alice Example <alice@example.test>']);
@@ -342,7 +343,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 
     it('carries no note of its own, and its rebuilt text, whole', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const pdfDocument = build(result);
         expect(rebuiltOf(pdfDocument).map((e) => e.notes)).toEqual([[], [], []]);
         for (const email of rebuiltOf(pdfDocument))
@@ -358,7 +359,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
     it('shows a deeper quote left in its text without its marks, as a real email does (tasks 8.1 and 8.6)', () =>
     {
         // A reply quoting Bob, whose own text quotes an older line with no header of its own (">>"):
-        // the rebuilt email is Bob's text, its quote marks removed by the engine; the older line keeps one ">".
+        // the rebuilt email is Bob's text, its quote marks removed by the thread analysis; the older line keeps one ">".
         const reply: NormalizedMessage = {
             ...fixture(LAST),
             messageId: 'quote-levels-1@example.test',
@@ -385,7 +386,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 
     it('says nowhere that the same text is quoted in another email', () =>
     {
-        const result = engineOf(THIRD, LAST);
+        const result = analysisOf(THIRD, LAST);
         expect(sharedEntries(result).length).toBeGreaterThan(0);
         const pdfDocument = build(result);
         for (const email of rebuiltOf(pdfDocument))
@@ -397,7 +398,7 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 
     it('shows its date from the best value read, as for a real email: a day alone as that day, else "no date"', () =>
     {
-        const base = engineOf(LAST);
+        const base = analysisOf(LAST);
         const day = Date.UTC(2025, 2, 3);
         const dated = (date: Partial<QuotedDate>, approximate: boolean) =>
             withRebuilt(base, 0, (rebuiltEntry) => ({
@@ -436,8 +437,8 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 
     it('says "Unknown sender" when the quote names none (a From row is never empty); a list read short is shown as read, unmarked', () =>
     {
-        const plain = rebuiltById(build(engineOf(LAST)), 0);
-        const result = withRebuilt(engineOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, from: [], incomplete: ['to', 'cc'], cc: [] } }));
+        const plain = rebuiltById(build(analysisOf(LAST)), 0);
+        const result = withRebuilt(analysisOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, from: [], incomplete: ['to', 'cc'], cc: [] } }));
         const pdfDocument = build(result);
         const email = rebuiltById(pdfDocument, 0);
         expect(fieldOf(email, 'From')).toEqual(['Unknown sender']);
@@ -452,16 +453,16 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
 
     it('counts the control characters of its text, shown as codes', () =>
     {
-        const result = withRebuilt(engineOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, reconstructedText: 'Hello\u0007 there' } }));
+        const result = withRebuilt(analysisOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, reconstructedText: 'Hello\u0007 there' } }));
         const pdfDocument = build(result);
         expect(rebuiltById(pdfDocument, 0).flags.controlChars).toBe(1);
-        expect(pdfDocument.controlChars).toBe(build(engineOf(LAST)).controlChars + 1);
+        expect(pdfDocument.controlChars).toBe(build(analysisOf(LAST)).controlChars + 1);
     });
 
     it('is written in the PDF language, with the real emails\' words', () =>
     {
         const frenchStrings = createPdfStrings('fr');
-        const pdfDocument = build(engineOf(LAST), { strings: frenchStrings });
+        const pdfDocument = build(analysisOf(LAST), { strings: frenchStrings });
         const email = rebuiltOf(pdfDocument)[0]!;
         expect(email.heading).toBe('E-mail 1');
         expect(email.heading).toBe(frenchStrings.emailHeading(1));
@@ -481,7 +482,7 @@ describe('nothing in the PDF says an email was rebuilt (task 8.3), in every lang
             const { fragments, word } = removedTexts(locale);
             expect(fragments.every((f) => f.trim().length >= 3)).toBe(true);
             // The three rebuilt emails with every rare case at once: no sender, lists read short, no subject, a date that could not be read, a day alone.
-            let result = engineOf(THIRD, LAST);
+            let result = analysisOf(THIRD, LAST);
             const ids = rebuiltEntries(result).map((r) => r.id);
             expect(ids.length).toBeGreaterThanOrEqual(2);
             result = withRebuilt(result, ids[0]!, (r) => ({ ...r, rebuilt: { ...r.rebuilt, from: [], incomplete: ['to', 'cc'], subject: null, dateText: 'gisteren', date: null } }));
@@ -516,7 +517,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 {
     it('index and bookmarks: every email numbered 1..n in PDF order, rebuilt first when older, no marker; links match', () =>
     {
-        const result = engineOf(THIRD, LAST);
+        const result = analysisOf(THIRD, LAST);
         const pdfDocument = build(result);
         const emailCount = pdfDocument.emails.length;
         expect(emailCount).toBeGreaterThan(2);
@@ -553,7 +554,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('bookmarks of the last email alone: rebuilt ones as real ones, with their numbers', () =>
     {
-        const entries = build(engineOf(LAST)).index.entries;
+        const entries = build(analysisOf(LAST)).index.entries;
         expect(entries.map((e) => e.rebuilt)).toEqual([true, true, true, false]);
         expect(entries[2]!.bookmark).toBe('3. 2025-03-03, Alice Example: Re: Office desks and chairs');
         expect(entries[1]!.bookmark).toMatch(/^2\. \d{4}-\d\d-\d\d, .+: \(no subject\)$/);
@@ -562,7 +563,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('cover: "Emails", the date range and the people count rebuilt emails like real ones; no count row or section of their own', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const pdfDocument = build(result);
         const off = build(result, { rebuilt: [] });
         expect(pdfDocument.cover.emailCount).toBe(4);
@@ -599,7 +600,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('cover: a rebuilt email without a date counts as undated, like a real one', () =>
     {
-        const result = withRebuilt(engineOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, dateText: null, date: null } }));
+        const result = withRebuilt(analysisOf(LAST), 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, dateText: null, date: null } }));
         const pdfDocument = build(result);
         expect(pdfDocument.cover.undated).toBe(1);
         // Counted in the data only: the cover shows the date range alone (task 8.8).
@@ -609,7 +610,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('cover: no source files and no SHA-256 (task 8.12); the real file is named in its own email only, a rebuilt email has no file', () =>
     {
-        const pdfDocument = build(engineOf(LAST));
+        const pdfDocument = build(analysisOf(LAST));
         const file = fixture(LAST).source;
         const texts = blockTexts(pdfDocument.cover.blocks).join('\n');
         expect(texts).not.toMatch(/[0-9a-f]{64}/);
@@ -627,7 +628,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
         /** LAST with rebuilt email 0 dated by the day 2025-03-03 and the real email at `realIso`; only rebuilt email 0 in the PDF. */
         const pdfDocumentFor = (realIso: string, timeZone: string): PdfDocument =>
         {
-            const base = withRebuilt(engineOf(LAST), 0, (rebuiltEntry) => ({
+            const base = withRebuilt(analysisOf(LAST), 0, (rebuiltEntry) => ({
                 ...rebuiltEntry,
                 rebuilt: {
                     ...rebuiltEntry.rebuilt,
@@ -636,7 +637,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
                     date: { text: '3 March 2025', wallMs: Date.UTC(2025, 2, 3), precision: 'day', estimatedUtcMs: Date.UTC(2025, 2, 3), basis: 'source-offset' },
                 },
             }));
-            const result: EngineResult = {
+            const result: ThreadAnalysisResult = {
                 ...base,
                 messages: base.messages.map((m) => ({ ...m, message: { ...m.message, date: { ...m.message.date, utcMs: Date.parse(realIso) } } })),
             };
@@ -662,7 +663,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('several real files and rebuilt emails between them: each real file named in its own email, under its PDF number; none on the cover', () =>
     {
-        const result = engineOf('10-order-1-alice.eml', LAST);
+        const result = analysisOf('10-order-1-alice.eml', LAST);
         const ids = rebuiltEntries(result).map((r) => r.id);
         const pdfDocument = build(result);
         const order = planPdfOrder(result, [0, 1], ids);
@@ -693,7 +694,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('a merged duplicate copy is named in the File row of the email it was merged into, rebuilt emails between', () =>
     {
-        const result = engineOf('10-order-1-alice.eml', '10-order-1-alice.eml', LAST);
+        const result = analysisOf('10-order-1-alice.eml', '10-order-1-alice.eml', LAST);
         expect(result.messages).toHaveLength(2);
         const pdfDocument = build(result);
         expect(pdfDocument.emails.map((e) => `${e.rebuilt === null ? 'real' : 'rebuilt'} ${String(e.number)}`)).toEqual(
@@ -706,7 +707,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('nothing about rebuilt emails when none is chosen (switch off), and the real email is the same either way but for its number', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const off = build(result, { rebuilt: [] });
         const absent = build(result, { rebuilt: null });
         const on = build(result);
@@ -727,7 +728,7 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
 
     it('the source email unticked: no rebuilt email at all (it follows its source)', () =>
     {
-        const result = engineOf(THIRD, LAST);
+        const result = analysisOf(THIRD, LAST);
         const pdfDocument = build(result, { positions: [] });
         expect(pdfDocument.emails).toEqual([]);
         expect(pdfDocument.cover.emailCount).toBe(0);
@@ -774,7 +775,7 @@ describe('"Print full original text" (policy.unfoldEverything; user decision 202
 
     it('leaves every rebuilt email out, whatever was chosen: the real emails alone, numbered 1..k', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const ids = rebuiltEntries(result).map((r) => r.id);
         expect(ids).toHaveLength(3);
         const pdfDocument = build(result, { rebuilt: ids, policy: EVERYTHING });
@@ -787,7 +788,7 @@ describe('"Print full original text" (policy.unfoldEverything; user decision 202
 
     it('prints the source email whole, quoted history included (collapse, never delete), the same as with no rebuilt email chosen', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const ids = rebuiltEntries(result).map((r) => r.id);
         const pdfDocument = build(result, { rebuilt: ids, policy: EVERYTHING });
         const body = pdfDocument.emails[0]!.body.map(text);
@@ -806,7 +807,7 @@ describe('"Print full original text" (policy.unfoldEverything; user decision 202
 
     it('back to the default policy, the same choice gives the rebuilt emails again (nothing forgotten)', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         const ids = rebuiltEntries(result).map((r) => r.id);
         build(result, { rebuilt: ids, policy: EVERYTHING });
         const pdfDocument = build(result, { rebuilt: ids });
@@ -816,7 +817,7 @@ describe('"Print full original text" (policy.unfoldEverything; user decision 202
 
     it('also when the text is quoted in several emails', () =>
     {
-        const result = engineOf(THIRD, LAST);
+        const result = analysisOf(THIRD, LAST);
         const pdfDocument = build(result, { policy: EVERYTHING });
         expect(rebuiltOf(pdfDocument)).toEqual([]);
         expect(pdfDocument.emails.map((e) => e.number)).toEqual([1, 2]);

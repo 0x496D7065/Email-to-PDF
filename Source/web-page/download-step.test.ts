@@ -1,6 +1,6 @@
 // Unit tests for step 3 wired into the page (download-step.ts, mount-page.ts), in
 // Node with the recording fake DOM (Helper/Test/test-support/fake-dom.ts), the real
-// steps 1 and 2 and engine, a controllable fake processFiles, a fake PDF
+// steps 1 and 2 and thread analysis, a controllable fake processFiles, a fake PDF
 // maker (no worker), fake blob: URLs and a fixed clock. Synthetic messages
 // only. The real worker, download and blob: URL are checked in Chromium by
 // Helper/Test/browser-tests/download.spec.ts.
@@ -14,7 +14,7 @@ import { mountPage, type Page } from './mount-page';
 import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { MakePdfRequest, PdfFontBytes, PdfOutcome } from '../../Header/pdf-worker-messages';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ synthetic data
 
@@ -45,7 +45,7 @@ function make(): NormalizedMessage
         warnings: [],
     };
 }
-const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
+const analysisOf = (messages: readonly NormalizedMessage[]): ThreadAnalysisResult =>
     analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 function fakeFile(name: string): FileLike
@@ -178,12 +178,12 @@ function choose(...names: string[]): void
 }
 
 /** Adds `count` emails and waits until the list and its PDF plans are ready. */
-async function addAndShow(count = 3): Promise<EngineResult>
+async function addAndShow(count = 3): Promise<ThreadAnalysisResult>
 {
     const messages = Array.from({ length: count }, make);
-    const result = engineOf(messages);
+    const result = analysisOf(messages);
     choose(...messages.map((m) => m.source.fileName));
-    calls.at(-1)?.resolve({ ok: true, engine: result });
+    calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
     await settle();
     runTasks();
     return result;
@@ -240,7 +240,7 @@ describe('step 3: when the PDF can be made', () =>
         choose('a.eml');
         expect(isUnavailable()).toBe(true);
         expect(note().textContent).toBe(t('download.unavailable.busy'));
-        calls.at(-1)?.resolve({ ok: true, engine: engineOf([make(), make()]) });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: analysisOf([make(), make()]) });
         await settle();
         // The list is shown, its PDF plans are still being worked out: still waiting.
         expect(isUnavailable()).toBe(true);
@@ -280,9 +280,9 @@ describe('step 3: when the PDF can be made', () =>
     it('says so when every ticked email has no text, and is available again once one with text is ticked (task 8.14)', async () =>
     {
         const messages = [{ ...make(), bodyText: '' }, { ...make(), bodyText: ' \n \n' }, make()];
-        const result = engineOf(messages);
+        const result = analysisOf(messages);
         choose(...messages.map((m) => m.source.fileName));
-        calls.at(-1)?.resolve({ ok: true, engine: result });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
         await settle();
         runTasks();
         expect(isUnavailable()).toBe(false);
@@ -311,9 +311,9 @@ describe('step 3: when the PDF can be made', () =>
         // (one slice for 6 emails) are ready while chunks are still waiting.
         remount({ chunkSize: 1 });
         const messages = Array.from({ length: 6 }, make);
-        const result = engineOf(messages);
+        const result = analysisOf(messages);
         choose(...messages.map((m) => m.source.fileName));
-        calls.at(-1)?.resolve({ ok: true, engine: result });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
         await settle();
         let stepsWithPlansWhileRendering = 0;
         for (let steps = 0; page.preview.isRendering(); steps++)
@@ -361,7 +361,7 @@ describe('step 3: when the PDF can be made', () =>
     it('stays unavailable after a batch with no email', async () =>
     {
         choose('notes.txt');
-        calls.at(-1)?.resolve({ ok: true, engine: engineOf([]) });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: analysisOf([]) });
         await settle();
         runTasks();
         expect(note().textContent).toBe(t('download.unavailable.no-emails'));
@@ -400,10 +400,10 @@ describe('step 3: making the PDF', () =>
             subject: 'Re: Garden bench',
             bodyText: 'Fine for me.\n\nOn Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n> Could you paint the bench?\n',
         };
-        const result = engineOf([quoting]);
+        const result = analysisOf([quoting]);
         expect(result.reconstructed.filter((r) => r.link === 'entry')).toHaveLength(1);
         choose(quoting.source.fileName);
-        calls.at(-1)?.resolve({ ok: true, engine: result });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
         await settle();
         runTasks();
         button().click();
@@ -455,9 +455,9 @@ describe('step 3: making the PDF', () =>
             subject: 'Re: Garden bench',
             bodyText: 'Fine for me.\n\nOn Mon, 3 Mar 2025 at 14:02, Alice Example <alice@example.test> wrote:\n> Could you paint the bench?\n',
         };
-        const result = engineOf([quoting]);
+        const result = analysisOf([quoting]);
         choose(quoting.source.fileName);
-        calls.at(-1)?.resolve({ ok: true, engine: result });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
         await settle();
         runTasks();
         expect(byId('review-rebuilt').textContent).toBe('1 of 1 rebuilt email will be in the PDF.');
@@ -600,7 +600,7 @@ describe('step 3: a change of choice drops the PDF', () =>
         expectNoLink();
         expect(byId('download-area').getAttribute('data-state')).toBe('idle');
         // Once the page is ready again, the note says why the PDF went away.
-        calls.at(-1)?.resolve({ ok: true, engine: engineOf([make(), make()]) });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: analysisOf([make(), make()]) });
         await settle();
         runTasks();
         expect(note().textContent).toBe(t('download.changed'));

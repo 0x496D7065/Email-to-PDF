@@ -25,7 +25,8 @@ import type { PlanReason } from '../../../Header/output-plan';
 import type { ParseErrorCode, ParseWarning } from '../../../Header/parsed-email';
 import type { PdfStatus } from '../../../Header/pdf-plan';
 import type { AuthorSource, UnreadAttachedCode } from '../../../Header/preview-display';
-import type { DedupeWarningCode, EngineWarningCode, FoldReason, OrderReason, ReconstructionWarningCode } from '../../../Header/thread-analysis-result';
+import type { DedupeWarningCode, ThreadAnalysisWarningCode, FoldReason, OrderReason,
+    ReconstructionWarningCode } from '../../../Header/thread-analysis-result';
 
 export const en = {
     app: {
@@ -583,7 +584,7 @@ export const en = {
             'detector-failed': 'Some quoted or repeated text in this email could not be checked, so it is shown in full.',
             'folding-disabled': 'This email is shown in full; quoted text could not be tucked away.',
             'dedupe-failed': 'Identical copies could not be checked, so every email is kept.',
-        } satisfies Record<EngineWarningCode, string>,
+        } satisfies Record<ThreadAnalysisWarningCode, string>,
         // Earlier emails quoted in this email could not (all) be rebuilt. Nothing is lost: the quote stays here.
         rebuild: {
             'reconstruct-failed': 'The earlier emails quoted in this email could not be rebuilt as separate emails. The quoted text is all still in this email.',

@@ -2,7 +2,7 @@
 // (Source/web-page/preview.ts builds them, Source/web-page/review.ts adds their checkboxes,
 // the switch and the counts), in Node with the recording fake DOM
 // (Helper/Test/test-support/fake-dom.ts), wired like Source/web-page/mount-page.ts. Synthetic
-// fixtures only (Helper/Test/test-data/eml), run through the real engine. The real
+// fixtures only (Helper/Test/test-data/eml), run through the real thread analysis. The real
 // page is checked in the browsers by Helper/Test/browser-tests/rebuilt.spec.ts.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
@@ -14,8 +14,8 @@ import { setLocale, t } from './translations';
 import { mountPreview, rebuiltAlsoText, rebuiltDateTexts, rebuiltNoteText, type Preview, type PreviewOptions } from './preview';
 import { createReview, messagesText, noteText, type Review, type ReviewOptions } from './review';
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineRebuilt } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage } from '../../Header/rebuilt-emails';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ data
 
@@ -33,17 +33,17 @@ const fixture = (name: string): NormalizedMessage =>
     }
     return message;
 };
-const engineOf = (...names: string[]): EngineResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
+const analysisOf = (...names: string[]): ThreadAnalysisResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
 /** The last email of a thread alone: 3 earlier emails rebuilt from its quote. */
 const LAST = '13-order-4-bob-outlook-nl.eml';
 
 /** A copy of `result` with rebuilt message `id` changed by `edit`. */
-function withRebuilt(result: EngineResult, id: number, edit: (r: EngineRebuilt) => EngineRebuilt): EngineResult
+function withRebuilt(result: ThreadAnalysisResult, id: number, edit: (r: AnalyzedRebuiltMessage) => AnalyzedRebuiltMessage): ThreadAnalysisResult
 {
     return { ...result, reconstructed: result.reconstructed.map((r) => (r.id === id ? edit(r) : r)) };
 }
 /** The same result without anything rebuilt (as before task 7.6). */
-const withoutRebuilt = (result: EngineResult): EngineResult => ({
+const withoutRebuilt = (result: ThreadAnalysisResult): ThreadAnalysisResult => ({
     ...result,
     reconstructed: [],
     timeline: result.messages.map((_, position) => ({ kind: 'message' as const, position })),
@@ -93,7 +93,7 @@ function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}):
     );
 }
 
-function show(result: EngineResult): void
+function show(result: ThreadAnalysisResult): void
 {
     review.show(result);
     preview.show(result);
@@ -169,7 +169,7 @@ describe('rebuilt cards in the list', () =>
 {
     it('appear at their place in the timeline, before the email they were taken from, oldest first', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         show(result);
         expect(items().map((i) => i.getAttribute('data-rebuilt-id') ?? `#${i.getAttribute('data-position') ?? '?'}`)).toEqual(['2', '1', '0', '#0']);
         expect(rendered).toBe(1);
@@ -177,7 +177,7 @@ describe('rebuilt cards in the list', () =>
 
     it('have no number, a "Rebuilt" label first in the heading, and the fixed note with the source number', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         show(result);
         for (const card of rebuiltItems())
         {
@@ -200,7 +200,7 @@ describe('rebuilt cards in the list', () =>
 
     it('show the fields read from the quote and the rebuilt text, as text', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         show(result);
         const [outlookEn, gmail, outlookNl] = rebuiltItems();
         expect(one(outlookNl as FakeElement, 'message-subject').textContent).toBe('Re: Office desks and chairs');
@@ -220,7 +220,7 @@ describe('rebuilt cards in the list', () =>
 
     it('leave the source email exactly as it was without rebuilt emails (collapse, never delete)', () =>
     {
-        const result = engineOf(LAST);
+        const result = analysisOf(LAST);
         show(withoutRebuilt(result));
         const before = shape(realItems()[0] as FakeElement);
         show(result);
@@ -231,7 +231,7 @@ describe('rebuilt cards in the list', () =>
 
     it('say which other emails quote the same text, on the one card shown', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+        const result = analysisOf('12-order-3-alice-gmail.eml', LAST);
         show(result);
         const also = rebuiltItems().flatMap((c) => withClass(c, 'rebuilt-also').map((p) => p.textContent));
         expect(also.length).toBeGreaterThan(0);
@@ -245,7 +245,7 @@ describe('rebuilt cards in the list', () =>
 
     it('say "Unknown sender" and "(list may be incomplete)" when the quote says no more', () =>
     {
-        const base = engineOf(LAST);
+        const base = analysisOf(LAST);
         const result = withRebuilt(base, 0, (r) => ({ ...r, rebuilt: { ...r.rebuilt, from: [], incomplete: ['to', 'cc'], cc: [] } }));
         show(result);
         const card = rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === '0') as FakeElement;
@@ -257,7 +257,7 @@ describe('rebuilt cards in the list', () =>
 
     it('show the date again in another zone when the zone changes', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const card = rebuiltItems()[2] as FakeElement;
         const time = card.descendants().find((d) => d.tagName === 'time') as FakeElement;
         const before = time.textContent;
@@ -295,7 +295,7 @@ describe('rebuilt cards in the list', () =>
 
     it('are written again in another language, in place', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const card = rebuiltItems()[1] as FakeElement;
         const box = one(card, 'include-checkbox');
         setLocale('fr');
@@ -311,7 +311,7 @@ describe('rebuilt cards in the list', () =>
 
     it('a rebuilt email with no text says it is not in the PDF, is not counted in, and has no slot (task 8.14, Q4)', () =>
     {
-        const base = engineOf(LAST);
+        const base = analysisOf(LAST);
         const id = rebuiltEntries(base)[1]!.id;
         for (const text of ['', '\n  \n'])
         {
@@ -348,7 +348,7 @@ describe('rebuilt cards in the list', () =>
 
     it('give a stand-in with its label, a note and its text when a card cannot be built; the list is still complete', () =>
     {
-        const base = engineOf(LAST);
+        const base = analysisOf(LAST);
         const result = withRebuilt(base, 1, (r) => ({ ...r, sourceIndex: 99 }));
         show(result);
         expect(items()).toHaveLength(4);
@@ -366,7 +366,7 @@ describe('the switch, the checkboxes and the counts', () =>
 {
     it('show no switch and no rebuilt count when nothing was rebuilt', () =>
     {
-        show(engineOf('10-order-1-alice.eml'));
+        show(analysisOf('10-order-1-alice.eml'));
         expect(isHidden(byId('rebuilt-switch'))).toBe(true);
         expect(isHidden(byId('review-rebuilt'))).toBe(true);
         expect(byId('review-messages').textContent).toBe('1 email found.');
@@ -374,7 +374,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('explain under the switch what rebuilt emails are, read as its description, in the page language (task 8.8)', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const explain = byId('rebuilt-explain');
         expect(isHidden(byId('rebuilt-switch'))).toBe(false);
         expect(isHidden(explain)).toBe(false);
@@ -395,7 +395,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('include every rebuilt email by default, and count them', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         expect(isHidden(byId('rebuilt-switch'))).toBe(false);
         expect(byId('rebuilt-include-all').checked).toBe(true);
         expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
@@ -411,7 +411,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('the switch leaves ALL rebuilt emails out (their cards leave the list) and brings them back', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const all = byId('rebuilt-include-all');
         tick(all, false);
         expect(rebuiltItems().every(isHidden)).toBe(true);
@@ -435,7 +435,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('a card unticked stays in the list, dimmed and marked "Not in the PDF"', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const card = rebuiltItems()[0] as FakeElement;
         tick(one(card, 'include-checkbox'), false);
         expect(isHidden(card)).toBe(false);
@@ -458,7 +458,7 @@ describe('the switch, the checkboxes and the counts', () =>
     {
         const changes: string[] = [];
         mount({}, { onChange: (line) => changes.push(line) });
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const own = one(rebuiltItems()[0] as FakeElement, 'include-checkbox');
         tick(own, false);
         const source = one(realItems()[0] as FakeElement, 'include-checkbox');
@@ -500,7 +500,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('a text quoted in two emails stays in while one of them is ticked (follow-source rule)', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+        const result = analysisOf('12-order-3-alice-gmail.eml', LAST);
         show(result);
         const shared = rebuiltEntries(result).filter((e) => e.copies.length > 0);
         expect(shared.length).toBeGreaterThan(0);
@@ -520,7 +520,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('say "In the PDF: taken from #K" only when the PDF takes the card from a copy in another email (task 7.7 review)', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+        const result = analysisOf('12-order-3-alice-gmail.eml', LAST);
         show(result);
         const rebuiltEmail = rebuiltEntries(result).find((x) => x.copies.length > 0)!;
         const own = result.positionByIndex[rebuiltEmail.sourceIndex]!;
@@ -580,7 +580,7 @@ describe('the switch, the checkboxes and the counts', () =>
             preview.refreshRebuilt();
             return line;
         };
-        const result = engineOf('12-order-3-alice-gmail.eml', LAST);
+        const result = analysisOf('12-order-3-alice-gmail.eml', LAST);
         show(result);
         // A state worth restoring: one card unticked, and one card taken from a copy (its own email unticked).
         const rebuiltEmail = rebuiltEntries(result).find((x) => x.copies.length > 0)!;
@@ -678,7 +678,7 @@ describe('the switch, the checkboxes and the counts', () =>
             preview.refreshRebuilt();
             return line;
         };
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         tick(one(rebuiltItems()[1] as FakeElement, 'include-checkbox'), false);
         const all = byId('rebuilt-include-all');
         tick(all, false);
@@ -709,11 +709,11 @@ describe('the switch, the checkboxes and the counts', () =>
     {
         let everything = false;
         mount({}, { unfoldEverything: () => everything });
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         everything = true;
         review.everythingChanged();
         preview.refreshRebuilt();
-        show(engineOf('70-no-date.eml', LAST));
+        show(analysisOf('70-no-date.eml', LAST));
         const all = byId('rebuilt-include-all');
         expect(all.checked).toBe(false);
         expect(all.hasAttribute('disabled')).toBe(true);
@@ -731,16 +731,16 @@ describe('the switch, the checkboxes and the counts', () =>
     it('everythingChanged gives no line when nothing was rebuilt', () =>
     {
         mount({}, { unfoldEverything: () => true });
-        show(engineOf('10-order-1-alice.eml'));
+        show(analysisOf('10-order-1-alice.eml'));
         expect(review.everythingChanged()).toBe('');
     });
 
     it('keep the choices when files are added, and forget them on "Clear everything"', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         tick(one(rebuiltItems()[0] as FakeElement, 'include-checkbox'), false);
         tick(byId('rebuilt-include-all'), false);
-        show(engineOf('70-no-date.eml', LAST));
+        show(analysisOf('70-no-date.eml', LAST));
         expect(byId('rebuilt-include-all').checked).toBe(false);
         expect(rebuiltItems().every(isHidden)).toBe(true);
         tick(byId('rebuilt-include-all'), true);
@@ -749,7 +749,7 @@ describe('the switch, the checkboxes and the counts', () =>
         review.reset();
         expect(byId('rebuilt-include-all').checked).toBe(true);
         expect(isHidden(byId('rebuilt-switch'))).toBe(true);
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         expect(review.includedRebuilt()).toHaveLength(3);
     });
 
@@ -766,14 +766,14 @@ describe('the switch, the checkboxes and the counts', () =>
                 review.decorateRebuilt(item, rebuiltEmail, result);
             },
         });
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         tick(one(rebuiltItems()[2] as FakeElement, 'include-checkbox'), false);
         expect(review.includedRebuilt().map((r) => r.id)).toEqual([2, 1]);
         expect(review.untickedRebuilt()).toEqual([0]);
         // The same files again, but this card's checkbox cannot be added: its plain stand-in shows no
         // checkbox and no "Not in the PDF" mark, so it counts as included.
         broken = true;
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const standIn = rebuiltItems()[2] as FakeElement;
         expect(hasClass(standIn, 'message-failed')).toBe(true);
         expect(withClass(standIn, 'include-checkbox')).toEqual([]);
@@ -791,7 +791,7 @@ describe('the switch, the checkboxes and the counts', () =>
         expect(rebuiltItems().every(isHidden)).toBe(true);
         expect(realItems().some(isHidden)).toBe(false);
         // Files added while the switch is off: the new stand-in is hidden as it is put in the list.
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const newStandIn = rebuiltItems()[2] as FakeElement;
         expect(newStandIn).not.toBe(standIn);
         expect(hasClass(newStandIn, 'message-failed')).toBe(true);
@@ -808,18 +808,18 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('a language change while the switch is off does not bring back the rebuilt part of the counts (task 7.8c)', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         const all = byId('rebuilt-include-all');
         tick(all, false);
         setLocale('nl');
         review.relabel();
-        expect(byId('review-messages').textContent).toBe(messagesText(engineOf(LAST).counts));
-        expect(byId('review-messages').textContent).not.toBe(messagesText(engineOf(LAST).counts, 3));
+        expect(byId('review-messages').textContent).toBe(messagesText(analysisOf(LAST).counts));
+        expect(byId('review-messages').textContent).not.toBe(messagesText(analysisOf(LAST).counts, 3));
         expect(byId('review-rebuilt').textContent).toBe('');
         expect(isHidden(byId('review-rebuilt'))).toBe(true);
         // Back on (still in Dutch): the rebuilt part comes back, in the page language.
         tick(all, true);
-        expect(byId('review-messages').textContent).toBe(messagesText(engineOf(LAST).counts, 3));
+        expect(byId('review-messages').textContent).toBe(messagesText(analysisOf(LAST).counts, 3));
         expect(byId('review-rebuilt').textContent).toBe(t('counts.rebuiltIncluded', { included: 3, count: 3 }));
         setLocale('en');
         review.relabel();
@@ -828,7 +828,7 @@ describe('the switch, the checkboxes and the counts', () =>
 
     it('messagesText adds the rebuilt count only when there is one', () =>
     {
-        const counts = engineOf(LAST).counts;
+        const counts = analysisOf(LAST).counts;
         expect(messagesText(counts)).toBe('1 email found.');
         expect(messagesText(counts, 1)).toBe('1 email found, 1 earlier email rebuilt from quoted text.');
     });
@@ -838,7 +838,7 @@ describe('problems while rebuilding', () =>
 {
     it('are a calm note on the email whose quote could not (all) be rebuilt, counted with the notes', () =>
     {
-        const base = engineOf('10-order-1-alice.eml');
+        const base = analysisOf('10-order-1-alice.eml');
         const email = base.messages[0];
         if (email === undefined)
         {
@@ -852,9 +852,9 @@ describe('problems while rebuilding', () =>
     });
 
     /** LAST (3 rebuilt emails) with a "could not (all) be rebuilt" note on its email, and optionally a parse note too. */
-    const withRebuildNote = (code: 'reconstruct-failed' | 'reconstruct-limit', parseNote = false): EngineResult =>
+    const withRebuildNote = (code: 'reconstruct-failed' | 'reconstruct-limit', parseNote = false): ThreadAnalysisResult =>
     {
-        const base = engineOf(LAST);
+        const base = analysisOf(LAST);
         const email = base.messages[0];
         if (email === undefined)
         {
@@ -917,7 +917,7 @@ describe('problems while rebuilding', () =>
 
     it('an email whose only note is "could not be rebuilt", put in the list while the switch is off, shows no note and is not counted', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         tick(byId('rebuilt-include-all'), false);
         // New files (the whole set is run again) while the switch is off.
         show(withRebuildNote('reconstruct-failed'));
@@ -931,9 +931,9 @@ describe('problems while rebuilding', () =>
     });
 
     /** One email with nothing rebuilt, only a "could not be rebuilt" note. */
-    const notesOnly = (): EngineResult =>
+    const notesOnly = (): ThreadAnalysisResult =>
     {
-        const base = engineOf('10-order-1-alice.eml');
+        const base = analysisOf('10-order-1-alice.eml');
         const email = base.messages[0];
         if (email === undefined)
         {
@@ -944,7 +944,7 @@ describe('problems while rebuilding', () =>
 
     it('the switch stays shown for a note-only result while it is off, so the note can be shown again (task 7.8c review)', () =>
     {
-        show(engineOf(LAST));
+        show(analysisOf(LAST));
         tick(byId('rebuilt-include-all'), false);
         show(notesOnly());
         expect(rebuiltItems()).toHaveLength(0);
@@ -978,7 +978,7 @@ describe('problems while rebuilding', () =>
 
     it('the switch is hidden when nothing was rebuilt and no email has a "could not be rebuilt" note', () =>
     {
-        show(engineOf('10-order-1-alice.eml'));
+        show(analysisOf('10-order-1-alice.eml'));
         expect(isHidden(byId('rebuilt-switch'))).toBe(true);
         expect(isHidden(byId('rebuilt-include-all'))).toBe(true);
     });

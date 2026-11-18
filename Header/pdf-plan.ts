@@ -45,7 +45,7 @@ export interface PdfLabel
 }
 
 /** A display block and its label (null: a shown block, fully in the PDF, or no plan). */
-export interface PdfBlock
+export interface LabeledBlock
 {
     readonly block: DisplayBlock;
     readonly label: PdfLabel | null;

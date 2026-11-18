@@ -16,17 +16,17 @@ import {
     type WorkerFactory,
     type WorkerJob,
 } from './parse-worker-runner';
-import type { ToWorker, WorkerEvents } from '../../Header/parse-worker-messages';
+import type { ToParseWorker, WorkerEvents } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 
 const FILE_SHA256 = 'a'.repeat(64);
 const TIMEOUT_MS = 1000;
 
 /** A fake worker: records what the page sends, lets the test play the worker's part. */
-function fakeWorker(options: { onSend?: (message: ToWorker) => void; sendThrows?: boolean; terminateThrows?: boolean } = {})
+function fakeWorker(options: { onSend?: (message: ToParseWorker) => void; sendThrows?: boolean; terminateThrows?: boolean } = {})
 {
     let events: WorkerEvents | undefined;
-    const sent: { message: ToWorker; transfer: Transferable[] }[] = [];
+    const sent: { message: ToParseWorker; transfer: Transferable[] }[] = [];
     const terminate = vi.fn(() =>
     {
         if (options.terminateThrows === true)

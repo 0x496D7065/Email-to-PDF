@@ -71,13 +71,13 @@ describe('processFilesWith', () =>
         {
             throw new Error(result.detail);
         }
-        expect(result.engine.counts).toMatchObject({ filesGiven: 6, messagesFound: 4, duplicatesMerged: 1, filesFailed: 2 });
-        expect(result.engine.messages.map((m) => m.message.source.fileName)).toEqual(['order-1.eml', 'order-2.eml', 'order-3.eml']);
-        expect(result.engine.failed.map((f) => [f.index, f.fileName, f.error])).toEqual([
+        expect(result.threadAnalysis.counts).toMatchObject({ filesGiven: 6, messagesFound: 4, duplicatesMerged: 1, filesFailed: 2 });
+        expect(result.threadAnalysis.messages.map((m) => m.message.source.fileName)).toEqual(['order-1.eml', 'order-2.eml', 'order-3.eml']);
+        expect(result.threadAnalysis.failed.map((f) => [f.index, f.fileName, f.error])).toEqual([
             [3, 'notes.txt', 'unsupported-type'],
             [4, 'huge.eml', 'too-large'],
         ]);
-        expect(result.engine.failed[1]?.detail).toBe(FILE_TOO_LARGE_DETAIL);
+        expect(result.threadAnalysis.failed[1]?.detail).toBe(FILE_TOO_LARGE_DETAIL);
         // The huge file was never loaded.
         expect(huge.arrayBuffer).not.toHaveBeenCalled();
         expect(progress).toEqual([
@@ -110,7 +110,7 @@ describe('processFilesWith', () =>
         expect(callOrder).toEqual(['read a.eml', 'parse a.eml', 'read b.eml', 'parse b.eml']);
     });
 
-    it('an engine timeout gives a batch-level error, with the parse results kept', async () =>
+    it('a thread analysis timeout gives a batch-level error, with the parse results kept', async () =>
     {
         const steps: ProcessSteps = { ...STEPS, organize: () => Promise.resolve({ ok: false, error: 'engine-timeout', detail: THREAD_ANALYSIS_TIMEOUT_DETAIL }) };
         const result = await processFilesWith([textFile('plain.eml', fixture('01-plain-english.eml')).file], steps);
@@ -144,8 +144,9 @@ describe('processFilesWith', () =>
         {
             throw new Error(result.detail);
         }
-        expect(result.engine.failed).toEqual([{ index: 0, fileName: 'bad.eml', sha256: null, error: 'tool-error', detail: UNEXPECTED_FILE_DETAIL }]);
-        expect(result.engine.messages.map((m) => m.message.source.fileName)).toEqual(['good.eml']);
+        expect(result.threadAnalysis.failed).toEqual(
+            [{ index: 0, fileName: 'bad.eml', sha256: null, error: 'tool-error', detail: UNEXPECTED_FILE_DETAIL }]);
+        expect(result.threadAnalysis.messages.map((m) => m.message.source.fileName)).toEqual(['good.eml']);
     });
 
     it('a progress callback that throws does not stop the batch', async () =>
@@ -163,7 +164,7 @@ describe('processFilesWith', () =>
     {
         const organizeSpy = vi.fn(organize);
         const result = await processFilesWith([], { ...STEPS, organize: organizeSpy });
-        expect(result.ok && result.engine.counts.filesGiven).toBe(0);
+        expect(result.ok && result.threadAnalysis.counts.filesGiven).toBe(0);
         expect(organizeSpy).toHaveBeenCalledWith([], undefined);
     });
 
@@ -183,9 +184,9 @@ describe('processFilesWith', () =>
         {
             throw new Error(result.detail);
         }
-        expect(result.engine.counts.filesFailed).toBe(0);
-        expect(result.engine.messages[0]?.parserWarnings).toContain('html-body-unreadable');
-        expect(result.engine.messages[0]?.message.bodyText).toBe('');
+        expect(result.threadAnalysis.counts.filesFailed).toBe(0);
+        expect(result.threadAnalysis.messages[0]?.parserWarnings).toContain('html-body-unreadable');
+        expect(result.threadAnalysis.messages[0]?.message.bodyText).toBe('');
     });
 });
 
@@ -219,7 +220,7 @@ describe('processFilesWith: cancelling ("Clear everything")', () =>
         expect(progress).toEqual([]);
     });
 
-    it('aborted while a file is parsed: no further file is read, the engine never runs, nothing is kept', async () =>
+    it('aborted while a file is parsed: no further file is read, the thread analysis never runs, nothing is kept', async () =>
     {
         const controller = new AbortController();
         const fakeFiles = [textFile('a.eml', fixture('10-order-1-alice.eml')), textFile('b.eml', fixture('11-order-2-bob-outlook-en.eml'))];
@@ -265,7 +266,7 @@ describe('processFilesWith: cancelling ("Clear everything")', () =>
         expect(parseSpy).not.toHaveBeenCalled();
     });
 
-    it('aborted while organizing: the engine result that still comes is thrown away', async () =>
+    it('aborted while organizing: the thread analysis result that still comes is thrown away', async () =>
     {
         const controller = new AbortController();
         const steps: ProcessSteps = {

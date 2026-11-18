@@ -3,7 +3,7 @@
 //   (pointing to step 1, which already lists them with the reasons), emails
 //   found (and, task 8.13b-4, how many of them were attached inside other
 //   emails) and identical copies merged, "N of M emails will be in the PDF"
-//   and how many emails have notes. The numbers are the engine's own counts;
+//   and how many emails have notes. The numbers are the thread analysis's own counts;
 //   nothing is counted again here. "N of M" counts only the ticked emails
 //   the PDF prints: an email with no text is left out of the PDF (task 8.14,
 //   Q3, Source/web-page-logic/no-printable-text.ts), and when some ticked ones are, a sentence
@@ -110,15 +110,15 @@ import { createStaticLabels } from './static-labels';
 import { headingId, joinList, messageNumberText, rebuiltHeadingId } from './preview';
 import type { ProcessResult } from '../../Header/file-processing';
 import type { MessageNote, UnreadAttachedCode } from '../../Header/preview-display';
-import type { EngineRebuilt } from '../../Header/rebuilt-emails';
-import type { EngineCounts, EngineMessage, EngineResult, ReconstructionWarning } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage } from '../../Header/rebuilt-emails';
+import type { ThreadAnalysisCounts, AnalyzedMessage, ThreadAnalysisResult, ReconstructionWarning } from '../../Header/thread-analysis-result';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (no DOM; unit tested directly).
 
 /**
  * "See emails #3, #5." for a note about look-alike emails, plus "2 more files
- * are involved." when the engine cut its list; '' if none. `more` counts
+ * are involved." when the thread analysis cut its list; '' if none. `more` counts
  * files, not emails (see MessageNote in Header/preview-display.ts).
  */
 export function relatedText(numbers: readonly number[], more: number): string
@@ -158,7 +158,7 @@ export function noteText(note: MessageNote): string
 }
 
 /** "12 files, 1 could not be read." */
-export function filesText(counts: EngineCounts): string
+export function filesText(counts: ThreadAnalysisCounts): string
 {
     const files = t('counts.files', { count: counts.filesGiven });
     if (counts.filesFailed === 0)
@@ -177,7 +177,7 @@ export function filesText(counts: EngineCounts): string
  * found were attached inside other emails (task 8.13b-4, P4): "9 emails
  * found (2 attached inside other emails), ...", said only when there is one.
  */
-export function messagesText(counts: EngineCounts, rebuilt = 0, attached = 0): string
+export function messagesText(counts: ThreadAnalysisCounts, rebuilt = 0, attached = 0): string
 {
     const found = t('counts.messagesFound', { count: counts.messagesFound });
     const parts = [attached > 0 ? t('counts.messagesFoundAttached', { found, attached: t('counts.attachedFound', { count: attached }) }) : found];
@@ -201,7 +201,7 @@ export function messagesText(counts: EngineCounts, rebuilt = 0, attached = 0): s
  * If that cannot be worked out (a broken entry), every ticked email is
  * counted, as before.
  */
-export function includedText(result: EngineResult, ticked: readonly number[]): string
+export function includedText(result: ThreadAnalysisResult, ticked: readonly number[]): string
 {
     let printed = ticked.length;
     try
@@ -219,7 +219,7 @@ export function includedText(result: EngineResult, ticked: readonly number[]): s
 
 /** The notes of one email, or none if they cannot be worked out (a broken entry: never stops the page). */
 export function safeNotes(
-    email: EngineMessage,
+    email: AnalyzedMessage,
     position: number,
     positionByIndex: readonly (number | null)[],
     rebuildWarnings: readonly ReconstructionWarning[] = [],
@@ -243,7 +243,7 @@ export function safeNotes(
  * purpose (preview show() also works them out), for simplicity: no shared
  * state between the two steps.
  */
-export function safeUnreadAttached(result: EngineResult): readonly (UnreadAttachedCode | null)[]
+export function safeUnreadAttached(result: ThreadAnalysisResult): readonly (UnreadAttachedCode | null)[]
 {
     try
     {
@@ -263,19 +263,19 @@ export interface Review
     /** The counts box, for the preview's `header`. */
     readonly element: HTMLDivElement;
     /** The preview's `decorate` hook: adds the include checkbox and the notes to an email's item. */
-    readonly decorate: (item: HTMLLIElement, message: EngineMessage, position: number, result: EngineResult) => void;
+    readonly decorate: (item: HTMLLIElement, message: AnalyzedMessage, position: number, result: ThreadAnalysisResult) => void;
     /** Shows the counts of a new result. The include choices are kept. */
-    show(result: EngineResult): void;
+    show(result: ThreadAnalysisResult): void;
     /** A step 1 result: its counts, or nothing after a batch error (choices kept). */
     showResult(result: ProcessResult): void;
     /** The preview's `onRendered` hook: the list of `result` is complete (see the header comment). */
-    readonly rendered: (result: EngineResult) => void;
+    readonly rendered: (result: ThreadAnalysisResult) => void;
     /** Forgets every include choice and empties the counts (for "Clear everything"). */
     reset(): void;
     /** List positions (0-based) of the emails to put in the PDF, in list (date) order. */
     includedPositions(): readonly number[];
     /** The emails to put in the PDF, in list (date) order. */
-    includedMessages(): readonly EngineMessage[];
+    includedMessages(): readonly AnalyzedMessage[];
     /** Writes the counts and every item's words again in the page language now (nothing is rebuilt). */
     relabel(): void;
     /**
@@ -285,11 +285,11 @@ export interface Review
      */
     readonly rebuiltSwitch: HTMLDivElement;
     /** The preview's `decorateRebuilt` hook: adds the include checkbox to a rebuilt email's card. */
-    readonly decorateRebuilt: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
+    readonly decorateRebuilt: (item: HTMLLIElement, rebuilt: AnalyzedRebuiltMessage, result: ThreadAnalysisResult) => void;
     /** True while rebuilt cards are shown: the switch is on and "Print full original text" is unticked. */
     rebuiltShown(): boolean;
     /** The rebuilt emails to put in the PDF, in list (timeline) order: ticked, and an email they were read from included; [] when the switch is off or "Print full original text" is ticked. */
-    includedRebuilt(): readonly EngineRebuilt[];
+    includedRebuilt(): readonly AnalyzedRebuiltMessage[];
     /**
      * Ids of the rebuilt emails the reader UNTICKED (task 8.13a review round
      * 2): only cards the page decorated (so the reader saw them) whose own
@@ -331,7 +331,7 @@ interface Parts
 interface Entry extends Parts
 {
     readonly item: HTMLLIElement;
-    readonly message: EngineMessage;
+    readonly message: AnalyzedMessage;
 }
 
 /** What buildRebuilt() added to a rebuilt card. */
@@ -348,7 +348,7 @@ interface RebuiltParts
 interface RebuiltEntry extends RebuiltParts
 {
     readonly item: HTMLLIElement;
-    readonly rebuilt: EngineRebuilt;
+    readonly rebuilt: AnalyzedRebuiltMessage;
 }
 
 export interface ReviewOptions
@@ -384,11 +384,11 @@ export function createReview(options: ReviewOptions = {}): Review
 {
     // --- State (memory only, README.md, rule R5) ------------------------------
     const selection = createEmailSelection();
-    let current: EngineResult | null = null;
+    let current: ThreadAnalysisResult | null = null;
     // The latest decorated item per position (a stand-in replaces a failed item).
     let entries = new Map<number, Entry>();
     // The result whose list the preview finished building (see `rendered`).
-    let renderedResult: EngineResult | null = null;
+    let renderedResult: ThreadAnalysisResult | null = null;
     // The parts added to each item, so a second call on the same item adds nothing.
     const added = new WeakMap<HTMLLIElement, Parts>();
     // How many emails of the result shown have notes (for the counts line):
@@ -406,7 +406,7 @@ export function createReview(options: ReviewOptions = {}): Review
     const rebuiltSelection = createRebuiltSelection();
     let rebuiltItems = new Map<number, RebuiltEntry>();
     const addedRebuilt = new WeakMap<HTMLLIElement, RebuiltParts>();
-    let rebuiltList: readonly EngineRebuilt[] = [];
+    let rebuiltList: readonly AnalyzedRebuiltMessage[] = [];
 
     // --- Counts box -----------------------------------------------------------
     const filesLine = createSafeElement('span', { attrs: { id: 'review-files-text' } });
@@ -451,7 +451,7 @@ export function createReview(options: ReviewOptions = {}): Review
     });
 
     /** True if the email goes into the PDF. A broken entry counts as included: never silently left out. */
-    function isIncluded(email: EngineMessage | undefined): boolean
+    function isIncluded(email: AnalyzedMessage | undefined): boolean
     {
         try
         {
@@ -539,7 +539,7 @@ export function createReview(options: ReviewOptions = {}): Review
     }
 
     /** True if this rebuilt card is ticked (a broken entry counts as ticked, as for real emails). */
-    function isRebuiltTicked(rebuiltEmail: EngineRebuilt): boolean
+    function isRebuiltTicked(rebuiltEmail: AnalyzedRebuiltMessage): boolean
     {
         try
         {
@@ -557,7 +557,7 @@ export function createReview(options: ReviewOptions = {}): Review
      * `included`: the list positions in the PDF (positions()), worked out once
      * by the caller. A broken entry counts as in the PDF (never silently left out).
      */
-    function sourceInPdf(rebuiltEmail: EngineRebuilt, included: ReadonlySet<number>): boolean
+    function sourceInPdf(rebuiltEmail: AnalyzedRebuiltMessage, included: ReadonlySet<number>): boolean
     {
         if (current === null)
         {
@@ -582,7 +582,7 @@ export function createReview(options: ReviewOptions = {}): Review
      * cannot be worked out (then the card simply shows no extra line).
      * Only asked while the card is in the PDF.
      */
-    function pdfSourceNumber(rebuiltEmail: EngineRebuilt, included: ReadonlySet<number>): number | null
+    function pdfSourceNumber(rebuiltEmail: AnalyzedRebuiltMessage, included: ReadonlySet<number>): number | null
     {
         if (current === null)
         {
@@ -607,7 +607,7 @@ export function createReview(options: ReviewOptions = {}): Review
      * (user decision Q1 (a): a rebuilt email follows its source email).
      * None while "Print full original text" is ticked (user decision 2026-10-29).
      */
-    function rebuiltIncluded(): EngineRebuilt[]
+    function rebuiltIncluded(): AnalyzedRebuiltMessage[]
     {
         if (current === null || !rebuiltOn())
         {
@@ -756,7 +756,7 @@ export function createReview(options: ReviewOptions = {}): Review
     }
 
     /** The counts lines of the result shown, in the page language. */
-    function writeCounts(result: EngineResult): void
+    function writeCounts(result: ThreadAnalysisResult): void
     {
         filesLine.textContent = filesText(result.counts);
         showIncludedLine();
@@ -804,7 +804,7 @@ export function createReview(options: ReviewOptions = {}): Review
     }
 
     /** Shows a result's counts; does nothing for the result already shown (its items stay registered). */
-    function show(result: EngineResult): void
+    function show(result: ThreadAnalysisResult): void
     {
         if (result === current)
         {
@@ -849,7 +849,7 @@ export function createReview(options: ReviewOptions = {}): Review
     }
 
     /** Builds the checkbox and notes of one item (only once per item). */
-    function build(item: HTMLLIElement, email: EngineMessage, position: number, result: EngineResult): Parts
+    function build(item: HTMLLIElement, email: AnalyzedMessage, position: number, result: ThreadAnalysisResult): Parts
     {
         const id = `include-${String(position)}`;
         const labelId = `${id}-label`;
@@ -904,7 +904,7 @@ export function createReview(options: ReviewOptions = {}): Review
     }
 
     /** Builds a rebuilt card's checkbox (only once per card), right after its heading. */
-    function buildRebuilt(item: HTMLLIElement, rebuiltEmail: EngineRebuilt): RebuiltParts
+    function buildRebuilt(item: HTMLLIElement, rebuiltEmail: AnalyzedRebuiltMessage): RebuiltParts
     {
         const id = `include-rebuilt-${String(rebuiltEmail.id)}`;
         const labelId = `${id}-label`;
@@ -993,7 +993,7 @@ export function createReview(options: ReviewOptions = {}): Review
         {
             if (result.ok)
             {
-                show(result.engine);
+                show(result.threadAnalysis);
             }
             else
             {

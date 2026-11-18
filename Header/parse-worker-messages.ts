@@ -1,10 +1,10 @@
 // Header: the messages between the page and the reading worker, and the
 // handle that starts a worker. Shared types only, no code (README.md, "Where
 // things are"). The checks that every message really has this shape are
-// isToWorker / isFromWorker in Source/email-reading/parse-worker-protocol.ts.
+// isToParseWorker / isFromParseWorker in Source/email-reading/parse-worker-protocol.ts.
 // Used by email-reading/ (parse-worker-protocol, parse-worker, parse-worker-runner,
 // parse-files) and worker-pipeline/ (its runners reuse WorkerHandle and
-// WorkerEvents; read-files and process-files use Limits).
+// WorkerEvents; read-files and process-files use FileSizeLimits).
 
 import type { ParseResult } from './parsed-email';
 
@@ -23,7 +23,7 @@ export interface ConversionsReply
 }
 
 /** Page -> worker. */
-export type ToWorker = ParseRequest | ConversionsReply;
+export type ToParseWorker = ParseRequest | ConversionsReply;
 
 export interface HtmlRequest
 {
@@ -31,20 +31,20 @@ export interface HtmlRequest
     readonly htmls: readonly string[];
 }
 
-export interface ResultMessage
+export interface ParseResultMessage
 {
     readonly type: 'result';
     readonly result: ParseResult;
 }
 
 /** The worker hit an error it could not turn into a result (a bug, not a bad file). */
-export interface FailedMessage
+export interface ParseFailedMessage
 {
     readonly type: 'failed';
 }
 
 /** Worker -> page. */
-export type FromWorker = HtmlRequest | ResultMessage | FailedMessage;
+export type FromParseWorker = HtmlRequest | ParseResultMessage | ParseFailedMessage;
 
 /** The two formats the tool reads. */
 export type FileKind = 'eml' | 'msg';
@@ -60,7 +60,7 @@ export type ConversionOutcome =
  * page sends: parse requests for the reading worker, thread-analysis requests for the thread-analysis worker
  * (Source/worker-pipeline/thread-analysis-worker-runner.ts), which reuses connectWorker (Source/email-reading/parse-worker-runner.ts).
  */
-export interface WorkerHandle<M = ToWorker>
+export interface WorkerHandle<M = ToParseWorker>
 {
     send(message: M, transfer: Transferable[]): void;
     terminate(): void;
@@ -76,7 +76,7 @@ export interface WorkerEvents
 }
 
 /** The limits, injectable so tests do not need 500 MB of data. */
-export interface Limits
+export interface FileSizeLimits
 {
     readonly maxFileBytes: number;
     readonly maxBatchBytes: number;

@@ -19,7 +19,7 @@
 //   with no warning (task 8.13b-1), so it is found here: the email's own
 //   message/rfc822 attachments (AttachmentInfo without attachedIndex) are
 //   more than its attached emails read as emails of their own without a
-//   place in its text (EngineAttached with no places). It is NOT said:
+//   place in its text (AnalyzedAttachedMessage with no places). It is NOT said:
 //   - for a .msg file: an attached Outlook item that was not read already
 //     gives the 'forwarded-message-not-expanded' warning (msg-parser.ts);
 //   - for an email that already has 'forwarded-message-not-expanded': an
@@ -36,14 +36,14 @@
 
 import { attachedAt } from '../thread-analysis/analyze-thread';
 import type { AttachedLinks, UnreadAttachedCode } from '../../Header/preview-display';
-import type { EngineAttached, EngineAttachedPlace, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedAttachedMessage, AnalyzedAttachedPlace, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** The attachment type of an email inside an .eml file. */
 const RFC822 = 'message/rfc822';
 /** The parts that make an email a bounce or feedback report (as in Source/email-reading/eml-parser.ts, REPORT_TYPES). */
 const REPORT_TYPES: ReadonlySet<string> = new Set(['message/delivery-status', 'message/feedback-report']);
 
-type LinkInput = Pick<EngineResult, 'messages' | 'positionByIndex' | 'attached' | 'counts'>;
+type LinkInput = Pick<ThreadAnalysisResult, 'messages' | 'positionByIndex' | 'attached' | 'counts'>;
 
 /** A list position from an input position, or null (unknown, a failed file). */
 function positionOf(result: LinkInput, index: number): number | null
@@ -82,7 +82,7 @@ function holdsUnread(result: LinkInput, position: number, readAsFile: ReadonlyMa
 }
 
 /** Every attached entry that can be used (an object with whole-number positions and a places list). */
-function usableEntries(result: LinkInput): EngineAttached[]
+function usableEntries(result: LinkInput): AnalyzedAttachedMessage[]
 {
     const list: unknown = result.attached;
     if (!Array.isArray(list))
@@ -90,12 +90,12 @@ function usableEntries(result: LinkInput): EngineAttached[]
         return [];
     }
     return (list as readonly unknown[]).filter(
-        (attachedEntry): attachedEntry is EngineAttached =>
+        (attachedEntry): attachedEntry is AnalyzedAttachedMessage =>
             typeof attachedEntry === 'object' &&
             attachedEntry !== null &&
-            Number.isInteger((attachedEntry as EngineAttached).index) &&
-            Number.isInteger((attachedEntry as EngineAttached).parentIndex) &&
-            Array.isArray((attachedEntry as EngineAttached).places),
+            Number.isInteger((attachedEntry as AnalyzedAttachedMessage).index) &&
+            Number.isInteger((attachedEntry as AnalyzedAttachedMessage).parentIndex) &&
+            Array.isArray((attachedEntry as AnalyzedAttachedMessage).places),
     );
 }
 
@@ -152,7 +152,7 @@ export function attachedLinks(result: LinkInput): AttachedLinks
             {
                 continue;
             }
-            for (const place of places as readonly EngineAttachedPlace[])
+            for (const place of places as readonly AnalyzedAttachedPlace[])
             {
                 const holder = positionOf(result, place.holderIndex);
                 if (holder !== null && unread[holder] === null)
@@ -171,7 +171,7 @@ export function attachedLinks(result: LinkInput): AttachedLinks
 }
 
 /** How many emails were found attached inside other emails (task 8.13b-4, P4): every one read as an email of its own, merged copies included. */
-export function attachedCount(result: Pick<EngineResult, 'attached'>): number
+export function attachedCount(result: Pick<ThreadAnalysisResult, 'attached'>): number
 {
     return Array.isArray(result.attached) ? result.attached.length : 0;
 }

@@ -43,7 +43,7 @@ import { bodyLines, lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -80,13 +80,13 @@ function realFile(messages: readonly ThreadMessage[], messageIndex: number, body
     };
 }
 
-function engineOf(threadCase: ThreadCase, dropped: readonly number[]): EngineResult
+function analysisOf(threadCase: ThreadCase, dropped: readonly number[]): ThreadAnalysisResult
 {
     return analyzeThread(dropped.map((i) => ({ ok: true as const, message: realFile(threadCase.messages!, i) })));
 }
 
 function build(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     options: { positions?: readonly number[]; rebuilt?: readonly number[]; unticked?: readonly number[]; rebuildingOff?: boolean; policy?: OutputPolicy; plans?: MessagePlan[] } = {},
 ): PdfDocument
 {
@@ -154,7 +154,7 @@ describe('printedElsewhere', () =>
 {
     it('covers the whole place of each chosen rebuilt email, header lines included, even when its date is only estimated (task 8.13a, Q4); nothing for one not chosen', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const entries = rebuiltEntries(result);
         expect(entries).toHaveLength(2);
         // The quoted dates of this conversation have no zone of their own ("Mon, Mar 3, 2025 at 6:52 PM").
@@ -178,7 +178,7 @@ describe('printedElsewhere', () =>
 
     it('covers a part linked to a real email only while that real email is in the PDF', () =>
     {
-        const result = engineOf(FORWARD, [0, 1, 2]);
+        const result = analysisOf(FORWARD, [0, 1, 2]);
         const linked = result.reconstructed.filter((r) => r.link === 'real');
         expect(linked.length).toBeGreaterThan(0);
         const all = planPdfOrder(result, [0, 1, 2]);
@@ -205,7 +205,7 @@ describe('printedElsewhere', () =>
     it('covers a copy of a chosen entry in the other email that quotes it (link "same-as"), and neither when the entry is not chosen', () =>
     {
         const threadCase = thread('gmail-en x3');
-        const result = engineOf(threadCase, [2, 3]);
+        const result = analysisOf(threadCase, [2, 3]);
         const copies = result.reconstructed.filter((r) => r.link === 'same-as');
         expect(copies.length).toBeGreaterThan(0);
         const all = planPdfOrder(result, [0, 1], rebuiltEntries(result).map((r) => r.id));
@@ -230,9 +230,9 @@ describe('printedElsewhere', () =>
 
     it('skips a rebuilt email whose place is not inside its source body (when unsure, keep)', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const length = result.messages[0]!.message.bodyText.length;
-        const broken: EngineResult = {
+        const broken: ThreadAnalysisResult = {
             ...result,
             reconstructed: result.reconstructed.map((r) => ({ ...r, rebuilt: { ...r.rebuilt, start: r.rebuilt.start, end: length + 5 } })),
         };
@@ -332,7 +332,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 {
     it('a forward: the forwarded emails, printed as emails of their own, are left out of the forward', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const pdfDocument = build(result);
         expect(pdfDocument.emails).toHaveLength(3);
         const forward = realOf(pdfDocument, 0);
@@ -374,7 +374,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 
     it('the switch off: the forwarded emails stay in the forward, as the plan says (no rebuilt email is "unticked")', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const off = build(result, { rebuilt: [], rebuildingOff: true });
         const plain = bodyOf(realOf(off, 0));
         expect(realOf(off, 0).flags.printedElsewhere).toBe(false);
@@ -386,7 +386,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 
     it('a forwarded email whose rebuilt email is unticked is left out of the forward (task 8.13a, Q2); "Print full original text" still prints it', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const ids = rebuiltEntries(result).map((r) => r.id);
         const none = build(result, { rebuilt: [], unticked: ids });
         expect(none.emails).toHaveLength(1);
@@ -408,7 +408,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 
     it('a rebuilt email merely missing from the chosen ones is NOT unticked (task 8.13a review round 2): its forwarded part stays in the forward', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const ids = rebuiltEntries(result).map((r) => r.id);
         // No `unticked` (the card list fell back, a card could not be shown, the review list failed): nothing is cut for Q2.
         for (const pdfDocument of [build(result, { rebuilt: [] }), build(result, { rebuilt: [], unticked: [] })])
@@ -440,7 +440,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 
     it('"Print full original text": the forward is printed whole and no rebuilt email is in', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const pdfDocument = build(result, { policy: EVERYTHING });
         expect(pdfDocument.emails).toHaveLength(1);
         expect(pdfDocument.emails[0]!.flags.printedElsewhere).toBe(false);
@@ -453,7 +453,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
 
     it('every email added as a file: the forwarded part is left out of the forward, the real files print it', () =>
     {
-        const result = engineOf(FORWARD, [0, 1, 2]);
+        const result = analysisOf(FORWARD, [0, 1, 2]);
         const pdfDocument = build(result, { rebuilt: [] });
         for (const sentenceIndex of [0, 1, 2])
         {
@@ -491,7 +491,7 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
     it('a reply: its quoted history is left out by its plan anyway, the rule changes nothing', () =>
     {
         const threadCase = thread('outlook-en x3');
-        const result = engineOf(threadCase, [3]);
+        const result = analysisOf(threadCase, [3]);
         const on = build(result);
         const off = build(result, { rebuilt: [] });
         expect(bodyOf(realOf(on, 0))).toBe(bodyOf(realOf(off, 0)));
@@ -603,16 +603,16 @@ describe('B1: an answer typed below an unmarked Outlook quote stays in the write
 describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the top of that rebuilt email (task 8.13a)', () =>
 {
     const exactBody = exactDates(buildThread(FORWARD.messages!).body);
-    const engineFor = (body: string): EngineResult => analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, body) }]);
+    const analysisFor = (body: string): ThreadAnalysisResult => analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, body) }]);
     /** The header lines of the rebuilt message of `generation` in the forward, as written. */
-    const headerOf = (result: EngineResult, generation: number): string =>
+    const headerOf = (result: ThreadAnalysisResult, generation: number): string =>
     {
         const rebuiltMessage = result.reconstructed.find((x) => x.rebuilt.generation === generation)!.rebuilt;
         return result.messages[0]!.message.bodyText.slice(rebuiltMessage.start, rebuiltMessage.headerEnd);
     };
     const keptIn = (pdfDocument: PdfDocument, header: string): boolean => squash(bodyOf(realOf(pdfDocument, 0))).includes(squash(header));
     /** Whether the rebuilt email of `generation` starts with `header` (moved there, verbatim) and nothing else prints it. */
-    const movedTo = (pdfDocument: PdfDocument, result: EngineResult, generation: number, header: string): boolean =>
+    const movedTo = (pdfDocument: PdfDocument, result: ThreadAnalysisResult, generation: number, header: string): boolean =>
     {
         const entryId = result.reconstructed.find((x) => x.rebuilt.generation === generation)!.id;
         const email = pdfDocument.emails.find((x) => x.rebuilt?.id === entryId)!;
@@ -622,7 +622,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
 
     it('dates with a zone and every field shown: both header blocks are left out, and moved nowhere (the rows show them)', () =>
     {
-        const result = engineFor(exactBody);
+        const result = analysisFor(exactBody);
         const pdfDocument = build(result);
         for (const generation of [1, 2])
         {
@@ -636,7 +636,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
     {
         const body = exactBody.replace(/^(To: Carol Test <carol@sample\.invalid>)$/mu, '$1\nBcc: Dan Hidden <dan@example.test>');
         expect(body).not.toBe(exactBody);
-        const result = engineFor(body);
+        const result = analysisFor(body);
         expect(rebuiltEntries(result)).toHaveLength(2);
         const header = headerOf(result, 1);
         expect(header).toContain('Bcc: Dan Hidden');
@@ -655,7 +655,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
     {
         const body = exactBody.replace('From: Bob Sample <bob@furniture.example.test>', 'From: Bob Sample <bob@furniture.example.test>, Erin Other <erin@example.test>');
         expect(body).not.toBe(exactBody);
-        const result = engineFor(body);
+        const result = analysisFor(body);
         const rebuiltEntry = result.reconstructed.find((x) => x.rebuilt.generation === 1)!;
         expect(rebuiltEntry.rebuilt.from).toEqual([]);
         const pdfDocument = build(result);
@@ -666,7 +666,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
 
     it('an estimated date (no zone of its own): both header blocks move to their rebuilt emails, the texts go', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const pdfDocument = build(result);
         for (const generation of [1, 2])
         {
@@ -681,7 +681,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
 
     it('the rebuilt email not in the PDF and not an unticked forward (the switch off): the header lines stay where they are', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const pdfDocument = build(result, { rebuilt: [], rebuildingOff: true });
         for (const generation of [1, 2])
         {
@@ -691,7 +691,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
 
     it('headerShownInPdf: each thing the header rows cannot show keeps the lines', () =>
     {
-        const result = engineFor(exactBody);
+        const result = analysisFor(exactBody);
         const body = result.messages[0]!.message.bodyText;
         const rebuiltMessage = result.reconstructed.find((x) => x.rebuilt.generation === 1)!.rebuilt;
         const self = (x: typeof rebuiltMessage): boolean => headerShownInPdf(body, x, { kind: 'rebuilt', rebuilt: x });
@@ -717,7 +717,7 @@ describe('B2 / Q4: header lines the rebuilt header rows cannot show move to the 
 
     it('headerShownInPdf against a real file: same sender name, subject and recipients, and an exact date', () =>
     {
-        const result = engineFor(exactBody);
+        const result = analysisFor(exactBody);
         const body = result.messages[0]!.message.bodyText;
         const rebuiltMessage = result.reconstructed.find((x) => x.rebuilt.generation === 1)!.rebuilt;
         const real = realFile(FORWARD.messages!, 1);
@@ -786,7 +786,7 @@ describe('the cut places: CRLF bodies, touching and overlapping places', () =>
         const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, exactDates(buildThread(FORWARD.messages!).body)) }]);
         const g1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!.rebuilt;
         const g2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!.rebuilt;
-        const odd: EngineResult = {
+        const odd: ThreadAnalysisResult = {
             ...result,
             reconstructed: result.reconstructed.map((r) => (r.rebuilt === g2 ? { ...r, rebuilt: { ...g2, start: g1.headerEnd, headerEnd: g1.headerEnd } } : r)),
         };
@@ -801,7 +801,7 @@ describe('printedElsewhereParts, pdfRanges, applyNoRepeatRule: where the PDF pri
 
     it('each part names the rebuilt email that prints it (its entry and PDF number); merged, the parts are printedElsewhere', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const entries = rebuiltEntries(result);
         const order = planPdfOrder(result, [0], entries.map((r) => r.id));
         const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition).get(0)!;
@@ -817,7 +817,7 @@ describe('printedElsewhereParts, pdfRanges, applyNoRepeatRule: where the PDF pri
 
     it('a part linked to a real file names that file: its list position and PDF number', () =>
     {
-        const result = engineOf(FORWARD, [0, 1, 2]);
+        const result = analysisOf(FORWARD, [0, 1, 2]);
         const order = planPdfOrder(result, [0, 1, 2]);
         const all = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition);
         const linked = result.reconstructed.filter((r) => r.link === 'real');
@@ -856,7 +856,7 @@ describe('printedElsewhereParts, pdfRanges, applyNoRepeatRule: where the PDF pri
         const e1 = result.reconstructed.find((r) => r.rebuilt.generation === 1)!;
         const e2 = result.reconstructed.find((r) => r.rebuilt.generation === 2)!;
         const g1 = e1.rebuilt;
-        const odd: EngineResult = {
+        const odd: ThreadAnalysisResult = {
             ...result,
             reconstructed: result.reconstructed.map((r) => (r === e2 ? { ...r, rebuilt: { ...r.rebuilt, start: g1.headerEnd, headerEnd: g1.headerEnd } } : r)),
         };
@@ -869,7 +869,7 @@ describe('printedElsewhereParts, pdfRanges, applyNoRepeatRule: where the PDF pri
 
     it('pdfRanges: the plan cut exactly as withoutPrintedElsewhere cuts it, each piece left out naming its email; null when the PDF prints the plan or the whole body', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const order = planPdfOrder(result, [0], rebuiltEntries(result).map((r) => r.id));
         const parts = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition).get(0)!;
         const body = result.messages[0]!.message.bodyText;
@@ -907,7 +907,7 @@ describe('printedElsewhereParts, pdfRanges, applyNoRepeatRule: where the PDF pri
 
     it('applyNoRepeatRule is what buildPdfDocument uses: the same order and parts; none and no rebuilt email under "Print full original text"', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const ids = rebuiltEntries(result).map((r) => r.id);
         const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
         const got = applyNoRepeatRule({ result, positions: [0], plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: ids });
@@ -1071,7 +1071,7 @@ describe('header lines read short: the lines left at the top of the text stay wi
 
     it('headerLinesEnd: after the rest of the wrapped list, the Subject line and the blank line; headerEnd when nothing is left', () =>
     {
-        const result = engineOf(threadCase, [1]);
+        const result = analysisOf(threadCase, [1]);
         const body = result.messages[0]!.message.bodyText;
         const rebuiltMessage = result.reconstructed[0]!.rebuilt;
         expect(rebuiltMessage.incomplete.length).toBeGreaterThan(0);
@@ -1080,7 +1080,7 @@ describe('header lines read short: the lines left at the top of the text stay wi
         expect(body.slice(rebuiltMessage.headerEnd, end)).toMatch(/Onderwerp: .+\n\s*\n$/u);
         expect(body.slice(end).trim().startsWith('Hello Bob,')).toBe(true);
         // A header read whole: its own end.
-        const whole = engineOf(FORWARD, [2]);
+        const whole = analysisOf(FORWARD, [2]);
         for (const rebuiltEntry of whole.reconstructed)
         {
             expect(headerLinesEnd(whole.messages[0]!.message.bodyText, rebuiltEntry.rebuilt)).toBe(rebuiltEntry.rebuilt.headerEnd);
@@ -1092,7 +1092,7 @@ describe('header lines read short: the lines left at the top of the text stay wi
 
     it('every email added as a file: the quoted texts and their header lines (and what is left of them) go: the real files show their own headers (task 8.13a, Q4)', () =>
     {
-        const result = engineOf(threadCase, [0, 1, 2]);
+        const result = analysisOf(threadCase, [0, 1, 2]);
         const pdfDocument = build(result, { rebuilt: [] });
         for (const sentenceIndex of [0, 1, 2])
         {
@@ -1112,7 +1112,7 @@ describe('header lines read short: the lines left at the top of the text stay wi
 
     it('the last email alone, a reply: its plan leaves the quoted history out, so no header line is moved (only lines the body would print move)', () =>
     {
-        const result = engineOf(threadCase, [2]);
+        const result = analysisOf(threadCase, [2]);
         const pdfDocument = build(result);
         expect(pdfDocument.emails.filter((e) => e.rebuilt !== null).length).toBeGreaterThan(0);
         for (const email of pdfDocument.emails)
@@ -1183,7 +1183,7 @@ describe('header lines against a real file: name-only recipients (S3), a strong 
 
     it('S4: an estimated date stops it, unless the link has a strong date match; the other reasons still stop it', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const body = result.messages[0]!.message.bodyText;
         const rebuiltMessage = result.reconstructed.find((x) => x.rebuilt.generation === 1)!.rebuilt;
         expect(rebuiltMessage.dateApproximate).toBe(true);
@@ -1212,7 +1212,7 @@ describe('header lines against a real file: name-only recipients (S3), a strong 
 
     it('S4, the whole PDF: every email added: the quoted header lines leave the forward, the real file shows its own header (task 8.13a, Q4: whether or not its rows show all they say)', () =>
     {
-        const result = engineOf(FORWARD, [0, 1, 2]);
+        const result = analysisOf(FORWARD, [0, 1, 2]);
         const forward = result.messages.findIndex((m) => m.message.subject === FORWARD.messages![2]!.subject);
         const linked = result.reconstructed.filter((r) => r.link === 'real' && result.positionByIndex[r.sourceIndex] === forward);
         expect(linked.length).toBeGreaterThan(0);
@@ -1249,7 +1249,7 @@ describe('Q3, option B (user decision 2026-11-09, task 8.13a, replaces 3a option
         {
             const threadCase = thread(caseId);
             const last = threadCase.messages!.length - 1;
-            const result = engineOf(threadCase, [0, last]);
+            const result = analysisOf(threadCase, [0, last]);
             const lastPosition = result.messages.findIndex((m) => m.message.subject === threadCase.messages![last]!.subject
                 && m.message.from[0]?.address === threadCase.messages![last]!.from.address);
             const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
@@ -1309,7 +1309,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         expect(result.reconstructed).toEqual([]);
         const plan = planOutput(result.messages, DEFAULT_OUTPUT_POLICY)[0]!;
         expect(plan.ranges.some((r) => r.reason === 'forwarded' && r.keep)).toBe(true);
-        expect(rebuiltEntries(engineOf(FORWARD, [2]))).toHaveLength(2);
+        expect(rebuiltEntries(analysisOf(FORWARD, [2]))).toHaveLength(2);
     });
 
     it('both rebuilt emails unticked: the rebuildable forwarded emails are left out, the refused one stays inline; full text and the preview keep everything', () =>
@@ -1387,7 +1387,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
 
     it('nothing is left out for an unticked email when its forward is not in the PDF, or the forward\'s plan is not trusted (printed whole)', () =>
     {
-        const result = engineOf(FORWARD, [2]);
+        const result = analysisOf(FORWARD, [2]);
         const ids = rebuiltEntries(result).map((r) => r.id);
         // The forward left out of the PDF: nothing cut anywhere (no email in the PDF holds it).
         expect(applyNoRepeatRule({ result, positions: [], plans: [], policy: DEFAULT_OUTPUT_POLICY, rebuilt: ids }).parts.size).toBe(0);
@@ -1566,7 +1566,8 @@ describe('a copy that ends with a signature block the printed copy lacks (task 8
         // No block, or the printed text has it all: null (cut the whole place).
         expect(unprintedSignatureStart(body, carolCopy.rebuilt, bobText + signature)).toBeNull();
         // Through applyNoRepeatRule: the same malformed copy keeps Carol's place whole (no part starts there), nothing lost.
-        const odd: EngineResult = { ...result, reconstructed: result.reconstructed.map((r) => (r.id === carolCopy.id ? { ...r, rebuilt: longer } : r)) };
+        const odd: ThreadAnalysisResult = { ...result,
+            reconstructed: result.reconstructed.map((r) => (r.id === carolCopy.id ? { ...r, rebuilt: longer } : r)) };
         const parts = applyNoRepeatRule({ result: odd, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: ids }).parts.get(carolAt) ?? [];
         expect(parts.some((p) => p.start < carolCopy.rebuilt.end && p.end > carolCopy.rebuilt.start)).toBe(false);
     });

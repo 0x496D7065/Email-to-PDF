@@ -59,7 +59,7 @@
 //     PDF), except where a kept part began inside a line of the body
 //     (joinKeptLines): a ">" there was in the middle of a line, so it is
 //     text, not a quote mark. A quoted line with nothing after its marks
-//     is an empty line, never dropped or merged by (e). The engine, the
+//     is an empty line, never dropped or merged by (e). The thread analysis, the
 //     preview and the original files are unchanged.
 //
 // The contract with the renderer (Source/pdf-export/ writer, milestone 5.4). Three

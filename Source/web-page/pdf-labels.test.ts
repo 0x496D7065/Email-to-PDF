@@ -1,6 +1,6 @@
 // Unit tests for the PDF labels' planning (pdf-labels.ts), in Node with the
 // recording fake DOM (Helper/Test/test-support/fake-dom.ts), a hand-run task queue and
-// a fake clock. Synthetic messages only, run through the real engine and the
+// a fake clock. Synthetic messages only, run through the real thread analysis and the
 // real plan. The wiring with the page and the preview is tested in
 // mount-page.test.ts, the real page in Helper/Test/browser-tests/pdf-labels.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +17,7 @@ import { fr } from './translations/fr';
 import { DEBOUNCE_MS, SLICE_MS, createPdfLabels, type PdfLabels } from './pdf-labels';
 import type { PreviewPdfPlans } from './preview';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.test' };
@@ -43,11 +43,12 @@ function make(from: EmailAddress, bodyText: string): NormalizedMessage
         warnings: [],
     };
 }
-const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
+const analysisOf = (messages: readonly NormalizedMessage[]): ThreadAnalysisResult =>
     analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 /** Alice twice with the same signature, Bob in between. */
-const threeEmails = (): EngineResult =>
-    engineOf([make(ALICE, `The bench is green.\n${SIGNATURE}`), make(BOB, 'Thanks, noted.\n'), make(ALICE, `The bench is delivered.\n${SIGNATURE}`)]);
+const threeEmails = (): ThreadAnalysisResult =>
+    analysisOf(
+        [make(ALICE, `The bench is green.\n${SIGNATURE}`), make(BOB, 'Thanks, noted.\n'), make(ALICE, `The bench is delivered.\n${SIGNATURE}`)]);
 
 // ------------------------------------------------------------------ harness
 
@@ -214,7 +215,7 @@ describe('createPdfLabels', () =>
         {
             messages.push(make(k % 2 === 0 ? ALICE : BOB, `Note ${String(k)} about the benches.\n${SIGNATURE}`));
         }
-        const result = engineOf(messages);
+        const result = analysisOf(messages);
         included = result.messages.map((_, p) => p);
         labels.show(result);
         // Each email reads the clock once (5 ms): about SLICE_MS / 5 emails per task.
@@ -366,7 +367,7 @@ describe('createPdfLabels', () =>
         {
             throw new Error('broken');
         } }) };
-        const bad: EngineResult = { ...result, messages: [broken, ...result.messages.slice(1)] };
+        const bad: ThreadAnalysisResult = { ...result, messages: [broken, ...result.messages.slice(1)] };
         included = [0, 1, 2];
         labels.show(bad);
         runAll();
@@ -380,11 +381,11 @@ describe('the no-repeat cut in the views (task 8.11)', () =>
 {
     const FORWARD = THREAD_CASES.find((c) => c.id === 'gmail forward of an outlook thread')!;
     /** The forward of FORWARD alone: two earlier emails rebuilt from it. */
-    function forwardAlone(): EngineResult
+    function forwardAlone(): ThreadAnalysisResult
     {
         const threadMessage = FORWARD.messages![2]!;
         const utcMs = instantOf(threadMessage.sent, threadMessage.zone);
-        return engineOf([
+        return analysisOf([
             { ...make(threadMessage.from, buildThread(FORWARD.messages!).body), to: [...threadMessage.to], subject: threadMessage.subject, date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: threadMessage.zone.offsetMinutes, zoneKnown: true } },
         ]);
     }

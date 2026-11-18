@@ -18,7 +18,8 @@ import { codedCharacterCount } from '../pdf-export/pdf-text-transforms';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { ParseWarning } from '../../Header/parsed-email';
 import type { MessageNote, UnreadAttachedCode } from '../../Header/preview-display';
-import type { DedupeWarningCode, EngineMessage, EngineWarningCode, ReconstructionWarning, ReconstructionWarningCode } from '../../Header/thread-analysis-result';
+import type { DedupeWarningCode, AnalyzedMessage, ThreadAnalysisWarningCode, ReconstructionWarning,
+    ReconstructionWarningCode } from '../../Header/thread-analysis-result';
 
 /**
  * Compile-time check that `List` names every member of `Union`: resolves to
@@ -54,16 +55,17 @@ export const DEDUPE_WARNINGS = [
 ] as const satisfies readonly DedupeWarningCode[];
 const dedupeWarningsComplete: Complete<DedupeWarningCode, typeof DEDUPE_WARNINGS> = true;
 
-/** Every engine warning, in the order shown. */
-export const ENGINE_WARNINGS = ['detector-failed', 'folding-disabled', 'dedupe-failed'] as const satisfies readonly EngineWarningCode[];
-const engineWarningsComplete: Complete<EngineWarningCode, typeof ENGINE_WARNINGS> = true;
+/** Every thread analysis warning, in the order shown. */
+export const THREAD_ANALYSIS_WARNINGS =
+    ['detector-failed', 'folding-disabled', 'dedupe-failed'] as const satisfies readonly ThreadAnalysisWarningCode[];
+const threadAnalysisWarningsComplete: Complete<ThreadAnalysisWarningCode, typeof THREAD_ANALYSIS_WARNINGS> = true;
 
 /** Every warning about rebuilding earlier emails from this email's quote (task 7.6), in the order shown. */
 export const REBUILD_WARNINGS = ['reconstruct-failed', 'reconstruct-limit'] as const satisfies readonly ReconstructionWarningCode[];
 const rebuildWarningsComplete: Complete<ReconstructionWarningCode, typeof REBUILD_WARNINGS> = true;
 
 // Read once so the checks above are not "unused" (they matter at compile time only).
-void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete, rebuildWarningsComplete];
+void [parseWarningsComplete, dedupeWarningsComplete, threadAnalysisWarningsComplete, rebuildWarningsComplete];
 
 /**
  * Notes about the PDF plan of one email (Source/thread-analysis/output-plan.ts, rules 4
@@ -124,7 +126,7 @@ export function relatedListNumbers(related: readonly number[], ownPosition: numb
  * written when that date could not be read, and its whole text (the parts
  * the PDF leaves out included: the count does not depend on the plan).
  */
-export function codedCharacters(email: EngineMessage): number
+export function codedCharacters(email: AnalyzedMessage): number
 {
     const message = email.message;
     const texts: string[] = [message.subject, message.bodyText, message.source.fileName, ...email.duplicates.map((d) => d.source.fileName)];
@@ -152,7 +154,7 @@ export function codedCharacters(email: EngineMessage): number
  * parser's notes (the "only listed as an attachment" one among them).
  */
 export function messageNotes(
-    email: EngineMessage,
+    email: AnalyzedMessage,
     position: number,
     positionByIndex: readonly (number | null)[],
     rebuildWarnings: readonly ReconstructionWarning[] = [],
@@ -199,10 +201,10 @@ export function messageNotes(
     {
         notes.push({ kind: 'chars', code: 'coded-characters' });
     }
-    const engine = new Set<EngineWarningCode>(email.engineWarnings);
-    for (const code of ENGINE_WARNINGS)
+    const threadAnalysis = new Set<ThreadAnalysisWarningCode>(email.threadAnalysisWarnings);
+    for (const code of THREAD_ANALYSIS_WARNINGS)
     {
-        if (engine.has(code))
+        if (threadAnalysis.has(code))
         {
             notes.push({ kind: 'engine', code });
         }

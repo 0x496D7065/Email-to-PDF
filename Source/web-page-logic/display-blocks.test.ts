@@ -1,6 +1,6 @@
 // Unit tests for the preview's grouped blocks (display-blocks.ts): exact
 // cases, a seeded property test in the style of Source/thread-analysis/fold-segments.test.ts,
-// and every synthetic fixture through the real engine. The key invariant
+// and every synthetic fixture through the real thread analysis. The key invariant
 // (README.md, rule R6): joining all blocks gives the body back unchanged.
 
 import { describe, expect, it } from 'vitest';
@@ -384,9 +384,9 @@ describe('property test: random texts and folds', () =>
     });
 });
 
-describe('every synthetic fixture through the real engine', () =>
+describe('every synthetic fixture through the real thread analysis', () =>
 {
-    it('keeps every body complete, and gives one folded block where the engine had several fragments', async () =>
+    it('keeps every body complete, and gives one folded block where the thread analysis had several fragments', async () =>
     {
         const messages = await parseAllFixtures();
         const out = analyzeThread(messages.map((message) => ({ ok: true, message })));
@@ -403,7 +403,7 @@ describe('every synthetic fixture through the real engine', () =>
             }
             return displayBlocks(email.message.bodyText, email.segments, SHOWN);
         };
-        // msg-04: the engine's signature, 1-char quoted-overlap line break,
+        // msg-04: the thread analysis's signature, 1-char quoted-overlap line break,
         // reply-header and quoted segments become ONE folded block below the
         // shown reply.
         expect(blocksOf('msg-04-chain-3-bob-nl').map((b) => b.folded)).toEqual([false, true]);

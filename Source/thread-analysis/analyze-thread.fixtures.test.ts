@@ -1,4 +1,4 @@
-// Runs the whole engine over every synthetic fixture (Helper/Test/test-data), parsed
+// Runs the whole thread analysis over every synthetic fixture (Helper/Test/test-data), parsed
 // by the real .eml and .msg adapters, as the app will do. It checks the
 // collapse-never-delete invariants (README.md, rule R6), prints how much of
 // each message is folded and why, and checks the key expectations of the
@@ -11,10 +11,10 @@ import { normalizeBody } from './dedupe';
 import { primaryReason, analyzeThread } from './analyze-thread';
 import { checkSegments, FOLD_REASONS, joinSegments, visibleView } from './fold-segments';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineMessage, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult, FoldReason } from '../../Header/thread-analysis-result';
 
 /** Whether every character of `snippet` (first occurrence) is folded, none is, or some are. */
-function state(message: EngineMessage, snippet: string): 'folded' | 'shown' | 'mixed'
+function state(message: AnalyzedMessage, snippet: string): 'folded' | 'shown' | 'mixed'
 {
     const body = message.message.bodyText;
     const offset = body.indexOf(snippet);
@@ -38,7 +38,7 @@ function state(message: EngineMessage, snippet: string): 'folded' | 'shown' | 'm
 }
 
 /** The display labels (primary reasons) of the folded segments overlapping `snippet`. */
-function labels(message: EngineMessage, snippet: string): FoldReason[]
+function labels(message: AnalyzedMessage, snippet: string): FoldReason[]
 {
     const offset = message.message.bodyText.indexOf(snippet);
     if (offset < 0)
@@ -57,9 +57,9 @@ function labels(message: EngineMessage, snippet: string): FoldReason[]
     return [...found];
 }
 
-describe('engine over the parsed fixtures', () =>
+describe('thread analysis over the parsed fixtures', () =>
 {
-    let cached: { messages: NormalizedMessage[]; results: ParseResult[]; out: EngineResult } | undefined;
+    let cached: { messages: NormalizedMessage[]; results: ParseResult[]; out: ThreadAnalysisResult } | undefined;
     async function run(): Promise<NonNullable<typeof cached>>
     {
         if (cached === undefined)
@@ -70,7 +70,7 @@ describe('engine over the parsed fixtures', () =>
         }
         return cached;
     }
-    const get = (out: EngineResult, file: string): EngineMessage =>
+    const get = (out: ThreadAnalysisResult, file: string): AnalyzedMessage =>
     {
         const message = out.messages.find((x) => x.message.source.fileName === file);
         if (message === undefined)
@@ -92,7 +92,7 @@ describe('engine over the parsed fixtures', () =>
             const unfolded = visibleView(body, message.segments, { unfoldAll: true });
             expect(unfolded.map((b) => b.text).join(''), file).toBe(body);
             expect(unfolded.some((b) => b.collapsed), file).toBe(false);
-            expect(message.engineWarnings, file).toEqual([]);
+            expect(message.threadAnalysisWarnings, file).toEqual([]);
             for (const duplicate of message.duplicates)
             {
                 expect(normalizeBody(messages[duplicate.index]!.bodyText), duplicate.source.fileName).toBe(normalizeBody(body));

@@ -31,7 +31,7 @@ import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 const EVERYTHING: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -64,7 +64,8 @@ function make(subject: string, fields: Partial<NormalizedMessage> = {}): Normali
 }
 const parsedOk = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
 
-function build(result: EngineResult, options: { positions?: readonly number[]; policy?: OutputPolicy; rebuilt?: readonly number[] } = {}): PdfDocument
+function build(result: ThreadAnalysisResult,
+    options: { positions?: readonly number[]; policy?: OutputPolicy; rebuilt?: readonly number[] } = {}): PdfDocument
 {
     const positions = options.positions ?? result.messages.map((_, k) => k);
     const policy = options.policy ?? DEFAULT_OUTPUT_POLICY;
@@ -84,7 +85,7 @@ function build(result: EngineResult, options: { positions?: readonly number[]; p
 }
 
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
-const positionOf = (result: EngineResult, subject: string): number => result.messages.findIndex((m) => m.message.subject === subject);
+const positionOf = (result: ThreadAnalysisResult, subject: string): number => result.messages.findIndex((m) => m.message.subject === subject);
 
 describe('emails with no text are left out of the PDF (task 8.14)', () =>
 {

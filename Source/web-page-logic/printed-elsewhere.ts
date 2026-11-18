@@ -26,12 +26,12 @@
 import { applyNoRepeatRule, pdfRanges } from '../pdf-export/build-pdf-document';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { PdfRange } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** The PDF step's input, as Source/web-page/mount-page.ts (pdfInput) gives it. */
 export interface PrintedElsewhereInput
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     /** List positions of the included emails, in list order. */
     readonly positions: readonly number[];
     /** One plan per position, same order. */

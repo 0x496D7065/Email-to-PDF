@@ -1,15 +1,15 @@
 // Unit tests for the include/exclude choices (email-selection.ts). Synthetic data only.
 import { describe, expect, it } from 'vitest';
 import { createEmailSelection, includedPositions, selectionKeys } from './email-selection';
-import type { EngineMessage } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage } from '../../Header/thread-analysis-result';
 
 /** A minimal kept email: only what email-selection.ts reads (its file hash and its merged copies' hashes). */
-function kept(sha256: string, merged: readonly string[] = []): EngineMessage
+function kept(sha256: string, merged: readonly string[] = []): AnalyzedMessage
 {
     return {
         message: { source: { fileName: `${sha256}.eml`, sha256, kind: 'eml' } },
         duplicates: merged.map((h, k) => ({ source: { fileName: `${h}.eml`, sha256: h, kind: 'eml' }, index: k + 1, rule: 'message-id' })),
-    } as unknown as EngineMessage;
+    } as unknown as AnalyzedMessage;
 }
 
 describe('selectionKeys', () =>
@@ -26,8 +26,9 @@ describe('selectionKeys', () =>
 describe('selectionKeys: emails attached inside a file (task 8.13b-3)', () =>
 {
     /** An email attached inside file `sha256` at `path`. */
-    const attached = (sha256: string, path: number[]): EngineMessage =>
-        ({ message: { source: { fileName: `${sha256}.eml`, sha256, kind: 'eml', attachedPath: path } }, duplicates: [] }) as unknown as EngineMessage;
+    const attached = (sha256: string, path: number[]): AnalyzedMessage =>
+        ({ message: { source: { fileName: `${sha256}.eml`, sha256, kind: 'eml', attachedPath: path } },
+            duplicates: [] }) as unknown as AnalyzedMessage;
 
     it('adds the place in the file to the file hash', () =>
     {
@@ -53,7 +54,7 @@ describe('selectionKeys: emails attached inside a file (task 8.13b-3)', () =>
         const merged = {
             message: { source: { fileName: 'bb.eml', sha256: 'bb', kind: 'eml' } },
             duplicates: [{ source: { fileName: 'aa.eml', sha256: 'aa', kind: 'eml', attachedPath: [1] }, index: 3, rule: 'message-id' }],
-        } as unknown as EngineMessage;
+        } as unknown as AnalyzedMessage;
         expect(selectionKeys(merged)).toEqual(['bb', 'aa/1']);
         selection.setIncluded(merged, false);
         expect([selection.isIncluded(attached('aa', [1])), selection.isIncluded(kept('aa'))]).toEqual([false, true]);

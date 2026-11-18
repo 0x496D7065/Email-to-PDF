@@ -1,15 +1,15 @@
 // Header: the thread analysis result (duplicates, order, folded parts,
 // warnings). Shared types only, no code (README.md, "Where things are").
-// thread-analysis/ (analyze-thread.ts, analyzeThread) produces EngineResult; it crosses
+// thread-analysis/ (analyze-thread.ts, analyzeThread) produces ThreadAnalysisResult; it crosses
 // the thread-analysis worker (thread-analysis-worker-messages.ts) and is read by web-page-logic/,
 // web-page/ and pdf-export/.
 
 import type { NormalizedMessage, ParseErrorCode, ParseWarning } from './parsed-email';
-import type { EngineRebuilt, TimelineEntry } from './rebuilt-emails';
+import type { AnalyzedRebuiltMessage, TimelineEntry } from './rebuilt-emails';
 
 /**
  * Something that went wrong while rebuilding messages from the quoted text
- * of one kept message (step 6). Kept apart from EngineWarningCode: the real
+ * of one kept message (step 6). Kept apart from ThreadAnalysisWarningCode: the real
  * message itself is not affected (its segments are the same), and the
  * preview does not show these yet (task 7.6).
  * - 'reconstruct-failed': rebuilding threw or returned something invalid,
@@ -20,8 +20,8 @@ import type { EngineRebuilt, TimelineEntry } from './rebuilt-emails';
  */
 export type ReconstructionWarningCode = 'reconstruct-failed' | 'reconstruct-limit';
 
-/** Something the engine itself had to work around for one message. */
-export type EngineWarningCode =
+/** Something the thread analysis itself had to work around for one message. */
+export type ThreadAnalysisWarningCode =
     // A fold detector threw an error for this message; its folds were skipped
     // (the other detectors' folds still apply).
     | 'detector-failed'
@@ -34,7 +34,7 @@ export type EngineWarningCode =
     | 'dedupe-failed';
 
 /** One kept message, ready for the preview. */
-export interface EngineMessage
+export interface AnalyzedMessage
 {
     /** The kept copy, unchanged (same object as in the input). */
     readonly message: NormalizedMessage;
@@ -52,8 +52,8 @@ export interface EngineMessage
     readonly dedupeWarnings: readonly DedupeWarning[];
     /** The parser's warnings (same array as `message.warnings`), here for convenience. */
     readonly parserWarnings: readonly ParseWarning[];
-    /** See EngineWarningCode; sorted, unique; usually empty. */
-    readonly engineWarnings: readonly EngineWarningCode[];
+    /** See ThreadAnalysisWarningCode; sorted, unique; usually empty. */
+    readonly threadAnalysisWarnings: readonly ThreadAnalysisWarningCode[];
     /** Cover of `message.bodyText`, shown or folded (see fold-segments.ts). [] for an empty body. */
     readonly segments: readonly Segment[];
 }
@@ -70,9 +70,9 @@ export interface FailedFile
 }
 
 /** The numbers the preview shows. */
-export interface EngineCounts
+export interface ThreadAnalysisCounts
 {
-    /** Every file given to the engine, read or failed (preview: "N files, M could not be read"). */
+    /** Every file given to the thread analysis, read or failed (preview: "N files, M could not be read"). */
     readonly filesGiven: number;
     /** Messages read successfully, duplicates and attached emails (task 8.13b-3) included. */
     readonly messagesFound: number;
@@ -88,13 +88,13 @@ export interface EngineCounts
 
 export interface ReconstructionWarning
 {
-    /** Input position of the kept message (EngineMessage.index). */
+    /** Input position of the kept message (AnalyzedMessage.index). */
     readonly index: number;
     readonly code: ReconstructionWarningCode;
 }
 
-/** One email attached inside a dropped file (ParseResult.attached), as the engine numbers it. */
-export interface EngineAttached
+/** One email attached inside a dropped file (ParseResult.attached), as the thread analysis numbers it. */
+export interface AnalyzedAttachedMessage
 {
     /** Its input position (see Indices at the top). */
     readonly index: number;
@@ -107,7 +107,7 @@ export interface EngineAttached
     /** The attachment name at each level of `path` (AttachedMessage.name of it and of each attached email above it), '' when none. */
     readonly names: readonly string[];
     /** AttachedMessage.places that are valid ranges of their holder's body, nearest holder first; [] when its text is in no body. */
-    readonly places: readonly EngineAttachedPlace[];
+    readonly places: readonly AnalyzedAttachedPlace[];
     /**
      * Whether the header rows of the kept copy holding it show every header
      * datum its own copy has: true when it is kept itself, or when the copy it
@@ -120,7 +120,7 @@ export interface EngineAttached
 }
 
 /** Where one attached email's printed block sits in the body of an email holding it (AttachedPlace, with input positions). */
-export interface EngineAttachedPlace
+export interface AnalyzedAttachedPlace
 {
     /**
      * Input position of the email whose bodyText holds the block: its parent,
@@ -137,14 +137,14 @@ export interface EngineAttachedPlace
     readonly end: number;
 }
 
-/** The whole engine output: plain, structured-clone-safe data. */
-export interface EngineResult
+/** The whole thread analysis output: plain, structured-clone-safe data. */
+export interface ThreadAnalysisResult
 {
     /** Kept messages, in chronological order. */
-    readonly messages: readonly EngineMessage[];
+    readonly messages: readonly AnalyzedMessage[];
     /** Failed files, in input order. */
     readonly failed: readonly FailedFile[];
-    readonly counts: EngineCounts;
+    readonly counts: ThreadAnalysisCounts;
     /**
      * For each input position: the position in `messages` of the kept message
      * that holds it (the message itself, or the one it was merged into); null
@@ -158,21 +158,21 @@ export interface EngineResult
      * shows the entries (Source/web-page-logic/rebuilt-email-display.ts), and so does the PDF
      * (Source/pdf-export/build-pdf-document.ts, the ones the reader chose).
      */
-    readonly reconstructed: readonly EngineRebuilt[];
+    readonly reconstructed: readonly AnalyzedRebuiltMessage[];
     /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (link-rebuilt-messages.ts). */
     readonly timeline: readonly TimelineEntry[];
     /** Problems while rebuilding, in `messages` order. Usually empty. */
     readonly reconstructionWarnings: readonly ReconstructionWarning[];
     /**
-     * Every email attached inside a dropped file that the engine read as a
+     * Every email attached inside a dropped file that the thread analysis read as a
      * message of its own (task 8.13b-3), by input position: entry k has
      * index `counts.filesGiven + k`. No key at all when there are none, so
      * the result for files without attached emails is what it always was.
      */
-    readonly attached?: readonly EngineAttached[];
+    readonly attached?: readonly AnalyzedAttachedMessage[];
 }
 
-/** Why the engine did NOT merge messages that look alike. Shown in the preview. */
+/** Why the thread analysis did NOT merge messages that look alike. Shown in the preview. */
 export type DedupeWarningCode =
     // Another message has the same Message-ID but a different body, subject,
     // attachment names or From list, or only one of them has a body-missing
@@ -212,7 +212,7 @@ export interface MergedCopy
 /** Which rule proved that a merged copy is the same message as the kept one. */
 export type DuplicateRule = 'message-id' | 'author-date-body';
 
-/** One engine warning, with the other messages it is about. */
+/** One dedupe warning, with the other messages it is about. */
 export interface DedupeWarning
 {
     readonly code: DedupeWarningCode;
@@ -234,7 +234,7 @@ export type OrderReason =
     | 'file-order' // no usable date: placed after all dated messages, in input order
     // No usable date, and attached inside another email: placed just before the
     // email it is attached to (user decision 2026-11-10, Q7, task 8.13b-3). Set
-    // by the engine (Source/thread-analysis/analyze-thread.ts, placeUndatedAttached), never by
+    // by the thread analysis (Source/thread-analysis/analyze-thread.ts, placeUndatedAttached), never by
     // orderMessages.
     | 'before-parent';
 

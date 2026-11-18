@@ -1,6 +1,6 @@
 // Unit tests for what step 2 shows of the emails rebuilt from quoted text
 // (Source/web-page-logic/rebuilt-email-display.ts). Synthetic fixtures only (Helper/Test/test-data/eml),
-// run through the real engine; a few results are then edited by hand to
+// run through the real thread analysis; a few results are then edited by hand to
 // reach the rare cases (no sender, a list read short, a bad timeline).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
@@ -19,8 +19,8 @@ import {
     sourceNumber,
 } from './rebuilt-email-display';
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineRebuilt, QuotedDate } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage, QuotedDate } from '../../Header/rebuilt-emails';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 let fixtures: Map<string, NormalizedMessage>;
 
@@ -38,10 +38,10 @@ const fixture = (name: string): NormalizedMessage =>
     }
     return message;
 };
-const engineOf = (...names: string[]): EngineResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
+const analysisOf = (...names: string[]): ThreadAnalysisResult => analyzeThread(names.map((n) => ({ ok: true as const, message: fixture(n) })));
 
 /** A copy of `result` with rebuilt message `id` changed by `edit`. */
-function withRebuilt(result: EngineResult, id: number, edit: (r: EngineRebuilt) => EngineRebuilt): EngineResult
+function withRebuilt(result: ThreadAnalysisResult, id: number, edit: (r: AnalyzedRebuiltMessage) => AnalyzedRebuiltMessage): ThreadAnalysisResult
 {
     return { ...result, reconstructed: result.reconstructed.map((r) => (r.id === id ? edit(r) : r)) };
 }
@@ -50,7 +50,7 @@ describe('previewOrder and rebuiltEntries', () =>
 {
     it('follow the timeline: rebuilt entries before the email that quotes them, oldest first', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         expect(result.messages).toHaveLength(1);
         const order = previewOrder(result);
         expect(order).toEqual([
@@ -64,7 +64,8 @@ describe('previewOrder and rebuiltEntries', () =>
 
     it('give no card to a rebuilt email that matches a real file (the real file wins)', () =>
     {
-        const result = engineOf('10-order-1-alice.eml', '11-order-2-bob-outlook-en.eml', '12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('10-order-1-alice.eml', '11-order-2-bob-outlook-en.eml', '12-order-3-alice-gmail.eml',
+            '13-order-4-bob-outlook-nl.eml');
         expect(result.reconstructed.length).toBeGreaterThan(0);
         expect(result.reconstructed.every((r) => r.link === 'real')).toBe(true);
         expect(rebuiltEntries(result)).toEqual([]);
@@ -73,7 +74,7 @@ describe('previewOrder and rebuiltEntries', () =>
 
     it('give one card per quoted text: copies quoted in several emails are listed on the entry, not shown twice', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
         const entries = rebuiltEntries(result);
         const sameAs = result.reconstructed.filter((r) => r.link === 'same-as');
         expect(sameAs.length).toBeGreaterThan(0);
@@ -91,7 +92,7 @@ describe('previewOrder and rebuiltEntries', () =>
 
     it('fall back to the real emails alone, in list order, when the timeline is broken (never an email missing)', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         const plain = [{ kind: 'message', position: 0 }];
         expect(previewOrder({ ...result, timeline: [] })).toEqual(plain);
         expect(previewOrder({ ...result, timeline: [...result.timeline, { kind: 'message', position: 0 }] })).toEqual(plain);
@@ -107,7 +108,7 @@ describe('source and "also in" numbers', () =>
 {
     it('give the list number of the email a rebuilt email was taken from', () =>
     {
-        const result = engineOf('70-no-date.eml', '13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('70-no-date.eml', '13-order-4-bob-outlook-nl.eml');
         const position = result.messages.findIndex((m) => m.message.source.fileName.endsWith('13-order-4-bob-outlook-nl.eml'));
         for (const rebuiltEmail of rebuiltEntries(result))
         {
@@ -117,8 +118,8 @@ describe('source and "also in" numbers', () =>
 
     it('never list the source itself or unknown positions as "also in"', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
-        const rebuiltEmail = rebuiltEntries(result)[0] as EngineRebuilt;
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
+        const rebuiltEmail = rebuiltEntries(result)[0] as AnalyzedRebuiltMessage;
         expect(alsoNumbers({ ...rebuiltEmail, alsoQuotedIn: [rebuiltEmail.sourceIndex, 42, rebuiltEmail.sourceIndex] }, result)).toEqual([]);
     });
 });
@@ -127,7 +128,7 @@ describe('the include choices', () =>
 {
     it('include every rebuilt email by default; the switch leaves them ALL out, and back', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         const selection = createRebuiltSelection();
         expect(selection.includeAll()).toBe(true);
         expect(includedRebuilt(result, selection).map((r) => r.id)).toEqual([2, 1, 0]);
@@ -144,9 +145,9 @@ describe('the include choices', () =>
 
     it('leave one card out with its own checkbox, and forget every choice on clear()', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         const selection = createRebuiltSelection();
-        const one = rebuiltEntries(result)[1] as EngineRebuilt;
+        const one = rebuiltEntries(result)[1] as AnalyzedRebuiltMessage;
         selection.setTicked(one, result, false);
         expect(includedRebuilt(result, selection).map((r) => r.id)).toEqual([2, 0]);
         selection.setIncludeAll(false);
@@ -157,18 +158,18 @@ describe('the include choices', () =>
 
     it('remember a choice by source file and place, so it survives adding more files (ids change)', () =>
     {
-        const before = engineOf('13-order-4-bob-outlook-nl.eml');
+        const before = analysisOf('13-order-4-bob-outlook-nl.eml');
         const selection = createRebuiltSelection();
-        const bob = rebuiltEntries(before).find((r) => r.rebuilt.from[0]?.address === 'bob@furniture.example.test') as EngineRebuilt;
+        const bob = rebuiltEntries(before).find((r) => r.rebuilt.from[0]?.address === 'bob@furniture.example.test') as AnalyzedRebuiltMessage;
         selection.setTicked(bob, before, false);
         // More files: an undated email and one that quotes the same text.
-        const after = engineOf('70-no-date.eml', '12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+        const after = analysisOf('70-no-date.eml', '12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
         const bobAfter = rebuiltEntries(after).filter((r) => r.rebuilt.from[0]?.address === 'bob@furniture.example.test');
         expect(bobAfter).toHaveLength(1);
-        expect(selection.isTicked(bobAfter[0] as EngineRebuilt, after)).toBe(false);
+        expect(selection.isTicked(bobAfter[0] as AnalyzedRebuiltMessage, after)).toBe(false);
         // Its keys cover every copy (the entry and the copy quoted in the other email).
-        const keys = rebuiltSelectionKeys(bobAfter[0] as EngineRebuilt, after);
-        expect(keys.length).toBe(1 + (bobAfter[0] as EngineRebuilt).copies.length);
+        const keys = rebuiltSelectionKeys(bobAfter[0] as AnalyzedRebuiltMessage, after);
+        expect(keys.length).toBe(1 + (bobAfter[0] as AnalyzedRebuiltMessage).copies.length);
         for (const key of keys)
         {
             expect(key).toMatch(/^[0-9a-f]{64}@\d+$/);
@@ -181,14 +182,15 @@ describe('the include choices', () =>
 
 describe('rebuiltDate', () =>
 {
-    const rebuiltWithDate = (dateText: string | null, date: Partial<QuotedDate> | null, dateApproximate = true): Pick<EngineRebuilt, 'rebuilt'> =>
+    const rebuiltWithDate = (
+        dateText: string | null, date: Partial<QuotedDate> | null, dateApproximate = true): Pick<AnalyzedRebuiltMessage, 'rebuilt'> =>
         ({
             rebuilt: {
                 dateText,
                 dateApproximate,
                 date: date === null ? null : { text: dateText ?? '', wallMs: null, precision: null, estimatedUtcMs: null, basis: 'none', ...date },
             },
-        }) as unknown as Pick<EngineRebuilt, 'rebuilt'>;
+        }) as unknown as Pick<AnalyzedRebuiltMessage, 'rebuilt'>;
 
     it('has no date without a date text, and shows an unreadable one as written only', () =>
     {
@@ -220,7 +222,7 @@ describe('rebuiltCard', () =>
 {
     it('gives the fields read from the quoted header, the source number and the text', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         const [outlookNl, gmail, outlookEn] = rebuiltEntries(result).map((r) => rebuiltCard(r, result)).reverse();
         // The newest quoted email (an Outlook block in Dutch): a subject, no quote marks.
         expect(outlookNl?.subject).toBe('Re: Office desks and chairs');
@@ -238,12 +240,12 @@ describe('rebuiltCard', () =>
 
     it('flags a list that may go on and leaves blank mailboxes out (no sender: "unknown")', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         const edited = withRebuilt(result, 0, (r) => ({
             ...r,
             rebuilt: { ...r.rebuilt, from: [{ name: ' ', address: '' }], incomplete: ['cc'], subject: '  ' },
         }));
-        const card = rebuiltCard(edited.reconstructed[0] as EngineRebuilt, edited);
+        const card = rebuiltCard(edited.reconstructed[0] as AnalyzedRebuiltMessage, edited);
         expect(card.from).toEqual([]);
         expect(card.ccIncomplete).toBe(true);
         expect(card.toIncomplete).toBe(false);
@@ -254,11 +256,11 @@ describe('rebuiltCard', () =>
 describe('the follow-source rule (rebuiltSources, rebuiltInPdf; task 7.7, user decision Q1 (a))', () =>
 {
     /** Entries quoted in both emails, with their copy. */
-    const shared = (result: EngineResult) => rebuiltEntries(result).filter((e) => e.copies.length > 0);
+    const shared = (result: ThreadAnalysisResult) => rebuiltEntries(result).filter((e) => e.copies.length > 0);
 
     it('lists the entry first, then its copies, each with the list position of the email it was read from', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
         const entries = shared(result);
         expect(entries.length).toBeGreaterThan(0);
         for (const rebuiltEmail of entries)
@@ -275,7 +277,7 @@ describe('the follow-source rule (rebuiltSources, rebuiltInPdf; task 7.7, user d
 
     it('keeps an entry while one of its emails is in the PDF, names that one, and lists the others as "also in"', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
         for (const rebuiltEmail of shared(result))
         {
             const own = result.positionByIndex[rebuiltEmail.sourceIndex]!;
@@ -296,7 +298,7 @@ describe('the follow-source rule (rebuiltSources, rebuiltInPdf; task 7.7, user d
 
     it('a rebuilt email quoted in one email only: in the PDF exactly while that email is', () =>
     {
-        const result = engineOf('13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('13-order-4-bob-outlook-nl.eml');
         for (const rebuiltEmail of rebuiltEntries(result))
         {
             expect(rebuiltInPdf(rebuiltEmail, result, () => 1)).toEqual({ shown: { rebuilt: rebuiltEmail, position: 0 }, number: 1, also: [] });
@@ -306,7 +308,7 @@ describe('the follow-source rule (rebuiltSources, rebuiltInPdf; task 7.7, user d
 
     it('"Print full original text" ticked: never in the PDF, whatever emails are in it (user decision 2026-10-28, task 7.8b)', () =>
     {
-        const result = engineOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
+        const result = analysisOf('12-order-3-alice-gmail.eml', '13-order-4-bob-outlook-nl.eml');
         const entries = rebuiltEntries(result);
         expect(entries.length).toBeGreaterThan(0);
         for (const rebuiltEmail of entries)

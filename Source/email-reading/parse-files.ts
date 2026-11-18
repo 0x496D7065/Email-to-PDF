@@ -37,7 +37,7 @@ import {
     runInWorker,
     type WorkerJob,
 } from './parse-worker-runner';
-import type { Limits } from '../../Header/parse-worker-messages';
+import type { FileSizeLimits } from '../../Header/parse-worker-messages';
 import type { InputFile, ParseErrorCode, ParseResult } from '../../Header/parsed-email';
 
 /**
@@ -71,7 +71,7 @@ const UNEXPECTED_DETAIL = 'could not be read (unexpected error)';
 /** Parses one checked, hashed file (in a worker in the browser). */
 export type JobRunner = (job: WorkerJob) => Promise<ParseResult>;
 
-const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
+const DEFAULT_LIMITS: FileSizeLimits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
 
 /**
  * Parses dropped files in the browser: each in its own worker, HTML bodies
@@ -102,7 +102,7 @@ export function parseFiles(files: readonly InputFile[], signal?: AbortSignal): P
 export async function parseFilesWith(
     files: readonly InputFile[],
     runJob: JobRunner,
-    limits: Limits = DEFAULT_LIMITS,
+    limits: FileSizeLimits = DEFAULT_LIMITS,
 ): Promise<ParseResult[]>
 {
     const results: ParseResult[] = [];

@@ -67,7 +67,7 @@ export interface KeptMessage
     /** Every other copy merged into this one, in input order. Empty if none. */
     readonly duplicates: readonly MergedCopy[];
     /**
-     * Engine warnings for this message and its merged copies, sorted by code,
+     * Thread analysis warnings for this message and its merged copies, sorted by code,
      * one entry per code. The parser's own warnings stay on `message.warnings`, untouched.
      */
     readonly warnings: readonly DedupeWarning[];
@@ -410,7 +410,7 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, item: V): void
  * Copies in one bucket with the same `signature` that are duplicates of each
  * other (they share a Message-ID, or an author and a date). Such copies
  * compare the same way with every other message, so they always end up in
- * the same group, and the engine compares one of them (`first`) on behalf
+ * the same group, and the thread analysis compares one of them (`first`) on behalf
  * of all. Thousands of identical copies then cost one comparison, not
  * millions. Copies with neither a Message-ID nor an author and date are
  * never duplicates, so each one is its own `Twins`.

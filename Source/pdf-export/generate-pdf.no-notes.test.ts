@@ -20,7 +20,7 @@
 //   the bookmarks, the source files with their SHA-256 (the merged copy like
 //   any other), the date as written alone in its row, just "UTC" for a zone
 //   that is not recognized;
-// - collapse, never delete: the engine result is the same after the PDF is
+// - collapse, never delete: the thread analysis result is the same after the PDF is
 //   made, and the model still holds the data behind the removed notes.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
@@ -36,7 +36,7 @@ import { buildPdfDocument } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const LOCALES = ['en', 'fr', 'nl'] as const;
 type Locale = (typeof LOCALES)[number];
@@ -123,7 +123,7 @@ function input(): { results: ParseResult[] }
 }
 
 /** The plans the app would make, with "Fallback" falling back and "Kept all" kept whole (plan rules 4 and 5). */
-function plansOf(result: EngineResult, positions: readonly number[]): MessagePlan[]
+function plansOf(result: ThreadAnalysisResult, positions: readonly number[]): MessagePlan[]
 {
     return planOutput(positions.map((p) => result.messages[p]!)).map((plan, k) =>
     {
@@ -330,7 +330,7 @@ describe('task 8.8: the PDF holds no notes', () =>
                 expect(bookmarks).toHaveLength(pdfDocument.emails.length + 2);
                 expect(bookmarks.slice(0, 2)).toEqual([strings.coverBookmark, pdfDocument.index.heading]);
 
-                // Collapse, never delete: the engine data is unchanged by making the PDF.
+                // Collapse, never delete: the thread analysis data is unchanged by making the PDF.
                 expect(JSON.stringify(result)).toBe(before);
             });
         }

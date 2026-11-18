@@ -1,4 +1,4 @@
-// Tests for the engine pipeline (README.md, rules R6 and R7). Synthetic data only.
+// Tests for the thread analysis pipeline (README.md, rules R6 and R7). Synthetic data only.
 // The random collapse-never-delete tests and the speed test are in
 // analyze-thread.property.test.ts; the run over the fixtures in analyze-thread.fixtures.test.ts.
 
@@ -7,7 +7,7 @@ import type { DedupeResult } from './dedupe';
 import { DEFAULT_THREAD_ANALYSIS_PARTS, primaryReason, analyzeThread, type ThreadAnalysisParts } from './analyze-thread';
 import { checkSegments, joinSegments, type FoldRange } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineMessage, EngineResult, FoldReason, Segment } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult, FoldReason, Segment } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ factory
 
@@ -50,7 +50,7 @@ const failure = (fileName: string): ParseResult => ({
 const undatedDate: NormalizedMessage['date'] = { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false };
 
 /** The kept message whose input position is `index`. */
-function byIndex(out: EngineResult, index: number): EngineMessage
+function byIndex(out: ThreadAnalysisResult, index: number): AnalyzedMessage
 {
     const position = out.positionByIndex[index];
     if (position === null || position === undefined)
@@ -61,7 +61,7 @@ function byIndex(out: EngineResult, index: number): EngineMessage
 }
 
 /** The reasons of the segment(s) covering the first occurrence of `snippet`; throws if they differ. */
-function reasonsAt(message: EngineMessage, snippet: string): readonly FoldReason[]
+function reasonsAt(message: AnalyzedMessage, snippet: string): readonly FoldReason[]
 {
     const body = message.message.bodyText;
     const offset = body.indexOf(snippet);
@@ -262,10 +262,10 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
             [ok(make({ bodyText: body })), ok(make({ bodyText: '' }))], { ...DEFAULT_THREAD_ANALYSIS_PARTS, buildSegments: dropsLastChar });
         const message = byIndex(out, 0);
         expect(message.segments).toEqual([{ start: 0, end: body.length, folded: false, reasons: [], related: [] }]);
-        expect(message.engineWarnings).toEqual(['folding-disabled']);
+        expect(message.threadAnalysisWarnings).toEqual(['folding-disabled']);
         // An empty body has no segments: that is valid, no warning.
         expect(byIndex(out, 1).segments).toEqual([]);
-        expect(byIndex(out, 1).engineWarnings).toEqual([]);
+        expect(byIndex(out, 1).threadAnalysisWarnings).toEqual([]);
     });
 
     it('shows the whole body when the segments have the right text but a bad shape', () =>
@@ -274,7 +274,7 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
         const badShape = (text: string): Segment[] => [{ start: 0, end: text.length, folded: true, reasons: [], related: [] }];
         const message = analyzeThread([ok(make({ bodyText: body }))], { ...DEFAULT_THREAD_ANALYSIS_PARTS, buildSegments: badShape }).messages[0]!;
         expect(message.segments.every((s) => !s.folded)).toBe(true);
-        expect(message.engineWarnings).toEqual(['folding-disabled']);
+        expect(message.threadAnalysisWarnings).toEqual(['folding-disabled']);
     });
 
     it('shows the whole body when building the segments throws', () =>
@@ -285,7 +285,7 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
         };
         const message = analyzeThread([ok(make({ bodyText: body }))], { ...DEFAULT_THREAD_ANALYSIS_PARTS, buildSegments: throws }).messages[0]!;
         expect(joinSegments(body, message.segments)).toBe(body);
-        expect(message.engineWarnings).toEqual(['folding-disabled']);
+        expect(message.threadAnalysisWarnings).toEqual(['folding-disabled']);
     });
 
     it('skips a detector that throws and keeps the folds of the others', () =>
@@ -309,9 +309,9 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
             },
         });
         const first = byIndex(out, 0);
-        expect(first.engineWarnings).toEqual(['detector-failed']);
+        expect(first.threadAnalysisWarnings).toEqual(['detector-failed']);
         expect(reasonsAt(first, '> line one')).toEqual(['quote-marker']);
-        expect(byIndex(out, 1).engineWarnings).toEqual(['detector-failed']);
+        expect(byIndex(out, 1).threadAnalysisWarnings).toEqual(['detector-failed']);
         for (const message of out.messages)
         {
             expect(checkSegments(message.message.bodyText, message.segments)).toEqual([]);
@@ -355,13 +355,13 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
         for (const testCase of cases)
         {
             const results = [ok(make({ bodyText: quoted })), ok(make({ bodyText: body }))];
-            let out: EngineResult | undefined;
+            let out: ThreadAnalysisResult | undefined;
             expect(() => (out = analyzeThread(results, { ...DEFAULT_THREAD_ANALYSIS_PARTS, ...testCase.parts })), testCase.name).not.toThrow();
             for (const message of out!.messages)
             {
                 expect(joinSegments(message.message.bodyText, message.segments), testCase.name).toBe(message.message.bodyText);
                 expect(checkSegments(message.message.bodyText, message.segments), testCase.name).toEqual([]);
-                expect(message.engineWarnings, testCase.name).toEqual(testCase.warnings);
+                expect(message.threadAnalysisWarnings, testCase.name).toEqual(testCase.warnings);
             }
         }
     });
@@ -381,7 +381,7 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
             detectReplyHeaders: () => [{ start: 0, end: 10, reason: 'reply-header' }, throwing as FoldRange],
         });
         const message = out.messages[0]!;
-        expect(message.engineWarnings).toEqual(['detector-failed']);
+        expect(message.threadAnalysisWarnings).toEqual(['detector-failed']);
         expect(message.segments.some((s) => s.reasons.includes('reply-header'))).toBe(false);
         expect(message.segments.some((s) => s.folded)).toBe(false);
         expect(joinSegments(body, message.segments)).toBe(body);
@@ -492,7 +492,7 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
             {
                 expect(message.duplicates).toEqual([]);
                 expect(message.dedupeWarnings).toEqual([]);
-                expect(message.engineWarnings).toEqual(['dedupe-failed']);
+                expect(message.threadAnalysisWarnings).toEqual(['dedupe-failed']);
                 expect(joinSegments(message.message.bodyText, message.segments)).toBe(message.message.bodyText);
             }
             expect(out.counts.duplicatesMerged).toBe(0);
@@ -511,7 +511,7 @@ describe('analyzeThread: safety net (never lose text, even with a broken detecto
         });
         const message = out.messages[0]!;
         expect(joinSegments(body, message.segments)).toBe(body);
-        expect(message.engineWarnings).toEqual([]);
+        expect(message.threadAnalysisWarnings).toEqual([]);
     });
 });
 
@@ -521,14 +521,14 @@ describe('analyzeThread: very many folds (no stack overflow)', () =>
     {
         const body = 'Hi\n' + '> qq\n> rr\nplain\n'.repeat(300_000);
         const startTime = performance.now();
-        let out: EngineResult | undefined;
+        let out: ThreadAnalysisResult | undefined;
         expect(() => (out = analyzeThread([ok(make({ bodyText: body }))]))).not.toThrow();
         const ms = performance.now() - startTime;
         console.log(`engine big body: ${(body.length / 1e6).toFixed(2)} MB, ${out!.messages[0]!.segments.length} segments, ${ms.toFixed(0)} ms`);
         const message = out!.messages[0]!;
         expect(joinSegments(body, message.segments)).toBe(body);
         expect(checkSegments(body, message.segments)).toEqual([]);
-        expect(message.engineWarnings).toEqual([]);
+        expect(message.threadAnalysisWarnings).toEqual([]);
         expect(message.segments.filter((s) => s.folded).length).toBeGreaterThanOrEqual(300_000);
         expect(ms).toBeLessThan(30_000);
     }, 60_000);
@@ -547,7 +547,7 @@ describe('analyzeThread: very many folds (no stack overflow)', () =>
         });
         const message = out.messages[0]!;
         expect(joinSegments(body, message.segments)).toBe(body);
-        expect(message.engineWarnings).toEqual([]);
+        expect(message.threadAnalysisWarnings).toEqual([]);
         expect(message.segments.length).toBe(600_000);
     }, 60_000);
 });

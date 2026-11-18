@@ -1,5 +1,5 @@
 // Unit tests for the PDF document model (Source/pdf-export/build-pdf-document.ts), with synthetic
-// emails (made-up names, *.test addresses) run through the real engine and
+// emails (made-up names, *.test addresses) run through the real thread analysis and
 // output plan, as the app does.
 
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ import { copyLayerText } from './pdf-writer/copy-layer-text';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail, PdfLine } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
@@ -49,11 +49,13 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 const parsedOk = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
 const undatedDate: NormalizedMessage['date'] = { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false };
 
-/** Runs the engine and the plans on every email (or the given positions), then builds the document. */
+/** Runs the thread analysis and the plans on every email (or the given positions), then builds the document. */
 function build(
     results: readonly ParseResult[],
-    options: { positions?: (r: EngineResult) => number[]; policy?: OutputPolicy; timeZone?: string; generatedAt?: number; plans?: (r: EngineResult, p: number[]) => MessagePlan[] } = {},
-): { pdfDocument: PdfDocument; result: EngineResult; input: BuildPdfInput }
+    options: {
+        positions?: (r: ThreadAnalysisResult) => number[]; policy?: OutputPolicy; timeZone?: string; generatedAt?: number;
+        plans?: (r: ThreadAnalysisResult, p: number[]) => MessagePlan[] } = {},
+): { pdfDocument: PdfDocument; result: ThreadAnalysisResult; input: BuildPdfInput }
 {
     const result = analyzeThread(results);
     const positions = options.positions?.(result) ?? result.messages.map((_, k) => k);
@@ -471,7 +473,7 @@ describe('body', () =>
 
     it('keeps the whole body, with no note (task 8.8), when the plan is missing or invalid', () =>
     {
-        const cases: ((r: EngineResult) => MessagePlan[])[] = [
+        const cases: ((r: ThreadAnalysisResult) => MessagePlan[])[] = [
             () => [],
             (r) => [{ ...planOutput([r.messages[0]!])[0]!, ranges: [{ start: 0, end: 3, keep: true, reason: 'text' }] }], // a gap
             (r) => [{ ...planOutput([r.messages[0]!])[0]!, ranges: [{ start: 0, end: 99_999, keep: true, reason: 'text' }] }],

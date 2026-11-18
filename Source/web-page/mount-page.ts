@@ -51,7 +51,7 @@
 // available as soon as files were added, also while they are being read and
 // while the list is still being built. Pressing it:
 // - step 1 (addFiles.reset): cancels the run still going, which terminates
-//   its parse or engine worker at once (Source/worker-pipeline/process-files.ts) and
+//   its parse or thread-analysis worker at once (Source/worker-pipeline/process-files.ts) and
 //   throws away anything it would still report; forgets every file, empties
 //   the file input, the summary, the failed-files list and the notices, and
 //   hides step 2;
@@ -97,7 +97,7 @@ import { mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, type Review } from './review';
 import type { ProcessResult } from '../../Header/file-processing';
 import type { PdfJobInput } from '../../Header/pdf-worker-messages';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 export interface PageOptions
 {
@@ -172,7 +172,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
     // The picker only calls back on the reader's action, once everything below exists.
     const shell = mountPageShell(root, { onLanguageChange: (locale) => setLanguage(locale) });
     // The result shown in step 2 (null: none), and whether its PDF plans failed.
-    let shown: EngineResult | null = null;
+    let shown: ThreadAnalysisResult | null = null;
     let plansFailed = false;
     // The control the focus was last on (null: none). See the top of this file.
     // A mouse or touch press forgets it first: a press on a control focuses
@@ -289,7 +289,7 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
         ...options.addFiles,
         onResult: (result) =>
         {
-            shown = result.ok ? result.engine : null;
+            shown = result.ok ? result.threadAnalysis : null;
             plansFailed = false;
             showResultInStep2(result, review, preview);
             pdfLabels.show(shown);

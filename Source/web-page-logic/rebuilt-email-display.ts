@@ -1,5 +1,5 @@
 // The messages rebuilt from quoted text, as step 2 shows them (milestone 7,
-// task 7.6; brief section 8.6). The engine rebuilds them and places them in
+// task 7.6; brief section 8.6). The thread analysis rebuilds them and places them in
 // one timeline with the real emails (Source/thread-analysis/link-rebuilt-messages.ts); this file
 // only decides what the preview shows of them, in which order, and which of
 // them the reader wants in the PDF. It decides nothing about the text.
@@ -48,21 +48,21 @@
 import { selectionKeys } from './email-selection';
 import type { EmailAddress } from '../../Header/parsed-email';
 import type { PreviewSlot, RebuiltCard, RebuiltDate, RebuiltInPdf, RebuiltSource } from '../../Header/preview-display';
-import type { EngineRebuilt, TimelineEntry } from '../../Header/rebuilt-emails';
-import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage, TimelineEntry } from '../../Header/rebuilt-emails';
+import type { AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /**
- * The preview's order: the engine's timeline. Defensive: if the timeline is
+ * The preview's order: the thread analysis's timeline. Defensive: if the timeline is
  * missing or does not hold every real email exactly once, or names a rebuilt
  * message that is not an entry, the real emails alone in list order (never
  * an email missing because of a bad timeline).
  */
-export function previewOrder(result: Pick<EngineResult, 'messages' | 'timeline' | 'reconstructed'>): PreviewSlot[]
+export function previewOrder(result: Pick<ThreadAnalysisResult, 'messages' | 'timeline' | 'reconstructed'>): PreviewSlot[]
 {
     const plain = (): PreviewSlot[] => result.messages.map((_, position) => ({ kind: 'message', position }));
     // (Array.isArray would turn a readonly array's type into any[]: hence the typed copies.)
     const timeline: readonly TimelineEntry[] | undefined = Array.isArray(result.timeline) ? result.timeline : undefined;
-    const reconstructed: readonly EngineRebuilt[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
+    const reconstructed: readonly AnalyzedRebuiltMessage[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
     if (timeline === undefined)
     {
         return plain();
@@ -97,9 +97,9 @@ export function previewOrder(result: Pick<EngineResult, 'messages' | 'timeline' 
 }
 
 /** The rebuilt messages that get a card (link 'entry'), in preview order. */
-export function rebuiltEntries(result: Pick<EngineResult, 'messages' | 'timeline' | 'reconstructed'>): EngineRebuilt[]
+export function rebuiltEntries(result: Pick<ThreadAnalysisResult, 'messages' | 'timeline' | 'reconstructed'>): AnalyzedRebuiltMessage[]
 {
-    const out: EngineRebuilt[] = [];
+    const out: AnalyzedRebuiltMessage[] = [];
     for (const slot of previewOrder(result))
     {
         if (slot.kind !== 'rebuilt')
@@ -116,14 +116,16 @@ export function rebuiltEntries(result: Pick<EngineResult, 'messages' | 'timeline
 }
 
 /** The kept email a rebuilt message was taken from, or undefined (not expected). */
-export function sourceMessageOf(rebuiltEmail: Pick<EngineRebuilt, 'sourceIndex'>, result: Pick<EngineResult, 'messages' | 'positionByIndex'>): EngineMessage | undefined
+export function sourceMessageOf(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'sourceIndex'>,
+    result: Pick<ThreadAnalysisResult, 'messages' | 'positionByIndex'>): AnalyzedMessage | undefined
 {
     const position = result.positionByIndex[rebuiltEmail.sourceIndex];
     return typeof position === 'number' ? result.messages[position] : undefined;
 }
 
 /** The list number (1-based, "#3") of the email a rebuilt message was taken from; null if unknown (not expected). */
-export function sourceNumber(rebuiltEmail: Pick<EngineRebuilt, 'sourceIndex'>, result: Pick<EngineResult, 'positionByIndex'>): number | null
+export function sourceNumber(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'sourceIndex'>,
+    result: Pick<ThreadAnalysisResult, 'positionByIndex'>): number | null
 {
     const position = result.positionByIndex[rebuiltEmail.sourceIndex];
     return typeof position === 'number' ? position + 1 : null;
@@ -134,7 +136,8 @@ export function sourceNumber(rebuiltEmail: Pick<EngineRebuilt, 'sourceIndex'>, r
  * (alsoQuotedIn, input positions), ascending, unique, without the source
  * itself and without unknown positions.
  */
-export function alsoNumbers(rebuiltEmail: Pick<EngineRebuilt, 'sourceIndex' | 'alsoQuotedIn'>, result: Pick<EngineResult, 'positionByIndex'>): number[]
+export function alsoNumbers(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'sourceIndex' | 'alsoQuotedIn'>,
+    result: Pick<ThreadAnalysisResult, 'positionByIndex'>): number[]
 {
     const own = sourceNumber(rebuiltEmail, result);
     const numbers = new Set<number>();
@@ -150,10 +153,11 @@ export function alsoNumbers(rebuiltEmail: Pick<EngineRebuilt, 'sourceIndex' | 'a
 }
 
 /** The keys of one rebuilt entry: source file hash + "@" + header offset, for it and every copy (see the top). */
-export function rebuiltSelectionKeys(rebuiltEmail: EngineRebuilt, result: Pick<EngineResult, 'messages' | 'positionByIndex' | 'reconstructed'>): string[]
+export function rebuiltSelectionKeys(rebuiltEmail: AnalyzedRebuiltMessage,
+    result: Pick<ThreadAnalysisResult, 'messages' | 'positionByIndex' | 'reconstructed'>): string[]
 {
     const keys = new Set<string>();
-    const add = (candidate: EngineRebuilt | undefined): void =>
+    const add = (candidate: AnalyzedRebuiltMessage | undefined): void =>
     {
         if (candidate === undefined)
         {
@@ -184,10 +188,10 @@ export interface RebuiltSelection
     includeAll(): boolean;
     setIncludeAll(included: boolean): void;
     /** The card's own checkbox: true unless the reader left it out (whatever the switch says). */
-    isTicked(rebuiltEmail: EngineRebuilt, result: EngineResult): boolean;
-    setTicked(rebuiltEmail: EngineRebuilt, result: EngineResult, ticked: boolean): void;
+    isTicked(rebuiltEmail: AnalyzedRebuiltMessage, result: ThreadAnalysisResult): boolean;
+    setTicked(rebuiltEmail: AnalyzedRebuiltMessage, result: ThreadAnalysisResult, ticked: boolean): void;
     /** Goes into the PDF: the switch is on and the card is ticked. */
-    isIncluded(rebuiltEmail: EngineRebuilt, result: EngineResult): boolean;
+    isIncluded(rebuiltEmail: AnalyzedRebuiltMessage, result: ThreadAnalysisResult): boolean;
     /** Back to the defaults: switch on, every card ticked. */
     clear(): void;
 }
@@ -196,7 +200,8 @@ export function createRebuiltSelection(): RebuiltSelection
 {
     const excluded = new Set<string>();
     let all = true;
-    const isTicked = (rebuiltEmail: EngineRebuilt, result: EngineResult): boolean => !rebuiltSelectionKeys(rebuiltEmail, result).some((k) => excluded.has(k));
+    const isTicked = (rebuiltEmail: AnalyzedRebuiltMessage, result: ThreadAnalysisResult): boolean =>
+        !rebuiltSelectionKeys(rebuiltEmail, result).some((k) => excluded.has(k));
     return {
         includeAll: () => all,
         setIncludeAll(included)
@@ -228,7 +233,7 @@ export function createRebuiltSelection(): RebuiltSelection
 }
 
 /** The rebuilt entries the reader wants in the PDF (switch on, card ticked), in preview (timeline) order. Not yet the follow-source rule (rebuiltInPdf). */
-export function includedRebuilt(result: EngineResult, selection: RebuiltSelection): EngineRebuilt[]
+export function includedRebuilt(result: ThreadAnalysisResult, selection: RebuiltSelection): AnalyzedRebuiltMessage[]
 {
     if (!selection.includeAll())
     {
@@ -242,10 +247,11 @@ export function includedRebuilt(result: EngineResult, selection: RebuiltSelectio
  * its copies (link 'same-as', ascending id). A copy that does not point back
  * to the entry, or whose email is unknown, is left out (not expected).
  */
-export function rebuiltSources(rebuiltEmail: EngineRebuilt, result: Pick<EngineResult, 'positionByIndex' | 'reconstructed'>): RebuiltSource[]
+export function rebuiltSources(rebuiltEmail: AnalyzedRebuiltMessage,
+    result: Pick<ThreadAnalysisResult, 'positionByIndex' | 'reconstructed'>): RebuiltSource[]
 {
     const out: RebuiltSource[] = [];
-    const add = (candidate: EngineRebuilt | undefined): void =>
+    const add = (candidate: AnalyzedRebuiltMessage | undefined): void =>
     {
         if (candidate === undefined)
         {
@@ -295,8 +301,8 @@ export interface RebuiltInPdfOptions
  * printed whole, so the rebuilt entry would only repeat their quoted text.
  */
 export function rebuiltInPdf(
-    rebuiltEmail: EngineRebuilt,
-    result: Pick<EngineResult, 'positionByIndex' | 'reconstructed'>,
+    rebuiltEmail: AnalyzedRebuiltMessage,
+    result: Pick<ThreadAnalysisResult, 'positionByIndex' | 'reconstructed'>,
     numberOf: (position: number) => number | null,
     options: RebuiltInPdfOptions = {},
 ): RebuiltInPdf | null
@@ -330,7 +336,7 @@ export function rebuiltInPdf(
 }
 
 /** The date of a rebuilt message (see RebuiltDate). */
-export function rebuiltDate(rebuiltEmail: Pick<EngineRebuilt, 'rebuilt'>): RebuiltDate
+export function rebuiltDate(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'rebuilt'>): RebuiltDate
 {
     const { dateText, date, dateApproximate } = rebuiltEmail.rebuilt;
     if (dateText === null || dateText.trim() === '')
@@ -359,7 +365,7 @@ export function rebuiltDate(rebuiltEmail: Pick<EngineRebuilt, 'rebuilt'>): Rebui
 
 const blank = (m: EmailAddress): boolean => m.name.trim() === '' && m.address.trim() === '';
 
-export function rebuiltCard(rebuiltEmail: EngineRebuilt, result: Pick<EngineResult, 'positionByIndex'>): RebuiltCard
+export function rebuiltCard(rebuiltEmail: AnalyzedRebuiltMessage, result: Pick<ThreadAnalysisResult, 'positionByIndex'>): RebuiltCard
 {
     const message = rebuiltEmail.rebuilt;
     return {

@@ -22,7 +22,7 @@ import ThreadAnalysisWorker from './thread-analysis-worker?worker&inline';
 import type { ThreadAnalysisFailure, ToThreadAnalysisWorker } from '../../Header/thread-analysis-worker-messages';
 import type { WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /**
  * Time limit for organizing one batch: 60 seconds. A normal batch takes well
@@ -40,7 +40,7 @@ export const THREAD_ANALYSIS_FAILED_DETAIL = 'the messages could not be organize
 
 /** The analysis result, or why there is none. */
 export type ThreadAnalysisOutcome =
-    | { readonly ok: true; readonly result: EngineResult }
+    | { readonly ok: true; readonly result: ThreadAnalysisResult }
     | { readonly ok: false; readonly error: ThreadAnalysisFailure; readonly detail: string };
 
 /** Starts a thread-analysis worker and connects its events. May throw (then the batch fails, nothing else). */

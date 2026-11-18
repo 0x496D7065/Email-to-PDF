@@ -56,7 +56,7 @@ import { senderKeyOf, signatureBlockKey } from '../thread-analysis/signature-det
 import { displayBlocks } from './display-blocks';
 import type { MessagePlan, PlanRange } from '../../Header/output-plan';
 import type { PrintedAs } from '../../Header/pdf-document-model';
-import type { DisplayBlock, PdfBlock, PdfLabel, PdfStatus, PdfView, PlannedEmail } from '../../Header/pdf-plan';
+import type { DisplayBlock, LabeledBlock, PdfLabel, PdfStatus, PdfView, PlannedEmail } from '../../Header/pdf-plan';
 import type { Segment } from '../../Header/thread-analysis-result';
 
 /** A range for the labels: a plan range, or a PDF range (with `printedAs`). */
@@ -181,7 +181,7 @@ export function labelOf(text: string, start: number, end: number, view: PdfView)
  * (the email is not in the PDF, or the plan is not ready), the plain display
  * blocks with no labels.
  */
-export function pdfBlocks(text: string, segments: readonly Segment[], view: PdfView | null): PdfBlock[]
+export function pdfBlocks(text: string, segments: readonly Segment[], view: PdfView | null): LabeledBlock[]
 {
     if (view === null)
     {
@@ -227,9 +227,9 @@ function samePrintedAsLabel(first: PdfLabel | null, second: PdfLabel | null): bo
  * Done here, in the preview's blocks only: the PDF and the no-repeat parts
  * (Source/pdf-export/build-pdf-document.ts, applyNoRepeatRule) are not changed by it.
  */
-export function mergeSamePrintedAs(blocks: readonly PdfBlock[]): PdfBlock[]
+export function mergeSamePrintedAs(blocks: readonly LabeledBlock[]): LabeledBlock[]
 {
-    const out: PdfBlock[] = [];
+    const out: LabeledBlock[] = [];
     for (const current of blocks)
     {
         const last = out[out.length - 1];

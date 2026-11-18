@@ -24,7 +24,7 @@ import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail, PrintedAs } from '../../Header/pdf-document-model';
 import type { PdfView } from '../../Header/pdf-plan';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 
@@ -100,17 +100,19 @@ const SCENARIOS: readonly Scenario[] = [
     { name: 'the first and the last, no rebuilt email ticked', dropped: (l) => [0, l], rebuilt: () => [] },
 ];
 
-/** The engine result, plans and PDF of a scenario (every email ticked), as the app makes them. */
+/** The thread analysis result, plans and PDF of a scenario (every email ticked), as the app makes them. */
 function setUp(threadCase: ThreadCase, scenario: Scenario, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY)
 {
     const tag = threadCase.id.replace(/[^a-z0-9]+/giu, '-');
     const last = threadCase.messages!.length - 1;
-    const result: EngineResult = analyzeThread(scenario.dropped(last).map((i) => ({ ok: true as const, message: realFile(threadCase.messages!, i, tag) })));
+    const result: ThreadAnalysisResult = analyzeThread(
+        scenario.dropped(last).map((i) => ({ ok: true as const, message: realFile(threadCase.messages!, i, tag) })));
     return prepare(result, result.messages.map((_, k) => k), scenario.rebuilt, policy);
 }
 
 /** The plans, PDF and preview views for the emails at `positions` of `result`, as the app makes them. */
-function prepare(result: EngineResult, positions: readonly number[], chooseRebuilt: (ids: readonly number[]) => number[], policy: OutputPolicy = DEFAULT_OUTPUT_POLICY)
+function prepare(result: ThreadAnalysisResult, positions: readonly number[], chooseRebuilt: (ids: readonly number[]) => number[],
+    policy: OutputPolicy = DEFAULT_OUTPUT_POLICY)
 {
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),
@@ -138,7 +140,7 @@ function prepare(result: EngineResult, positions: readonly number[], chooseRebui
 }
 
 /** Per non-blank character of a body: where the preview says it is printed instead (only characters so labelled). */
-function labelled(body: string, result: EngineResult, position: number, view: PdfView): Map<number, PrintedAs>
+function labelled(body: string, result: ThreadAnalysisResult, position: number, view: PdfView): Map<number, PrintedAs>
 {
     const out = new Map<number, PrintedAs>();
     for (const { block, label } of pdfBlocks(body, result.messages[position]!.segments, view))

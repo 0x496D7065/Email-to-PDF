@@ -5,8 +5,8 @@
 // review) shows it; pdf-export/build-pdf-document.ts reads RebuiltInPdf.
 
 import type { EmailAddress, ParseWarning } from './parsed-email';
-import type { EngineRebuilt } from './rebuilt-emails';
-import type { DedupeWarningCode, EngineWarningCode, ReconstructionWarningCode } from './thread-analysis-result';
+import type { AnalyzedRebuiltMessage } from './rebuilt-emails';
+import type { DedupeWarningCode, ThreadAnalysisWarningCode, ReconstructionWarningCode } from './thread-analysis-result';
 
 /** Where the shown author comes from. */
 export type AuthorSource =
@@ -44,13 +44,14 @@ export type MessageNote =
         /** The other emails' numbers in the list (1-based), ascending; never this email. */
         readonly related: readonly number[];
         /**
-         * How many more FILES are involved but not listed (the engine caps its
+         * How many more FILES are involved but not listed (the thread analysis caps its
          * list). Files, not emails: several files can be one merged email,
          * possibly one already listed, so this is never worded as emails.
          */
         readonly more: number;
     }
-    | { readonly kind: 'engine'; readonly code: EngineWarningCode }
+    // 'engine' is the old name of thread analysis, kept because it is a translation key.
+    | { readonly kind: 'engine'; readonly code: ThreadAnalysisWarningCode }
     // Some of its characters will show in the PDF as codes such as "[U+0000]" (task 8.8: said here, not in the PDF).
     | { readonly kind: 'chars'; readonly code: 'coded-characters' }
     // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
@@ -64,7 +65,7 @@ export type PreviewSlot = { readonly kind: 'message'; readonly position: number 
 /** One place the text of a rebuilt entry was read: the entry itself or one of its copies, and the list position of the email quoting it. */
 export interface RebuiltSource
 {
-    readonly rebuilt: EngineRebuilt;
+    readonly rebuilt: AnalyzedRebuiltMessage;
     readonly position: number;
 }
 

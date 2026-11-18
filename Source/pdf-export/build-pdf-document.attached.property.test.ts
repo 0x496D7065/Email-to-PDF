@@ -1,7 +1,7 @@
 // Random tests of collapse, never delete with emails attached inside dropped
 // files (task 8.13b-3, review round 2, finding M1). Seeded random .eml files
 // (so every run is the same) are read by the real .eml parser and run
-// through the real engine, output plan and PDF model with "Print full
+// through the real thread analysis, output plan and PDF model with "Print full
 // original text" off: trees of emails attached inline or as a file, up to
 // three levels deep, with random dates (with a zone, without one, missing,
 // unreadable), random In-Reply-To links (to any email of the case, also
@@ -31,7 +31,7 @@ import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number
@@ -193,7 +193,7 @@ interface Tally
 }
 
 /** Builds the folded PDF of a random selection of `result` and checks every email's own sentence. */
-function check(result: EngineResult, random: () => number, where: string, tally: Tally): void
+function check(result: ThreadAnalysisResult, random: () => number, where: string, tally: Tally): void
 {
     const positions = result.messages.map((_, k) => k).filter(() => random() < 0.75);
     const plans = planOutput(
@@ -207,15 +207,16 @@ function check(result: EngineResult, random: () => number, where: string, tally:
         { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt, unticked });
     const bodies = pdfDocument.emails.map((e) => squash(bodyOf(e)));
     const ticked = new Set(positions);
-    result.messages.forEach((engineMessage, position) =>
+    result.messages.forEach((analyzedMessage, position) =>
     {
-        const name = engineMessage.message.subject.replace(/ subject$/u, '');
+        const name = analyzedMessage.message.subject.replace(/ subject$/u, '');
         const sentence = squash(sentenceOf(name));
         const times = bodies.filter((b) => b.includes(sentence)).length;
         if (ticked.has(position))
         {
             tally.checked++;
-            if (engineMessage.message.source.attachedPath !== undefined || engineMessage.duplicates.some((d) => d.source.attachedPath !== undefined))
+            if (analyzedMessage.message.source.attachedPath !== undefined
+                || analyzedMessage.duplicates.some((d) => d.source.attachedPath !== undefined))
             {
                 tally.attachedChecked++;
             }
@@ -239,7 +240,7 @@ function check(result: EngineResult, random: () => number, where: string, tally:
     });
 }
 
-/** The real overlap detector, told nothing about which email holds which (the engine fix of M1 undone). */
+/** The real overlap detector, told nothing about which email holds which (the thread analysis fix of M1 undone). */
 const NO_HOLDS: ThreadAnalysisParts = {
     ...DEFAULT_THREAD_ANALYSIS_PARTS,
     detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))),

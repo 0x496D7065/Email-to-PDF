@@ -19,7 +19,7 @@ import { mountPageShell, type PageShell } from './page-shell';
 import { t } from './translations';
 import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
 import type { ParseErrorCode, ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // --- Helpers ----------------------------------------------------------------
 
@@ -33,8 +33,8 @@ function fileItem(file: FileLike, isDirectory = false): DataTransferItemLike
     return { kind: 'file', getAsFile: () => file, webkitGetAsEntry: () => ({ isDirectory }) };
 }
 
-/** An engine result with the given counts and failed files (no real messages needed here). */
-function engineResult(
+/** A thread analysis result with the given counts and failed files (no real messages needed here). */
+function analysisResult(
     given: number,
     found: number,
     merged: number,
@@ -43,15 +43,15 @@ function engineResult(
 ): ProcessResult
 {
     const kept = found - merged;
-    const engine = {
+    const threadAnalysis = {
         messages: Array.from({ length: kept }, () => ({})),
         failed: failed.map((f, i) => ({ ...f, index: i, sha256: null })),
         counts: { filesGiven: given, messagesFound: found, duplicatesMerged: merged, filesFailed: failed.length, undated: 0, withFolds: 0 },
         positionByIndex: [],
         // Only the number of entries matters to the counts (task 8.13b-4, P4).
         ...(attached === 0 ? {} : { attached: Array.from({ length: attached }, () => ({})) }),
-    } as unknown as EngineResult;
-    return { ok: true, engine };
+    } as unknown as ThreadAnalysisResult;
+    return { ok: true, threadAnalysis };
 }
 
 /** A controllable processFiles: each call waits until the test resolves it. */
@@ -211,9 +211,9 @@ describe('filesFromDrop', () =>
 
 describe('summarize and summaryText', () =>
 {
-    it('uses the engine counts and failed files', () =>
+    it('uses the thread analysis counts and failed files', () =>
     {
-        const summary = summarize(engineResult(12, 10, 1, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'not an email file' }]));
+        const summary = summarize(analysisResult(12, 10, 1, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'not an email file' }]));
         expect(summary).toEqual({
             filesAdded: 12,
             filesFailed: 1,
@@ -228,17 +228,18 @@ describe('summarize and summaryText', () =>
 
     it('leaves out zero failures and zero merges, with English plurals', () =>
     {
-        expect(summaryText(summarize(engineResult(1, 1, 0, [])))).toBe('1 file added. 1 email found.');
-        expect(summaryText(summarize(engineResult(3, 0, 0, [])))).toBe('3 files added. 0 emails found.');
+        expect(summaryText(summarize(analysisResult(1, 1, 0, [])))).toBe('1 file added. 1 email found.');
+        expect(summaryText(summarize(analysisResult(3, 0, 0, [])))).toBe('3 files added. 0 emails found.');
     });
 
     it('says how many emails were attached inside other emails, only when there are some (task 8.13b-4, P4)', () =>
     {
-        const one = summarize(engineResult(1, 2, 0, [], 1));
+        const one = summarize(analysisResult(1, 2, 0, [], 1));
         expect(one.attachedFound).toBe(1);
         expect(summaryText(one)).toBe('1 file added. 2 emails found (1 attached inside another email).');
-        expect(summaryText(summarize(engineResult(3, 5, 1, [], 2)))).toBe('3 files added. 5 emails found (2 attached inside other emails). 1 identical copy merged.');
-        expect(summaryText(summarize(engineResult(3, 3, 0, [], 0)))).toBe('3 files added. 3 emails found.');
+        expect(summaryText(summarize(analysisResult(3, 5, 1, [], 2)))).toBe(
+            '3 files added. 5 emails found (2 attached inside other emails). 1 identical copy merged.');
+        expect(summaryText(summarize(analysisResult(3, 3, 0, [], 0)))).toBe('3 files added. 3 emails found.');
     });
 
     it('counts what was read when the whole batch failed', () =>
@@ -269,7 +270,7 @@ describe('summarize and summaryText', () =>
             { ok: true, message: {} as never, attached: attached(1) },
         ];
         const summary = summarize({ ok: false, error: 'engine-failed', detail: 'broken', parsed });
-        // 3 files read + 3 attached emails, as the engine counts them (EngineCounts.messagesFound).
+        // 3 files read + 3 attached emails, as the thread analysis counts them (ThreadAnalysisCounts.messagesFound).
         expect(summary).toMatchObject({ filesAdded: 4, filesFailed: 1, messagesFound: 6, attachedFound: 3, duplicatesMerged: 0 });
         expect(summaryText(summary)).toBe('4 files added. 1 could not be read. 6 emails found (3 attached inside other emails).');
     });
@@ -385,7 +386,7 @@ describe('mountAddFiles: choosing files', () =>
         // No value: an "in progress" bar.
         expect(byId('add-progress-bar').hasAttribute('value')).toBe(false);
 
-        const result = engineResult(2, 2, 0, []);
+        const result = analysisResult(2, 2, 0, []);
         resolve(result);
         await settle();
 
@@ -416,7 +417,7 @@ describe('mountAddFiles: choosing files', () =>
         // A repeated report is not announced again.
         options.onProgress?.({ stage: 'organizing', filesDone: 10, filesTotal: 10 });
         expect(statuses).toEqual([readingStatusText(10), t('drop.organizing')]);
-        resolve(engineResult(10, 10, 0, []));
+        resolve(analysisResult(10, 10, 0, []));
         await settle();
         expect(statuses).toEqual([readingStatusText(10), t('drop.organizing'), '10 files added. 10 emails found.']);
     });
@@ -427,7 +428,7 @@ describe('mountAddFiles: choosing files', () =>
         const first = control.calls[0] ?? expect.unreachable();
         first.options.onProgress?.({ stage: 'organizing', filesDone: 1, filesTotal: 1 });
         choose('b.eml', 'c.eml');
-        first.resolve(engineResult(1, 1, 0, []));
+        first.resolve(analysisResult(1, 1, 0, []));
         await settle();
         const second = control.calls[1] ?? expect.unreachable();
         second.options.onProgress?.({ stage: 'reading', filesDone: 0, filesTotal: 3 });
@@ -457,7 +458,7 @@ describe('mountAddFiles: results', () =>
     {
         choose('a.eml', '<b>notes</b>.txt', '');
         control.calls[0]?.resolve(
-            engineResult(3, 1, 0, [
+            analysisResult(3, 1, 0, [
                 { fileName: '<b>notes</b>.txt', error: 'unsupported-type', detail: 'not an email file: only .eml and .msg files can be read' },
                 { fileName: '', error: 'too-large', detail: 'the file is larger than 50 MB, the limit for one file' },
             ]),
@@ -494,7 +495,7 @@ describe('mountAddFiles: results', () =>
     {
         choose('a.eml', 'b.msg', 'c.eml');
         control.calls[0]?.resolve(
-            engineResult(3, 1, 0, [
+            analysisResult(3, 1, 0, [
                 { fileName: 'b.msg', error: 'tool-error', detail: 'the reading step stopped unexpectedly (worker failed)' },
                 { fileName: 'c.eml', error: 'timeout', detail: 'took too long to read (stopped)' },
             ]),
@@ -515,7 +516,8 @@ describe('mountAddFiles: results', () =>
     it('a file the browser could not open is not shown as a damaged file', async () =>
     {
         choose('a.eml', 'moved.eml');
-        control.calls[0]?.resolve(engineResult(2, 1, 0, [{ fileName: 'moved.eml', error: 'unreadable', detail: 'could not be read from your computer' }]));
+        control.calls[0]?.resolve(
+            analysisResult(2, 1, 0, [{ fileName: 'moved.eml', error: 'unreadable', detail: 'could not be read from your computer' }]));
         await settle();
         const items = byId('add-failed-list').children as FakeElement[];
         expect(items[0]?.textContent).toContain(`moved.eml ${t('errors.file.unreadable')}`);
@@ -539,12 +541,12 @@ describe('mountAddFiles: results', () =>
     it('does not open step 2 when no email was found', async () =>
     {
         choose('notes.txt');
-        control.calls[0]?.resolve(engineResult(1, 0, 0, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'x' }]));
+        control.calls[0]?.resolve(analysisResult(1, 0, 0, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'x' }]));
         await settle();
         expect(checkReady).toEqual([false]);
     });
 
-    it('shows the batch error and keeps the list of failed files when the engine fails', async () =>
+    it('shows the batch error and keeps the list of failed files when the thread analysis fails', async () =>
     {
         choose('a.eml', 'big.eml');
         control.calls[0]?.resolve({
@@ -586,7 +588,7 @@ describe('mountAddFiles: adding more files', () =>
     it('re-runs on the whole list (old files first) each time files are added', async () =>
     {
         choose('a.eml');
-        control.calls[0]?.resolve(engineResult(1, 1, 0, []));
+        control.calls[0]?.resolve(analysisResult(1, 1, 0, []));
         await settle();
         choose('b.eml', 'a.eml');
         expect(control.calls[1]?.files.map((f) => f.name)).toEqual(['a.eml', 'b.eml', 'a.eml']);
@@ -606,7 +608,7 @@ describe('mountAddFiles: adding more files', () =>
         expect(control.calls).toHaveLength(1);
         expect(byId('add-notice').textContent).toBe(t('drop.queued'));
 
-        control.calls[0]?.resolve(engineResult(1, 1, 0, []));
+        control.calls[0]?.resolve(analysisResult(1, 1, 0, []));
         await settle();
         // The stale result is not shown; one more round with every file.
         expect(results).toEqual([]);
@@ -616,7 +618,7 @@ describe('mountAddFiles: adding more files', () =>
         expect(control.calls[1]?.files.map((f) => f.name)).toEqual(['a.eml', 'b.eml', 'c.msg']);
         expect(shell.addArea.getAttribute('aria-busy')).toBe('true');
 
-        const final = engineResult(3, 3, 0, []);
+        const final = analysisResult(3, 3, 0, []);
         control.calls[1]?.resolve(final);
         await settle();
         expect(results).toEqual([final]);
@@ -741,7 +743,7 @@ describe('mountAddFiles: reset', () =>
     it('forgets every file and puts step 1 back as at the start', async () =>
     {
         choose('a.eml');
-        control.calls[0]?.resolve(engineResult(1, 1, 0, [{ fileName: 'x.txt', error: 'corrupt', detail: 'x' }]));
+        control.calls[0]?.resolve(analysisResult(1, 1, 0, [{ fileName: 'x.txt', error: 'corrupt', detail: 'x' }]));
         await settle();
         drop([fileItem(fakeFile('Mail'), true)]);
 
@@ -765,7 +767,7 @@ describe('mountAddFiles: reset', () =>
         expect(shell.addArea.hasAttribute('aria-busy')).toBe(false);
         expect(button().hasAttribute('aria-disabled')).toBe(false);
         first?.options.onProgress?.({ stage: 'organizing', filesDone: 1, filesTotal: 1 });
-        first?.resolve(engineResult(1, 1, 0, []));
+        first?.resolve(analysisResult(1, 1, 0, []));
         await settle();
         expect(results).toEqual([]);
         expect(byId('add-summary').hasAttribute('hidden')).toBe(true);
@@ -785,7 +787,7 @@ describe('mountAddFiles: reset', () =>
 
         // The old run reports progress and finishes while the new one is going.
         old?.options.onProgress?.({ stage: 'organizing', filesDone: 1, filesTotal: 1 });
-        old?.resolve(engineResult(1, 1, 0, [{ fileName: 'a.eml', error: 'corrupt', detail: 'old' }]));
+        old?.resolve(analysisResult(1, 1, 0, [{ fileName: 'a.eml', error: 'corrupt', detail: 'old' }]));
         await settle();
         expect(results).toEqual([]);
         expect(statuses.length).toBe(statusesBefore);
@@ -794,7 +796,7 @@ describe('mountAddFiles: reset', () =>
         expect(shell.addArea.getAttribute('aria-busy')).toBe('true');
         expect(control.calls).toHaveLength(2);
 
-        const final = engineResult(1, 1, 0, []);
+        const final = analysisResult(1, 1, 0, []);
         current?.resolve(final);
         await settle();
         expect(results).toEqual([final]);
@@ -819,13 +821,13 @@ describe('mountAddFiles: reset', () =>
     {
         choose('a.eml');
         choose('b.eml'); // queued
-        control.calls[0]?.resolve(engineResult(1, 1, 0, []));
+        control.calls[0]?.resolve(analysisResult(1, 1, 0, []));
         await settle();
         const second = control.calls[1];
         expect(second?.files.map((f) => f.name)).toEqual(['a.eml', 'b.eml']);
         addFiles.reset();
         expect(second?.options.signal?.aborted).toBe(true);
-        second?.resolve(engineResult(2, 2, 0, []));
+        second?.resolve(analysisResult(2, 2, 0, []));
         await settle();
         expect(results).toEqual([]);
         expect(addFiles.hasFiles()).toBe(false);
@@ -844,7 +846,7 @@ describe('mountAddFiles: reset', () =>
         addFiles.reset();
         choose('a.eml');
         const call = control.calls[0];
-        call?.resolve(engineResult(1, 1, 0, []));
+        call?.resolve(analysisResult(1, 1, 0, []));
         await settle();
         addFiles.reset();
         // The run had finished: its signal was never needed.
@@ -863,9 +865,9 @@ describe('mountAddFiles: hasFiles, onFilesChange and focus', () =>
         expect(filesChanges).toBe(1);
         choose('b.eml'); // queued while busy
         expect(filesChanges).toBe(2);
-        control.calls[0]?.resolve(engineResult(1, 1, 0, []));
+        control.calls[0]?.resolve(analysisResult(1, 1, 0, []));
         await settle();
-        control.calls[1]?.resolve(engineResult(2, 2, 0, []));
+        control.calls[1]?.resolve(analysisResult(2, 2, 0, []));
         await settle();
         expect(addFiles.hasFiles()).toBe(true);
         addFiles.reset();
@@ -876,7 +878,7 @@ describe('mountAddFiles: hasFiles, onFilesChange and focus', () =>
     it('a batch where every file failed still has files (the failed list is shown)', async () =>
     {
         choose('notes.txt');
-        control.calls[0]?.resolve(engineResult(1, 0, 0, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'x' }]));
+        control.calls[0]?.resolve(analysisResult(1, 0, 0, [{ fileName: 'notes.txt', error: 'unsupported-type', detail: 'x' }]));
         await settle();
         expect(addFiles.hasFiles()).toBe(true);
     });

@@ -3,7 +3,7 @@
 // into pages; this file knows nothing about pages, coordinates, fonts, sizes
 // or PDF syntax, so the renderer can be replaced without touching it.
 //
-// buildPdfDocument() takes the engine result, the INCLUDED emails (list
+// buildPdfDocument() takes the thread analysis result, the INCLUDED emails (list
 // positions, in list order) with their output plans (Source/thread-analysis/output-plan.ts,
 // the same plans the preview labels show, Source/web-page/pdf-labels.ts), the policy,
 // the time zone, the generation moment and the fixed texts, and returns a
@@ -116,18 +116,18 @@
 // stays in the quoting email while its rebuilt email prints it too (as
 // before task 8.10; the user unticks that rebuilt email or adds the file).
 // ATTACHED EMAILS (task 8.13b-3, user decisions 2026-11-10): an email
-// attached inside a dropped file is a real email of the engine's list
-// (Header/thread-analysis-result.ts, EngineAttached), so it gets its own slot, number,
+// attached inside a dropped file is a real email of the thread analysis's list
+// (Header/thread-analysis-result.ts, AnalyzedAttachedMessage), so it gets its own slot, number,
 // index entry and page like any other (Q1, Q2: its own tick). Its File row
 // names the file and each attachment down to it ("parent.eml ›
 // forwarded.eml", fileRowLine, Q5). With "Print full original text" off,
 // the no-repeat rule above also covers it: its printed block in the body of
-// an email holding it (an inline forward in an .eml: EngineAttached.places)
+// an email holding it (an inline forward in an .eml: AnalyzedAttachedMessage.places)
 // is left out of that body as follows (attachedBlockParts).
 // - In the PDF (`printedAs` kind 'email'), ONLY THE PARTS ITS OWN PAGE
 //   PRINTS are left out (task 8.13b-3, review round 4, M1, user decision
 //   option a; blockClaims): its header lines, when its header rows show
-//   all of its header data (EngineAttached.keptShowsHeader), and the pieces
+//   all of its header data (AnalyzedAttachedMessage.keptShowsHeader), and the pieces
 //   of its text its page prints (its plan's kept ranges; a piece its page
 //   leaves out as printed by another email keeps that email as its label).
 //   Whatever its page leaves out (quoted history of an older email that is
@@ -144,7 +144,7 @@
 // out when it is unticked; Q8); a dropped file's copy is always the one
 // kept (D2), and when it lacks header data the attached copy has (a Bcc
 // line, a date), the block's header lines stay. A holder merged into
-// another copy: the engine moves the place to the kept copy (S1,
+// another copy: the thread analysis moves the place to the kept copy (S1,
 // analyze-thread.ts settleAttached), so an unticked attached email is printed in
 // no copy of it. The block is exactly the attached email's text as the
 // parser wrote it, so no writer's answer can sit inside it: the B1 check
@@ -225,7 +225,7 @@
 // removed; the rest of the line is unchanged. This applies to the kept
 // parts of a body, to the whole body under "Print full original text" and
 // to the deeper quotes left in a rebuilt email's text (whose own quote
-// marks the engine removed already). The preview and the original files
+// marks the thread analysis removed already). The preview and the original files
 // (and their SHA-256) are unchanged.
 //
 // No notes in the PDF (user rule 2026-11-05, task 8.8): the PDF is the
@@ -279,14 +279,14 @@ import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-p
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfBlock, PdfDocument, PdfEmail, PdfFieldRow, PdfIndexEntry, PdfLine, PdfParticipant, PdfRange, PdfRole, PdfStrings, PrintedAs } from '../../Header/pdf-document-model';
 import type { RebuiltInPdf } from '../../Header/preview-display';
-import type { EngineRebuilt, ReconstructedMessage } from '../../Header/rebuilt-emails';
-import type { EngineAttached, EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage, ReconstructedMessage } from '../../Header/rebuilt-emails';
+import type { AnalyzedAttachedMessage, AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ---------------------------------------------------------------- the shape
 
 export interface BuildPdfInput
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     /** List positions of the included emails, in list order (Source/web-page/review.ts, includedPositions). */
     readonly positions: readonly number[];
     /** One plan per position, same order (Source/web-page/pdf-labels.ts, currentPlans). */
@@ -423,7 +423,7 @@ export type PdfSlot =
     | { readonly kind: 'email'; readonly position: number; readonly number: number; /** Index into `plans`. */ readonly plan: number }
     | {
         readonly kind: 'rebuilt';
-        readonly entry: EngineRebuilt;
+        readonly entry: AnalyzedRebuiltMessage;
         readonly number: number;
         /**
          * Where it was read from (rebuiltInPdf). Only `shown` is used: its
@@ -460,20 +460,20 @@ export interface PdfOrder
  * numbers.
  * Pure: `result` is never changed.
  */
-export function planPdfOrder(result: EngineResult, positions: readonly number[], rebuiltIds: readonly number[] = []): PdfOrder
+export function planPdfOrder(result: ThreadAnalysisResult, positions: readonly number[], rebuiltIds: readonly number[] = []): PdfOrder
 {
     // The real emails, each once, and their rank among them (1..k).
     const realRank: (number | null)[] = result.messages.map(() => null);
     const realEmails: { readonly position: number; readonly plan: number }[] = [];
     positions.forEach((position, planIndex) =>
     {
-        const engineMessage = result.messages[position];
-        if (engineMessage === undefined || realRank[position] !== null)
+        const analyzedMessage = result.messages[position];
+        if (analyzedMessage === undefined || realRank[position] !== null)
         {
             return;
         }
         // An email with no text is left out of the PDF (task 8.14, see NO-TEXT EMAILS at the top).
-        if (hasNoPrintableText(engineMessage.message))
+        if (hasNoPrintableText(analyzedMessage.message))
         {
             return;
         }
@@ -483,7 +483,7 @@ export function planPdfOrder(result: EngineResult, positions: readonly number[],
 
     // The rebuilt entries chosen that follow a real email in the PDF, with their rank in the timeline.
     type UnnumberedSlot = { readonly kind: 'email'; readonly position: number; readonly plan: number }
-        | { readonly kind: 'rebuilt'; readonly entry: EngineRebuilt; readonly source: RebuiltInPdf };
+        | { readonly kind: 'rebuilt'; readonly entry: AnalyzedRebuiltMessage; readonly source: RebuiltInPdf };
     const chosenRebuilt: { readonly slot: UnnumberedSlot; readonly rank: number }[] = [];
     const rankOfPosition = new Map<number, number>();
     if (rebuiltIds.length > 0)
@@ -906,7 +906,7 @@ export function headerLinesEnd(body: string, rebuiltMessage: ReconstructedMessag
  * Kept INLINE, as the plan says (nothing else would show it): a rebuilt
  * message that is not in the PDF for any other reason (not a forwarded
  * part, its entry chosen but not placed, a real file linked to it that is
- * not in the PDF), and any quoted part the engine could not rebuild at all
+ * not in the PDF), and any quoted part the thread analysis could not rebuild at all
  * (reconstruct-quoted-messages.ts, REFUSAL: there is no place for it).
  * THE WRITER'S ANSWER STAYS (task 8.10, B1, review round 3, as narrowed by
  * task 8.13a, Q3): a place whose text holds BOTH text the plan calls the
@@ -929,7 +929,7 @@ export function headerLinesEnd(body: string, rebuiltMessage: ReconstructedMessag
  * Pure: `result` and `plans` are never changed.
  */
 export function printedElsewhere(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     slots: readonly PdfSlot[],
     pdfNumberByPosition: readonly (number | null)[],
     plans?: ReadonlyMap<number, MessagePlan | undefined>,
@@ -1041,7 +1041,7 @@ function disjointParts(places: readonly PrintedPart[]): PrintedPart[]
  * Pure: `result` and `plans` are never changed.
  */
 export function printedElsewhereParts(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     slots: readonly PdfSlot[],
     pdfNumberByPosition: readonly (number | null)[],
     plans?: ReadonlyMap<number, MessagePlan | undefined>,
@@ -1055,7 +1055,7 @@ export function printedElsewhereParts(
 interface MoveCandidate
 {
     readonly entryId: number;
-    /** The id of the place (its EngineRebuilt). */
+    /** The id of the place (its AnalyzedRebuiltMessage). */
     readonly copyId: number;
     readonly position: number;
     readonly start: number;
@@ -1212,7 +1212,7 @@ function blockBodyStart(body: string, start: number, end: number): { readonly at
  * - The forwarded separator and header lines (the block up to its first
  *   blank line, Header/parsed-email.ts AttachedPlace): printed as the email,
  *   whose header rows show them, when those rows show all of its header
- *   data (EngineAttached.keptShowsHeader: not so when a dropped file's copy
+ *   data (AnalyzedAttachedMessage.keptShowsHeader: not so when a dropped file's copy
  *   with less header data was kept, D2); otherwise they stay.
  * - Its text (after that blank line): the pieces its page prints
  *   (pagePieces of `pieces`, in the offsets of the kept copy's body
@@ -1281,7 +1281,7 @@ function blockClaims(holderBody: string, start: number, end: number, ownBody: st
  * valid offsets, and not in the email's own body.
  */
 function attachedBlockParts(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     pdfNumberByPosition: readonly (number | null)[],
     plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
     found: Map<number, PrintedPart[]>,
@@ -1354,7 +1354,7 @@ function attachedBlockParts(
     // depth 1. It still works: copies merge only when their bodies are equal (normalizeBody), so the kept
     // body holds the same blocks, and S1 (analyze-thread.ts settleAttached) moves the places of the entries
     // attached inside the merged copy to the kept body, where they keep their own (deeper) path.
-    const depth = (a: EngineAttached): number => listOrNone(a.path).length;
+    const depth = (a: AnalyzedAttachedMessage): number => listOrNone(a.path).length;
     const deepestFirst = attachedEmails.map((a, k) => ({ a, k })).sort((x, y) => depth(y.a) - depth(x.a) || y.k - x.k);
     for (const { a: attached } of deepestFirst)
     {
@@ -1385,7 +1385,7 @@ function attachedBlockParts(
                 continue;
             }
             const holderMessage = result.messages[holder];
-            // The offsets are those of that very body (Header/thread-analysis-result.ts, EngineAttachedPlace).
+            // The offsets are those of that very body (Header/thread-analysis-result.ts, AnalyzedAttachedPlace).
             if (holderMessage === undefined || holderMessage.index !== place.holderIndex)
             {
                 continue;
@@ -1453,7 +1453,7 @@ function subtractIntervals(start: number, end: number, holes: readonly (readonly
 
 /** printedElsewhereParts, and the header lines moved to each rebuilt email (see applyNoRepeatRule). */
 function noRepeatParts(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     slots: readonly PdfSlot[],
     pdfNumberByPosition: readonly (number | null)[],
     plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
@@ -1463,7 +1463,7 @@ function noRepeatParts(
 {
     const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
     // Each entry in the PDF, with the copy whose header and text it prints (rebuiltInPdf), and its PDF number.
-    const entries = new Map<number, { readonly copy: EngineRebuilt; readonly position: number; readonly number: number }>();
+    const entries = new Map<number, { readonly copy: AnalyzedRebuiltMessage; readonly position: number; readonly number: number }>();
     for (const slot of slots)
     {
         if (slot.kind === 'rebuilt')
@@ -1475,7 +1475,7 @@ function noRepeatParts(
     const candidates: MoveCandidate[] = [];
     // The entries whose printed copy's header lines are printed nowhere (its plan leaves them out, its rows cannot show them).
     const unshown = new Set<number>();
-    const reconstructed: readonly EngineRebuilt[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
+    const reconstructed: readonly AnalyzedRebuiltMessage[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
     for (const rebuiltEntry of reconstructed)
     {
         const position = result.positionByIndex[rebuiltEntry.sourceIndex];
@@ -1604,8 +1604,8 @@ function noRepeatParts(
  * are taken.
  */
 function movedHeaders(
-    result: EngineResult,
-    entries: ReadonlyMap<number, { readonly copy: EngineRebuilt; readonly position: number }>,
+    result: ThreadAnalysisResult,
+    entries: ReadonlyMap<number, { readonly copy: AnalyzedRebuiltMessage; readonly position: number }>,
     candidates: readonly MoveCandidate[],
     unshown: ReadonlySet<number>,
     pdfNumberByPosition: readonly (number | null)[],
@@ -1941,7 +1941,7 @@ export interface NoRepeatResult
  * printed-somewhere-check.ts).
  */
 function printedNowhere(
-    result: EngineResult,
+    result: ThreadAnalysisResult,
     order: PdfOrder,
     plans: ReadonlyMap<number, MessagePlan | undefined>,
     elsewhere: ReadonlyMap<number, BodyIntervals>,
@@ -1961,20 +1961,20 @@ function printedNowhere(
         {
             continue;
         }
-        const engineMessage = result.messages[slot.position];
+        const analyzedMessage = result.messages[slot.position];
         const plan = plans.get(slot.position);
-        if (engineMessage === undefined || !hasValidRanges(plan, engineMessage.message.bodyText.length) || plan.fallback)
+        if (analyzedMessage === undefined || !hasValidRanges(plan, analyzedMessage.message.bodyText.length) || plan.fallback)
         {
             continue;
         }
         // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
-        const isList: boolean = Array.isArray(engineMessage.segments);
+        const isList: boolean = Array.isArray(analyzedMessage.segments);
         if (!isList)
         {
             continue;
         }
         // Segments are a sorted cover of the body: these intervals are sorted and do not overlap (as `overlappingIntervals` needs).
-        const linked = engineMessage.segments
+        const linked = analyzedMessage.segments
             .filter(
                 (segment) =>
                     segment.folded &&
@@ -2285,21 +2285,21 @@ export { FILE_CHAIN_SEPARATOR };
  * One line of an email's File row for the copy at input position `index`
  * (the kept copy or a merged one): its file name, or "(file without a name)";
  * for an email attached inside a file (task 8.13b-3, Q5), the file name and
- * then the attachment name at each level down to it (EngineAttached.names),
+ * then the attachment name at each level down to it (AnalyzedAttachedMessage.names),
  * joined by FILE_CHAIN_SEPARATOR, an attachment without a name shown as
- * "(attached email N)" with its number at that level (EngineAttached.path:
+ * "(attached email N)" with its number at that level (AnalyzedAttachedMessage.path:
  * the n-th attached email of the email holding it). The text comes from
  * Source/web-page-logic/file-chain.ts, shared with the preview's "Also in" row (task
  * 8.13b-4, P2), so the two never disagree.
  */
-function fileRowLine(result: EngineResult, index: number, fileName: string, strings: PdfStrings, sanitizer: Sanitizer): PdfLine
+function fileRowLine(result: ThreadAnalysisResult, index: number, fileName: string, strings: PdfStrings, sanitizer: Sanitizer): PdfLine
 {
     const chain = fileChain(result, index, fileName, strings);
     return chain.ownWords ? ownTextLine(chain.text, 'muted') : sanitizer.line(chain.text, 'muted');
 }
 
 function buildEmail(
-    engineMessage: EngineMessage,
+    analyzedMessage: AnalyzedMessage,
     position: number,
     number: number,
     plan: MessagePlan | undefined,
@@ -2309,7 +2309,7 @@ function buildEmail(
 ): EmailParts
 {
     const { strings, policy, timeZone } = input;
-    const message = engineMessage.message;
+    const message = analyzedMessage.message;
     const sanitizer = createSanitizer();
     const indexSanitizer = createSanitizer(); // the index repeats the header texts: not counted again
 
@@ -2368,8 +2368,8 @@ function buildEmail(
     const hasSubject = message.subject.trim() !== '';
     fields.push({ label: strings.subjectLabel,
         value: [hasSubject ? sanitizer.line(message.subject, 'field-value') : ownTextLine(strings.noSubject, 'muted')] });
-    const files = [{ index: engineMessage.index, fileName: message.source.fileName },
-        ...engineMessage.duplicates.map((d) => ({ index: d.index, fileName: d.source.fileName }))];
+    const files = [{ index: analyzedMessage.index, fileName: message.source.fileName },
+        ...analyzedMessage.duplicates.map((d) => ({ index: d.index, fileName: d.source.fileName }))];
     fields.push({ label: strings.fileLabel, value: files.map((f) => fileRowLine(input.result, f.index, f.fileName, strings, sanitizer)) });
 
     // Body.
@@ -2511,7 +2511,7 @@ export function dayStartInZone(day: string, zone: string): number | null
  * of its own: data only, the app says it); a day alone as that day; a date
  * that could not be read as written; none: "no date".
  */
-function rebuiltDateParts(rebuiltEntry: EngineRebuilt, input: BuildPdfInput, sanitizer: Sanitizer): RebuiltDateParts
+function rebuiltDateParts(rebuiltEntry: AnalyzedRebuiltMessage, input: BuildPdfInput, sanitizer: Sanitizer): RebuiltDateParts
 {
     const { strings, timeZone } = input;
     const date = rebuiltDate(rebuiltEntry);
@@ -2565,7 +2565,8 @@ function rebuiltDateParts(rebuiltEntry: EngineRebuilt, input: BuildPdfInput, san
  * first in its text, as plain text (the same role, font and indent as the
  * rest of its text), so nothing is lost and they sit under its header.
  */
-function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: number, input: BuildPdfInput, moved: readonly string[]): EmailParts
+function buildRebuiltEmail(entry: AnalyzedRebuiltMessage, source: RebuiltInPdf, number: number, input: BuildPdfInput,
+    moved: readonly string[]): EmailParts
 {
     const { strings } = input;
     const shownEntry = source.shown.rebuilt;
@@ -2681,8 +2682,8 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
         }
         else
         {
-            const engineMessage = result.messages[slot.position]!;
-            parts = buildEmail(engineMessage, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NO_INTERVALS,
+            const analyzedMessage = result.messages[slot.position]!;
+            parts = buildEmail(analyzedMessage, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NO_INTERVALS,
                 restored.get(slot.position) ?? NO_INTERVALS);
         }
         emails.push(parts.email);

@@ -5,7 +5,7 @@
 // where it is. The reviewer's cases, with emails attached inside files and
 // with plain files (a loss that existed before task 8.13b-3), each checked
 // in the PDF and in the preview's labels (the same calculation), with the
-// engine's own fix (overlap-quote-detection.ts, withHeldReferences) and without it.
+// thread analysis's own fix (overlap-quote-detection.ts, withHeldReferences) and without it.
 // Synthetic data only: made-up names, *.test addresses (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
@@ -20,7 +20,7 @@ import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -78,7 +78,7 @@ async function parse(name: string, text: string): Promise<ParseResult>
 
 const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
-const pdfDocumentOf = (result: EngineResult): PdfDocument =>
+const pdfDocumentOf = (result: ThreadAnalysisResult): PdfDocument =>
 {
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
@@ -90,10 +90,10 @@ const pdfDocumentOf = (result: EngineResult): PdfDocument =>
 /** How many emails of the PDF print `text`. */
 const printedIn = (pdfDocument: PdfDocument, text: string): number =>
     pdfDocument.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
-const positionOf = (result: EngineResult, name: string): number => result.messages.findIndex((m) => m.message.subject === `${name} subject`);
+const positionOf = (result: ThreadAnalysisResult, name: string): number => result.messages.findIndex((m) => m.message.subject === `${name} subject`);
 
 /** The preview's ranges for every email (Source/web-page-logic/printed-elsewhere.ts), and the restored pieces (applyNoRepeatRule). */
-function previewOf(result: EngineResult)
+function previewOf(result: ThreadAnalysisResult)
 {
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
@@ -104,7 +104,7 @@ function previewOf(result: EngineResult)
     return { ranges: printedElsewhereRanges(input), restored: applyNoRepeatRule(input).restored, plans };
 }
 
-/** The real overlap detector, told nothing about which email holds which: the engine's own fixes undone (holds and withHeldReferences). */
+/** The real overlap detector, told nothing about which email holds which: the thread analysis's own fixes undone (holds and withHeldReferences). */
 const NO_HOLDS: ThreadAnalysisParts = {
     ...DEFAULT_THREAD_ANALYSIS_PARTS,
     detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))),
@@ -121,10 +121,10 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
     // Review round 4 (M1, user decision option a): Ben's page leaves his quote of S out (quoted history), so
     // that quote stays in Cy's copy of Ben's block (only what Ben's page prints is cut there): S is printed in
     // Ann's email and inside Cy's forward (an accepted repeat, never nowhere).
-    const bodyAt = (pdfDocument: PdfDocument, result: EngineResult, name: string): string =>
+    const bodyAt = (pdfDocument: PdfDocument, result: ThreadAnalysisResult, name: string): string =>
         squash(bodyOf(pdfDocument.emails.find((e) => e.position === positionOf(result, name))!));
 
-    it('S is printed in Ann\'s email: the engine folds the forward, not Ann (Cy counts as referencing what Ben references)', async () =>
+    it('S is printed in Ann\'s email: the thread analysis folds the forward, not Ann (Cy counts as referencing what Ben references)', async () =>
     {
         const result = analyzeThread(await files());
         const ann = result.messages[positionOf(result, 'ann')]!;
@@ -142,7 +142,7 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
         expect(printedIn(pdfDocument, FORWARD)).toBe(1);
     });
 
-    it('the engine fixes undone: S is still printed, once, in Cy\'s copy of Ben\'s block; nothing to restore', async () =>
+    it('the thread analysis fixes undone: S is still printed, once, in Cy\'s copy of Ben\'s block; nothing to restore', async () =>
     {
         const result = analyzeThread(await files(), NO_HOLDS);
         const annPosition = positionOf(result, 'ann');

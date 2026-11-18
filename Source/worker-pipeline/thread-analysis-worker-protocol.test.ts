@@ -49,7 +49,7 @@ describe('message checks', () =>
         expect(isToThreadAnalysisWorker(data)).toBe(false);
     });
 
-    it('accepts a real engine result and a failure', () =>
+    it('accepts a real thread analysis result and a failure', () =>
     {
         expect(isFromThreadAnalysisWorker({ type: 'result', result: analyzeThread([FAILED_FILE]) })).toBe(true);
         expect(RESULT.reconstructed.length).toBe(1);
@@ -76,7 +76,7 @@ describe('message checks', () =>
 
 describe('createThreadAnalysisWorkerSide', () =>
 {
-    it('runs the engine once and posts its result', () =>
+    it('runs the thread analysis once and posts its result', () =>
     {
         const posted: FromThreadAnalysisWorker[] = [];
         const handle = createThreadAnalysisWorkerSide((m) => posted.push(m));
@@ -104,7 +104,7 @@ describe('createThreadAnalysisWorkerSide', () =>
         expect(posted).toHaveLength(1);
     });
 
-    it('an engine that throws gives a bare failure message (no internals)', () =>
+    it('a thread analysis that throws gives a bare failure message (no internals)', () =>
     {
         const posted: FromThreadAnalysisWorker[] = [];
         const handle = createThreadAnalysisWorkerSide(

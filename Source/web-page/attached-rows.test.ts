@@ -3,7 +3,7 @@
 // #6" (Q2), both plain text (Q4), and "Also in" naming the same chain as the
 // PDF's File row (P2 / Q3), through one shared helper. In Node with the
 // recording fake DOM (Helper/Test/test-support/fake-dom.ts), on the real parser and
-// engine; the real page is checked in Chromium by Helper/Test/browser-tests/attached.spec.ts.
+// thread analysis; the real page is checked in Chromium by Helper/Test/browser-tests/attached.spec.ts.
 // Synthetic data only (README.md, rule R7).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +18,7 @@ import { lineText } from '../pdf-export/pdf-text-transforms';
 import { setLocale, t } from './translations';
 import { alsoInText, attachedEmailsText, attachedToText, mountPreview, type Preview } from './preview';
 import type { ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -44,7 +44,7 @@ const DATE_2 = 'Tue, 3 Jun 2025 10:00:00 +0000';
 const DATE_3 = 'Wed, 4 Jun 2025 10:00:00 +0000';
 const BODY = (who: string): string => `${who} wrote this text about the oak desks and the delivery window on Friday morning.`;
 
-async function run(...files: [string, string][]): Promise<EngineResult>
+async function run(...files: [string, string][]): Promise<ThreadAnalysisResult>
 {
     const parsed: ParseResult[] = [];
     for (const [name, text] of files)
@@ -207,7 +207,7 @@ describe('Attached to / Attached emails rows', () =>
 describe('"Also in": the same chain as the PDF File row (P2)', () =>
 {
     /** The PDF File row of the email with `subject`, as text lines. */
-    function pdfFileRow(out: EngineResult, subject: string, locale: string): string[]
+    function pdfFileRow(out: ThreadAnalysisResult, subject: string, locale: string): string[]
     {
         const positions = out.messages.map((_, k) => k);
         const plans = planOutput(

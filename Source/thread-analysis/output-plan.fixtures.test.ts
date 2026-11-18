@@ -1,5 +1,5 @@
 // Runs the PDF output plan (output-plan.ts) over every synthetic fixture
-// (Helper/Test/test-data), parsed and run through the engine as the app does, with
+// (Helper/Test/test-data), parsed and run through the thread analysis as the app does, with
 // the default policy. Prints, per email, what the PDF would leave out, and
 // checks the key expectations on the known fixture threads.
 
@@ -8,15 +8,15 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { analyzeThread } from './analyze-thread';
 import { planOutput } from './output-plan';
 import type { MessagePlan } from '../../Header/output-plan';
-import type { EngineMessage } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage } from '../../Header/thread-analysis-result';
 
-function keptText(message: EngineMessage, messagePlan: MessagePlan): string
+function keptText(message: AnalyzedMessage, messagePlan: MessagePlan): string
 {
     return messagePlan.ranges.filter((r) => r.keep).map((r) => message.message.bodyText.slice(r.start, r.end)).join('');
 }
 
 /** Whether every character of `snippet` (first occurrence) is kept, none is, or some are. */
-function state(message: EngineMessage, messagePlan: MessagePlan, snippet: string): 'kept' | 'left out' | 'mixed'
+function state(message: AnalyzedMessage, messagePlan: MessagePlan, snippet: string): 'kept' | 'left out' | 'mixed'
 {
     const offset = message.message.bodyText.indexOf(snippet);
     if (offset < 0)
@@ -40,7 +40,7 @@ function state(message: EngineMessage, messagePlan: MessagePlan, snippet: string
 
 describe('output plan over the parsed fixtures', () =>
 {
-    let cached: { messages: readonly EngineMessage[]; plans: MessagePlan[] } | undefined;
+    let cached: { messages: readonly AnalyzedMessage[]; plans: MessagePlan[] } | undefined;
     async function run(): Promise<NonNullable<typeof cached>>
     {
         if (cached === undefined)
@@ -51,7 +51,7 @@ describe('output plan over the parsed fixtures', () =>
         }
         return cached;
     }
-    const find = (runResult: NonNullable<typeof cached>, file: string): [EngineMessage, MessagePlan] =>
+    const find = (runResult: NonNullable<typeof cached>, file: string): [AnalyzedMessage, MessagePlan] =>
     {
         const k = runResult.messages.findIndex((m) => m.message.source.fileName === file);
         if (k < 0)

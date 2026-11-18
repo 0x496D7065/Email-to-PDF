@@ -12,7 +12,7 @@ import { MAX_EXPANDED_FORWARDS, MAX_FORWARD_DEPTH } from './attached-email-limit
 import { sha256Hex } from './file-hash';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser, resultFromFields } from './msg-parser';
-import { isFromWorker } from './parse-worker-protocol';
+import { isFromParseWorker } from './parse-worker-protocol';
 import type { AttachedMessage, ParseResult } from '../../Header/parsed-email';
 
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -61,7 +61,7 @@ async function parseOk(spec: MsgSpec, name = 'attached-test.msg'): Promise<OkRes
     {
         throw new Error(`expected ok, got ${result.error}: ${result.detail}`);
     }
-    expect(isFromWorker({ type: 'result', result })).toBe(true);
+    expect(isFromParseWorker({ type: 'result', result })).toBe(true);
     return result;
 }
 

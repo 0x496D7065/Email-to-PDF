@@ -6,7 +6,7 @@
 // and file-processing.ts (ThreadAnalysisFailure).
 
 import type { ParseResult } from './parsed-email';
-import type { EngineResult } from './thread-analysis-result';
+import type { ThreadAnalysisResult } from './thread-analysis-result';
 
 export interface ThreadAnalysisRequest
 {
@@ -20,7 +20,7 @@ export type ToThreadAnalysisWorker = ThreadAnalysisRequest;
 export interface ThreadAnalysisResultMessage
 {
     readonly type: 'result';
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
 }
 
 /** The thread analysis threw (a bug, not a bad file); no details are sent. */
@@ -33,4 +33,5 @@ export interface ThreadAnalysisFailedMessage
 export type FromThreadAnalysisWorker = ThreadAnalysisResultMessage | ThreadAnalysisFailedMessage;
 
 /** Why organizing a batch failed. */
+// 'engine' is the old name of thread analysis, kept because these are error codes and translation keys.
 export type ThreadAnalysisFailure = 'engine-timeout' | 'engine-failed';

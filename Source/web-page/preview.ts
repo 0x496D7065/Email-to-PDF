@@ -1,4 +1,4 @@
-// Step 2: the preview. A list of the emails in the engine's (chronological)
+// Step 2: the preview. A list of the emails in the thread analysis's (chronological)
 // order, each with its date, author, recipients, subject, attachments and body.
 //
 // What it shows, and how:
@@ -91,7 +91,7 @@
 // are the same in every language.
 //
 // Rebuilt emails (milestone 7, task 7.6; Source/web-page-logic/rebuilt-email-display.ts): the
-// list follows the engine's timeline, so an earlier email rebuilt from the
+// list follows the thread analysis's timeline, so an earlier email rebuilt from the
 // quoted text of an email added gets its own card at its place in time.
 // Only rebuilt emails with their own timeline entry get one (one that is
 // the same as a real email added gets none: the real file wins). A rebuilt
@@ -148,10 +148,10 @@ import { createStaticLabels } from './static-labels';
 import type { ProcessResult } from '../../Header/file-processing';
 import type { PlanReason } from '../../Header/output-plan';
 import type { AttachmentInfo, EmailAddress, EmailDate } from '../../Header/parsed-email';
-import type { DisplayBlock, PdfBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
+import type { DisplayBlock, LabeledBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
 import type { AttachedLinks, PreviewSlot, RebuiltCard, RebuiltDate } from '../../Header/preview-display';
-import type { EngineRebuilt } from '../../Header/rebuilt-emails';
-import type { EngineMessage, EngineResult, MergedCopy } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage } from '../../Header/rebuilt-emails';
+import type { AnalyzedMessage, ThreadAnalysisResult, MergedCopy } from '../../Header/thread-analysis-result';
 
 /** Emails built per chunk (at least one per chunk, see MAX_CHUNK_CHARS). */
 export const DEFAULT_CHUNK_SIZE = 40;
@@ -269,7 +269,7 @@ export function dateTexts(date: EmailDate, zone: string): DateTexts
 /**
  * Lines in a block of text: "a\nb" is 2, "a\nb\n" too (a final line break
  * starts no new line). Only LF is counted: bodyText has LF line ends only
- * (Source/email-reading/line-endings.ts), so this matches the engine's lines.
+ * (Source/email-reading/line-endings.ts), so this matches the thread analysis's lines.
  */
 export function lineCount(text: string): number
 {
@@ -500,14 +500,14 @@ export interface PreviewOptions
      * call per position and must not keep references from a call that threw.
      * Each item's heading has the id `message-<position>-title`.
      */
-    readonly decorate?: (item: HTMLLIElement, message: EngineMessage, position: number, result: EngineResult) => void;
+    readonly decorate?: (item: HTMLLIElement, message: AnalyzedMessage, position: number, result: ThreadAnalysisResult) => void;
     /**
      * The same for a rebuilt email's card (Source/web-page/review.ts: its include
      * checkbox). Called after the card is built; if building or decorating
      * fails, called again with the card's stand-in. Each card's heading has
      * the id `rebuilt-<id>-title`.
      */
-    readonly decorateRebuilt?: (item: HTMLLIElement, rebuilt: EngineRebuilt, result: EngineResult) => void;
+    readonly decorateRebuilt?: (item: HTMLLIElement, rebuilt: AnalyzedRebuiltMessage, result: ThreadAnalysisResult) => void;
     /**
      * False while no rebuilt email is shown (Source/web-page/review.ts: its switch is
      * off, or "Print full original text" is ticked). Then EVERY rebuilt card is hidden, decorated or not (a
@@ -522,7 +522,7 @@ export interface PreviewOptions
      * for a list replaced or reset before it was finished. If it throws, the
      * list is not affected.
      */
-    readonly onRendered?: (result: EngineResult) => void;
+    readonly onRendered?: (result: ThreadAnalysisResult) => void;
     /** Controls added at the end of the toolbar (Source/web-page/pdf-labels.ts). Default: none. */
     readonly toolbarItems?: readonly Node[];
     /** Called after the user picked another time zone (Source/web-page/mount-page.ts: a PDF made before is dropped). */
@@ -533,7 +533,7 @@ export interface PreviewOptions
 export interface PreviewPdfPlans
 {
     /** The result they were made for: plans for another result are ignored. */
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     /** List position -> its plan. An email that is not in the map is not in the PDF (no labels). */
     readonly views: ReadonlyMap<number, PdfView>;
 }
@@ -548,7 +548,7 @@ export type PdfLabelState = 'off' | 'updating' | 'ready' | 'failed';
 export interface Preview
 {
     /** Shows the emails of a result (replacing what was shown). */
-    show(result: EngineResult): void;
+    show(result: ThreadAnalysisResult): void;
     /** Shows a step 1 result: its emails, or nothing after a batch error. */
     showResult(result: ProcessResult): void;
     /**
@@ -609,7 +609,7 @@ interface FocusSpot
 /** One email's body in the page, redrawn when its PDF plan changes. */
 interface BodySlot
 {
-    readonly email: EngineMessage;
+    readonly email: AnalyzedMessage;
     readonly position: number;
     readonly positionByIndex: readonly (number | null)[];
     readonly body: HTMLDivElement;
@@ -628,7 +628,7 @@ interface BodySlot
 /** One email's item in the page (not a stand-in): what relabel() writes again. */
 interface ItemSlot
 {
-    readonly email: EngineMessage;
+    readonly email: AnalyzedMessage;
     readonly number: HTMLSpanElement;
     /** The "(no subject)" placeholder, or null when the email has a subject (shown as it is). */
     readonly noSubject: HTMLSpanElement | null;
@@ -683,7 +683,7 @@ interface StandIn
 const NOT_DRAWN = 'not drawn yet';
 
 /** Where the blocks are and which of them carry a label element: equal shapes can be updated in place. */
-function shapeOf(blocks: readonly PdfBlock[]): string
+function shapeOf(blocks: readonly LabeledBlock[]): string
 {
     return blocks.map((b) => `${String(b.block.start)}:${String(b.block.end)}:${b.block.folded ? 'f' : b.label === null ? 's' : 'l'}`).join(',');
 }
@@ -750,7 +750,7 @@ export function attachedEmailsText(numbers: readonly number[]): string
 }
 
 /** The file chain of one merged copy for the "Also in" row (the PDF File row's own text, Source/web-page-logic/file-chain.ts). */
-export function alsoInText(result: Pick<EngineResult, 'attached' | 'counts'>, copy: MergedCopy): string
+export function alsoInText(result: Pick<ThreadAnalysisResult, 'attached' | 'counts'>, copy: MergedCopy): string
 {
     return fileChain(result, copy.index, copy.source.fileName, {
         noFileName: t('added.noName'),
@@ -765,7 +765,7 @@ export function alsoInText(result: Pick<EngineResult, 'attached' | 'counts'>, co
  * it is attached to (`links`, task 8.13b-4; plain list numbers), and the
  * files it was also found in (each copy's chain, as in the PDF's File row).
  */
-function metaRows(email: EngineMessage, date: DateSlot, result: EngineResult | null, links: ItemLinks): Node[]
+function metaRows(email: AnalyzedMessage, date: DateSlot, result: ThreadAnalysisResult | null, links: ItemLinks): Node[]
 {
     const message = email.message;
     const author = displayAuthor(message);
@@ -894,7 +894,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     // Increased by each show() and reset(): a chunk of an older list does nothing.
     let generation = 0;
     // The result shown (null when the list is empty).
-    let currentResult: EngineResult | null = null;
+    let currentResult: ThreadAnalysisResult | null = null;
     // The attached-email links of the result shown (task 8.13b-4), worked out once per result; null: none.
     let currentLinks: AttachedLinks | null = null;
     // The bodies built so far, by list position.
@@ -1082,7 +1082,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
      * fold's summary), it is put back on the matching new one (restoreFocus);
      * focus anywhere else is left alone.
      */
-    function drawBlocks(slot: BodySlot, blocks: readonly PdfBlock[], wasOpen: readonly { start: number; end: number }[]): void
+    function drawBlocks(slot: BodySlot, blocks: readonly LabeledBlock[], wasOpen: readonly { start: number; end: number }[]): void
     {
         const focusSpot = focusSpotIn(slot);
         const built: BuiltBlock[] = [];
@@ -1206,7 +1206,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     }
 
     /** An email's body, with its PDF note (placed just above the body, outside the email's text). */
-    function bodyOf(email: EngineMessage, position: number, positionByIndex: readonly (number | null)[]): BodySlot
+    function bodyOf(email: AnalyzedMessage, position: number, positionByIndex: readonly (number | null)[]): BodySlot
     {
         const slot: BodySlot = {
             email: email,
@@ -1225,7 +1225,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         return slot;
     }
 
-    function itemOf(email: EngineMessage, position: number, result: EngineResult): HTMLLIElement
+    function itemOf(email: AnalyzedMessage, position: number, result: ThreadAnalysisResult): HTMLLIElement
     {
         const message = email.message;
         const hasSubject = message.subject.trim() !== '';
@@ -1265,7 +1265,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
      * rule R6). Built from the plainest parts only. See decoratedFallbackOf
      * for the `decorate` hook.
      */
-    function fallbackItemOf(email: EngineMessage | undefined, position: number): HTMLLIElement
+    function fallbackItemOf(email: AnalyzedMessage | undefined, position: number): HTMLLIElement
     {
         const text = typeof email?.message?.bodyText === 'string' ? email.message.bodyText : '';
         // Its text is shown whole, without PDF labels: when the email is in the
@@ -1297,7 +1297,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
      * half-done decoration never reaches the page. Without a message (only a
      * bug can cause that) there is nothing to hand to `decorate`.
      */
-    function decoratedFallbackOf(email: EngineMessage | undefined, position: number, result: EngineResult): HTMLLIElement
+    function decoratedFallbackOf(email: AnalyzedMessage | undefined, position: number, result: ThreadAnalysisResult): HTMLLIElement
     {
         const item = fallbackItemOf(email, position);
         if (email === undefined || options.decorate === undefined)
@@ -1316,7 +1316,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     }
 
     /** One email's item, or its stand-in if building it failed. Never throws for one bad email. */
-    function safeItemOf(email: EngineMessage | undefined, position: number, result: EngineResult): HTMLLIElement
+    function safeItemOf(email: AnalyzedMessage | undefined, position: number, result: ThreadAnalysisResult): HTMLLIElement
     {
         const slotCount = slots.length;
         try
@@ -1354,7 +1354,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         return createSafeElement('span', { attrs: { class: 'rebuilt-label' }, text: t('rebuilt.label') });
     }
 
-    function rebuiltItemOf(rebuiltEmail: EngineRebuilt, result: EngineResult): HTMLLIElement
+    function rebuiltItemOf(rebuiltEmail: AnalyzedRebuiltMessage, result: ThreadAnalysisResult): HTMLLIElement
     {
         const card = rebuiltCard(rebuiltEmail, result);
         const label = rebuiltLabel();
@@ -1395,7 +1395,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     }
 
     /** A rebuilt card's stand-in: its label, a calm note and its text (the text is in its source email's card anyway). */
-    function rebuiltFallbackOf(rebuiltEmail: EngineRebuilt | undefined, id: number): HTMLLIElement
+    function rebuiltFallbackOf(rebuiltEmail: AnalyzedRebuiltMessage | undefined, id: number): HTMLLIElement
     {
         const text = typeof rebuiltEmail?.rebuilt?.reconstructedText === 'string' ? rebuiltEmail.rebuilt.reconstructedText : '';
         const label = rebuiltLabel();
@@ -1412,7 +1412,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     }
 
     /** A rebuilt card, or its stand-in (decorated if possible, as for real emails). Never throws for one bad card. */
-    function safeRebuiltItemOf(rebuiltEmail: EngineRebuilt | undefined, id: number, result: EngineResult): HTMLLIElement
+    function safeRebuiltItemOf(rebuiltEmail: AnalyzedRebuiltMessage | undefined, id: number, result: ThreadAnalysisResult): HTMLLIElement
     {
         try
         {
@@ -1591,7 +1591,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         applyChunk();
     }
 
-    function show(result: EngineResult): void
+    function show(result: ThreadAnalysisResult): void
     {
         clear();
         currentResult = result;
@@ -1820,7 +1820,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         {
             if (result.ok)
             {
-                show(result.engine);
+                show(result.threadAnalysis);
             }
             else
             {

@@ -591,10 +591,11 @@ test('processFiles: File objects in, organized messages out; every worker ends a
             ok: true as const,
             hugeRead,
             progress,
-            counts: result.engine.counts,
-            kept: result.engine.messages.map((m) => m.message.source.fileName),
-            duplicateOf2: result.engine.messages.find((m) => m.message.source.fileName === 'order-2.eml')?.duplicates.map((d) => d.source.fileName),
-            failed: result.engine.failed.map((f) => [f.index, f.fileName, f.error, f.detail]),
+            counts: result.threadAnalysis.counts,
+            kept: result.threadAnalysis.messages.map((m) => m.message.source.fileName),
+            duplicateOf2: result.threadAnalysis.messages.find((m) => m.message.source.fileName === 'order-2.eml')
+                ?.duplicates.map((d) => d.source.fileName),
+            failed: result.threadAnalysis.failed.map((f) => [f.index, f.fileName, f.error, f.detail]),
             tooLargeDetail: entry.FILE_TOO_LARGE_DETAIL,
         };
     }, entryUrl);

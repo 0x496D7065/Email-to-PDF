@@ -14,7 +14,7 @@
 // they are returned as they are, for the caller to show as text only.
 
 import { attachedAt } from '../thread-analysis/analyze-thread';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** Between the levels of an attached email's chain: "parent.eml › forwarded.eml". */
 export const FILE_CHAIN_SEPARATOR = ' › ';
@@ -45,7 +45,8 @@ export interface FileChain
  * copy), whose file is named `fileName` (NormalizedMessage.source.fileName;
  * blank: "(file without a name)").
  */
-export function fileChain(result: Pick<EngineResult, 'attached' | 'counts'>, index: number, fileName: string, words: FileChainWords): FileChain
+export function fileChain(result: Pick<ThreadAnalysisResult, 'attached' | 'counts'>, index: number, fileName: string,
+    words: FileChainWords): FileChain
 {
     const file = fileName.trim() === '' ? null : fileName;
     const attached = attachedAt(result, index);

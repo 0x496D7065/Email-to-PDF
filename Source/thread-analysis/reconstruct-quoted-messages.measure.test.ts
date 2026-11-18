@@ -464,5 +464,5 @@ describe('thread reconstruction: recall cost of refusing (task 7.4, measured apa
 });
 
 // "0 wrong suppressions" (no rebuilt message linked to a real file or merged
-// with a copy of another message) is measured in the engine, with the other
+// with a copy of another message) is measured in the thread analysis, with the other
 // task 7.5 targets: Source/thread-analysis/link-rebuilt-messages.measure.test.ts.

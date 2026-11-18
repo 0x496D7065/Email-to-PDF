@@ -29,7 +29,7 @@
 // Pure functions, no DOM (README.md, rule R7).
 
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineMessage } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage } from '../../Header/thread-analysis-result';
 
 /** The key of one copy: its file's SHA-256, plus "/" and its place in the file for an attached email ("<hash>/2.1"). */
 export function sourceKey(source: NormalizedMessage['source']): string
@@ -39,7 +39,7 @@ export function sourceKey(source: NormalizedMessage['source']): string
 }
 
 /** The keys of one email: its copy's key (sourceKey), then those of the copies merged into it (unique). */
-export function selectionKeys(email: EngineMessage): string[]
+export function selectionKeys(email: AnalyzedMessage): string[]
 {
     const keys = [sourceKey(email.message.source), ...email.duplicates.map((d) => sourceKey(d.source))];
     return [...new Set(keys)];
@@ -49,9 +49,9 @@ export function selectionKeys(email: EngineMessage): string[]
 export interface EmailSelection
 {
     /** True unless the reader left this email out. */
-    isIncluded(email: EngineMessage): boolean;
+    isIncluded(email: AnalyzedMessage): boolean;
     /** Records the reader's choice for this email. */
-    setIncluded(email: EngineMessage, included: boolean): void;
+    setIncluded(email: AnalyzedMessage, included: boolean): void;
     /** Forgets every choice: every email is included again. */
     clear(): void;
 }
@@ -80,7 +80,7 @@ export function createEmailSelection(): EmailSelection
 }
 
 /** The list positions (0-based, chronological) of the included emails, ascending. */
-export function includedPositions(messages: readonly EngineMessage[], selection: EmailSelection): number[]
+export function includedPositions(messages: readonly AnalyzedMessage[], selection: EmailSelection): number[]
 {
     const positions: number[] = [];
     messages.forEach((email, position) =>

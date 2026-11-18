@@ -1,14 +1,14 @@
 // Header: earlier emails rebuilt from quoted text, and where they fit in the
 // timeline. Shared types only, no code (README.md, "Where things are").
 // thread-analysis/ (reconstruct-quoted-messages, quoted-date, link-rebuilt-messages) produces them as
-// part of EngineResult; web-page-logic/, web-page/ and pdf-export/ show and print them.
+// part of ThreadAnalysisResult; web-page-logic/, web-page/ and pdf-export/ show and print them.
 
 import type { EmailAddress } from './parsed-email';
 
 /** One message rebuilt from quoted text, with its links. Plain data. */
-export interface EngineRebuilt
+export interface AnalyzedRebuiltMessage
 {
-    /** Its position in EngineResult.reconstructed. */
+    /** Its position in ThreadAnalysisResult.reconstructed. */
     readonly id: number;
     /** Input position of the email whose body quotes it (offsets in `rebuilt` are into that body). */
     readonly sourceIndex: number;
@@ -28,9 +28,9 @@ export interface EngineRebuilt
 }
 
 export type TimelineEntry =
-    /** A real message: `position` in EngineResult.messages. */
+    /** A real message: `position` in ThreadAnalysisResult.messages. */
     | { readonly kind: 'message'; readonly position: number }
-    /** A rebuilt message: `id` in EngineResult.reconstructed (always link 'entry'). */
+    /** A rebuilt message: `id` in ThreadAnalysisResult.reconstructed (always link 'entry'). */
     | { readonly kind: 'rebuilt'; readonly id: number; readonly placement: RebuiltPlacement };
 
 /**

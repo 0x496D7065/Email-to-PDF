@@ -1,4 +1,4 @@
-// Tests for step 6 of the engine (task 7.5): messages rebuilt from quoted
+// Tests for step 6 of the thread analysis (task 7.5): messages rebuilt from quoted
 // text, their links and the timeline, and the safety net around them
 // (README.md, rules R6 and R7). Synthetic data only. The linking rules
 // themselves are tested in link-rebuilt-messages.test.ts, the targets over the
@@ -12,7 +12,7 @@ import { MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages } from 
 import { joinSegments } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 
@@ -46,7 +46,8 @@ const last = (): NormalizedMessage => make({ bodyText: THREAD.body, subject: THR
 const NO_REBUILD: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: () => [] };
 
 /** Everything the app used before task 7.5. */
-const realPart = (out: EngineResult): unknown => ({ messages: out.messages, failed: out.failed, counts: out.counts, positionByIndex: out.positionByIndex });
+const realPart = (out: ThreadAnalysisResult): unknown =>
+    ({ messages: out.messages, failed: out.failed, counts: out.counts, positionByIndex: out.positionByIndex });
 
 describe('analyzeThread: rebuilt messages (step 6)', () =>
 {
@@ -155,7 +156,7 @@ describe('analyzeThread: rebuilding safety net', () =>
         expect(out.reconstructed).toEqual([]);
         expect(out.timeline).toEqual([{ kind: 'message', position: 0 }]);
         expect(out.reconstructionWarnings).toEqual([{ index: 0, code: 'reconstruct-failed' }]);
-        expect(out.messages[0]?.engineWarnings).toEqual([]);
+        expect(out.messages[0]?.threadAnalysisWarnings).toEqual([]);
     });
 
     it('copies only the known fields of a rebuilt message (plain data)', () =>

@@ -16,7 +16,7 @@
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import type { FromThreadAnalysisWorker, ToThreadAnalysisWorker } from '../../Header/thread-analysis-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 function isRecord(value: unknown): value is Record<string, unknown>
 {
@@ -75,7 +75,7 @@ export function isFromThreadAnalysisWorker(data: unknown): data is FromThreadAna
  */
 export function createThreadAnalysisWorkerSide(
     post: (message: FromThreadAnalysisWorker) => void,
-    analyze: (results: readonly ParseResult[]) => EngineResult = analyzeThread,
+    analyze: (results: readonly ParseResult[]) => ThreadAnalysisResult = analyzeThread,
 ): (data: unknown) => void
 {
     let started = false;
@@ -91,7 +91,7 @@ export function createThreadAnalysisWorkerSide(
             return;
         }
         started = true;
-        let result: EngineResult;
+        let result: ThreadAnalysisResult;
         try
         {
             result = analyze(data.results);

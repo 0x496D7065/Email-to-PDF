@@ -26,7 +26,7 @@ import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -71,7 +71,8 @@ const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 const fileRow = (e: PdfEmail): string[] => e.fields.find((f) => f.label === strings.fileLabel)!.value.map(lineText);
 
 /** The PDF model of `result` with the emails at `positions` (default: all). */
-function pdfDocumentOf(result: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = result.messages.map((_, k) => k)): PdfDocument
+function pdfDocumentOf(result: ThreadAnalysisResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY,
+    positions = result.messages.map((_, k) => k)): PdfDocument
 {
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),
@@ -80,7 +81,7 @@ function pdfDocumentOf(result: EngineResult, policy: OutputPolicy = DEFAULT_OUTP
     return buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 10), strings });
 }
 /** The preview's labels for the same input (Source/web-page-logic/printed-elsewhere.ts). */
-function labelsOf(result: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = result.messages.map((_, k) => k))
+function labelsOf(result: ThreadAnalysisResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = result.messages.map((_, k) => k))
 {
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),
@@ -88,16 +89,16 @@ function labelsOf(result: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_PO
     );
     return printedElsewhereRanges({ result, positions, plans, policy, rebuilt: [] });
 }
-const emailOf = (pdfDocument: PdfDocument, result: EngineResult, subject: string): PdfEmail | undefined =>
+const emailOf = (pdfDocument: PdfDocument, result: ThreadAnalysisResult, subject: string): PdfEmail | undefined =>
     pdfDocument.emails.find((e) => e.position !== null && result.messages[e.position]?.message.subject === subject);
-const positionOf = (result: EngineResult, subject: string): number => result.messages.findIndex((m) => m.message.subject === subject);
+const positionOf = (result: ThreadAnalysisResult, subject: string): number => result.messages.findIndex((m) => m.message.subject === subject);
 /** How many emails of the PDF print `text`. */
 const printedIn = (pdfDocument: PdfDocument, text: string): number =>
     pdfDocument.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
 
 describe('PDF model: an inline forward (.eml) printed as an email of its own', () =>
 {
-    const build = async (): Promise<EngineResult> =>
+    const build = async (): Promise<ThreadAnalysisResult> =>
         analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY))))]);
 
     it('folded: its own entry and page, its block cut from the parent ("printed as" it), never printed twice', async () =>
@@ -271,10 +272,12 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
     // A reply header with neither a readable date nor a sender mailbox: the quote cannot be rebuilt
     // (reconstruct-quoted-messages.ts, R1), but Ben's plan still leaves it out as quoted history.
     const marksOnly = `${FINE}\r\n\r\nOn a quiet afternoon last spring, the old office team wrote:\r\n> ${OLD}\r\n`;
-    const build = async (benBody: string): Promise<EngineResult> => analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(simple('ben', TUE, benBody))))]);
+    const build = async (benBody: string): Promise<ThreadAnalysisResult> =>
+        analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(simple('ben', TUE, benBody))))]);
 
     /** The PDF and the preview's ranges for Cy, for one way of choosing rebuilt emails. */
-    function both(result: EngineResult, extra: { readonly rebuilt?: number[]; readonly unticked?: number[]; readonly rebuildingOff?: boolean },
+    function both(result: ThreadAnalysisResult,
+        extra: { readonly rebuilt?: number[]; readonly unticked?: number[]; readonly rebuildingOff?: boolean },
         positions = result.messages.map((_, k) => k))
     {
         const plans = planOutput(
@@ -287,7 +290,7 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
     }
 
     /** The checks for one mode: OLD printed in Cy (and labelled so in the preview), Ben's own text once, on his page. */
-    function expectKept(result: EngineResult, pdfDocument: PdfDocument, ranges: ReturnType<typeof printedElsewhereRanges>): void
+    function expectKept(result: ThreadAnalysisResult, pdfDocument: PdfDocument, ranges: ReturnType<typeof printedElsewhereRanges>): void
     {
         const cyPosition = positionOf(result, 'cy subject');
         const cyBody = result.messages[cyPosition]!.message.bodyText;
@@ -454,8 +457,8 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         expect(result.messages).toHaveLength(4);
         for (const email of pdfDocument.emails)
         {
-            const engineMessage = result.messages[email.position!]!;
-            expect(bodyOf(email), engineMessage.message.subject).toBe(referenceDisplayText(engineMessage.message.bodyText));
+            const analyzedMessage = result.messages[email.position!]!;
+            expect(bodyOf(email), analyzedMessage.message.subject).toBe(referenceDisplayText(analyzedMessage.message.bodyText));
         }
         // Folded: every email's own text is still printed exactly once.
         const folded = pdfDocumentOf(result);
@@ -499,9 +502,9 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         }
     });
 
-    it('safety net: if the engine ever folded an attached email\'s text as quoted from its holder, that text stays in the holder (never nowhere)', async () =>
+    it('safety net: if the thread analysis ever folded an attached email\'s text as quoted from its holder, that text stays in the holder (never nowhere)', async () =>
     {
-        // The overlap detector told nothing about which email holds which: the engine fix undone.
+        // The overlap detector told nothing about which email holds which: the thread analysis fix undone.
         const noHolds: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))) };
         const result = analyzeThread([await parseEml('parent.eml',
             holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))], noHolds);
@@ -548,7 +551,7 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         expect(realBody.split('north').length).toBe(2);
         const changedBody = realBody.replace('north', 'south');
         const CHANGED = A_BODY.replace('north', 'south');
-        const result: EngineResult = { ...real,
+        const result: ThreadAnalysisResult = { ...real,
             messages: real.messages.map((m, k) => (k === alice ? { ...m, message: { ...m.message, bodyText: changedBody } } : m)) };
         const places = result.attached!.find((a) => result.positionByIndex[a.index] === bob)!.places.filter((p) =>
             result.positionByIndex[p.holderIndex] === alice);

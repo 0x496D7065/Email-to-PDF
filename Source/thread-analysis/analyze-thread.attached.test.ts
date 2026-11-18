@@ -1,7 +1,7 @@
-// The engine with emails attached inside dropped files (task 8.13b-3, user
-// decisions 2026-11-10): every attached email is an engine message of its
+// The thread analysis with emails attached inside dropped files (task 8.13b-3, user
+// decisions 2026-11-10): every attached email is a thread analysis message of its
 // own, de-duplicated, ordered and folded like a dropped file's email (Q6-Q8),
-// and EngineAttached keeps where it came from. The files are built in memory
+// and AnalyzedAttachedMessage keeps where it came from. The files are built in memory
 // from synthetic text and read by the real parsers (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ import { attachedAt, DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread } from './anal
 import type { OverlapInput } from './overlap-quote-detection';
 import { checkSegments, joinSegments } from './fold-segments';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -62,7 +62,7 @@ const ok = (result: ParseResult): Extract<ParseResult, { ok: true }> =>
     }
     return result;
 };
-const bySubject = (out: EngineResult, subject: string): EngineMessage =>
+const bySubject = (out: ThreadAnalysisResult, subject: string): AnalyzedMessage =>
 {
     const message = out.messages.find((x) => x.message.subject === subject);
     if (message === undefined)
@@ -71,10 +71,10 @@ const bySubject = (out: EngineResult, subject: string): EngineMessage =>
     }
     return message;
 };
-const subjects = (out: EngineResult): string[] => out.messages.map((m) => m.message.subject);
+const subjects = (out: ThreadAnalysisResult): string[] => out.messages.map((m) => m.message.subject);
 
 /** Every kept message is fully recoverable and every input position is held exactly once. */
-function expectWhole(out: EngineResult): void
+function expectWhole(out: ThreadAnalysisResult): void
 {
     for (const message of out.messages)
     {
@@ -318,10 +318,10 @@ describe('analyzeThread: an email holding an attached email always quotes it (ta
     /** Bob's email: its own text, then an inline forward of Carol's. */
     const aWithForward = (date: string | null): string => holding('bob', date, plain(UNIQUE_A), rfc822(simple('carol', 'Sun, 1 Jun 2025 09:00:00 +0200', B_BODY)));
     /** Every folded segment of `m` linked to message `related` (an input position). */
-    const foldsFrom = (out: EngineResult, message: EngineMessage, related: number): number =>
+    const foldsFrom = (out: ThreadAnalysisResult, message: AnalyzedMessage, related: number): number =>
         message.segments.filter((s) => s.folded && s.related.some((i) => out.positionByIndex[i] === out.positionByIndex[related])).length;
-    /** Runs the engine and records what the overlap detector was given. */
-    const spied = (results: readonly ParseResult[]): { out: EngineResult; given: OverlapInput[] } =>
+    /** Runs the thread analysis and records what the overlap detector was given. */
+    const spied = (results: readonly ParseResult[]): { out: ThreadAnalysisResult; given: OverlapInput[] } =>
     {
         let given: OverlapInput[] = [];
         const out = analyzeThread(results, {

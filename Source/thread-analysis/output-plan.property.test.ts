@@ -2,7 +2,7 @@
 //
 // Random synthetic emails (seeded, so every run is the same) get segments
 // either from random folds (buildSegments, any range, any reason) or from the
-// real engine (analyzeThread), and every plan is checked:
+// real thread analysis (analyzeThread), and every plan is checked:
 // - the ranges cover [0, length) with no gap or overlap, and joining kept and
 //   left-out ranges gives the exact body back;
 // - every left-out range lies inside folded segments (text that is not
@@ -303,7 +303,7 @@ function checkAllPolicies(inputs: readonly PlanInput[], where: string): void
 }
 
 const FOLD_SEEDS = Array.from({ length: 300 }, (_, k) => 1 + k);
-const ENGINE_SEEDS = Array.from({ length: 150 }, (_, k) => 1000 + k);
+const ANALYSIS_SEEDS = Array.from({ length: 150 }, (_, k) => 1000 + k);
 
 /**
  * One set of random folds for `seed`. Everything depends on the seed only
@@ -335,8 +335,8 @@ function foldSet(seed: number): PlanInput[]
     return inputs;
 }
 
-/** One set of random emails for `seed`, through the real engine (same seed-only rule as foldSet). */
-function engineSet(seed: number): readonly PlanInput[]
+/** One set of random emails for `seed`, through the real thread analysis (same seed-only rule as foldSet). */
+function analyzedSet(seed: number): readonly PlanInput[]
 {
     serial = seed * 100;
     const random = makeRandom(seed);
@@ -345,7 +345,7 @@ function engineSet(seed: number): readonly PlanInput[]
     return analyzeThread(messages.map((message) => ({ ok: true as const, message }))).messages;
 }
 
-/** An included subset of an engine set (every other email). */
+/** An included subset of a thread analysis set (every other email). */
 const subset = (inputs: readonly PlanInput[]): PlanInput[] => inputs.filter((_, k) => k % 2 === 0);
 
 describe('planOutput: properties', () =>
@@ -358,15 +358,15 @@ describe('planOutput: properties', () =>
         }
     });
 
-    it('holds the invariants over the real engine (150 seeded sets), and for every subset of included emails', () =>
+    it('holds the invariants over the real thread analysis (150 seeded sets), and for every subset of included emails', () =>
     {
-        for (const seed of ENGINE_SEEDS)
+        for (const seed of ANALYSIS_SEEDS)
         {
-            const inputs = engineSet(seed);
+            const inputs = analyzedSet(seed);
             checkAllPolicies(inputs, `seed ${seed}`);
             checkAllPolicies(subset(inputs), `seed ${seed} subset`);
         }
-    }, 60_000); // 150 engine runs: slow on a busy machine
+    }, 60_000); // 150 thread analysis runs: slow on a busy machine
 
     it('the random sets above do exercise every rule', () =>
     {
@@ -394,16 +394,16 @@ describe('planOutput: properties', () =>
         {
             count(foldSet(seed));
         }
-        for (const seed of ENGINE_SEEDS)
+        for (const seed of ANALYSIS_SEEDS)
         {
-            const inputs = engineSet(seed);
+            const inputs = analyzedSet(seed);
             count(inputs);
             count(subset(inputs));
         }
         console.log(`output plan properties: ${JSON.stringify(seen)} emails with a left-out tail / signature / forwarded part`);
         // Thresholds: about half of the counts measured when this test was written
         // (tails 57, signatures 25, forwarded 956), so a small change to the
-        // generator or the engine does not break it, but a rule that stops firing does.
+        // generator or the thread analysis does not break it, but a rule that stops firing does.
         expect(seen.tails).toBeGreaterThan(25);
         expect(seen.signatures).toBeGreaterThan(12);
         expect(seen.forwarded).toBeGreaterThan(450);

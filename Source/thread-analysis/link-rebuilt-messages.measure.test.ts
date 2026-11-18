@@ -1,4 +1,4 @@
-// Measurement of thread rebuilding INSIDE the engine (milestone 7, task 7.5):
+// Measurement of thread rebuilding INSIDE the thread analysis (milestone 7, task 7.5):
 // every conversation of Helper/Test/test-support/thread-cases.ts is dropped as real
 // files in several ways, analyzeThread runs, and the timeline is compared with
 // the ground truth of Helper/Test/test-support/thread-builder.ts. Targets:
@@ -18,7 +18,7 @@ import { buildThread, instantOf, isForwardStyle, QUOTE_STYLES, type QuoteStyle, 
 import { ALICE, BOB, CAROL, chain, DAVE, ERIN, THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread } from './analyze-thread';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** Message `i` of a conversation as a real dropped file (its body quotes the ones before it). */
 export function realFile(messages: readonly ThreadMessage[], i: number, tag: string): NormalizedMessage
@@ -47,7 +47,7 @@ export function realFile(messages: readonly ThreadMessage[], i: number, tag: str
     };
 }
 
-/** What one engine run says about one conversation. */
+/** What one thread analysis run says about one conversation. */
 export interface Outcome
 {
     /** Conversation index of each timeline entry, in timeline order (-1: a rebuilt entry at no true header). */
@@ -57,7 +57,7 @@ export interface Outcome
     readonly wrong: readonly string[];
     /** Conversation indices dropped or rebuilt (rightly) from a dropped email: the ones the timeline must hold. */
     readonly expected: ReadonlySet<number>;
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
 }
 
 /** Drops the messages `dropped` (conversation indices, in that drop order) and reads the timeline. */
@@ -137,7 +137,7 @@ function partialDrops(count: number): number[][]
 
 const CASES = THREAD_CASES.filter((c) => c.messages !== undefined);
 
-describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =>
+describe('thread rebuilding in the thread analysis: milestone 7 targets (task 7.5)', () =>
 {
     it('has every thread case with its messages', () =>
     {
@@ -226,13 +226,13 @@ describe('thread rebuilding in the engine: milestone 7 targets (task 7.5)', () =
     });
 });
 
-describe('thread rebuilding in the engine: speed (task 7.5)', () =>
+describe('thread rebuilding in the thread analysis: speed (task 7.5)', () =>
 {
     const STYLES: readonly QuoteStyle[] = QUOTE_STYLES.filter((s) => !isForwardStyle(s));
     const PEOPLE = [ALICE, BOB, CAROL, DAVE, ERIN];
 
-    /** Times the rebuilding stages of one engine run. */
-    function timed(results: readonly ParseResult[]): { out: EngineResult; total: number; rebuild: number }
+    /** Times the rebuilding stages of one thread analysis run. */
+    function timed(results: readonly ParseResult[]): { out: ThreadAnalysisResult; total: number; rebuild: number }
     {
         let stageStart = 0;
         let rebuild = 0;

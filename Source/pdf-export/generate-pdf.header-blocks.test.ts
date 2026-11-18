@@ -22,7 +22,7 @@
 // text in the body font, one tab in, never in the header style. The
 // regression tests at the end pin that for the input shapes of the bug
 // report (header lines that are still printed inside a body after task
-// 8.13a: an attached email the engine does not rebuild, header lines moved
+// 8.13a: an attached email the thread analysis does not rebuild, header lines moved
 // to the top of a rebuilt email, a forward with the switch off; which
 // header lines stay is checked in Source/pdf-export/build-pdf-document.header-lines.test.ts).
 // Synthetic data only (README.md, rule R7).
@@ -41,7 +41,7 @@ import { loadPdfFonts } from './load-bundled-fonts';
 import { createPdfStrings } from './pdf-strings';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const STRINGS = createPdfStrings('en');
 const FULL: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -81,7 +81,8 @@ function realFile(messages: readonly ThreadMessage[], messageIndex: number, tag:
  * The PDF of `messages` (every one ticked), with every rebuilt email chosen unless `rebuilt` says otherwise;
  * every rebuilt email not chosen counts as unticked by the reader (BuildPdfInput.unticked) unless `rebuildingOff`.
  */
-async function makePdf(messages: readonly NormalizedMessage[], policy: OutputPolicy, rebuilt?: (result: EngineResult) => number[], rebuildingOff = false)
+async function makePdf(messages: readonly NormalizedMessage[], policy: OutputPolicy, rebuilt?: (result: ThreadAnalysisResult) => number[],
+    rebuildingOff = false)
 {
     const result = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
     const positions = result.messages.map((_, k) => k);

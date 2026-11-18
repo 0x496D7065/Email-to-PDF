@@ -13,9 +13,9 @@ import { createEmlParser } from './eml-parser';
 import { sha256Hex } from './file-hash';
 import type { HtmlToTextResult } from './html-to-text';
 import { createMsgParser } from './msg-parser';
-import { createWorkerSide, isFromWorker, isToWorker } from './parse-worker-protocol';
+import { createWorkerSide, isFromParseWorker, isToParseWorker } from './parse-worker-protocol';
 import { runInWorker, type WorkerFactory } from './parse-worker-runner';
-import type { FromWorker } from '../../Header/parse-worker-messages';
+import type { FromParseWorker } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
@@ -122,7 +122,7 @@ const ATTACHED_EML = [
 
 const stubConverter = (html: string): HtmlToTextResult => ({ text: html.replace(/<[^>]*>/g, ''), truncated: false });
 
-describe('isFromWorker: attached emails (strict)', () =>
+describe('isFromParseWorker: attached emails (strict)', () =>
 {
     async function parsed(): Promise<ParseResult>
     {
@@ -132,7 +132,7 @@ describe('isFromWorker: attached emails (strict)', () =>
     it('the real result is accepted, with the expected shape', async () =>
     {
         const result = await parsed();
-        expect(isFromWorker({ type: 'result', result })).toBe(true);
+        expect(isFromParseWorker({ type: 'result', result })).toBe(true);
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -238,7 +238,7 @@ describe('isFromWorker: attached emails (strict)', () =>
     {
         const result = structuredClone(await parsed()) as unknown as LooseResult;
         mutate(result);
-        expect(isFromWorker({ type: 'result', result })).toBe(false);
+        expect(isFromParseWorker({ type: 'result', result })).toBe(false);
     });
 });
 
@@ -276,7 +276,7 @@ const ATTACHED_MSG_SPEC: MsgSpec = (() =>
     };
 })();
 
-describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
+describe('isFromParseWorker: attached Outlook items in a .msg file (strict)', () =>
 {
     async function parsed(): Promise<ParseResult>
     {
@@ -286,7 +286,7 @@ describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
     it('the real result is accepted, with the expected shape', async () =>
     {
         const result = await parsed();
-        expect(isFromWorker({ type: 'result', result })).toBe(true);
+        expect(isFromParseWorker({ type: 'result', result })).toBe(true);
         if (!result.ok)
         {
             throw new Error(result.detail);
@@ -326,11 +326,11 @@ describe('isFromWorker: attached Outlook items in a .msg file (strict)', () =>
     {
         const result = structuredClone(await parsed()) as unknown as LooseMsgResult;
         mutate(result);
-        expect(isFromWorker({ type: 'result', result })).toBe(false);
+        expect(isFromParseWorker({ type: 'result', result })).toBe(false);
     });
 });
 
-describe('isToWorker / isFromWorker', () =>
+describe('isToParseWorker / isFromParseWorker', () =>
 {
     it.each([
         [{ type: 'parse', name: 'a.eml', kind: 'eml', bytes: new Uint8Array(1) }, true],
@@ -343,9 +343,9 @@ describe('isToWorker / isFromWorker', () =>
         [{ type: 'other' }, false],
         [null, false],
         ['parse', false],
-    ])('isToWorker(%j) = %s', (data, expected) =>
+    ])('isToParseWorker(%j) = %s', (data, expected) =>
     {
-        expect(isToWorker(data)).toBe(expected);
+        expect(isToParseWorker(data)).toBe(expected);
     });
 
     it.each([
@@ -357,17 +357,17 @@ describe('isToWorker / isFromWorker', () =>
         [{ type: 'failed' }, true],
         [{ type: 'progress' }, false],
         [undefined, false],
-    ])('isFromWorker(%j) = %s', (data, expected) =>
+    ])('isFromParseWorker(%j) = %s', (data, expected) =>
     {
-        expect(isFromWorker(data)).toBe(expected);
+        expect(isFromParseWorker(data)).toBe(expected);
     });
 });
 
 /** Collects what the worker side posts; resolves `next()` with the next message. */
 function workerSide()
 {
-    const posted: FromWorker[] = [];
-    const waiters: ((message: FromWorker) => void)[] = [];
+    const posted: FromParseWorker[] = [];
+    const waiters: ((message: FromParseWorker) => void)[] = [];
     const handle = createWorkerSide((message) =>
     {
         const waiter = waiters.shift();
@@ -380,7 +380,7 @@ function workerSide()
             posted.push(message);
         }
     });
-    const next = (): Promise<FromWorker> =>
+    const next = (): Promise<FromParseWorker> =>
     {
         const ready = posted.shift();
         return ready ? Promise.resolve(ready) : new Promise((resolve) => waiters.push(resolve));

@@ -30,8 +30,8 @@
 import { convertHtmlList } from './deferred-html';
 import type { HtmlToTextResult } from './html-to-text';
 import ParseWorker from './parse-worker?worker&inline';
-import { isFromWorker } from './parse-worker-protocol';
-import type { FileKind, ToWorker, WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
+import { isFromParseWorker } from './parse-worker-protocol';
+import type { FileKind, ToParseWorker, WorkerEvents, WorkerHandle } from '../../Header/parse-worker-messages';
 import type { ParseResult } from '../../Header/parsed-email';
 
 /** Detail of a file whose worker was stopped at the time limit ('timeout'). */
@@ -149,7 +149,7 @@ export function runInWorker(job: WorkerJob, options: RunOptions): Promise<ParseR
             {
                 return;
             }
-            if (!isFromWorker(data) || data.type === 'failed')
+            if (!isFromParseWorker(data) || data.type === 'failed')
             {
                 toolError();
                 return;
@@ -265,7 +265,7 @@ export const createBrowserWorker: WorkerFactory = (events) =>
     connectWorker(new ParseWorker({ name: 'parse-worker' }), events);
 
 /** Connects a started browser Worker to `events` and wraps it as a WorkerHandle. */
-export function connectWorker<M = ToWorker>(worker: Worker, events: WorkerEvents): WorkerHandle<M>
+export function connectWorker<M = ToParseWorker>(worker: Worker, events: WorkerEvents): WorkerHandle<M>
 {
     worker.addEventListener('message', (event: MessageEvent<unknown>) => events.message(event.data));
     worker.addEventListener('error', (event) =>

@@ -78,7 +78,7 @@ afterEach(() =>
 
 describe('runThreadAnalysisInWorker', () =>
 {
-    it("sends the parse results, resolves with the engine's result and terminates the worker", async () =>
+    it("sends the parse results, resolves with the thread analysis's result and terminates the worker", async () =>
     {
         const fake = fakeWorker();
         const pending = runThreadAnalysisInWorker(RESULTS, { createWorker: fake.factory, timeoutMs: TIMEOUT_MS });

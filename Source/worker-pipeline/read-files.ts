@@ -19,7 +19,7 @@
 
 import { BATCH_TOO_LARGE_DETAIL, FILE_TOO_LARGE_DETAIL, MAX_BATCH_BYTES, MAX_FILE_BYTES } from '../email-reading/parse-files';
 import type { FileLike } from '../../Header/file-processing';
-import type { Limits } from '../../Header/parse-worker-messages';
+import type { FileSizeLimits } from '../../Header/parse-worker-messages';
 import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 /** One file after reading: its bytes, or a failed result for the preview. */
@@ -34,13 +34,13 @@ export type ReadOutcome =
  */
 export const UNREADABLE_DETAIL = 'could not be read from your computer (it may have been moved or changed); add it again';
 
-const DEFAULT_LIMITS: Limits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
+const DEFAULT_LIMITS: FileSizeLimits = { maxFileBytes: MAX_FILE_BYTES, maxBatchBytes: MAX_BATCH_BYTES };
 
 /**
  * Returns a reader for one batch: call it once per file, in order. It keeps
  * the running total for the batch limit. Never rejects.
  */
-export function createFileReader(limits: Limits = DEFAULT_LIMITS): (file: FileLike) => Promise<ReadOutcome>
+export function createFileReader(limits: FileSizeLimits = DEFAULT_LIMITS): (file: FileLike) => Promise<ReadOutcome>
 {
     let acceptedBytes = 0;
     return async (file) =>

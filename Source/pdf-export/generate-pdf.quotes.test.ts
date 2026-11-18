@@ -1,13 +1,13 @@
 // The PDF layout of quoted text (task 8.6, user decision 2026-11-05, PDF
 // only), over whole synthetic conversations run through the whole path
-// (engine, plans, generatePdf with the real fonts and our own writer) and
+// (thread analysis, plans, generatePdf with the real fonts and our own writer) and
 // read back from the written file: no line of the PDF starts with a ">"
 // quote mark; every body line, wrapped lines included, is one fixed step
 // (one tab: 4 spaces of the body font, bodyIndentSpaces, task 8.9) in from
 // the margin, whatever its quote level, for real
 // emails and for emails rebuilt from quoted text alike; the heading and
 // header rows stay at the margin; a ">" inside a line is kept; VT / FF stay
-// visible as codes. And the full text is still there: the engine's messages
+// visible as codes. And the full text is still there: the thread analysis's messages
 // are unchanged and "Print full original text" prints every body whole,
 // only its quote prefixes left out (Helper/Test/test-support/pdf-reference.ts).
 //
@@ -29,7 +29,7 @@ import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const LEFT = CONFIG.margin.left;
 /** Where every body line starts: one tab (4 normal spaces of the body font at the body size, from the font's tables) in from the margin. */
@@ -92,7 +92,8 @@ interface ReadLine
 }
 
 /** Every line of the email pages (footers left out), as read back from the file. */
-async function emailLines(messages: readonly NormalizedMessage[], policy: OutputPolicy): Promise<{ lines: ReadLine[]; result: EngineResult; rebuilt: number }>
+async function emailLines(messages: readonly NormalizedMessage[],
+    policy: OutputPolicy): Promise<{ lines: ReadLine[]; result: ThreadAnalysisResult; rebuilt: number }>
 {
     const result = analyzeThread(messages.map((m) => ({ ok: true as const, message: m })));
     const positions = result.messages.map((_, k) => k);

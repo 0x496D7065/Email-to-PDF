@@ -70,7 +70,7 @@ function codes(keptEntry: KeptMessage): string[]
     return keptEntry.warnings.map((w) => w.code);
 }
 
-/** Recipient keys as the engine compares them (lower-cased address, else the name). */
+/** Recipient keys as the thread analysis compares them (lower-cased address, else the name). */
 function keys(list: readonly EmailAddress[]): string[]
 {
     return list.map((m) => (m.address !== '' ? m.address.toLowerCase() : `name:${m.name}`));

@@ -3,7 +3,7 @@
 // sent as an attachment that could not be read (P3, Q5: on its holder and on
 // every email printing that holder inline) and the attached count (P4). The
 // files are built in memory from synthetic text and read by the real parser
-// and engine, so the note follows what the parser really lists (README.md,
+// and thread analysis, so the note follows what the parser really lists (README.md,
 // rule R7: synthetic data only).
 
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { attachedCount, attachedLinks } from './attached-links';
 import type { ParseResult } from '../../Header/parsed-email';
-import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
@@ -44,7 +44,7 @@ const BODY = (who: string): string => `${who} wrote this text about the oak desk
 /** An email part that the parser cannot read as an email: nothing to show (no header lines, no text, no attachment). */
 const UNREADABLE = '\r\n';
 
-async function run(...files: [string, string][]): Promise<EngineResult>
+async function run(...files: [string, string][]): Promise<ThreadAnalysisResult>
 {
     const parsed: ParseResult[] = [];
     for (const [name, text] of files)
@@ -53,7 +53,7 @@ async function run(...files: [string, string][]): Promise<EngineResult>
     }
     return analyzeThread(parsed);
 }
-const numberOf = (out: EngineResult, subject: string): number =>
+const numberOf = (out: ThreadAnalysisResult, subject: string): number =>
 {
     const position = out.messages.findIndex((m) => m.message.subject === subject);
     if (position < 0)
@@ -62,7 +62,7 @@ const numberOf = (out: EngineResult, subject: string): number =>
     }
     return position + 1;
 };
-const at = <T>(list: readonly T[], out: EngineResult, subject: string): T => list[numberOf(out, subject) - 1] as T;
+const at = <T>(list: readonly T[], out: ThreadAnalysisResult, subject: string): T => list[numberOf(out, subject) - 1] as T;
 
 describe('attachedLinks: Attached to / Attached emails (P1)', () =>
 {
@@ -125,16 +125,17 @@ describe('attachedLinks: Attached to / Attached emails (P1)', () =>
     {
         const out = await run(['bob.eml', simple('bob', DATE_1, BODY('Bob'))]);
         expect(attachedLinks(out)).toEqual({ attachedTo: [[]], attachedEmails: [[]], unread: [null] });
-        const self = { ...out, attached: [{ index: 0, parentIndex: 0, fileIndex: 0, path: [1], names: [''], places: [], keptShowsHeader: true }] } as EngineResult;
+        const self = { ...out, attached: [
+            { index: 0, parentIndex: 0, fileIndex: 0, path: [1], names: [''], places: [], keptShowsHeader: true }] } as ThreadAnalysisResult;
         expect(attachedLinks(self).attachedTo).toEqual([[]]);
     });
 
     it('skips broken entries instead of throwing', async () =>
     {
         const out = await run(['carol.eml', holding('carol', DATE_2, plain(BODY('Carol')), rfc822(simple('bob', DATE_1, BODY('Bob'))))]);
-        const broken = { ...out, attached: [null, 7, { index: 'x' }, ...(out.attached ?? [])] } as unknown as EngineResult;
+        const broken = { ...out, attached: [null, 7, { index: 'x' }, ...(out.attached ?? [])] } as unknown as ThreadAnalysisResult;
         expect(() => attachedLinks(broken)).not.toThrow();
-        const notList = { ...out, attached: 'nope' } as unknown as EngineResult;
+        const notList = { ...out, attached: 'nope' } as unknown as ThreadAnalysisResult;
         expect(attachedLinks(notList).attachedTo).toEqual([[], []]);
     });
 });
@@ -219,7 +220,7 @@ describe('attachedLinks: unread email sent as an attachment (P3)', () =>
     it('says nothing for a .msg file (an unread Outlook item has its own note)', async () =>
     {
         const out = await run(['carol.eml', holding('carol', DATE_2, plain(BODY('Carol')), rfc822(UNREADABLE, asFile('broken.eml')))]);
-        const email = out.messages[0] as EngineMessage;
+        const email = out.messages[0] as AnalyzedMessage;
         const asMsg = { ...out, messages: [{ ...email, message: { ...email.message, source: { ...email.message.source, kind: 'msg' as const } } }] };
         expect(attachedLinks(asMsg).unread).toEqual([null]);
     });
@@ -244,6 +245,6 @@ describe('attachedCount (P4)', () =>
         const out = await run(['bob.eml', bob], ['carol.eml', holding('carol', DATE_2, plain(BODY('Carol')), rfc822(bob, asFile('a.eml')), rfc822(simple('alice', DATE_1, BODY('Alice'))))]);
         expect(attachedCount(out)).toBe(2);
         expect(out.counts.messagesFound).toBe(4);
-        expect(attachedCount({ attached: 'nope' } as unknown as EngineResult)).toBe(0);
+        expect(attachedCount({ attached: 'nope' } as unknown as ThreadAnalysisResult)).toBe(0);
     });
 });

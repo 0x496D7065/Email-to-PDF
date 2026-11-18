@@ -16,14 +16,14 @@ import type { LayoutConfig, PdfBackend } from '../../Header/laid-out-document';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { GeneratedPdf, PdfStrings } from '../../Header/pdf-document-model';
 import type { ParsedFont, PdfFontName } from '../../Header/pdf-fonts';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** The four parsed PDF fonts (loadPdfFonts). */
 export type PdfFonts = Readonly<Record<PdfFontName, ParsedFont>>;
 
 export interface GeneratePdfInput
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     /** List positions of the included emails, in list order (Source/web-page/pdf-labels.ts, PdfPlans). */
     readonly positions: readonly number[];
     /** One plan per position, same order. */

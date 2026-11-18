@@ -115,7 +115,7 @@ export interface PdfEmail
     readonly number: number;
     /** For links from the index (resolved by the renderer): emailAnchor(number). */
     readonly anchor: string;
-    /** Its position in the engine's list (`result.messages`); null for a rebuilt email (see `rebuilt`). */
+    /** Its position in the thread analysis's list (`result.messages`); null for a rebuilt email (see `rebuilt`). */
     readonly position: number | null;
     /** "Email 3", for a rebuilt email too. */
     readonly heading: string;

@@ -4,7 +4,7 @@
 // Dutch with ">" marks, Outlook header blocks, "-----Original Message-----",
 // forwards, a quoted sentence alone, text pasted with no header; right,
 // missing and wrong In-Reply-To; right, missing, unreadable and wrong
-// dates) are run through the real engine, output plan and PDF model with
+// dates) are run through the real thread analysis, output plan and PDF model with
 // "Print full original text" off, dropped:
 // - each email as a file of its own (plain files: the loss that existed
 //   before task 8.13b-3, an undated or wrong-clock email whose paragraph a
@@ -14,7 +14,7 @@
 //   some attached emails also dropped as files of their own (copies, merged).
 // Random ticks and random rebuilt emails chosen. Checked:
 // - every ticked email's own sentence is printed at least once in the PDF
-//   (the PRINTED SOMEWHERE check, Source/pdf-export/build-pdf-document.ts, and the engine's
+//   (the PRINTED SOMEWHERE check, Source/pdf-export/build-pdf-document.ts, and the thread analysis's
 //   withHeldReferences, Source/thread-analysis/overlap-quote-detection.ts); how often one is printed
 //   twice is counted and reported (allowed: restoring may print twice);
 // - an unticked email's sentence is printed nowhere when no ticked email's
@@ -37,7 +37,7 @@ import { lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number
@@ -123,7 +123,7 @@ const tally = (): Tally => ({ cases: 0, ticked: 0, lost: 0, twice: 0, unticked: 
  * Every sentence in it must be printed somewhere in the PDF: the no-repeat rule may move text to another
  * email, never lose it (review round 4, M1).
  */
-function keptTexts(result: EngineResult, positions: readonly number[], plans: readonly MessagePlan[], rebuilt: readonly number[],
+function keptTexts(result: ThreadAnalysisResult, positions: readonly number[], plans: readonly MessagePlan[], rebuilt: readonly number[],
     unticked: readonly number[]): Map<number, string>
 {
     const { parts } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt, unticked });
@@ -163,7 +163,7 @@ function keptTexts(result: EngineResult, positions: readonly number[], plans: re
 }
 
 /** One case: the folded PDF of a random selection, every own sentence checked; then the full text. */
-function check(testCase: QuotingCase, result: EngineResult, random: () => number, where: string, tallyCounts: Tally,
+function check(testCase: QuotingCase, result: ThreadAnalysisResult, random: () => number, where: string, tallyCounts: Tally,
     missing: ReadonlySet<number>): void
 {
     tallyCounts.cases++;
@@ -268,7 +268,7 @@ function check(testCase: QuotingCase, result: EngineResult, random: () => number
     }
 }
 
-/** The real overlap detector, told nothing about which email holds which (the engine's fixes for attached emails undone). */
+/** The real overlap detector, told nothing about which email holds which (the thread analysis's fixes for attached emails undone). */
 const NO_HOLDS: ThreadAnalysisParts = {
     ...DEFAULT_THREAD_ANALYSIS_PARTS,
     detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))),
@@ -370,7 +370,7 @@ describe('collapse, never delete, with emails quoting each other: random cases (
         expect(elapsedMs).toBeLessThan(1500);
     }, 120_000);
 
-    it('the PRINTED SOMEWHERE check alone (the engine\'s holder links undone): still at least once (400 cases with attached emails)', () =>
+    it('the PRINTED SOMEWHERE check alone (the thread analysis\'s holder links undone): still at least once (400 cases with attached emails)', () =>
     {
         const tallyCounts = run('attached', 400, 0.5, NO_HOLDS, ' no holds');
         expect(tallyCounts.failures.slice(0, 10)).toEqual([]);

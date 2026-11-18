@@ -43,8 +43,8 @@
 
 import { bodyLines } from '../pdf-export/pdf-text-transforms';
 import type { NormalizedMessage, ParseWarning } from '../../Header/parsed-email';
-import type { EngineRebuilt } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage } from '../../Header/rebuilt-emails';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** The parser warnings that mean the text could not be read (in full): such an email is never left out (Q2). */
 export const UNREADABLE_BODY_WARNINGS: readonly ParseWarning[] = ['html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'];
@@ -76,7 +76,7 @@ export function hasNoPrintableText(message: Pick<NormalizedMessage, 'bodyText' |
 }
 
 /** True when the PDF leaves this rebuilt email out because its rebuilt text has no text (Q4). */
-export function rebuiltHasNoPrintableText(rebuiltEmail: Pick<EngineRebuilt, 'rebuilt'>): boolean
+export function rebuiltHasNoPrintableText(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'rebuilt'>): boolean
 {
     return isEmptyText(rebuiltEmail.rebuilt?.reconstructedText);
 }
@@ -86,7 +86,7 @@ export function rebuiltHasNoPrintableText(rebuiltEmail: Pick<EngineRebuilt, 'reb
  * given order) less the emails left out because they have no text, and less
  * any position without an email.
  */
-export function pdfPositions(result: Pick<EngineResult, 'messages'>, positions: readonly number[]): number[]
+export function pdfPositions(result: Pick<ThreadAnalysisResult, 'messages'>, positions: readonly number[]): number[]
 {
     return positions.filter((position) =>
     {

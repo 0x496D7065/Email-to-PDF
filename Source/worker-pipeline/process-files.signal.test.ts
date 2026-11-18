@@ -56,7 +56,7 @@ describe('processFiles: cancel signal', () =>
         expect(options?.timeoutMs).toBe(THREAD_ANALYSIS_TIMEOUT_MS);
     });
 
-    it('passes no signal to the engine runner when none is given', async () =>
+    it('passes no signal to the thread-analysis runner when none is given', async () =>
     {
         await processFiles([emlFile()]);
         expect(runThreadAnalysisInWorker).toHaveBeenCalledTimes(1);

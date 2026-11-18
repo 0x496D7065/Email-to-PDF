@@ -21,7 +21,7 @@ import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
 import { loadPdfFonts } from './load-bundled-fonts';
 import { createPdfStrings } from './pdf-strings';
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 let fonts: PdfFonts;
 let last: NormalizedMessage;
@@ -39,7 +39,7 @@ beforeAll(async () =>
 /** The PDF of the last email alone, with the given rebuilt ids (default: every entry), read back as text. */
 async function pdfText(options: { rebuilt?: readonly number[]; positions?: readonly number[]; locale?: 'en' | 'fr' | 'nl' } = {})
 {
-    const result: EngineResult = analyzeThread([{ ok: true, message: last }]);
+    const result: ThreadAnalysisResult = analyzeThread([{ ok: true, message: last }]);
     const positions = options.positions ?? [0];
     const plans = planOutput(
         positions.map((p) => result.messages[p]!),

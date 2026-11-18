@@ -4,7 +4,7 @@
 // full of awkward text (control characters, lone surrogates, CR, U+2028,
 // tabs, bidi controls, tag characters and flags, noncharacters, joiners,
 // emoji, combining marks, runs of blank lines, quotes, reply headers,
-// signatures), are run through the real engine and output plan, and:
+// signatures), are run through the real thread analysis and output plan, and:
 // - with "include everything" (README.md, rule R6), every email's body in
 //   the model is the full body after the documented display transforms only
 //   (checked against the independent Helper/Test/test-support/pdf-reference.ts); and
@@ -52,7 +52,7 @@ import type { MessagePlan } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number
@@ -241,7 +241,8 @@ let noTextSeen = 0;
  * (`printed` equal to `positions`), the slots are the ticked emails, as
  * before. Returns how many were left out.
  */
-function expectOnlyNoTextLeftOut(result: EngineResult, positions: readonly number[], printed: readonly number[], pdfDocument: PdfDocument): number
+function expectOnlyNoTextLeftOut(result: ThreadAnalysisResult, positions: readonly number[], printed: readonly number[],
+    pdfDocument: PdfDocument): number
 {
     const left = positions.filter((p) => !printed.includes(p));
     for (const position of left)
@@ -377,12 +378,12 @@ describe('PDF document model properties', () =>
                 let codes = 0;
                 for (const { email, position } of realEmails(pdfDocument))
                 {
-                    const engineMessage = result.messages[position]!;
+                    const analyzedMessage = result.messages[position]!;
                     const where = `seed ${String(seed)} position ${String(email.position)}`;
-                    expect(bodyOf(email), where).toBe(referenceDisplayText(engineMessage.message.bodyText));
+                    expect(bodyOf(email), where).toBe(referenceDisplayText(analyzedMessage.message.bodyText));
                     // Tasks 8.1 and 8.6: nothing but the quote prefixes is missing.
-                    expect(quotePrefixProblems(engineMessage.message.bodyText, email.body.map(lineText)), where).toEqual([]);
-                    quoted += referenceDisplayLines(engineMessage.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
+                    expect(quotePrefixProblems(analyzedMessage.message.bodyText, email.body.map(lineText)), where).toEqual([]);
+                    quoted += referenceDisplayLines(analyzedMessage.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
                     for (const line of email.body)
                     {
                         for (const run of line)
@@ -453,7 +454,7 @@ describe('PDF document model properties', () =>
                 const messages = Array.from({ length: 12 }, (_, k) =>
                 {
                     const message = randomMessage(random, seed * 100 + k);
-                    // A quoted history after the new text, so the engine has earlier emails to rebuild.
+                    // A quoted history after the new text, so the thread analysis has earlier emails to rebuild.
                     const quoted = Array.from({ length: 1 + Math.floor(random() * 4) }, () => `> ${pick(random, PIECES)}`).join('\n');
                     const history = `\n\nOn Tue, 4 Mar 2025 at 09:${String(10 + (k % 50))}, ${pick(random, ['Bob Sample <bob@furniture.example.test>', 'Carol Test <carol@sample.test>'])} wrote:\n> The desks arrive on Monday morning.\n${quoted}\n`;
                     return random() < 0.7 ? { ...message, bodyText: message.bodyText + history } : message;

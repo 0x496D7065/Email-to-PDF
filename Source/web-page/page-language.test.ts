@@ -1,6 +1,6 @@
 // Unit tests for switching the page language with files loaded (mount-page.ts,
 // setLanguage, and each part's relabel), in Node with the recording fake DOM
-// (Helper/Test/test-support/fake-dom.ts), the real steps and engine, a controllable
+// (Helper/Test/test-support/fake-dom.ts), the real steps and thread analysis, a controllable
 // fake processFiles and a fake PDF maker. Synthetic messages only.
 //
 // The shipped page has English, French and Dutch. Here a synthetic test
@@ -22,7 +22,7 @@ import { mountPage, type Page } from './mount-page';
 import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { MakePdfRequest, PdfFontBytes, PdfOutcome } from '../../Header/pdf-worker-messages';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 vi.mock('./translations/catalog', async (importOriginal) =>
 {
@@ -76,7 +76,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
  * without a date (a note); an email whose item cannot be built (a stand-in);
  * a file that is not an email and one without a name.
  */
-function emails(): { messages: NormalizedMessage[]; result: EngineResult; standInSubject: string }
+function emails(): { messages: NormalizedMessage[]; result: ThreadAnalysisResult; standInSubject: string }
 {
     const first = make({ cc: [CAROL], attachments: [{ fileName: 'plan.pdf', size: 2048, mimeType: 'application/pdf' }] });
     const copy: NormalizedMessage = { ...first, source: { fileName: 'bench-copy.eml', sha256: 'f'.repeat(64), kind: 'eml' } };
@@ -197,7 +197,7 @@ async function addAndShow(): Promise<ReturnType<typeof emails>>
     const input = byId('file-input');
     input.files = [...emailSet.messages.map((m) => m.source.fileName), 'bench-copy.eml', 'notes.txt', ''].map(fakeFile);
     input.fire('change');
-    calls.at(-1)?.resolve({ ok: true, engine: emailSet.result });
+    calls.at(-1)?.resolve({ ok: true, threadAnalysis: emailSet.result });
     await settle();
     runAll();
     expect(page.preview.pdfLabelState()).toBe('ready');
@@ -742,7 +742,7 @@ describe('setLanguage while the PDF-label status line shows text', () =>
         const input = byId('file-input');
         input.files = [...emailSet.messages.map((m) => m.source.fileName), 'bench-copy.eml', 'notes.txt', ''].map(fakeFile);
         input.fire('change');
-        calls.at(-1)?.resolve({ ok: true, engine: emailSet.result });
+        calls.at(-1)?.resolve({ ok: true, threadAnalysis: emailSet.result });
         await settle();
         // No runAll(): the plans are still being made.
         expect(page.preview.pdfLabelState()).toBe('updating');

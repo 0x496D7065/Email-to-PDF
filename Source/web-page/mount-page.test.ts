@@ -1,6 +1,6 @@
 // Unit tests for the wired page and "Clear everything" (mount-page.ts), in Node
 // with the recording fake DOM (Helper/Test/test-support/fake-dom.ts), the real step 1,
-// step 2 and engine, and a controllable fake processFiles. Synthetic
+// step 2 and thread analysis, and a controllable fake processFiles. Synthetic
 // messages only. The real page, files and workers are checked in Chromium by
 // Helper/Test/browser-tests/clear.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +13,7 @@ import { t } from './translations';
 import { focusedControlWasRemoved, mountPage, showResultInStep2, type Page } from './mount-page';
 import type { FileLike, ProcessOptions, ProcessResult } from '../../Header/file-processing';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ synthetic data
 
@@ -42,7 +42,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
     };
 }
 const failedFile = (fileName: string): ParseResult => ({ ok: false, fileName, sha256: null, error: 'unsupported-type', detail: 'not an email file' });
-const engineOf = (messages: readonly NormalizedMessage[], extra: readonly ParseResult[] = []): EngineResult =>
+const analysisOf = (messages: readonly NormalizedMessage[], extra: readonly ParseResult[] = []): ThreadAnalysisResult =>
     analyzeThread([...messages.map((message): ParseResult => ({ ok: true, message })), ...extra]);
 
 function fakeFile(name: string): FileLike
@@ -151,15 +151,15 @@ function emailTexts(messages: readonly NormalizedMessage[], failedNames: readonl
 }
 
 /** Adds two emails and a failed file, and waits until everything is shown. */
-async function addAndShow(): Promise<{ messages: NormalizedMessage[]; result: EngineResult }>
+async function addAndShow(): Promise<{ messages: NormalizedMessage[]; result: ThreadAnalysisResult }>
 {
     const messages = [make(), make()];
     // An identical copy of the first email in another file: merged, its file name shown as "Also in".
     const copy: NormalizedMessage = { ...messages[0]!, source: { fileName: 'bench-copy.eml', sha256: 'f'.repeat(64), kind: 'eml' } };
-    const result = engineOf([...messages, copy], [failedFile('notes.txt')]);
+    const result = analysisOf([...messages, copy], [failedFile('notes.txt')]);
     expect(result.counts.duplicatesMerged).toBe(1);
     choose(...messages.map((m) => m.source.fileName), 'bench-copy.eml', 'notes.txt');
-    control.calls.at(-1)?.resolve({ ok: true, engine: result });
+    control.calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
     await settle();
     while (tasks.length > 0)
     {
@@ -205,7 +205,7 @@ describe('showResultInStep2', () =>
     it('gives the result to the review first, then to the list', () =>
     {
         const order: string[] = [];
-        const result: ProcessResult = { ok: true, engine: engineOf([]) };
+        const result: ProcessResult = { ok: true, threadAnalysis: analysisOf([]) };
         showResultInStep2(
             result,
             { showResult: (r) => order.push(r === result ? 'review' : 'other') },
@@ -230,7 +230,7 @@ describe('mountPage', () =>
         const signature = '\n-- \nAlice Example\nGarden Benches (fictional company)\n';
         const messages = [make({ bodyText: `The bench is green.\n${signature}` }), make({ bodyText: `The bench is delivered.\n${signature}` })];
         choose(...messages.map((m) => m.source.fileName));
-        control.calls.at(-1)?.resolve({ ok: true, engine: engineOf(messages) });
+        control.calls.at(-1)?.resolve({ ok: true, threadAnalysis: analysisOf(messages) });
         await settle();
         expect(page.preview.pdfLabelState()).toBe('updating');
         while (tasks.length > 0)
@@ -285,9 +285,9 @@ describe('mountPage', () =>
             bodyText: buildThread(FORWARD.messages!).body,
             date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: threadMessage.zone.offsetMinutes, zoneKnown: true },
         });
-        const result = engineOf([forward]);
+        const result = analysisOf([forward]);
         choose(forward.source.fileName);
-        control.calls.at(-1)?.resolve({ ok: true, engine: result });
+        control.calls.at(-1)?.resolve({ ok: true, threadAnalysis: result });
         await settle();
         const run = (): void =>
         {
@@ -448,7 +448,7 @@ describe('mountPage', () =>
     it('an empty list (no email found) gets its counts too', async () =>
     {
         choose('notes.txt');
-        control.calls[0]?.resolve({ ok: true, engine: engineOf([], [failedFile('notes.txt')]) });
+        control.calls[0]?.resolve({ ok: true, threadAnalysis: analysisOf([], [failedFile('notes.txt')]) });
         await settle();
         expect(byId('review-included').textContent).toBe('0 of 0 emails will be in the PDF.');
     });
@@ -469,7 +469,7 @@ describe('"Clear everything": availability', () =>
     {
         choose('a.eml');
         expect(clearButton().hasAttribute('aria-disabled')).toBe(false);
-        control.calls[0]?.resolve({ ok: true, engine: engineOf([make()]) });
+        control.calls[0]?.resolve({ ok: true, threadAnalysis: analysisOf([make()]) });
         await settle();
         expect(clearButton().hasAttribute('aria-disabled')).toBe(false);
         clearButton().click();
@@ -487,7 +487,7 @@ describe('"Clear everything": availability', () =>
     it('is available when every file failed (the failed list is something to clear)', async () =>
     {
         choose('notes.txt');
-        control.calls[0]?.resolve({ ok: true, engine: engineOf([], [failedFile('notes.txt')]) });
+        control.calls[0]?.resolve({ ok: true, threadAnalysis: analysisOf([], [failedFile('notes.txt')]) });
         await settle();
         expect(clearButton().hasAttribute('aria-disabled')).toBe(false);
     });
@@ -539,7 +539,7 @@ describe('"Clear everything": after a finished batch', () =>
         // The same files again (same hashes): no choice may come back.
         choose(...first.messages.map((m) => m.source.fileName));
         expect(control.calls.at(-1)?.files.map((f) => f.name)).toEqual(first.messages.map((m) => m.source.fileName));
-        control.calls.at(-1)?.resolve({ ok: true, engine: engineOf(first.messages) });
+        control.calls.at(-1)?.resolve({ ok: true, threadAnalysis: analysisOf(first.messages) });
         await settle();
         expect(items()).toHaveLength(2);
         expect(page.review.includedPositions()).toEqual([0, 1]);
@@ -568,7 +568,7 @@ describe('"Clear everything": while processing', () =>
 
         // The run ends later anyway: nothing of it may appear.
         run.options.onProgress?.({ stage: 'organizing', filesDone: 2, filesTotal: 2 });
-        run.resolve({ ok: true, engine: engineOf(messages) });
+        run.resolve({ ok: true, threadAnalysis: analysisOf(messages) });
         await settle();
         while (tasks.length > 0)
         {
@@ -583,7 +583,7 @@ describe('"Clear everything": while processing', () =>
         choose('a.eml');
         choose('b.eml'); // waits
         clearButton().click();
-        control.calls[0]?.resolve({ ok: true, engine: engineOf([make()]) });
+        control.calls[0]?.resolve({ ok: true, threadAnalysis: analysisOf([make()]) });
         await settle();
         // No second round was started for the waiting file.
         expect(control.calls).toHaveLength(1);
@@ -603,7 +603,7 @@ describe('"Clear everything": while the list is built in chunks', () =>
     {
         const messages = [make(), make(), make(), make()];
         choose(...messages.map((m) => m.source.fileName));
-        control.calls[0]?.resolve({ ok: true, engine: engineOf(messages) });
+        control.calls[0]?.resolve({ ok: true, threadAnalysis: analysisOf(messages) });
         await settle();
         expect(items()).toHaveLength(1);
         expect(page.preview.isRendering()).toBe(true);

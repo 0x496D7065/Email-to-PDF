@@ -5,12 +5,14 @@
 import { describe, expect, it } from 'vitest';
 import { FILE_CHAIN_SEPARATOR as PDF_SEPARATOR } from '../pdf-export/build-pdf-document';
 import { FILE_CHAIN_SEPARATOR, fileChain, type FileChainWords } from './file-chain';
-import type { EngineAttached, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedAttachedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const words: FileChainWords = { noFileName: '(no name)', attachedNoName: (n) => `(attached ${String(n)})` };
 
 /** A result with 2 dropped files and the given attached entries (input positions 2, 3, ...). */
-function resultWith(...attached: Omit<EngineAttached, 'index' | 'fileIndex' | 'places' | 'keptShowsHeader'>[]): Pick<EngineResult, 'attached' | 'counts'>
+function resultWith(
+    ...attached: Omit<AnalyzedAttachedMessage, 'index' | 'fileIndex' | 'places' | 'keptShowsHeader'>[]
+): Pick<ThreadAnalysisResult, 'attached' | 'counts'>
 {
     return {
         counts: { filesGiven: 2, messagesFound: 2 + attached.length, duplicatesMerged: 0, filesFailed: 0, undated: 0, withFolds: 0 },

@@ -1,4 +1,4 @@
-// Property tests for the engine pipeline (README.md, rules R6 and R7).
+// Property tests for the thread analysis pipeline (README.md, rules R6 and R7).
 //
 // Random synthetic threads (seeded, so every run is the same) go through
 // analyzeThread, and the collapse-never-delete invariants are checked for every
@@ -26,7 +26,7 @@ import { normalizeBody } from './dedupe';
 import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts, type ThreadAnalysisStage } from './analyze-thread';
 import { checkSegments, FOLD_REASONS, joinSegments, visibleView } from './fold-segments';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { DuplicateRule, EngineResult, FoldReason } from '../../Header/thread-analysis-result';
+import type { DuplicateRule, ThreadAnalysisResult, FoldReason } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------- generator
 
@@ -292,10 +292,10 @@ function makeBatch(seed: number, options: BatchOptions): Batch
 
 // ------------------------------------------------------------- invariants
 
-/** Checks every collapse-never-delete invariant of one engine run. */
+/** Checks every collapse-never-delete invariant of one thread analysis run. */
 function checkInvariants(
     results: readonly ParseResult[],
-    out: EngineResult,
+    out: ThreadAnalysisResult,
     copies: readonly [number, number][],
     conflicts: readonly [number, number][] = [],
 ): void
@@ -359,7 +359,7 @@ function checkInvariants(
         expect(unfolded.map((b) => b.text).join('')).toBe(body);
         expect(unfolded.some((b) => b.collapsed)).toBe(false);
         expect(visibleView(body, message.segments, { unfoldAll: false }).map((b) => b.text).join('')).toBe(body);
-        expect(message.engineWarnings).toEqual([]);
+        expect(message.threadAnalysisWarnings).toEqual([]);
         expect(message.parserWarnings).toBe(message.message.warnings);
         for (const segment of message.segments)
         {
@@ -451,8 +451,8 @@ function onlyMarksRemoved(slice: string, text: string): boolean
 
 const NO_REBUILD: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: () => [] };
 
-/** The rebuild invariants of one engine run (see the file comment); `baseline` = the same run with rebuilding off. */
-function checkRebuilt(out: EngineResult, baseline?: EngineResult): void
+/** The rebuild invariants of one thread analysis run (see the file comment); `baseline` = the same run with rebuilding off. */
+function checkRebuilt(out: ThreadAnalysisResult, baseline?: ThreadAnalysisResult): void
 {
     if (baseline !== undefined)
     {
@@ -527,7 +527,7 @@ function checkRebuilt(out: EngineResult, baseline?: EngineResult): void
  * "Note N:", so a rebuilt message and the real message (or the copy) it is
  * linked to must open with the same N. Returns the links that do not.
  */
-function wrongLinks(out: EngineResult): string[]
+function wrongLinks(out: ThreadAnalysisResult): string[]
 {
     const serial = (text: string): string | null => /Note (\d+):/u.exec(text)?.[1] ?? null;
     const wrong: string[] = [];
@@ -577,7 +577,7 @@ describe('analyzeThread: collapse-never-delete over random synthetic threads', (
         {
             const { results, copies, conflicts } = makeBatch(seed, SMALL);
             const snapshot = JSON.stringify(results);
-            let out: EngineResult | undefined;
+            let out: ThreadAnalysisResult | undefined;
             expect(() => (out = analyzeThread(results)), `seed ${seed}`).not.toThrow();
             if (out === undefined)
             {

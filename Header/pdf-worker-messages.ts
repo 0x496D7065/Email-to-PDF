@@ -7,12 +7,12 @@
 
 import type { MessagePlan, OutputPolicy } from './output-plan';
 import type { PdfFontName } from './pdf-fonts';
-import type { EngineResult } from './thread-analysis-result';
+import type { ThreadAnalysisResult } from './thread-analysis-result';
 
 /** What one PDF is made of: the input of generatePdf without the fonts. */
 export interface PdfJobInput
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     /** List positions of the included emails, in list order. */
     readonly positions: readonly number[];
     /** One plan per position, same order (Source/web-page/pdf-labels.ts: the preview's own plans). */

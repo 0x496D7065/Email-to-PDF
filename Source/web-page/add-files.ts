@@ -211,19 +211,19 @@ export function summarize(result: ProcessResult): BatchSummary
 {
     if (result.ok)
     {
-        const { counts, failed } = result.engine;
+        const { counts, failed } = result.threadAnalysis;
         return {
             filesAdded: counts.filesGiven,
             filesFailed: counts.filesFailed,
             messagesFound: counts.messagesFound,
-            attachedFound: attachedCount(result.engine),
+            attachedFound: attachedCount(result.threadAnalysis),
             duplicatesMerged: counts.duplicatesMerged,
             failed: failed.map((f) => ({ fileName: f.fileName, error: f.error, detail: f.detail })),
             batchError: null,
         };
     }
-    // No engine result: count what was read, the emails attached inside the
-    // files read included (as the engine counts them, task 8.13b-4, Q7).
+    // No thread analysis result: count what was read, the emails attached inside the
+    // files read included (as the thread analysis counts them, task 8.13b-4, Q7).
     // Duplicates are unknown (not merged).
     const failed = result.parsed.flatMap((p) => (p.ok ? [] : [{ fileName: p.fileName, error: p.error, detail: p.detail }]));
     const attachedFound = result.parsed.reduce((n, p) => n + (p.ok && Array.isArray(p.attached) ? p.attached.length : 0), 0);
@@ -416,7 +416,7 @@ export function mountAddFiles(shell: PageShell, options: AddFilesOptions): AddFi
         }
         else
         {
-            // No value: an "in progress" bar with no percentage (the engine gives none).
+            // No value: an "in progress" bar with no percentage (the thread analysis gives none).
             setSafeAttribute(progressBar, 'value', false);
         }
         // The status line (the page's one live region) does not follow the files
@@ -495,8 +495,8 @@ export function mountAddFiles(shell: PageShell, options: AddFilesOptions): AddFi
         setSafeAttribute(failedBox, 'hidden', summary.failed.length === 0);
         setSafeAttribute(summaryBox, 'hidden', false);
         shell.setStatus(errorText === '' ? line : `${errorText} ${line}`);
-        // Step 2 needs the engine's result: after a batch error there is none to show.
-        shell.setCheckReady(result.ok && result.engine.messages.length > 0);
+        // Step 2 needs the thread analysis's result: after a batch error there is none to show.
+        shell.setCheckReady(result.ok && result.threadAnalysis.messages.length > 0);
     }
 
     async function run(): Promise<void>

@@ -38,7 +38,7 @@ import { loadPdfFonts } from './load-bundled-fonts';
 import { headerLinesEnd, holdsOwnText, holdsQuotedText } from './build-pdf-document';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 let fonts: PdfFonts;
 beforeAll(async () =>
@@ -90,7 +90,7 @@ function sentences(threadCase: ThreadCase): string[]
  * unticked by the reader), read back: the text of each email, in PDF order.
  */
 async function emailTexts(threadCase: ThreadCase, dropped: readonly number[],
-    options: { rebuilt?: (result: EngineResult) => number[]; rebuildingOff?: boolean; policy?: OutputPolicy } = {})
+    options: { rebuilt?: (result: ThreadAnalysisResult) => number[]; rebuildingOff?: boolean; policy?: OutputPolicy } = {})
 {
     const tag = threadCase.id.replace(/[^a-z0-9]+/giu, '-');
     const result = analyzeThread(dropped.map((i) => ({ ok: true as const, message: realFile(threadCase.messages!, i, tag) })));

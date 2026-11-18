@@ -5,7 +5,7 @@
 
 import type { ThreadAnalysisFailure } from './thread-analysis-worker-messages';
 import type { ParseResult } from './parsed-email';
-import type { EngineResult } from './thread-analysis-result';
+import type { ThreadAnalysisResult } from './thread-analysis-result';
 
 /**
  * Why a whole batch has no result. 'unexpected' is a bug in process-files.ts,
@@ -17,7 +17,7 @@ export type ProcessErrorCode = ThreadAnalysisFailure | 'unexpected' | 'cancelled
 /**
  * Progress for the UI: 'reading' after each file is read and parsed
  * (filesDone goes from 0 to filesTotal), then 'organizing' once while the
- * engine runs.
+ * thread analysis runs.
  */
 export interface ProcessProgress
 {
@@ -28,7 +28,7 @@ export interface ProcessProgress
 
 /** The outcome of one batch. */
 export type ProcessResult =
-    | { readonly ok: true; readonly engine: EngineResult }
+    | { readonly ok: true; readonly threadAnalysis: ThreadAnalysisResult }
     | {
         readonly ok: false;
         readonly error: ProcessErrorCode;
@@ -44,7 +44,7 @@ export interface ProcessOptions
     readonly onProgress?: (progress: ProcessProgress) => void;
     /**
      * Cancels the batch ("Clear everything"): the running worker (parse or
-     * engine) is terminated, no further file is read, and the batch resolves
+     * thread analysis) is terminated, no further file is read, and the batch resolves
      * soon after with { ok: false, error: 'cancelled' } and no parse results.
      * A file the browser is still reading cannot be interrupted; its bytes are
      * dropped as soon as the read ends, without being parsed.

@@ -10,7 +10,7 @@
 //   (user decision 2026-11-09, task 8.12, replacing brief section 8.5);
 // - the index follows the cover information directly on page 1, and every
 //   email starts at the top of a page of its own (task 8.12);
-// - collapse, never delete: the engine result (every message and every
+// - collapse, never delete: the thread analysis result (every message and every
 //   rebuilt email) is the same after the PDF is made.
 // Synthetic fixtures only (Helper/Test/test-data/eml/): the last email of a thread
 // alone (three earlier emails rebuilt from its quote), and several files of
@@ -279,7 +279,7 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                     }
                     expect(cover.at(-1)).toBe(strings.pageFooter(1, pages.length));
 
-                    // Collapse, never delete: the engine data is unchanged by making the PDF.
+                    // Collapse, never delete: the thread analysis data is unchanged by making the PDF.
                     expect(JSON.stringify(result)).toBe(before);
                 });
             }

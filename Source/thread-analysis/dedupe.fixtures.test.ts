@@ -25,7 +25,7 @@ describe('dedupe over the parsed fixtures', () =>
         expect(actual.sort()).toEqual([...expected.values()].map((ids) => ids.sort()).sort());
         expect(result.mergedCount).toBe(FIXTURES.length - expected.size);
 
-        // No fixture triggers an engine warning.
+        // No fixture triggers a thread analysis warning.
         for (const keptEntry of result.kept)
         {
             expect(keptEntry.warnings).toEqual([]);

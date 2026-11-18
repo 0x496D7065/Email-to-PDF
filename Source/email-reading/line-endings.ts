@@ -1,7 +1,7 @@
 // Line endings of body text, shared by the .eml and .msg adapters.
 //
 // Every bodyText leaves the adapters with LF ("\n") line ends only, so every
-// later step (the engine's detectors, the preview, the PDF) sees the same
+// later step (the thread analysis's detectors, the preview, the PDF) sees the same
 // lines, whatever the source format wrote: CRLF (Outlook, raw MIME) or a lone
 // CR (old Mac files; postal-mime turns CRLF into LF but leaves a lone CR).
 

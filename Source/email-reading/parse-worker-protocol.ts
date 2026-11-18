@@ -16,7 +16,7 @@
 
 import { parseWithDeferredHtml } from './deferred-html';
 import { FORWARDED_SEPARATOR } from './forwarded-block';
-import type { ConversionOutcome, FromWorker, ParseRequest, ToWorker } from '../../Header/parse-worker-messages';
+import type { ConversionOutcome, FromParseWorker, ParseRequest, ToParseWorker } from '../../Header/parse-worker-messages';
 
 function isRecord(value: unknown): value is Record<string, unknown>
 {
@@ -24,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown>
 }
 
 /** True if `data` is a well-formed page -> worker message. */
-export function isToWorker(data: unknown): data is ToWorker
+export function isToParseWorker(data: unknown): data is ToParseWorker
 {
     if (!isRecord(data))
     {
@@ -38,7 +38,7 @@ export function isToWorker(data: unknown): data is ToWorker
 }
 
 /** True if `data` is a well-formed worker -> page message. */
-export function isFromWorker(data: unknown): data is FromWorker
+export function isFromParseWorker(data: unknown): data is FromParseWorker
 {
     if (!isRecord(data))
     {
@@ -206,7 +206,7 @@ function isPath(value: unknown): value is number[]
  * parse-worker.ts (which only wires it to the worker's global scope) so it
  * runs in unit tests without a browser.
  */
-export function createWorkerSide(post: (message: FromWorker) => void): (data: unknown) => void
+export function createWorkerSide(post: (message: FromParseWorker) => void): (data: unknown) => void
 {
     let waiting: ((outcomes: readonly ConversionOutcome[]) => void) | null = null;
     let started = false;
@@ -234,7 +234,7 @@ export function createWorkerSide(post: (message: FromWorker) => void): (data: un
 
     return (data) =>
     {
-        if (!isToWorker(data))
+        if (!isToParseWorker(data))
         {
             return;
         }

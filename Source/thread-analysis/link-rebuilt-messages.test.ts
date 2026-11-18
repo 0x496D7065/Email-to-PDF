@@ -1,7 +1,7 @@
 // Unit tests for link-rebuilt-messages.ts: matching rebuilt messages to real ones,
 // merging copies, and the timeline order. Synthetic data only (README.md,
 // rule R7). The run over the generated conversations is in
-// link-rebuilt-messages.measure.test.ts; the engine wiring in analyze-thread.test.ts; the
+// link-rebuilt-messages.measure.test.ts; the thread analysis wiring in analyze-thread.test.ts; the
 // cases that must NOT link in link-rebuilt-messages.adversarial.test.ts.
 
 import { describe, expect, it } from 'vitest';

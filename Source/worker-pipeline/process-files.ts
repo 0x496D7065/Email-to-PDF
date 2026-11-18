@@ -33,7 +33,7 @@ import {
 } from './thread-analysis-worker-runner';
 import { createFileReader } from './read-files';
 import type { FileLike, ProcessOptions, ProcessProgress, ProcessResult } from '../../Header/file-processing';
-import type { Limits } from '../../Header/parse-worker-messages';
+import type { FileSizeLimits } from '../../Header/parse-worker-messages';
 import type { InputFile, ParseResult } from '../../Header/parsed-email';
 
 /** Detail for an unexpected error (a bug, never a bad file). */
@@ -48,7 +48,7 @@ export interface ProcessSteps
 {
     readonly parse: (files: readonly InputFile[], signal?: AbortSignal) => Promise<ParseResult[]>;
     readonly organize: (results: readonly ParseResult[], signal?: AbortSignal) => Promise<ThreadAnalysisOutcome>;
-    readonly limits: Limits;
+    readonly limits: FileSizeLimits;
 }
 
 const BROWSER_STEPS: ProcessSteps = {
@@ -119,7 +119,7 @@ export async function processFilesWith(files: readonly FileLike[], steps: Proces
         }
         if (outcome.ok)
         {
-            return { ok: true, engine: outcome.result };
+            return { ok: true, threadAnalysis: outcome.result };
         }
         return { ok: false, error: outcome.error, detail: outcome.detail, parsed };
     }

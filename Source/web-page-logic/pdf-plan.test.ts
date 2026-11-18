@@ -1,6 +1,6 @@
 // Unit tests for the preview's PDF labels (pdf-plan.ts): exact cases of the
 // mapping (cuts, whitespace, the shown-text safety label, "same signature as
-// in email #N"), and every synthetic fixture through the real engine and the
+// in email #N"), and every synthetic fixture through the real thread analysis and the
 // real plan, checking the two promises: no label is ever wrong for any of
 // its text, and the blocks always give the body back unchanged (README.md,
 // rule R6).
@@ -15,8 +15,8 @@ import { labelOf, mergeSamePrintedAs, pdfBlocks, pdfBreaks, printedAsEmailOfItsO
 import type { MessagePlan, PlanRange } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfRange, PrintedAs } from '../../Header/pdf-document-model';
-import type { PdfBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
-import type { EngineMessage, FoldReason } from '../../Header/thread-analysis-result';
+import type { LabeledBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
+import type { AnalyzedMessage, FoldReason } from '../../Header/thread-analysis-result';
 
 const plan = (ranges: PlanRange[], extra: Partial<MessagePlan> = {}): MessagePlan => ({
     ranges,
@@ -27,7 +27,8 @@ const plan = (ranges: PlanRange[], extra: Partial<MessagePlan> = {}): MessagePla
     ...extra,
 });
 const view = (ranges: PlanRange[], signatureFrom = new Map<number, number>()): PdfView => ({ plan: plan(ranges), signatureFrom });
-const brief = (blocks: readonly PdfBlock[]) => blocks.map((b) => [b.block.text, b.block.folded, b.label?.status ?? null, b.label?.reasons ?? null]);
+const brief = (blocks: readonly LabeledBlock[]) =>
+    blocks.map((b) => [b.block.text, b.block.folded, b.label?.status ?? null, b.label?.reasons ?? null]);
 
 // Own text, a signature, one blank line, then an app quote: as Bob's
 // Outlook reply in the fixtures. displayBlocks makes ONE folded block of
@@ -303,7 +304,7 @@ describe('a view with the PDF\'s ranges (the no-repeat rule, task 8.11)', () =>
     });
 });
 
-// ------------------------------------------------------------ real engine
+// ------------------------------------------------------------ real thread analysis
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.test' };
@@ -328,13 +329,13 @@ function make(from: EmailAddress, bodyText: string): NormalizedMessage
     };
 }
 const SIGNATURE = '\n-- \nAlice Example\nGarden Benches (fictional company)\n';
-const engineOf = (messages: readonly NormalizedMessage[]) => analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
+const analysisOf = (messages: readonly NormalizedMessage[]) => analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 describe('signatureSources', () =>
 {
     it('points a repeated signature to the email where it is kept, as the plan decides', () =>
     {
-        const result = engineOf([
+        const result = analysisOf([
             make(ALICE, `The bench is green.\n${SIGNATURE}`),
             make(BOB, 'Thanks, noted.\n'),
             make(ALICE, `The bench is delivered.\n${SIGNATURE}`),
@@ -361,7 +362,7 @@ describe('signatureSources', () =>
 });
 
 /** For every block: each non-space character of it is kept exactly when its label says "in". */
-function expectLabelsTrue(email: EngineMessage, plan: MessagePlan, blocks: readonly PdfBlock[]): void
+function expectLabelsTrue(email: AnalyzedMessage, plan: MessagePlan, blocks: readonly LabeledBlock[]): void
 {
     const body = email.message.bodyText;
     const keep = new Array<boolean>(body.length).fill(true);
@@ -398,7 +399,7 @@ function expectLabelsTrue(email: EngineMessage, plan: MessagePlan, blocks: reado
     }
 }
 
-describe('every fixture, through the real engine and plan', () =>
+describe('every fixture, through the real thread analysis and plan', () =>
 {
     it('labels are never wrong, shown text is never left out, and the blocks give the body back', async () =>
     {
@@ -509,7 +510,7 @@ describe('adjacent blocks with the same "printed as" label are one block (task 8
     // "printed as" are already one display block, so this case is not reached
     // through pdfBlocks; the rule is checked directly).
     const outLabel = (printedAs: PrintedAs): PdfLabel => ({ status: 'out', reasons: ['forwarded'], signaturesFrom: [], printedAs });
-    const makeBlock = (start: number, end: number, folded: boolean, reason: FoldReason | null, related: number[] = []): PdfBlock => ({
+    const makeBlock = (start: number, end: number, folded: boolean, reason: FoldReason | null, related: number[] = []): LabeledBlock => ({
         block: { start, end, text: FORWARD_BODY.slice(start, end), folded, reasons: reason === null ? [] : [reason], related, label: reason, collapsed: folded },
         label: outLabel(rebuilt5),
     });

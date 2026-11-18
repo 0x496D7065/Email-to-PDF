@@ -2,7 +2,7 @@
 // merged with another copy (task 7.5, review round 2). A wrong link would
 // later remove a quoted message from the timeline and the PDF by declaring
 // it identical to a different message; a visible repeat is acceptable
-// (link-rebuilt-messages.ts, file comment). Each case runs the whole engine on
+// (link-rebuilt-messages.ts, file comment). Each case runs the whole thread analysis on
 // hand-written synthetic emails, so the splitter, the header reader and the
 // date reader take part, and first checks that the quoted message IS
 // rebuilt (the case is not empty). Synthetic data only (README.md, rule R7).
@@ -13,8 +13,8 @@ import { chain } from '../../Helper/Test/test-support/thread-cases';
 import { analyzeThread } from './analyze-thread';
 import { comparableText } from './link-rebuilt-messages';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
-import type { EngineRebuilt } from '../../Header/rebuilt-emails';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedRebuiltMessage } from '../../Header/rebuilt-emails';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@example.test' };
@@ -42,7 +42,8 @@ function email(from: EmailAddress, iso: string, body: string, offsetMinutes: num
     };
 }
 
-const run = (...messages: NormalizedMessage[]): EngineResult => analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
+const run = (...messages: NormalizedMessage[]): ThreadAnalysisResult =>
+    analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 /** Gmail-style reply: own text, then "On <date>, <who> wrote:" and the quoted lines. */
 const gmailReply = (own: string, date: string, who: string, quoted: string): string =>
@@ -58,7 +59,7 @@ const outlookReply = (own: string, header: readonly string[], quoted: string, se
 const WHO = 'Alice Example <alice@example.test>';
 
 /** The rebuilt messages sent by Alice; there must be at least `min` (the case is not empty). */
-function aliceRebuilt(out: EngineResult, min = 1): EngineRebuilt[]
+function aliceRebuilt(out: ThreadAnalysisResult, min = 1): AnalyzedRebuiltMessage[]
 {
     const list = out.reconstructed.filter((r) => r.rebuilt.from.length === 1 && (r.rebuilt.from[0]?.name === ALICE.name || r.rebuilt.from[0]?.address === ALICE.address));
     expect(list.length, 'rebuilt messages from Alice').toBeGreaterThanOrEqual(min);
@@ -66,7 +67,7 @@ function aliceRebuilt(out: EngineResult, min = 1): EngineRebuilt[]
 }
 
 /** No rebuilt message is linked to a real file or merged with another copy. */
-function expectNoLink(out: EngineResult): void
+function expectNoLink(out: ThreadAnalysisResult): void
 {
     expect(out.reconstructed.map((r) => `${r.id}:${r.link}`)).toEqual(out.reconstructed.map((r) => `${r.id}:entry`));
     // Every real message and every rebuilt message is in the timeline.
@@ -704,7 +705,7 @@ describe('policy (b): what still links (round 4 controls)', () =>
         const [rebuilt] = aliceRebuilt(out);
         expect(rebuilt?.rebuilt.incomplete).toEqual(['to']);
         expect(rebuilt?.rebuilt.reconstructedText.startsWith('Hello Bob')).toBe(false);
-        expect(comparableText(rebuilt?.rebuilt as EngineRebuilt['rebuilt']).startsWith('Hello Bob')).toBe(true);
+        expect(comparableText(rebuilt?.rebuilt as AnalyzedRebuiltMessage['rebuilt']).startsWith('Hello Bob')).toBe(true);
         expect(rebuilt?.link).toBe('real');
     });
 });

@@ -1,5 +1,5 @@
 // The PDF document model (Source/pdf-export/build-pdf-document.ts) over every synthetic fixture
-// (Helper/Test/test-data), parsed, run through the engine and planned as the app
+// (Helper/Test/test-data), parsed, run through the thread analysis and planned as the app
 // does: the replies show their new text and not the quoted history, every
 // file is a source, and with "include everything" every body is complete.
 
@@ -13,7 +13,7 @@ import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */
@@ -22,26 +22,26 @@ const realEmails = (pdfDocument: PdfDocument): { email: PdfEmail; position: numb
 
 describe('PDF document model over the parsed fixtures', () =>
 {
-    let result: EngineResult | undefined;
-    async function engine(): Promise<EngineResult>
+    let result: ThreadAnalysisResult | undefined;
+    async function analyzeFixtures(): Promise<ThreadAnalysisResult>
     {
         result ??= analyzeThread((await parseAllFixtures()).map((message) => ({ ok: true as const, message })));
         return result;
     }
-    async function buildFixtureDocument(policy: OutputPolicy): Promise<{ pdfDocument: PdfDocument; result: EngineResult }>
+    async function buildFixtureDocument(policy: OutputPolicy): Promise<{ pdfDocument: PdfDocument; result: ThreadAnalysisResult }>
     {
-        const engineResult = await engine();
-        const positions = engineResult.messages.map((_, k) => k);
-        const plans = planOutput(engineResult.messages, policy);
+        const threadAnalysis = await analyzeFixtures();
+        const positions = threadAnalysis.messages.map((_, k) => k);
+        const plans = planOutput(threadAnalysis.messages, policy);
         return {
-            result: engineResult,
-            pdfDocument: buildPdfDocument({ result: engineResult, positions, plans, policy, timeZone: 'America/New_York',
+            result: threadAnalysis,
+            pdfDocument: buildPdfDocument({ result: threadAnalysis, positions, plans, policy, timeZone: 'America/New_York',
                 generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: createPdfStrings('en') }),
         };
     }
-    const emailOf = (pdfDocument: PdfDocument, engineResult: EngineResult, file: string): PdfEmail =>
+    const emailOf = (pdfDocument: PdfDocument, threadAnalysis: ThreadAnalysisResult, file: string): PdfEmail =>
     {
-        const position = engineResult.messages.findIndex((m) => m.message.source.fileName === file);
+        const position = threadAnalysis.messages.findIndex((m) => m.message.source.fileName === file);
         const email = pdfDocument.emails.find((x) => x.position === position);
         if (email === undefined)
         {
@@ -52,7 +52,7 @@ describe('PDF document model over the parsed fixtures', () =>
 
     it('shows the new text of the known replies and leaves their quoted history out', async () =>
     {
-        const { pdfDocument, result: engineResult } = await buildFixtureDocument(DEFAULT_OUTPUT_POLICY);
+        const { pdfDocument, result: threadAnalysis } = await buildFixtureDocument(DEFAULT_OUTPUT_POLICY);
         // [file, new text that must be shown, quoted text that must not]
         const replies: [string, string, string][] = [
             ['eml/11-order-2-bob-outlook-en.eml', 'I can come by on Wednesday 5 March', 'We are furnishing a small office for four people'],
@@ -65,7 +65,7 @@ describe('PDF document model over the parsed fixtures', () =>
         ];
         for (const [file, fresh, quoted] of replies)
         {
-            const body = bodyOf(emailOf(pdfDocument, engineResult, file));
+            const body = bodyOf(emailOf(pdfDocument, threadAnalysis, file));
             expect(body, `${file}: new text`).toContain(fresh);
             expect(body, `${file}: quoted text`).not.toContain(quoted);
             // No blank line at either end, never more than 2 in a row.
@@ -76,34 +76,35 @@ describe('PDF document model over the parsed fixtures', () =>
 
     it('numbers every email, names every file in its email (merged copies too), no source list or hash on the cover', async () =>
     {
-        const { pdfDocument, result: engineResult } = await buildFixtureDocument(DEFAULT_OUTPUT_POLICY);
+        const { pdfDocument, result: threadAnalysis } = await buildFixtureDocument(DEFAULT_OUTPUT_POLICY);
         const strings = createPdfStrings('en');
-        expect(pdfDocument.emails.map((e) => e.number)).toEqual(engineResult.messages.map((_, k) => k + 1));
+        expect(pdfDocument.emails.map((e) => e.number)).toEqual(threadAnalysis.messages.map((_, k) => k + 1));
         // Collapse, never delete: every read file is still named, in the File row of the email it gave.
         const named = pdfDocument.emails.flatMap((e) => e.fields.filter((f) => f.label === strings.fileLabel).flatMap((f) => f.value.map(lineText)));
-        expect(named).toHaveLength(engineResult.counts.messagesFound);
-        expect(engineResult.counts.duplicatesMerged).toBeGreaterThan(0);
+        expect(named).toHaveLength(threadAnalysis.counts.messagesFound);
+        expect(threadAnalysis.counts.duplicatesMerged).toBeGreaterThan(0);
         // Task 8.12: the cover is the title, the summary and the people, nothing else.
         expect(pdfDocument.cover.blocks.map((b) => b.kind)).toEqual(['heading', 'fields', 'heading', 'list']);
         expect(
             pdfDocument.cover.blocks.flatMap((b) => (b.kind === 'list' ? b.items.flat().map(lineText) : [])).join('\n')).not.toMatch(/[0-9a-f]{64}/);
         expect(pdfDocument.cover.participants.length).toBeGreaterThan(2);
-        expect(pdfDocument.cover.undated).toBe(engineResult.counts.undated);
+        expect(pdfDocument.cover.undated).toBe(threadAnalysis.counts.undated);
     });
 
     it('with "include everything", every body is the full text after the display transforms only', async () =>
     {
         const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
-        const { pdfDocument, result: engineResult } = await buildFixtureDocument(policy);
+        const { pdfDocument, result: threadAnalysis } = await buildFixtureDocument(policy);
         let quoted = 0;
         for (const { email, position } of realEmails(pdfDocument))
         {
-            const engineMessage = engineResult.messages[position]!;
-            expect(bodyOf(email), engineMessage.message.source.fileName).toBe(referenceDisplayText(engineMessage.message.bodyText));
+            const analyzedMessage = threadAnalysis.messages[position]!;
+            expect(bodyOf(email), analyzedMessage.message.source.fileName).toBe(referenceDisplayText(analyzedMessage.message.bodyText));
             // Tasks 8.1 and 8.6: only the quote prefixes are missing; no line starts with a quote mark.
-            expect(quotePrefixProblems(engineMessage.message.bodyText, email.body.map(lineText)), engineMessage.message.source.fileName).toEqual([]);
-            expect(bodyOf(email), engineMessage.message.source.fileName).not.toMatch(/^\s*>/mu);
-            quoted += referenceDisplayLines(engineMessage.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
+            expect(quotePrefixProblems(analyzedMessage.message.bodyText, email.body.map(lineText)),
+                analyzedMessage.message.source.fileName).toEqual([]);
+            expect(bodyOf(email), analyzedMessage.message.source.fileName).not.toMatch(/^\s*>/mu);
+            quoted += referenceDisplayLines(analyzedMessage.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
             expect(email.flags.planFallback).toBe(false);
         }
         // The fixtures hold ">" quotes (Gmail, Thunderbird, HTML blockquotes).

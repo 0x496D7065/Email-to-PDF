@@ -30,7 +30,7 @@
 // - when done, and only if the inputs did not change meanwhile, the preview
 //   gets them (and applies them in chunks of its own). A newer change
 //   cancels the work in progress.
-// Why on the page and not in the engine worker: the plans need the emails,
+// Why on the page and not in the thread-analysis worker: the plans need the emails,
 // which are already here; sending thousands of emails to a worker on each
 // tick would cost about as much as working the plans out, and the worker is
 // stopped once its run is over. Short slices keep the page responsive.
@@ -59,7 +59,7 @@ import { createStaticLabels } from './static-labels';
 import type { PreviewPdfPlans } from './preview';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { PdfView, PlannedEmail } from '../../Header/pdf-plan';
-import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 /** Pause after a change before the plans are worked out (ms). */
 export const DEBOUNCE_MS = 150;
@@ -69,7 +69,7 @@ export const SLICE_MS = 12;
 /** The PDF plans of the included emails, as the PDF step needs them. */
 export interface PdfPlans
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     readonly policy: OutputPolicy;
     /** List positions of the included emails, in list order (a position without an email is not in it). */
     readonly positions: readonly number[];
@@ -117,7 +117,7 @@ export interface PdfLabels
     /** The checkbox field and its note, for the preview's toolbar. */
     readonly element: HTMLDivElement;
     /** A new result is shown (null: none). */
-    show(result: EngineResult | null): void;
+    show(result: ThreadAnalysisResult | null): void;
     /** The included emails may have changed: works the plans out again if needed. */
     refresh(): void;
     /** For "Clear everything": unticks the checkbox, cancels the work, drops the plans. */
@@ -135,7 +135,7 @@ export interface PdfLabels
 /** The input of one planning: everything the plans depend on. */
 interface Inputs
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     readonly policy: OutputPolicy;
     readonly positions: readonly number[];
     readonly key: string;
@@ -148,7 +148,7 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
     const now = options.now ?? ((): number => performance.now());
 
     // --- State (memory only, README.md, rule R5) ------------------------------
-    let result: EngineResult | null = null;
+    let result: ThreadAnalysisResult | null = null;
     // The last plans made, and whether they match the current inputs.
     let made: { readonly inputs: Inputs; readonly plans: PdfPlans; readonly preview: PreviewPdfPlans } | null = null;
     let upToDate = false;
@@ -173,7 +173,7 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         return Object.freeze({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: checkbox.checked });
     }
 
-    function inputsNow(result: EngineResult): Inputs
+    function inputsNow(result: ThreadAnalysisResult): Inputs
     {
         const outputPolicy = policy();
         const positions = [...options.includedPositions()];
@@ -274,7 +274,7 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         // skipped here once): the plans are made from this list and matched back
         // to it in the same order, so plans[k] always belongs to planned[k].
         const planned: PlannedEmail[] = [];
-        const messages: EngineMessage[] = [];
+        const messages: AnalyzedMessage[] = [];
         for (const position of inputs.positions)
         {
             const email = inputs.result.messages[position];

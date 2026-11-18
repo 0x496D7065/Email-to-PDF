@@ -6,7 +6,7 @@
 // - Adjacent folded segments become one folded block. Its reasons and links
 //   are the union of theirs. Its label is the reason covering the most
 //   characters: each folded segment counts its whole length for ONE reason,
-//   the engine's primaryReason of its own reasons (Source/thread-analysis/analyze-thread.ts), so
+//   the thread analysis's primaryReason of its own reasons (Source/thread-analysis/analyze-thread.ts), so
 //   a segment folded by several detectors is not counted twice; absorbed
 //   whitespace counts for nothing; a tie goes to the reason primaryReason
 //   prefers. (A short signature above a long quoted history is then called
@@ -25,7 +25,7 @@
 // Collapse, never delete (README.md, rule R6): blocks only group segments.
 // Their texts are slices of the body, so joining all blocks always gives the
 // body back unchanged. If the segments are not a valid cover of the body
-// (never expected: the engine checks them), the whole body is shown as one
+// (never expected: the thread analysis checks them), the whole body is shown as one
 // unfolded block instead of risking a gap.
 //
 // Pure functions, no DOM (README.md, rule R7).

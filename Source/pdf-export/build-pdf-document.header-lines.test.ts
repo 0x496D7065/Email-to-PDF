@@ -1,7 +1,7 @@
 // Task 8.13a (user rule 2026-11-09): with "Print full original text" off,
 // the PDF shows no header-looking lines of another email inside an email's
 // text. Checked as a general INVARIANT on the PDF document model, with the
-// engine's own quoted-header detection (findReplyHeaders, the detector that
+// thread analysis's own quoted-header detection (findReplyHeaders, the detector that
 // reconstruct-quoted-messages.ts reads its places from), over every conversation of
 // Helper/Test/test-support/thread-cases.ts (several sets of files, every rebuilt email
 // ticked, none, every other one) and over the fixture set:
@@ -10,7 +10,7 @@
 //    findReplyHeaders finds in its body ([start, headEnd): an "On ...
 //    wrote:" line, a "From: / Sent: / To: / Subject:" block, a forward
 //    marker with its lines) has a character printed, EXCEPT a header the
-//    engine could not rebuild (no place of result.reconstructed starts
+//    thread analysis could not rebuild (no place of result.reconstructed starts
 //    there: reconstruct-quoted-messages.ts refused it, or it lies in an attached email the
 //    .eml reader writes after the forwarded-message separator, task 8.13b),
 //    and a header whose email is not in the PDF at all (its rebuilt email
@@ -46,7 +46,7 @@ import { bodyLines, lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail, PdfRange } from '../../Header/pdf-document-model';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 const EN = createPdfStrings('en');
 const FULL: OutputPolicy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
@@ -93,7 +93,7 @@ const rowsOf = (e: PdfEmail): string => e.fields.map((f) => `${f.label} ${f.valu
 
 interface Made
 {
-    readonly result: EngineResult;
+    readonly result: ThreadAnalysisResult;
     readonly positions: readonly number[];
     readonly plans: readonly MessagePlan[];
     readonly rebuilt: readonly number[];
@@ -148,7 +148,7 @@ function printedOf(made: Made, planIndex: number): { readonly kept: Uint8Array; 
 
 interface Stats
 {
-    /** Headers shown that the engine could not rebuild (no place). */
+    /** Headers shown that the thread analysis could not rebuild (no place). */
     exempt: number;
     /** Headers of a place whose email is not in the PDF (not an unticked forward): kept inline. */
     inline: number;
@@ -174,7 +174,7 @@ function expectNoHeaderLines(made: Made, what: string): Stats
         expect(email, `${what}: email at ${String(position)} in the PDF`).toBeDefined();
         const { kept, ranges } = printedOf(made, k);
         const places = new Set(result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt.start));
-        // 1. No header block shown, except one the engine could not rebuild.
+        // 1. No header block shown, except one the thread analysis could not rebuild.
         for (const header of findReplyHeaders(body, message.subject))
         {
             let shown = false;

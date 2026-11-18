@@ -1,20 +1,20 @@
 // Unit tests for step 2's counts, include checkboxes and notes (review.ts),
 // in Node with the recording fake DOM (Helper/Test/test-support/fake-dom.ts), wired to
-// the real preview and the real engine like Source/web-page/mount-page.ts does. Synthetic
+// the real preview and the real thread analysis like Source/web-page/mount-page.ts does. Synthetic
 // messages only. The real page is checked in Chromium by Helper/Test/browser-tests/review.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
-import { DEDUPE_WARNINGS, ENGINE_WARNINGS, PARSE_WARNINGS } from '../web-page-logic/message-notes';
+import { DEDUPE_WARNINGS, THREAD_ANALYSIS_WARNINGS, PARSE_WARNINGS } from '../web-page-logic/message-notes';
 import { SAFE_TAGS } from './safe-dom';
 import { setLocale, t } from './translations';
 import { headingId, mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, filesText, includedText, messagesText, noteText, relatedText, type Review, type ReviewOptions } from './review';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { MessageNote } from '../../Header/preview-display';
-import type { EngineMessage, EngineResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ factory
 
@@ -47,7 +47,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 const NO_DATE: NormalizedMessage['date'] = { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false };
 const failedFile = (fileName: string): ParseResult => ({ ok: false, fileName, sha256: null, error: 'unsupported-type', detail: 'not an email file' });
 const ok = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
-const engineOf = (messages: readonly NormalizedMessage[], extra: readonly ParseResult[] = []): EngineResult =>
+const analysisOf = (messages: readonly NormalizedMessage[], extra: readonly ParseResult[] = []): ThreadAnalysisResult =>
     analyzeThread([...messages.map(ok), ...extra]);
 
 // ------------------------------------------------------------------ fake page
@@ -77,7 +77,7 @@ function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}):
 }
 
 /** Shows a result like Source/web-page/mount-page.ts does: the review first, then the list. */
-function show(result: EngineResult): void
+function show(result: ThreadAnalysisResult): void
 {
     review.show(result);
     preview.show(result);
@@ -137,7 +137,7 @@ const renderedBody = (item: FakeElement): string =>
 
 describe('texts', () =>
 {
-    it('writes the counts lines from the engine counts', () =>
+    it('writes the counts lines from the thread analysis counts', () =>
     {
         const counts = { filesGiven: 12, filesFailed: 1, messagesFound: 11, duplicatesMerged: 2, undated: 0, withFolds: 0 };
         expect(filesText(counts)).toBe('12 files, 1 could not be read.');
@@ -179,7 +179,8 @@ describe('texts', () =>
 
     it('counts only the ticked emails the PDF prints, and says how many are left out for having no text (task 8.14, Q3)', () =>
     {
-        const result = engineOf([make(), make({ bodyText: '' }), make(), make({ bodyText: ' \n ' }), make({ bodyText: '', warnings: ['rtf-only-body'] })]);
+        const result = analysisOf(
+            [make(), make({ bodyText: '' }), make(), make({ bodyText: ' \n ' }), make({ bodyText: '', warnings: ['rtf-only-body'] })]);
         const empty = result.messages.flatMap((m, k) => (m.message.bodyText.trim() === '' && m.message.warnings.length === 0 ? [k] : []));
         expect(empty).toHaveLength(2);
         const all = result.messages.map((_, k) => k);
@@ -235,7 +236,7 @@ describe('texts', () =>
             ...PARSE_WARNINGS.map((code): MessageNote => ({ kind: 'parse', code })),
             { kind: 'order', code: 'file-order' },
             ...DEDUPE_WARNINGS.map((code): MessageNote => ({ kind: 'dedupe', code, related: [], more: 0 })),
-            ...ENGINE_WARNINGS.map((code): MessageNote => ({ kind: 'engine', code })),
+            ...THREAD_ANALYSIS_WARNINGS.map((code): MessageNote => ({ kind: 'engine', code })),
             { kind: 'chars', code: 'coded-characters' },
             { kind: 'attached', code: 'attached-unread' },
             { kind: 'attached', code: 'attached-unread-inside' },
@@ -277,7 +278,7 @@ describe('counts', () =>
         expect(top).toEqual(['review-summary', 'preview-toolbar', 'preview-list']);
     });
 
-    it('match the engine counts exactly, for every fixture plus a failed file', async () =>
+    it('match the thread analysis counts exactly, for every fixture plus a failed file', async () =>
     {
         const parsed = await parseAllFixtures();
         const result = analyzeThread([...parsed.map(ok), failedFile('notes.txt')]);
@@ -302,7 +303,7 @@ describe('counts', () =>
 
     it('hides the pointer and the notes line when there is nothing to point to', () =>
     {
-        show(engineOf([make(), make()]));
+        show(analysisOf([make(), make()]));
         expect(byId('review-files-text').textContent).toBe('2 files.');
         expect(byId('review-failed-pointer').hasAttribute('hidden')).toBe(true);
         expect(byId('review-notes').hasAttribute('hidden')).toBe(true);
@@ -312,14 +313,14 @@ describe('counts', () =>
     it('empties after a batch error but keeps the choices', () =>
     {
         const first = make();
-        show(engineOf([first, make()]));
+        show(analysisOf([first, make()]));
         toggle(items()[0]!, false);
         review.showResult({ ok: false, error: 'engine-failed', detail: 'synthetic', parsed: [] });
         preview.showResult({ ok: false, error: 'engine-failed', detail: 'synthetic', parsed: [] });
         expect(byId('review-files-text').textContent).toBe('');
         expect(includedLine()).toBe('');
         expect(review.includedPositions()).toEqual([]);
-        show(engineOf([first, make()]));
+        show(analysisOf([first, make()]));
         expect(review.includedPositions()).toEqual([1]);
     });
 });
@@ -328,7 +329,7 @@ describe('include checkboxes', () =>
 {
     it('gives every email one labelled checkbox, ticked, right after its heading', () =>
     {
-        show(engineOf([make(), make(), make()]));
+        show(analysisOf([make(), make(), make()]));
         items().forEach((item, position) =>
         {
             const box = checkbox(item);
@@ -353,7 +354,7 @@ describe('include checkboxes', () =>
     it('unticking dims the email, keeps all its text, and updates the line and the selection', () =>
     {
         const messages = [make({ subject: 'One' }), make({ subject: 'Two' }), make({ subject: 'Three' })];
-        const result = engineOf(messages);
+        const result = analysisOf(messages);
         show(result);
         const second = items()[1]!;
         toggle(second, false);
@@ -377,7 +378,7 @@ describe('include checkboxes', () =>
 
     it('an email with no text keeps its tick box; the line counts it out and says why, following its tick (task 8.14)', () =>
     {
-        const result = engineOf([make({ subject: 'One' }), make({ subject: 'Empty', bodyText: '' }), make({ subject: 'Three' })]);
+        const result = analysisOf([make({ subject: 'One' }), make({ subject: 'Empty', bodyText: '' }), make({ subject: 'Three' })]);
         show(result);
         const empty = items()[1]!;
         expect(checkbox(empty).checked).toBe(true);
@@ -404,7 +405,7 @@ describe('include checkboxes', () =>
     {
         const announced: string[] = [];
         mount({}, { onChange: (text) => announced.push(text) });
-        show(engineOf([make(), make()]));
+        show(analysisOf([make(), make()]));
         expect(announced).toEqual([]);
         expect(area.descendants().some((e) => e.hasAttribute('aria-live'))).toBe(false);
         toggle(items()[0]!, false);
@@ -417,7 +418,7 @@ describe('include checkboxes', () =>
         const seen: [readonly number[], boolean][] = [];
         // The choice is recorded, and the line given is the one shown.
         mount({}, { onChange: (text) => seen.push([review.includedPositions(), text === includedLine()]) });
-        show(engineOf([make(), make()]));
+        show(analysisOf([make(), make()]));
         expect(seen).toEqual([]);
         toggle(items()[0]!, false);
         toggle(items()[0]!, true);
@@ -431,11 +432,11 @@ describe('include checkboxes', () =>
     {
         const one = make({ subject: 'One' });
         const two = make({ subject: 'Two' });
-        show(engineOf([one, two]));
+        show(analysisOf([one, two]));
         toggle(items()[1]!, false);
         // An earlier email arrives: "Two" moves from #2 to #3.
         const zero = make({ subject: 'Zero', date: { ...one.date, utcMs: (one.date.utcMs ?? 0) - 86_400_000 } });
-        show(engineOf([one, two, zero]));
+        show(analysisOf([one, two, zero]));
         expect(subjects()).toEqual(['Zero', 'One', 'Two']);
         expect(items().map((i) => checkbox(i).checked)).toEqual([true, true, false]);
         expect(items()[2]!.getAttribute('data-included')).toBe('false');
@@ -446,12 +447,12 @@ describe('include checkboxes', () =>
     it('keeps the choice when a new copy of the same email becomes the kept one', () =>
     {
         const own = make({ subject: 'Lamps', bcc: [] });
-        show(engineOf([own, make()]));
+        show(analysisOf([own, make()]));
         const position = subjects().indexOf('Lamps');
         toggle(items()[position]!, false);
         // The sender's own copy with a Bcc line: provably the same email, and kept instead.
         const withBcc: NormalizedMessage = { ...own, bcc: [CAROL], source: { ...own.source, fileName: 'sent.eml', sha256: 'f'.repeat(64) } };
-        const result = engineOf([own, make(), withBcc]);
+        const result = analysisOf([own, make(), withBcc]);
         expect(result.counts.duplicatesMerged).toBe(1);
         show(result);
         const now = subjects().indexOf('Lamps');
@@ -463,13 +464,13 @@ describe('include checkboxes', () =>
     it('forgets the choices on reset()', () =>
     {
         const messages = [make(), make()];
-        show(engineOf(messages));
+        show(analysisOf(messages));
         toggle(items()[0]!, false);
         preview.reset();
         review.reset();
         expect(review.includedPositions()).toEqual([]);
         expect(includedLine()).toBe('');
-        show(engineOf(messages));
+        show(analysisOf(messages));
         expect(items().map((i) => checkbox(i).checked)).toEqual([true, true]);
         expect(review.includedPositions()).toEqual([0, 1]);
     });
@@ -483,7 +484,7 @@ describe('include checkboxes', () =>
                 review.decorate(item, email, position, result);
             },
         });
-        show(engineOf([make(), make()]));
+        show(analysisOf([make(), make()]));
         for (const item of items())
         {
             expect(checkboxes(item)).toHaveLength(1);
@@ -506,7 +507,7 @@ describe('include checkboxes', () =>
                 }
             },
         });
-        const result = engineOf([make({ subject: 'Fine' }), make({ subject: 'Broken' }), make({ subject: 'Fine too' })]);
+        const result = analysisOf([make({ subject: 'Fine' }), make({ subject: 'Broken' }), make({ subject: 'Fine too' })]);
         show(result);
         const standIn = items()[1]!;
         expect(hasClass(standIn, 'message-failed')).toBe(true);
@@ -538,11 +539,11 @@ describe('include checkboxes', () =>
             },
         });
         const messages = [make({ subject: 'Fine' }), make({ subject: 'Broken' }), make({ subject: 'Fine too' })];
-        show(engineOf(messages));
+        show(analysisOf(messages));
         toggle(items()[1]!, false);
         expect(review.includedPositions()).toEqual([0, 2]);
         failing = true;
-        const result = engineOf(messages);
+        const result = analysisOf(messages);
         show(result);
         const standIn = items()[1]!;
         expect(hasClass(standIn, 'message-failed')).toBe(true);
@@ -564,13 +565,13 @@ describe('include checkboxes', () =>
         const queue: (() => void)[] = [];
         mount({ chunkSize: 1, schedule: (task) => queue.push(task), cancel: () => undefined });
         const messages = [make(), make(), make()];
-        show(engineOf(messages));
+        show(analysisOf(messages));
         while (queue.length > 0)
         {
             queue.shift()!();
         }
         toggle(items()[2]!, false);
-        show(engineOf(messages));
+        show(analysisOf(messages));
         expect(items()).toHaveLength(1);
         expect(review.includedPositions()).toEqual([0, 1]);
         expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
@@ -587,12 +588,12 @@ describe('include checkboxes', () =>
     {
         // Made in date order: A, B, C.
         const [messageA, messageB, messageC] = [make({ subject: 'A' }), make({ subject: 'B' }), make({ subject: 'C' })];
-        show(engineOf([messageA, messageB, messageC]));
+        show(analysisOf([messageA, messageB, messageC]));
         expect(subjects()).toEqual(['A', 'B', 'C']);
         const oldItems = items();
         expect(oldItems.map((i) => i.getAttribute('data-included'))).toEqual(['true', 'true', 'true']);
         // A new, shorter list where C is #1: the old items are gone from the page.
-        show(engineOf([messageC, make({ subject: 'D' })]));
+        show(analysisOf([messageC, make({ subject: 'D' })]));
         expect(subjects()).toEqual(['C', 'D']);
         for (const old of oldItems)
         {
@@ -610,7 +611,7 @@ describe('include checkboxes', () =>
 
     it('picks up a new result through decorate even if review.show() was not called first', () =>
     {
-        const result = engineOf([make(), make()]);
+        const result = analysisOf([make(), make()]);
         preview.show(result); // no review.show()
         expect(includedLine()).toBe('2 of 2 emails will be in the PDF.');
         toggle(items()[1]!, false);
@@ -622,9 +623,9 @@ describe('include checkboxes', () =>
 
     it('ignores rendered() for a result that is not the one shown (an older or unknown list)', () =>
     {
-        const older = engineOf([make(), make(), make()]);
+        const older = analysisOf([make(), make(), make()]);
         show(older);
-        const result = engineOf([make({ subject: 'One' }), make({ subject: 'Two' })]);
+        const result = analysisOf([make({ subject: 'One' }), make({ subject: 'Two' })]);
         show(result);
         toggle(items()[1]!, false);
         const before = {
@@ -634,7 +635,7 @@ describe('include checkboxes', () =>
             positions: review.includedPositions(),
         };
         expect(before.included).toBe('1 of 2 emails will be in the PDF.');
-        for (const stale of [older, engineOf([make(), make(), make(), make()])])
+        for (const stale of [older, analysisOf([make(), make(), make(), make()])])
         {
             review.rendered(stale);
             expect(byId('review-files-text').textContent).toBe(before.files);
@@ -650,19 +651,19 @@ describe('include checkboxes', () =>
         ['the list first (rendered comes before the review knows the result)', false],
     ])('shows the counts of an empty list given in either order: %s', (_label, reviewFirst) =>
     {
-        show(engineOf([make(), make()]));
-        const empty = engineOf([], [failedFile('notes.txt')]);
+        show(analysisOf([make(), make()]));
+        const empty = analysisOf([], [failedFile('notes.txt')]);
         expect(empty.messages).toHaveLength(0);
         // An empty list is complete at once.
         if (reviewFirst)
         {
-            review.showResult({ ok: true, engine: empty });
-            preview.showResult({ ok: true, engine: empty });
+            review.showResult({ ok: true, threadAnalysis: empty });
+            preview.showResult({ ok: true, threadAnalysis: empty });
         }
         else
         {
-            preview.showResult({ ok: true, engine: empty });
-            review.showResult({ ok: true, engine: empty });
+            preview.showResult({ ok: true, threadAnalysis: empty });
+            review.showResult({ ok: true, threadAnalysis: empty });
         }
         expect(items()).toHaveLength(0);
         expect(byId('review-files-text').textContent).toBe('1 file, 1 could not be read.');
@@ -676,7 +677,7 @@ describe('include checkboxes', () =>
     {
         const queue: (() => void)[] = [];
         mount({ chunkSize: 1, schedule: (task) => queue.push(task), cancel: () => undefined });
-        show(engineOf([make(), make(), make()]));
+        show(analysisOf([make(), make(), make()]));
         expect(items()).toHaveLength(1);
         expect(includedLine()).toBe('3 of 3 emails will be in the PDF.');
         toggle(items()[0]!, false);
@@ -712,7 +713,7 @@ describe('emails attached inside other emails (task 8.13b-4)', () =>
             setLocale('en');
             review.relabel();
         }
-        show(engineOf([make(), make()]));
+        show(analysisOf([make(), make()]));
         expect(byId('review-messages').textContent).toBe('2 emails found.');
     });
 
@@ -743,12 +744,12 @@ describe('emails attached inside other emails (task 8.13b-4)', () =>
 
     it('forgets the notes with "Clear everything" and with a new result', () =>
     {
-        show(engineOf([make({ subject: 'Holder', attachments: [RFC822_FILE] })]));
+        show(analysisOf([make({ subject: 'Holder', attachments: [RFC822_FILE] })]));
         expect(notesOf(items()[0]!)).toEqual([t('warnings.attached.attached-unread')]);
         review.reset();
         preview.reset();
         expect(byId('review-notes').hasAttribute('hidden')).toBe(true);
-        show(engineOf([make({ subject: 'Other' })]));
+        show(analysisOf([make({ subject: 'Other' })]));
         expect(notesOf(items()[0]!)).toEqual([]);
         expect(byId('review-notes').hasAttribute('hidden')).toBe(true);
     });
@@ -758,7 +759,7 @@ describe('notes', () =>
 {
     it('says on the card when the PDF will show some characters as codes (task 8.8: not in the PDF), in the page language', () =>
     {
-        show(engineOf([make({ subject: 'Odd', bodyText: 'Line\u0000one\n' }), make({ subject: 'Plain' })]));
+        show(analysisOf([make({ subject: 'Odd', bodyText: 'Line\u0000one\n' }), make({ subject: 'Plain' })]));
         const odd = items().find((i) => i.descendants().some((e) => e.textContent === 'Odd'))!;
         const plain = items().find((i) => i.descendants().some((e) => e.textContent === 'Plain'))!;
         expect(notesOf(odd)).toEqual(['This email contains hidden or damaged characters. In the PDF they may appear as codes such as [U+0000].']);
@@ -779,7 +780,7 @@ describe('notes', () =>
 
     it('shows an undated email\'s notes: no date found, placed at the end', () =>
     {
-        show(engineOf([make({ subject: 'Undated', date: NO_DATE, warnings: ['missing-date'] }), make({ subject: 'Dated' })]));
+        show(analysisOf([make({ subject: 'Undated', date: NO_DATE, warnings: ['missing-date'] }), make({ subject: 'Dated' })]));
         expect(subjects()).toEqual(['Dated', 'Undated']);
         expect(notesOf(items()[0]!)).toEqual([]);
         expect(withClass(items()[0]!, 'message-notes')).toHaveLength(0);
@@ -789,15 +790,15 @@ describe('notes', () =>
         expect(byId('review-notes').textContent).toBe('1 email has notes, shown with it below.');
     });
 
-    it('shows each parser and engine note of an email', () =>
+    it('shows each parser and thread analysis note of an email', () =>
     {
         const message = make({ warnings: ['unknown-time-zone', 'html-converted-body', 'html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'] });
-        const result = engineOf([message]);
-        const withEngine: EngineResult = {
+        const result = analysisOf([message]);
+        const withAnalysisWarnings: ThreadAnalysisResult = {
             ...result,
-            messages: [{ ...result.messages[0]!, engineWarnings: ['detector-failed', 'folding-disabled'] }],
+            messages: [{ ...result.messages[0]!, threadAnalysisWarnings: ['detector-failed', 'folding-disabled'] }],
         };
-        show(withEngine);
+        show(withAnalysisWarnings);
         expect(notesOf(items()[0]!)).toEqual([
             t('warnings.parse.unknown-time-zone'),
             t('warnings.parse.html-body-unreadable'),
@@ -815,7 +816,7 @@ describe('notes', () =>
         const sameIdB = make({ subject: 'Same id B', messageId: 'same@example.test', bodyText: 'Different text.\n' });
         const other = make({ subject: 'Other' });
         // Input order other, sameIdB, sameIdA; list order by date: sameIdA (#1), sameIdB (#2), other (#3).
-        show(engineOf([other, sameIdB, sameIdA]));
+        show(analysisOf([other, sameIdB, sameIdA]));
         expect(subjects()).toEqual(['Same id A', 'Same id B', 'Other']);
         const label = t('warnings.dedupe.same-id-different-content');
         expect(notesOf(items()[0]!)).toContain(`${label} See email #2.`);
@@ -823,10 +824,10 @@ describe('notes', () =>
         expect(notesOf(items()[2]!)).toEqual([]);
     });
 
-    it('counts the files left out in files when the engine capped the list of related ones', () =>
+    it('counts the files left out in files when the thread analysis capped the list of related ones', () =>
     {
-        const result = engineOf([make(), make(), make()]);
-        const capped: EngineResult = {
+        const result = analysisOf([make(), make(), make()]);
+        const capped: ThreadAnalysisResult = {
             ...result,
             messages: result.messages.map((m, k) =>
                 k === 0 ? { ...m, dedupeWarnings: [{ code: 'possible-duplicate-not-merged', related: [0, 1, 2], relatedTotal: 25 }] } : m,
@@ -836,11 +837,11 @@ describe('notes', () =>
         expect(notesOf(items()[0]!)).toEqual([`${t('warnings.dedupe.possible-duplicate-not-merged')} See emails #2, #3. 22 more files are involved.`]);
     });
 
-    it('never claims more emails than there are when many files merge into one (real engine)', () =>
+    it('never claims more emails than there are when many files merge into one (real thread analysis)', () =>
     {
         // Email A, then 22 copies of email B: same Message-ID as A but another
         // text. The copies are identical, so they merge into one email: 2 emails
-        // in all. The engine lists 20 of the 22 files; the 2 others are files of
+        // in all. The thread analysis lists 20 of the 22 files; the 2 others are files of
         // that same email #2, so the note must not say "2 more" emails.
         const first = make({ subject: 'First', messageId: 'shared@example.test', bodyText: 'First.\n' });
         const second = make({ subject: 'Second', messageId: 'shared@example.test', bodyText: 'Second.\n' });
@@ -848,7 +849,7 @@ describe('notes', () =>
             ...second,
             source: { fileName: `second-${String(k)}.eml`, sha256: (0xb000 + k).toString(16).padStart(64, '0'), kind: 'eml' },
         }));
-        const result = engineOf([first, ...copies]);
+        const result = analysisOf([first, ...copies]);
         expect(result.messages).toHaveLength(2);
         expect(result.counts.duplicatesMerged).toBe(21);
         show(result);
@@ -866,7 +867,7 @@ describe('safety', () =>
         const hostile = '<img src=x onerror=alert(1)><script>alert(2)</script>';
         const own = make({ subject: hostile, source: { fileName: `${hostile}.eml`, sha256: 'a'.repeat(64), kind: 'eml' } });
         const copy: NormalizedMessage = { ...own, source: { fileName: `copy ${hostile}.eml`, sha256: 'b'.repeat(64), kind: 'eml' } };
-        const result = engineOf([own, copy], [failedFile(`${hostile}.txt`)]);
+        const result = analysisOf([own, copy], [failedFile(`${hostile}.txt`)]);
         expect(result.counts.duplicatesMerged).toBe(1);
         show(result);
         const item = items()[0]!;
@@ -884,8 +885,8 @@ describe('safety', () =>
 
     it('never stops the counts for a broken entry (a bug): it is counted as included', () =>
     {
-        const result = engineOf([make(), make()]);
-        const broken = { ...result, messages: [result.messages[0]!, { message: null } as unknown as EngineMessage] };
+        const result = analysisOf([make(), make()]);
+        const broken = { ...result, messages: [result.messages[0]!, { message: null } as unknown as AnalyzedMessage] };
         review.show(broken);
         expect(includedLine()).toBe('2 of 2 emails will be in the PDF.');
         expect(review.includedPositions()).toEqual([0, 1]);

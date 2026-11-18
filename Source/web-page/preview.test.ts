@@ -1,6 +1,6 @@
 // Unit tests for step 2, the preview, in Node with the recording fake DOM
 // (Helper/Test/test-support/fake-dom.ts). Synthetic messages only, run through the real
-// engine so the folds are the ones the page will show. The real page is
+// thread analysis so the folds are the ones the page will show. The real page is
 // checked in Chromium by Helper/Test/browser-tests/preview.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
@@ -34,7 +34,7 @@ import {
 } from './preview';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { DisplayBlock } from '../../Header/pdf-plan';
-import type { EngineResult } from '../../Header/thread-analysis-result';
+import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ------------------------------------------------------------------ factory
 
@@ -65,7 +65,7 @@ function make(fields: Partial<NormalizedMessage> = {}): NormalizedMessage
     };
 }
 
-const engineOf = (messages: readonly NormalizedMessage[]): EngineResult =>
+const analysisOf = (messages: readonly NormalizedMessage[]): ThreadAnalysisResult =>
     analyzeThread(messages.map((message): ParseResult => ({ ok: true, message })));
 
 const dateAt = (iso: string, offsetMinutes: number | null = -300, zoneKnown = true): NormalizedMessage['date'] => ({
@@ -311,7 +311,7 @@ describe('task 8.8: what the PDF no longer says, shown in step 2', () =>
     it('shows the date as written under "(no date)" on the card, in the page language', () =>
     {
         const bad = make({ date: { ...NO_DATE, original: 'Someday, around noon' }, warnings: ['unparseable-date'] });
-        preview.show(engineOf([bad]));
+        preview.show(analysisOf([bad]));
         const note = one(items()[0]!, 'sender-time');
         expect(note.textContent).toBe('As written in the email: Someday, around noon');
         expect(note.hasAttribute('hidden')).toBe(false);
@@ -375,13 +375,13 @@ describe('mountPreview', () =>
         expect((byId('preview-zone').children as FakeElement[]).map((o) => o.getAttribute('value'))).toEqual(['Asia/Tokyo', 'UTC']);
     });
 
-    it('shows the emails in the engine order, numbered', () =>
+    it('shows the emails in the thread analysis order, numbered', () =>
     {
         const late = make({ subject: 'Late', date: dateAt('2025-03-05T10:00:00Z') });
         const early = make({ subject: 'Early', date: dateAt('2025-03-01T10:00:00Z') });
         const undated = make({ subject: 'Undated', date: NO_DATE });
         const middle = make({ subject: 'Middle', date: dateAt('2025-03-03T10:00:00Z') });
-        const result = engineOf([undated, late, early, middle]);
+        const result = analysisOf([undated, late, early, middle]);
         preview.show(result);
         expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(result.messages.map((m) => m.message.subject));
         expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(['Early', 'Middle', 'Late', 'Undated']);
@@ -396,7 +396,7 @@ describe('mountPreview', () =>
     it('shows author, recipients and dates; the sender time only when it differs', () =>
     {
         const carol: EmailAddress = { name: '', address: 'carol@example.test' };
-        preview.show(engineOf([make({ cc: [carol], bcc: [BOB], date: dateAt('2025-03-03T08:15:00Z', -300) })]));
+        preview.show(analysisOf([make({ cc: [carol], bcc: [BOB], date: dateAt('2025-03-03T08:15:00Z', -300) })]));
         const item = items()[0]!;
         expect(label(item, 'author')).toBe(t('preview.author.from'));
         expect(meta(item, 'author')).toBe('Alice Example <alice@example.test>');
@@ -415,12 +415,12 @@ describe('mountPreview', () =>
     {
         const carol: EmailAddress = { name: 'Carol Test', address: 'carol@example.test' };
         const expected = 'Alice Example <alice@example.test>, Bob Sample <bob@furniture.example.test>, Carol Test <carol@example.test>';
-        preview.show(engineOf([make({ to: [ALICE, BOB, carol] })]));
+        preview.show(analysisOf([make({ to: [ALICE, BOB, carol] })]));
         expect(meta(items()[0]!, 'to')).toBe(expected);
         setLocale('fr');
         try
         {
-            preview.show(engineOf([make({ to: [ALICE, BOB, carol] })]));
+            preview.show(analysisOf([make({ to: [ALICE, BOB, carol] })]));
             expect(meta(items()[0]!, 'to')).toBe(expected);
         }
         finally
@@ -431,7 +431,7 @@ describe('mountPreview', () =>
 
     it('leaves out empty To, Cc and Bcc rows', () =>
     {
-        preview.show(engineOf([make({ to: [], cc: [{ name: ' ', address: '' }] })]));
+        preview.show(analysisOf([make({ to: [], cc: [{ name: ' ', address: '' }] })]));
         const item = items()[0]!;
         expect([meta(item, 'to'), meta(item, 'cc'), meta(item, 'bcc'), meta(item, 'attachments'), meta(item, 'also-in')]).toEqual([null, null, null, null, null]);
     });
@@ -439,14 +439,14 @@ describe('mountPreview', () =>
     it('uses the "sent by" mailbox when there is no From', () =>
     {
         const sender: EmailAddress = { name: 'Assistant', address: 'assistant@example.test' };
-        preview.show(engineOf([make({ from: [], sender })]));
+        preview.show(analysisOf([make({ from: [], sender })]));
         expect(label(items()[0]!, 'author')).toBe(t('preview.author.sender'));
         expect(meta(items()[0]!, 'author')).toBe('Assistant <assistant@example.test>');
     });
 
     it('handles an email with no subject, no date, no author and no text', () =>
     {
-        preview.show(engineOf([make({ subject: '   ', date: NO_DATE, from: [], to: [], bodyText: '' })]));
+        preview.show(analysisOf([make({ subject: '   ', date: NO_DATE, from: [], to: [], bodyText: '' })]));
         const item = items()[0]!;
         const subject = one(item, 'message-subject');
         expect(subject.textContent).toBe(t('preview.noSubject'));
@@ -463,7 +463,7 @@ describe('mountPreview', () =>
     it('lists attachments as text only: no link, no image, no file access', () =>
     {
         preview.show(
-            engineOf([
+            analysisOf([
                 make({
                     attachments: [
                         { fileName: 'quote.pdf', size: 2048, mimeType: 'application/pdf' },
@@ -486,7 +486,7 @@ describe('mountPreview', () =>
     {
         const original = make({ messageId: 'same@example.test' });
         const copy = { ...original, source: { ...original.source, fileName: 'copy-from-sent.eml', sha256: 'e'.repeat(64) } };
-        const result = engineOf([original, copy]);
+        const result = analysisOf([original, copy]);
         expect(result.counts.duplicatesMerged).toBe(1);
         preview.show(result);
         expect(items()).toHaveLength(1);
@@ -500,12 +500,12 @@ describe('mountPreview', () =>
         const copyOf = (fileName: string, hash: string): NormalizedMessage => ({ ...original, source: { ...original.source, fileName, sha256: hash.repeat(64) } });
         const emails = [original, copyOf('copy-a.eml', 'a'), copyOf('copy-b.eml', 'b'), copyOf('copy-c.eml', 'c')];
         const expected = 'copy-a.eml, copy-b.eml, copy-c.eml';
-        preview.show(engineOf(emails));
+        preview.show(analysisOf(emails));
         expect(meta(items()[0]!, 'also-in')).toBe(expected);
         setLocale('fr');
         try
         {
-            preview.show(engineOf(emails));
+            preview.show(analysisOf(emails));
             expect(meta(items()[0]!, 'also-in')).toBe(expected);
         }
         finally
@@ -516,7 +516,7 @@ describe('mountPreview', () =>
 
     it('folds quoted text in a labelled <details>, with the email it repeats', () =>
     {
-        const result = engineOf(thread());
+        const result = analysisOf(thread());
         preview.show(result);
         const [ask, reply] = items();
         expect(folds()).toHaveLength(1);
@@ -534,12 +534,12 @@ describe('mountPreview', () =>
 
     it('opens and closes every fold with the checkbox; new folds follow it', () =>
     {
-        preview.show(engineOf([...thread(), ...thread()]));
+        preview.show(analysisOf([...thread(), ...thread()]));
         expect(folds().length).toBeGreaterThanOrEqual(2);
         expect(folds().every((d) => !d.hasAttribute('open'))).toBe(true);
         setShowFolded(true);
         expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
-        preview.show(engineOf(thread()));
+        preview.show(analysisOf(thread()));
         expect(folds().length).toBeGreaterThanOrEqual(1);
         expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
         setShowFolded(false);
@@ -554,14 +554,14 @@ describe('mountPreview', () =>
             make({ bodyText: '   leading spaces\n\n\n\ttabs\t\nno final break' }),
             make({ bodyText: '' }),
         ];
-        const result = engineOf(messages);
+        const result = analysisOf(messages);
         preview.show(result);
         setShowFolded(true);
         items().forEach((item, k) => expect(renderedBody(item)).toBe(result.messages[k]!.message.bodyText));
         expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
     });
 
-    it('keeps every character of every synthetic fixture, run through the engine', async () =>
+    it('keeps every character of every synthetic fixture, run through the thread analysis', async () =>
     {
         const parsed = await parseAllFixtures();
         const result = analyzeThread(parsed.map((message): ParseResult => ({ ok: true, message })));
@@ -582,7 +582,7 @@ describe('mountPreview', () =>
 
     it('rewrites only the dates when the zone changes', () =>
     {
-        const result = engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) }), make({ date: NO_DATE }), ...thread()]);
+        const result = analysisOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) }), make({ date: NO_DATE }), ...thread()]);
         preview.show(result);
         const bodies = items().map((i) => one(i, 'message-body'));
         const bodyNodes = bodies.map((b) => [...b.descendants()]);
@@ -603,7 +603,7 @@ describe('mountPreview', () =>
         chooseZone('UTC');
         expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
         // The zone stays for the next result.
-        preview.show(engineOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) })]));
+        preview.show(analysisOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) })]));
         expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
     });
 
@@ -611,7 +611,7 @@ describe('mountPreview', () =>
     {
         const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
         preview.show(
-            engineOf([
+            analysisOf([
                 make({
                     subject: evil,
                     from: [{ name: evil, address: '"><svg onload=alert(3)>@example.test' }],
@@ -645,7 +645,7 @@ describe('mountPreview', () =>
     {
         const seen: [string, number, string][] = [];
         mount({ decorate: (item, m, position) => seen.push([m.message.subject, position, fake(item).tagName]) });
-        const result = engineOf(thread());
+        const result = analysisOf(thread());
         preview.show(result);
         expect(seen).toEqual(result.messages.map((m, k) => [m.message.subject, k, 'li']));
     });
@@ -684,7 +684,7 @@ describe('chunked building', () =>
         next.task();
     }
 
-    const many = (n: number): EngineResult => engineOf(Array.from({ length: n }, (_, k) => make({ subject: `Mail ${String(k)}` })));
+    const many = (n: number): ThreadAnalysisResult => analysisOf(Array.from({ length: n }, (_, k) => make({ subject: `Mail ${String(k)}` })));
 
     it('builds the first chunk at once and the rest later, in order', () =>
     {
@@ -705,7 +705,7 @@ describe('chunked building', () =>
 
     it('builds later chunks with the zone and fold state of the moment', () =>
     {
-        preview.show(engineOf([...thread(), ...thread(), ...thread()]));
+        preview.show(analysisOf([...thread(), ...thread(), ...thread()]));
         chooseZone('Asia/Tokyo');
         setShowFolded(true);
         while (tasks.length > 0)
@@ -736,7 +736,7 @@ describe('chunked building', () =>
     it('calls onRendered once the last item is in the page, never for a replaced list, and survives it throwing', () =>
     {
         const queue: (() => void)[] = [];
-        const seen: { result: EngineResult; count: number }[] = [];
+        const seen: { result: ThreadAnalysisResult; count: number }[] = [];
         mount({
             chunkSize: 2,
             schedule: (task) => queue.push(task),
@@ -763,7 +763,7 @@ describe('chunked building', () =>
         // A list built in one go, and an empty one, are complete at once.
         const small = many(1);
         preview.show(small);
-        const empty = engineOf([]);
+        const empty = analysisOf([]);
         preview.show(empty);
         expect(seen.map((s) => s.result)).toEqual([result, small, empty]);
         expect(items()).toEqual([]);
@@ -799,7 +799,7 @@ describe('chunked building', () =>
 
     it('reset() puts the zone and the "show quoted text" checkbox back to their defaults', () =>
     {
-        preview.show(engineOf([...thread(), ...thread()]));
+        preview.show(analysisOf([...thread(), ...thread()]));
         chooseZone('Asia/Tokyo');
         setShowFolded(true);
         preview.reset();
@@ -807,7 +807,7 @@ describe('chunked building', () =>
         expect(byId('preview-zone').value).toBe('America/New_York');
         expect(byId('preview-show-folded').checked).toBe(false);
         // The next list follows the defaults: dates in the start zone, folds closed.
-        preview.show(engineOf(thread()));
+        preview.show(analysisOf(thread()));
         // New York: UTC-05:00, or UTC-04:00 once summer time starts (the synthetic thread moves on a day per call).
         expect(items().every((i) => /UTC-0[45]:00$/.test(one(i, 'message-date').textContent))).toBe(true);
         expect(folds().length).toBeGreaterThan(0);
@@ -823,9 +823,9 @@ describe('chunked building', () =>
         expect(byId('preview-show-folded').checked).toBe(true);
     });
 
-    it('a failed batch (no engine result) empties the list too', () =>
+    it('a failed batch (no thread analysis result) empties the list too', () =>
     {
-        preview.showResult({ ok: true, engine: many(5) });
+        preview.showResult({ ok: true, threadAnalysis: many(5) });
         expect(items()).toHaveLength(2);
         preview.showResult({ ok: false, error: 'engine-failed', detail: 'synthetic', parsed: [] });
         expect(items()).toEqual([]);
@@ -860,7 +860,8 @@ describe('chunked building', () =>
                 throw new Error('synthetic decorate failure');
             },
         });
-        const result = engineOf(Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n\n-- \nSender ${String(k)}\n` })));
+        const result = analysisOf(
+            Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n\n-- \nSender ${String(k)}\n` })));
         preview.show(result);
         while (tasks.length > 0)
         {
@@ -907,7 +908,7 @@ describe('chunked building', () =>
                 throw new Error('synthetic decorate failure');
             },
         });
-        preview.show(engineOf([make({ subject: 'Empty', bodyText: '' })]));
+        preview.show(analysisOf([make({ subject: 'Empty', bodyText: '' })]));
         const failed = items()[0]!;
         expect(hasClass(failed, 'message-failed')).toBe(true);
         expect(withClass(failed, 'body-text')).toEqual([]);
@@ -929,7 +930,7 @@ describe('chunked building', () =>
                 item.setAttribute('data-decorated', 'yes');
             },
         });
-        const result = engineOf([make({ subject: 'Mail 0' }), make({ subject: 'Mail 1' }), make({ subject: 'Mail 2' })]);
+        const result = analysisOf([make({ subject: 'Mail 0' }), make({ subject: 'Mail 1' }), make({ subject: 'Mail 2' })]);
         preview.show(result);
         expect(calls).toEqual([
             ['Mail 0', 0, false],
@@ -954,7 +955,7 @@ describe('chunked building', () =>
                 throw new Error('synthetic decorate failure');
             },
         });
-        const result = engineOf([make({ subject: 'Only', bodyText: 'Kept text.\n' })]);
+        const result = analysisOf([make({ subject: 'Only', bodyText: 'Kept text.\n' })]);
         preview.show(result);
         expect(calls).toBe(2);
         const failed = items()[0]!;
@@ -968,8 +969,8 @@ describe('chunked building', () =>
     {
         const decorate = vi.fn();
         mount({ decorate });
-        const result = engineOf([make({ subject: 'Mail 0' })]);
-        preview.show({ ...result, messages: [result.messages[0]!, undefined as unknown as EngineResult['messages'][number]] });
+        const result = analysisOf([make({ subject: 'Mail 0' })]);
+        preview.show({ ...result, messages: [result.messages[0]!, undefined as unknown as ThreadAnalysisResult['messages'][number]] });
         expect(decorate).toHaveBeenCalledTimes(1);
         const list = items();
         expect(list.map((i) => hasClass(i, 'message-failed'))).toEqual([false, true]);
@@ -978,7 +979,7 @@ describe('chunked building', () =>
 
     it('ends a chunk early when its bodies are very long, but always builds one email', () =>
     {
-        preview.show(engineOf([make({ bodyText: 'a'.repeat(MAX_CHUNK_CHARS) }), make({ bodyText: 'b'.repeat(MAX_CHUNK_CHARS) }), make()]));
+        preview.show(analysisOf([make({ bodyText: 'a'.repeat(MAX_CHUNK_CHARS) }), make({ bodyText: 'b'.repeat(MAX_CHUNK_CHARS) }), make()]));
         expect(items()).toHaveLength(1);
         runNext();
         expect(items()).toHaveLength(2);
@@ -1034,7 +1035,7 @@ describe('PDF labels', () =>
         return [ask, reply, again];
     }
     /** The plans of `positions` of a result, as Source/web-page/pdf-labels.ts makes them. */
-    function plansFor(result: EngineResult, positions: readonly number[], unfoldEverything = false): PreviewPdfPlans
+    function plansFor(result: ThreadAnalysisResult, positions: readonly number[], unfoldEverything = false): PreviewPdfPlans
     {
         const plans = planOutput(
             positions.map((p) => result.messages[p]!),
@@ -1051,7 +1052,7 @@ describe('PDF labels', () =>
      * (task 8.11); `unticked` (default: every rebuilt email not in `rebuilt`, as when the reader unticked their cards).
      */
     function plansWithCut(
-        result: EngineResult,
+        result: ThreadAnalysisResult,
         positions: readonly number[],
         rebuilt: readonly number[],
         unfoldEverything = false,
@@ -1127,7 +1128,7 @@ describe('PDF labels', () =>
 
         it('the forward alone, its rebuilt emails ticked: each forwarded part says which PDF email prints it; unticked, "not in the PDF" (task 8.13a, Q2); the switch off, back to "In the PDF: forwarded email"', () =>
         {
-            const result = engineOf([realFile(2)]);
+            const result = analysisOf([realFile(2)]);
             const ids = rebuiltEntries(result).map((r) => r.id);
             expect(ids).toHaveLength(2);
             preview.show(result);
@@ -1202,7 +1203,7 @@ describe('PDF labels', () =>
 
         it('every email as a file: the forwarded parts name the real emails by their list number', () =>
         {
-            const result = engineOf([realFile(0), realFile(1), realFile(2)]);
+            const result = analysisOf([realFile(0), realFile(1), realFile(2)]);
             preview.show(result);
             runAll();
             preview.setPdfPlans(plansWithCut(result, [0, 1, 2], []));
@@ -1221,7 +1222,7 @@ describe('PDF labels', () =>
 
         it('"Print full original text": nothing changes compared with before task 8.11, every label "In the PDF: ..."', () =>
         {
-            const result = engineOf([realFile(2)]);
+            const result = analysisOf([realFile(2)]);
             const ids = rebuiltEntries(result).map((r) => r.id);
             preview.show(result);
             runAll();
@@ -1280,7 +1281,7 @@ describe('PDF labels', () =>
     it('starts "off": no labels, no status text; the fold texts are unchanged', () =>
     {
         expect(byId('pdf-labels-status').hasAttribute('hidden')).toBe(true); // no list yet
-        preview.show(engineOf(benchThread()));
+        preview.show(analysisOf(benchThread()));
         runAll();
         expect(state()).toBe('off');
         expect(preview.pdfLabelState()).toBe('off');
@@ -1295,7 +1296,7 @@ describe('PDF labels', () =>
 
     it('the status line keeps its place through updating and ready (only its text changes)', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         const status = byId('pdf-labels-status');
@@ -1321,13 +1322,13 @@ describe('PDF labels', () =>
             ['ready', false, ''],
         ]);
         // An empty list: no line at all.
-        preview.show(engineOf([]));
+        preview.show(analysisOf([]));
         expect(status.hasAttribute('hidden')).toBe(true);
     });
 
     it('an email whose labels cannot be updated says so (never silent), and is tried again next time', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         const plans = plansFor(result, [0, 1, 2]);
@@ -1364,7 +1365,7 @@ describe('PDF labels', () =>
     it('an email with no text says it is not in the PDF, with no PDF label or note, ticked or not (task 8.14)', () =>
     {
         const spaces = ' \t\n \n﻿\n';
-        const result = engineOf([
+        const result = analysisOf([
             make({ subject: 'Has text', date: dateAt('2025-03-03T08:00:00Z') }),
             make({ subject: 'Empty', bodyText: '', date: dateAt('2025-03-03T09:00:00Z'), attachments: [{ fileName: 'plan.pdf', size: 10, mimeType: 'application/pdf' }] }),
             make({ subject: 'Spaces', bodyText: spaces, date: dateAt('2025-03-03T10:00:00Z') }),
@@ -1438,7 +1439,7 @@ describe('PDF labels', () =>
                 }
             },
         });
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         const standIn = items()[1]!;
@@ -1460,7 +1461,7 @@ describe('PDF labels', () =>
 
     it('shows the plans as labels, cutting a block that is partly in the PDF', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         preview.setPdfPlans(null);
@@ -1489,7 +1490,7 @@ describe('PDF labels', () =>
 
     it('an email left out of the PDF (not in the plans) gets no labels; plans for another result are ignored', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         preview.setPdfPlans(plansFor(result, [1, 2]));
@@ -1498,14 +1499,14 @@ describe('PDF labels', () =>
         // #3 now holds Alice's first kept signature.
         expect(labelsOf(items()[2]!)).toEqual(['In the PDF: signature']);
 
-        preview.setPdfPlans(plansFor(engineOf(benchThread()), [0, 1, 2]));
+        preview.setPdfPlans(plansFor(analysisOf(benchThread()), [0, 1, 2]));
         expect(state()).toBe('updating');
         expect(preview.pdfLabelState()).toBe('updating');
     });
 
     it('an email unticked after its labels were shown keeps them in place but hidden, so the list below does not move', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         preview.setPdfPlans(plansFor(result, [0, 1, 2]));
@@ -1549,7 +1550,7 @@ describe('PDF labels', () =>
 
     it('updates labels in place when the blocks stay the same, and keeps what the reader opened when they change', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         preview.setPdfPlans(plansFor(result, [0, 1, 2]));
@@ -1591,9 +1592,9 @@ describe('PDF labels', () =>
     describe('keyboard focus through a redraw', () =>
     {
         /** Shows benchThread with its first plans; returns the result and Bob's reply (#2: two folds, signature in, quote out). */
-        function ready(): { result: EngineResult; reply: FakeElement }
+        function ready(): { result: ThreadAnalysisResult; reply: FakeElement }
         {
-            const result = engineOf(benchThread());
+            const result = analysisOf(benchThread());
             preview.show(result);
             runAll();
             preview.setPdfPlans(plansFor(result, [0, 1, 2]));
@@ -1749,7 +1750,7 @@ describe('PDF labels', () =>
 
     it('applies new plans in chunks, and emails built later get their labels as they are built', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         expect(items()).toHaveLength(1);
         preview.setPdfPlans(plansFor(result, [0, 1, 2]));
@@ -1759,7 +1760,7 @@ describe('PDF labels', () =>
         expect(labelsOf(items()[2]!)).toEqual(['Not in the PDF: same signature as in email #1']);
 
         // Every email built: PDF_CHUNK_FACTOR emails per chunk (chunk size 1); ready only at the end.
-        const many = engineOf(
+        const many = analysisOf(
             Array.from({ length: PDF_CHUNK_FACTOR + 2 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Note ${String(k)}.\n\n${ALICE_SIGNATURE}` })),
         );
         preview.show(many);
@@ -1780,7 +1781,7 @@ describe('PDF labels', () =>
 
     it('notes an email the PDF keeps whole', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         const plans = plansFor(result, [0, 1, 2]);
@@ -1799,7 +1800,7 @@ describe('PDF labels', () =>
 
     it('failed plans: labels hidden, a note says so; reset() turns everything off', () =>
     {
-        const result = engineOf(benchThread());
+        const result = analysisOf(benchThread());
         preview.show(result);
         runAll();
         preview.setPdfPlans(plansFor(result, [0, 1, 2]));
