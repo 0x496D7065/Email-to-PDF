@@ -1,7 +1,7 @@
 // Header: what the preview list shows of each email (author, notes, attached
 // emails, rebuilt-email cards and their places). Shared types only, no code
-// (README.md, "Where things are"). page-logic/ (display-author,
-// message-notes, attached-links, rebuilt) computes it; page/ (preview,
+// (README.md, "Where things are"). web-page-logic/ (display-author,
+// message-notes, attached-links, rebuilt-email-display) computes it; web-page/ (preview,
 // review) shows it; pdf-export/model.ts reads RebuiltInPdf.
 
 import type { EmailAddress, ParseWarning } from './parsed-email';
@@ -19,7 +19,7 @@ export type AuthorSource =
     // Neither: the preview shows an "unknown sender" marker.
     | 'none';
 
-/** The unread-attached note of one email (see the top of Source/page-logic/attached-links.ts). */
+/** The unread-attached note of one email (see the top of Source/web-page-logic/attached-links.ts). */
 export type UnreadAttachedCode = 'attached-unread' | 'attached-unread-inside';
 
 export interface AttachedLinks
@@ -55,7 +55,7 @@ export type MessageNote =
     | { readonly kind: 'chars'; readonly code: 'coded-characters' }
     // Earlier emails in its quote could not (all) be rebuilt; the quote itself is untouched.
     | { readonly kind: 'rebuild'; readonly code: ReconstructionWarningCode }
-    // An email sent as an attachment, in it or in an email inside it, could not be read (task 8.13b-4, P3; Source/page-logic/attached-links.ts).
+    // An email sent as an attachment, in it or in an email inside it, could not be read (task 8.13b-4, P3; Source/web-page-logic/attached-links.ts).
     | { readonly kind: 'attached'; readonly code: UnreadAttachedCode };
 
 /** One place in the preview list: a real email (its list position) or a rebuilt entry (its id). */

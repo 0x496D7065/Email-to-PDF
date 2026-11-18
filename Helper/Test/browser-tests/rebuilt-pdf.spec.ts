@@ -1,6 +1,6 @@
 // Browser test of the emails rebuilt from quoted text IN THE PDF (milestone
-// 7, task 7.7, and task 8.3: Source/pdf-export/model.ts, Source/page/review.ts,
-// Source/page/page.ts), in each
+// 7, task 7.7, and task 8.3: Source/pdf-export/model.ts, Source/web-page/review.ts,
+// Source/web-page/mount-page.ts), in each
 // test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts), with the real pipeline and the real workers. The
 // downloaded file is read back as text (Helper/Test/test-support/pdf-reader.ts: the
@@ -35,7 +35,7 @@
 // error, nothing stored. Test data is made up (README.md, rule R7).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 

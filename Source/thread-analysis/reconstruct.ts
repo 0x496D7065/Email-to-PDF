@@ -6,7 +6,7 @@
 // to estimate the time of a quoted date written without a zone: user
 // decision, see quoted-date.ts). Output: one ReconstructedMessage per earlier
 // message, newest first (= in body order). The engine links them
-// (rebuild-links.ts); the preview (Source/page/preview.ts) and the PDF
+// (rebuild-links.ts); the preview (Source/web-page/preview.ts) and the PDF
 // (Source/pdf-export/model.ts) show them, marked as rebuilt.
 //
 // How it works:

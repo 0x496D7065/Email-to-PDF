@@ -20,7 +20,7 @@
  *
  * The Ko-fi donation page is the one entry: exactly this URL (no other
  * Ko-fi page, no http:, no longer path, no query), the href of the plain
- * link built by donationLink in Source/page/dom.ts. The page never loads it: the
+ * link built by donationLink in Source/web-page/safe-dom.ts. The page never loads it: the
  * browser only goes there, in a new tab, when the reader clicks the link.
  * The repository link will be the next entry, at publish time, e.g.
  *   'https://github.com/OWNER/REPO',

@@ -32,7 +32,7 @@ import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/th
 import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
 import { headerLinesEnd, holdsOwnText, holdsQuotedText } from './model';

@@ -48,7 +48,7 @@ const restrictedSyntax = [
     // el.setAttribute('onclick', ...) / ('srcdoc', ...) when the name is
     // written as a literal or a template literal (`on${x}`: its first
     // text part is checked). Names built at run time are caught by
-    // Source/page/dom.ts (el / setSafeAttribute), which refuses them.
+    // Source/web-page/safe-dom.ts (createSafeElement / setSafeAttribute), which refuses them.
     ...[
         ['setAttribute', 0],
         ['setAttributeNS', 1],

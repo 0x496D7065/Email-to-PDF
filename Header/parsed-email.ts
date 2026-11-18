@@ -1,6 +1,6 @@
 // Header: the parsed email. Shared types only, no code (README.md, "Where
-// things are"). email-reading/ produces it; thread-analysis/, page-logic/,
-// page/, pdf-export/ and worker-pipeline/ read it.
+// things are"). email-reading/ produces it; thread-analysis/, web-page-logic/,
+// web-page/, pdf-export/ and worker-pipeline/ read it.
 //
 // The normalized message structure: the one shape every parser produces.
 //

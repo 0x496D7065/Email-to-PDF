@@ -4,10 +4,10 @@
 // file only; it is never shipped.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pseudo } from '../../Helper/Test/test-support/test-locale';
-import { setLocale } from '../page/translations';
+import { setLocale } from '../web-page/translations';
 import { createPdfStrings } from './strings';
 
-vi.mock('../page/translations/catalog', async (importOriginal) =>
+vi.mock('../web-page/translations/catalog', async (importOriginal) =>
 {
     const { withTestLocales } = await import('../../Helper/Test/test-support/test-locale');
     return withTestLocales(await importOriginal(), ['xx']);

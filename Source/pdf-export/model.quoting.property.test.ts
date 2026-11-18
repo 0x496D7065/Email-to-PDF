@@ -30,7 +30,7 @@ import { quotingCase, quotingSentence, type QuotingCase } from '../../Helper/Tes
 import { DEFAULT_PARTS, runEngine, type EngineParts } from '../thread-analysis/engine';
 import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, noRepeat } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';

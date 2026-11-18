@@ -257,10 +257,10 @@ describe('checkSourceFonts', () =>
         ]);
         expect(
             checkSourceFonts(
-                [{ path: 'Source/pdf-export/fonts/A.woff', bytes: fontA }, { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB }, { path: 'Source/page/x.ttf', bytes: fontA }],
+                [{ path: 'Source/pdf-export/fonts/A.woff', bytes: fontA }, { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB }, { path: 'Source/web-page/x.ttf', bytes: fontA }],
                 fonts,
             ),
-        ).toEqual([expect.stringMatching(/^Source\/page\/x\.ttf: font file not listed/)]);
+        ).toEqual([expect.stringMatching(/^Source\/web-page\/x\.ttf: font file not listed/)]);
         expect(checkSourceFonts([{ path: 'Source/pdf-export/fonts/A.woff', bytes: fontA }], fonts)).toEqual([expect.stringMatching(/B\.woff: font file is missing/)]);
     });
 
@@ -269,13 +269,13 @@ describe('checkSourceFonts', () =>
         const files = [
             { path: 'Source/pdf-export/fonts/A.woff', bytes: fontA },
             { path: 'Source/pdf-export/fonts/B.woff', bytes: fontB },
-            { path: 'Source/page/B.woff', bytes: fontB },
+            { path: 'Source/web-page/B.woff', bytes: fontB },
         ];
-        expect(checkSourceFonts(files, fonts)).toEqual([expect.stringMatching(/^Source\/page\/B\.woff: font file not listed/)]);
+        expect(checkSourceFonts(files, fonts)).toEqual([expect.stringMatching(/^Source\/web-page\/B\.woff: font file not listed/)]);
         const real = PDF_FONT_FILES.map((f) => ({ path: f.file, bytes: new Uint8Array(0) }));
-        const moved = real.map((f) => (f.path === 'Source/pdf-export/fonts/IBMPlexSans-Bold.woff' ? { ...f, path: 'Source/page/IBMPlexSans-Bold.woff' } : f));
+        const moved = real.map((f) => (f.path === 'Source/pdf-export/fonts/IBMPlexSans-Bold.woff' ? { ...f, path: 'Source/web-page/IBMPlexSans-Bold.woff' } : f));
         const problems = checkSourceFonts(moved);
-        expect(problems).toContainEqual(expect.stringMatching(/^Source\/page\/IBMPlexSans-Bold\.woff: font file not listed/));
+        expect(problems).toContainEqual(expect.stringMatching(/^Source\/web-page\/IBMPlexSans-Bold\.woff: font file not listed/));
         expect(problems).toContainEqual(expect.stringMatching(/^Source\/pdf-export\/fonts\/IBMPlexSans-Bold\.woff: font file is missing/));
     });
 
@@ -310,10 +310,10 @@ describe('isBytesImportAllowed (the ?bytes plugin of vite.config.ts)', () =>
             '/home/dev/other/Source/pdf-export/fonts/A.woff',
             '/home/dev/proj/Source/pdf-export/fonts-x/A.woff',
             '/home/dev/proj/Source/pdf-export/fonts/sub/A.woff',
-            '/home/dev/proj/Source/pdf-export/fonts/../../page/A.woff',
+            '/home/dev/proj/Source/pdf-export/fonts/../../web-page/A.woff',
             '/home/dev/proj/Source/pdf-export/fonts/A.woff2',
             '/home/dev/proj/Source/pdf-export/fonts/A.ttf',
-            '/home/dev/proj/Source/page/A.woff',
+            '/home/dev/proj/Source/web-page/A.woff',
         ])
         {
             expect(isBytesImportAllowed(file, dir), file).toBe(false);

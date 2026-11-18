@@ -1,8 +1,8 @@
 // Header: the thread analysis result (duplicates, order, folded parts,
 // warnings). Shared types only, no code (README.md, "Where things are").
 // thread-analysis/ (engine.ts, runEngine) produces EngineResult; it crosses
-// the engine worker (engine-worker-messages.ts) and is read by page-logic/,
-// page/ and pdf-export/.
+// the engine worker (engine-worker-messages.ts) and is read by web-page-logic/,
+// web-page/ and pdf-export/.
 
 import type { NormalizedMessage, ParseErrorCode, ParseWarning } from './parsed-email';
 import type { EngineRebuilt, TimelineEntry } from './rebuilt-emails';
@@ -155,7 +155,7 @@ export interface EngineResult
      * Messages rebuilt from quoted text (step 6), by source (in `messages`
      * order), newest first; each says whether it is linked to a real message,
      * the same as another rebuilt one, or its own timeline entry. The preview
-     * shows the entries (Source/page-logic/rebuilt.ts), and so does the PDF
+     * shows the entries (Source/web-page-logic/rebuilt-email-display.ts), and so does the PDF
      * (Source/pdf-export/model.ts, the ones the reader chose).
      */
     readonly reconstructed: readonly EngineRebuilt[];

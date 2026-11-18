@@ -2,7 +2,7 @@
 // the page gets. Shared types only, no code (README.md, "Where things are").
 // The checks that every message really has this shape are isToPdfWorker /
 // isFromPdfWorker in Source/worker-pipeline/pdf-protocol.ts.
-// Used by worker-pipeline/ (pdf-protocol, pdf-worker, pdf-runner) and page/
+// Used by worker-pipeline/ (pdf-protocol, pdf-worker, pdf-runner) and web-page/
 // (pdf-job, download-step, page).
 
 import type { MessagePlan, OutputPolicy } from './output-plan';
@@ -15,10 +15,10 @@ export interface PdfJobInput
     readonly result: EngineResult;
     /** List positions of the included emails, in list order. */
     readonly positions: readonly number[];
-    /** One plan per position, same order (Source/page/pdf-labels.ts: the preview's own plans). */
+    /** One plan per position, same order (Source/web-page/pdf-labels.ts: the preview's own plans). */
     readonly plans: readonly MessagePlan[];
     /**
-     * Ids of the rebuilt emails the reader wants in the PDF (Source/page/review.ts,
+     * Ids of the rebuilt emails the reader wants in the PDF (Source/web-page/review.ts,
      * includedRebuilt; [] when the switch is off). Absent: none. The PDF still
      * applies the follow-source rule (Source/pdf-export/model.ts, planPdfOrder).
      */
@@ -30,7 +30,7 @@ export interface PdfJobInput
      */
     readonly rebuildingOff?: boolean;
     /**
-     * Ids of the rebuilt emails whose card the reader unticked (Source/page/review.ts,
+     * Ids of the rebuilt emails whose card the reader unticked (Source/web-page/review.ts,
      * untickedRebuilt): only their forwarded parts are left out of a forward
      * (Source/pdf-export/model.ts, BuildPdfInput.unticked, task 8.13a review round 2).
      * Absent: none.

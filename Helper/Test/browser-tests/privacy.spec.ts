@@ -1,5 +1,5 @@
 // Browser test of the privacy panel at the top of the page and the
-// disclaimer of step 3 (Source/page/app.ts; README.md, rules R1, R2 and R4), in
+// disclaimer of step 3 (Source/web-page/page-shell.ts; README.md, rules R1, R2 and R4), in
 // each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts).
 //
@@ -10,7 +10,7 @@
 // violation (Helper/Test/browser-tests/support/watch.ts). No accessibility library is used (no new
 // dependency): names, focus, headings and contrast are checked explicitly.
 import { expect, test, type Page } from '@playwright/test';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
 import { watchPage, withoutSelectConsole, withoutSelectReports, type Watch } from './support/watch.ts';

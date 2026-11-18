@@ -67,7 +67,7 @@ import type * as FontModule from '../../../Source/pdf-export/font-reader/font.ts
 import type * as ConfigModule from '../../../Source/pdf-export/page-layout/config.ts';
 import type * as EmlModule from '../../../Source/email-reading/eml.ts';
 import type * as MsgModule from '../../../Source/email-reading/msg.ts';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import { FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../test-data/manifest.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';

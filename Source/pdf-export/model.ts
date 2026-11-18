@@ -5,7 +5,7 @@
 //
 // buildPdfDocument() takes the engine result, the INCLUDED emails (list
 // positions, in list order) with their output plans (Source/thread-analysis/output-plan.ts,
-// the same plans the preview labels show, Source/page/pdf-labels.ts), the policy,
+// the same plans the preview labels show, Source/web-page/pdf-labels.ts), the policy,
 // the time zone, the generation moment and the fixed texts, and returns a
 // PdfDocument:
 // - cover: title, date range, people, email count, generation date and time
@@ -30,7 +30,7 @@
 // Rebuilt emails (milestone 7, tasks 7.7 and 8.3; brief section 8.6):
 // earlier emails rebuilt from the quoted text of an email
 // (Source/thread-analysis/rebuild-links.ts), the ones the reader chose (`rebuilt`,
-// Source/page/review.ts includedRebuilt), at their place in the timeline
+// Source/web-page/review.ts includedRebuilt), at their place in the timeline
 // (planPdfOrder). USER DECISION 2026-11-02 (task 8.3, an approved exception
 // to brief section 8.6, for the PDF only): in the PDF a rebuilt email looks
 // and is numbered exactly like a real one. Nothing in the PDF says or shows
@@ -41,12 +41,12 @@
 // a day alone as that day, a date that could not be read as written), no
 // marker in the index or the bookmarks. On the cover it counts in "Emails", the date
 // range and the people like a real email. The
-// PREVIEW keeps marking rebuilt emails (Source/page/preview.ts), unchanged.
+// PREVIEW keeps marking rebuilt emails (Source/web-page/preview.ts), unchanged.
 // PdfEmail.rebuilt and PdfIndexEntry.rebuilt still tell the two apart in
 // the data (for tests and checks); the renderer never prints them.
 // FOLLOW-SOURCE RULE (user decision Q1 (a)): a rebuilt email is in the PDF
 // only while at least one email it was read from is (rebuiltInPdf in
-// Source/page-logic/rebuilt.ts); for a text quoted in several emails, the text
+// Source/web-page-logic/rebuilt-email-display.ts); for a text quoted in several emails, the text
 // and header shown are the ones read from its own source when that one is
 // in the PDF, else from the source in the PDF that comes first.
 // NO-REPEAT RULE (user decision 2026-11-06, task 8.10): when "Print full
@@ -60,7 +60,7 @@
 // also printed on their own pages (the plan keeps a forwarded part, rule 1
 // of Source/thread-analysis/output-plan.ts). The preview labels each such part with
 // the email that prints it, from the same calculation (noRepeat,
-// printedElsewhereParts, pdfRanges; Source/page-logic/printed-elsewhere.ts,
+// printedElsewhereParts, pdfRanges; Source/web-page-logic/printed-elsewhere.ts,
 // task 8.11).
 // - THE WRITER'S OWN TEXT STAYS, ATTRIBUTION FIRST (user decision
 //   2026-11-06, B1; review round 3 of task 8.10, findings 1 and S5): text
@@ -170,13 +170,13 @@
 // restored one counts as printed for the next ones, so a paragraph two
 // emails each leave out "because the other one has it" comes back once, in
 // the first. It may still print twice (accepted: never nowhere). The same
-// calculation gives the preview's labels (Source/page-logic/printed-elsewhere.ts:
+// calculation gives the preview's labels (Source/web-page-logic/printed-elsewhere.ts:
 // a restored piece is labelled "In the PDF"). Quoted history under a reply
 // header or behind ">" marks is not such a piece: it is left out by the
 // plan's own rule, whether or not its email is in the PDF, as before.
 // NO-TEXT EMAILS (task 8.14; user decisions 2026-11-09 and 2026-11-15, a
 // NARROW, deliberate exception to README.md, rule R6, and to brief section
-// 8.5): an email with no text (Source/page-logic/no-text.ts, hasNoPrintableText:
+// 8.5): an email with no text (Source/web-page-logic/no-printable-text.ts, hasNoPrintableText:
 // its body is only white space, and no parser warning says its text could
 // not be read) is left out of the PDF entirely, attachments or not, in both
 // modes: no slot (planPdfOrder), so no number (the others are numbered
@@ -195,7 +195,7 @@
 // lines) in the email holding it (attachedBlockParts); one the reader
 // unticked is cut as before (Q3).
 // The "(no text)" placeholder stays for a text that could not be read (Q2:
-// the warnings of Source/page-logic/no-text.ts) and for a body with text whose
+// the warnings of Source/web-page-logic/no-printable-text.ts) and for a body with text whose
 // every part is printed elsewhere (a forward whose forwarded emails are on
 // pages of their own, see the no-repeat rule; Q6).
 // FULL ORIGINAL TEXT RULE ("Print full original text"; user decision
@@ -231,7 +231,7 @@
 // No notes in the PDF (user rule 2026-11-05, task 8.8): the PDF is the
 // final product. Nothing in it says that something went wrong, may be
 // missing or inaccurate, or how the tool works; the app says all of that in
-// step 2 before the download (Source/page/review.ts, Source/page/preview.ts). The PDF
+// step 2 before the download (Source/web-page/review.ts, Source/web-page/preview.ts). The PDF
 // keeps only the placeholders of blank fields ("(no subject)", "(no date)",
 // "Unknown sender", "(no text)" (only where NO-TEXT EMAILS above keeps it),
 // "(attachment without a name)"), the page
@@ -266,11 +266,11 @@ import { headerLabelCounts } from '../thread-analysis/quoted-header';
 import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-analysis/rebuild-links';
 import { mapOffsets } from '../thread-analysis/same-text-offsets';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../thread-analysis/time-format';
-import { displayAuthor } from '../page-logic/display-author';
-import { FILE_CHAIN_SEPARATOR, fileChain } from '../page-logic/file-chain';
-import { joinMailboxes } from '../page-logic/mailbox-list';
-import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../page-logic/no-text';
-import { previewOrder, rebuiltDate, rebuiltInPdf } from '../page-logic/rebuilt';
+import { displayAuthor } from '../web-page-logic/display-author';
+import { FILE_CHAIN_SEPARATOR, fileChain } from '../web-page-logic/file-chain';
+import { joinMailboxes } from '../web-page-logic/mailbox-list';
+import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
+import { previewOrder, rebuiltDate, rebuiltInPdf } from '../web-page-logic/rebuilt-email-display';
 import { printedText } from './printed-check';
 import { bodyLines, inlineRuns, joinKeptLines, lineText } from './text';
 // Pure and backend-neutral (it only reads Source/pdf-export/text.ts): the bookmark cut follows the same rule as the copy layer.
@@ -287,9 +287,9 @@ import type { EngineAttached, EngineMessage, EngineResult } from '../../Header/t
 export interface BuildPdfInput
 {
     readonly result: EngineResult;
-    /** List positions of the included emails, in list order (Source/page/review.ts, includedPositions). */
+    /** List positions of the included emails, in list order (Source/web-page/review.ts, includedPositions). */
     readonly positions: readonly number[];
-    /** One plan per position, same order (Source/page/pdf-labels.ts, currentPlans). */
+    /** One plan per position, same order (Source/web-page/pdf-labels.ts, currentPlans). */
     readonly plans: readonly MessagePlan[];
     readonly policy: OutputPolicy;
     /** IANA zone name (an invalid one falls back to UTC; the cover then names UTC). */
@@ -299,13 +299,13 @@ export interface BuildPdfInput
     readonly strings: PdfStrings;
     /**
      * Ids (in `result.reconstructed`) of the rebuilt emails the reader wants in
-     * the PDF (Source/page/review.ts, includedRebuilt; [] or absent when the switch
+     * the PDF (Source/web-page/review.ts, includedRebuilt; [] or absent when the switch
      * is off). Each still follows the emails it was read from (planPdfOrder).
      * Ignored (none in the PDF) when `policy.unfoldEverything` is true.
      */
     readonly rebuilt?: readonly number[];
     /**
-     * True when "Rebuild conversation from replies" is off (Source/page/review.ts,
+     * True when "Rebuild conversation from replies" is off (Source/web-page/review.ts,
      * rebuiltShown false): no rebuilt email figures at all, so none counts as
      * unticked and a forwarded part stays in its forward as the plan says
      * (task 8.13a, Q2 applies only to a rebuilt email the reader UNTICKED):
@@ -314,7 +314,7 @@ export interface BuildPdfInput
     readonly rebuildingOff?: boolean;
     /**
      * Ids (in `result.reconstructed`) of the rebuilt emails whose card the
-     * reader saw and UNTICKED while the switch is on (Source/page/review.ts,
+     * reader saw and UNTICKED while the switch is on (Source/web-page/review.ts,
      * untickedRebuilt; task 8.13a review round 2): only a forwarded part of
      * one of these is left out of its forward (Q2). An entry merely missing
      * from `rebuilt` (a card that could not be shown, a list that fell back
@@ -2087,7 +2087,7 @@ function printedNowhere(
  * The order of the PDF (planPdfOrder, no rebuilt email under "Print full
  * original text") and the no-repeat rule's parts, exactly as
  * buildPdfDocument works them out: it calls this, and so does the preview
- * (Source/page-logic/printed-elsewhere.ts, task 8.11), so the labels say what
+ * (Source/web-page-logic/printed-elsewhere.ts, task 8.11), so the labels say what
  * the PDF does. Then the PRINTED SOMEWHERE check (printedNowhere), on the
  * same data, for both.
  */
@@ -2267,7 +2267,7 @@ interface EmailParts
     readonly people: ParticipantSource;
 }
 
-/** Between the levels of an attached email's File row (Source/page-logic/file-chain.ts). */
+/** Between the levels of an attached email's File row (Source/web-page-logic/file-chain.ts). */
 export { FILE_CHAIN_SEPARATOR };
 
 /**
@@ -2278,7 +2278,7 @@ export { FILE_CHAIN_SEPARATOR };
  * joined by FILE_CHAIN_SEPARATOR, an attachment without a name shown as
  * "(attached email N)" with its number at that level (EngineAttached.path:
  * the n-th attached email of the email holding it). The text comes from
- * Source/page-logic/file-chain.ts, shared with the preview's "Also in" row (task
+ * Source/web-page-logic/file-chain.ts, shared with the preview's "Also in" row (task
  * 8.13b-4, P2), so the two never disagree.
  */
 function fileRowLine(result: EngineResult, index: number, fileName: string, strings: PdfStrings, s: Sanitizer): PdfLine

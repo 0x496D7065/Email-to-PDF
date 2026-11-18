@@ -25,7 +25,7 @@ import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';

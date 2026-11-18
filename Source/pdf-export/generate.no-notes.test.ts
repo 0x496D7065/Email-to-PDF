@@ -3,7 +3,7 @@
 // (user rule 2026-11-05): the PDF is the final product and holds NO notes.
 // Nothing in it says that something went wrong, may be missing or may be
 // inaccurate, or how the tool works: the app says all of that in step 2
-// (Source/page/review.ts, Source/page/preview.ts).
+// (Source/web-page/review.ts, Source/web-page/preview.ts).
 //
 // One set of synthetic emails holds every case that used to get a note: a
 // thread whose last email gives rebuilt emails (one with a time read without
@@ -27,9 +27,9 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test/test-support/pdf-reader';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { CATALOG } from '../page/translations/catalog';
-import { isPluralForms } from '../page/translations';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { CATALOG } from '../web-page/translations/catalog';
+import { isPluralForms } from '../web-page/translations';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
 import { buildPdfDocument } from './model';

@@ -13,9 +13,9 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Locator, type Page } from '@playwright/test';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
-import { en } from '../../../Source/page/translations/en.ts';
-import { fr } from '../../../Source/page/translations/fr.ts';
-import { nl } from '../../../Source/page/translations/nl.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
+import { fr } from '../../../Source/web-page/translations/fr.ts';
+import { nl } from '../../../Source/web-page/translations/nl.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
 declare global

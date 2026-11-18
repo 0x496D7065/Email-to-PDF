@@ -1,7 +1,7 @@
 // Header: earlier emails rebuilt from quoted text, and where they fit in the
 // timeline. Shared types only, no code (README.md, "Where things are").
 // thread-analysis/ (reconstruct, quoted-date, rebuild-links) produces them as
-// part of EngineResult; page-logic/, page/ and pdf-export/ show and print them.
+// part of EngineResult; web-page-logic/, web-page/ and pdf-export/ show and print them.
 
 import type { EmailAddress } from './parsed-email';
 

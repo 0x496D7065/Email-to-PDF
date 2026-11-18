@@ -1,5 +1,5 @@
 // A synthetic, test-only language for the language-switching tests: every
-// English string of Source/page/translations/en.ts with each ASCII letter swapped for an
+// English string of Source/web-page/translations/en.ts with each ASCII letter swapped for an
 // accented look-alike and the whole text in brackets, e.g. "Add your emails"
 // -> "[Àďď ýöüŕ éɱàîļš]". Placeholders ({count}, {name}...) are kept as they
 // are, so t() fills them in exactly like in English. After a switch, any
@@ -13,8 +13,8 @@
 //     withTestLocales(await importOriginal(), ['xx']));
 // so the shipped page has English only.
 
-import { en } from '../../../Source/page/translations/en';
-import type { Messages } from '../../../Source/page/translations/index';
+import { en } from '../../../Source/web-page/translations/en';
+import type { Messages } from '../../../Source/web-page/translations/index';
 
 /** The code of the synthetic language (not a real language). */
 export const TEST_LOCALE = 'xx';
@@ -68,7 +68,7 @@ export function testLanguageName(locale: string): string
     return `[Pseudo ${locale}]`;
 }
 
-/** The shape of Source/page/translations/catalog.ts. */
+/** The shape of Source/web-page/translations/catalog.ts. */
 interface Catalog
 {
     readonly CATALOG: Readonly<Record<string, Messages>>;

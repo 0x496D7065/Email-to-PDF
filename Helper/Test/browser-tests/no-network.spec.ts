@@ -7,8 +7,8 @@
 // local preview server, so even a broken CSP could not reach the internet.
 import { expect, test, type BrowserContext, type Page, type Request } from '@playwright/test';
 import { cspForHeader, cspForMeta, PERMISSIONS_POLICY, REFERRER_POLICY } from '../../../Source/security-headers/headers.ts';
-import { DONATION_IMAGE, DONATION_URL } from '../../../Source/page/dom.ts';
-import { en } from '../../../Source/page/translations/en.ts';
+import { DONATION_IMAGE, DONATION_URL } from '../../../Source/web-page/safe-dom.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 
 /** What we keep from each `securitypolicyviolation` event. */
 interface Violation
@@ -287,7 +287,7 @@ test('the meta CSP alone blocks fetch() and remote images', async ({ page, brows
     await expectImageBlockedByCsp(browserName);
 });
 
-// The Ko-fi donation button (Source/page/dom.ts, donationLink): the one link to
+// The Ko-fi donation button (Source/web-page/safe-dom.ts, donationLink): the one link to
 // another website (README.md, rule R1). It must be a plain link that loads
 // nothing from Ko-fi, with Ko-fi's image served by this site.
 test('the Ko-fi button is a plain link with its image from this site, and Ko-fi is never contacted', async ({ page, browserName }) =>

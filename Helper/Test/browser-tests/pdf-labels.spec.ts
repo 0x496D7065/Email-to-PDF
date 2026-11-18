@@ -1,5 +1,5 @@
-// Browser test of the preview's PDF labels (Source/page/preview.ts,
-// Source/page/pdf-labels.ts): each folded part says, in words, whether it will be
+// Browser test of the preview's PDF labels (Source/web-page/preview.ts,
+// Source/web-page/pdf-labels.ts): each folded part says, in words, whether it will be
 // in the PDF, exactly as the PDF's own plan (Source/thread-analysis/output-plan.ts)
 // decides; unticking an email or ticking "Print full original text" changes
 // the labels, and a label that may be stale is never shown. In each test
@@ -13,7 +13,7 @@
 // (Helper/Test/browser-tests/support/watch.ts).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 

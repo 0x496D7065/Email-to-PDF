@@ -1,5 +1,5 @@
 // The PDF document model and emails with no text (task 8.14; user decisions
-// 2026-11-09 and 2026-11-15; Source/page-logic/no-text.ts): an email whose body
+// 2026-11-09 and 2026-11-15; Source/web-page-logic/no-printable-text.ts): an email whose body
 // is only white space, and whose text was read, is left out of the PDF
 // entirely, attachments or not, in both modes. No slot, no number (the
 // others are numbered 1..k without a gap), no index entry, no bookmark, and
@@ -19,10 +19,10 @@ import { readOutline, readPageRuns, readPdf, textLines } from '../../Helper/Test
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { attachedLinks } from '../page-logic/attached-links';
-import { hasNoPrintableText, pdfPositions } from '../page-logic/no-text';
-import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { attachedLinks } from '../web-page-logic/attached-links';
+import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
+import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { loadPdfFonts } from './load-fonts';
 import { buildPdfDocument, planPdfOrder } from './model';

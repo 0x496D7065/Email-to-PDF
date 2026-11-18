@@ -55,7 +55,7 @@ describe('test code guard', () =>
 {
     it('finds the test code in every scanned folder, and no app code or fixture', () =>
     {
-        for (const path of ['/Source/page/app.test.ts', '/Helper/Test/browser-tests/no-network.spec.ts', '/Helper/Test/browser-tests/support/watch.ts', '/Helper/Test/test-support/pdf-reader.ts', '/Helper/build-checks/no-network-rules.test.ts', '/Helper/lint-rules/body-brace-style.test.ts'])
+        for (const path of ['/Source/web-page/page-shell.test.ts', '/Helper/Test/browser-tests/no-network.spec.ts', '/Helper/Test/browser-tests/support/watch.ts', '/Helper/Test/test-support/pdf-reader.ts', '/Helper/build-checks/no-network-rules.test.ts', '/Helper/lint-rules/body-brace-style.test.ts'])
         {
             expect(codePaths, path).toContain(path);
         }
@@ -98,7 +98,7 @@ describe('guard exemptions', () =>
             return;
         }
         expect(exemptionsFor(first.file)).toContain(first.text);
-        expect(exemptionsFor('Source/page/app.test.ts')).toEqual([]);
+        expect(exemptionsFor('Source/web-page/page-shell.test.ts')).toEqual([]);
         expect(exemptionsFor(EXEMPTIONS_FILE)).toEqual(GUARD_EXEMPTIONS.map((e) => e.text));
     });
 });

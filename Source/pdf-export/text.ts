@@ -264,7 +264,7 @@ export function inlineRuns(text: string, role: PdfRole): SanitizedRuns
  * How many characters of `text` the PDF writes as a visible code (group 1
  * of the contract; line breaks are not counted): the same count inlineRuns
  * and bodyLines give for it. For the app, which says so before the PDF is
- * made (Source/page-logic/message-notes.ts; task 8.8: the PDF has no note).
+ * made (Source/web-page-logic/message-notes.ts; task 8.8: the PDF has no note).
  */
 export function codedCharacterCount(text: string): number
 {

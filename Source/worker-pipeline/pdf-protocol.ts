@@ -17,7 +17,7 @@
 
 import { generatePdf } from '../pdf-export/generate';
 import { PDF_FONT_NAMES, parsePdfFonts } from '../pdf-export/parse-fonts';
-import { isSupportedLocale } from '../page/translations';
+import { isSupportedLocale } from '../web-page/translations';
 import type { GeneratedPdf } from '../../Header/pdf-document-model';
 import type { FromPdfWorker, MakePdfRequest, ToPdfWorker } from '../../Header/pdf-worker-messages';
 

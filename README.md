@@ -575,7 +575,7 @@ microphone, location, and so on). The single source of all of these is
 
 HTML bodies are turned into plain text with an inert parser (one that runs
 no scripts and loads nothing) and shown with `textContent`, never as HTML.
-The page builds elements only through `Source/page/dom.ts`, which sets text only
+The page builds elements only through `Source/web-page/safe-dom.ts`, which sets text only
 through `textContent` and refuses event handler attributes and unsafe
 URLs. Attachments are never opened or processed, only listed, with one
 exception: an email attached inside an `.eml` email (inline or sent as an
@@ -707,7 +707,7 @@ at all (see "Emails with no text" below).
 - **Emails with no text:** an email whose text is empty or only white
   space (spaces, tabs, empty lines, non-breaking spaces) is left out of
   the PDF entirely, even when it has attachments, with or without "Print
-  full original text" (`Source/page-logic/no-text.ts`). This is a second,
+  full original text" (`Source/web-page-logic/no-printable-text.ts`). This is a second,
   narrow exception: such an email has nothing to print, so it gets no
   page, no index line, no bookmark and no number (the other emails are
   numbered without a gap), and it does not count on the cover (the number
@@ -903,8 +903,8 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `Source/thread-analysis/` | Duplicates, order, quoted history, signatures, earlier emails rebuilt from quotes. |
 | `Source/pdf-export/` | The PDF: its content, `font-reader/`, `page-layout/`, `pdf-writer/` and the bundled `fonts/`. |
 | `Source/worker-pipeline/` | Starts the analysis and PDF workers and chains all the steps (`process-files`). The reading worker lives in `Source/email-reading/`. |
-| `Source/page/` | The page the user sees; `translations/` holds every visible word (English, French, Dutch). |
-| `Source/page-logic/` | What the page shows, as pure functions (no DOM). |
+| `Source/web-page/` | The page the user sees; `translations/` holds every visible word (English, French, Dutch). |
+| `Source/web-page-logic/` | What the page shows, as pure functions (no DOM). |
 | `Source/offline-copy/` | The service worker (offline copy of the site's own files). |
 | `Source/security-headers/` | The Content Security Policy and other security headers. |
 | `Source/library-shims/` | Small browser replacements for library dependencies. |

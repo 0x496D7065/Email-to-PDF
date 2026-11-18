@@ -1,6 +1,6 @@
 // Header: processing a batch of dropped files (read, parse, analyse), as the
 // page sees it. Shared types only, no code (README.md, "Where things are").
-// worker-pipeline/ (process-files, read-files) does the work; page/
+// worker-pipeline/ (process-files, read-files) does the work; web-page/
 // (add-files, page, preview, review) starts it and shows the result.
 
 import type { EngineFailure } from './engine-worker-messages';

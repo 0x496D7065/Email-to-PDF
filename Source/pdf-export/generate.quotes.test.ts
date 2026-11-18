@@ -20,7 +20,7 @@ import { buildThread, type QuoteStyle, type ThreadMessage } from '../../Helper/T
 import { chain } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
 import { loadPdfFonts } from './load-fonts';

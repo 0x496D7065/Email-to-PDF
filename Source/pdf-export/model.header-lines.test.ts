@@ -39,7 +39,7 @@ import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { findReplyHeaders } from '../thread-analysis/reply-header';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, noRepeat, pdfRanges } from './model';
 import { createPdfStrings } from './strings';
 import { bodyLines, lineText } from './text';

@@ -7,7 +7,7 @@
 // license links and donation link and REJECTS everything else. None of them
 // is personal data (the donation link holds only the project's public
 // working name). Other tests take the donation link from the app's code
-// (DONATION_URL in Source/page/dom.ts) instead of writing it out.
+// (DONATION_URL in Source/web-page/safe-dom.ts) instead of writing it out.
 //
 // This file itself necessarily contains every exempted string, so the guard
 // blanks all of them here too (exemptionsFor below). test-code-guard.test.ts

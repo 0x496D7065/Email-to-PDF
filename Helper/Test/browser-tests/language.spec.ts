@@ -1,5 +1,5 @@
 // Browser test of the language picker and the French and Dutch pages
-// (Source/page/app.ts, Source/page/page.ts, Source/page/translations/fr.ts, Source/page/translations/nl.ts), in
+// (Source/web-page/page-shell.ts, Source/web-page/mount-page.ts, Source/web-page/translations/fr.ts, Source/web-page/translations/nl.ts), in
 // each test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts):
 //
@@ -22,9 +22,9 @@
 // *.test addresses).
 import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
-import { en } from '../../../Source/page/translations/en.ts';
-import { fr } from '../../../Source/page/translations/fr.ts';
-import { nl } from '../../../Source/page/translations/nl.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
+import { fr } from '../../../Source/web-page/translations/fr.ts';
+import { nl } from '../../../Source/web-page/translations/nl.ts';
 import { readOutline, readPdf } from '../test-support/pdf-reader.ts';
 import { contrastFailures } from './support/contrast.ts';
 import {

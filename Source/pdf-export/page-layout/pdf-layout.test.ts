@@ -9,7 +9,7 @@ import { buildThread } from '../../../Helper/Test/test-support/thread-builder';
 import { chain } from '../../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../../thread-analysis/output-plan';
-import { rebuiltEntries } from '../../page-logic/rebuilt';
+import { rebuiltEntries } from '../../web-page-logic/rebuilt-email-display';
 import { readWoffFont } from '../font-reader/font';
 import { PDF_FONTS } from '../fonts';
 import { buildPdfDocument, emailAnchor } from '../model';

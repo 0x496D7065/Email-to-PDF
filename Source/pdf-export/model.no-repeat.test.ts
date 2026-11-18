@@ -20,8 +20,8 @@ import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/te
 import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { hasNoPrintableText } from '../page-logic/no-text';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { hasNoPrintableText } from '../web-page-logic/no-printable-text';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import {
     buildPdfDocument,
     extraTail,

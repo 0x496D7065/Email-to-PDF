@@ -11,7 +11,7 @@
 // Helper/Test/browser-tests/support/watch.ts for the detectors.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 
@@ -104,7 +104,7 @@ async function openWithFixtures(page: Page): Promise<Locator>
     await expect(items).toHaveCount(6);
     await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
     // The PDF plans arrive a moment later and redraw the fold blocks (see
-    // Source/page/pdf-labels.ts): wait for them, so no later click or focus is lost.
+    // Source/web-page/pdf-labels.ts): wait for them, so no later click or focus is lost.
     await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready', { timeout: 15_000 });
     return items;
 }

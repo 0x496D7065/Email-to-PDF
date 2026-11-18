@@ -2,7 +2,7 @@
 // text with roles), its fixed texts, and the finished PDF. Shared types only,
 // no code (README.md, "Where things are"). pdf-export/model.ts
 // (buildPdfDocument) builds it; pdf-export/page-layout/ lays it out;
-// page-logic/ reads the printed ranges for the preview;
+// web-page-logic/ reads the printed ranges for the preview;
 // pdf-export/generate.ts returns GeneratedPdf to the PDF worker.
 
 import type { PlanRange } from './output-plan';

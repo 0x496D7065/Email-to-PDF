@@ -34,7 +34,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 import { cspForHeader, cspForMeta, cspForServiceWorker, PERMISSIONS_POLICY, REFERRER_POLICY } from '../../../Source/security-headers/headers.ts';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import {
     engineOf,
     untoleratedReports,

@@ -1,5 +1,5 @@
 // Browser test of step 2's counts, include checkboxes and notes
-// (Source/page/review.ts; README.md, rules R1, R2, R4, R5 and R6), in each test
+// (Source/web-page/review.ts; README.md, rules R1, R2, R4, R5 and R6), in each test
 // browser against the BUILT site served by `vite preview` (see playwright.config.ts).
 // The real pipeline runs on synthetic fixtures from Helper/Test/test-data/eml plus
 // one made-up file that is not an email, added through the file input.
@@ -9,7 +9,7 @@
 // violation (page or worker) and no console error. See Helper/Test/browser-tests/support/watch.ts.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { en } from '../../../Source/page/translations/en.ts';
+import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { engineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, type Watch } from './support/watch.ts';
 

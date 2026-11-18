@@ -812,7 +812,7 @@ export function planOutput(messages: readonly PlanInput[], policy: OutputPolicy 
 /**
  * planOutput one email at a time: yields the plan of each email, in order
  * (the same plans, by the same code). The page uses it to spread the work
- * over several short tasks (Source/page/pdf-labels.ts), so it never freezes. The
+ * over several short tasks (Source/web-page/pdf-labels.ts), so it never freezes. The
  * caller must not change `messages` while it runs.
  */
 export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputPolicy = DEFAULT_OUTPUT_POLICY): Generator<MessagePlan, void, undefined>

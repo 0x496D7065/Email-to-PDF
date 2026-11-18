@@ -1,7 +1,7 @@
 // Header: the output plan, what of each email is printed, folded or left
 // out. Shared types only, no code (README.md, "Where things are").
 // thread-analysis/output-plan.ts (planOutput) makes it from the user's
-// OutputPolicy; page-logic/, page/, pdf-export/ and the PDF worker use it.
+// OutputPolicy; web-page-logic/, web-page/, pdf-export/ and the PDF worker use it.
 
 /** What the PDF leaves out. */
 export interface OutputPolicy

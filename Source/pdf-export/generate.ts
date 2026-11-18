@@ -24,15 +24,15 @@ export type PdfFonts = Readonly<Record<PdfFontName, ParsedFont>>;
 export interface GeneratePdfInput
 {
     readonly result: EngineResult;
-    /** List positions of the included emails, in list order (Source/page/pdf-labels.ts, PdfPlans). */
+    /** List positions of the included emails, in list order (Source/web-page/pdf-labels.ts, PdfPlans). */
     readonly positions: readonly number[];
     /** One plan per position, same order. */
     readonly plans: readonly MessagePlan[];
-    /** Ids of the rebuilt emails chosen (Source/page/review.ts, includedRebuilt); absent or [] for none. See BuildPdfInput.rebuilt. */
+    /** Ids of the rebuilt emails chosen (Source/web-page/review.ts, includedRebuilt); absent or [] for none. See BuildPdfInput.rebuilt. */
     readonly rebuilt?: readonly number[];
     /** True when "Rebuild conversation from replies" is off. See BuildPdfInput.rebuildingOff. */
     readonly rebuildingOff?: boolean;
-    /** Ids of the rebuilt emails the reader unticked (Source/page/review.ts, untickedRebuilt). See BuildPdfInput.unticked. */
+    /** Ids of the rebuilt emails the reader unticked (Source/web-page/review.ts, untickedRebuilt). See BuildPdfInput.unticked. */
     readonly unticked?: readonly number[];
     readonly policy: OutputPolicy;
     /** IANA zone the dates are shown in (an invalid one falls back to UTC; the cover then names UTC). */

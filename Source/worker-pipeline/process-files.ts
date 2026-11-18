@@ -19,7 +19,7 @@
 //   say what was read. This function never throws and never rejects, so the
 //   page always gets something to show.
 //
-// Cancelling ("Clear everything", Source/page/page.ts): the `signal` option
+// Cancelling ("Clear everything", Source/web-page/mount-page.ts): the `signal` option
 // terminates the running worker, stops the batch and drops what it read.
 //
 // Everything stays in memory only (README.md, rule R5).

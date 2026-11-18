@@ -14,7 +14,7 @@ import { detectQuotedOverlap } from '../thread-analysis/overlap';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import { printedElsewhereRanges } from '../page-logic/printed-elsewhere';
+import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { buildPdfDocument, noRepeat } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
@@ -91,7 +91,7 @@ const docOf = (out: EngineResult): PdfDocument =>
 const printedIn = (d: PdfDocument, text: string): number => d.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
 const positionOf = (out: EngineResult, name: string): number => out.messages.findIndex((m) => m.message.subject === `${name} subject`);
 
-/** The preview's ranges for every email (Source/page-logic/printed-elsewhere.ts), and the restored pieces (noRepeat). */
+/** The preview's ranges for every email (Source/web-page-logic/printed-elsewhere.ts), and the restored pieces (noRepeat). */
 function previewOf(out: EngineResult)
 {
     const positions = out.messages.map((_, k) => k);

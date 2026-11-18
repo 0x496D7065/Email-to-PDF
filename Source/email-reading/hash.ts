@@ -1,7 +1,7 @@
 // SHA-256 of a file's bytes. The app uses it to recognize a file again: the
 // reader's include/exclude choices are kept by file hash
-// (Source/page-logic/selection.ts) and so are the ids of rebuilt emails
-// (Source/page-logic/rebuilt.ts). It is no longer printed in the PDF (user
+// (Source/web-page-logic/email-selection.ts) and so are the ids of rebuilt emails
+// (Source/web-page-logic/rebuilt-email-display.ts). It is no longer printed in the PDF (user
 // decision 2026-11-09, task 8.12).
 //
 // Uses the Web Crypto API (`crypto.subtle`), built into every modern browser

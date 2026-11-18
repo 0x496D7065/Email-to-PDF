@@ -1,6 +1,6 @@
 // Header: what the preview shows of each email's PDF (in, out or partly; its
 // blocks and their labels). Shared types only, no code (README.md, "Where
-// things are"). page-logic/ (pdf-plan, display-blocks) computes it; page/
+// things are"). web-page-logic/ (pdf-plan, display-blocks) computes it; web-page/
 // (preview, pdf-labels) shows it.
 
 import type { MessagePlan, PlanReason } from './output-plan';
@@ -19,7 +19,7 @@ export interface PdfView
     readonly signatureFrom: ReadonlyMap<number, number>;
     /**
      * The body's ranges as the PDF prints them, when the no-repeat rule
-     * leaves something out of it (Source/page-logic/printed-elsewhere.ts); they
+     * leaves something out of it (Source/web-page-logic/printed-elsewhere.ts); they
      * replace `plan.ranges` for the labels. Absent: the plan's ranges.
      */
     readonly pdfRanges?: readonly PdfRange[];
@@ -73,7 +73,7 @@ export interface DisplayBlock
     readonly related: readonly number[];
     /**
      * What to call the block ("signature", "quoted text", ...): the reason
-     * covering the most characters (see the rules at the top of Source/page-logic/pdf-plan.ts);
+     * covering the most characters (see the rules at the top of Source/web-page-logic/pdf-plan.ts);
      * null when shown.
      */
     readonly label: FoldReason | null;

@@ -43,8 +43,8 @@ import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { runEngine } from '../thread-analysis/engine';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
-import { hasNoPrintableText, pdfPositions } from '../page-logic/no-text';
-import { rebuiltEntries } from '../page-logic/rebuilt';
+import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PrintedPart } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
@@ -457,7 +457,7 @@ describe('PDF document model properties', () =>
                 const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
                 const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
                 const included = positions.map((p) => result.messages[p]!);
-                // Each document is built with plans of its own policy, as the app does (Source/page/pdf-labels.ts).
+                // Each document is built with plans of its own policy, as the app does (Source/web-page/pdf-labels.ts).
                 const defaultPlans = planOutput(included, DEFAULT_OUTPUT_POLICY);
                 const everythingPlans = planOutput(included, policy);
                 const rebuilt = rebuiltEntries(result).map((r) => r.id);

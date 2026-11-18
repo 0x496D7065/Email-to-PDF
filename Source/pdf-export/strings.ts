@@ -2,7 +2,7 @@
 // (Source/pdf-export/model.ts) as one object, so the model stays a pure function of
 // its inputs and a test (or another language) can pass its own.
 //
-// createPdfStrings(locale) builds them from the page's strings (Source/page/translations)
+// createPdfStrings(locale) builds them from the page's strings (Source/web-page/translations)
 // in the language asked for: the PDF's own texts live under `pdf.document`,
 // and the labels it shares with the preview (From, To, "(no subject)", file
 // sizes...) are the preview's, so the two always use the same words. The
@@ -13,10 +13,10 @@
 // from the caller already sanitized by the model; the result is plain text
 // the renderer writes as text, never markup (README.md, rule R4).
 
-import { translator } from '../page/translations';
+import { translator } from '../web-page/translations';
 import type { PdfStrings } from '../../Header/pdf-document-model';
 
-/** One decimal under 10 (1.4 KB), whole numbers above (12 KB): the same rule as the preview (Source/page/preview.ts, sizeText). */
+/** One decimal under 10 (1.4 KB), whole numbers above (12 KB): the same rule as the preview (Source/web-page/preview.ts, sizeText). */
 function roundSize(n: number): number
 {
     return n < 10 ? Math.round(n * 10) / 10 : Math.round(n);
