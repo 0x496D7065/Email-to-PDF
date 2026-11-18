@@ -11,7 +11,7 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { loadPdfFonts } from './load-bundled-fonts';
 import type { OutputPolicy } from '../../Header/output-plan';
 

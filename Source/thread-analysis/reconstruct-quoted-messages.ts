@@ -7,7 +7,7 @@
 // decision, see quoted-date.ts). Output: one ReconstructedMessage per earlier
 // message, newest first (= in body order). The engine links them
 // (link-rebuilt-messages.ts); the preview (Source/web-page/preview.ts) and the PDF
-// (Source/pdf-export/model.ts) show them, marked as rebuilt.
+// (Source/pdf-export/build-pdf-document.ts) show them, marked as rebuilt.
 //
 // How it works:
 // 1. findReplyHeaders (reply-header.ts) finds the quote headers, with its own

@@ -3,14 +3,14 @@
 // run's copy text, and enforced again by the backend on every ToUnicode
 // entry, /ActualText and bookmark title it writes (defence in depth).
 //
-// The contract with the renderer (Source/pdf-export/text.ts) has three groups of
+// The contract with the renderer (Source/pdf-export/pdf-text-transforms.ts) has three groups of
 // special characters. Here:
 // - group 1 (controls, bidi controls, noncharacters, lone surrogates, tag
 //   characters outside the three kept flags...) never reaches the backend;
 //   if it does anyway, each code point (each code unit for a lone
 //   surrogate) becomes U+FFFD, so nothing that could hide or reorder text
 //   is ever written. Tags outside a kept flag count as group 1 here, as in
-//   text.ts ("any other tag run is coded in full");
+//   pdf-text-transforms.ts ("any other tag run is coded in full");
 // - group 2 (DRAWN_AS_NOTHING: ZWSP, ZWNJ, ZWJ, LRM / RLM / ALM, CGJ,
 //   U+2060 to U+2064, BOM, variation selectors, tags) is dropped, EXCEPT
 //   the parts of emoji:
@@ -30,7 +30,7 @@
 //
 // The neighbours looked at are those in the INPUT, so the result never
 // depends on what was dropped. Pure (README.md, rule R7).
-import { isDrawnAsNothing, KEPT_FLAG_TAGS, SOFT_HYPHEN } from '../text';
+import { isDrawnAsNothing, KEPT_FLAG_TAGS, SOFT_HYPHEN } from '../pdf-text-transforms';
 
 const REPLACEMENT_CHARACTER = 0xfffd;
 const ZWJ = 0x200d;
@@ -49,7 +49,7 @@ function isPictographic(codePoint: number | undefined): boolean
 
 const isSkinTone = (codePoint: number | undefined): boolean => codePoint !== undefined && codePoint >= 0x1f3fb && codePoint <= 0x1f3ff;
 
-/** Group 1 of the contract in Source/pdf-export/text.ts, for one code point (or one lone surrogate code unit). */
+/** Group 1 of the contract in Source/pdf-export/pdf-text-transforms.ts, for one code point (or one lone surrogate code unit). */
 export function isGroup1(codePoint: number): boolean
 {
     if (codePoint < 0x20)

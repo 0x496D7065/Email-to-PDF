@@ -24,7 +24,7 @@ import { parseFont, readWoffFont } from '../font-reader/parse-font';
 import { readSfntDirectory } from '../font-reader/sfnt-directory';
 import { unwrapWoff } from '../font-reader/unwrap-woff';
 import { PDF_FONTS } from '../bundled-fonts';
-import { isDrawnAsNothing } from '../text';
+import { isDrawnAsNothing } from '../pdf-text-transforms';
 import { MAX_OUTLINE_DEPTH, MAX_PAGES, PdfWriter, writePdf } from './write-pdf';
 import { MAX_OUTPUT_BYTES } from './pdf-file-builder';
 import { PdfWriteError } from './pdf-syntax';

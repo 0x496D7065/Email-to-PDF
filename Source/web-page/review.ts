@@ -296,7 +296,7 @@ export interface Review
      * checkbox is unticked, while rebuilt cards are shown (rebuiltShown); [] otherwise.
      * An entry left out of includedRebuilt for any other reason (no card, a
      * list that fell back, its source unticked, a broken entry) is not in it.
-     * The PDF leaves out the forwarded parts of these only (Source/pdf-export/model.ts,
+     * The PDF leaves out the forwarded parts of these only (Source/pdf-export/build-pdf-document.ts,
      * BuildPdfInput.unticked).
      */
     untickedRebuilt(): readonly number[];

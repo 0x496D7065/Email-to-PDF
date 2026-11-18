@@ -164,7 +164,7 @@
 // attached reply; since round 4 that block keeps what the reply's page
 // leaves out). So, after every other decision, each such piece the plan leaves
 // out (printedNowhere) is checked against the text the PDF really prints
-// (Source/pdf-export/printed-check.ts: words only, whole sentences); one printed
+// (Source/pdf-export/printed-somewhere-check.ts: words only, whole sentences); one printed
 // nowhere is printed where it is after all (NoRepeat.restored; the piece
 // keeps the plan's reason, kept). Pieces are checked in PDF order and a
 // restored one counts as printed for the next ones, so a paragraph two
@@ -206,19 +206,19 @@
 //
 // Body: the plan's KEPT ranges, less the parts printed elsewhere (the
 // no-repeat rule above), plus the pieces PRINTED SOMEWHERE restores,
-// joined in order (Source/pdf-export/text.ts, joinKept):
+// joined in order (Source/pdf-export/pdf-text-transforms.ts, joinKept):
 // nothing is written where a part is left out (README.md, rule R6, the
 // exception for the PDF), except a line break when two kept parts would
 // otherwise run together on one line. With `policy.unfoldEverything` the
 // whole body is used, whatever the plan says. A plan that is missing or not
 // a valid list of ranges (null included) keeps the whole body too (flag
 // `planFallback`): when unsure, keep. Then the display-only transforms of
-// Source/pdf-export/text.ts apply (line ends, tabs, control and broken characters as
+// Source/pdf-export/pdf-text-transforms.ts apply (line ends, tabs, control and broken characters as
 // codes in runs of role 'code', blank lines). That file also holds the
 // contract with the renderer about invisible characters.
 // Quote marks (user decisions 2026-11-02, task 8.1, and 2026-11-05, task
 // 8.6, PDF only): a body line that starts with ">" quote marks is shown
-// WITHOUT them (Source/pdf-export/text.ts transform g). Quote levels are not kept:
+// WITHOUT them (Source/pdf-export/pdf-text-transforms.ts transform g). Quote levels are not kept:
 // the renderer indents every body line by one fixed step, one tab (4 spaces
 // of the body font; Source/pdf-export/page-layout/layout-config.ts, bodyIndentSpaces, task 8.9),
 // quoted or not. Only the prefix is
@@ -271,9 +271,9 @@ import { FILE_CHAIN_SEPARATOR, fileChain } from '../web-page-logic/file-chain';
 import { joinMailboxes } from '../web-page-logic/mailbox-list';
 import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { previewOrder, rebuiltDate, rebuiltInPdf } from '../web-page-logic/rebuilt-email-display';
-import { printedText } from './printed-check';
-import { bodyLines, inlineRuns, joinKeptLines, lineText } from './text';
-// Pure and backend-neutral (it only reads Source/pdf-export/text.ts): the bookmark cut follows the same rule as the copy layer.
+import { printedText } from './printed-somewhere-check';
+import { bodyLines, inlineRuns, joinKeptLines, lineText } from './pdf-text-transforms';
+// Pure and backend-neutral (it only reads Source/pdf-export/pdf-text-transforms.ts): the bookmark cut follows the same rule as the copy layer.
 import { copyLayerCutIndex } from './pdf-writer/copy-layer-text';
 import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
@@ -394,7 +394,7 @@ function bookmarkCut(points: readonly string[], limit: number): number
 
 /**
  * A bookmark title from texts already made one-line by inlineRuns (no line
- * breaks, no tabs, control characters as codes, Source/pdf-export/text.ts): cut to
+ * breaks, no tabs, control characters as codes, Source/pdf-export/pdf-text-transforms.ts): cut to
  * MAX_BOOKMARK_LENGTH code points, ending with U+2026 when cut. The cut
  * never splits an emoji, a flag or a letter from its accents (bookmarkCut);
  * trailing spaces before the cut mark are dropped.
@@ -1891,7 +1891,7 @@ export interface NoRepeat
      * Per rebuilt entry in the PDF (its id), the blocks of original header
      * lines moved to the top of its text, in order (task 8.13a, Q4; see
      * printedElsewhere): each exactly as written in its source body (quote
-     * marks included: the PDF drops them, Source/pdf-export/text.ts), ending with a
+     * marks included: the PDF drops them, Source/pdf-export/pdf-text-transforms.ts), ending with a
      * line break. An entry with none is not in the map.
      */
     readonly moved: ReadonlyMap<number, readonly string[]>;
@@ -1919,7 +1919,7 @@ export interface NoRepeat
  * header or behind ">" marks is not a candidate: it is left out as the
  * mail app's quoted history (rule 2), as before, whether or not its email
  * is in the PDF. Touching parts are joined into one piece. Each piece, in PDF order, is
- * checked against the text the PDF prints (Source/pdf-export/printed-check.ts: every
+ * checked against the text the PDF prints (Source/pdf-export/printed-somewhere-check.ts: every
  * real email's printed ranges after the no-repeat cut, every rebuilt
  * email's text with its moved header lines, and the pieces restored before
  * it); one that is not found is restored, and its text then counts as
@@ -1927,7 +1927,7 @@ export interface NoRepeat
  * "because the other one has it" is printed once, in the first). What is
  * printed only grows, so a piece found stays found. Costs nothing when
  * there is no candidate; else about linear in the text of the PDF (see
- * printed-check.ts).
+ * printed-somewhere-check.ts).
  */
 function printedNowhere(
     result: EngineResult,
@@ -2151,7 +2151,7 @@ function bodyTextOf(
 
 /**
  * What the PDF shows of a body, before the display transforms; with
- * `notLineStarts` for bodyLines (Source/pdf-export/text.ts, joinKeptLines).
+ * `notLineStarts` for bodyLines (Source/pdf-export/pdf-text-transforms.ts, joinKeptLines).
  * `elsewhere`: the parts of this body printed as emails of their own
  * (printedElsewhere), left out (withoutPrintedElsewhere) unless the whole
  * body is printed (see the top of this file).
@@ -2167,7 +2167,7 @@ export function pdfBodyText(
     return { text, planFallback, notLineStarts };
 }
 
-/** Sanitizes one-line texts (Source/pdf-export/text.ts, inlineRuns) and adds up the characters replaced by a code. */
+/** Sanitizes one-line texts (Source/pdf-export/pdf-text-transforms.ts, inlineRuns) and adds up the characters replaced by a code. */
 interface Sanitizer
 {
     count: number;
@@ -2543,7 +2543,7 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
  * real email (task 8.3), with the copy chosen by rebuiltInPdf. Its text is
  * the rebuilt text (its own quote marks already removed), whole: no plan
  * applies to it. Deeper quotes left in it (">" lines of an older email it
- * quoted) lose their quote marks like a real email's (Source/pdf-export/text.ts, transform g).
+ * quoted) lose their quote marks like a real email's (Source/pdf-export/pdf-text-transforms.ts, transform g).
  * `moved` (task 8.13a, Q4; NoRepeat.moved): original header lines its
  * header rows cannot show, left out of the emails that quote it; they come
  * first in its text, as plain text (the same role, font and indent as the

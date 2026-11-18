@@ -1,5 +1,5 @@
 // The fixed texts of the PDF, handed to the document model
-// (Source/pdf-export/model.ts) as one object, so the model stays a pure function of
+// (Source/pdf-export/build-pdf-document.ts) as one object, so the model stays a pure function of
 // its inputs and a test (or another language) can pass its own.
 //
 // createPdfStrings(locale) builds them from the page's strings (Source/web-page/translations)

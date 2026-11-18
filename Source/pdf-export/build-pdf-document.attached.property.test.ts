@@ -13,7 +13,7 @@
 //   how often one is printed twice is counted (expected: never);
 // - an unticked email's sentence is printed nowhere (Q3: an unticked
 //   attached email is left out of the email holding it too);
-// - the no-repeat rule alone (Source/pdf-export/model.ts, blockClaims: only what an
+// - the no-repeat rule alone (Source/pdf-export/build-pdf-document.ts, blockClaims: only what an
 //   attached email's page prints is left out of the email holding it,
 //   review round 4), with an overlap detector that ignores the holder links
 //   (`holds`, Source/thread-analysis/overlap-quote-detection.ts): still at least once.
@@ -26,9 +26,9 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument } from './model';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { buildPdfDocument } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
 import type { EngineResult } from '../../Header/thread-analysis-result';

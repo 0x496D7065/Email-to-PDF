@@ -1,4 +1,4 @@
-// The layout: the document model (Source/pdf-export/model.ts) in, the laid-out
+// The layout: the document model (Source/pdf-export/build-pdf-document.ts) in, the laid-out
 // document (Header/laid-out-document.ts) out, ready for a PdfBackend's
 // render(). Everything is placed here; the backend draws exactly that.
 //
@@ -48,13 +48,13 @@
 // config.bodyIndentSpaces, default 4, normal spaces of the body font at the
 // body size, measured from the font) and wrapped to the width left. One
 // step for every line, quoted or not (quote marks are removed,
-// Source/pdf-export/text.ts transform g), for real and rebuilt emails alike. The
+// Source/pdf-export/pdf-text-transforms.ts transform g), for real and rebuilt emails alike. The
 // "(no text)" placeholder of an empty text (the email's notes) is indented
 // the same way, where the text would be (task 8.10). The heading, header
 // rows and attachments stay at the margin.
 //
 // Each email's heading is a named destination (its anchor, emailAnchor in
-// model.ts), and so are the top of the cover ("cover") and the index
+// build-pdf-document.ts), and so are the top of the cover ("cover") and the index
 // heading ("index"). anchorPages maps each email anchor to its page as a
 // 0-based index, the same numbering as LaidOutDestination.page (the page
 // shown to a reader, and in the index, is the index + 1).

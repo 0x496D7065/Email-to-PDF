@@ -1,4 +1,4 @@
-// Tests of the "is this text printed somewhere?" check (Source/pdf-export/printed-check.ts;
+// Tests of the "is this text printed somewhere?" check (Source/pdf-export/printed-somewhere-check.ts;
 // task 8.13b-3, review round 3, M2): words only (quote marks, wrapping,
 // punctuation and case do not matter), the whole text must be covered by
 // long enough runs, runs never join two printed pieces, and it stays fast
@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { MIN_RUN_WORDS } from '../thread-analysis/overlap-quote-detection';
-import { printedText } from './printed-check';
+import { printedText } from './printed-somewhere-check';
 
 const S1 = 'The twelve oak desks will arrive on Thursday morning and the movers need the loading bay free until noon.';
 const S2 = 'Please send the signed delivery note back to the front office before the end of the month, thank you.';

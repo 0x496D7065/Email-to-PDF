@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readWoffFont } from '../font-reader/parse-font';
 import { PDF_FONTS } from '../bundled-fonts';
-import { sanitizeRuns } from '../text';
+import { sanitizeRuns } from '../pdf-text-transforms';
 import { DEFAULT_LAYOUT_CONFIG } from './layout-config';
 import { SPACE_ITEM } from './shape-text';
 import { type LaidLine, Typesetter } from './typesetter';
@@ -160,7 +160,7 @@ describe('glyph mapping', () =>
         expect(lines[0]!.width).toBeCloseTo(bodyWidth('abcde'), 6);
     });
 
-    it('keeps the code style of the codes made by Source/pdf-export/text.ts', () =>
+    it('keeps the code style of the codes made by Source/pdf-export/pdf-text-transforms.ts', () =>
     {
         const { runs } = wrap(sanitizeRuns('bell\u{7}here', 'body').runs);
         const line = runs[0]!;

@@ -9,11 +9,11 @@
 // is left out too, labelled "Not in the PDF: forwarded email whose rebuilt
 // email is unticked". A piece the plan leaves out that the PDF prints after
 // all because it is printed nowhere else (the PRINTED SOMEWHERE check of
-// Source/pdf-export/model.ts, NoRepeat.restored; task 8.13b-3, review round 3) comes
+// Source/pdf-export/build-pdf-document.ts, NoRepeat.restored; task 8.13b-3, review round 3) comes
 // back kept, so its label says "In the PDF".
 //
 // It decides nothing on its own: it calls the PDF model's own functions
-// (Source/pdf-export/model.ts: noRepeat, which buildPdfDocument calls too, and
+// (Source/pdf-export/build-pdf-document.ts: noRepeat, which buildPdfDocument calls too, and
 // pdfRanges, which cuts the plan with the same call the PDF makes) on the
 // same input the PDF step gets (Source/web-page/mount-page.ts, pdfInput: the included
 // emails, their plans, the policy, the rebuilt emails chosen and those
@@ -23,7 +23,7 @@
 //
 // Pure function, no DOM (README.md, rule R7). Nothing is stored.
 
-import { noRepeat, pdfRanges } from '../pdf-export/model';
+import { noRepeat, pdfRanges } from '../pdf-export/build-pdf-document';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { PdfRange } from '../../Header/pdf-document-model';
 import type { EngineResult } from '../../Header/thread-analysis-result';
@@ -39,15 +39,15 @@ export interface PrintedElsewhereInput
     readonly policy: OutputPolicy;
     /** Ids of the rebuilt emails chosen (Source/web-page/review.ts, includedRebuilt; ignored under "Print full original text"). */
     readonly rebuilt: readonly number[];
-    /** True when "Rebuild conversation from replies" is off (Source/pdf-export/model.ts, BuildPdfInput.rebuildingOff). Absent: false. */
+    /** True when "Rebuild conversation from replies" is off (Source/pdf-export/build-pdf-document.ts, BuildPdfInput.rebuildingOff). Absent: false. */
     readonly rebuildingOff?: boolean;
-    /** Ids of the rebuilt emails the reader unticked (Source/web-page/review.ts, untickedRebuilt; Source/pdf-export/model.ts, BuildPdfInput.unticked). Absent: none. */
+    /** Ids of the rebuilt emails the reader unticked (Source/web-page/review.ts, untickedRebuilt; Source/pdf-export/build-pdf-document.ts, BuildPdfInput.unticked). Absent: none. */
     readonly unticked?: readonly number[];
 }
 
 /**
  * Per list position, the ranges of its body as the PDF prints them
- * (Source/pdf-export/model.ts, pdfRanges): only the emails the no-repeat rule leaves
+ * (Source/pdf-export/build-pdf-document.ts, pdfRanges): only the emails the no-repeat rule leaves
  * something out of, or that get a piece back (NoRepeat.restored); an email
  * not in the map is printed as its plan says.
  * Empty under "Print full original text" (every email is printed whole).

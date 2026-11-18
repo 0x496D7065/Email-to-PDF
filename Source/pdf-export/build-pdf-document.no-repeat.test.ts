@@ -1,5 +1,5 @@
 // Unit tests for the no-repeat rule of the PDF document model (user
-// decision 2026-11-06, task 8.10; Source/pdf-export/model.ts: printedElsewhere,
+// decision 2026-11-06, task 8.10; Source/pdf-export/build-pdf-document.ts: printedElsewhere,
 // headerShownInPdf, withoutPrintedElsewhere, buildPdfDocument): when "Print
 // full original text" is off, a part of an email's text that the PDF
 // prints as an email of its own is left out of that email's text, header
@@ -13,7 +13,7 @@
 // rebuilt email not in the PDF leaves its text where the plan puts it; with
 // "Print full original text" everything is printed as written.
 // The whole PDF path is checked over every test conversation in
-// Source/pdf-export/generate.no-repeat.test.ts. Synthetic data only
+// Source/pdf-export/generate-pdf.no-repeat.test.ts. Synthetic data only
 // (Helper/Test/test-support/thread-cases.ts; README.md, rule R7).
 import { describe, expect, it } from 'vitest';
 import { buildThread, instantOf, type ThreadMessage } from '../../Helper/Test/test-support/thread-builder';
@@ -37,9 +37,9 @@ import {
     printedElsewhereParts,
     withoutPrintedElsewhere,
     type BodyIntervals,
-} from './model';
-import { createPdfStrings } from './strings';
-import { bodyLines, lineText } from './text';
+} from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { bodyLines, lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';

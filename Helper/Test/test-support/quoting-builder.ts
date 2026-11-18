@@ -1,6 +1,6 @@
 // Test support (task 8.13b-3, review round 3, finding M2): random small
 // conversations in which emails QUOTE each other, for the "collapse, never
-// delete" property tests (Source/pdf-export/model.quoting.property.test.ts) and for
+// delete" property tests (Source/pdf-export/build-pdf-document.quoting.property.test.ts) and for
 // comparing two versions of the tool on the same inputs.
 //
 // Each case is a few emails (2 to 7). Each one has a sentence of its own

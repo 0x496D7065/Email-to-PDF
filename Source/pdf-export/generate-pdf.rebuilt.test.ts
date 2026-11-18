@@ -16,10 +16,10 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../web-page/translations';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { createPdfStrings } from './strings';
+import { createPdfStrings } from './pdf-strings';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';
 
@@ -75,7 +75,7 @@ function between(all: string, start: string, ...ends: string[]): string
     return all.slice(from, stops.length === 0 ? undefined : Math.min(...stops));
 }
 
-/** What the PDF used to write for a rebuilt email (before task 8.3), in `locale` (see Source/pdf-export/model.rebuilt.test.ts). */
+/** What the PDF used to write for a rebuilt email (before task 8.3), in `locale` (see Source/pdf-export/build-pdf-document.rebuilt.test.ts). */
 function removedTexts(locale: 'en' | 'fr' | 'nl'): { fragments: string[]; word: RegExp }
 {
     const { t } = translator(locale);

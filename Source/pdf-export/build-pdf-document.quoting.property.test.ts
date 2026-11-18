@@ -14,7 +14,7 @@
 //   some attached emails also dropped as files of their own (copies, merged).
 // Random ticks and random rebuilt emails chosen. Checked:
 // - every ticked email's own sentence is printed at least once in the PDF
-//   (the PRINTED SOMEWHERE check, Source/pdf-export/model.ts, and the engine's
+//   (the PRINTED SOMEWHERE check, Source/pdf-export/build-pdf-document.ts, and the engine's
 //   withHeldReferences, Source/thread-analysis/overlap-quote-detection.ts); how often one is printed
 //   twice is counted and reported (allowed: restoring may print twice);
 // - an unticked email's sentence is printed nowhere when no ticked email's
@@ -31,9 +31,9 @@ import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts 
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, noRepeat } from './model';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { buildPdfDocument, noRepeat } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfEmail } from '../../Header/pdf-document-model';

@@ -38,7 +38,7 @@
 // (Source/thread-analysis/output-plan.ts, mapped by Source/web-page-logic/pdf-plan.ts). The plans
 // are worked out by Source/web-page/pdf-labels.ts and handed over with setPdfPlans().
 // With "Print full original text" off, a part the PDF prints as an email of
-// its own (the no-repeat rule of Source/pdf-export/model.ts, task 8.10) is labelled
+// its own (the no-repeat rule of Source/pdf-export/build-pdf-document.ts, task 8.10) is labelled
 // "Not in this email in the PDF: printed as email #N" instead (task 8.11;
 // the views carry the PDF's own cut, Source/web-page-logic/printed-elsewhere.ts).
 // Rules:

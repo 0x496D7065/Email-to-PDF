@@ -6,7 +6,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readWoffFont } from '../../pdf-export/font-reader/parse-font';
 import { PDF_FONTS } from '../../pdf-export/bundled-fonts';
-import { createPdfStrings } from '../../pdf-export/strings';
+import { createPdfStrings } from '../../pdf-export/pdf-strings';
 import { en } from './en';
 import { fr } from './fr';
 import { isPluralForms, type Messages, pickLocale, placeholdersIn, translator } from './index';

@@ -31,7 +31,7 @@
 // emails it was read from (user decision Q1 (a), task 7.7; rebuiltInPdf):
 // it is in the PDF only while one of them is. The review applies both
 // (Source/web-page/review.ts, includedRebuilt) and the PDF applies the follow-source
-// rule again with its own list of emails (Source/pdf-export/model.ts, planPdfOrder).
+// rule again with its own list of emails (Source/pdf-export/build-pdf-document.ts, planPdfOrder).
 // And while "Print full original text" is ticked (OutputPolicy
 // .unfoldEverything; user decisions 2026-10-28 and 2026-10-29, tasks 7.8b
 // and 7.8c), NO rebuilt message is shown or goes into the PDF: the source

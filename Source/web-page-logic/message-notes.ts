@@ -14,7 +14,7 @@
 
 import { isDisplayableMs } from '../thread-analysis/time-format';
 // Pure, no DOM: the PDF's own rule for which characters become a code.
-import { codedCharacterCount } from '../pdf-export/text';
+import { codedCharacterCount } from '../pdf-export/pdf-text-transforms';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { ParseWarning } from '../../Header/parsed-email';
 import type { MessageNote, UnreadAttachedCode } from '../../Header/preview-display';
@@ -73,7 +73,7 @@ void [parseWarningsComplete, dedupeWarningsComplete, engineWarningsComplete, reb
  * notes above.
  * 'pdf-kept-all-empty-elsewhere' (task 8.11, finding S1, done in task
  * 8.13a): rule 4 keeps the whole email, but the PDF's no-repeat rule
- * (Source/pdf-export/model.ts) still leaves out of it the parts it prints as emails
+ * (Source/pdf-export/build-pdf-document.ts) still leaves out of it the parts it prints as emails
  * of their own, so "the whole email" would not be true.
  */
 export const PDF_NOTES = ['pdf-kept-all-empty', 'pdf-kept-all-empty-elsewhere', 'pdf-fallback'] as const;
@@ -118,7 +118,7 @@ export function relatedListNumbers(related: readonly number[], ownPosition: numb
 
 /**
  * How many characters of an email the PDF writes as codes such as
- * "[U+0000]" (Source/pdf-export/text.ts, group 1: control characters, broken
+ * "[U+0000]" (Source/pdf-export/pdf-text-transforms.ts, group 1: control characters, broken
  * characters and the like): in the texts the PDF can show of it, which are
  * its header fields, attachment names and types, file names, its date as
  * written when that date could not be read, and its whole text (the parts

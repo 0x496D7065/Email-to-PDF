@@ -10,11 +10,11 @@
 // (Source/web-page/review.ts).
 //
 // The rule (hasNoPrintableText) is the only place that decides it. The PDF
-// model (Source/pdf-export/model.ts, planPdfOrder), the preview's note, the counts and
+// model (Source/pdf-export/build-pdf-document.ts, planPdfOrder), the preview's note, the counts and
 // the download button (Source/web-page/mount-page.ts) all ask it, so they cannot disagree.
 // It depends on the email alone: never on the mode, the ticks or the plans.
 // - "No text" is exactly what the PDF would show as an empty text: the body
-//   after the PDF's display transforms (Source/pdf-export/text.ts, bodyLines) has no
+//   after the PDF's display transforms (Source/pdf-export/pdf-text-transforms.ts, bodyLines) has no
 //   line at all. A line with only white space as JavaScript's `\s` defines
 //   it (spaces, tabs, line breaks, U+00A0, U+FEFF and the other Unicode
 //   spaces) is blank. Anything else is TEXT and keeps the email in the PDF:
@@ -41,7 +41,7 @@
 //
 // Pure functions, no DOM (README.md, rule R7). Nothing is stored.
 
-import { bodyLines } from '../pdf-export/text';
+import { bodyLines } from '../pdf-export/pdf-text-transforms';
 import type { NormalizedMessage, ParseWarning } from '../../Header/parsed-email';
 import type { EngineRebuilt } from '../../Header/rebuilt-emails';
 import type { EngineResult } from '../../Header/thread-analysis-result';

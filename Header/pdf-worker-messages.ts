@@ -20,19 +20,19 @@ export interface PdfJobInput
     /**
      * Ids of the rebuilt emails the reader wants in the PDF (Source/web-page/review.ts,
      * includedRebuilt; [] when the switch is off). Absent: none. The PDF still
-     * applies the follow-source rule (Source/pdf-export/model.ts, planPdfOrder).
+     * applies the follow-source rule (Source/pdf-export/build-pdf-document.ts, planPdfOrder).
      */
     readonly rebuilt?: readonly number[];
     /**
      * True when "Rebuild conversation from replies" is off: no rebuilt email
-     * counts as unticked (Source/pdf-export/model.ts, BuildPdfInput.rebuildingOff, task
+     * counts as unticked (Source/pdf-export/build-pdf-document.ts, BuildPdfInput.rebuildingOff, task
      * 8.13a). Absent: false.
      */
     readonly rebuildingOff?: boolean;
     /**
      * Ids of the rebuilt emails whose card the reader unticked (Source/web-page/review.ts,
      * untickedRebuilt): only their forwarded parts are left out of a forward
-     * (Source/pdf-export/model.ts, BuildPdfInput.unticked, task 8.13a review round 2).
+     * (Source/pdf-export/build-pdf-document.ts, BuildPdfInput.unticked, task 8.13a review round 2).
      * Absent: none.
      */
     readonly unticked?: readonly number[];

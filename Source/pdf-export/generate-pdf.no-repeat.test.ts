@@ -1,4 +1,4 @@
-// The no-repeat rule (user decision 2026-11-06, task 8.10; Source/pdf-export/model.ts,
+// The no-repeat rule (user decision 2026-11-06, task 8.10; Source/pdf-export/build-pdf-document.ts,
 // printedElsewhere): when "Print full original text" is off, no email is
 // printed twice in the PDF. A part of an email's text that the PDF prints
 // as an email of its own (a rebuilt email, or the real file a rebuilt one
@@ -21,7 +21,7 @@
 //   email inside an unmarked Outlook quote is cut from the last email and
 //   printed as its rebuilt email).
 // Header lines are not counted here: only the emails' own sentences are
-// (Source/pdf-export/model.header-lines.test.ts checks them).
+// (Source/pdf-export/build-pdf-document.header-lines.test.ts checks them).
 // An email of the conversation is found by its own sentence (thread-cases.ts,
 // SENTENCES: one per email, unique in a conversation), white space ignored
 // (a line may wrap anywhere). Synthetic data only (README.md, rule R7).
@@ -33,9 +33,9 @@ import { readDests, readPageRuns, readPdf, textLines } from '../../Helper/Test/t
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { headerLinesEnd, holdsOwnText, holdsQuotedText } from './model';
+import { headerLinesEnd, holdsOwnText, holdsQuotedText } from './build-pdf-document';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';
@@ -262,7 +262,7 @@ describe('no email twice in the PDF (task 8.10), every conversation of thread-ca
                 // cannot be proved a quote. Its place holds no quoted text, so it is cut from the last email
                 // like any other place and printed once, as its rebuilt email (with its header lines on
                 // top). The writer's answer next to a quote the plan checked still stays (B1, see
-                // Source/pdf-export/model.no-repeat.test.ts).
+                // Source/pdf-export/build-pdf-document.no-repeat.test.ts).
                 const got = counts(texts, sentences(c));
                 expect(got).toEqual(once(c.messages!.length));
                 // The cases where option A repeated a sentence (PINNED_REPEATS): each is now in its rebuilt email only.

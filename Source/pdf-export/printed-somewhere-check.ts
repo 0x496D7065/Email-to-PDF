@@ -2,7 +2,7 @@
 // round 3, finding M2; collapse, never delete, README.md rule R6).
 //
 // WHAT IT IS USED FOR. The PDF model's PRINTED SOMEWHERE check
-// (Source/pdf-export/model.ts, printedNowhere) asks this module about CANDIDATES
+// (Source/pdf-export/build-pdf-document.ts, printedNowhere) asks this module about CANDIDATES
 // only: in a real email in the PDF whose plan is used (valid, not a
 // fallback), a piece its plan leaves out (not a signature) that lies in a
 // folded segment whose ONLY reason is 'quoted-overlap' and that is linked

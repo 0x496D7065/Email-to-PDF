@@ -1,9 +1,9 @@
 // Header: the PDF's content before layout (cover, index, emails as lines of
 // text with roles), its fixed texts, and the finished PDF. Shared types only,
-// no code (README.md, "Where things are"). pdf-export/model.ts
+// no code (README.md, "Where things are"). pdf-export/build-pdf-document.ts
 // (buildPdfDocument) builds it; pdf-export/page-layout/ lays it out;
 // web-page-logic/ reads the printed ranges for the preview;
-// pdf-export/generate.ts returns GeneratedPdf to the PDF worker.
+// pdf-export/generate-pdf.ts returns GeneratedPdf to the PDF worker.
 
 import type { PlanRange } from './output-plan';
 
@@ -86,7 +86,7 @@ export interface PdfEmailFlags
     readonly planFallback: boolean;
     /** Some text was converted from HTML (the layout may differ from what the sender saw). */
     readonly htmlConverted: boolean;
-    /** Control or broken characters of this email shown as codes (Source/pdf-export/text.ts, group 1). */
+    /** Control or broken characters of this email shown as codes (Source/pdf-export/pdf-text-transforms.ts, group 1). */
     readonly controlChars: number;
     /** The no-repeat rule left out text of this body that the PDF prints as emails of their own (task 8.10; data only). */
     readonly printedElsewhere: boolean;
@@ -127,9 +127,9 @@ export interface PdfEmail
      * row: it has no file).
      */
     readonly fields: readonly PdfFieldRow[];
-    /** Lines above the text (role 'muted'): only the "(no text)" placeholder of an empty text (task 8.8: the PDF has no notes; task 8.14: see NO-TEXT EMAILS at the top of Source/pdf-export/model.ts). */
+    /** Lines above the text (role 'muted'): only the "(no text)" placeholder of an empty text (task 8.8: the PDF has no notes; task 8.14: see NO-TEXT EMAILS at the top of Source/pdf-export/build-pdf-document.ts). */
     readonly notes: readonly PdfLine[];
-    /** The text: one entry per line, [] for an empty line (see Source/pdf-export/text.ts). */
+    /** The text: one entry per line, [] for an empty line (see Source/pdf-export/pdf-text-transforms.ts). */
     readonly body: readonly PdfLine[];
     /** One line per attachment (listed only, never opened); null when there is none. */
     readonly attachments: { readonly label: string; readonly items: readonly PdfLine[] } | null;

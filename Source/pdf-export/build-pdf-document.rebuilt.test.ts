@@ -1,5 +1,5 @@
 // Unit tests for the emails rebuilt from quoted text in the PDF document
-// model (Source/pdf-export/model.ts: planPdfOrder, buildPdfDocument; tasks 7.7 and
+// model (Source/pdf-export/build-pdf-document.ts: planPdfOrder, buildPdfDocument; tasks 7.7 and
 // 8.3): their place, the numbering, the follow-source rule, the switch,
 // what a rebuilt email shows, the index, the cover, and the hashes of real
 // files only. USER DECISION 2026-11-02 (task 8.3, PDF only): a rebuilt email
@@ -14,9 +14,9 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../web-page/translations';
 import { previewOrder, rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder } from './model';
-import { createPdfStrings } from './strings';
-import { bodyLines, lineText } from './text';
+import { buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { bodyLines, lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfBlock, PdfDocument, PdfEmail, PdfLine, PdfStrings } from '../../Header/pdf-document-model';

@@ -7,7 +7,7 @@
 // font size. Colours are grey levels (0 black, 1 white). layoutPdf checks
 // the config first (validateLayoutConfig) and throws a clear Error for one
 // it cannot lay out.
-import { TAB_WIDTH } from '../text';
+import { TAB_WIDTH } from '../pdf-text-transforms';
 import type { LaidOutColor, LayoutConfig, TextStyle } from '../../../Header/laid-out-document';
 import type { PdfRole } from '../../../Header/pdf-document-model';
 

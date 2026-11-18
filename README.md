@@ -805,7 +805,7 @@ already there, in full, in the email that quotes them, which keeps all of
 it (folded in the preview, whole in the PDF). Unticking it brings back the
 earlier choices exactly.
 
-A second display change, in the PDF only (`Source/pdf-export/text.ts`): the quote
+A second display change, in the PDF only (`Source/pdf-export/pdf-text-transforms.ts`): the quote
 marks at the start of a line (one or more ">", the spaces and invisible
 characters before each, and one space or no-break space after the last)
 are not printed. The invisible characters are the ones the PDF draws as

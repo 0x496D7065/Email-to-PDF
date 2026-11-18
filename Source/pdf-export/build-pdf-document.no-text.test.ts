@@ -6,7 +6,7 @@
 // it does not count on the cover (count, date range, people, undated). An
 // unreadable body keeps the "(no text)" placeholder (Q2), and so does a
 // forward whose forwarded emails print on pages of their own (Q6, see
-// Source/pdf-export/model.no-repeat.test.ts). An attached email the reader ticked
+// Source/pdf-export/build-pdf-document.no-repeat.test.ts). An attached email the reader ticked
 // that is left out this way keeps its header lines in the email holding it;
 // one the reader unticked is cut as before. An .eml with no text holding an
 // email attached as a file that was not read is left out too (decision B).
@@ -23,11 +23,11 @@ import { attachedLinks } from '../web-page-logic/attached-links';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { buildPdfDocument, planPdfOrder } from './model';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { buildPdfDocument, planPdfOrder } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult, ParseWarning } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';

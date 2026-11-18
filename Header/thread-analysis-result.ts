@@ -156,7 +156,7 @@ export interface EngineResult
      * order), newest first; each says whether it is linked to a real message,
      * the same as another rebuilt one, or its own timeline entry. The preview
      * shows the entries (Source/web-page-logic/rebuilt-email-display.ts), and so does the PDF
-     * (Source/pdf-export/model.ts, the ones the reader chose).
+     * (Source/pdf-export/build-pdf-document.ts, the ones the reader chose).
      */
     readonly reconstructed: readonly EngineRebuilt[];
     /** Every kept message (each once, in `messages` order) and every rebuilt entry, in time order (link-rebuilt-messages.ts). */

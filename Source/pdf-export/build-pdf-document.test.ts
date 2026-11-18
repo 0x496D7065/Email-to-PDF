@@ -1,4 +1,4 @@
-// Unit tests for the PDF document model (Source/pdf-export/model.ts), with synthetic
+// Unit tests for the PDF document model (Source/pdf-export/build-pdf-document.ts), with synthetic
 // emails (made-up names, *.test addresses) run through the real engine and
 // output plan, as the app does.
 
@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { sizeText } from '../web-page/preview';
-import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput } from './model';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import { copyLayerText } from './pdf-writer/copy-layer-text';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';

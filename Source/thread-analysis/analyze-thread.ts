@@ -71,7 +71,7 @@
 // - `attached` (EngineAttached) keeps where each one came from (its parent,
 //   its file, its attachment names for the PDF's File row) and its printed
 //   blocks in the bodies holding it (places), for the PDF's no-repeat rule
-//   (Source/pdf-export/model.ts): the engine itself never cuts any body.
+//   (Source/pdf-export/build-pdf-document.ts): the engine itself never cuts any body.
 // Attached entries that break ParseResult's contract (normally rejected by
 // the worker validator already) are skipped, with the ones attached inside
 // them: their text then simply stays where its parent prints it.

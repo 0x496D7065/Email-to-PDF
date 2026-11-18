@@ -1,4 +1,4 @@
-// Unit tests for the PDF text transforms (Source/pdf-export/text.ts). Synthetic text only.
+// Unit tests for the PDF text transforms (Source/pdf-export/pdf-text-transforms.ts). Synthetic text only.
 // Every invisible or special character is written as an escape (\u{...}, or
 // \uXXXX for a lone surrogate or an ASCII control).
 
@@ -22,7 +22,7 @@ import {
     TAB_WIDTH,
     ZERO_WIDTH_SPACE,
     type KeptRange,
-} from './text';
+} from './pdf-text-transforms';
 import type { PdfLine } from '../../Header/pdf-document-model';
 
 const linesText = (lines: readonly PdfLine[]): string => lines.map(lineText).join('\n');

@@ -14,9 +14,9 @@ import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/th
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/model';
-import { createPdfStrings } from '../pdf-export/strings';
-import { bodyLines, lineText } from '../pdf-export/text';
+import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/build-pdf-document';
+import { createPdfStrings } from '../pdf-export/pdf-strings';
+import { bodyLines, lineText } from '../pdf-export/pdf-text-transforms';
 import { pdfBlocks, signatureSources } from './pdf-plan';
 import { printedElsewhereRanges } from './printed-elsewhere';
 import { rebuiltEntries } from './rebuilt-email-display';

@@ -1,4 +1,4 @@
-// The PDF document model (Source/pdf-export/model.ts) over every synthetic fixture
+// The PDF document model (Source/pdf-export/build-pdf-document.ts) over every synthetic fixture
 // (Helper/Test/test-data), parsed, run through the engine and planned as the app
 // does: the replies show their new text and not the quoted history, every
 // file is a source, and with "include everything" every body is complete.
@@ -7,10 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { buildPdfDocument } from './model';
+import { buildPdfDocument } from './build-pdf-document';
 import { quotePrefixProblems, referenceDisplayLines, referenceDisplayText } from '../../Helper/Test/test-support/pdf-reference';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
 import type { EngineResult } from '../../Header/thread-analysis-result';

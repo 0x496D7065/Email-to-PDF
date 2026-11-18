@@ -1,4 +1,4 @@
-// The PRINTED SOMEWHERE check of the PDF model (Source/pdf-export/model.ts,
+// The PRINTED SOMEWHERE check of the PDF model (Source/pdf-export/build-pdf-document.ts,
 // printedNowhere; task 8.13b-3, review round 3, finding M2; collapse, never
 // delete): text an email's plan leaves out only because another email in
 // the PDF holds it must really be printed somewhere, else it is printed
@@ -15,9 +15,9 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
-import { buildPdfDocument, noRepeat } from './model';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { buildPdfDocument, noRepeat } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import type { ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
 import type { EngineResult } from '../../Header/thread-analysis-result';

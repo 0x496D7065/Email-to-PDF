@@ -8,7 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
-import { planPdfOrder } from '../pdf-export/model';
+import { planPdfOrder } from '../pdf-export/build-pdf-document';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { setLocale, t } from './translations';
 import { mountPreview, rebuiltAlsoText, rebuiltDateTexts, rebuiltNoteText, type Preview, type PreviewOptions } from './preview';

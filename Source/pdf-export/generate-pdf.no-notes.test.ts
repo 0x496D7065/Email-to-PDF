@@ -30,10 +30,10 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { CATALOG } from '../web-page/translations/catalog';
 import { isPluralForms } from '../web-page/translations';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { buildPdfDocument } from './model';
-import { createPdfStrings } from './strings';
+import { buildPdfDocument } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';

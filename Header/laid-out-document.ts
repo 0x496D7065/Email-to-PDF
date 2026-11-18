@@ -2,7 +2,7 @@
 // no code (README.md, "Where things are"). pdf-export/page-layout/ produces
 // the document (with LayoutConfig, whose defaults are DEFAULT_LAYOUT_CONFIG in
 // Source/pdf-export/page-layout/layout-config.ts); a PdfBackend in
-// pdf-export/pdf-writer/ writes it; pdf-export/generate.ts connects the two.
+// pdf-export/pdf-writer/ writes it; pdf-export/generate-pdf.ts connects the two.
 //
 // The laid-out document: the contract between the layout (milestone 5.4c,
 // which wraps lines and fills pages) and a PDF backend (which only writes
@@ -123,7 +123,7 @@ export interface LaidOutDestination
 /**
  * A bookmark. `title` may come from email data (subjects, senders). Outline
  * titles and info.title must already be one-line text (tabs and line breaks
- * normalized by the caller, as inlineRuns in Source/pdf-export/text.ts does):
+ * normalized by the caller, as inlineRuns in Source/pdf-export/pdf-text-transforms.ts does):
  * copyLayerText turns any left into U+FFFD.
  */
 export interface LaidOutOutlineItem
@@ -200,10 +200,10 @@ export interface LayoutConfig
      * this many times the space's advance in roles.body's font at roles.body's
      * size, measured from the font when the layout starts (pdf-layout.ts,
      * bodyIndentWidth). Default TAB_WIDTH (4): one tab, as a tab in the text
-     * is printed (Source/pdf-export/text.ts transform b; user decision 2026-11-06, task
+     * is printed (Source/pdf-export/pdf-text-transforms.ts transform b; user decision 2026-11-06, task
      * 8.9; before it a fixed 14 pt, task 8.6). One step for every body line,
      * wrapped lines included, whatever its quote level (quote marks are
-     * removed, Source/pdf-export/text.ts transform g), for real and rebuilt emails
+     * removed, Source/pdf-export/pdf-text-transforms.ts transform g), for real and rebuilt emails
      * alike. The heading, the header rows and the attachments stay at the
      * margin. A whole number >= 1 (validateLayoutConfig); the width it gives
      * must be at most half the text area width (checked by layoutPdf, which

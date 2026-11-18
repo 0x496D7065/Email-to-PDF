@@ -23,10 +23,10 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { CATALOG } from '../web-page/translations/catalog';
 import { isPluralForms, type Messages } from '../web-page/translations';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { buildPdfDocument } from './model';
-import { createPdfStrings } from './strings';
+import { buildPdfDocument } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 
 const LOCALES = ['en', 'fr', 'nl'] as const;

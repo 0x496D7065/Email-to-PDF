@@ -1,4 +1,4 @@
-// The typesetter: one PdfLine (runs with roles, Source/pdf-export/text.ts) in, wrapped
+// The typesetter: one PdfLine (runs with roles, Source/pdf-export/pdf-text-transforms.ts) in, wrapped
 // lines out (wrap), each then drawn at a place as text runs for the backend
 // (drawLine). It owns the styles, the shaper and the line breaker.
 //

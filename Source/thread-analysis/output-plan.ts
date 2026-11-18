@@ -17,7 +17,7 @@
 // email, without a reply header, when it is the text of another sender's
 // email that is in the PDF too (rule 2, an overlap start): it is in the PDF
 // once already. The PDF model checks that afterwards (PRINTED SOMEWHERE in
-// Source/pdf-export/model.ts, task 8.13b-3, review round 3): such text that the PDF
+// Source/pdf-export/build-pdf-document.ts, task 8.13b-3, review round 3): such text that the PDF
 // prints nowhere after all (a missing or wrong date can make two emails
 // each leave it out because of the other one) is printed where it is.
 // Known limit (accepted): an Outlook-style quote has no ">" markers, so where
@@ -27,7 +27,7 @@
 // On top of this plan, the PDF leaves out of a body every part it prints as
 // an email of its own (a rebuilt email in the PDF, or the real file a
 // rebuilt one is linked to), forwarded parts included: the no-repeat rule
-// of Source/pdf-export/model.ts (printedElsewhere, user decision 2026-11-06, task
+// of Source/pdf-export/build-pdf-document.ts (printedElsewhere, user decision 2026-11-06, task
 // 8.10). This plan does not know which rebuilt emails are chosen, so it
 // still says 'forwarded', kept, for such a part. A range this plan labels
 // 'text' (the writer's own, rule 2b included) or a kept signature is never

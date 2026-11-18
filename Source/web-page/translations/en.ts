@@ -498,7 +498,7 @@ export const en = {
         },
         // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
         messageFailed: 'The tool could not show what the PDF leaves out for this email.',
-        // The texts written in the PDF itself (Source/pdf-export/model.ts, through Source/pdf-export/strings.ts).
+        // The texts written in the PDF itself (Source/pdf-export/build-pdf-document.ts, through Source/pdf-export/pdf-strings.ts).
         // No notes here (user rule 2026-11-05, task 8.8): anything about what went
         // wrong, may be missing or inaccurate, or how the tool works is said in the app.
         document: {

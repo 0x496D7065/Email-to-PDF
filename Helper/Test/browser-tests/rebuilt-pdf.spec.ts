@@ -1,5 +1,5 @@
 // Browser test of the emails rebuilt from quoted text IN THE PDF (milestone
-// 7, task 7.7, and task 8.3: Source/pdf-export/model.ts, Source/web-page/review.ts,
+// 7, task 7.7, and task 8.3: Source/pdf-export/build-pdf-document.ts, Source/web-page/review.ts,
 // Source/web-page/mount-page.ts), in each
 // test browser against the BUILT site served by `vite preview` (see
 // playwright.config.ts), with the real pipeline and the real workers. The

@@ -26,7 +26,7 @@
 //   signature".
 // - Printed as an email of its own (task 8.11): with "Print full original
 //   text" off, the PDF also leaves out of a body the parts it prints as
-//   emails of their own (the no-repeat rule of Source/pdf-export/model.ts, task
+//   emails of their own (the no-repeat rule of Source/pdf-export/build-pdf-document.ts, task
 //   8.10). A view then carries the body's ranges as the PDF prints them
 //   (`pdfRanges`, from Source/web-page-logic/printed-elsewhere.ts, which calls the
 //   PDF model's own functions); they replace the plan's ranges here. Such
@@ -225,7 +225,7 @@ function samePrintedAsLabel(first: PdfLabel | null, second: PdfLabel | null): bo
  * R6): its text is the two texts joined, so the blocks still give the body
  * back unchanged.
  * Done here, in the preview's blocks only: the PDF and the no-repeat parts
- * (Source/pdf-export/model.ts, noRepeat) are not changed by it.
+ * (Source/pdf-export/build-pdf-document.ts, noRepeat) are not changed by it.
  */
 export function mergeSamePrintedAs(blocks: readonly PdfBlock[]): PdfBlock[]
 {

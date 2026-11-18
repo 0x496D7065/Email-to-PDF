@@ -15,7 +15,7 @@
 // MOVED back to the page (a transfer), not copied.
 // Nothing is stored anywhere (README.md, rule R5).
 
-import { generatePdf } from '../pdf-export/generate';
+import { generatePdf } from '../pdf-export/generate-pdf';
 import { PDF_FONT_NAMES, parsePdfFonts } from '../pdf-export/parse-pdf-fonts';
 import { isSupportedLocale } from '../web-page/translations';
 import type { GeneratedPdf } from '../../Header/pdf-document-model';

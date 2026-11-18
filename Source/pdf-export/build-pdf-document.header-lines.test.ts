@@ -19,7 +19,7 @@
 //    part of an unticked rebuilt email is never exempt (Q2: left out).
 //    Nothing else is exempt: the writer's answer kept with its quote (B1,
 //    Q3) does not occur in these conversations (a violation would say so;
-//    that case is tested in Source/pdf-export/model.no-repeat.test.ts, B1).
+//    that case is tested in Source/pdf-export/build-pdf-document.no-repeat.test.ts, B1).
 // 2. A rebuilt email's text holds no header block below the header lines
 //    moved to its top (Q4).
 // 3. Collapse, never delete: every character a body loses to the no-repeat
@@ -30,7 +30,7 @@
 //    "Print full original text" (which prints every body whole). Header
 //    lines moved to a rebuilt email are printed exactly once in the PDF.
 // Every PDF email starting on a page of its own with its index line is
-// checked on the written file (Source/pdf-export/generate.header-blocks.test.ts).
+// checked on the written file (Source/pdf-export/generate-pdf.header-blocks.test.ts).
 // Synthetic data only (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
@@ -40,9 +40,9 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { findReplyHeaders } from '../thread-analysis/reply-header';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, noRepeat, pdfRanges } from './model';
-import { createPdfStrings } from './strings';
-import { bodyLines, lineText } from './text';
+import { buildPdfDocument, noRepeat, pdfRanges } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { bodyLines, lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail, PdfRange } from '../../Header/pdf-document-model';

@@ -7,7 +7,7 @@
 //
 // No DOM, no network (README.md, rule R1), so it is worker-safe.
 import { readWoffFont } from './font-reader/parse-font';
-import type { PdfFonts } from './generate';
+import type { PdfFonts } from './generate-pdf';
 import type { ParsedFont, PdfFontName } from '../../Header/pdf-fonts';
 
 /** The font names in a fixed order (the result does not depend on key order). */

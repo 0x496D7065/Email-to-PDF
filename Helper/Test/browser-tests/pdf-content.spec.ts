@@ -995,7 +995,7 @@ test('"Print full original text": every email\'s whole text, in order', async ({
     const doc = await readBack(await makePdf(page), emails.length);
     checkFront(doc, emails, inZone(FIXED_NOW).full);
 
-    // Invisible characters (Source/pdf-export/text.ts, group 2) are not in the copy
+    // Invisible characters (Source/pdf-export/pdf-text-transforms.ts, group 2) are not in the copy
     // layer: the copy layer is what you see. The fixtures have none; dropped
     // from the expectation all the same.
     const INVISIBLE: readonly (readonly [number, number])[] = [

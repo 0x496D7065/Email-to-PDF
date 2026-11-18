@@ -1,5 +1,5 @@
 // One call from the included emails to the PDF file: the document model
-// (model.ts), the layout with the index page numbers, links and bookmarks
+// (build-pdf-document.ts), the layout with the index page numbers, links and bookmarks
 // (page-layout/), and the backend (pdf-writer/). This is what the PDF worker runs.
 //
 // Pure apart from the time it takes: no DOM, no clock (the caller passes
@@ -9,8 +9,8 @@
 // only ever written as text in the PDF (rule R4); the plans decide what is
 // left out (rule R6, the exception for the PDF), nothing here changes that.
 import { layoutPdf } from './page-layout';
-import { buildPdfDocument } from './model';
-import { createPdfStrings } from './strings';
+import { buildPdfDocument } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
 import { PdfWriter } from './pdf-writer';
 import type { LayoutConfig, PdfBackend } from '../../Header/laid-out-document';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';

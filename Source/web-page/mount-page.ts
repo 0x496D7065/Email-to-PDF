@@ -31,14 +31,14 @@
 // of the switch or of a rebuilt card's checkbox drops a PDF made before and
 // is announced (onRebuiltChange). The PDF shows the ones the review gives
 // (review.includedRebuilt(), task 7.7: ticked, switch on, and an email they
-// were read from in the PDF), at their place in time (Source/pdf-export/model.ts).
+// were read from in the PDF), at their place in time (Source/pdf-export/build-pdf-document.ts).
 // While "Print full original text" is ticked, none of them is shown or in
 // the PDF, and the switch is unticked and disabled (user decision
 // 2026-10-29, task 7.8c): the review reads the PDF labels' policy
 // (unfoldEverything); a change of that checkbox sets the switch and the
 // cards again (everythingChanged), shows or hides every card
 // (preview.refreshRebuilt) and announces the new rebuilt line. The PDF
-// model leaves them out under that policy too (Source/pdf-export/model.ts).
+// model leaves them out under that policy too (Source/pdf-export/build-pdf-document.ts).
 //
 // Step 3 makes the PDF from exactly the plans the labels show (pdfInput),
 // and only once they are up to date (pdfUnavailable). Every change of what

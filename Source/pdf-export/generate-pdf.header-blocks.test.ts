@@ -24,7 +24,7 @@
 // report (header lines that are still printed inside a body after task
 // 8.13a: an attached email the engine does not rebuild, header lines moved
 // to the top of a rebuilt email, a forward with the switch off; which
-// header lines stay is checked in Source/pdf-export/model.header-lines.test.ts).
+// header lines stay is checked in Source/pdf-export/build-pdf-document.header-lines.test.ts).
 // Synthetic data only (README.md, rule R7).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all';
@@ -35,10 +35,10 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { createEmlParser } from '../email-reading/eml-parser';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { generatePdf, type PdfFonts } from './generate';
+import { generatePdf, type PdfFonts } from './generate-pdf';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { createPdfStrings } from './strings';
+import { createPdfStrings } from './pdf-strings';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';

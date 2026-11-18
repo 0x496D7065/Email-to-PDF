@@ -2,7 +2,7 @@
 // emails, rebuilt-email cards and their places). Shared types only, no code
 // (README.md, "Where things are"). web-page-logic/ (display-author,
 // message-notes, attached-links, rebuilt-email-display) computes it; web-page/ (preview,
-// review) shows it; pdf-export/model.ts reads RebuiltInPdf.
+// review) shows it; pdf-export/build-pdf-document.ts reads RebuiltInPdf.
 
 import type { EmailAddress, ParseWarning } from './parsed-email';
 import type { EngineRebuilt } from './rebuilt-emails';

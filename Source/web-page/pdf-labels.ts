@@ -8,7 +8,7 @@
 // description (aria-describedby), so a screen reader reads it with the
 // checkbox. While it is ticked, the "Rebuild conversation from replies"
 // switch is unticked and disabled and no rebuilt email is shown or printed
-// (Source/web-page/review.ts, Source/pdf-export/model.ts).
+// (Source/web-page/review.ts, Source/pdf-export/build-pdf-document.ts).
 //
 // The plans are the PDF's own: planOutput's rules (planOutputSteps,
 // Source/thread-analysis/output-plan.ts) on the INCLUDED emails, in list order, with the
@@ -37,7 +37,7 @@
 //
 // Printed as an email of its own (task 8.11): with the checkbox unticked,
 // the PDF also leaves out of a body the parts it prints as emails of their
-// own (the no-repeat rule of Source/pdf-export/model.ts, task 8.10), which depends on
+// own (the no-repeat rule of Source/pdf-export/build-pdf-document.ts, task 8.10), which depends on
 // the rebuilt emails chosen too (`includedRebuilt`, Source/web-page/review.ts) and
 // on those the reader unticked (`untickedRebuilt`, task 8.13a, Q2). The
 // views handed to the preview carry that cut (pdfRanges), worked out by the

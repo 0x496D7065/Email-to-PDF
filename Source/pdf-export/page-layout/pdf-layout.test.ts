@@ -12,9 +12,9 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../../thread-analysis/output-
 import { rebuiltEntries } from '../../web-page-logic/rebuilt-email-display';
 import { readWoffFont } from '../font-reader/parse-font';
 import { PDF_FONTS } from '../bundled-fonts';
-import { buildPdfDocument, emailAnchor } from '../model';
-import { createPdfStrings } from '../strings';
-import { lineText, TAB_WIDTH } from '../text';
+import { buildPdfDocument, emailAnchor } from '../build-pdf-document';
+import { createPdfStrings } from '../pdf-strings';
+import { lineText, TAB_WIDTH } from '../pdf-text-transforms';
 import { PdfWriter } from '../pdf-writer';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, MAX_DIGIT_EM, SHORT_DATE_EM } from './layout-config';
 import { bodyIndentWidth, layoutPdf, type PdfLayout } from './pdf-layout';
@@ -702,7 +702,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
         // The same as 4 spaces in a line of body text: "x    x" is 4 spaces wider than "xx".
         const width = (text: string): number => typesetter.wrap([{ role: 'body', text }], 1e6, 'body')[0]!.width;
         expect(width('x    x') - width('xx')).toBeCloseTo(STEP, 9);
-        // And as a tab in the text (printed as 4 spaces, Source/pdf-export/text.ts transform b).
+        // And as a tab in the text (printed as 4 spaces, Source/pdf-export/pdf-text-transforms.ts transform b).
         expect(width(`x${' '.repeat(TAB_WIDTH)}x`) - width('xx')).toBeCloseTo(STEP, 9);
         // It follows the body style: twice the size, twice the indent; the other roles do not count.
         const bigBody: LayoutConfig = { ...CONFIG, roles: { ...CONFIG.roles, body: { ...CONFIG.roles.body, size: 20 } }, index: { ...CONFIG.index, pageWidth: 80, dateWidth: 180 } };

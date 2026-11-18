@@ -900,7 +900,7 @@ export function readQuotedHeader(bodyText: string, header: Pick<FoundHeader, 'st
  * reads them (any ">" depth; lines that are not label lines are not
  * counted). The PDF uses it to know whether a rebuilt email's header rows
  * show everything its original header lines say (a Bcc line or a repeated
- * label is never shown: Source/pdf-export/model.ts, the no-repeat rule, task 8.10).
+ * label is never shown: Source/pdf-export/build-pdf-document.ts, the no-repeat rule, task 8.10).
  * Odd input (not a string, bounds outside the text) gives an empty map.
  * Never throws.
  */

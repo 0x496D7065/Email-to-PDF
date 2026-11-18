@@ -5,7 +5,7 @@
 // N)", N being its number among the emails attached at that level.
 //
 // ONE helper for both places that show it (task 8.13b-4, P2 / Q3), so they
-// can never disagree: the PDF's File row (Source/pdf-export/model.ts, fileRowLine)
+// can never disagree: the PDF's File row (Source/pdf-export/build-pdf-document.ts, fileRowLine)
 // and the preview's "Also in" row (Source/web-page/preview.ts). The words ("(file
 // without a name)", "(attached email N)") are passed in, so this file has
 // none of its own.

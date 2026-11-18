@@ -1,4 +1,4 @@
-// Property and speed tests for the PDF document model (Source/pdf-export/model.ts).
+// Property and speed tests for the PDF document model (Source/pdf-export/build-pdf-document.ts).
 //
 // Random synthetic emails (seeded, so every run is the same), with bodies
 // full of awkward text (control characters, lone surrogates, CR, U+2028,
@@ -31,7 +31,7 @@
 // - the first three also with the same emails grouped into files with
 //   emails attached inside them (task 8.13b-3, review round 2): inline or
 //   as a file for the first two, only as a file for the third (the printed
-//   blocks of inline ones are checked in model.attached.property.test.ts);
+//   blocks of inline ones are checked in build-pdf-document.attached.property.test.ts);
 // - 2000 emails build in well under a second.
 // Synthetic data only: made-up names, *.test addresses. Every invisible or
 // special character is written as a \u escape.
@@ -45,9 +45,9 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PrintedPart } from './model';
-import { createPdfStrings } from './strings';
-import { lineText } from './text';
+import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PrintedPart } from './build-pdf-document';
+import { createPdfStrings } from './pdf-strings';
+import { lineText } from './pdf-text-transforms';
 import type { MessagePlan } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail } from '../../Header/pdf-document-model';
@@ -112,7 +112,7 @@ const PIECES: readonly string[] = [
     '\u{00A0}',
     '\u{2028}',
     '\u{2029}',
-    // Group 1 of Source/pdf-export/text.ts beyond the controls: bidi controls, annotation, noncharacters, tags.
+    // Group 1 of Source/pdf-export/pdf-text-transforms.ts beyond the controls: bidi controls, annotation, noncharacters, tags.
     '\u{202E}',
     '\u{2066}x\u{2069}',
     '\u{FFF9}',
@@ -438,7 +438,7 @@ describe('PDF document model properties', () =>
         let changed = 0;
         let ownTextChecked = 0;
         // With attached emails, only sent as files: no printed block in any body, so every part left out
-        // is still one of a rebuilt email (blocks are checked in model.attached.property.test.ts).
+        // is still one of a rebuilt email (blocks are checked in build-pdf-document.attached.property.test.ts).
         for (const grouping of ['files', 'file'] as const)
         {
             for (let seed = 201; seed <= 240; seed++)

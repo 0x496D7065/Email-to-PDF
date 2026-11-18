@@ -9,7 +9,7 @@
 //   browsers, workers and Node all have. Runs of plain Latin text (U+0020
 //   to U+007E, U+00A0 to U+02FF: no combining mark, no surrogate) skip it:
 //   there every code unit is a cluster of its own.
-// - Characters of group 2 (Source/pdf-export/text.ts, DRAWN_AS_NOTHING) get no glyph
+// - Characters of group 2 (Source/pdf-export/pdf-text-transforms.ts, DRAWN_AS_NOTHING) get no glyph
 //   and no width; they stay in the copy text (the backend's copy layer then
 //   keeps or drops them, Source/pdf-export/pdf-writer/copy-layer-text.ts).
 // - A cluster of one character the font has is drawn with that glyph.
@@ -33,7 +33,7 @@
 //   drawn nor copied (typesetter.ts).
 // No kerning, no ligatures, no bidi (Source/pdf-export/font-reader/parse-font.ts). Pure (README.md,
 // rule R7).
-import { controlMarker, isDrawnAsNothing, SOFT_HYPHEN, ZERO_WIDTH_SPACE } from '../text';
+import { controlMarker, isDrawnAsNothing, SOFT_HYPHEN, ZERO_WIDTH_SPACE } from '../pdf-text-transforms';
 import type { FontMetrics } from './font-metrics';
 import type { TextStyle } from '../../../Header/laid-out-document';
 

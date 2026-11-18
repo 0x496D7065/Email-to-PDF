@@ -1,9 +1,9 @@
 // copyLayerText: the copy layer's rules for the three groups of
-// Source/pdf-export/text.ts (README.md, rule R4: nothing that can hide or reorder
+// Source/pdf-export/pdf-text-transforms.ts (README.md, rule R4: nothing that can hide or reorder
 // text reaches the PDF's copy layer). Special characters are written as
 // braced escapes, so this file stays ASCII.
 import { describe, expect, it } from 'vitest';
-import { DRAWN_AS_NOTHING, isDrawnAsNothing } from '../text';
+import { DRAWN_AS_NOTHING, isDrawnAsNothing } from '../pdf-text-transforms';
 import { copyLayerCutIndex, copyLayerText, isGroup1 } from './copy-layer-text';
 
 const FFFD = '\u{FFFD}';
