@@ -4,7 +4,7 @@
 // 1.1, see Source/pdf-export/fonts/LICENSE.txt), embedded whole in the PDF later (no
 // subsetting).
 //
-// Each `?bytes` import is the file's exact bytes (see vite.config.ts). The
+// Each `?bytes` import is the file's exact bytes (see Helper/vite-plugins/bytes-import-plugin.ts). The
 // build puts them in a chunk of their own, assets/pdf-fonts-[hash].js, which
 // the page entry (Source/main.ts) imports statically, so the fonts are in memory
 // as soon as the page has loaded and the export works offline.

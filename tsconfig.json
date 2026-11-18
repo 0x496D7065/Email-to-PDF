@@ -15,11 +15,13 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true,
-    // Lets vite.config.ts import "./Source/security-headers/headers.ts" with its extension,
+    // Lets vite.config.ts and the Vite plugins (Helper/vite-plugins/) import
+    // "../../Source/security-headers/headers.ts" and the like with their extension,
     // which Vite's future native config loader requires. Safe: tsc never emits.
     "allowImportingTsExtensions": true
   },
   // Helper/ (never shipped):
+  // - vite-plugins/: the project's own Vite plugins, used by vite.config.ts.
   // - build-checks/ and lint-rules/ for the self-tests and their .d.mts
   //   types. The .mjs files themselves are not type-checked (no allowJs).
   // - Helper/Test/browser-tests/ (and playwright.config.ts): browser tests, type-checked.

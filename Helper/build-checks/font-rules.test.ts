@@ -292,7 +292,7 @@ describe('checkSourceFonts', () =>
     });
 });
 
-describe('isBytesImportAllowed (the ?bytes plugin of vite.config.ts)', () =>
+describe('isBytesImportAllowed (the ?bytes plugin, Helper/vite-plugins/bytes-import-plugin.ts)', () =>
 {
     it('accepts a .woff file directly in the project Source/pdf-export/fonts/ folder (POSIX and Windows)', () =>
     {

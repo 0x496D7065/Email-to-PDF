@@ -3,7 +3,7 @@
 //
 // The fonts (Source/pdf-export/fonts/*.woff, official IBM Plex files) are built into one
 // JS chunk as plain number arrays: `new Uint8Array([119,79,70,70,...])`
-// (see the `?bytes` plugin in vite.config.ts). A long number array is as
+// (see the `?bytes` plugin, Helper/vite-plugins/bytes-import-plugin.ts). A long number array is as
 // opaque to the text rules as a base64 string, so it could hide code. Hence:
 //   - a long number array is allowed ONLY in the font chunk,
 //   - every long number array there must decode to the exact bytes of one of
@@ -287,7 +287,7 @@ export function checkSourceFonts(files, fonts = PDF_FONT_FILES)
 }
 
 /**
- * May the `?bytes` plugin of vite.config.ts load this file? Only a .woff
+ * May the `?bytes` plugin (Helper/vite-plugins/bytes-import-plugin.ts) load this file? Only a .woff
  * file directly inside `fontsDir` (this project's absolute Source/pdf-export/fonts/
  * folder), so not e.g. node_modules/x/Source/pdf-export/fonts/ or another project's.
  * Back slashes (Windows) count as forward slashes; on Windows the drive

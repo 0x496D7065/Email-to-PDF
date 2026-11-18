@@ -1,6 +1,6 @@
 // Security headers for the built site: the single source of truth.
 //
-// Used ONLY at build time by vite.config.ts (never imported by the app):
+// Used ONLY at build time by the Vite plugins in Helper/vite-plugins/ (never imported by the app):
 //   - writes dist/_headers (Cloudflare Pages reads it and sends real HTTP headers)
 //   - adds a <meta> CSP + referrer tag to dist/index.html as a fallback for
 //     hosts that cannot set headers (e.g. GitHub Pages).
@@ -46,7 +46,7 @@ export function cspForMeta(): string
 
 /**
  * Path of the service worker script (the offline copy of the site's own
- * files, Source/offline-copy/). It is written into dist/ by the build (vite.config.ts).
+ * files, Source/offline-copy/). It is written into dist/ by the build (Helper/vite-plugins/offline-copy-plugin.ts).
  */
 export const SERVICE_WORKER_PATH = '/sw.js';
 
@@ -73,7 +73,7 @@ export function cspForServiceWorker(): string
 /**
  * The security headers sent with the file at `pathname` (the same for every
  * file except the service worker script, which gets its own CSP). Used by
- * `npm run preview` (vite.config.ts); dist/_headers says the same for
+ * `npm run preview` (Helper/vite-plugins/preview-headers-plugin.ts); dist/_headers says the same for
  * Cloudflare Pages (cloudflareHeadersFile).
  */
 export function securityHeadersFor(pathname: string): Record<string, string>

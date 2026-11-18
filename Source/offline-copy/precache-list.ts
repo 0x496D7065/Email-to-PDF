@@ -1,6 +1,6 @@
 // Build-time half of the service worker: the precache list, made from the
-// files the build writes into dist/. Used ONLY by vite.config.ts (the
-// offline-copy plugin), never by the page. Pure functions (the plugin does
+// files the build writes into dist/. Used ONLY by the build (the
+// offline-copy plugin, Helper/vite-plugins/offline-copy-plugin.ts), never by the page. Pure functions (the plugin does
 // the file reading), unit tested in precache-list.test.ts.
 //
 // The list is every file the site serves, minus the ones that are not
@@ -10,7 +10,7 @@
 // "/index.html": hosts such as Cloudflare Pages redirect that to "/", and a
 // redirected copy cannot be used to open the page.
 
-// With its extension: vite.config.ts loads this file, and Vite's future
+// With its extension: the offline-copy plugin loads this file, and Vite's future
 // native config loader needs it (as for Source/security-headers/headers.ts).
 import { MANIFEST_PLACEHOLDER } from '../../Helper/build-checks/service-worker-version.mjs';
 import { isPlainPath, type PrecacheManifest } from './service-worker-logic.ts';

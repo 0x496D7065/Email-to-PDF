@@ -1,5 +1,5 @@
 // The service worker (built as dist/sw.js by the offline-copy plugin in
-// vite.config.ts; registered by Source/offline-copy/register-service-worker.ts in the built site only).
+// Helper/vite-plugins/offline-copy-plugin.ts; registered by Source/offline-copy/register-service-worker.ts in the built site only).
 //
 // What it is for: after the page has been opened once with the internet
 // on, the page can be opened (or reloaded) again while offline. For that it

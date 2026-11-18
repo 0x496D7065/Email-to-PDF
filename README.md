@@ -910,7 +910,8 @@ tests need Playwright's browsers, installed by a repo script (below).
 | `Source/library-shims/` | Small browser replacements for library dependencies. |
 | `Source/public/` | Files copied into the site as they are (third-party notices, Ko-fi button). |
 | `Header/` | The shared type definitions: the data shapes several `Source/` folders agree on (the parsed email, the worker messages, the analysis result, the PDF model, ...), and the `.d.ts` declarations (`?bytes` font imports, `node:fs` for the browser tests). TypeScript has no real header files, so this is the closest thing: types only, no code, erased at build time (a lint rule enforces it). Types used inside one folder only stay next to their code. |
-| `Helper/` | Everything that is not the site: build checks, lint rules and tests. Never shipped. |
+| `Helper/` | Everything that is not the site: Vite plugins, build checks, lint rules and tests. Never shipped. |
+| `Helper/vite-plugins/` | The project's own Vite plugins, used by `vite.config.ts`: the security headers (`dist/_headers` and the `<meta>` CSP), the same headers for `npm run preview`, the offline copy (`dist/sw.js`) and the `?bytes` font imports. |
 | `Helper/build-checks/` | The no-network build check (font, URL and service-worker version rules). |
 | `Helper/lint-rules/` | The project's own lint rules, and the file-name check (lowercase kebab-case names, e.g. `pdf-job.test.ts`; runs with `npm test`). |
 | `Helper/Test/` | All tests that are not next to the code they test: browser tests, synthetic test emails, test helpers. |

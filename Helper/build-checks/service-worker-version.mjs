@@ -1,5 +1,5 @@
 // The service worker's cache version (Source/offline-copy/): one function shared by the
-// build, which writes the version into dist/sw.js (vite.config.ts, through
+// build, which writes the version into dist/sw.js (Helper/vite-plugins/offline-copy-plugin.ts, through
 // Source/offline-copy/precache-list.ts), and by the build check, which computes it again
 // from dist/ and fails if dist/sw.js holds another one
 // (check-no-network.mjs). Plain JavaScript so the build check can run it

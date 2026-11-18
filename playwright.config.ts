@@ -38,7 +38,7 @@ export default defineConfig({
     // Playwright starts this server before the tests and stops it afterwards.
     // It always rebuilds first, so the tests never run against a stale dist/.
     // `vite preview` serves dist/ with the same security headers as Cloudflare
-    // (see previewHeaders() in vite.config.ts). --strictPort makes it fail
+    // (see previewHeaders() in Helper/vite-plugins/preview-headers-plugin.ts). --strictPort makes it fail
     // instead of silently picking another port.
     webServer: {
         command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${String(PORT)} --strictPort`,
