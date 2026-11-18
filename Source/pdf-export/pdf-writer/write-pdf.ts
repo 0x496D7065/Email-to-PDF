@@ -1,5 +1,5 @@
 // Our own PDF backend: writes a laid-out document (Header/laid-out-document.ts) as a PDF 1.7
-// file. Objects plus a classic cross-reference table (pdf-file.ts); content
+// file. Objects plus a classic cross-reference table (pdf-file-builder.ts); content
 // streams and font files deflated; the four Plex fonts embedded whole when
 // used (font-objects.ts); internal links, named destinations and bookmarks
 // only.
@@ -9,12 +9,12 @@
 // text only ever becomes hex string data. No network (rule R1), nothing
 // stored (rule R5), no dates, no author: the Info dictionary holds only
 // /Title and /Producer.
-import { copyLayerText } from './copy-text';
-import { pageContent } from './content';
+import { copyLayerText } from './copy-layer-text';
+import { pageContent } from './page-content-stream';
 import { deflate } from './deflate';
 import { checkEmbeddable, cidFont, fontDescriptor, FontUsage, toUnicodeCmap, type0Font, widthsArray } from './font-objects';
-import { MAX_OUTPUT_BYTES, PdfFile } from './pdf-file';
-import { ascii, fail, hexText, int, name, num, PdfWriteError } from './syntax';
+import { MAX_OUTPUT_BYTES, PdfFile } from './pdf-file-builder';
+import { ascii, fail, hexText, int, name, num, PdfWriteError } from './pdf-syntax';
 import type { LaidOutDocument, LaidOutOutlineItem, LaidOutTextRun, PdfBackend, PdfFontSet } from '../../../Header/laid-out-document';
 import type { PdfFontName } from '../../../Header/pdf-fonts';
 

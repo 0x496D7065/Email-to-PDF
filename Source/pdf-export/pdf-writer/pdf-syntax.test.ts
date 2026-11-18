@@ -1,8 +1,8 @@
 // The PDF syntax helpers: numbers never in exponent notation and never
 // NaN / Infinity, strict names, text only as UTF-16BE hex (README.md, rule R4).
 import { describe, expect, it } from 'vitest';
-import { copyLayerText } from './copy-text';
-import { ascii, hexText, MAX_TEXT_UNITS, name, num, PdfWriteError, utf16Hex } from './syntax';
+import { copyLayerText } from './copy-layer-text';
+import { ascii, hexText, MAX_TEXT_UNITS, name, num, PdfWriteError, utf16Hex } from './pdf-syntax';
 
 describe('num', () =>
 {

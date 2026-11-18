@@ -5,7 +5,7 @@ import { parseToUnicode } from '../../../Helper/Test/test-support/pdf-reader';
 import { readWoffFont } from '../font-reader/parse-font';
 import { PDF_FONTS } from '../bundled-fonts';
 import { checkEmbeddable, fontDescriptor, FontUsage, toUnicodeCmap, widthsArray } from './font-objects';
-import { PdfWriteError } from './syntax';
+import { PdfWriteError } from './pdf-syntax';
 import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 let sans: ParsedFont;

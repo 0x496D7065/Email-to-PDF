@@ -10,7 +10,7 @@
 // Deterministic: the /ID is derived from a SHA-256 of the bytes before the
 // trailer (Web Crypto, available in pages and workers), so the same input
 // always gives the same file. No dates anywhere.
-import { ascii, fail, int } from './syntax';
+import { ascii, fail, int } from './pdf-syntax';
 
 /** Largest PDF the writer produces (256 MiB; about twice that is needed while writing, see above). */
 export const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;

@@ -2,9 +2,9 @@
 // CIDFontType2 descendant: /Encoding /Identity-H (each glyph is drawn by its
 // 2-byte glyph id) and /CIDToGIDMap /Identity. Also builds the font's /W
 // widths (only the glyphs used) and its ToUnicode CMap (the copy layer, see
-// copy-text.ts). Pure apart from deflate (README.md, rule R7).
-import { copyLayerText } from './copy-text';
-import { fail, hex4, int, name, num, utf16Hex } from './syntax';
+// copy-layer-text.ts). Pure apart from deflate (README.md, rule R7).
+import { copyLayerText } from './copy-layer-text';
+import { fail, hex4, int, name, num, utf16Hex } from './pdf-syntax';
 import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 /** fsType bit 1: "restricted license embedding", the font must not be embedded. */

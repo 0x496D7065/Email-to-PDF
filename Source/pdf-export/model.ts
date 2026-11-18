@@ -274,7 +274,7 @@ import { previewOrder, rebuiltDate, rebuiltInPdf } from '../web-page-logic/rebui
 import { printedText } from './printed-check';
 import { bodyLines, inlineRuns, joinKeptLines, lineText } from './text';
 // Pure and backend-neutral (it only reads Source/pdf-export/text.ts): the bookmark cut follows the same rule as the copy layer.
-import { copyLayerCutIndex } from './pdf-writer/copy-text';
+import { copyLayerCutIndex } from './pdf-writer/copy-layer-text';
 import type { MessagePlan, OutputPolicy, PlanRange } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfBlock, PdfDocument, PdfEmail, PdfFieldRow, PdfIndexEntry, PdfLine, PdfParticipant, PdfRange, PdfRole, PdfStrings, PrintedAs } from '../../Header/pdf-document-model';

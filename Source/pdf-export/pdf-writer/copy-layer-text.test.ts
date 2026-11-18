@@ -4,7 +4,7 @@
 // braced escapes, so this file stays ASCII.
 import { describe, expect, it } from 'vitest';
 import { DRAWN_AS_NOTHING, isDrawnAsNothing } from '../text';
-import { copyLayerCutIndex, copyLayerText, isGroup1 } from './copy-text';
+import { copyLayerCutIndex, copyLayerText, isGroup1 } from './copy-layer-text';
 
 const FFFD = '\u{FFFD}';
 const tags = (letters: string): string => [...letters].map((l) => String.fromCodePoint(0xe0000 + l.charCodeAt(0))).join('');

@@ -98,7 +98,7 @@
 // 3. Soft hyphen U+00AD (SOFT_HYPHEN): kept; the renderer draws a hyphen
 //    only where it breaks the line there, nothing otherwise. The copy layer
 //    follows what is drawn: "-" where the line breaks there, nothing
-//    otherwise (Source/pdf-export/pdf-writer/copy-text.ts).
+//    otherwise (Source/pdf-export/pdf-writer/copy-layer-text.ts).
 //
 // Pure functions, no DOM (README.md, rule R7). Email text stays plain data:
 // it is never read as markup or code (README.md, rule R4).

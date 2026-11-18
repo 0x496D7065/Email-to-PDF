@@ -19,7 +19,7 @@
 // characters, e.g. a line holding only an LRM or a ZWSP, or a ZWSP between
 // an emoji's codes and the end of the line) makes no run, so its copy text
 // is not written: nothing is seen there, and the copy layer would drop
-// those characters anyway (Source/pdf-export/pdf-writer/copy-text.ts).
+// those characters anyway (Source/pdf-export/pdf-writer/copy-layer-text.ts).
 // "What you copy is what you see": a soft hyphen where the line breaks is
 // drawn as "-" and copies as "-"; elsewhere it is not drawn and is not in
 // the copy text either. Pure (README.md, rule R7).

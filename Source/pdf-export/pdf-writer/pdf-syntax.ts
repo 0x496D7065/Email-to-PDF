@@ -4,7 +4,7 @@
 // (UTF-16BE with a byte order mark), never a literal (...) string and never
 // PDF syntax. Names come from our code only and are checked against a strict
 // pattern. Pure (README.md, rule R7).
-import { copyLayerCutIndex, copyLayerText } from './copy-text';
+import { copyLayerCutIndex, copyLayerText } from './copy-layer-text';
 
 /** The one error type the PDF writer throws. */
 export class PdfWriteError extends Error

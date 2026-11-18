@@ -11,7 +11,7 @@
 //   there every code unit is a cluster of its own.
 // - Characters of group 2 (Source/pdf-export/text.ts, DRAWN_AS_NOTHING) get no glyph
 //   and no width; they stay in the copy text (the backend's copy layer then
-//   keeps or drops them, Source/pdf-export/pdf-writer/copy-text.ts).
+//   keeps or drops them, Source/pdf-export/pdf-writer/copy-layer-text.ts).
 // - A cluster of one character the font has is drawn with that glyph.
 // - A base with combining marks (or a lone character the font lacks) whose
 //   NFC form is ONE code point the font has ("e" + U+0301 -> U+00E9) is drawn

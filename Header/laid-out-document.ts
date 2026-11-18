@@ -53,7 +53,7 @@ export interface LaidOutRect
  * `actualText`, when set, is ALWAYS written as /ActualText (and `copyText`
  * is then only informative).
  *
- * Both are passed through copyLayerText (copy-text.ts) by the backend.
+ * Both are passed through copyLayerText (copy-layer-text.ts) by the backend.
  */
 export interface LaidOutTextRun
 {

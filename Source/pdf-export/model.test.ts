@@ -9,7 +9,7 @@ import { sizeText } from '../web-page/preview';
 import { bookmarkTitle, buildPdfDocument, emailAnchor, MAX_BOOKMARK_LENGTH, participantsOf, pdfBodyText, pdfFileName, type BuildPdfInput } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
-import { copyLayerText } from './pdf-writer/copy-text';
+import { copyLayerText } from './pdf-writer/copy-layer-text';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { PdfDocument, PdfEmail, PdfLine } from '../../Header/pdf-document-model';

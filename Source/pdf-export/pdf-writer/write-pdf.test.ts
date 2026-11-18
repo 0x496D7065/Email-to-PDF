@@ -25,9 +25,9 @@ import { readSfntDirectory } from '../font-reader/sfnt-directory';
 import { unwrapWoff } from '../font-reader/unwrap-woff';
 import { PDF_FONTS } from '../bundled-fonts';
 import { isDrawnAsNothing } from '../text';
-import { MAX_OUTLINE_DEPTH, MAX_PAGES, OwnPdfWriter, writePdf } from './own-writer';
-import { MAX_OUTPUT_BYTES } from './pdf-file';
-import { PdfWriteError } from './syntax';
+import { MAX_OUTLINE_DEPTH, MAX_PAGES, OwnPdfWriter, writePdf } from './write-pdf';
+import { MAX_OUTPUT_BYTES } from './pdf-file-builder';
+import { PdfWriteError } from './pdf-syntax';
 import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage, LaidOutTextRun, PdfFontSet } from '../../../Header/laid-out-document';
 import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 

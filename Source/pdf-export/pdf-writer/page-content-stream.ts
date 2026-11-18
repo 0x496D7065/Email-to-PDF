@@ -3,11 +3,11 @@
 // top-left origin to PDF's bottom-left one. Text is drawn by glyph id
 // (Identity-H: 4 hex digits per glyph, so no email text is ever written as
 // PDF syntax, README.md, rule R4); a run whose copy text differs from what
-// ToUnicode yields gets a /Span with /ActualText (copy-text.ts). Pure
+// ToUnicode yields gets a /Span with /ActualText (copy-layer-text.ts). Pure
 // (README.md, rule R7).
-import { copyLayerText } from './copy-text';
+import { copyLayerText } from './copy-layer-text';
 import type { FontUsage } from './font-objects';
-import { fail, hex4, hexText, name, num } from './syntax';
+import { fail, hex4, hexText, name, num } from './pdf-syntax';
 import type { LaidOutColor, LaidOutPage, LaidOutTextRun } from '../../../Header/laid-out-document';
 
 /** Largest font size accepted, in points. */
