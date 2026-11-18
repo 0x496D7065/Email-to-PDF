@@ -7,6 +7,9 @@
 // exposed, because the PDF FontDescriptor and the layout may want different
 // ones (OS/2 fsSelection bit 7, USE_TYPO_METRICS, says which the font
 // designer intends for line spacing; it is exposed as useTypoMetrics).
+// numGlyphs, numberOfHMetrics, unitsPerEm, macStyle and fsSelection are the
+// OpenType spec's field names; head, hhea, maxp, hmtx, post and os2 (OS/2)
+// hold the table of that tag.
 //
 // Text measuring is deliberately simple: one glyph per code point, from the
 // cmap, and the sum of their advance widths. No kerning (GPOS/kern), no
@@ -14,8 +17,8 @@
 // measured with its own advance (usually 0 in Plex), so "e" + U+0301 is the
 // width of "e". A code point the font lacks maps to glyph 0 (.notdef) and is
 // measured as .notdef; the renderer decides what to draw instead.
-import { BinaryReader, fail, toFontError } from './binary-reader';
-import { type Cmap, parseCmap } from './cmap-table';
+import { BinaryReader, throwFontError, toFontError } from './binary-reader';
+import { type CmapSubtable, parseCmap } from './cmap-table';
 import { readSfntDirectory, tableBytes } from './sfnt-directory';
 import { unwrapWoff } from './unwrap-woff';
 import type { ParsedFont } from '../../../Header/pdf-fonts';
@@ -34,7 +37,7 @@ export function parseFont(sfnt: Uint8Array): ParsedFont
 {
     try
     {
-        return parse(sfnt);
+        return parseTables(sfnt);
     }
     catch (error)
     {
@@ -42,66 +45,66 @@ export function parseFont(sfnt: Uint8Array): ParsedFont
     }
 }
 
-function parse(sfnt: Uint8Array): ParsedFont
+function parseTables(sfnt: Uint8Array): ParsedFont
 {
     const directory = readSfntDirectory(sfnt);
-    const table = (tag: (typeof REQUIRED_TABLES)[number]): BinaryReader =>
+    const requireTable = (tag: (typeof REQUIRED_TABLES)[number]): BinaryReader =>
     {
         const bytes = tableBytes(sfnt, directory, tag);
         if (bytes === undefined)
         {
-            fail(`font: no "${tag}" table`);
+            throwFontError(`font: no "${tag}" table`);
         }
         return new BinaryReader(bytes, tag);
     };
     for (const tag of REQUIRED_TABLES)
     {
-        table(tag);
+        requireTable(tag);
     }
 
-    const head = table('head');
-    head.need(0, 54, 'head table');
-    if (head.u32(12) !== 0x5f0f3cf5)
+    const head = requireTable('head');
+    head.requireBytes(0, 54, 'head table');
+    if (head.readUint32(12) !== 0x5f0f3cf5)
     {
-        fail('head: wrong magic number');
+        throwFontError('head: wrong magic number');
     }
-    const unitsPerEm = head.u16(18);
+    const unitsPerEm = head.readUint16(18);
     if (unitsPerEm < 16 || unitsPerEm > 16384)
     {
-        fail(`head: unitsPerEm ${unitsPerEm} is out of range (16 to 16384)`);
+        throwFontError(`head: unitsPerEm ${unitsPerEm} is out of range (16 to 16384)`);
     }
-    const macStyle = head.u16(44);
+    const macStyle = head.readUint16(44);
 
-    const maxp = table('maxp');
-    const numGlyphs = maxp.u16(4);
+    const maxp = requireTable('maxp');
+    const numGlyphs = maxp.readUint16(4);
     if (numGlyphs === 0)
     {
-        fail('maxp: font has no glyphs');
+        throwFontError('maxp: font has no glyphs');
     }
 
-    const hhea = table('hhea');
-    hhea.need(0, 36, 'hhea table');
-    const numberOfHMetrics = hhea.u16(34);
+    const hhea = requireTable('hhea');
+    hhea.requireBytes(0, 36, 'hhea table');
+    const numberOfHMetrics = hhea.readUint16(34);
     if (numberOfHMetrics === 0 || numberOfHMetrics > numGlyphs)
     {
-        fail('hhea: numberOfHMetrics is 0 or more than the glyph count');
+        throwFontError('hhea: numberOfHMetrics is 0 or more than the glyph count');
     }
 
-    const advances = readAdvances(table('hmtx'), numberOfHMetrics, numGlyphs);
+    const advances = readAdvances(requireTable('hmtx'), numberOfHMetrics, numGlyphs);
 
-    const os2 = table('OS/2');
-    os2.need(0, 78, 'OS/2 table');
-    const os2Version = os2.u16(0);
+    const os2 = requireTable('OS/2');
+    os2.requireBytes(0, 78, 'OS/2 table');
+    const os2Version = os2.readUint16(0);
     if (os2Version >= 2)
     {
-        os2.need(0, 96, 'OS/2 version 2 table');
+        os2.requireBytes(0, 96, 'OS/2 version 2 table');
     }
-    const fsSelection = os2.u16(62);
+    const fsSelection = os2.readUint16(62);
 
-    const post = table('post');
-    post.need(0, 32, 'post table');
+    const post = requireTable('post');
+    post.requireBytes(0, 32, 'post table');
 
-    const cmap: Cmap = parseCmap(table('cmap').bytes, numGlyphs);
+    const cmapSubtable: CmapSubtable = parseCmap(requireTable('cmap').bytes, numGlyphs);
 
     const glyphFor = (codePoint: number): number =>
     {
@@ -113,7 +116,7 @@ function parse(sfnt: Uint8Array): ParsedFont
         {
             return 0; // a surrogate is never a character
         }
-        return cmap.lookup(codePoint);
+        return cmapSubtable.lookup(codePoint);
     };
     const advance = (glyphId: number): number =>
     {
@@ -127,27 +130,27 @@ function parse(sfnt: Uint8Array): ParsedFont
 
     return Object.freeze({
         sfnt,
-        postScriptName: postScriptNameFor(table('name')),
+        postScriptName: postScriptNameFor(requireTable('name')),
         unitsPerEm,
         numGlyphs,
-        bbox: Object.freeze({ xMin: head.i16(36), yMin: head.i16(38), xMax: head.i16(40), yMax: head.i16(42) }),
-        hhea: Object.freeze({ ascender: hhea.i16(4), descender: hhea.i16(6), lineGap: hhea.i16(8) }),
-        typo: Object.freeze({ ascender: os2.i16(68), descender: os2.i16(70), lineGap: os2.i16(72) }),
-        win: Object.freeze({ ascent: os2.u16(74), descent: os2.u16(76) }),
+        bbox: Object.freeze({ xMin: head.readInt16(36), yMin: head.readInt16(38), xMax: head.readInt16(40), yMax: head.readInt16(42) }),
+        hhea: Object.freeze({ ascender: hhea.readInt16(4), descender: hhea.readInt16(6), lineGap: hhea.readInt16(8) }),
+        typo: Object.freeze({ ascender: os2.readInt16(68), descender: os2.readInt16(70), lineGap: os2.readInt16(72) }),
+        win: Object.freeze({ ascent: os2.readUint16(74), descent: os2.readUint16(76) }),
         // Bit 7 is defined from OS/2 version 4 on; earlier versions reserve it.
         useTypoMetrics: os2Version >= 4 && (fsSelection & 0x80) !== 0,
-        capHeight: os2Version >= 2 ? os2.i16(88) : null,
-        xHeight: os2Version >= 2 ? os2.i16(86) : null,
+        capHeight: os2Version >= 2 ? os2.readInt16(88) : null,
+        xHeight: os2Version >= 2 ? os2.readInt16(86) : null,
         os2Version,
-        weightClass: os2.u16(4),
-        fsType: os2.u16(8),
-        italicAngle: post.i32(4) / 65536,
-        underlinePosition: post.i16(8),
-        underlineThickness: post.i16(10),
-        isFixedPitch: post.u32(12) !== 0,
+        weightClass: os2.readUint16(4),
+        fsType: os2.readUint16(8),
+        italicAngle: post.readInt32(4) / 65536,
+        underlinePosition: post.readInt16(8),
+        underlineThickness: post.readInt16(10),
+        isFixedPitch: post.readUint32(12) !== 0,
         isItalic: (macStyle & 0x02) !== 0 || (fsSelection & 0x01) !== 0,
         isBold: (macStyle & 0x01) !== 0 || (fsSelection & 0x20) !== 0,
-        cmap: Object.freeze({ format: cmap.format, platformId: cmap.platformId, encodingId: cmap.encodingId }),
+        cmap: Object.freeze({ format: cmapSubtable.format, platformId: cmapSubtable.platformId, encodingId: cmapSubtable.encodingId }),
         glyphFor,
         hasGlyph: (codePoint: number): boolean => glyphFor(codePoint) !== 0,
         advance,
@@ -171,18 +174,18 @@ function parse(sfnt: Uint8Array): ParsedFont
  */
 function readAdvances(hmtx: BinaryReader, numberOfHMetrics: number, numGlyphs: number): Uint16Array
 {
-    hmtx.need(0, 4 * numberOfHMetrics + 2 * (numGlyphs - numberOfHMetrics), 'hmtx table');
+    hmtx.requireBytes(0, 4 * numberOfHMetrics + 2 * (numGlyphs - numberOfHMetrics), 'hmtx table');
     const advances = new Uint16Array(numGlyphs);
     for (let i = 0; i < numberOfHMetrics; i++)
     {
-        advances[i] = hmtx.u16(4 * i);
+        advances[i] = hmtx.readUint16(4 * i);
     }
     advances.fill(advances[numberOfHMetrics - 1]!, numberOfHMetrics);
     return advances;
 }
 
 /** Most characters in a PostScript name (the limit Adobe recommends). */
-const MAX_POSTSCRIPT_NAME = 63;
+const MAX_POSTSCRIPT_NAME_LENGTH = 63;
 
 /**
  * name ID 6, the PostScript name, as a safe PDF name: only printable ASCII
@@ -192,27 +195,27 @@ const MAX_POSTSCRIPT_NAME = 63;
  * (1, 0) bytes are read one per character (as Latin-1); only the ASCII
  * ones survive the filter, so the Mac Roman upper half never matters.
  */
-function postScriptNameFor(name: BinaryReader): string
+function postScriptNameFor(nameTable: BinaryReader): string
 {
-    const count = name.u16(2);
-    const storage = name.u16(4);
-    name.need(6, count * 12, 'name records');
+    const recordCount = nameTable.readUint16(2);
+    const stringStorageAt = nameTable.readUint16(4);
+    nameTable.requireBytes(6, recordCount * 12, 'name records');
     const candidates: { rank: number; text: string }[] = [];
-    for (let i = 0; i < count; i++)
+    for (let i = 0; i < recordCount; i++)
     {
-        const at = 6 + i * 12;
-        if (name.u16(at + 6) !== 6)
+        const recordAt = 6 + i * 12;
+        if (nameTable.readUint16(recordAt + 6) !== 6)
         {
             continue;
         }
-        const platformId = name.u16(at);
-        const encodingId = name.u16(at + 2);
+        const platformId = nameTable.readUint16(recordAt);
+        const encodingId = nameTable.readUint16(recordAt + 2);
         const rank = platformId === 3 && encodingId === 1 ? 0 : platformId === 1 && encodingId === 0 ? 1 : platformId === 0 ? 2 : -1;
         if (rank < 0)
         {
             continue;
         }
-        const bytes = name.slice(storage + name.u16(at + 10), name.u16(at + 8), 'name string');
+        const bytes = nameTable.slice(stringStorageAt + nameTable.readUint16(recordAt + 10), nameTable.readUint16(recordAt + 8), 'name string');
         let text = '';
         if (platformId === 1)
         {
@@ -233,11 +236,11 @@ function postScriptNameFor(name: BinaryReader): string
     candidates.sort((a, b) => a.rank - b.rank);
     for (const { text } of candidates)
     {
-        const safe = text.replace(/[^\x21-\x7e]|[()<>[\]{}/%#]/g, '').slice(0, MAX_POSTSCRIPT_NAME);
-        if (safe !== '')
+        const safeName = text.replace(/[^\x21-\x7e]|[()<>[\]{}/%#]/g, '').slice(0, MAX_POSTSCRIPT_NAME_LENGTH);
+        if (safeName !== '')
         {
-            return safe;
+            return safeName;
         }
     }
-    fail('name: no usable PostScript name (name ID 6)');
+    throwFontError('name: no usable PostScript name (name ID 6)');
 }

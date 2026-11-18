@@ -1,13 +1,16 @@
-// The font's cmap table: Unicode code point -> glyph id (pure, as in rule
+// The font's cmap table (the OpenType "character to glyph index mapping"
+// table): Unicode code point -> glyph id (pure, as in rule
 // R7). Reads subtable format 4 (BMP, segments) and format 12 (all planes,
 // groups). Glyph 0 (.notdef) means "the font has no glyph for it".
+// segCountX2, segCount, startCode, endCode, idDelta, idRangeOffset, numGroups,
+// startCharCode and endCharCode are the OpenType spec's field names.
 //
 // Both formats are checked once when parsed (sizes, sorted non-overlapping
 // segments / groups) and then looked up with a binary search, so a lookup is
 // O(log n) and can never loop on damaged data.
-import { BinaryReader, fail } from './binary-reader';
+import { BinaryReader, throwFontError } from './binary-reader';
 
-export interface Cmap
+export interface CmapSubtable
 {
     readonly format: 4 | 12;
     readonly platformId: number;
@@ -34,75 +37,79 @@ export const CMAP_PREFERENCE: readonly (readonly [number, number])[] = [
  * Glyph ids >= numGlyphs are treated as missing (0). Throws a FontError when
  * the table is damaged or has no usable Unicode subtable.
  */
-export function parseCmap(table: Uint8Array, numGlyphs: number): Cmap
+export function parseCmap(table: Uint8Array, numGlyphs: number): CmapSubtable
 {
-    const r = new BinaryReader(table, 'cmap');
-    if (r.u16(0) !== 0)
+    const reader = new BinaryReader(table, 'cmap');
+    if (reader.readUint16(0) !== 0)
     {
-        fail('cmap: unknown table version');
+        throwFontError('cmap: unknown table version');
     }
-    const count = r.u16(2);
-    r.need(4, count * 8, 'encoding records');
-    const records: { platformId: number; encodingId: number; offset: number }[] = [];
-    for (let i = 0; i < count; i++)
+    const encodingRecordCount = reader.readUint16(2);
+    reader.requireBytes(4, encodingRecordCount * 8, 'encoding records');
+    const encodingRecords: { platformId: number; encodingId: number; offset: number }[] = [];
+    for (let i = 0; i < encodingRecordCount; i++)
     {
-        const at = 4 + i * 8;
-        records.push({ platformId: r.u16(at), encodingId: r.u16(at + 2), offset: r.u32(at + 4) });
+        const recordAt = 4 + i * 8;
+        encodingRecords.push({
+            platformId: reader.readUint16(recordAt),
+            encodingId: reader.readUint16(recordAt + 2),
+            offset: reader.readUint32(recordAt + 4)
+        });
     }
     for (const [platformId, encodingId] of CMAP_PREFERENCE)
     {
-        for (const record of records)
+        for (const record of encodingRecords)
         {
             if (record.platformId !== platformId || record.encodingId !== encodingId)
             {
                 continue;
             }
-            const format = r.u16(record.offset);
+            const format = reader.readUint16(record.offset);
             if (format === 4)
             {
-                return { format, platformId, encodingId, lookup: format4(r, record.offset, numGlyphs) };
+                return { format, platformId, encodingId, lookup: format4Lookup(reader, record.offset, numGlyphs) };
             }
             if (format === 12)
             {
-                return { format, platformId, encodingId, lookup: format12(r, record.offset, numGlyphs) };
+                return { format, platformId, encodingId, lookup: format12Lookup(reader, record.offset, numGlyphs) };
             }
         }
     }
-    fail('cmap: no Unicode subtable of format 4 or 12');
+    throwFontError('cmap: no Unicode subtable of format 4 or 12');
 }
 
-function validGlyph(glyph: number, numGlyphs: number): number
+function glyphOrMissing(glyph: number, numGlyphs: number): number
 {
     return glyph < numGlyphs ? glyph : 0;
 }
 
 /** Format 4: segment mapping to delta values (BMP only). */
-function format4(r: BinaryReader, start: number, numGlyphs: number): (codePoint: number) => number
+function format4Lookup(reader: BinaryReader, start: number, numGlyphs: number): (codePoint: number) => number
 {
-    r.need(start, 14, 'format 4 header');
-    const length = r.u16(start + 2);
-    const sub = new BinaryReader(r.slice(start, length, 'format 4 subtable'), 'cmap format 4');
-    const segCountX2 = sub.u16(6);
+    reader.requireBytes(start, 14, 'format 4 header');
+    const length = reader.readUint16(start + 2);
+    const subtable = new BinaryReader(reader.slice(start, length, 'format 4 subtable'), 'cmap format 4');
+    const segCountX2 = subtable.readUint16(6);
     if (segCountX2 === 0 || segCountX2 % 2 !== 0)
     {
-        fail('cmap format 4: bad segment count');
+        throwFontError('cmap format 4: bad segment count');
     }
     const segCount = segCountX2 / 2;
-    const endAt = 14;
-    const startAt = endAt + segCountX2 + 2; // + reservedPad
-    const deltaAt = startAt + segCountX2;
-    const rangeAt = deltaAt + segCountX2;
-    sub.need(endAt, rangeAt + segCountX2 - endAt, 'format 4 segment arrays');
+    const endCodesAt = 14;
+    const startCodesAt = endCodesAt + segCountX2 + 2; // + reservedPad
+    const idDeltasAt = startCodesAt + segCountX2;
+    const idRangeOffsetsAt = idDeltasAt + segCountX2;
+    subtable.requireBytes(endCodesAt, idRangeOffsetsAt + segCountX2 - endCodesAt, 'format 4 segment arrays');
     let previousEnd = -1;
     for (let i = 0; i < segCount; i++)
     {
-        const end = sub.u16(endAt + 2 * i);
-        const first = sub.u16(startAt + 2 * i);
-        if (first > end || first <= previousEnd)
+        const endCode = subtable.readUint16(endCodesAt + 2 * i);
+        const startCode = subtable.readUint16(startCodesAt + 2 * i);
+        if (startCode > endCode || startCode <= previousEnd)
         {
-            fail('cmap format 4: segments are not sorted or overlap');
+            throwFontError('cmap format 4: segments are not sorted or overlap');
         }
-        previousEnd = end;
+        previousEnd = endCode;
     }
     return (codePoint) =>
     {
@@ -116,7 +123,7 @@ function format4(r: BinaryReader, start: number, numGlyphs: number): (codePoint:
         while (low < high)
         {
             const middle = (low + high) >>> 1;
-            if (sub.u16(endAt + 2 * middle) < codePoint)
+            if (subtable.readUint16(endCodesAt + 2 * middle) < codePoint)
             {
                 low = middle + 1;
             }
@@ -125,52 +132,52 @@ function format4(r: BinaryReader, start: number, numGlyphs: number): (codePoint:
                 high = middle;
             }
         }
-        const end = sub.u16(endAt + 2 * low);
-        const first = sub.u16(startAt + 2 * low);
-        if (codePoint > end || codePoint < first)
+        const endCode = subtable.readUint16(endCodesAt + 2 * low);
+        const startCode = subtable.readUint16(startCodesAt + 2 * low);
+        if (codePoint > endCode || codePoint < startCode)
         {
             return 0;
         }
-        const delta = sub.u16(deltaAt + 2 * low);
-        const rangeOffset = sub.u16(rangeAt + 2 * low);
-        if (rangeOffset === 0)
+        const idDelta = subtable.readUint16(idDeltasAt + 2 * low);
+        const idRangeOffset = subtable.readUint16(idRangeOffsetsAt + 2 * low);
+        if (idRangeOffset === 0)
         {
-            return validGlyph((codePoint + delta) & 0xffff, numGlyphs);
+            return glyphOrMissing((codePoint + idDelta) & 0xffff, numGlyphs);
         }
         // idRangeOffset counts bytes from its own position into glyphIdArray.
-        const at = rangeAt + 2 * low + rangeOffset + 2 * (codePoint - first);
-        if (at + 2 > sub.length)
+        const glyphIdAt = idRangeOffsetsAt + 2 * low + idRangeOffset + 2 * (codePoint - startCode);
+        if (glyphIdAt + 2 > subtable.length)
         {
             return 0;
         }
-        const glyph = sub.u16(at);
-        return glyph === 0 ? 0 : validGlyph((glyph + delta) & 0xffff, numGlyphs);
+        const glyph = subtable.readUint16(glyphIdAt);
+        return glyph === 0 ? 0 : glyphOrMissing((glyph + idDelta) & 0xffff, numGlyphs);
     };
 }
 
 /** Format 12: segmented coverage (all of Unicode). */
-function format12(r: BinaryReader, start: number, numGlyphs: number): (codePoint: number) => number
+function format12Lookup(reader: BinaryReader, start: number, numGlyphs: number): (codePoint: number) => number
 {
-    r.need(start, 16, 'format 12 header');
-    const length = r.u32(start + 4);
-    const sub = new BinaryReader(r.slice(start, length, 'format 12 subtable'), 'cmap format 12');
-    const numGroups = sub.u32(12);
+    reader.requireBytes(start, 16, 'format 12 header');
+    const length = reader.readUint32(start + 4);
+    const subtable = new BinaryReader(reader.slice(start, length, 'format 12 subtable'), 'cmap format 12');
+    const numGroups = subtable.readUint32(12);
     if (numGroups === 0)
     {
-        fail('cmap format 12: no groups');
+        throwFontError('cmap format 12: no groups');
     }
-    sub.need(16, numGroups * 12, 'format 12 groups');
+    subtable.requireBytes(16, numGroups * 12, 'format 12 groups');
     let previousEnd = -1;
     for (let i = 0; i < numGroups; i++)
     {
-        const at = 16 + 12 * i;
-        const first = sub.u32(at);
-        const end = sub.u32(at + 4);
-        if (first > end || end > 0x10ffff || first <= previousEnd)
+        const groupAt = 16 + 12 * i;
+        const startCharCode = subtable.readUint32(groupAt);
+        const endCharCode = subtable.readUint32(groupAt + 4);
+        if (startCharCode > endCharCode || endCharCode > 0x10ffff || startCharCode <= previousEnd)
         {
-            fail('cmap format 12: groups are not sorted, overlap or pass U+10FFFF');
+            throwFontError('cmap format 12: groups are not sorted, overlap or pass U+10FFFF');
         }
-        previousEnd = end;
+        previousEnd = endCharCode;
     }
     return (codePoint) =>
     {
@@ -179,7 +186,7 @@ function format12(r: BinaryReader, start: number, numGlyphs: number): (codePoint
         while (low < high)
         {
             const middle = (low + high) >>> 1;
-            if (sub.u32(16 + 12 * middle + 4) < codePoint)
+            if (subtable.readUint32(16 + 12 * middle + 4) < codePoint)
             {
                 low = middle + 1;
             }
@@ -188,12 +195,12 @@ function format12(r: BinaryReader, start: number, numGlyphs: number): (codePoint
                 high = middle;
             }
         }
-        const at = 16 + 12 * low;
-        const first = sub.u32(at);
-        if (codePoint < first || codePoint > sub.u32(at + 4))
+        const groupAt = 16 + 12 * low;
+        const startCharCode = subtable.readUint32(groupAt);
+        if (codePoint < startCharCode || codePoint > subtable.readUint32(groupAt + 4))
         {
             return 0;
         }
-        return validGlyph(sub.u32(at + 8) + (codePoint - first), numGlyphs);
+        return glyphOrMissing(subtable.readUint32(groupAt + 8) + (codePoint - startCharCode), numGlyphs);
     };
 }

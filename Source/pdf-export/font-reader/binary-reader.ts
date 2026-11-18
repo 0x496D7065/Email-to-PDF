@@ -14,7 +14,7 @@ export class FontError extends Error
 }
 
 /** Throws a FontError. Typed `never` so callers can use it as an expression. */
-export function fail(message: string): never
+export function throwFontError(message: string): never
 {
     throw new FontError(message);
 }
@@ -53,7 +53,7 @@ export function tagName(tag: number): string
 }
 
 /** Rounds a length up to a multiple of 4 (sfnt tables are 4-byte aligned). */
-export function pad4(length: number): number
+export function padToFourBytes(length: number): number
 {
     return (length + 3) & ~3;
 }
@@ -77,48 +77,48 @@ export class BinaryReader
     }
 
     /** Fails unless `size` bytes from `offset` are inside the range. */
-    need(offset: number, size: number, what = 'data'): void
+    requireBytes(offset: number, size: number, description = 'data'): void
     {
         if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(size) || offset < 0 || size < 0 || offset + size > this.length)
         {
-            fail(`${this.label}: ${what} at byte ${offset} (${size} bytes) is past the end (${this.length} bytes)`);
+            throwFontError(`${this.label}: ${description} at byte ${offset} (${size} bytes) is past the end (${this.length} bytes)`);
         }
     }
 
-    u8(offset: number): number
+    readUint8(offset: number): number
     {
-        this.need(offset, 1);
+        this.requireBytes(offset, 1);
         return this.view.getUint8(offset);
     }
 
-    u16(offset: number): number
+    readUint16(offset: number): number
     {
-        this.need(offset, 2);
+        this.requireBytes(offset, 2);
         return this.view.getUint16(offset);
     }
 
-    i16(offset: number): number
+    readInt16(offset: number): number
     {
-        this.need(offset, 2);
+        this.requireBytes(offset, 2);
         return this.view.getInt16(offset);
     }
 
-    u32(offset: number): number
+    readUint32(offset: number): number
     {
-        this.need(offset, 4);
+        this.requireBytes(offset, 4);
         return this.view.getUint32(offset);
     }
 
-    i32(offset: number): number
+    readInt32(offset: number): number
     {
-        this.need(offset, 4);
+        this.requireBytes(offset, 4);
         return this.view.getInt32(offset);
     }
 
     /** A view (not a copy) of `size` bytes from `offset`. */
-    slice(offset: number, size: number, what?: string): Uint8Array
+    slice(offset: number, size: number, description?: string): Uint8Array
     {
-        this.need(offset, size, what);
+        this.requireBytes(offset, size, description);
         return this.bytes.subarray(offset, offset + size);
     }
 }
@@ -131,24 +131,24 @@ export function tableChecksum(bytes: Uint8Array, offset: number, length: number)
 {
     if (offset < 0 || length < 0 || offset + length > bytes.length)
     {
-        fail('checksum range is past the end of the data');
+        throwFontError('checksum range is past the end of the data');
     }
     let sum = 0;
     const end = offset + length;
-    const whole = offset + (length & ~3);
-    for (let i = offset; i < whole; i += 4)
+    const wholeWordsEnd = offset + (length & ~3);
+    for (let i = offset; i < wholeWordsEnd; i += 4)
     {
-        // `bytes[i]!`: i < whole <= end <= bytes.length, checked above.
+        // `bytes[i]!`: i < wholeWordsEnd <= end <= bytes.length, checked above.
         sum = (sum + ((bytes[i]! << 24) | (bytes[i + 1]! << 16) | (bytes[i + 2]! << 8) | bytes[i + 3]!)) >>> 0;
     }
-    if (whole < end)
+    if (wholeWordsEnd < end)
     {
-        let last = 0;
+        let lastWord = 0;
         for (let i = 0; i < 4; i++)
         {
-            last = (last << 8) | (whole + i < end ? bytes[whole + i]! : 0);
+            lastWord = (lastWord << 8) | (wholeWordsEnd + i < end ? bytes[wholeWordsEnd + i]! : 0);
         }
-        sum = (sum + (last >>> 0)) >>> 0;
+        sum = (sum + (lastWord >>> 0)) >>> 0;
     }
     return sum;
 }

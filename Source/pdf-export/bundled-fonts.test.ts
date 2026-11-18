@@ -3,12 +3,12 @@
 // The `?bytes` imports run through the same Vite plugin as the build.
 import { describe, expect, it } from 'vitest';
 import notices from '../public/THIRD_PARTY_NOTICES.txt?raw';
-import { PDF_FONT_FILES as PINNED } from '../../Helper/build-checks/font-rules.mjs';
+import { PDF_FONT_FILES as PINNED_FONT_FILES } from '../../Helper/build-checks/font-rules.mjs';
 import license from './fonts/LICENSE.txt?raw';
 import { isWoff, PDF_FONT_FILES, PDF_FONTS, pdfFontsReady } from './bundled-fonts';
 import type { PdfFontName } from '../../Header/pdf-fonts';
 
-const names = Object.keys(PDF_FONTS) as PdfFontName[];
+const fontNames = Object.keys(PDF_FONTS) as PdfFontName[];
 
 async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string>
 {
@@ -20,11 +20,11 @@ describe('PDF_FONTS', () =>
 {
     it('has the four styles, each from its own file', () =>
     {
-        expect(names.sort()).toEqual(['mono-regular', 'sans-bold', 'sans-italic', 'sans-regular']);
+        expect(fontNames.sort()).toEqual(['mono-regular', 'sans-bold', 'sans-italic', 'sans-regular']);
         expect(new Set(Object.values(PDF_FONT_FILES)).size).toBe(4);
     });
 
-    it.each(names)('%s is a complete WOFF file: signature "wOFF", header length = file length', (name) =>
+    it.each(fontNames)('%s is a complete WOFF file: signature "wOFF", header length = file length', (name) =>
     {
         const bytes = PDF_FONTS[name];
         expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe('wOFF');
@@ -32,16 +32,17 @@ describe('PDF_FONTS', () =>
         expect(isWoff(bytes)).toBe(true);
     });
 
-    it.each(names)('%s has the SHA-256 of the official file', async (name) =>
+    it.each(fontNames)('%s has the SHA-256 of the official file', async (name) =>
     {
-        const pinned = PINNED.find((font) => font.file === `Source/pdf-export/fonts/${PDF_FONT_FILES[name]}`);
+        const pinned = PINNED_FONT_FILES.find((font) => font.file === `Source/pdf-export/fonts/${PDF_FONT_FILES[name]}`);
         expect(pinned).toBeDefined();
         expect(await sha256(PDF_FONTS[name])).toBe(pinned?.sha256);
     });
 
     it('exports every pinned font, and only those', () =>
     {
-        expect(Object.values(PDF_FONT_FILES).map((file) => `Source/pdf-export/fonts/${file}`).sort()).toEqual(PINNED.map((font) => font.file).sort());
+        expect(Object.values(PDF_FONT_FILES).map((file) => `Source/pdf-export/fonts/${file}`).sort())
+            .toEqual(PINNED_FONT_FILES.map((font) => font.file).sort());
     });
 
     it('reports the fonts as ready', () =>
@@ -52,7 +53,7 @@ describe('PDF_FONTS', () =>
 
 describe('isWoff', () =>
 {
-    const header = (signature: number, length: number, size = 44): Uint8Array =>
+    const woffHeader = (signature: number, length: number, size = 44): Uint8Array =>
     {
         const bytes = new Uint8Array(size);
         const view = new DataView(bytes.buffer);
@@ -63,20 +64,20 @@ describe('isWoff', () =>
 
     it('accepts a header whose length matches', () =>
     {
-        expect(isWoff(header(0x774f4646, 44))).toBe(true);
+        expect(isWoff(woffHeader(0x774f4646, 44))).toBe(true);
     });
 
     it('rejects a wrong signature, a cut-off or padded file, and a too-short buffer', () =>
     {
-        expect(isWoff(header(0x774f4632, 44))).toBe(false); // 'wOF2': WOFF 2, not WOFF 1
-        expect(isWoff(header(0x774f4646, 100))).toBe(false); // claims 100 bytes, has 44
-        expect(isWoff(header(0x774f4646, 44, 45))).toBe(false); // one extra byte
+        expect(isWoff(woffHeader(0x774f4632, 44))).toBe(false); // 'wOF2': WOFF 2, not WOFF 1
+        expect(isWoff(woffHeader(0x774f4646, 100))).toBe(false); // claims 100 bytes, has 44
+        expect(isWoff(woffHeader(0x774f4646, 44, 45))).toBe(false); // one extra byte
         expect(isWoff(new Uint8Array([0x77, 0x4f, 0x46, 0x46]))).toBe(false);
     });
 
     it('reads the header of a view into a larger buffer correctly', () =>
     {
-        const inner = header(0x774f4646, 44);
+        const inner = woffHeader(0x774f4646, 44);
         const outer = new Uint8Array(50);
         outer.set(inner, 3);
         expect(isWoff(outer.subarray(3, 47))).toBe(true);

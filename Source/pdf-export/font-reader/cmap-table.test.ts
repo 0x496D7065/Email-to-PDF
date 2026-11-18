@@ -4,19 +4,19 @@ import { FontError } from './binary-reader';
 import { parseCmap } from './cmap-table';
 
 /** A big-endian byte writer for building test tables. */
-class Writer
+class BigEndianWriter
 {
     private readonly bytes: number[] = [];
-    u16(value: number): this
+    writeUint16(value: number): this
     {
         this.bytes.push((value >>> 8) & 0xff, value & 0xff);
         return this;
     }
-    u32(value: number): this
+    writeUint32(value: number): this
     {
-        return this.u16((value >>> 16) & 0xffff).u16(value & 0xffff);
+        return this.writeUint16((value >>> 16) & 0xffff).writeUint16(value & 0xffff);
     }
-    raw(data: Uint8Array): this
+    writeBytes(data: Uint8Array): this
     {
         this.bytes.push(...data);
         return this;
@@ -25,7 +25,7 @@ class Writer
     {
         return this.bytes.length;
     }
-    done(): Uint8Array
+    toBytes(): Uint8Array
     {
         return Uint8Array.from(this.bytes);
     }
@@ -41,12 +41,12 @@ interface Segment
 }
 
 /** A format 4 subtable. Segments must be sorted; a final U+FFFF segment is added. */
-function format4(segments: Segment[], { lengthDelta = 0, segCountX2 }: { lengthDelta?: number; segCountX2?: number } = {}): Uint8Array
+function buildFormat4(segments: Segment[], { lengthDelta = 0, segCountX2 }: { lengthDelta?: number; segCountX2?: number } = {}): Uint8Array
 {
-    const all: Segment[] = [...segments, { start: 0xffff, end: 0xffff, delta: 1 }];
-    const segCount = all.length;
+    const allSegments: Segment[] = [...segments, { start: 0xffff, end: 0xffff, delta: 1 }];
+    const segCount = allSegments.length;
     const glyphIdArray: number[] = [];
-    const rangeOffsets = all.map((segment, i) =>
+    const rangeOffsets = allSegments.map((segment, i) =>
     {
         if (segment.glyphs === undefined)
         {
@@ -56,67 +56,67 @@ function format4(segments: Segment[], { lengthDelta = 0, segCountX2 }: { lengthD
         glyphIdArray.push(...segment.glyphs);
         return offset;
     });
-    const body = new Writer();
-    for (const s of all)
+    const body = new BigEndianWriter();
+    for (const segment of allSegments)
     {
-        body.u16(s.end);
+        body.writeUint16(segment.end);
     }
-    body.u16(0); // reservedPad
-    for (const s of all)
+    body.writeUint16(0); // reservedPad
+    for (const segment of allSegments)
     {
-        body.u16(s.start);
+        body.writeUint16(segment.start);
     }
-    for (const s of all)
+    for (const segment of allSegments)
     {
-        body.u16(s.delta & 0xffff);
+        body.writeUint16(segment.delta & 0xffff);
     }
     for (const offset of rangeOffsets)
     {
-        body.u16(offset);
+        body.writeUint16(offset);
     }
     for (const glyph of glyphIdArray)
     {
-        body.u16(glyph);
+        body.writeUint16(glyph);
     }
     const length = 14 + body.length;
-    return new Writer()
-        .u16(4)
-        .u16(length + lengthDelta)
-        .u16(0) // language
-        .u16(segCountX2 ?? segCount * 2)
-        .u16(0) // searchRange etc.: not used by the reader
-        .u16(0)
-        .u16(0)
-        .raw(body.done())
-        .done();
+    return new BigEndianWriter()
+        .writeUint16(4)
+        .writeUint16(length + lengthDelta)
+        .writeUint16(0) // language
+        .writeUint16(segCountX2 ?? segCount * 2)
+        .writeUint16(0) // searchRange etc.: not used by the reader
+        .writeUint16(0)
+        .writeUint16(0)
+        .writeBytes(body.toBytes())
+        .toBytes();
 }
 
 /** A format 12 subtable from [startChar, endChar, startGlyph] groups. */
-function format12(groups: [number, number, number][], numGroups = groups.length): Uint8Array
+function buildFormat12(groups: [number, number, number][], numGroups = groups.length): Uint8Array
 {
-    const w = new Writer().u16(12).u16(0).u32(16 + 12 * groups.length).u32(0).u32(numGroups);
+    const writer = new BigEndianWriter().writeUint16(12).writeUint16(0).writeUint32(16 + 12 * groups.length).writeUint32(0).writeUint32(numGroups);
     for (const [start, end, glyph] of groups)
     {
-        w.u32(start).u32(end).u32(glyph);
+        writer.writeUint32(start).writeUint32(end).writeUint32(glyph);
     }
-    return w.done();
+    return writer.toBytes();
 }
 
 /** A cmap table holding the given subtables. */
-function cmap(subtables: { platformId: number; encodingId: number; data: Uint8Array }[]): Uint8Array
+function buildCmapTable(subtables: { platformId: number; encodingId: number; data: Uint8Array }[]): Uint8Array
 {
-    const w = new Writer().u16(0).u16(subtables.length);
+    const writer = new BigEndianWriter().writeUint16(0).writeUint16(subtables.length);
     let offset = 4 + 8 * subtables.length;
-    for (const s of subtables)
+    for (const subtable of subtables)
     {
-        w.u16(s.platformId).u16(s.encodingId).u32(offset);
-        offset += s.data.length;
+        writer.writeUint16(subtable.platformId).writeUint16(subtable.encodingId).writeUint32(offset);
+        offset += subtable.data.length;
     }
-    for (const s of subtables)
+    for (const subtable of subtables)
     {
-        w.raw(s.data);
+        writer.writeBytes(subtable.data);
     }
-    return w.done();
+    return writer.toBytes();
 }
 
 const SEGMENTS: Segment[] = [
@@ -129,7 +129,7 @@ const SEGMENTS: Segment[] = [
 
 describe('parseCmap format 4', () =>
 {
-    const table = cmap([{ platformId: 3, encodingId: 1, data: format4(SEGMENTS) }]);
+    const table = buildCmapTable([{ platformId: 3, encodingId: 1, data: buildFormat4(SEGMENTS) }]);
     const parsed = parseCmap(table, 300);
 
     it('maps by delta and through glyphIdArray', () =>
@@ -154,16 +154,16 @@ describe('parseCmap format 4', () =>
 
     it('treats a glyph id at or above numGlyphs as missing', () =>
     {
-        const small = parseCmap(table, 50);
-        expect(small.lookup(0x40)).toBe(0x21);
-        expect(small.lookup(0x51)).toBe(0); // glyph 50
-        expect(small.lookup(0xe0)).toBe(0); // glyph 105
+        const fiftyGlyphs = parseCmap(table, 50);
+        expect(fiftyGlyphs.lookup(0x40)).toBe(0x21);
+        expect(fiftyGlyphs.lookup(0x51)).toBe(0); // glyph 50
+        expect(fiftyGlyphs.lookup(0xe0)).toBe(0); // glyph 105
     });
 
     it('gives 0 when idRangeOffset points past the subtable', () =>
     {
-        const data = format4([{ start: 0x41, end: 0x5a, delta: 0, glyphs: [7] }]); // one entry for 26 code points
-        const lookup = parseCmap(cmap([{ platformId: 3, encodingId: 1, data }]), 300).lookup;
+        const data = buildFormat4([{ start: 0x41, end: 0x5a, delta: 0, glyphs: [7] }]); // one entry for 26 code points
+        const lookup = parseCmap(buildCmapTable([{ platformId: 3, encodingId: 1, data }]), 300).lookup;
         expect(lookup(0x41)).toBe(7);
         expect(lookup(0x42)).toBe(0); // its glyphIdArray entry would be past the end of the subtable
         expect(lookup(0x5a)).toBe(0);
@@ -171,17 +171,17 @@ describe('parseCmap format 4', () =>
 
     it('rejects damaged subtables', () =>
     {
-        const parse = (data: Uint8Array): unknown => parseCmap(cmap([{ platformId: 3, encodingId: 1, data }]), 300);
-        expect(() => parse(format4(SEGMENTS, { lengthDelta: 2 }))).toThrow(/format 4 subtable .* past the end/);
-        expect(() => parse(format4(SEGMENTS, { segCountX2: 7 }))).toThrow(/bad segment count/);
-        expect(() => parse(format4(SEGMENTS, { segCountX2: 0 }))).toThrow(/bad segment count/);
-        expect(() => parse(format4(SEGMENTS, { segCountX2: 400 }))).toThrow(/segment arrays .* past the end/);
+        const parseSubtable = (data: Uint8Array): unknown => parseCmap(buildCmapTable([{ platformId: 3, encodingId: 1, data }]), 300);
+        expect(() => parseSubtable(buildFormat4(SEGMENTS, { lengthDelta: 2 }))).toThrow(/format 4 subtable .* past the end/);
+        expect(() => parseSubtable(buildFormat4(SEGMENTS, { segCountX2: 7 }))).toThrow(/bad segment count/);
+        expect(() => parseSubtable(buildFormat4(SEGMENTS, { segCountX2: 0 }))).toThrow(/bad segment count/);
+        expect(() => parseSubtable(buildFormat4(SEGMENTS, { segCountX2: 400 }))).toThrow(/segment arrays .* past the end/);
         const unsorted = [SEGMENTS[1]!, SEGMENTS[0]!];
-        expect(() => parse(format4(unsorted))).toThrow(/not sorted or overlap/);
+        expect(() => parseSubtable(buildFormat4(unsorted))).toThrow(/not sorted or overlap/);
         const overlapping = [{ start: 0x20, end: 0x50, delta: 0 }, { start: 0x50, end: 0x60, delta: 0 }];
-        expect(() => parse(format4(overlapping))).toThrow(/not sorted or overlap/);
-        expect(() => parse(format4([{ start: 0x50, end: 0x40, delta: 0 }]))).toThrow(/not sorted or overlap/);
-        expect(() => parse(format4(SEGMENTS).subarray(0, 10))).toThrow(FontError);
+        expect(() => parseSubtable(buildFormat4(overlapping))).toThrow(/not sorted or overlap/);
+        expect(() => parseSubtable(buildFormat4([{ start: 0x50, end: 0x40, delta: 0 }]))).toThrow(/not sorted or overlap/);
+        expect(() => parseSubtable(buildFormat4(SEGMENTS).subarray(0, 10))).toThrow(FontError);
     });
 });
 
@@ -192,7 +192,7 @@ describe('parseCmap format 12', () =>
         [0xe9, 0xe9, 120],
         [0x1f600, 0x1f602, 250], // a few emoji, to test the planes above the BMP
     ];
-    const parsed = parseCmap(cmap([{ platformId: 3, encodingId: 10, data: format12(groups) }]), 300);
+    const parsed = parseCmap(buildCmapTable([{ platformId: 3, encodingId: 10, data: buildFormat12(groups) }]), 300);
 
     it('maps groups in all planes', () =>
     {
@@ -209,60 +209,61 @@ describe('parseCmap format 12', () =>
 
     it('treats a glyph id at or above numGlyphs as missing', () =>
     {
-        const lookup = parseCmap(cmap([{ platformId: 3, encodingId: 10, data: format12(groups) }]), 251).lookup;
+        const lookup = parseCmap(buildCmapTable([{ platformId: 3, encodingId: 10, data: buildFormat12(groups) }]), 251).lookup;
         expect(lookup(0x1f600)).toBe(250);
         expect(lookup(0x1f601)).toBe(0);
     });
 
     it('rejects damaged subtables', () =>
     {
-        const parse = (data: Uint8Array): unknown => parseCmap(cmap([{ platformId: 3, encodingId: 10, data }]), 300);
-        expect(() => parse(format12(groups, 0))).toThrow(/no groups/);
-        expect(() => parse(format12(groups, 0xffffffff))).toThrow(/groups .* past the end/);
-        expect(() => parse(format12([[0x30, 0x20, 1]]))).toThrow(/not sorted/);
-        expect(() => parse(format12([[0x20, 0x30, 1], [0x30, 0x40, 1]]))).toThrow(/not sorted, overlap/);
-        expect(() => parse(format12([[0x20, 0x110000, 1]]))).toThrow(/U\+10FFFF/);
-        expect(() => parse(format12(groups).subarray(0, 30))).toThrow(/format 12 subtable .* past the end/);
+        const parseSubtable = (data: Uint8Array): unknown => parseCmap(buildCmapTable([{ platformId: 3, encodingId: 10, data }]), 300);
+        expect(() => parseSubtable(buildFormat12(groups, 0))).toThrow(/no groups/);
+        expect(() => parseSubtable(buildFormat12(groups, 0xffffffff))).toThrow(/groups .* past the end/);
+        expect(() => parseSubtable(buildFormat12([[0x30, 0x20, 1]]))).toThrow(/not sorted/);
+        expect(() => parseSubtable(buildFormat12([[0x20, 0x30, 1], [0x30, 0x40, 1]]))).toThrow(/not sorted, overlap/);
+        expect(() => parseSubtable(buildFormat12([[0x20, 0x110000, 1]]))).toThrow(/U\+10FFFF/);
+        expect(() => parseSubtable(buildFormat12(groups).subarray(0, 30))).toThrow(/format 12 subtable .* past the end/);
     });
 });
 
 describe('parseCmap subtable choice', () =>
 {
-    const bmp = format4([{ start: 0x41, end: 0x41, delta: 1 - 0x41 }]); // A -> 1
-    const full = format12([[0x41, 0x41, 2]]); // A -> 2
+    const bmpSubtable = buildFormat4([{ start: 0x41, end: 0x41, delta: 1 - 0x41 }]); // A -> 1
+    const fullUnicodeSubtable = buildFormat12([[0x41, 0x41, 2]]); // A -> 2
 
     it('prefers (3,10), then (0,6)/(0,4), then (3,1)/(0,3)', () =>
     {
-        const pick = (records: [number, number, Uint8Array][]): string =>
+        const chosenRecord = (records: [number, number, Uint8Array][]): string =>
         {
-            const parsed = parseCmap(cmap(records.map(([platformId, encodingId, data]) => ({ platformId, encodingId, data }))), 10);
+            const parsed = parseCmap(buildCmapTable(records.map(([platformId, encodingId, data]) => ({ platformId, encodingId, data }))), 10);
             return `${parsed.platformId},${parsed.encodingId}`;
         };
-        expect(pick([[0, 3, bmp], [3, 1, bmp], [3, 10, full]])).toBe('3,10');
-        expect(pick([[0, 3, bmp], [3, 1, bmp], [0, 4, full]])).toBe('0,4');
-        expect(pick([[0, 3, bmp], [3, 1, bmp]])).toBe('3,1');
-        expect(pick([[1, 0, bmp], [0, 3, bmp]])).toBe('0,3');
+        expect(chosenRecord([[0, 3, bmpSubtable], [3, 1, bmpSubtable], [3, 10, fullUnicodeSubtable]])).toBe('3,10');
+        expect(chosenRecord([[0, 3, bmpSubtable], [3, 1, bmpSubtable], [0, 4, fullUnicodeSubtable]])).toBe('0,4');
+        expect(chosenRecord([[0, 3, bmpSubtable], [3, 1, bmpSubtable]])).toBe('3,1');
+        expect(chosenRecord([[1, 0, bmpSubtable], [0, 3, bmpSubtable]])).toBe('0,3');
     });
 
     it('skips a preferred record of another format', () =>
     {
-        const format6 = new Writer().u16(6).u16(10).u16(0).u16(0).u16(0).done();
-        const parsed = parseCmap(cmap([{ platformId: 3, encodingId: 10, data: format6 }, { platformId: 3, encodingId: 1, data: bmp }]), 10);
+        const format6 = new BigEndianWriter().writeUint16(6).writeUint16(10).writeUint16(0).writeUint16(0).writeUint16(0).toBytes();
+        const parsed = parseCmap(
+            buildCmapTable([{ platformId: 3, encodingId: 10, data: format6 }, { platformId: 3, encodingId: 1, data: bmpSubtable }]), 10);
         expect(parsed).toMatchObject({ format: 4, platformId: 3, encodingId: 1 });
         expect(parsed.lookup(0x41)).toBe(1);
     });
 
     it('rejects a table with no Unicode subtable, a wrong version or records past the end', () =>
     {
-        expect(() => parseCmap(cmap([{ platformId: 1, encodingId: 0, data: bmp }]), 10)).toThrow(/no Unicode subtable/);
-        expect(() => parseCmap(cmap([]), 10)).toThrow(/no Unicode subtable/);
-        const versioned = cmap([{ platformId: 3, encodingId: 1, data: bmp }]);
+        expect(() => parseCmap(buildCmapTable([{ platformId: 1, encodingId: 0, data: bmpSubtable }]), 10)).toThrow(/no Unicode subtable/);
+        expect(() => parseCmap(buildCmapTable([]), 10)).toThrow(/no Unicode subtable/);
+        const versioned = buildCmapTable([{ platformId: 3, encodingId: 1, data: bmpSubtable }]);
         versioned[1] = 1;
         expect(() => parseCmap(versioned, 10)).toThrow(/unknown table version/);
-        const counted = cmap([{ platformId: 3, encodingId: 1, data: bmp }]);
+        const counted = buildCmapTable([{ platformId: 3, encodingId: 1, data: bmpSubtable }]);
         counted[2] = 0xff;
         expect(() => parseCmap(counted, 10)).toThrow(/encoding records .* past the end/);
-        const pointing = cmap([{ platformId: 3, encodingId: 1, data: bmp }]);
+        const pointing = buildCmapTable([{ platformId: 3, encodingId: 1, data: bmpSubtable }]);
         pointing[8] = 0x7f;
         expect(() => parseCmap(pointing, 10)).toThrow(FontError);
     });

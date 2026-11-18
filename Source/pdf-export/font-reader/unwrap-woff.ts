@@ -1,4 +1,5 @@
-// WOFF 1.0 -> plain sfnt (TrueType) bytes, for embedding in the PDF as
+// WOFF 1.0 (Web Open Font Format: a font file with each table optionally
+// compressed) -> plain sfnt (TrueType) bytes, for embedding in the PDF as
 // FontFile2 (the PDF writer, milestone 5.4b). Fonts are the bundled IBM Plex
 // files only (README.md, rule R1: never loaded from the network), but the
 // reader is strict anyway: every count, offset and length is checked before
@@ -9,6 +10,8 @@
 // each table either stored as it is (compLength == origLength) or compressed
 // with zlib (compLength < origLength). Optional metadata and private blocks
 // follow; they are not part of the font and are checked for bounds only.
+// compLength, origLength, origChecksum, numTables, totalSfntSize, flavor,
+// searchRange and entrySelector are the WOFF / OpenType spec's field names.
 //
 // Decompression uses the platform's DecompressionStream('deflate') (the
 // zlib format), available in browsers, workers and Node 22: no dependency
@@ -20,14 +23,24 @@
 // order). The table bytes come back unchanged; the directory is rebuilt.
 // head.checkSumAdjustment is kept as stored, so it can be stale (see
 // checkSumAdjustment in sfnt-directory.ts).
-import { BinaryReader, directoryChecksum, fail, MAX_FONT_BYTES, MAX_TABLES, pad4, tagName, toFontError, TRUETYPE_FLAVOR } from './binary-reader';
+import {
+    BinaryReader,
+    directoryChecksum,
+    throwFontError,
+    MAX_FONT_BYTES,
+    MAX_TABLES,
+    padToFourBytes,
+    tagName,
+    toFontError,
+    TRUETYPE_FLAVOR
+} from './binary-reader';
 
 const WOFF_SIGNATURE = 0x774f4646; // 'wOFF'
 const OTTO_FLAVOR = 0x4f54544f; // 'OTTO': CFF outlines
-const WOFF_HEADER = 44;
-const WOFF_ENTRY = 20;
-const SFNT_HEADER = 12;
-const SFNT_ENTRY = 16;
+const WOFF_HEADER_BYTES = 44;
+const WOFF_ENTRY_BYTES = 20;
+const SFNT_HEADER_BYTES = 12;
+const SFNT_ENTRY_BYTES = 16;
 
 interface WoffEntry
 {
@@ -47,7 +60,7 @@ export async function unwrapWoff(woff: Uint8Array): Promise<Uint8Array<ArrayBuff
 {
     try
     {
-        return await unwrap(woff);
+        return await convertWoffToSfnt(woff);
     }
     catch (error)
     {
@@ -55,126 +68,126 @@ export async function unwrapWoff(woff: Uint8Array): Promise<Uint8Array<ArrayBuff
     }
 }
 
-async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
+async function convertWoffToSfnt(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
 {
     if (!(woff instanceof Uint8Array))
     {
-        fail('WOFF: input is not a Uint8Array');
+        throwFontError('WOFF: input is not a Uint8Array');
     }
-    if (woff.length < WOFF_HEADER)
+    if (woff.length < WOFF_HEADER_BYTES)
     {
-        fail(`WOFF: file is truncated (${woff.length} bytes, the header alone is ${WOFF_HEADER})`);
+        throwFontError(`WOFF: file is truncated (${woff.length} bytes, the header alone is ${WOFF_HEADER_BYTES})`);
     }
     if (woff.length > MAX_FONT_BYTES)
     {
-        fail(`WOFF: file is larger than ${MAX_FONT_BYTES} bytes`);
+        throwFontError(`WOFF: file is larger than ${MAX_FONT_BYTES} bytes`);
     }
-    const r = new BinaryReader(woff, 'WOFF');
+    const reader = new BinaryReader(woff, 'WOFF');
 
-    const signature = r.u32(0);
+    const signature = reader.readUint32(0);
     if (signature !== WOFF_SIGNATURE)
     {
-        fail(`WOFF: wrong signature "${tagName(signature)}" (expected "wOFF")`);
+        throwFontError(`WOFF: wrong signature "${tagName(signature)}" (expected "wOFF")`);
     }
-    const flavor = r.u32(4);
+    const flavor = reader.readUint32(4);
     if (flavor === OTTO_FLAVOR)
     {
-        fail('WOFF: font has CFF outlines (flavor "OTTO"); only TrueType outlines are supported');
+        throwFontError('WOFF: font has CFF outlines (flavor "OTTO"); only TrueType outlines are supported');
     }
     if (flavor !== TRUETYPE_FLAVOR)
     {
-        fail(`WOFF: unsupported flavor 0x${flavor.toString(16).padStart(8, '0')} (expected TrueType 0x00010000)`);
+        throwFontError(`WOFF: unsupported flavor 0x${flavor.toString(16).padStart(8, '0')} (expected TrueType 0x00010000)`);
     }
-    const length = r.u32(8);
+    const length = reader.readUint32(8);
     if (length !== woff.length)
     {
-        fail(`WOFF: header says ${length} bytes but the file has ${woff.length} (truncated or padded)`);
+        throwFontError(`WOFF: header says ${length} bytes but the file has ${woff.length} (truncated or padded)`);
     }
-    const numTables = r.u16(12);
+    const numTables = reader.readUint16(12);
     if (numTables === 0)
     {
-        fail('WOFF: font has no tables');
+        throwFontError('WOFF: font has no tables');
     }
     if (numTables > MAX_TABLES)
     {
-        fail(`WOFF: too many tables (${numTables}, at most ${MAX_TABLES})`);
+        throwFontError(`WOFF: too many tables (${numTables}, at most ${MAX_TABLES})`);
     }
-    if (r.u16(14) !== 0)
+    if (reader.readUint16(14) !== 0)
     {
-        fail('WOFF: reserved header field is not 0');
+        throwFontError('WOFF: reserved header field is not 0');
     }
-    const totalSfntSize = r.u32(16);
+    const totalSfntSize = reader.readUint32(16);
     if (totalSfntSize > MAX_FONT_BYTES)
     {
-        fail(`WOFF: decompressed font would be larger than ${MAX_FONT_BYTES} bytes`);
+        throwFontError(`WOFF: decompressed font would be larger than ${MAX_FONT_BYTES} bytes`);
     }
 
-    const directoryEnd = WOFF_HEADER + numTables * WOFF_ENTRY;
-    r.need(WOFF_HEADER, numTables * WOFF_ENTRY, 'table directory');
+    const directoryEnd = WOFF_HEADER_BYTES + numTables * WOFF_ENTRY_BYTES;
+    reader.requireBytes(WOFF_HEADER_BYTES, numTables * WOFF_ENTRY_BYTES, 'table directory');
 
     // Regions of the file in use, to reject overlaps: tables and the
     // optional metadata / private blocks.
-    const regions: { start: number; end: number; what: string }[] = [];
-    const optionalBlock = (offsetAt: number, lengthAt: number, what: string): void =>
+    const regions: { start: number; end: number; description: string }[] = [];
+    const checkOptionalBlock = (offsetAt: number, lengthAt: number, blockName: string): void =>
     {
-        const offset = r.u32(offsetAt);
-        const size = r.u32(lengthAt);
+        const offset = reader.readUint32(offsetAt);
+        const size = reader.readUint32(lengthAt);
         if (size === 0)
         {
             if (offset !== 0)
             {
-                fail(`WOFF: ${what} block has an offset but no length`);
+                throwFontError(`WOFF: ${blockName} block has an offset but no length`);
             }
             return;
         }
         if (offset < directoryEnd)
         {
-            fail(`WOFF: ${what} block starts inside the header or directory`);
+            throwFontError(`WOFF: ${blockName} block starts inside the header or directory`);
         }
-        r.need(offset, size, `${what} block`);
-        regions.push({ start: offset, end: offset + size, what: `${what} block` });
+        reader.requireBytes(offset, size, `${blockName} block`);
+        regions.push({ start: offset, end: offset + size, description: `${blockName} block` });
     };
-    optionalBlock(24, 28, 'metadata');
-    optionalBlock(36, 40, 'private');
+    checkOptionalBlock(24, 28, 'metadata');
+    checkOptionalBlock(36, 40, 'private');
 
     const entries: WoffEntry[] = [];
-    const tags = new Set<number>();
-    let sfntSize = SFNT_HEADER + numTables * SFNT_ENTRY;
+    const seenTags = new Set<number>();
+    let sfntSizeFromTables = SFNT_HEADER_BYTES + numTables * SFNT_ENTRY_BYTES;
     for (let i = 0; i < numTables; i++)
     {
-        const at = WOFF_HEADER + i * WOFF_ENTRY;
+        const entryAt = WOFF_HEADER_BYTES + i * WOFF_ENTRY_BYTES;
         const entry: WoffEntry = {
-            tag: r.u32(at),
-            offset: r.u32(at + 4),
-            compLength: r.u32(at + 8),
-            origLength: r.u32(at + 12),
-            origChecksum: r.u32(at + 16),
+            tag: reader.readUint32(entryAt),
+            offset: reader.readUint32(entryAt + 4),
+            compLength: reader.readUint32(entryAt + 8),
+            origLength: reader.readUint32(entryAt + 12),
+            origChecksum: reader.readUint32(entryAt + 16),
         };
-        const name = `table "${tagName(entry.tag)}"`;
-        if (tags.has(entry.tag))
+        const tableLabel = `table "${tagName(entry.tag)}"`;
+        if (seenTags.has(entry.tag))
         {
-            fail(`WOFF: ${name} appears twice`);
+            throwFontError(`WOFF: ${tableLabel} appears twice`);
         }
-        tags.add(entry.tag);
+        seenTags.add(entry.tag);
         if (entry.origLength > MAX_FONT_BYTES)
         {
-            fail(`WOFF: ${name} declares ${entry.origLength} bytes (more than ${MAX_FONT_BYTES})`);
+            throwFontError(`WOFF: ${tableLabel} declares ${entry.origLength} bytes (more than ${MAX_FONT_BYTES})`);
         }
         if (entry.compLength > entry.origLength)
         {
-            fail(`WOFF: ${name} is longer compressed than uncompressed`);
+            throwFontError(`WOFF: ${tableLabel} is longer compressed than uncompressed`);
         }
         if (entry.offset < directoryEnd)
         {
-            fail(`WOFF: ${name} starts inside the header or directory`);
+            throwFontError(`WOFF: ${tableLabel} starts inside the header or directory`);
         }
         if (entry.offset % 4 !== 0)
         {
-            fail(`WOFF: ${name} does not start on a 4-byte boundary`);
+            throwFontError(`WOFF: ${tableLabel} does not start on a 4-byte boundary`);
         }
-        r.need(entry.offset, entry.compLength, name);
-        regions.push({ start: entry.offset, end: entry.offset + entry.compLength, what: name });
-        sfntSize += pad4(entry.origLength);
+        reader.requireBytes(entry.offset, entry.compLength, tableLabel);
+        regions.push({ start: entry.offset, end: entry.offset + entry.compLength, description: tableLabel });
+        sfntSizeFromTables += padToFourBytes(entry.origLength);
         entries.push(entry);
     }
     regions.sort((a, b) => a.start - b.start);
@@ -184,81 +197,81 @@ async function unwrap(woff: Uint8Array): Promise<Uint8Array<ArrayBuffer>>
         const region = regions[i]!;
         if (region.start < before.end)
         {
-            fail(`WOFF: ${before.what} and ${region.what} overlap`);
+            throwFontError(`WOFF: ${before.description} and ${region.description} overlap`);
         }
     }
-    if (sfntSize !== totalSfntSize)
+    if (sfntSizeFromTables !== totalSfntSize)
     {
-        fail(`WOFF: header says the font is ${totalSfntSize} bytes but its tables add up to ${sfntSize}`);
+        throwFontError(`WOFF: header says the font is ${totalSfntSize} bytes but its tables add up to ${sfntSizeFromTables}`);
     }
 
     // Write the sfnt: offset table, directory sorted by tag, tables in file order.
     const sfnt = new Uint8Array(totalSfntSize);
-    const out = new DataView(sfnt.buffer);
-    out.setUint32(0, flavor);
-    out.setUint16(4, numTables);
+    const sfntView = new DataView(sfnt.buffer);
+    sfntView.setUint32(0, flavor);
+    sfntView.setUint16(4, numTables);
     let entrySelector = 0;
     while (2 << entrySelector <= numTables)
     {
         entrySelector++; // numTables <= MAX_TABLES: a few steps
     }
-    const searchRange = (1 << entrySelector) * SFNT_ENTRY;
-    out.setUint16(6, searchRange);
-    out.setUint16(8, entrySelector);
-    out.setUint16(10, numTables * SFNT_ENTRY - searchRange);
+    const searchRange = (1 << entrySelector) * SFNT_ENTRY_BYTES;
+    sfntView.setUint16(6, searchRange);
+    sfntView.setUint16(8, entrySelector);
+    sfntView.setUint16(10, numTables * SFNT_ENTRY_BYTES - searchRange);
 
-    const placed = new Map<WoffEntry, number>();
-    let position = SFNT_HEADER + numTables * SFNT_ENTRY;
+    const sfntOffsets = new Map<WoffEntry, number>();
+    let position = SFNT_HEADER_BYTES + numTables * SFNT_ENTRY_BYTES;
     for (const entry of [...entries].sort((a, b) => a.offset - b.offset))
     {
-        placed.set(entry, position);
-        const data = woff.subarray(entry.offset, entry.offset + entry.compLength);
+        sfntOffsets.set(entry, position);
+        const storedBytes = woff.subarray(entry.offset, entry.offset + entry.compLength);
         if (entry.compLength === entry.origLength)
         {
-            sfnt.set(data, position);
+            sfnt.set(storedBytes, position);
         }
         else
         {
-            await inflateInto(data, entry.origLength, sfnt, position, tagName(entry.tag));
+            await inflateInto(storedBytes, entry.origLength, sfnt, position, tagName(entry.tag));
         }
         const checksum = directoryChecksum(entry.tag, sfnt, position, entry.origLength);
         if (checksum !== entry.origChecksum)
         {
-            fail(`WOFF: table "${tagName(entry.tag)}" checksum does not match (damaged data)`);
+            throwFontError(`WOFF: table "${tagName(entry.tag)}" checksum does not match (damaged data)`);
         }
-        position += pad4(entry.origLength);
+        position += padToFourBytes(entry.origLength);
     }
 
     [...entries]
         .sort((a, b) => a.tag - b.tag)
         .forEach((entry, i) =>
         {
-            const at = SFNT_HEADER + i * SFNT_ENTRY;
-            out.setUint32(at, entry.tag);
-            out.setUint32(at + 4, entry.origChecksum);
-            out.setUint32(at + 8, placed.get(entry)!);
-            out.setUint32(at + 12, entry.origLength);
+            const entryAt = SFNT_HEADER_BYTES + i * SFNT_ENTRY_BYTES;
+            sfntView.setUint32(entryAt, entry.tag);
+            sfntView.setUint32(entryAt + 4, entry.origChecksum);
+            sfntView.setUint32(entryAt + 8, sfntOffsets.get(entry)!);
+            sfntView.setUint32(entryAt + 12, entry.origLength);
         });
     return sfnt;
 }
 
 /**
  * Inflates one zlib-compressed table straight into `target` at `position`.
- * Fails as soon as the output would pass `expected` bytes (so a "zip bomb"
- * cannot grow memory), and when it ends short of `expected`.
+ * Fails as soon as the output would pass `expectedLength` bytes (so a "zip bomb"
+ * cannot grow memory), and when it ends short of `expectedLength`.
  */
-async function inflateInto(data: Uint8Array, expected: number, target: Uint8Array, position: number, tag: string): Promise<void>
+async function inflateInto(storedBytes: Uint8Array, expectedLength: number, target: Uint8Array, position: number, tag: string): Promise<void>
 {
-    const what = `table "${tag}"`;
+    const tableLabel = `table "${tag}"`;
     // A copy, so the stream gets a plain ArrayBuffer-backed chunk of its own.
-    const stream = new Blob([data.slice()]).stream().pipeThrough(new DecompressionStream('deflate'));
+    const stream = new Blob([storedBytes.slice()]).stream().pipeThrough(new DecompressionStream('deflate'));
     const reader = stream.getReader();
     let written = 0;
     try
     {
         // Each non-empty chunk adds at least 1 byte and the total is capped at
-        // `expected`, so this loop ends; the extra allowance covers empty chunks.
-        for (let reads = 0; reads <= expected + 64; reads++)
+        // `expectedLength`, so this loop ends; the extra allowance covers empty chunks.
+        for (let readCount = 0; readCount <= expectedLength + 64; readCount++)
         {
             let chunk: ReadableStreamReadResult<Uint8Array>;
             try
@@ -267,25 +280,25 @@ async function inflateInto(data: Uint8Array, expected: number, target: Uint8Arra
             }
             catch (error)
             {
-                throw toFontError(error, `WOFF: ${what} has bad zlib data`);
+                throw toFontError(error, `WOFF: ${tableLabel} has bad zlib data`);
             }
             if (chunk.done)
             {
-                if (written !== expected)
+                if (written !== expectedLength)
                 {
-                    fail(`WOFF: ${what} decompressed to ${written} bytes, expected ${expected}`);
+                    throwFontError(`WOFF: ${tableLabel} decompressed to ${written} bytes, expected ${expectedLength}`);
                 }
                 return;
             }
             const bytes = chunk.value;
-            if (written + bytes.length > expected)
+            if (written + bytes.length > expectedLength)
             {
-                fail(`WOFF: ${what} decompresses to more than the declared ${expected} bytes`);
+                throwFontError(`WOFF: ${tableLabel} decompresses to more than the declared ${expectedLength} bytes`);
             }
             target.set(bytes, position + written);
             written += bytes.length;
         }
-        fail(`WOFF: ${what} decompression did not finish`);
+        throwFontError(`WOFF: ${tableLabel} decompression did not finish`);
     }
     finally
     {
