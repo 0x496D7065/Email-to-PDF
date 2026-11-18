@@ -21,10 +21,10 @@ import { isPlainPath, type PrecacheManifest } from './service-worker-logic.ts';
 export { MANIFEST_PLACEHOLDER, manifestVersion, readBuiltManifest, VERSION_LENGTH } from '../../Helper/build-checks/sw-version.mjs';
 
 /** File name of the service worker script in dist/ (served as /sw.js). */
-export const SW_FILE_NAME = 'sw.js';
+export const SERVICE_WORKER_FILE_NAME = 'sw.js';
 
 /** dist/ files that are never stored: host settings files and the service worker itself. */
-const NEVER_PRECACHED: ReadonlySet<string> = new Set(['_headers', '_redirects', '_routes.json', SW_FILE_NAME]);
+const NEVER_PRECACHED: ReadonlySet<string> = new Set(['_headers', '_redirects', '_routes.json', SERVICE_WORKER_FILE_NAME]);
 
 /**
  * The precache paths for the files of dist/ (`fileNames`: paths relative
@@ -40,25 +40,25 @@ export function precachePaths(fileNames: readonly string[], base = '/'): string[
         throw new Error(`precache list: base must start and end with "/", not ${base}`);
     }
     const paths: string[] = [];
-    let page = false;
-    for (const name of fileNames)
+    let hasIndexHtml = false;
+    for (const fileName of fileNames)
     {
-        if (NEVER_PRECACHED.has(name) || name.endsWith('.map'))
+        if (NEVER_PRECACHED.has(fileName) || fileName.endsWith('.map'))
         {
             continue;
         }
-        const path = name === 'index.html' ? base : `${base}${name}`;
-        if (name === 'index.html')
+        const path = fileName === 'index.html' ? base : `${base}${fileName}`;
+        if (fileName === 'index.html')
         {
-            page = true;
+            hasIndexHtml = true;
         }
         else if (!isPlainPath(path))
         {
-            throw new Error(`precache list: "${name}" is not a plain file path`);
+            throw new Error(`precache list: "${fileName}" is not a plain file path`);
         }
         paths.push(path);
     }
-    if (!page)
+    if (!hasIndexHtml)
     {
         throw new Error('precache list: dist/index.html is missing');
     }
@@ -76,13 +76,13 @@ export function precachePaths(fileNames: readonly string[], base = '/'): string[
  */
 export function injectManifest(code: string, manifest: PrecacheManifest): string
 {
-    const literal = new RegExp(`(["'\`])${MANIFEST_PLACEHOLDER}\\1`, 'g');
-    const found = code.match(literal)?.length ?? 0;
-    const anywhere = code.split(MANIFEST_PLACEHOLDER).length - 1;
-    if (found !== 1 || anywhere !== 1)
+    const placeholderLiteralPattern = new RegExp(`(["'\`])${MANIFEST_PLACEHOLDER}\\1`, 'g');
+    const quotedCount = code.match(placeholderLiteralPattern)?.length ?? 0;
+    const anywhereCount = code.split(MANIFEST_PLACEHOLDER).length - 1;
+    if (quotedCount !== 1 || anywhereCount !== 1)
     {
-        throw new Error(`sw.js must contain the precache placeholder exactly once (found ${String(anywhere)})`);
+        throw new Error(`sw.js must contain the precache placeholder exactly once (found ${String(anywhereCount)})`);
     }
-    const json = JSON.stringify({ version: manifest.version, paths: manifest.paths });
-    return code.replace(literal, () => JSON.stringify(json));
+    const manifestJson = JSON.stringify({ version: manifest.version, paths: manifest.paths });
+    return code.replace(placeholderLiteralPattern, () => JSON.stringify(manifestJson));
 }

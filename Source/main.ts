@@ -16,10 +16,10 @@ import { mountPage } from './web-page/mount-page';
 // page (the picker shows once there are two languages).
 setLocale(pickLocale(navigator.languages.length > 0 ? navigator.languages : [navigator.language]));
 
-const root = document.getElementById('app');
-if (root)
+const appElement = document.getElementById('app');
+if (appElement)
 {
-    mountPage(root);
+    mountPage(appElement);
 }
 
 // The PDF fonts are imported here, by the page entry, so their chunk

@@ -14,7 +14,7 @@ export const SERVICE_WORKER_URL = '/sw.js';
 export const SERVICE_WORKER_SCOPE = '/';
 
 /** The part of `navigator` used here. */
-export interface ServiceWorkerHost
+export interface ServiceWorkerNavigator
 {
     readonly serviceWorker?: {
         register(url: string, options?: { scope?: string; updateViaCache?: 'imports' | 'all' | 'none' }): Promise<unknown>;
@@ -25,26 +25,26 @@ export interface ServiceWorkerHost
  * Asks the browser to install the service worker. Never throws, and a
  * refusal (a rejected promise) is swallowed.
  */
-export function registerServiceWorker(host: ServiceWorkerHost | undefined): void
+export function registerServiceWorker(browserNavigator: ServiceWorkerNavigator | undefined): void
 {
     // Inside a promise chain, so a register() that throws at once is caught too.
     Promise.resolve()
         .then(() =>
         {
-            const container = host?.serviceWorker;
-            if (container === undefined || container === null || typeof container.register !== 'function')
+            const serviceWorkerContainer = browserNavigator?.serviceWorker;
+            if (serviceWorkerContainer === undefined || serviceWorkerContainer === null || typeof serviceWorkerContainer.register !== 'function')
             {
                 return undefined;
             }
             // updateViaCache 'none': the browser always asks the site for a new
             // sw.js, so an update is noticed on the next visit.
-            return container.register(SERVICE_WORKER_URL, { scope: SERVICE_WORKER_SCOPE, updateViaCache: 'none' });
+            return serviceWorkerContainer.register(SERVICE_WORKER_URL, { scope: SERVICE_WORKER_SCOPE, updateViaCache: 'none' });
         })
         .catch(() => undefined);
 }
 
 /** The part of `window` used here. */
-export interface LoadTarget
+export interface PageWindow
 {
     readonly document: { readonly readyState: string };
     addEventListener(type: 'load', listener: () => void, options: { once: true }): void;
@@ -54,14 +54,14 @@ export interface LoadTarget
  * Registers once the page has fully loaded (so storing the site's files
  * never competes with opening the page), or at once if it already has.
  */
-export function registerWhenLoaded(target: LoadTarget, host: ServiceWorkerHost | undefined): void
+export function registerWhenLoaded(pageWindow: PageWindow, browserNavigator: ServiceWorkerNavigator | undefined): void
 {
-    if (target.document.readyState === 'complete')
+    if (pageWindow.document.readyState === 'complete')
     {
-        registerServiceWorker(host);
+        registerServiceWorker(browserNavigator);
     }
     else
     {
-        target.addEventListener('load', () => registerServiceWorker(host), { once: true });
+        pageWindow.addEventListener('load', () => registerServiceWorker(browserNavigator), { once: true });
     }
 }

@@ -52,14 +52,14 @@ interface ServiceWorkerScope
     addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
 }
 
-const scope = self as unknown as ServiceWorkerScope;
+const serviceWorkerGlobal = self as unknown as ServiceWorkerScope;
 
 // Replaced by the build with the precache list (Source/offline-copy/precache-list.ts,
 // injectManifest). Left as is (e.g. a build without the plugin), JSON.parse
 // throws, the worker never installs, and the page works as without it.
 const MANIFEST = parseManifest('__SW_PRECACHE_MANIFEST__');
 const CACHE = cacheNameFor(MANIFEST.version);
-const PATHS: ReadonlySet<string> = new Set(MANIFEST.paths);
+const PRECACHED_PATHS: ReadonlySet<string> = new Set(MANIFEST.paths);
 
 /** Stores every listed file. All or nothing: one failed file fails the install. */
 async function storeOwnFiles(): Promise<void>
@@ -73,11 +73,11 @@ async function storeOwnFiles(): Promise<void>
 /** Deletes the caches of older versions of this service worker. */
 async function deleteOldCopies(): Promise<void>
 {
-    for (const name of await caches.keys())
+    for (const cacheName of await caches.keys())
     {
-        if (isOldCacheOfOurs(name, CACHE))
+        if (isOldCacheOfOurs(cacheName, CACHE))
         {
-            await caches.delete(name);
+            await caches.delete(cacheName);
         }
     }
 }
@@ -91,25 +91,25 @@ async function deleteOldCopies(): Promise<void>
  */
 async function answer(path: string, request: Request): Promise<Response>
 {
-    const copy = await caches.match(path, { cacheName: CACHE });
-    return copy ?? fetch(request);
+    const storedCopy = await caches.match(path, { cacheName: CACHE });
+    return storedCopy ?? fetch(request);
 }
 
-scope.addEventListener('install', (event) =>
+serviceWorkerGlobal.addEventListener('install', (event) =>
 {
     // A new version takes over at once: the page loads all its files when it
     // opens, so an open page never needs a file of the old version later.
-    event.waitUntil(storeOwnFiles().then(() => scope.skipWaiting()));
+    event.waitUntil(storeOwnFiles().then(() => serviceWorkerGlobal.skipWaiting()));
 });
 
-scope.addEventListener('activate', (event) =>
+serviceWorkerGlobal.addEventListener('activate', (event) =>
 {
-    event.waitUntil(deleteOldCopies().then(() => scope.clients.claim()));
+    event.waitUntil(deleteOldCopies().then(() => serviceWorkerGlobal.clients.claim()));
 });
 
-scope.addEventListener('fetch', (event) =>
+serviceWorkerGlobal.addEventListener('fetch', (event) =>
 {
-    const path = precachedPathFor(event.request, scope.location.origin, PATHS);
+    const path = precachedPathFor(event.request, serviceWorkerGlobal.location.origin, PRECACHED_PATHS);
     if (path === null)
     {
         return;

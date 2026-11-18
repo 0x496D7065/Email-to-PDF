@@ -10,14 +10,14 @@ import { TypeEnum } from '@kenjiuno/msgreader/lib/Reader';
 import { describe, expect, it } from 'vitest';
 
 /** A string as UTF-16LE bytes, like .msg "Unicode" (PT_UNICODE, ...001F) properties. */
-function utf16le(text: string): Uint8Array
+function toUtf16le(text: string): Uint8Array
 {
     const bytes = new Uint8Array(text.length * 2);
     for (let i = 0; i < text.length; i++)
     {
-        const code = text.charCodeAt(i);
-        bytes[2 * i] = code & 0xff;
-        bytes[2 * i + 1] = code >> 8;
+        const charCode = text.charCodeAt(i);
+        bytes[2 * i] = charCode & 0xff;
+        bytes[2 * i + 1] = charCode >> 8;
     }
     return bytes;
 }
@@ -31,8 +31,8 @@ function buildMsg(streams: Record<string, Uint8Array>): DataView
         entries[0]?.children?.push(entries.length);
         entries.push({ name, type: TypeEnum.DOCUMENT, binaryProvider: () => bytes, length: bytes.length });
     }
-    const bytes = burn(entries);
-    return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const fileBytes = burn(entries);
+    return new DataView(fileBytes.buffer, fileBytes.byteOffset, fileBytes.byteLength);
 }
 
 describe('iconv-lite shim with msgreader', () =>
@@ -41,8 +41,8 @@ describe('iconv-lite shim with msgreader', () =>
     {
         const msg = buildMsg({
             // 0037 = subject, 1000 = plain-text body; type 001F = UTF-16LE string.
-            '__substg1.0_0037001F': utf16le('Café meeting'),
-            '__substg1.0_1000001F': utf16le('Hello from café.'),
+            '__substg1.0_0037001F': toUtf16le('Café meeting'),
+            '__substg1.0_1000001F': toUtf16le('Hello from café.'),
         });
         const fields = new MsgReader(msg).getFileData();
         expect(fields.subject).toBe('Café meeting');

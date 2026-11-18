@@ -11,7 +11,7 @@ import {
 
 // The exact policy documented in README.md, rule R2. If this test fails, the policy
 // was changed: loosening it needs the user's explicit approval.
-const EXPECTED: Record<string, string> = {
+const DOCUMENTED_POLICY: Record<string, string> = {
     'default-src': "'none'",
     'script-src': "'self'",
     'style-src': "'self'",
@@ -26,30 +26,30 @@ const EXPECTED: Record<string, string> = {
 };
 
 /** "a x; b y z" -> { a: "x", b: "y z" } */
-function parse(policy: string): Record<string, string>
+function parsePolicy(policy: string): Record<string, string>
 {
-    const result: Record<string, string> = {};
-    for (const part of policy.split(';'))
+    const directives: Record<string, string> = {};
+    for (const directive of policy.split(';'))
     {
-        const [name = '', ...sources] = part.trim().split(/\s+/);
+        const [name = '', ...sources] = directive.trim().split(/\s+/);
         if (name)
         {
-            result[name] = sources.join(' ');
+            directives[name] = sources.join(' ');
         }
     }
-    return result;
+    return directives;
 }
 
 describe('Content Security Policy', () =>
 {
     it('meta version is exactly the documented policy', () =>
     {
-        expect(parse(cspForMeta())).toEqual(EXPECTED);
+        expect(parsePolicy(cspForMeta())).toEqual(DOCUMENTED_POLICY);
     });
 
     it('header version adds only frame-ancestors none', () =>
     {
-        expect(parse(cspForHeader())).toEqual({ ...EXPECTED, 'frame-ancestors': "'none'" });
+        expect(parsePolicy(cspForHeader())).toEqual({ ...DOCUMENTED_POLICY, 'frame-ancestors': "'none'" });
     });
 
     it('never allows inline code, eval, remote hosts or wildcards', () =>
@@ -67,7 +67,7 @@ describe('service worker CSP (/sw.js only)', () =>
 {
     it('is the header policy with ONLY connect-src set to self (the user-approved exception)', () =>
     {
-        expect(parse(cspForServiceWorker())).toEqual({ ...EXPECTED, 'connect-src': "'self'", 'frame-ancestors': "'none'" });
+        expect(parsePolicy(cspForServiceWorker())).toEqual({ ...DOCUMENTED_POLICY, 'connect-src': "'self'", 'frame-ancestors': "'none'" });
     });
 
     it('never allows inline code, eval, remote hosts or wildcards', () =>

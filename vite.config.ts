@@ -4,7 +4,7 @@ import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { isBytesImportAllowed } from './Helper/build-checks/font-rules.mjs';
 import { cloudflareHeadersFile, cspForMeta, REFERRER_POLICY, securityHeadersFor } from './Source/security-headers/headers.ts';
-import { injectManifest, manifestVersion, precachePaths, SW_FILE_NAME } from './Source/offline-copy/precache-list.ts';
+import { injectManifest, manifestVersion, precachePaths, SERVICE_WORKER_FILE_NAME } from './Source/offline-copy/precache-list.ts';
 
 // Adds the security headers (README.md, rule R2) to the PRODUCTION BUILD only.
 //
@@ -104,7 +104,7 @@ function offlineCopy(): Plugin
         {
             if (site)
             {
-                this.emitFile({ type: 'chunk', id: swEntry, fileName: SW_FILE_NAME });
+                this.emitFile({ type: 'chunk', id: swEntry, fileName: SERVICE_WORKER_FILE_NAME });
             }
         },
         // 'post': after every other plugin has written its files (index.html, _headers).
@@ -116,20 +116,20 @@ function offlineCopy(): Plugin
                 {
                     return;
                 }
-                const sw = bundle[SW_FILE_NAME];
+                const sw = bundle[SERVICE_WORKER_FILE_NAME];
                 if (sw?.type !== 'chunk')
                 {
-                    throw new Error(`offline-copy: ${SW_FILE_NAME} was not built`);
+                    throw new Error(`offline-copy: ${SERVICE_WORKER_FILE_NAME} was not built`);
                 }
                 // A classic script: nothing imported from or shared with the page's code.
                 if (sw.imports.length > 0 || sw.dynamicImports.length > 0 || sw.exports.length > 0)
                 {
-                    throw new Error(`offline-copy: ${SW_FILE_NAME} must not import or export anything`);
+                    throw new Error(`offline-copy: ${SERVICE_WORKER_FILE_NAME} must not import or export anything`);
                 }
                 const files = new Map<string, Uint8Array>();
                 for (const [fileName, output] of Object.entries(bundle))
                 {
-                    if (fileName === SW_FILE_NAME)
+                    if (fileName === SERVICE_WORKER_FILE_NAME)
                     {
                         continue;
                     }

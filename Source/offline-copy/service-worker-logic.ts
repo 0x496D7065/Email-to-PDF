@@ -29,24 +29,24 @@ export function cacheNameFor(version: string): string
 }
 
 /**
- * Should this cache be deleted when version `current` takes over? Only the
- * caches of this service worker (by prefix), never the current one. Caches
- * the site did not make are left alone.
+ * Should this cache be deleted when `currentCacheName` becomes the current
+ * cache? Only the caches of this service worker (by prefix), never the
+ * current one. Caches the site did not make are left alone.
  */
-export function isOldCacheOfOurs(name: string, current: string): boolean
+export function isOldCacheOfOurs(cacheName: string, currentCacheName: string): boolean
 {
-    return name.startsWith(CACHE_PREFIX) && name !== current;
+    return cacheName.startsWith(CACHE_PREFIX) && cacheName !== currentCacheName;
 }
 
-const VERSION = /^[0-9a-f]{16,64}$/;
+const VERSION_PATTERN = /^[0-9a-f]{16,64}$/;
 // A path of the site: "/" then letters, digits, ".", "_", "-" and "/" only
 // (no query string, no fragment, no escapes, no ".." step).
-const PATH = /^\/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*)?$/;
+const PLAIN_PATH_PATTERN = /^\/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*)?$/;
 
 /** Is `path` a plain path of this site, as the precache list holds them? */
 export function isPlainPath(path: string): boolean
 {
-    return PATH.test(path) && !path.split('/').includes('..');
+    return PLAIN_PATH_PATTERN.test(path) && !path.split('/').includes('..');
 }
 
 /**
@@ -56,13 +56,13 @@ export function isPlainPath(path: string): boolean
  */
 export function parseManifest(json: string): PrecacheManifest
 {
-    const value: unknown = JSON.parse(json);
-    if (typeof value !== 'object' || value === null)
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== 'object' || parsed === null)
     {
         throw new Error('precache list: not an object');
     }
-    const { version, paths } = value as { version?: unknown; paths?: unknown };
-    if (typeof version !== 'string' || !VERSION.test(version))
+    const { version, paths } = parsed as { version?: unknown; paths?: unknown };
+    if (typeof version !== 'string' || !VERSION_PATTERN.test(version))
     {
         throw new Error('precache list: bad version');
     }
@@ -70,24 +70,24 @@ export function parseManifest(json: string): PrecacheManifest
     {
         throw new Error('precache list: no paths');
     }
-    const list: string[] = [];
+    const checkedPaths: string[] = [];
     for (const path of paths as unknown[])
     {
         if (typeof path !== 'string' || !isPlainPath(path))
         {
             throw new Error('precache list: bad path');
         }
-        list.push(path);
+        checkedPaths.push(path);
     }
-    if (new Set(list).size !== list.length)
+    if (new Set(checkedPaths).size !== checkedPaths.length)
     {
         throw new Error('precache list: duplicate path');
     }
-    if (Object.keys(value).length !== 2)
+    if (Object.keys(parsed).length !== 2)
     {
         throw new Error('precache list: unexpected field');
     }
-    return { version, paths: list };
+    return { version, paths: checkedPaths };
 }
 
 /** What the request filter looks at: the request's method and full URL. */
