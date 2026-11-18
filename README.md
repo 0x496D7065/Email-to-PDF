@@ -814,7 +814,7 @@ the soft hyphen and all variation selectors (U+FE00 to U+FE0F and U+E0100
 to U+E01EF). Quote levels are not shown: every line of an email's text is
 indented by one fixed step, one tab: the width of 4 normal spaces of the
 body font at the body size, measured from the font
-(`Source/pdf-export/page-layout/config.ts`, `bodyIndentSpaces`; 9.44 pt with the
+(`Source/pdf-export/page-layout/layout-config.ts`, `bodyIndentSpaces`; 9.44 pt with the
 default 10 pt IBM Plex Sans), quoted or not, and so is the "(no text)"
 placeholder; the header rows and the attachment list stay at the margin. The PDF stops
 reading the marks at a vertical tab or form feed control, or at any other

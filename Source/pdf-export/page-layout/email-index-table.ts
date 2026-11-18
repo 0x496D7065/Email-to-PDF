@@ -24,7 +24,7 @@
 // one, else it breaks between its lines (its link is then split in one area
 // per page). Pure (README.md, rule R7); email text only ever becomes glyphs
 // and copy text (rule R4).
-import { linesHeight } from './blocks';
+import { linesHeight } from './field-rows-and-lists';
 import type { PageBuilder } from './page-builder';
 import type { LaidLine, Typesetter } from './typesetter';
 import type { LayoutConfig } from '../../../Header/laid-out-document';

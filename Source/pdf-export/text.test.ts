@@ -552,7 +552,7 @@ describe('bodyLines: quote marks removed (transform g, tasks 8.1 and 8.6)', () =
     it('keeps blank-looking characters the PDF fonts print as codes: a ">" after them is not at the start', () =>
     {
         // Hangul fillers, braille blank, Mongolian vowel separator: no glyph in IBM Plex, so the renderer
-        // prints "[U+XXXX]" (Source/pdf-export/page-layout/shape.ts); they are text here, and the line is kept as written.
+        // prints "[U+XXXX]" (Source/pdf-export/page-layout/shape-text.ts); they are text here, and the line is kept as written.
         for (const blank of ['\u{3164}', '\u{115F}', '\u{1160}', '\u{FFA0}', '\u{2800}', '\u{180E}'])
         {
             const where = JSON.stringify(blank);

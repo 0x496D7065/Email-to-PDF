@@ -64,7 +64,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import type * as FontModule from '../../../Source/pdf-export/font-reader/parse-font.ts';
-import type * as ConfigModule from '../../../Source/pdf-export/page-layout/config.ts';
+import type * as ConfigModule from '../../../Source/pdf-export/page-layout/layout-config.ts';
 import type * as EmlModule from '../../../Source/email-reading/eml-parser.ts';
 import type * as MsgModule from '../../../Source/email-reading/msg-parser.ts';
 import { en } from '../../../Source/web-page/translations/en.ts';
@@ -190,7 +190,7 @@ test.beforeAll(async () =>
         // The body indent expected in the PDF: one tab, 4 normal spaces of the body font at the body size (task 8.9),
         // measured here from the bundled font file's own tables.
         const { readWoffFont } = (await server.ssrLoadModule('/Source/pdf-export/font-reader/parse-font.ts')) as typeof FontModule;
-        const { DEFAULT_LAYOUT_CONFIG } = (await server.ssrLoadModule('/Source/pdf-export/page-layout/config.ts')) as typeof ConfigModule;
+        const { DEFAULT_LAYOUT_CONFIG } = (await server.ssrLoadModule('/Source/pdf-export/page-layout/layout-config.ts')) as typeof ConfigModule;
         const body = DEFAULT_LAYOUT_CONFIG.roles.body;
         expect(body.font).toBe('sans-regular');
         const plex = await readWoffFont(new Uint8Array(readFileSync(`${ROOT}Source/pdf-export/fonts/IBMPlexSans-Regular.woff`)));
@@ -924,7 +924,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     expect(xOf('Good, the van will take the old desks on Friday.')).toBeCloseTo(own, 2);
     // No step per quote level: the quoted lines at the same x as the own text,
     // which is one tab (4 spaces of the body font) in from the header labels
-    // (Source/pdf-export/page-layout/config.ts, bodyIndentSpaces; task 8.9).
+    // (Source/pdf-export/page-layout/layout-config.ts, bodyIndentSpaces; task 8.9).
     for (const text of quotedLines)
     {
         expect(xOf(text), text).toBeCloseTo(own, 2);

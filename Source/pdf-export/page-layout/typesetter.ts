@@ -25,7 +25,7 @@
 // the copy text either. Pure (README.md, rule R7).
 import { FontMetrics } from './font-metrics';
 import { breakLines, SHY_NONE } from './line-break';
-import { type ResolvedStyle, type ShapedText, Shaper, SOFT_HYPHEN_ITEM, type StyledText } from './shape';
+import { type ResolvedStyle, type ShapedText, Shaper, SOFT_HYPHEN_ITEM, type StyledText } from './shape-text';
 import type { LaidOutTextRun, LayoutConfig, TextStyle } from '../../../Header/laid-out-document';
 import type { PdfLine, PdfRole } from '../../../Header/pdf-document-model';
 import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';

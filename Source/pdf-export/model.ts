@@ -220,7 +220,7 @@
 // 8.6, PDF only): a body line that starts with ">" quote marks is shown
 // WITHOUT them (Source/pdf-export/text.ts transform g). Quote levels are not kept:
 // the renderer indents every body line by one fixed step, one tab (4 spaces
-// of the body font; Source/pdf-export/page-layout/config.ts, bodyIndentSpaces, task 8.9),
+// of the body font; Source/pdf-export/page-layout/layout-config.ts, bodyIndentSpaces, task 8.9),
 // quoted or not. Only the prefix is
 // removed; the rest of the line is unchanged. This applies to the kept
 // parts of a body, to the whole body under "Print full original text" and
@@ -251,7 +251,7 @@
 // No source files on the cover (user decision 2026-11-09, task 8.12, which
 // replaces the list with SHA-256 of brief section 8.5): no heading, no file
 // names, no hashes. The index follows the cover information directly
-// (Source/pdf-export/page-layout/index-table.ts). Each real email still names its file in
+// (Source/pdf-export/page-layout/email-index-table.ts). Each real email still names its file in
 // its own File row. Files that could not be read are not in the PDF at all
 // (step 1 of the app lists them with the reasons). The cover has no text
 // about rebuilt emails either (task 8.3, checked again in task 8.7).

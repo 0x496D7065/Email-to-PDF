@@ -34,7 +34,7 @@
 //     a line that starts with ">" quote marks is shown WITHOUT them. Quote
 //     levels are not shown: the layout indents every body line by the same
 //     single step, one tab (4 spaces of the body font), quoted or not
-//     (Source/pdf-export/page-layout/config.ts, bodyIndentSpaces; task 8.9). The
+//     (Source/pdf-export/page-layout/layout-config.ts, bodyIndentSpaces; task 8.9). The
 //     prefix (quotePrefixLength) is every ">" before the first other
 //     character, with what comes before each: whitespace (JavaScript's \s:
 //     spaces, tabs, U+00A0, U+FEFF...) and the invisible characters drawn
@@ -318,7 +318,7 @@ const VS_SUPPLEMENT_LAST = 0xe01ef;
  *
  * Left out on purpose: characters that often look blank but that the PDF
  * fonts (IBM Plex) have no glyph for, so the renderer prints them as a
- * visible code (Source/pdf-export/page-layout/shape.ts): the Hangul fillers U+115F,
+ * visible code (Source/pdf-export/page-layout/shape-text.ts): the Hangul fillers U+115F,
  * U+1160, U+3164, U+FFA0, the braille blank U+2800 and the Mongolian vowel
  * separator U+180E. A ">" after such a code is not at the start of the
  * line, and a code is never removed. The exception is whitespace: the fonts

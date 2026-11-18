@@ -1,4 +1,4 @@
-// Line breaking: splits the items of one line (shape.ts) into lines that fit
+// Line breaking: splits the items of one line (shape-text.ts) into lines that fit
 // a width. Greedy (each line takes as much as fits), linear in the number of
 // items (an item is looked at most twice).
 //
@@ -13,7 +13,7 @@
 // A single item wider than the line (rare: a huge cluster) gets a line of
 // its own. Spaces at the start of the text (indentation) are kept. A line
 // with no item is one empty line. Pure (README.md, rule R7).
-import { BREAK_AFTER, type ShapedText, SOFT_HYPHEN_ITEM, SPACE } from './shape';
+import { BREAK_AFTER, type ShapedText, SOFT_HYPHEN_ITEM, SPACE } from './shape-text';
 
 /** LineRange.hyphenAt when the line does not end at a soft hyphen. */
 export const SHY_NONE = -1;

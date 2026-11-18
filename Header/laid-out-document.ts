@@ -1,7 +1,7 @@
 // Header: the laid-out document and the layout settings. Shared types only,
 // no code (README.md, "Where things are"). pdf-export/page-layout/ produces
 // the document (with LayoutConfig, whose defaults are DEFAULT_LAYOUT_CONFIG in
-// Source/pdf-export/page-layout/config.ts); a PdfBackend in
+// Source/pdf-export/page-layout/layout-config.ts); a PdfBackend in
 // pdf-export/pdf-writer/ writes it; pdf-export/generate.ts connects the two.
 //
 // The laid-out document: the contract between the layout (milestone 5.4c,

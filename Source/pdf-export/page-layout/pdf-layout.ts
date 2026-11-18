@@ -4,7 +4,7 @@
 //
 // Order of the pages: the cover (its blocks), then the index right below
 // them, on the same page when its start fits there (task 8.12;
-// Source/pdf-export/page-layout/index-table.ts: one row per email with its page number,
+// Source/pdf-export/page-layout/email-index-table.ts: one row per email with its page number,
 // each row a link to the email), then the emails, from a new page.
 //
 // Page numbers in the index: the emails are laid out once, on pages of
@@ -12,7 +12,7 @@
 // before them, so an email on its page p is on page front + p + 1 of the
 // file. But the front's length is only known once the index is laid out
 // with its numbers. Rows have the same height whatever their number (see
-// index-table.ts), so: the front is laid out with a guess of its length,
+// email-index-table.ts), so: the front is laid out with a guess of its length,
 // and again with the length it really had, until both agree (twice in
 // practice, the second time is exact). A hard bound (maxPasses, default 4)
 // stops a run that does not settle with a clear Error instead of a PDF with
@@ -61,9 +61,9 @@
 //
 // Pure: no DOM, no clock, no storage, worker-safe (README.md, rules R5,
 // R7). Email text only ever becomes glyphs and copy text (rule R4).
-import { layItem, layRow, linesHeight, placeItem, placeRow, type LaidRow } from './blocks';
-import { DEFAULT_LAYOUT_CONFIG, validateLayoutConfig } from './config';
-import { INDEX_DESTINATION, layIndex, placeIndex } from './index-table';
+import { layItem, layRow, linesHeight, placeItem, placeRow, type LaidRow } from './field-rows-and-lists';
+import { DEFAULT_LAYOUT_CONFIG, validateLayoutConfig } from './layout-config';
+import { INDEX_DESTINATION, layIndex, placeIndex } from './email-index-table';
 import { PageBuilder, type PageInProgress } from './page-builder';
 import { Typesetter } from './typesetter';
 import type { LaidOutDocument, LaidOutOutlineItem, LaidOutPage, LayoutConfig } from '../../../Header/laid-out-document';

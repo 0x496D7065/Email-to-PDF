@@ -16,7 +16,7 @@ import { buildPdfDocument, emailAnchor } from '../model';
 import { createPdfStrings } from '../strings';
 import { lineText, TAB_WIDTH } from '../text';
 import { OwnPdfWriter } from '../pdf-writer';
-import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, MAX_DIGIT_EM, SHORT_DATE_EM } from './config';
+import { DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_PAGE_DIGITS, MAX_DIGIT_EM, SHORT_DATE_EM } from './layout-config';
 import { bodyIndentWidth, layoutPdf, type PdfLayout } from './pdf-layout';
 import { Typesetter } from './typesetter';
 import type { LaidOutDocument, LaidOutTextRun, LayoutConfig, TextStyle } from '../../../Header/laid-out-document';

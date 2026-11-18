@@ -1,12 +1,12 @@
-// Text to glyphs and line breaking (shape.ts, line-break.ts, typesetter.ts)
+// Text to glyphs and line breaking (shape-text.ts, line-break.ts, typesetter.ts)
 // with the real IBM Plex fonts. Synthetic text only. Special characters are
 // written as braced escapes, so this file stays ASCII.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readWoffFont } from '../font-reader/parse-font';
 import { PDF_FONTS } from '../bundled-fonts';
 import { sanitizeRuns } from '../text';
-import { DEFAULT_LAYOUT_CONFIG } from './config';
-import { SPACE } from './shape';
+import { DEFAULT_LAYOUT_CONFIG } from './layout-config';
+import { SPACE } from './shape-text';
 import { type LaidLine, Typesetter } from './typesetter';
 import type { LaidOutTextRun } from '../../../Header/laid-out-document';
 import type { PdfLine, PdfRole } from '../../../Header/pdf-document-model';
