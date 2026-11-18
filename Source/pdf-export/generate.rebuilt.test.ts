@@ -18,7 +18,7 @@ import { translator } from '../web-page/translations';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { createPdfStrings } from './strings';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { EngineResult } from '../../Header/thread-analysis-result';

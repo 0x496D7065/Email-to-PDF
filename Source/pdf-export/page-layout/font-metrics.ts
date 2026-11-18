@@ -2,7 +2,7 @@
 // millions of times: the glyph id of each BMP code point is cached in a
 // table (other planes in a map), and every glyph's advance is kept in ems.
 // Widths are font units x size / unitsPerEm; no kerning, no shaping (see
-// Source/pdf-export/font-reader/font.ts). Pure (README.md, rule R7).
+// Source/pdf-export/font-reader/parse-font.ts). Pure (README.md, rule R7).
 import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 const UNKNOWN = -1;

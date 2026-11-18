@@ -11,12 +11,12 @@
 // (the browser copies it, structured clone). The fonts travel as their WOFF
 // BYTES, copied from the page's own (the page keeps its copy for the next
 // PDF), and the worker parses them: the worker must never import the font
-// chunk itself (see Source/pdf-export/parse-fonts.ts). The finished PDF's bytes are
+// chunk itself (see Source/pdf-export/parse-pdf-fonts.ts). The finished PDF's bytes are
 // MOVED back to the page (a transfer), not copied.
 // Nothing is stored anywhere (README.md, rule R5).
 
 import { generatePdf } from '../pdf-export/generate';
-import { PDF_FONT_NAMES, parsePdfFonts } from '../pdf-export/parse-fonts';
+import { PDF_FONT_NAMES, parsePdfFonts } from '../pdf-export/parse-pdf-fonts';
 import { isSupportedLocale } from '../web-page/translations';
 import type { GeneratedPdf } from '../../Header/pdf-document-model';
 import type { FromPdfWorker, MakePdfRequest, ToPdfWorker } from '../../Header/pdf-worker-messages';

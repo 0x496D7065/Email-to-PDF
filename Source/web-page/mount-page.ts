@@ -84,7 +84,7 @@
 // made again by itself. Nothing about the language is stored, and "Clear
 // everything" keeps it.
 
-import { PDF_FONTS } from '../pdf-export/fonts';
+import { PDF_FONTS } from '../pdf-export/bundled-fonts';
 import { pdfPositions } from '../web-page-logic/no-printable-text';
 import { createBrowserPdfWorker, pdfTimeoutMs, runPdfInWorker } from '../worker-pipeline/pdf-worker-runner';
 import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files';

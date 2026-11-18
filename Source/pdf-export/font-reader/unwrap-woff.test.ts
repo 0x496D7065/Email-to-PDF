@@ -3,10 +3,10 @@
 // against an independent decompression in this test; damaged files are
 // built synthetically here (no real font data is modified on disk).
 import { describe, expect, it } from 'vitest';
-import { PDF_FONTS } from '../fonts';
-import { directoryChecksum, FontError, MAX_FONT_BYTES, pad4, tagName, TRUETYPE_FLAVOR } from './binary';
-import { checkSumAdjustment, readSfntDirectory, tableBytes } from './sfnt';
-import { unwrapWoff } from './woff';
+import { PDF_FONTS } from '../bundled-fonts';
+import { directoryChecksum, FontError, MAX_FONT_BYTES, pad4, tagName, TRUETYPE_FLAVOR } from './binary-reader';
+import { checkSumAdjustment, readSfntDirectory, tableBytes } from './sfnt-directory';
+import { unwrapWoff } from './unwrap-woff';
 import type { PdfFontName } from '../../../Header/pdf-fonts';
 
 const names = Object.keys(PDF_FONTS) as PdfFontName[];
@@ -51,7 +51,7 @@ interface WoffEntryView
     origChecksum: number;
 }
 
-/** The WOFF directory, read here independently of Source/pdf-export/font-reader/woff.ts. */
+/** The WOFF directory, read here independently of Source/pdf-export/font-reader/unwrap-woff.ts. */
 function woffDirectory(woff: Uint8Array): WoffEntryView[]
 {
     const view = new DataView(woff.buffer, woff.byteOffset, woff.byteLength);

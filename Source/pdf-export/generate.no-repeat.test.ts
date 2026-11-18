@@ -34,7 +34,7 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { headerLinesEnd, holdsOwnText, holdsQuotedText } from './model';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';

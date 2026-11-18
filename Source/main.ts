@@ -4,7 +4,7 @@
 // Source/web-page/mount-page.ts).
 // Nothing is logged and nothing is stored (README.md, rule R5).
 import './web-page/app.css';
-import { pdfFontsReady } from './pdf-export/fonts';
+import { pdfFontsReady } from './pdf-export/bundled-fonts';
 import { registerWhenLoaded } from './offline-copy/register';
 import { pickLocale, setLocale } from './web-page/translations';
 import { mountPage } from './web-page/mount-page';

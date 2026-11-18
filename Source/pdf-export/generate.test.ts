@@ -11,7 +11,7 @@ import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { type GeneratePdfInput, generatePdf, type PdfFonts } from './generate';
 import { COVER_DESTINATION, DEFAULT_LAYOUT_CONFIG as CONFIG, INDEX_DESTINATION, layoutPdf, MAX_FRONT_PASSES, type PdfLayout, settlePageCount } from './page-layout';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { buildPdfDocument, MAX_BOOKMARK_LENGTH } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';
@@ -206,7 +206,7 @@ describe('loadPdfFonts', () =>
         expect(Object.keys(fonts)).toEqual(['sans-regular', 'sans-bold', 'sans-italic', 'mono-regular']);
         expect(fonts['sans-bold'].weightClass).toBe(700);
         expect(fonts['mono-regular'].isFixedPitch).toBe(true);
-        const { PDF_FONTS } = await import('./fonts');
+        const { PDF_FONTS } = await import('./bundled-fonts');
         const again = await loadPdfFonts(PDF_FONTS);
         expect(again['sans-italic'].postScriptName).toBe(fonts['sans-italic'].postScriptName);
     });

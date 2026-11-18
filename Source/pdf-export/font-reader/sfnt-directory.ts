@@ -12,7 +12,7 @@ import {
     TAG_HEAD,
     tagName,
     TRUETYPE_FLAVOR,
-} from './binary';
+} from './binary-reader';
 
 export interface SfntTable
 {

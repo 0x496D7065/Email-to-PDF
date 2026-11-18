@@ -1,7 +1,7 @@
 // cmap parsing on hand-built synthetic tables (pure, as in rule R7).
 import { describe, expect, it } from 'vitest';
-import { FontError } from './binary';
-import { parseCmap } from './cmap';
+import { FontError } from './binary-reader';
+import { parseCmap } from './cmap-table';
 
 /** A big-endian byte writer for building test tables. */
 class Writer

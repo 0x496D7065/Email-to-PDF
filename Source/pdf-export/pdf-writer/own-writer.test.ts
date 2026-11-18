@@ -19,11 +19,11 @@ import {
     readOutline,
     readPdf,
 } from '../../../Helper/Test/test-support/pdf-reader';
-import { directoryChecksum } from '../font-reader/binary';
-import { parseFont, readWoffFont } from '../font-reader/font';
-import { readSfntDirectory } from '../font-reader/sfnt';
-import { unwrapWoff } from '../font-reader/woff';
-import { PDF_FONTS } from '../fonts';
+import { directoryChecksum } from '../font-reader/binary-reader';
+import { parseFont, readWoffFont } from '../font-reader/parse-font';
+import { readSfntDirectory } from '../font-reader/sfnt-directory';
+import { unwrapWoff } from '../font-reader/unwrap-woff';
+import { PDF_FONTS } from '../bundled-fonts';
 import { isDrawnAsNothing } from '../text';
 import { MAX_OUTLINE_DEPTH, MAX_PAGES, OwnPdfWriter, writePdf } from './own-writer';
 import { MAX_OUTPUT_BYTES } from './pdf-file';

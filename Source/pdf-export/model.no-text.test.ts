@@ -24,7 +24,7 @@ import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { buildPdfDocument, planPdfOrder } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';

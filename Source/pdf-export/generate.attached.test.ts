@@ -12,7 +12,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { generatePdf, type PdfFonts } from './generate';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import type { OutputPolicy } from '../../Header/output-plan';
 
 let fonts: PdfFonts;

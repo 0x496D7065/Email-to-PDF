@@ -4,8 +4,8 @@
 // caution as English where it matters, and characters the PDF fonts can
 // draw. Pure data checks plus the bundled fonts: no DOM.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readWoffFont } from '../../pdf-export/font-reader/font';
-import { PDF_FONTS } from '../../pdf-export/fonts';
+import { readWoffFont } from '../../pdf-export/font-reader/parse-font';
+import { PDF_FONTS } from '../../pdf-export/bundled-fonts';
 import { createPdfStrings } from '../../pdf-export/strings';
 import { en } from './en';
 import { nl } from './nl';

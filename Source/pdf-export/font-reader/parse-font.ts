@@ -14,10 +14,10 @@
 // measured with its own advance (usually 0 in Plex), so "e" + U+0301 is the
 // width of "e". A code point the font lacks maps to glyph 0 (.notdef) and is
 // measured as .notdef; the renderer decides what to draw instead.
-import { BinaryReader, fail, toFontError } from './binary';
-import { type Cmap, parseCmap } from './cmap';
-import { readSfntDirectory, tableBytes } from './sfnt';
-import { unwrapWoff } from './woff';
+import { BinaryReader, fail, toFontError } from './binary-reader';
+import { type Cmap, parseCmap } from './cmap-table';
+import { readSfntDirectory, tableBytes } from './sfnt-directory';
+import { unwrapWoff } from './unwrap-woff';
 import type { ParsedFont } from '../../../Header/pdf-fonts';
 
 /** The tables a TrueType font for FontFile2 must have (glyf/loca: TrueType outlines). */

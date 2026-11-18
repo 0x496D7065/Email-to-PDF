@@ -5,7 +5,7 @@
 // Pure apart from the time it takes: no DOM, no clock (the caller passes
 // `generatedAt`), no storage, no globals, nothing loaded (README.md, rules
 // R1, R5, R7), so it is safe in a Web Worker. The fonts are parsed once by
-// the caller (loadPdfFonts, load-fonts.ts) and passed in. Email text is
+// the caller (loadPdfFonts, load-bundled-fonts.ts) and passed in. Email text is
 // only ever written as text in the PDF (rule R4); the plans decide what is
 // left out (rule R6, the exception for the PDF), nothing here changes that.
 import { layoutPdf } from './page-layout';

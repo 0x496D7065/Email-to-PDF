@@ -23,7 +23,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
 import { lineText } from './text';

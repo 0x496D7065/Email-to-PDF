@@ -5,7 +5,7 @@
 // Both formats are checked once when parsed (sizes, sorted non-overlapping
 // segments / groups) and then looked up with a binary search, so a lookup is
 // O(log n) and can never loop on damaged data.
-import { BinaryReader, fail } from './binary';
+import { BinaryReader, fail } from './binary-reader';
 
 export interface Cmap
 {

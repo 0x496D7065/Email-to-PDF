@@ -188,7 +188,7 @@ function offlineCopy(): Plugin
 
 // `import bytes from './X.woff?bytes'` gives the file's exact bytes as a
 // Uint8Array, written in the bundle as `new Uint8Array([119,79,70,70,...])`.
-// Used for the PDF fonts (Source/pdf-export/fonts.ts). Why not Vite's built-in ways:
+// Used for the PDF fonts (Source/pdf-export/bundled-fonts.ts). Why not Vite's built-in ways:
 // `?url` would load the file later with fetch(), which the CSP forbids
 // (connect-src 'none'); `?inline` writes base64, which the build check
 // rejects (it could hide code); `?raw` reads the file as UTF-8 text, which

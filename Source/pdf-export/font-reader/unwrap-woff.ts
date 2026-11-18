@@ -19,8 +19,8 @@
 // data in the WOFF file (the WOFF spec asks encoders to keep the original
 // order). The table bytes come back unchanged; the directory is rebuilt.
 // head.checkSumAdjustment is kept as stored, so it can be stale (see
-// checkSumAdjustment in sfnt.ts).
-import { BinaryReader, directoryChecksum, fail, MAX_FONT_BYTES, MAX_TABLES, pad4, tagName, toFontError, TRUETYPE_FLAVOR } from './binary';
+// checkSumAdjustment in sfnt-directory.ts).
+import { BinaryReader, directoryChecksum, fail, MAX_FONT_BYTES, MAX_TABLES, pad4, tagName, toFontError, TRUETYPE_FLAVOR } from './binary-reader';
 
 const WOFF_SIGNATURE = 0x774f4646; // 'wOFF'
 const OTTO_FLAVOR = 0x4f54544f; // 'OTTO': CFF outlines

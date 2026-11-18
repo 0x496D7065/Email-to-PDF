@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { readPdf } from '../../Helper/Test/test-support/pdf-reader';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { PDF_FONTS } from '../pdf-export/fonts';
+import { PDF_FONTS } from '../pdf-export/bundled-fonts';
 import { createPdfWorkerSide, isFromPdfWorker, isToPdfWorker, makePdf, ownBuffer } from './pdf-worker-protocol';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { GeneratedPdf } from '../../Header/pdf-document-model';

@@ -2,11 +2,11 @@
 // them with one table changed in memory (pure, as in rule R7). The font files
 // on disk are never touched.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { PDF_FONTS } from '../fonts';
-import { directoryChecksum, FontError } from './binary';
-import { parseFont, readWoffFont } from './font';
-import { readSfntDirectory } from './sfnt';
-import { unwrapWoff } from './woff';
+import { PDF_FONTS } from '../bundled-fonts';
+import { directoryChecksum, FontError } from './binary-reader';
+import { parseFont, readWoffFont } from './parse-font';
+import { readSfntDirectory } from './sfnt-directory';
+import { unwrapWoff } from './unwrap-woff';
 import type { ParsedFont, PdfFontName } from '../../../Header/pdf-fonts';
 
 const names = Object.keys(PDF_FONTS) as PdfFontName[];

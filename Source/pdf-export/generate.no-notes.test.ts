@@ -31,7 +31,7 @@ import { CATALOG } from '../web-page/translations/catalog';
 import { isPluralForms } from '../web-page/translations';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { buildPdfDocument } from './model';
 import { createPdfStrings } from './strings';
 import type { MessagePlan } from '../../Header/output-plan';

@@ -31,7 +31,7 @@
 // - Soft hyphen (group 3) gets no glyph and no width; the line breaker may
 //   break there, and then a "-" is drawn and copied; elsewhere it is neither
 //   drawn nor copied (typesetter.ts).
-// No kerning, no ligatures, no bidi (Source/pdf-export/font-reader/font.ts). Pure (README.md,
+// No kerning, no ligatures, no bidi (Source/pdf-export/font-reader/parse-font.ts). Pure (README.md,
 // rule R7).
 import { controlMarker, isDrawnAsNothing, SOFT_HYPHEN, ZERO_WIDTH_SPACE } from '../text';
 import type { FontMetrics } from './font-metrics';

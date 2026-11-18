@@ -2,8 +2,8 @@
 // with the real IBM Plex fonts. Synthetic text only. Special characters are
 // written as braced escapes, so this file stays ASCII.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { readWoffFont } from '../font-reader/font';
-import { PDF_FONTS } from '../fonts';
+import { readWoffFont } from '../font-reader/parse-font';
+import { PDF_FONTS } from '../bundled-fonts';
 import { sanitizeRuns } from '../text';
 import { DEFAULT_LAYOUT_CONFIG } from './config';
 import { SPACE } from './shape';

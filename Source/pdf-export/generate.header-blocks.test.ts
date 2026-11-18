@@ -37,7 +37,7 @@ import { createEmlParser } from '../email-reading/eml-parser';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate';
 import { DEFAULT_LAYOUT_CONFIG as CONFIG } from './page-layout';
-import { loadPdfFonts } from './load-fonts';
+import { loadPdfFonts } from './load-bundled-fonts';
 import { createPdfStrings } from './strings';
 import type { OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';

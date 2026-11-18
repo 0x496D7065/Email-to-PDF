@@ -1,12 +1,12 @@
 // Parses the four PDF fonts from WOFF bytes handed in by the caller. The
 // PDF worker uses this (Source/worker-pipeline/pdf-worker.ts): the page passes it the
-// bundled font bytes, so the worker never imports the font chunk (fonts.ts,
+// bundled font bytes, so the worker never imports the font chunk (bundled-fonts.ts,
 // about 1.2 MB of numbers that the build allows in one file only, see
-// Helper/build-checks/font-rules.mjs). Only TYPES come from fonts.ts here: a type import
+// Helper/build-checks/font-rules.mjs). Only TYPES come from bundled-fonts.ts here: a type import
 // is erased by the build and pulls nothing in.
 //
 // No DOM, no network (README.md, rule R1), so it is worker-safe.
-import { readWoffFont } from './font-reader/font';
+import { readWoffFont } from './font-reader/parse-font';
 import type { PdfFonts } from './generate';
 import type { ParsedFont, PdfFontName } from '../../Header/pdf-fonts';
 

@@ -251,7 +251,7 @@ describe('file-scoped URL allowlist (font license)', () =>
         {
             expect(findViolations(ofl, { isDist: true, distFile }), distFile).toHaveLength(1);
         }
-        for (const sourceFile of ['Source/pdf-export/fonts.ts', 'Source/pdf-export/fonts/license.txt', 'Source/LICENSE.txt', 'Source/index.html', 'THIRD_PARTY_NOTICES.txt'])
+        for (const sourceFile of ['Source/pdf-export/bundled-fonts.ts', 'Source/pdf-export/fonts/license.txt', 'Source/LICENSE.txt', 'Source/index.html', 'THIRD_PARTY_NOTICES.txt'])
         {
             expect(findViolations(ofl, { isDist: false, sourceFile }), sourceFile).toHaveLength(1);
         }
