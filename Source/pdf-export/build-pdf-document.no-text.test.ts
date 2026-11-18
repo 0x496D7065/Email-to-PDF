@@ -62,7 +62,7 @@ function make(subject: string, fields: Partial<NormalizedMessage> = {}): Normali
         ...fields,
     };
 }
-const ok = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
+const parsedOk = (message: NormalizedMessage): ParseResult => ({ ok: true, message });
 
 function build(result: EngineResult, options: { positions?: readonly number[]; policy?: OutputPolicy; rebuilt?: readonly number[] } = {}): PdfDocument
 {
@@ -101,41 +101,42 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
     const first = make('Oak');
     const blank = make('Only spaces', { bodyText: ' \t\n\n  \n﻿\n', from: [quiet], date: { utcMs: null, original: '', offsetMinutes: null, zoneKnown: false } });
     const last = make('Pine');
-    const result = analyzeThread([empty, first, blank, last].map(ok));
+    const result = analyzeThread([empty, first, blank, last].map(parsedOk));
 
     for (const [mode, policy] of POLICIES)
     {
         it(`${mode}: no slot, no number, numbered 1..k, no index entry or bookmark, not on the cover`, () =>
         {
-            const doc = build(result, { policy });
+            const pdfDocument = build(result, { policy });
             const kept = [positionOf(result, 'Oak'), positionOf(result, 'Pine')];
             const gone = [positionOf(result, 'Empty with attachment'), positionOf(result, 'Only spaces')];
-            expect(doc.emails.map((e) => e.position)).toEqual(kept);
-            expect(doc.emails.map((e) => e.number)).toEqual([1, 2]);
-            expect(doc.emails.map((e) => e.heading)).toEqual([EN.emailHeading(1), EN.emailHeading(2)]);
-            for (const p of gone)
+            expect(pdfDocument.emails.map((e) => e.position)).toEqual(kept);
+            expect(pdfDocument.emails.map((e) => e.number)).toEqual([1, 2]);
+            expect(pdfDocument.emails.map((e) => e.heading)).toEqual([EN.emailHeading(1), EN.emailHeading(2)]);
+            for (const position of gone)
             {
-                expect(doc.pdfNumberByPosition[p]).toBeNull();
+                expect(pdfDocument.pdfNumberByPosition[position]).toBeNull();
             }
-            expect(kept.map((p) => doc.pdfNumberByPosition[p])).toEqual([1, 2]);
-            expect(doc.index.entries.map((e) => e.number)).toEqual([1, 2]);
-            expect(doc.index.entries.map((e) => lineText(e.subject))).toEqual(['Oak', 'Pine']);
-            const bookmarks = doc.index.entries.map((e) => e.bookmark).join('\n');
+            expect(kept.map((p) => pdfDocument.pdfNumberByPosition[p])).toEqual([1, 2]);
+            expect(pdfDocument.index.entries.map((e) => e.number)).toEqual([1, 2]);
+            expect(pdfDocument.index.entries.map((e) => lineText(e.subject))).toEqual(['Oak', 'Pine']);
+            const bookmarks = pdfDocument.index.entries.map((e) => e.bookmark).join('\n');
             for (const word of ['Empty with attachment', 'Only spaces', 'floor-plan.pdf'])
             {
                 expect(bookmarks).not.toContain(word);
             }
-            expect(doc.index.entries.flatMap((e) => e.attachmentLines.map(lineText)).join('\n')).not.toContain('floor-plan.pdf');
+            expect(pdfDocument.index.entries.flatMap((e) => e.attachmentLines.map(lineText)).join('\n')).not.toContain('floor-plan.pdf');
             // Cover (Q1): count, date range, undated and people of the emails in the PDF only.
-            expect(doc.cover.emailCount).toBe(2);
-            expect(doc.cover.undated).toBe(0);
+            expect(pdfDocument.cover.emailCount).toBe(2);
+            expect(pdfDocument.cover.undated).toBe(0);
             const oak = result.messages[kept[0]!]!.message.date.utcMs!;
             const pine = result.messages[kept[1]!]!.message.date.utcMs!;
-            expect(doc.cover.dateRange).not.toBeNull();
-            expect(doc.cover.dateRange!.first.slice(0, 10)).toBe(new Date(oak).toISOString().slice(0, 10));
-            expect(doc.cover.dateRange!.last.slice(0, 10)).toBe(new Date(pine).toISOString().slice(0, 10));
-            expect(doc.cover.participants.map((p) => p.address).sort()).toEqual(['erin@example.test', 'finn@example.test']);
-            const cover = doc.cover.blocks.flatMap((b) => (b.kind === 'fields' ? b.rows.flatMap((r) => r.value.map(lineText)) : b.kind === 'list' ? b.items.flat().map(lineText) : []));
+            expect(pdfDocument.cover.dateRange).not.toBeNull();
+            expect(pdfDocument.cover.dateRange!.first.slice(0, 10)).toBe(new Date(oak).toISOString().slice(0, 10));
+            expect(pdfDocument.cover.dateRange!.last.slice(0, 10)).toBe(new Date(pine).toISOString().slice(0, 10));
+            expect(pdfDocument.cover.participants.map((p) => p.address).sort()).toEqual(['erin@example.test', 'finn@example.test']);
+            const cover = pdfDocument.cover.blocks.flatMap((b) =>
+                (b.kind === 'fields' ? b.rows.flatMap((r) => r.value.map(lineText)) : b.kind === 'list' ? b.items.flat().map(lineText) : []));
             expect(cover).toContain(EN.emailCount(2));
             expect(cover.join('\n')).not.toMatch(/Gail|Hank/u);
         });
@@ -148,11 +149,11 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
         expect(order.slots.map((s) => (s.kind === 'email' ? s.position : -1))).toEqual(pdfPositions(result, positions));
         expect(order.slots.map((s) => s.number)).toEqual([1, 2]);
         // The plan index still points at the right plan (the position's place in `positions`).
-        for (const s of order.slots)
+        for (const slot of order.slots)
         {
-            if (s.kind === 'email')
+            if (slot.kind === 'email')
             {
-                expect(positions[s.plan]).toBe(s.position);
+                expect(positions[slot.plan]).toBe(slot.position);
             }
         }
     });
@@ -161,11 +162,11 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
     {
         for (const body of ['>', '​', '\u000b', '\u000c', '\u0000', ' > ', '\n\n>\n'])
         {
-            const r = analyzeThread([ok(make('Odd', { bodyText: body }))]);
-            expect(hasNoPrintableText(r.messages[0]!.message), JSON.stringify(body)).toBe(false);
+            const oddResult = analyzeThread([parsedOk(make('Odd', { bodyText: body }))]);
+            expect(hasNoPrintableText(oddResult.messages[0]!.message), JSON.stringify(body)).toBe(false);
             for (const [, policy] of POLICIES)
             {
-                expect(build(r, { policy }).emails, JSON.stringify(body)).toHaveLength(1);
+                expect(build(oddResult, { policy }).emails, JSON.stringify(body)).toHaveLength(1);
             }
         }
     });
@@ -173,32 +174,32 @@ describe('emails with no text are left out of the PDF (task 8.14)', () =>
     it('keeps an empty body whose text could not be read, with "(no text)" (Q2)', () =>
     {
         const warnings: readonly ParseWarning[] = ['html-body-unreadable', 'rtf-only-body', 'forwarded-message-not-expanded'];
-        for (const w of warnings)
+        for (const warning of warnings)
         {
-            const r = analyzeThread([ok(make('Unread', { bodyText: '', warnings: ['no-body', w] }))]);
+            const unreadResult = analyzeThread([parsedOk(make('Unread', { bodyText: '', warnings: ['no-body', warning] }))]);
             for (const [, policy] of POLICIES)
             {
-                const doc = build(r, { policy });
-                expect(doc.emails, w).toHaveLength(1);
-                expect(doc.emails[0]!.notes.map(lineText), w).toEqual([EN.noText]);
-                expect(doc.cover.emailCount).toBe(1);
+                const pdfDocument = build(unreadResult, { policy });
+                expect(pdfDocument.emails, warning).toHaveLength(1);
+                expect(pdfDocument.emails[0]!.notes.map(lineText), warning).toEqual([EN.noText]);
+                expect(pdfDocument.cover.emailCount).toBe(1);
             }
         }
     });
 
     it('every ticked email without text: a document with no email (generatePdf stays valid)', async () =>
     {
-        const r = analyzeThread([ok(make('A', { bodyText: '' })), ok(make('B', { bodyText: '  \n' }))]);
-        const doc = build(r);
-        expect(doc.emails).toEqual([]);
-        expect(doc.index.entries).toEqual([]);
-        expect(doc.cover.emailCount).toBe(0);
-        expect(doc.cover.dateRange).toBeNull();
-        expect(doc.pdfNumberByPosition).toEqual([null, null]);
+        const noTextResult = analyzeThread([parsedOk(make('A', { bodyText: '' })), parsedOk(make('B', { bodyText: '  \n' }))]);
+        const pdfDocument = build(noTextResult);
+        expect(pdfDocument.emails).toEqual([]);
+        expect(pdfDocument.index.entries).toEqual([]);
+        expect(pdfDocument.cover.emailCount).toBe(0);
+        expect(pdfDocument.cover.dateRange).toBeNull();
+        expect(pdfDocument.pdfNumberByPosition).toEqual([null, null]);
         const made = await generatePdf({
-            result: r,
+            result: noTextResult,
             positions: [0, 1],
-            plans: planOutput(r.messages),
+            plans: planOutput(noTextResult.messages),
             policy: DEFAULT_OUTPUT_POLICY,
             timeZone: 'Africa/Lagos',
             generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
@@ -232,9 +233,9 @@ describe('attached emails with no text (task 8.14)', () =>
     {
         expect(result.attached).toHaveLength(1);
         expect(hasNoPrintableText(result.messages[attached]!.message)).toBe(true);
-        const doc = build(result);
-        expect(doc.emails.map((e) => e.position)).toEqual([holder]);
-        const body = bodyOf(doc.emails[0]!);
+        const pdfDocument = build(result);
+        expect(pdfDocument.emails.map((e) => e.position)).toEqual([holder]);
+        const body = bodyOf(pdfDocument.emails[0]!);
         expect(body).toContain('Subject: Header only child');
         expect(body).toContain('This is note number');
         // The preview's labels agree: nothing of the holder is left out.
@@ -245,23 +246,23 @@ describe('attached emails with no text (task 8.14)', () =>
 
     it('unticked by the reader: its block is cut from the holder, as before (Q3 of task 8.13b-3)', () =>
     {
-        const doc = build(result, { positions: [holder] });
-        const body = bodyOf(doc.emails[0]!);
+        const pdfDocument = build(result, { positions: [holder] });
+        const body = bodyOf(pdfDocument.emails[0]!);
         expect(body).not.toContain('Subject: Header only child');
         expect(body).toContain('This is note number');
     });
 
     it('a holder with no text and an email attached as a file: the attached email is printed on its own', () =>
     {
-        const r = analyzeThread([
+        const emptyHolderResult = analyzeThread([
             attachedResult({ message: make('Empty holder', { bodyText: '' }), children: [{ node: { message: make('Attached item') }, inline: false, name: 'item.msg' }] }),
         ]);
         for (const [, policy] of POLICIES)
         {
-            const doc = build(r, { policy });
-            expect(doc.emails.map((e) => lineText(e.fields.find((f) => f.label === EN.subjectLabel)!.value[0]!))).toEqual(['Attached item']);
-            expect(doc.emails[0]!.number).toBe(1);
-            expect(bodyOf(doc.emails[0]!)).toContain('This is note number');
+            const pdfDocument = build(emptyHolderResult, { policy });
+            expect(pdfDocument.emails.map((e) => lineText(e.fields.find((f) => f.label === EN.subjectLabel)!.value[0]!))).toEqual(['Attached item']);
+            expect(pdfDocument.emails[0]!.number).toBe(1);
+            expect(bodyOf(pdfDocument.emails[0]!)).toContain('This is note number');
         }
     });
 
@@ -270,25 +271,26 @@ describe('attached emails with no text (task 8.14)', () =>
         // The .eml parser lists such a part as a message/rfc822 attachment with no warning (task 8.13b-1); the
         // preview's note (attached-links.ts) says it was not read. Only an INLINE forward that was not read gives
         // 'forwarded-message-not-expanded' and stays in with "(no text)" (see the Q2 test above).
-        const r = analyzeThread([
-            ok(make('Empty with unread file', { bodyText: '', warnings: ['no-body'], attachments: [{ fileName: 'lost-item.eml', size: 2_048, mimeType: 'message/rfc822' }] })),
-            ok(make('Walnut')),
+        const unreadFileResult = analyzeThread([
+            parsedOk(make('Empty with unread file',
+                { bodyText: '', warnings: ['no-body'], attachments: [{ fileName: 'lost-item.eml', size: 2_048, mimeType: 'message/rfc822' }] })),
+            parsedOk(make('Walnut')),
         ]);
-        const lost = positionOf(r, 'Empty with unread file');
-        const walnut = positionOf(r, 'Walnut');
-        expect(r.messages[lost]!.message.source.kind).toBe('eml');
-        expect(hasNoPrintableText(r.messages[lost]!.message)).toBe(true);
-        expect(attachedLinks(r).unread[lost]).toBe('attached-unread');
-        const positions = r.messages.map((_, k) => k);
-        expect(pdfPositions(r, positions)).toEqual([walnut]);
+        const lost = positionOf(unreadFileResult, 'Empty with unread file');
+        const walnut = positionOf(unreadFileResult, 'Walnut');
+        expect(unreadFileResult.messages[lost]!.message.source.kind).toBe('eml');
+        expect(hasNoPrintableText(unreadFileResult.messages[lost]!.message)).toBe(true);
+        expect(attachedLinks(unreadFileResult).unread[lost]).toBe('attached-unread');
+        const positions = unreadFileResult.messages.map((_, k) => k);
+        expect(pdfPositions(unreadFileResult, positions)).toEqual([walnut]);
         for (const [mode, policy] of POLICIES)
         {
-            const doc = build(r, { policy });
-            expect(doc.emails.map((e) => e.position), mode).toEqual([walnut]);
-            expect(doc.emails[0]!.number, mode).toBe(1);
-            expect(doc.pdfNumberByPosition[lost], mode).toBeNull();
-            expect(doc.cover.emailCount, mode).toBe(1);
-            const indexText = doc.index.entries.flatMap((e) => [e.bookmark, ...e.attachmentLines.map(lineText)]).join('\n');
+            const pdfDocument = build(unreadFileResult, { policy });
+            expect(pdfDocument.emails.map((e) => e.position), mode).toEqual([walnut]);
+            expect(pdfDocument.emails[0]!.number, mode).toBe(1);
+            expect(pdfDocument.pdfNumberByPosition[lost], mode).toBeNull();
+            expect(pdfDocument.cover.emailCount, mode).toBe(1);
+            const indexText = pdfDocument.index.entries.flatMap((e) => [e.bookmark, ...e.attachmentLines.map(lineText)]).join('\n');
             expect(indexText, mode).not.toContain('lost-item.eml');
         }
     });
@@ -305,7 +307,7 @@ describe('rebuilt emails with no text (task 8.14, Q4)', () =>
         '\n' +
         OUTLOOK('Carol Test <carol@sample.invalid>', 'Sunday, March 2, 2025 1:02 PM', 'Bob Sample <bob@furniture.example.test>') +
         'Old text from Carol about the twelve oak desks.\n';
-    const result = analyzeThread([ok(make('RE: Desks', { bodyText: body }))]);
+    const result = analyzeThread([parsedOk(make('RE: Desks', { bodyText: body }))]);
     const entries = rebuiltEntries(result);
     const bob = entries.find((r) => r.rebuilt.from.some((m) => m.name === 'Bob Sample'));
     const carol = entries.find((r) => r.rebuilt.from.some((m) => m.name === 'Carol Test'));
@@ -331,8 +333,8 @@ describe('rebuilt emails with no text (task 8.14, Q4)', () =>
 
     it('with the full text, no rebuilt email at all (as before)', () =>
     {
-        const doc = build(result, { policy: EVERYTHING, rebuilt: [bob!.id, carol!.id] });
-        expect(doc.emails.map((e) => e.position)).toEqual([0]);
-        expect(bodyOf(doc.emails[0]!)).toContain('Subject: Desks');
+        const pdfDocument = build(result, { policy: EVERYTHING, rebuilt: [bob!.id, carol!.id] });
+        expect(pdfDocument.emails.map((e) => e.position)).toEqual([0]);
+        expect(bodyOf(pdfDocument.emails[0]!)).toContain('Subject: Desks');
     });
 });

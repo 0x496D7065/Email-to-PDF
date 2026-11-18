@@ -54,25 +54,25 @@ beforeAll(async () =>
     fixtures = await parseAllFixtures();
 });
 
-/** Message `i` of a conversation as a real file (its body quotes the ones before it). */
-function realFile(messages: readonly ThreadMessage[], i: number, tag: string): NormalizedMessage
+/** Message `messageIndex` of a conversation as a real file (its body quotes the ones before it). */
+function realFile(messages: readonly ThreadMessage[], messageIndex: number, tag: string): NormalizedMessage
 {
-    const m = messages[i]!;
-    const id = (k: number): string => `${tag}-${String(k)}@example.test`;
-    const utcMs = instantOf(m.sent, m.zone);
+    const threadMessage = messages[messageIndex]!;
+    const messageId = (k: number): string => `${tag}-${String(k)}@example.test`;
+    const utcMs = instantOf(threadMessage.sent, threadMessage.zone);
     return {
-        messageId: id(i),
-        inReplyTo: i === 0 ? null : id(i - 1),
-        references: Array.from({ length: i }, (_, k) => id(k)),
-        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true },
-        from: [m.from],
-        to: m.to,
-        cc: m.cc ?? [],
+        messageId: messageId(messageIndex),
+        inReplyTo: messageIndex === 0 ? null : messageId(messageIndex - 1),
+        references: Array.from({ length: messageIndex }, (_, k) => messageId(k)),
+        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: threadMessage.zone.offsetMinutes, zoneKnown: true },
+        from: [threadMessage.from],
+        to: threadMessage.to,
+        cc: threadMessage.cc ?? [],
         bcc: [],
-        subject: m.subject,
-        bodyText: buildThread(messages.slice(0, i + 1)).body,
+        subject: threadMessage.subject,
+        bodyText: buildThread(messages.slice(0, messageIndex + 1)).body,
         attachments: [],
-        source: { fileName: `${tag}-${String(i)}.eml`, sha256: (i + 1).toString(16).padStart(64, '0'), kind: 'eml' },
+        source: { fileName: `${tag}-${String(messageIndex)}.eml`, sha256: (messageIndex + 1).toString(16).padStart(64, '0'), kind: 'eml' },
         warnings: [],
     };
 }
@@ -138,10 +138,10 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
     const emails = new Map<number, number>();
     for (const [name, dest] of dests)
     {
-        const m = /^email-(\d+)$/u.exec(name);
-        if (m !== null)
+        const match = /^email-(\d+)$/u.exec(name);
+        if (match !== null)
         {
-            emails.set(Number(m[1]), dest.page);
+            emails.set(Number(match[1]), dest.page);
         }
     }
     expect(emails.size, what).toBeGreaterThan(0);
@@ -151,8 +151,8 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
     const indexed = new Map<number, number>();
     for (const link of links)
     {
-        const m = /^email-(\d+)$/u.exec(link.dest);
-        if (m === null)
+        const match = /^email-(\d+)$/u.exec(link.dest);
+        if (match === null)
         {
             continue;
         }
@@ -160,42 +160,44 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
         const [, y1, , y2] = link.rect;
         const lines = textLines(pages[link.page]!).filter((l) => l.y > y1 && l.y < y2);
         const shown = /\s(\d+)$/u.exec(lines[0]?.shown ?? '');
-        expect(shown, `${what}: the index line of email ${m[1]!} shows a page`).not.toBeNull();
-        if (!indexed.has(Number(m[1])))
+        expect(shown, `${what}: the index line of email ${match[1]!} shows a page`).not.toBeNull();
+        if (!indexed.has(Number(match[1])))
         {
-            indexed.set(Number(m[1]), Number(shown![1]) - 1);
+            indexed.set(Number(match[1]), Number(shown![1]) - 1);
         }
     }
     expect(indexed, `${what}: every email has an index line with its page, and every index line an email`).toEqual(emails);
 
     const regularNames = new Set([regular]);
     const headings = new Map<number, number>();
-    for (let p = firstEmailPage; p < pages.length; p++)
+    for (let pageIndex = firstEmailPage; pageIndex < pages.length; pageIndex++)
     {
-        const runs = pages[p]!.map((r) => ({ ...r, font: names[p]!.get(r.font) ?? r.font }));
+        const runs = pages[pageIndex]!.map((r) => ({ ...r, font: names[pageIndex]!.get(r.font) ?? r.font }));
         const boldRuns = runs.filter((r) => r.font === bold);
         const heading = boldRuns.filter((r) => near(r.size, CONFIG.roles.heading.size));
-        expect(heading.length, `${what}: page ${String(p + 1)} has at most one email heading`).toBeLessThanOrEqual(1);
-        const h = heading[0];
-        if (h !== undefined)
+        expect(heading.length, `${what}: page ${String(pageIndex + 1)} has at most one email heading`).toBeLessThanOrEqual(1);
+        const firstHeading = heading[0];
+        if (firstHeading !== undefined)
         {
-            const m = /^Email (\d+)$/u.exec(h.shown);
-            expect(m, `${what}: page ${String(p + 1)}: "${h.shown}" is an email heading`).not.toBeNull();
-            const n = Number(m![1]);
-            headings.set(n, p);
-            expect(emails.get(n), `${what}: Email ${String(n)} is on the page of its destination`).toBe(p);
+            const match = /^Email (\d+)$/u.exec(firstHeading.shown);
+            expect(match, `${what}: page ${String(pageIndex + 1)}: "${firstHeading.shown}" is an email heading`).not.toBeNull();
+            const emailNumber = Number(match![1]);
+            headings.set(emailNumber, pageIndex);
+            expect(emails.get(emailNumber), `${what}: Email ${String(emailNumber)} is on the page of its destination`).toBe(pageIndex);
             // The topmost text of its page (PDF y goes up).
-            expect(Math.max(...runs.map((r) => r.y)), `${what}: Email ${String(n)} starts at the top of page ${String(p + 1)}`).toBeCloseTo(h.y, 6);
+            expect(Math.max(...runs.map((r) => r.y)),
+                `${what}: Email ${String(emailNumber)} starts at the top of page ${String(pageIndex + 1)}`).toBeCloseTo(firstHeading.y, 6);
         }
         const bodyTop = Math.max(-Infinity, ...runs.filter((r) => isBody(r, regularNames)).map((r) => r.y));
-        for (const r of boldRuns)
+        for (const boldRun of boldRuns)
         {
-            if (r === h || r.shown === STRINGS.attachmentsLabel)
+            if (boldRun === firstHeading || boldRun.shown === STRINGS.attachmentsLabel)
             {
                 continue;
             }
             // A header label: on the page of its email's heading, above the email's text.
-            expect(near(r.size, CONFIG.roles['field-label'].size) && h !== undefined && r.y > bodyTop, `${what}: page ${String(p + 1)}: bold "${r.shown}" is a header label above the text of an email that starts on this page`).toBe(true);
+            expect(near(boldRun.size, CONFIG.roles['field-label'].size) && firstHeading !== undefined && boldRun.y > bodyTop,
+                `${what}: page ${String(pageIndex + 1)}: bold "${boldRun.shown}" is a header label above the text of an email that starts on this page`).toBe(true);
         }
     }
     expect(headings, `${what}: one heading per email, on its page`).toEqual(emails);
@@ -204,28 +206,30 @@ async function expectHeaderBlocksAtPageTops(pdf: ParsedPdf, what: string): Promi
 
 describe('every header block of the PDF is at the top of a page and has its index line (task 8.13)', () =>
 {
-    for (const c of THREAD_CASES)
+    for (const threadCase of THREAD_CASES)
     {
-        it(c.id, async () =>
+        it(threadCase.id, async () =>
         {
-            const ms = c.messages!;
-            const tag = c.id.replace(/[^a-z0-9]+/giu, '-');
-            const n = ms.length;
-            const files = (idx: readonly number[]): NormalizedMessage[] => idx.map((i) => realFile(ms, i, tag));
+            const threadMessages = threadCase.messages!;
+            const tag = threadCase.id.replace(/[^a-z0-9]+/giu, '-');
+            const messageCount = threadMessages.length;
+            const files = (idx: readonly number[]): NormalizedMessage[] => idx.map((i) => realFile(threadMessages, i, tag));
             const batches: [string, number[]][] = [
-                ['last', [n - 1]],
-                ['every email', ms.map((_, i) => i)],
-                ['first and last', [0, n - 1]],
-                ['last two', [n - 2, n - 1]],
+                ['last', [messageCount - 1]],
+                ['every email', threadMessages.map((_, i) => i)],
+                ['first and last', [0, messageCount - 1]],
+                ['last two', [messageCount - 2, messageCount - 1]],
             ];
-            for (const [name, idx] of batches)
+            for (const [name, fileIndexes] of batches)
             {
-                await expectHeaderBlocksAtPageTops(await makePdf(files(idx), DEFAULT_OUTPUT_POLICY), `${c.id}, ${name}`);
+                await expectHeaderBlocksAtPageTops(await makePdf(files(fileIndexes), DEFAULT_OUTPUT_POLICY), `${threadCase.id}, ${name}`);
             }
             // The last email alone with the switch off, and with "Print full original text".
-            await expectHeaderBlocksAtPageTops(await makePdf(files([n - 1]), DEFAULT_OUTPUT_POLICY, () => []), `${c.id}, last, no rebuilt email`);
-            await expectHeaderBlocksAtPageTops(await makePdf(files([n - 1]), FULL), `${c.id}, last, full original text`);
-            await expectHeaderBlocksAtPageTops(await makePdf(files(ms.map((_, i) => i)), FULL), `${c.id}, every email, full original text`);
+            await expectHeaderBlocksAtPageTops(await makePdf(files([messageCount - 1]), DEFAULT_OUTPUT_POLICY, () => []),
+                `${threadCase.id}, last, no rebuilt email`);
+            await expectHeaderBlocksAtPageTops(await makePdf(files([messageCount - 1]), FULL), `${threadCase.id}, last, full original text`);
+            await expectHeaderBlocksAtPageTops(await makePdf(files(threadMessages.map((_, i) => i)), FULL),
+                `${threadCase.id}, every email, full original text`);
         });
     }
 
@@ -235,9 +239,9 @@ describe('every header block of the PDF is at the top of a page and has its inde
         {
             const mode = policy.unfoldEverything ? 'full' : 'folded';
             await expectHeaderBlocksAtPageTops(await makePdf(fixtures, policy), `all fixtures, ${mode}`);
-            for (const f of fixtures)
+            for (const fixture of fixtures)
             {
-                await expectHeaderBlocksAtPageTops(await makePdf([f], policy), `${f.source.fileName}, ${mode}`);
+                await expectHeaderBlocksAtPageTops(await makePdf([fixture], policy), `${fixture.source.fileName}, ${mode}`);
             }
         }
     });
@@ -254,18 +258,19 @@ async function linesHolding(pdf: ParsedPdf, text: string): Promise<{ page: numbe
 {
     const pages = await readPageRuns(pdf);
     const names = pageFonts(pdf);
-    const out: { page: number; x: number; fonts: string[]; shown: string }[] = [];
-    for (const [p, runs] of pages.entries())
+    const matches: { page: number; x: number; fonts: string[]; shown: string }[] = [];
+    for (const [pageIndex, runs] of pages.entries())
     {
         for (const line of textLines(runs))
         {
             if (line.shown.includes(text))
             {
-                out.push({ page: p, x: line.runs[0]!.x, fonts: line.runs.map((r) => names[p]!.get(r.font) ?? r.font), shown: line.shown });
+                matches.push(
+                    { page: pageIndex, x: line.runs[0]!.x, fonts: line.runs.map((r) => names[pageIndex]!.get(r.font) ?? r.font), shown: line.shown });
             }
         }
     }
-    return out;
+    return matches;
 }
 
 describe('header lines inside an email text are plain body text, never a header block (task 8.13 regressions)', () =>
@@ -341,34 +346,36 @@ describe('header lines inside an email text are plain body text, never a header 
 
     it('an Outlook chain with only the first and the last file: the middle emails\' header lines, moved to their rebuilt emails, are plain body text (task 8.13a, Q3, Q4)', async () =>
     {
-        const c = THREAD_CASES.find((x) => x.id === 'outlook-en x3')!;
-        const ms = c.messages!;
-        const pdf = await makePdf([realFile(ms, 0, 'b1'), realFile(ms, ms.length - 1, 'b1')], DEFAULT_OUTPUT_POLICY);
+        const threadCase = THREAD_CASES.find((x) => x.id === 'outlook-en x3')!;
+        const threadMessages = threadCase.messages!;
+        const pdf = await makePdf([realFile(threadMessages, 0, 'b1'), realFile(threadMessages, threadMessages.length - 1, 'b1')],
+            DEFAULT_OUTPUT_POLICY);
         await expectPlainBodyLines(pdf, ['From: Alice Example', 'Sent: Monday, March 3, 2025', 'Subject: RE: Office desks and chairs'], 'outlook-en x3, first and last');
     });
 
     it('a Gmail forward of an Outlook thread, the last email alone: header lines that the rebuilt emails cannot show, moved to their tops, are plain body text (task 8.13a, Q4)', async () =>
     {
-        const c = THREAD_CASES.find((x) => x.id === 'gmail forward of an outlook thread')!;
-        const ms = c.messages!;
-        const pdf = await makePdf([realFile(ms, ms.length - 1, 'b2')], DEFAULT_OUTPUT_POLICY);
+        const threadCase = THREAD_CASES.find((x) => x.id === 'gmail forward of an outlook thread')!;
+        const threadMessages = threadCase.messages!;
+        const pdf = await makePdf([realFile(threadMessages, threadMessages.length - 1, 'b2')], DEFAULT_OUTPUT_POLICY);
         await expectPlainBodyLines(pdf, ['---------- Forwarded message', 'Date: Mon, Mar 3, 2025 at 6:52 PM', 'Sent: Monday, March 3, 2025 5:15 PM'], 'gmail forward, last');
     });
 
     it('a forward whose rebuilt emails are unticked: the forwarded emails are left out (task 8.13a, Q2); with the switch off, or "Print full original text", they stay in its text', async () =>
     {
-        const c = THREAD_CASES.find((x) => x.id === 'outlook forward (FW: subject)')!;
-        const ms = c.messages!;
+        const threadCase = THREAD_CASES.find((x) => x.id === 'outlook forward (FW: subject)')!;
+        const threadMessages = threadCase.messages!;
         const lines = ['From: Bob Sample', 'Subject: RE: Office desks and chairs', 'Thank you for your message.'];
-        const unticked = await makePdf([realFile(ms, ms.length - 1, 'off')], DEFAULT_OUTPUT_POLICY, () => []);
+        const unticked = await makePdf([realFile(threadMessages, threadMessages.length - 1, 'off')], DEFAULT_OUTPUT_POLICY, () => []);
         expect((await expectHeaderBlocksAtPageTops(unticked, 'forward, rebuilt emails unticked')).size).toBe(1);
         for (const text of lines)
         {
             expect(await linesHolding(unticked, text), `unticked: "${text}" left out`).toEqual([]);
         }
-        const off = await makePdf([realFile(ms, ms.length - 1, 'off')], DEFAULT_OUTPUT_POLICY, () => [], true);
+        const off = await makePdf([realFile(threadMessages, threadMessages.length - 1, 'off')], DEFAULT_OUTPUT_POLICY, () => [], true);
         expect((await expectHeaderBlocksAtPageTops(off, 'forward, switch off')).size).toBe(1);
         await expectPlainBodyLines(off, lines, 'forward, switch off');
-        await expectPlainBodyLines(await makePdf([realFile(ms, ms.length - 1, 'off')], FULL), lines, 'forward, full original text');
+        await expectPlainBodyLines(await makePdf([realFile(threadMessages, threadMessages.length - 1, 'off')], FULL), lines,
+            'forward, full original text');
     });
 });

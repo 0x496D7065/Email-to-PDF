@@ -225,7 +225,7 @@ function samePrintedAsLabel(first: PdfLabel | null, second: PdfLabel | null): bo
  * R6): its text is the two texts joined, so the blocks still give the body
  * back unchanged.
  * Done here, in the preview's blocks only: the PDF and the no-repeat parts
- * (Source/pdf-export/build-pdf-document.ts, noRepeat) are not changed by it.
+ * (Source/pdf-export/build-pdf-document.ts, applyNoRepeatRule) are not changed by it.
  */
 export function mergeSamePrintedAs(blocks: readonly PdfBlock[]): PdfBlock[]
 {

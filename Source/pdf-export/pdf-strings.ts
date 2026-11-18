@@ -17,16 +17,16 @@ import { translator } from '../web-page/translations';
 import type { PdfStrings } from '../../Header/pdf-document-model';
 
 /** One decimal under 10 (1.4 KB), whole numbers above (12 KB): the same rule as the preview (Source/web-page/preview.ts, sizeText). */
-function roundSize(n: number): number
+function roundSize(value: number): number
 {
-    return n < 10 ? Math.round(n * 10) / 10 : Math.round(n);
+    return value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
 }
 
 /** The PDF texts in `locale` (a language the page ships; throws for any other, see translator()). */
 export function createPdfStrings(locale: string): PdfStrings
 {
     const { t } = translator(locale);
-    const size = (bytes: number | null): string =>
+    const formatSize = (bytes: number | null): string =>
     {
         if (bytes === null || !Number.isFinite(bytes) || bytes < 0)
         {
@@ -36,12 +36,12 @@ export function createPdfStrings(locale: string): PdfStrings
         {
             return t('preview.size.bytes', { count: bytes });
         }
-        const kb = bytes / 1024;
-        if (kb < 1024)
+        const kilobytes = bytes / 1024;
+        if (kilobytes < 1024)
         {
-            return t('preview.size.kb', { size: roundSize(kb) });
+            return t('preview.size.kb', { size: roundSize(kilobytes) });
         }
-        return t('preview.size.mb', { size: roundSize(kb / 1024) });
+        return t('preview.size.mb', { size: roundSize(kilobytes / 1024) });
     };
     return {
         locale,
@@ -87,7 +87,7 @@ export function createPdfStrings(locale: string): PdfStrings
         noAttachmentName: t('preview.noAttachmentName'),
         senderLocal: (time) => t('preview.senderTime', { time }),
         mailbox: (name, address) => t('preview.mailbox', { name, address }),
-        size,
+        size: formatSize,
         attachmentDetails: (sizeText, type) =>
             type.trim() === '' ? t('pdf.document.attachmentNoType', { size: sizeText }) : t('pdf.document.attachment', { size: sizeText, type }),
         fileName: (day) => (day === null ? t('pdf.document.fileNameNoDate') : t('pdf.document.fileName', { date: day })),

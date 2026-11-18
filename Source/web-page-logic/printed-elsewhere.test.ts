@@ -14,7 +14,7 @@ import { THREAD_CASES, type ThreadCase } from '../../Helper/Test/test-support/th
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
-import { buildPdfDocument, noRepeat, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/build-pdf-document';
+import { buildPdfDocument, applyNoRepeatRule, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/build-pdf-document';
 import { createPdfStrings } from '../pdf-export/pdf-strings';
 import { bodyLines, lineText } from '../pdf-export/pdf-text-transforms';
 import { pdfBlocks, signatureSources } from './pdf-plan';
@@ -212,7 +212,7 @@ const newCounts = (): Counts => ({ labelledSomewhere: 0, rebuiltTargets: 0, real
 function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: readonly string[], ownOf: (position: number) => number | undefined, counts: Counts): void
 {
     const { result, positions, plans, input, doc: pdfDocument, views } = prepared;
-    const { elsewhere } = noRepeat(input);
+    const { elsewhere } = applyNoRepeatRule(input);
     for (const [k, position] of positions.entries())
     {
         const body = result.messages[position]!.message.bodyText;

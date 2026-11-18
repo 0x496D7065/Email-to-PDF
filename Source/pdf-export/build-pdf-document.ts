@@ -59,7 +59,7 @@
 // stops a forward from printing its forwarded emails inline when they are
 // also printed on their own pages (the plan keeps a forwarded part, rule 1
 // of Source/thread-analysis/output-plan.ts). The preview labels each such part with
-// the email that prints it, from the same calculation (noRepeat,
+// the email that prints it, from the same calculation (applyNoRepeatRule,
 // printedElsewhereParts, pdfRanges; Source/web-page-logic/printed-elsewhere.ts,
 // task 8.11).
 // - THE WRITER'S OWN TEXT STAYS, ATTRIBUTION FIRST (user decision
@@ -165,7 +165,7 @@
 // leaves out). So, after every other decision, each such piece the plan leaves
 // out (printedNowhere) is checked against the text the PDF really prints
 // (Source/pdf-export/printed-somewhere-check.ts: words only, whole sentences); one printed
-// nowhere is printed where it is after all (NoRepeat.restored; the piece
+// nowhere is printed where it is after all (NoRepeatResult.restored; the piece
 // keeps the plan's reason, kept). Pieces are checked in PDF order and a
 // restored one counts as printed for the next ones, so a paragraph two
 // emails each leave out "because the other one has it" comes back once, in
@@ -271,7 +271,7 @@ import { FILE_CHAIN_SEPARATOR, fileChain } from '../web-page-logic/file-chain';
 import { joinMailboxes } from '../web-page-logic/mailbox-list';
 import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { previewOrder, rebuiltDate, rebuiltInPdf } from '../web-page-logic/rebuilt-email-display';
-import { printedText } from './printed-somewhere-check';
+import { createPrintedText } from './printed-somewhere-check';
 import { bodyLines, inlineRuns, joinKeptLines, lineText } from './pdf-text-transforms';
 // Pure and backend-neutral (it only reads Source/pdf-export/pdf-text-transforms.ts): the bookmark cut follows the same rule as the copy layer.
 import { copyLayerCutIndex } from './pdf-writer/copy-layer-text';
@@ -342,11 +342,11 @@ export function pdfFileName(generatedAt: number, timeZone: string, strings: Pick
 export const MAX_BOOKMARK_LENGTH = 120;
 
 /** Characters that belong to the one before them: combining marks (variation selectors included) and skin tone modifiers. */
-const ATTACHED = /^[\p{M}\p{Emoji_Modifier}]$/u;
-function isRegionalIndicator(point: string | undefined): boolean
+const ATTACHED_TO_PREVIOUS = /^[\p{M}\p{Emoji_Modifier}]$/u;
+function isRegionalIndicator(character: string | undefined): boolean
 {
-    const cp = point?.codePointAt(0);
-    return cp !== undefined && cp >= 0x1f1e6 && cp <= 0x1f1ff;
+    const codePoint = character?.codePointAt(0);
+    return codePoint !== undefined && codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff;
 }
 
 /**
@@ -362,33 +362,33 @@ function isRegionalIndicator(point: string | undefined): boolean
  * chain, can be cut to nothing: that email's bookmark then shows only
  * "N. date, From: ..." (acceptable; the text itself is untouched on the pages).
  */
-function bookmarkCut(points: readonly string[], limit: number): number
+function bookmarkKeptCount(points: readonly string[], limit: number): number
 {
     const text = points.join('');
     let cut = limit;
     for (;;)
     {
-        let next = Array.from(text.slice(0, copyLayerCutIndex(text, points.slice(0, cut).join('').length))).length;
+        let nextCut = Array.from(text.slice(0, copyLayerCutIndex(text, points.slice(0, cut).join('').length))).length;
         // A dropped mark takes the character it belongs to along (and the marks before it).
-        while (next > 0 && ATTACHED.test(points[next] ?? ''))
+        while (nextCut > 0 && ATTACHED_TO_PREVIOUS.test(points[nextCut] ?? ''))
         {
-            next--;
+            nextCut--;
         }
         // Regional indicators pair from the start of their run: an odd count before the cut splits a pair.
-        let run = 0;
-        while (run < next && isRegionalIndicator(points[next - 1 - run]))
+        let indicatorsBefore = 0;
+        while (indicatorsBefore < nextCut && isRegionalIndicator(points[nextCut - 1 - indicatorsBefore]))
         {
-            run++;
+            indicatorsBefore++;
         }
-        if (run % 2 === 1 && isRegionalIndicator(points[next]))
+        if (indicatorsBefore % 2 === 1 && isRegionalIndicator(points[nextCut]))
         {
-            next--;
+            nextCut--;
         }
-        if (next === cut)
+        if (nextCut === cut)
         {
             return cut;
         }
-        cut = next;
+        cut = nextCut;
     }
 }
 
@@ -396,7 +396,7 @@ function bookmarkCut(points: readonly string[], limit: number): number
  * A bookmark title from texts already made one-line by inlineRuns (no line
  * breaks, no tabs, control characters as codes, Source/pdf-export/pdf-text-transforms.ts): cut to
  * MAX_BOOKMARK_LENGTH code points, ending with U+2026 when cut. The cut
- * never splits an emoji, a flag or a letter from its accents (bookmarkCut);
+ * never splits an emoji, a flag or a letter from its accents (bookmarkKeptCount);
  * trailing spaces before the cut mark are dropped.
  */
 export function bookmarkTitle(text: string): string
@@ -406,7 +406,7 @@ export function bookmarkTitle(text: string): string
     {
         return text;
     }
-    return `${points.slice(0, bookmarkCut(points, MAX_BOOKMARK_LENGTH - 1)).join('').trimEnd()}\u{2026}`;
+    return `${points.slice(0, bookmarkKeptCount(points, MAX_BOOKMARK_LENGTH - 1)).join('').trimEnd()}\u{2026}`;
 }
 
 /** The anchor of email `number` (for the index links), real or rebuilt. */
@@ -464,30 +464,31 @@ export function planPdfOrder(result: EngineResult, positions: readonly number[],
 {
     // The real emails, each once, and their rank among them (1..k).
     const realRank: (number | null)[] = result.messages.map(() => null);
-    const real: { readonly position: number; readonly plan: number }[] = [];
-    positions.forEach((position, k) =>
+    const realEmails: { readonly position: number; readonly plan: number }[] = [];
+    positions.forEach((position, planIndex) =>
     {
-        const m = result.messages[position];
-        if (m === undefined || realRank[position] !== null)
+        const engineMessage = result.messages[position];
+        if (engineMessage === undefined || realRank[position] !== null)
         {
             return;
         }
         // An email with no text is left out of the PDF (task 8.14, see NO-TEXT EMAILS at the top).
-        if (hasNoPrintableText(m.message))
+        if (hasNoPrintableText(engineMessage.message))
         {
             return;
         }
-        realRank[position] = real.length + 1;
-        real.push({ position, plan: k });
+        realRank[position] = realEmails.length + 1;
+        realEmails.push({ position, plan: planIndex });
     });
 
     // The rebuilt entries chosen that follow a real email in the PDF, with their rank in the timeline.
-    type Placed = { readonly kind: 'email'; readonly position: number; readonly plan: number } | { readonly kind: 'rebuilt'; readonly entry: EngineRebuilt; readonly source: RebuiltInPdf };
-    const rebuilt: { readonly slot: Placed; readonly rank: number }[] = [];
+    type UnnumberedSlot = { readonly kind: 'email'; readonly position: number; readonly plan: number }
+        | { readonly kind: 'rebuilt'; readonly entry: EngineRebuilt; readonly source: RebuiltInPdf };
+    const chosenRebuilt: { readonly slot: UnnumberedSlot; readonly rank: number }[] = [];
     const rankOfPosition = new Map<number, number>();
     if (rebuiltIds.length > 0)
     {
-        const wanted = new Set(rebuiltIds);
+        const chosenIds = new Set(rebuiltIds);
         previewOrder(result).forEach((slot, rank) =>
         {
             if (slot.kind === 'message')
@@ -496,68 +497,68 @@ export function planPdfOrder(result: EngineResult, positions: readonly number[],
                 return;
             }
             const entry = result.reconstructed[slot.id];
-            if (entry === undefined || !wanted.has(slot.id) || rebuiltHasNoPrintableText(entry))
+            if (entry === undefined || !chosenIds.has(slot.id) || rebuiltHasNoPrintableText(entry))
             {
                 return;
             }
             const source = rebuiltInPdf(entry, result, (p) => realRank[p] ?? null);
             if (source !== null)
             {
-                rebuilt.push({ slot: { kind: 'rebuilt', entry, source }, rank });
+                chosenRebuilt.push({ slot: { kind: 'rebuilt', entry, source }, rank });
             }
         });
     }
 
-    const placed: Placed[] = [];
-    let next = 0;
-    for (const email of real)
+    const placed: UnnumberedSlot[] = [];
+    let nextRebuilt = 0;
+    for (const email of realEmails)
     {
         const rank = rankOfPosition.get(email.position) ?? Number.POSITIVE_INFINITY;
-        while (next < rebuilt.length && rebuilt[next]!.rank < rank)
+        while (nextRebuilt < chosenRebuilt.length && chosenRebuilt[nextRebuilt]!.rank < rank)
         {
-            placed.push(rebuilt[next++]!.slot);
+            placed.push(chosenRebuilt[nextRebuilt++]!.slot);
         }
         placed.push({ kind: 'email', ...email });
     }
-    while (next < rebuilt.length)
+    while (nextRebuilt < chosenRebuilt.length)
     {
-        placed.push(rebuilt[next++]!.slot);
+        placed.push(chosenRebuilt[nextRebuilt++]!.slot);
     }
 
     // One numbering over every slot.
     const pdfNumberByPosition: (number | null)[] = result.messages.map(() => null);
-    const slots = placed.map((slot, k): PdfSlot =>
+    const slots = placed.map((slot, slotIndex): PdfSlot =>
     {
         if (slot.kind === 'email')
         {
-            pdfNumberByPosition[slot.position] = k + 1;
+            pdfNumberByPosition[slot.position] = slotIndex + 1;
         }
-        return { ...slot, number: k + 1 };
+        return { ...slot, number: slotIndex + 1 };
     });
     return { slots, pdfNumberByPosition };
 }
 
-function isBlank(m: EmailAddress): boolean
+function isBlankMailbox(mailbox: EmailAddress): boolean
 {
-    return m.name.trim() === '' && m.address.trim() === '';
+    return mailbox.name.trim() === '' && mailbox.address.trim() === '';
 }
 
 /** "Name <address>", or whichever of the two exists (as the preview shows it). */
-function mailboxText(m: EmailAddress, strings: PdfStrings): string
+function mailboxText(mailbox: EmailAddress, strings: PdfStrings): string
 {
-    const hasName = m.name.trim() !== '';
-    const hasAddress = m.address.trim() !== '';
+    const hasName = mailbox.name.trim() !== '';
+    const hasAddress = mailbox.address.trim() !== '';
     if (hasName && hasAddress)
     {
-        return strings.mailbox(m.name, m.address);
+        return strings.mailbox(mailbox.name, mailbox.address);
     }
-    return hasName ? m.name : m.address;
+    return hasName ? mailbox.name : mailbox.address;
 }
 
 /** A short form for the index: the name, or the address when there is no name. */
-function shortMailbox(m: EmailAddress): string
+function shortMailbox(mailbox: EmailAddress): string
 {
-    return m.name.trim() !== '' ? m.name : m.address;
+    return mailbox.name.trim() !== '' ? mailbox.name : mailbox.address;
 }
 
 /**
@@ -565,31 +566,31 @@ function shortMailbox(m: EmailAddress): string
  * [0, length), each range non-empty with a boolean `keep`. Anything else
  * (a gap would silently drop text) means the plan is not trusted.
  */
-function validRanges(plan: MessagePlan | null | undefined, length: number): plan is MessagePlan
+function hasValidRanges(plan: MessagePlan | null | undefined, length: number): plan is MessagePlan
 {
     if (typeof plan !== 'object' || plan === null || !Array.isArray(plan.ranges))
     {
         return false;
     }
-    let last = 0;
-    for (const r of plan.ranges as readonly unknown[])
+    let coveredTo = 0;
+    for (const range of plan.ranges as readonly unknown[])
     {
-        if (typeof r !== 'object' || r === null)
+        if (typeof range !== 'object' || range === null)
         {
             return false;
         }
-        const { start, end, keep } = r as Record<string, unknown>;
+        const { start, end, keep } = range as Record<string, unknown>;
         if (typeof keep !== 'boolean' || !Number.isInteger(start) || !Number.isInteger(end))
         {
             return false;
         }
-        if (start !== last || (end as number) <= last || (end as number) > length)
+        if (start !== coveredTo || (end as number) <= coveredTo || (end as number) > length)
         {
             return false;
         }
-        last = end as number;
+        coveredTo = end as number;
     }
-    return last === length;
+    return coveredTo === length;
 }
 
 /** Nothing joined: every line of the text starts a line of the body. */
@@ -598,7 +599,7 @@ const NO_JOINS: ReadonlySet<number> = new Set();
 /** Code-unit intervals [start, end) of one body, sorted, not overlapping, not touching. */
 export type BodyIntervals = readonly (readonly [number, number])[];
 
-const NOWHERE: BodyIntervals = [];
+const NO_INTERVALS: BodyIntervals = [];
 
 /**
  * The header rows the PDF prints for a place left out: a rebuilt copy's (its
@@ -611,29 +612,29 @@ export type PrintedHeader =
     | { readonly kind: 'rebuilt'; readonly rebuilt: ReconstructedMessage }
     | { readonly kind: 'real'; readonly message: NormalizedMessage; readonly strong?: boolean };
 
-const trimmed = (s: string | null): string => (s ?? '').trim();
+const trimmedOrEmpty = (s: string | null): string => (s ?? '').trim();
 /** A display name compared: outer white space removed, inner runs of white space as one space. */
 const nameKey = (name: string): string => name.trim().replace(/\s+/gu, ' ');
 const sameMailbox = (a: EmailAddress, b: EmailAddress): boolean => a.name.trim() === b.name.trim() && a.address.trim().toLowerCase() === b.address.trim().toLowerCase();
 const sameMailboxes = (a: readonly EmailAddress[], b: readonly EmailAddress[]): boolean =>
 {
-    const x = a.filter((m) => !isBlank(m));
-    const y = b.filter((m) => !isBlank(m));
-    return x.length === y.length && x.every((m, k) => sameMailbox(m, y[k]!));
+    const nonBlankA = a.filter((m) => !isBlankMailbox(m));
+    const nonBlankB = b.filter((m) => !isBlankMailbox(m));
+    return nonBlankA.length === nonBlankB.length && nonBlankA.every((m, k) => sameMailbox(m, nonBlankB[k]!));
 };
 /**
- * `m` is one of `list`: the same address (letter case ignored), and, when
- * both have a display name, the same name too (nameKey; task 8.11, review
- * finding G3: "Robert <bob@x>" is not shown by a row that says "Bob
- * <bob@x>", so its header lines stay, B2); or, when `m` has no address (an
- * Outlook header often writes names only: "To: Bob Sample"), a mailbox of
+ * `mailbox` is one of `list`: the same address (letter case ignored), and,
+ * when both have a display name, the same name too (nameKey; task 8.11,
+ * review finding G3: "Robert <bob@x>" is not shown by a row that says "Bob
+ * <bob@x>", so its header lines stay, B2); or, when `mailbox` has no address
+ * (an Outlook header often writes names only: "To: Bob Sample"), a mailbox of
  * `list` with the same name (nameKey), with or without an address (task
  * 8.10, S3). The real file's row shows that name.
  */
-const amongMailboxes = (m: EmailAddress, list: readonly EmailAddress[]): boolean =>
+const amongMailboxes = (mailbox: EmailAddress, list: readonly EmailAddress[]): boolean =>
 {
-    const address = m.address.trim().toLowerCase();
-    const name = nameKey(m.name);
+    const address = mailbox.address.trim().toLowerCase();
+    const name = nameKey(mailbox.name);
     if (address !== '')
     {
         return list.some((x) => x.address.trim().toLowerCase() === address && (name === '' || nameKey(x.name) === '' || nameKey(x.name) === name));
@@ -669,35 +670,35 @@ const amongMailboxes = (m: EmailAddress, list: readonly EmailAddress[]): boolean
  *   read must be in the file's To or Cc (by address, with the same name
  *   when both have one, G3; or by name when it has no address, S3).
  */
-export function headerShownInPdf(body: string, r: ReconstructedMessage, printed: PrintedHeader): boolean
+export function headerShownInPdf(body: string, rebuiltMessage: ReconstructedMessage, printed: PrintedHeader): boolean
 {
-    const labels = headerLabelCounts(body, r.start, r.headerEnd);
+    const labels = headerLabelCounts(body, rebuiltMessage.start, rebuiltMessage.headerEnd);
     if ((labels.get('bcc') ?? 0) > 0)
     {
         return false;
     }
-    for (const n of labels.values())
+    for (const count of labels.values())
     {
-        if (n > 1)
+        if (count > 1)
         {
             return false;
         }
     }
-    if (r.incomplete.length > 0)
+    if (rebuiltMessage.incomplete.length > 0)
     {
         return false;
     }
-    const from = r.from.filter((m) => !isBlank(m));
+    const from = rebuiltMessage.from.filter((m) => !isBlankMailbox(m));
     const sender = from[0];
     if (from.length !== 1 || sender === undefined)
     {
         return false;
     }
-    if ((labels.get('subject') ?? 0) > 0 && trimmed(r.subject) === '')
+    if ((labels.get('subject') ?? 0) > 0 && trimmedOrEmpty(rebuiltMessage.subject) === '')
     {
         return false;
     }
-    const date = rebuiltDate({ rebuilt: r });
+    const date = rebuiltDate({ rebuilt: rebuiltMessage });
     if (date.kind === 'none')
     {
         return false;
@@ -713,18 +714,18 @@ export function headerShownInPdf(body: string, r: ReconstructedMessage, printed:
         {
             return false;
         }
-        const p = printed.rebuilt;
+        const printedCopy = printed.rebuilt;
         return (
-            p === r ||
-            (sameMailboxes(p.from, r.from) &&
-                sameMailboxes(p.to, r.to) &&
-                sameMailboxes(p.cc, r.cc) &&
-                trimmed(p.subject) === trimmed(r.subject) &&
-                trimmed(p.dateText) === trimmed(r.dateText) &&
-                p.incomplete.length === 0)
+            printedCopy === rebuiltMessage ||
+            (sameMailboxes(printedCopy.from, rebuiltMessage.from) &&
+                sameMailboxes(printedCopy.to, rebuiltMessage.to) &&
+                sameMailboxes(printedCopy.cc, rebuiltMessage.cc) &&
+                trimmedOrEmpty(printedCopy.subject) === trimmedOrEmpty(rebuiltMessage.subject) &&
+                trimmedOrEmpty(printedCopy.dateText) === trimmedOrEmpty(rebuiltMessage.dateText) &&
+                printedCopy.incomplete.length === 0)
         );
     }
-    const m = printed.message;
+    const realMessage = printed.message;
     if (date.kind !== 'moment')
     {
         return false;
@@ -737,36 +738,36 @@ export function headerShownInPdf(body: string, r: ReconstructedMessage, printed:
     const sameAddress = (x: EmailAddress): boolean => x.address.trim().toLowerCase() === senderAddress;
     const senderShown =
         senderName === ''
-            ? senderAddress !== '' && m.from.some(sameAddress)
-            : m.from.some((x) => nameKey(x.name) === senderName && (senderAddress === '' || sameAddress(x)));
+            ? senderAddress !== '' && realMessage.from.some(sameAddress)
+            : realMessage.from.some((x) => nameKey(x.name) === senderName && (senderAddress === '' || sameAddress(x)));
     if (!senderShown)
     {
         return false;
     }
-    if (trimmed(r.subject) !== '' && trimmed(r.subject) !== m.subject.trim())
+    if (trimmedOrEmpty(rebuiltMessage.subject) !== '' && trimmedOrEmpty(rebuiltMessage.subject) !== realMessage.subject.trim())
     {
         return false;
     }
-    const recipients = [...m.to, ...m.cc];
-    return [...r.to, ...r.cc].every((x) => isBlank(x) || amongMailboxes(x, recipients));
+    const recipients = [...realMessage.to, ...realMessage.cc];
+    return [...rebuiltMessage.to, ...rebuiltMessage.cc].every((x) => isBlankMailbox(x) || amongMailboxes(x, recipients));
 }
 
 /** The kept ranges of the writer's own: the writer's own text (B1) and a kept signature (S5). */
-const isOwn = (r: PlanRange): boolean => r.keep && (r.reason === 'text' || r.reason === 'signature' || r.reason === 'repeated-signature');
+const isOwnRange = (r: PlanRange): boolean => r.keep && (r.reason === 'text' || r.reason === 'signature' || r.reason === 'repeated-signature');
 
 /** The ranges the plan marks as a quote (kept or not): a quote of the writer, app quoted history, a forwarded part. */
-const isQuoted = (r: PlanRange): boolean => r.reason === 'writer-quote' || r.reason === 'app-quoted-history' || r.reason === 'forwarded';
+const isQuoteRange = (r: PlanRange): boolean => r.reason === 'writer-quote' || r.reason === 'app-quoted-history' || r.reason === 'forwarded';
 
 /** Whether [start, end) of `body` overlaps, with text other than white space, a range of `ranges` that passes `test`. */
 function holdsText(body: string, ranges: readonly PlanRange[], start: number, end: number, test: (r: PlanRange) => boolean): boolean
 {
-    for (const r of ranges)
+    for (const range of ranges)
     {
-        if (r.end <= start || r.start >= end)
+        if (range.end <= start || range.start >= end)
         {
             continue;
         }
-        if (test(r) && /\S/u.test(body.slice(Math.max(r.start, start), Math.min(r.end, end))))
+        if (test(range) && /\S/u.test(body.slice(Math.max(range.start, start), Math.min(range.end, end))))
         {
             return true;
         }
@@ -784,7 +785,7 @@ function holdsText(body: string, ranges: readonly PlanRange[], start: number, en
  */
 export function holdsOwnText(body: string, ranges: readonly PlanRange[], start: number, end: number): boolean
 {
-    return holdsText(body, ranges, start, end, isOwn);
+    return holdsText(body, ranges, start, end, isOwnRange);
 }
 
 /**
@@ -796,11 +797,11 @@ export function holdsOwnText(body: string, ranges: readonly PlanRange[], start: 
  */
 export function holdsQuotedText(body: string, ranges: readonly PlanRange[], start: number, end: number): boolean
 {
-    return holdsText(body, ranges, start, end, isQuoted);
+    return holdsText(body, ranges, start, end, isQuoteRange);
 }
 
 /** Where the forwarded part of a plan starts (rule 1 of output-plan.ts: everything from there on), or null. */
-function forwardedFrom(ranges: readonly PlanRange[]): number | null
+function forwardedPartStart(ranges: readonly PlanRange[]): number | null
 {
     return ranges.find((r) => r.reason === 'forwarded')?.start ?? null;
 }
@@ -820,39 +821,39 @@ function forwardedFrom(ranges: readonly PlanRange[]): number | null
  * line (say "To: ..." or "Subject: ..."), it is taken for header lines and
  * stays (B1 holds), while the quote below it may be cut.
  */
-export function headerLinesEnd(body: string, r: ReconstructedMessage): number
+export function headerLinesEnd(body: string, rebuiltMessage: ReconstructedMessage): number
 {
-    const { headerEnd, end } = r;
-    let rest: string;
+    const { headerEnd, end } = rebuiltMessage;
+    let comparable: string;
     try
     {
-        rest = comparableText(r);
+        comparable = comparableText(rebuiltMessage);
     }
     catch
     {
         return headerEnd; // malformed input: no leftover lines
     }
-    const text = r.reconstructedText;
-    if (typeof text !== 'string' || rest.length >= text.length)
+    const reconstructedText = rebuiltMessage.reconstructedText;
+    if (typeof reconstructedText !== 'string' || comparable.length >= reconstructedText.length)
     {
         return headerEnd;
     }
-    if (rest === '')
+    if (comparable === '')
     {
         return end;
     }
-    const skipped = text.slice(0, text.length - rest.length);
-    let at = headerEnd;
-    for (let k = skipped.indexOf('\n'); k >= 0; k = skipped.indexOf('\n', k + 1))
+    const skipped = reconstructedText.slice(0, reconstructedText.length - comparable.length);
+    let lineStart = headerEnd;
+    for (let skippedNewline = skipped.indexOf('\n'); skippedNewline >= 0; skippedNewline = skipped.indexOf('\n', skippedNewline + 1))
     {
-        const nl = body.indexOf('\n', at);
-        if (nl < 0 || nl >= end)
+        const bodyNewline = body.indexOf('\n', lineStart);
+        if (bodyNewline < 0 || bodyNewline >= end)
         {
             return end;
         }
-        at = nl + 1;
+        lineStart = bodyNewline + 1;
     }
-    return at;
+    return lineStart;
 }
 
 /**
@@ -877,7 +878,7 @@ export function headerLinesEnd(body: string, r: ReconstructedMessage): number
  * not show everything they say (headerShownInPdf), or when the plan took
  * some of them for own text (a wrapped To / Cc line, a Subject line), they
  * are MOVED, as plain text, to the top of that rebuilt email's own text
- * (noRepeat, `moved`; buildRebuiltEmail), so nothing is lost and they sit
+ * (applyNoRepeatRule, `moved`; buildRebuiltEmail), so nothing is lost and they sit
  * under a real header. Only lines the body would have printed are moved:
  * its trusted plan keeps some of them (lines the plan leaves out anyway,
  * say the quoted history of a reply, are not added to the rebuilt email).
@@ -893,13 +894,13 @@ export function headerLinesEnd(body: string, r: ReconstructedMessage): number
  * "Print full original text" and the original files still do. Only ids
  * actually in `unticked` count (task 8.13a review round 2): an entry merely
  * not chosen is never taken for unticked. Only when `unticked` and `plans`
- * are given (noRepeat gives no `unticked` while the switch is off,
+ * are given (applyNoRepeatRule gives no `unticked` while the switch is off,
  * BuildPdfInput.rebuildingOff: then no forwarded part is cut).
  * A DIFFERING SIGNATURE (task 8.13a review round 2): a copy linked to the
  * email that prints it (link 'same-as', or 'real') may end with a signature
  * block the printed text does not have (link-rebuilt-messages.ts, rules 1c and 2:
  * one of the two texts may end with one). That block is printed nowhere
- * else, so it stays INLINE (the part ends where it starts, extraTail); only
+ * else, so it stays INLINE (the part ends where it starts, unprintedSignatureStart); only
  * the words the other email prints are cut. When it is unclear where in the
  * body the block starts, the whole place stays (when unsure, keep).
  * Kept INLINE, as the plan says (nothing else would show it): a rebuilt
@@ -935,12 +936,12 @@ export function printedElsewhere(
     unticked?: ReadonlySet<number>,
 ): Map<number, BodyIntervals>
 {
-    const out = new Map<number, BodyIntervals>();
+    const intervalsByPosition = new Map<number, BodyIntervals>();
     for (const [position, parts] of printedElsewhereParts(result, slots, pdfNumberByPosition, plans, unticked))
     {
-        out.set(position, mergeParts(parts));
+        intervalsByPosition.set(position, mergeParts(parts));
     }
-    return out;
+    return intervalsByPosition;
 }
 
 /** A part [start, end) of one body that the PDF prints as the email `printedAs` (printedElsewhereParts). */
@@ -969,18 +970,18 @@ const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean =>
 /** The parts of a body as BodyIntervals: sorted, overlapping or touching parts merged. */
 function mergeParts(parts: readonly { readonly start: number; readonly end: number }[]): BodyIntervals
 {
-    const list = parts.map((p): [number, number] => [p.start, p.end]).sort((a, b) => a[0] - b[0]);
+    const sortedPairs = parts.map((p): [number, number] => [p.start, p.end]).sort((a, b) => a[0] - b[0]);
     const merged: [number, number][] = [];
-    for (const [a, b] of list)
+    for (const [start, end] of sortedPairs)
     {
         const last = merged[merged.length - 1];
-        if (last !== undefined && a <= last[1])
+        if (last !== undefined && start <= last[1])
         {
-            last[1] = Math.max(last[1], b);
+            last[1] = Math.max(last[1], end);
         }
         else
         {
-            merged.push([a, b]);
+            merged.push([start, end]);
         }
     }
     return merged;
@@ -994,41 +995,41 @@ function mergeParts(parts: readonly { readonly start: number; readonly end: numb
  * the union of the places (so mergeParts of the result is mergeParts of the
  * places).
  */
-function disjointParts(found: readonly PrintedPart[]): PrintedPart[]
+function disjointParts(places: readonly PrintedPart[]): PrintedPart[]
 {
-    const bounds = [...new Set(found.flatMap((p) => [p.start, p.end]))].sort((a, b) => a - b);
-    const out: PrintedPart[] = [];
+    const bounds = [...new Set(places.flatMap((p) => [p.start, p.end]))].sort((a, b) => a - b);
+    const disjoint: PrintedPart[] = [];
     for (let k = 0; k + 1 < bounds.length; k++)
     {
-        const a = bounds[k]!;
-        const b = bounds[k + 1]!;
-        let best: PrintedPart | undefined;
-        for (const p of found)
+        const pieceStart = bounds[k]!;
+        const pieceEnd = bounds[k + 1]!;
+        let innermost: PrintedPart | undefined;
+        for (const place of places)
         {
-            if (p.start > a || p.end < b)
+            if (place.start > pieceStart || place.end < pieceEnd)
             {
                 continue;
             }
-            if (best === undefined || p.start > best.start || (p.start === best.start && p.end < best.end))
+            if (innermost === undefined || place.start > innermost.start || (place.start === innermost.start && place.end < innermost.end))
             {
-                best = p;
+                innermost = place;
             }
         }
-        if (best === undefined)
+        if (innermost === undefined)
         {
             continue;
         }
-        const last = out[out.length - 1];
-        if (last !== undefined && last.end === a && samePrintedAs(last.printedAs, best.printedAs))
+        const previous = disjoint[disjoint.length - 1];
+        if (previous !== undefined && previous.end === pieceStart && samePrintedAs(previous.printedAs, innermost.printedAs))
         {
-            out[out.length - 1] = { ...last, end: b };
+            disjoint[disjoint.length - 1] = { ...previous, end: pieceEnd };
         }
         else
         {
-            out.push({ start: a, end: b, printedAs: best.printedAs });
+            disjoint.push({ start: pieceStart, end: pieceEnd, printedAs: innermost.printedAs });
         }
     }
-    return out;
+    return disjoint;
 }
 
 /**
@@ -1053,9 +1054,9 @@ export function printedElsewhereParts(
 /** A block of quoted header lines a place leaves behind for its rebuilt email (task 8.13a, Q4). */
 interface MoveCandidate
 {
-    readonly entry: number;
+    readonly entryId: number;
     /** The id of the place (its EngineRebuilt). */
-    readonly copy: number;
+    readonly copyId: number;
     readonly position: number;
     readonly start: number;
     readonly headerEnd: number;
@@ -1095,42 +1096,42 @@ function headerKey(text: string): string
  * would cut it all, block included). Words are compared as the link rules
  * compare them (wordsOf).
  */
-export function extraTail(body: string, place: ReconstructedMessage, printedText: string): number | null | 'unsure'
+export function unprintedSignatureStart(body: string, place: ReconstructedMessage, printedText: string): number | null | 'unsure'
 {
     const text = place.reconstructedText;
     if (typeof text !== 'string' || typeof printedText !== 'string')
     {
         return 'unsure';
     }
-    const at = signatureStart(text, nameWordsOf(Array.isArray(place.from) ? place.from : []));
-    if (at === null)
+    const signatureAt = signatureStart(text, nameWordsOf(Array.isArray(place.from) ? place.from : []));
+    if (signatureAt === null)
     {
         return null;
     }
-    const whole = wordsOf(comparableText(place)).tokens;
-    if (whole.length === 0)
+    const placeWords = wordsOf(comparableText(place)).tokens;
+    if (placeWords.length === 0)
     {
         return null;
     }
-    if (` ${wordsOf(printedText).tokens.join(' ')} `.includes(` ${whole.join(' ')} `))
+    if (` ${wordsOf(printedText).tokens.join(' ')} `.includes(` ${placeWords.join(' ')} `))
     {
         return null;
     }
     // The block's first line, counted from the start of the place's text.
-    let lines = 0;
-    for (let k = text.indexOf('\n'); k >= 0 && k < at; k = text.indexOf('\n', k + 1))
+    let linesBefore = 0;
+    for (let textNewline = text.indexOf('\n'); textNewline >= 0 && textNewline < signatureAt; textNewline = text.indexOf('\n', textNewline + 1))
     {
-        lines++;
+        linesBefore++;
     }
     let offset = place.headerEnd;
-    for (let k = 0; k < lines; k++)
+    for (let k = 0; k < linesBefore; k++)
     {
-        const nl = body.indexOf('\n', offset);
-        if (nl < 0 || nl >= place.end)
+        const bodyNewline = body.indexOf('\n', offset);
+        if (bodyNewline < 0 || bodyNewline >= place.end)
         {
             return 'unsure';
         }
-        offset = nl + 1;
+        offset = bodyNewline + 1;
     }
     return offset < place.end ? offset : 'unsure';
 }
@@ -1144,7 +1145,7 @@ function listOrNone<T>(list: readonly T[] | undefined): readonly T[]
 }
 
 /**
- * What the page of the email at list position `own` (an attached email in
+ * What the page of the email at list position `attachedPosition` (an attached email in
  * the PDF, or the copy it was merged into) prints of its body, as pieces of
  * that body with the email each piece is printed as (task 8.13b-3, review
  * round 4, M1): its plan's KEPT ranges, printed as itself, except the parts
@@ -1158,52 +1159,52 @@ function listOrNone<T>(list: readonly T[] | undefined): readonly T[]
  * whole (no plan, a plan that is not valid or failed; bodyTextOf) is one
  * piece. Sorted, not overlapping.
  */
-function pagePieces(body: string, plan: MessagePlan | undefined, self: PrintedAs, ownParts: readonly PrintedPart[]): PrintedPart[]
+function pagePieces(body: string, plan: MessagePlan | undefined, printedAsItself: PrintedAs, ownParts: readonly PrintedPart[]): PrintedPart[]
 {
-    if (!validRanges(plan, body.length) || plan.fallback)
+    if (!hasValidRanges(plan, body.length) || plan.fallback)
     {
-        return body.length === 0 ? [] : [{ start: 0, end: body.length, printedAs: self }];
+        return body.length === 0 ? [] : [{ start: 0, end: body.length, printedAs: printedAsItself }];
     }
     const sorted = disjointParts(ownParts);
-    const out: PrintedPart[] = [];
-    for (const r of plan.ranges)
+    const pieces: PrintedPart[] = [];
+    for (const range of plan.ranges)
     {
-        if (!r.keep)
+        if (!range.keep)
         {
             continue;
         }
-        let from = r.start;
+        let from = range.start;
         for (const part of sorted)
         {
-            if (part.end <= from || part.start >= r.end)
+            if (part.end <= from || part.start >= range.end)
             {
                 continue;
             }
             if (part.start > from)
             {
-                out.push({ start: from, end: part.start, printedAs: self });
+                pieces.push({ start: from, end: part.start, printedAs: printedAsItself });
             }
-            const end = Math.min(part.end, r.end);
-            out.push({ start: Math.max(part.start, from), end, printedAs: part.printedAs });
+            const end = Math.min(part.end, range.end);
+            pieces.push({ start: Math.max(part.start, from), end, printedAs: part.printedAs });
             from = end;
         }
-        if (from < r.end)
+        if (from < range.end)
         {
-            out.push({ start: from, end: r.end, printedAs: self });
+            pieces.push({ start: from, end: range.end, printedAs: printedAsItself });
         }
     }
-    return out;
+    return pieces;
 }
 
 /** Where the text of an attached email's printed block starts in it: after the first blank line (none: a block of header lines only, its end). */
 function blockBodyStart(body: string, start: number, end: number): { readonly at: number; readonly hasBlank: boolean }
 {
-    const blank = /(?:\r\n|\r|\n)[ \t]*(?:\r\n|\r|\n)/u.exec(body.slice(start, end));
-    return blank === null ? { at: end, hasBlank: false } : { at: start + blank.index + blank[0].length, hasBlank: true };
+    const blankLine = /(?:\r\n|\r|\n)[ \t]*(?:\r\n|\r|\n)/u.exec(body.slice(start, end));
+    return blankLine === null ? { at: end, hasBlank: false } : { at: start + blankLine.index + blankLine[0].length, hasBlank: true };
 }
 
 /**
- * The parts of attached email `a`'s printed block `holderBody[start, end)`
+ * The parts of an attached email's printed block `holderBody[start, end)`
  * that its own page prints, in the holder's offsets (task 8.13b-3, review
  * round 4, M1, user decision option a): the no-repeat rule leaves out of the
  * holder ONLY these; everything else of the block stays where the holder's
@@ -1221,15 +1222,16 @@ function blockBodyStart(body: string, start: number, end: number): { readonly at
  * When the block's text cannot be matched to that body for certain, none
  * (the whole block stays: when unsure, keep).
  */
-function blockClaims(holderBody: string, start: number, end: number, ownBody: string, pieces: readonly PrintedPart[], self: PrintedAs, showsHeader: boolean): PrintedPart[]
+function blockClaims(holderBody: string, start: number, end: number, ownBody: string, pieces: readonly PrintedPart[], printedAsItself: PrintedAs,
+    showsHeader: boolean): PrintedPart[]
 {
-    const { at, hasBlank } = blockBodyStart(holderBody, start, end);
-    const text = holderBody.slice(at, end);
+    const { at: bodyStart, hasBlank } = blockBodyStart(holderBody, start, end);
+    const text = holderBody.slice(bodyStart, end);
     if (!hasBlank && /\S/u.test(ownBody))
     {
         return [];
     }
-    const out: PrintedPart[] = [];
+    const claims: PrintedPart[] = [];
     if (pieces.length > 0)
     {
         const mapped = mapOffsets(ownBody, text, pieces.flatMap((p) => [p.start, p.end]));
@@ -1237,21 +1239,21 @@ function blockClaims(holderBody: string, start: number, end: number, ownBody: st
         {
             return [];
         }
-        pieces.forEach((p, k) =>
+        pieces.forEach((piece, pieceIndex) =>
         {
-            const a = at + mapped[2 * k]!;
-            const b = at + mapped[2 * k + 1]!;
-            if (a < b)
+            const claimStart = bodyStart + mapped[2 * pieceIndex]!;
+            const claimEnd = bodyStart + mapped[2 * pieceIndex + 1]!;
+            if (claimStart < claimEnd)
             {
-                out.push({ start: a, end: b, printedAs: p.printedAs });
+                claims.push({ start: claimStart, end: claimEnd, printedAs: piece.printedAs });
             }
         });
     }
-    if (showsHeader && at > start)
+    if (showsHeader && bodyStart > start)
     {
-        out.push({ start, end: at, printedAs: self });
+        claims.push({ start, end: bodyStart, printedAs: printedAsItself });
     }
-    return out;
+    return claims;
 }
 
 /**
@@ -1286,13 +1288,13 @@ function attachedBlockParts(
     readerTicked: ReadonlySet<number> | undefined,
 ): void
 {
-    const list = listOrNone(result.attached);
-    if (list.length === 0)
+    const attachedEmails = listOrNone(result.attached);
+    if (attachedEmails.length === 0)
     {
         return;
     }
     const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
-    const add = (holder: number, part: PrintedPart): void =>
+    const addPart = (holder: number, part: PrintedPart): void =>
     {
         let parts = found.get(holder);
         if (parts === undefined)
@@ -1307,44 +1309,45 @@ function attachedBlockParts(
         readonly start: number;
         readonly end: number;
     }
-    const unticked: (Block & { readonly printedAs: PrintedAs })[] = [];
+    const untickedBlocks: (Block & { readonly printedAs: PrintedAs })[] = [];
     // The pieces of the blocks of emails in the PDF that their page does not print.
-    const leftIn: (Block & { readonly pieces: [number, number][] })[] = [];
+    const leftInBlocks: (Block & { readonly pieces: [number, number][] })[] = [];
     // The parts of body `holder` left out with an unticked attached email (Q3): its block, less what an
     // attached email in the PDF inside it does not print, less nothing for the unticked ones inside that one.
     const untickedParts = (holder: number): PrintedPart[] =>
     {
-        const keep: [number, number][] = [];
-        for (const b of leftIn)
+        const keptPieces: [number, number][] = [];
+        for (const block of leftInBlocks)
         {
-            if (b.holder !== holder)
+            if (block.holder !== holder)
             {
                 continue;
             }
             // `inside` only matters when blockClaims returned nothing for this block (its text could not be
-            // matched: the whole block is in b.pieces). Otherwise its claims already hold the unticked blocks
-            // inside it (pagePieces gave them to its page with untickedParts), so b.pieces lacks them anyway.
-            const inside = unticked.filter((u) => u.holder === holder && b.start <= u.start && u.end <= b.end && u.end - u.start < b.end - b.start).map((u): [number, number] => [u.start, u.end]);
-            for (const [s, e] of b.pieces)
+            // matched: the whole block is in block.pieces). Otherwise its claims already hold the unticked blocks
+            // inside it (pagePieces gave them to its page with untickedParts), so block.pieces lacks them anyway.
+            const inside = untickedBlocks.filter((u) => u.holder === holder && block.start <= u.start && u.end <= block.end
+                && u.end - u.start < block.end - block.start).map((u): [number, number] => [u.start, u.end]);
+            for (const [pieceStart, pieceEnd] of block.pieces)
             {
-                for (const piece of without(s, e, inside))
+                for (const piece of subtractIntervals(pieceStart, pieceEnd, inside))
                 {
-                    keep.push(piece);
+                    keptPieces.push(piece);
                 }
             }
         }
-        const out: PrintedPart[] = [];
-        for (const u of unticked)
+        const parts: PrintedPart[] = [];
+        for (const untickedBlock of untickedBlocks)
         {
-            if (u.holder === holder)
+            if (untickedBlock.holder === holder)
             {
-                for (const [start, end] of without(u.start, u.end, keep))
+                for (const [start, end] of subtractIntervals(untickedBlock.start, untickedBlock.end, keptPieces))
                 {
-                    out.push({ start, end, printedAs: u.printedAs });
+                    parts.push({ start, end, printedAs: untickedBlock.printedAs });
                 }
             }
         }
-        return out;
+        return parts;
     };
     // Deepest first (longest path): this assumes the blocks inside an email's own body belong to deeper
     // attached entries. With D2/S1 the kept body may be a dropped file, whose own attached entries have
@@ -1352,85 +1355,90 @@ function attachedBlockParts(
     // body holds the same blocks, and S1 (analyze-thread.ts settleAttached) moves the places of the entries
     // attached inside the merged copy to the kept body, where they keep their own (deeper) path.
     const depth = (a: EngineAttached): number => listOrNone(a.path).length;
-    const order = list.map((a, k) => ({ a, k })).sort((x, y) => depth(y.a) - depth(x.a) || y.k - x.k);
-    for (const { a } of order)
+    const deepestFirst = attachedEmails.map((a, k) => ({ a, k })).sort((x, y) => depth(y.a) - depth(x.a) || y.k - x.k);
+    for (const { a: attached } of deepestFirst)
     {
-        const own = result.positionByIndex[a.index];
-        if (typeof own !== 'number')
+        const attachedPosition = result.positionByIndex[attached.index];
+        if (typeof attachedPosition !== 'number')
         {
             continue;
         }
-        const ownMessage = result.messages[own];
-        if (ownMessage === undefined)
+        const attachedMessage = result.messages[attachedPosition];
+        if (attachedMessage === undefined)
         {
             continue;
         }
-        const ticked = inPdf(own);
+        const ticked = inPdf(attachedPosition);
         // Left out for having no text, not by the reader (task 8.14): its block stays in every holder.
-        if (!ticked && hasNoPrintableText(ownMessage.message) && (readerTicked === undefined || readerTicked.has(own)))
+        if (!ticked && hasNoPrintableText(attachedMessage.message) && (readerTicked === undefined || readerTicked.has(attachedPosition)))
         {
             continue;
         }
-        const self: PrintedAs = ticked ? { kind: 'email', position: own, number: pdfNumberByPosition[own]! } : { kind: 'unticked-attached', position: own };
+        const printedAsItself: PrintedAs = ticked ? { kind: 'email', position: attachedPosition, number: pdfNumberByPosition[attachedPosition]! }
+            : { kind: 'unticked-attached', position: attachedPosition };
         let pieces: PrintedPart[] | null = null;
-        for (const p of listOrNone(a.places))
+        for (const place of listOrNone(attached.places))
         {
-            const holder = result.positionByIndex[p.holderIndex];
-            if (!inPdf(holder) || holder === own)
+            const holder = result.positionByIndex[place.holderIndex];
+            if (!inPdf(holder) || holder === attachedPosition)
             {
                 continue;
             }
-            const m = result.messages[holder];
+            const holderMessage = result.messages[holder];
             // The offsets are those of that very body (Header/thread-analysis-result.ts, EngineAttachedPlace).
-            if (m === undefined || m.index !== p.holderIndex)
+            if (holderMessage === undefined || holderMessage.index !== place.holderIndex)
             {
                 continue;
             }
-            const body = m.message.bodyText;
-            if (!Number.isInteger(p.start) || !Number.isInteger(p.end) || p.start < 0 || p.end <= p.start || p.end > body.length)
+            const body = holderMessage.message.bodyText;
+            if (!Number.isInteger(place.start) || !Number.isInteger(place.end) || place.start < 0 || place.end <= place.start
+                || place.end > body.length)
             {
                 continue;
             }
             if (!ticked)
             {
-                unticked.push({ holder, start: p.start, end: p.end, printedAs: self });
+                untickedBlocks.push({ holder, start: place.start, end: place.end, printedAs: printedAsItself });
                 continue;
             }
             // Every email attached inside this one is deeper, so done: its parts in this body are final.
-            pieces ??= pagePieces(ownMessage.message.bodyText, plans?.get(own), self, [...(found.get(own) ?? []), ...untickedParts(own)]);
-            const claims = blockClaims(body, p.start, p.end, ownMessage.message.bodyText, pieces, self, a.keptShowsHeader === true);
-            for (const c of claims)
+            pieces ??= pagePieces(attachedMessage.message.bodyText, plans?.get(attachedPosition), printedAsItself,
+                [...(found.get(attachedPosition) ?? []), ...untickedParts(attachedPosition)]);
+            const claims = blockClaims(body, place.start, place.end, attachedMessage.message.bodyText, pieces, printedAsItself,
+                attached.keptShowsHeader === true);
+            for (const claim of claims)
             {
-                add(holder, c);
+                addPart(holder, claim);
             }
-            leftIn.push({ holder, start: p.start, end: p.end, pieces: without(p.start, p.end, claims.map((c): [number, number] => [c.start, c.end])) });
+            leftInBlocks.push({ holder, start: place.start, end: place.end,
+                pieces: subtractIntervals(place.start, place.end, claims.map((c): [number, number] => [c.start, c.end])) });
         }
     }
-    for (const holder of new Set(unticked.map((u) => u.holder)))
+    for (const holder of new Set(untickedBlocks.map((u) => u.holder)))
     {
         for (const part of untickedParts(holder))
         {
-            add(holder, part);
+            addPart(holder, part);
         }
     }
 }
 
 /** [start, end) less every interval of `holes` (in any order, may overlap), as sorted pieces; none when nothing is left. */
-function without(start: number, end: number, holes: readonly (readonly [number, number])[]): [number, number][]
+function subtractIntervals(start: number, end: number, holes: readonly (readonly [number, number])[]): [number, number][]
 {
-    const out: [number, number][] = [];
+    const remaining: [number, number][] = [];
     let from = start;
-    for (const [a, b] of [...holes].sort((x, y) => x[0] - y[0] || x[1] - y[1]))
+    for (const [holeStart, holeEnd] of [...holes].sort((x, y) => x[0] - y[0] || x[1] - y[1]))
     {
-        if (b <= from || a >= end)
+        if (holeEnd <= from || holeStart >= end)
         {
             continue;
         }
-        if (a > from)
+        if (holeStart > from)
         {
-            out.push([from, a]);
+            remaining.push([from, holeStart]);
         }
-        from = Math.max(from, b);
+        from = Math.max(from, holeEnd);
         if (from >= end)
         {
             break;
@@ -1438,12 +1446,12 @@ function without(start: number, end: number, holes: readonly (readonly [number, 
     }
     if (from < end)
     {
-        out.push([from, end]);
+        remaining.push([from, end]);
     }
-    return out;
+    return remaining;
 }
 
-/** printedElsewhereParts, and the header lines moved to each rebuilt email (see noRepeat). */
+/** printedElsewhereParts, and the header lines moved to each rebuilt email (see applyNoRepeatRule). */
 function noRepeatParts(
     result: EngineResult,
     slots: readonly PdfSlot[],
@@ -1468,56 +1476,58 @@ function noRepeatParts(
     // The entries whose printed copy's header lines are printed nowhere (its plan leaves them out, its rows cannot show them).
     const unshown = new Set<number>();
     const reconstructed: readonly EngineRebuilt[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
-    for (const r of reconstructed)
+    for (const rebuiltEntry of reconstructed)
     {
-        const position = result.positionByIndex[r.sourceIndex];
+        const position = result.positionByIndex[rebuiltEntry.sourceIndex];
         if (!inPdf(position))
         {
             continue;
         }
-        const { start, headerEnd, end } = r.rebuilt;
+        const { start, headerEnd, end } = rebuiltEntry.rebuilt;
         const body = result.messages[position]?.message.bodyText ?? '';
         if (!Number.isInteger(start) || !Number.isInteger(headerEnd) || !Number.isInteger(end) || start < 0 || headerEnd < start || end < headerEnd || end > body.length)
         {
             continue;
         }
         const plan = plans?.get(position);
-        const own = plan !== undefined && validRanges(plan, body.length) && !plan.fallback ? plan.ranges : null;
+        const trustedRanges = plan !== undefined && hasValidRanges(plan, body.length) && !plan.fallback ? plan.ranges : null;
         let shownAs: PrintedHeader | null = null;
         let printedAs: PrintedAs | null = null;
         // The text the other email prints (null: this place is that text, or nothing prints it).
         let printedText: string | null = null;
-        if (r.link === 'entry' || r.link === 'same-as')
+        if (rebuiltEntry.link === 'entry' || rebuiltEntry.link === 'same-as')
         {
-            const id = r.link === 'entry' ? r.id : r.sameAs;
-            const entry = id === null ? undefined : entries.get(id);
-            if (id !== null && entry !== undefined)
+            const entryId = rebuiltEntry.link === 'entry' ? rebuiltEntry.id : rebuiltEntry.sameAs;
+            const entry = entryId === null ? undefined : entries.get(entryId);
+            if (entryId !== null && entry !== undefined)
             {
                 shownAs = { kind: 'rebuilt', rebuilt: entry.copy.rebuilt };
-                printedAs = { kind: 'rebuilt', id, number: entry.number };
-                if (entry.copy.id !== r.id)
+                printedAs = { kind: 'rebuilt', id: entryId, number: entry.number };
+                if (entry.copy.id !== rebuiltEntry.id)
                 {
                     printedText = entry.copy.rebuilt.reconstructedText;
                 }
             }
-            else if (id !== null && unticked !== undefined && unticked.has(id) && reconstructed[id]?.link === 'entry' && own !== null)
+            else if (entryId !== null && unticked !== undefined && unticked.has(entryId) && reconstructed[entryId]?.link === 'entry'
+                && trustedRanges !== null)
             {
                 // Q2: a forwarded part whose rebuilt email the reader unticked (only an id the reader really unticked).
-                const forwarded = forwardedFrom(own);
+                const forwarded = forwardedPartStart(trustedRanges);
                 if (forwarded !== null && start >= forwarded)
                 {
-                    printedAs = { kind: 'unticked', id };
+                    printedAs = { kind: 'unticked', id: entryId };
                 }
             }
         }
-        else if (r.link === 'real' && r.realIndex !== null)
+        else if (rebuiltEntry.link === 'real' && rebuiltEntry.realIndex !== null)
         {
-            const real = result.positionByIndex[r.realIndex];
-            const message = real === undefined || real === position || !inPdf(real) ? undefined : result.messages[real]?.message;
-            if (message !== undefined && inPdf(real))
+            const realPosition = result.positionByIndex[rebuiltEntry.realIndex];
+            const message = realPosition === undefined || realPosition === position || !inPdf(realPosition) ? undefined
+                : result.messages[realPosition]?.message;
+            if (message !== undefined && inPdf(realPosition))
             {
-                shownAs = { kind: 'real', message, strong: r.match?.strong === true && !r.match.ambiguousDate };
-                printedAs = { kind: 'email', position: real, number: pdfNumberByPosition[real]! };
+                shownAs = { kind: 'real', message, strong: rebuiltEntry.match?.strong === true && !rebuiltEntry.match.ambiguousDate };
+                printedAs = { kind: 'email', position: realPosition, number: pdfNumberByPosition[realPosition]! };
                 printedText = typeof message.bodyText === 'string' ? message.bodyText : '';
             }
         }
@@ -1526,14 +1536,14 @@ function noRepeatParts(
             continue;
         }
         // The header lines, with what is left of a header read short at the top of the text.
-        const linesEnd = headerLinesEnd(body, r.rebuilt);
+        const linesEnd = headerLinesEnd(body, rebuiltEntry.rebuilt);
         // The writer's answer (Q3): own text and quoted text in the place's text keep the whole place.
-        if (own !== null && holdsOwnText(body, own, linesEnd, end) && holdsQuotedText(body, own, linesEnd, end))
+        if (trustedRanges !== null && holdsOwnText(body, trustedRanges, linesEnd, end) && holdsQuotedText(body, trustedRanges, linesEnd, end))
         {
             continue;
         }
         // A signature block only this copy has stays inline: the other email does not print it (see printedElsewhere).
-        const tail = printedText === null ? null : extraTail(body, r.rebuilt, printedText);
+        const tail = printedText === null ? null : unprintedSignatureStart(body, rebuiltEntry.rebuilt, printedText);
         // A block whose line cannot be found ('unsure'), or found where it cannot be (in the header lines):
         // when unsure, keep the whole place.
         if (tail === 'unsure' || (tail !== null && (tail < linesEnd || tail >= end)))
@@ -1545,26 +1555,27 @@ function noRepeatParts(
         {
             continue;
         }
-        let list = found.get(position);
-        if (list === undefined)
+        let partsHere = found.get(position);
+        if (partsHere === undefined)
         {
-            list = [];
-            found.set(position, list);
+            partsHere = [];
+            found.set(position, partsHere);
         }
-        list.push({ start, end: cutEnd, printedAs });
+        partsHere.push({ start, end: cutEnd, printedAs });
         // Q4: header lines the rebuilt email's rows cannot show (or that the plan took for own text) move to it,
         // when this body would have printed them (its trusted plan keeps some of them; lines the plan leaves
         // out, say the quoted history of a reply, were never printed and are not added; an untrusted plan
         // prints the body whole, lines included, so moving them would print them twice).
         if (printedAs.kind === 'rebuilt' && shownAs !== null && linesEnd > start)
         {
-            const shown = !(own !== null && holdsOwnText(body, own, start, linesEnd)) && headerShownInPdf(body, r.rebuilt, shownAs);
-            const kept = own !== null && holdsText(body, own, start, linesEnd, (x) => x.keep);
-            if (!shown && kept)
+            const headerShown = !(trustedRanges !== null && holdsOwnText(body, trustedRanges, start, linesEnd))
+                && headerShownInPdf(body, rebuiltEntry.rebuilt, shownAs);
+            const headerKept = trustedRanges !== null && holdsText(body, trustedRanges, start, linesEnd, (x) => x.keep);
+            if (!headerShown && headerKept)
             {
-                candidates.push({ entry: printedAs.id, copy: r.id, position, start, headerEnd, linesEnd });
+                candidates.push({ entryId: printedAs.id, copyId: rebuiltEntry.id, position, start, headerEnd, linesEnd });
             }
-            else if (!shown && own !== null && entries.get(printedAs.id)?.copy.id === r.id)
+            else if (!headerShown && trustedRanges !== null && entries.get(printedAs.id)?.copy.id === rebuiltEntry.id)
             {
                 unshown.add(printedAs.id);
             }
@@ -1600,96 +1611,96 @@ function movedHeaders(
     pdfNumberByPosition: readonly (number | null)[],
 ): Map<number, readonly string[]>
 {
-    const out = new Map<number, readonly string[]>();
+    const movedByEntry = new Map<number, readonly string[]>();
     const bodyAt = (position: number): string => result.messages[position]?.message.bodyText ?? '';
-    for (const [id, entry] of entries)
+    for (const [entryId, entry] of entries)
     {
-        const mine = candidates.filter((c) => c.entry === id);
-        if (mine.length === 0)
+        const entryCandidates = candidates.filter((c) => c.entryId === entryId);
+        if (entryCandidates.length === 0)
         {
             continue;
         }
         const shownBody = bodyAt(entry.position);
         const shownCopy = entry.copy.rebuilt;
-        const seen = new Set<string>(unshown.has(id) ? [] : [headerKey(shownBody.slice(shownCopy.start, headerLinesEnd(shownBody, shownCopy)))]);
-        const texts: string[] = [];
-        const take = (text: string): void =>
+        const seen = new Set<string>(unshown.has(entryId) ? [] : [headerKey(shownBody.slice(shownCopy.start, headerLinesEnd(shownBody, shownCopy)))]);
+        const movedTexts: string[] = [];
+        const addMoved = (text: string): void =>
         {
             if (text.trim() === '')
             {
                 return;
             }
-            texts.push(/[\r\n]$/u.test(text) ? text : `${text}\n`);
+            movedTexts.push(/[\r\n]$/u.test(text) ? text : `${text}\n`);
         };
-        const own = mine.find((c) => c.copy === entry.copy.id && c.position === entry.position);
-        if (own !== undefined)
+        const ownCandidate = entryCandidates.find((c) => c.copyId === entry.copy.id && c.position === entry.position);
+        if (ownCandidate !== undefined)
         {
-            take(bodyAt(own.position).slice(own.start, own.headerEnd));
+            addMoved(bodyAt(ownCandidate.position).slice(ownCandidate.start, ownCandidate.headerEnd));
         }
-        const others = mine
-            .filter((c) => c !== own)
+        const others = entryCandidates
+            .filter((c) => c !== ownCandidate)
             .sort((a, b) => (pdfNumberByPosition[a.position] ?? 0) - (pdfNumberByPosition[b.position] ?? 0) || a.start - b.start);
-        for (const c of others)
+        for (const candidate of others)
         {
-            const text = bodyAt(c.position).slice(c.start, c.linesEnd);
+            const text = bodyAt(candidate.position).slice(candidate.start, candidate.linesEnd);
             const key = headerKey(text);
             if (seen.has(key))
             {
                 continue;
             }
             seen.add(key);
-            take(text);
+            addMoved(text);
         }
-        if (texts.length > 0)
+        if (movedTexts.length > 0)
         {
-            out.set(id, texts);
+            movedByEntry.set(entryId, movedTexts);
         }
     }
-    return out;
+    return movedByEntry;
 }
 
 /**
- * `r` cut at the bounds of `intervals` (sorted), its pieces inside them left
- * out, whatever its reason (task 8.13a: printedElsewhere alone decides what
- * is cut; it keeps every place that holds the writer's answer, Q3). Returns
+ * `range` cut at the bounds of `intervals` (sorted), its pieces inside them
+ * left out, whatever its reason (task 8.13a: printedElsewhere alone decides
+ * what is cut; it keeps every place that holds the writer's answer, Q3). Returns
  * whether text other than white space was left out.
  */
-function cutRange(body: string, r: PlanRange, intervals: BodyIntervals, out: CutRanges): boolean
+function cutRange(body: string, range: PlanRange, intervals: BodyIntervals, cutRanges: CutRanges): boolean
 {
     let leftOut = false;
-    let from = r.start;
-    const push = (range: PlanRange, cut: boolean): void =>
+    let from = range.start;
+    const push = (piece: PlanRange, cut: boolean): void =>
     {
-        out.ranges.push(range);
-        out.cut.push(cut);
+        cutRanges.ranges.push(piece);
+        cutRanges.cut.push(cut);
     };
-    for (const [a, b] of intervals)
+    for (const [intervalStart, intervalEnd] of intervals)
     {
-        if (b <= from)
+        if (intervalEnd <= from)
         {
             continue;
         }
-        if (a >= r.end || from >= r.end)
+        if (intervalStart >= range.end || from >= range.end)
         {
             break;
         }
-        const start = Math.max(a, from);
-        const end = Math.min(b, r.end);
+        const start = Math.max(intervalStart, from);
+        const end = Math.min(intervalEnd, range.end);
         const hasText = /\S/.test(body.slice(start, end));
         if (start > from)
         {
-            push({ ...r, start: from, end: start }, false);
+            push({ ...range, start: from, end: start }, false);
         }
-        push({ ...r, start, end, keep: false }, true);
+        push({ ...range, start, end, keep: false }, true);
         if (hasText)
         {
             leftOut = true;
         }
         from = end;
     }
-    if (from < r.end)
+    if (from < range.end)
     {
-        push({ ...r, start: from, end: r.end }, false);
+        push({ ...range, start: from, end: range.end }, false);
     }
     return leftOut;
 }
@@ -1704,26 +1715,26 @@ interface CutRanges
 /** withoutPrintedElsewhere, with which ranges the rule left out. */
 function cutPrintedElsewhere(body: string, ranges: readonly PlanRange[], parts: BodyIntervals): CutRanges & { readonly leftOut: boolean }
 {
-    const out: CutRanges = { ranges: [], cut: [] };
+    const cutRanges: CutRanges = { ranges: [], cut: [] };
     let leftOut = false;
-    for (const r of ranges)
+    for (const range of ranges)
     {
-        if (!r.keep)
+        if (!range.keep)
         {
-            out.ranges.push(r);
-            out.cut.push(false);
+            cutRanges.ranges.push(range);
+            cutRanges.cut.push(false);
             continue;
         }
-        if (cutRange(body, r, near(parts, r.start, r.end), out))
+        if (cutRange(body, range, overlappingIntervals(parts, range.start, range.end), cutRanges))
         {
             leftOut = true;
         }
     }
-    return { ...out, leftOut };
+    return { ...cutRanges, leftOut };
 }
 
 /** The intervals of a sorted list that may touch [start, end), as a slice (binary search on the end). */
-function near(intervals: BodyIntervals, start: number, end: number): BodyIntervals
+function overlappingIntervals(intervals: BodyIntervals, start: number, end: number): BodyIntervals
 {
     let lo = 0;
     let hi = intervals.length;
@@ -1739,12 +1750,12 @@ function near(intervals: BodyIntervals, start: number, end: number): BodyInterva
             hi = mid;
         }
     }
-    let to = lo;
-    while (to < intervals.length && (intervals[to]?.[0] ?? end) < end)
+    let endIndex = lo;
+    while (endIndex < intervals.length && (intervals[endIndex]?.[0] ?? end) < end)
     {
-        to++;
+        endIndex++;
     }
-    return intervals.slice(lo, to);
+    return intervals.slice(lo, endIndex);
 }
 
 /**
@@ -1781,7 +1792,7 @@ export function withoutPrintedElsewhere(
  * parts is split between them). null when the PDF prints the body whole
  * ("Print full original text", a plan missing, not valid or failed: see
  * bodyTextOf), or when nothing is left out this way: the plan's ranges are
- * then what the PDF prints. `restored` (NoRepeat.restored, review round 3
+ * then what the PDF prints. `restored` (NoRepeatResult.restored, review round 3
  * of task 8.13b-3): pieces the plan leaves out that the PDF prints after
  * all, because their text is printed nowhere else; they come back kept
  * (printedAs null), with the plan's reason.
@@ -1791,10 +1802,10 @@ export function pdfRanges(
     plan: MessagePlan | null | undefined,
     policy: Pick<OutputPolicy, 'unfoldEverything'>,
     parts: readonly PrintedPart[],
-    restored: BodyIntervals = NOWHERE,
+    restored: BodyIntervals = NO_INTERVALS,
 ): readonly PdfRange[] | null
 {
-    if (policy.unfoldEverything || (parts.length === 0 && restored.length === 0) || !validRanges(plan, body.length) || plan.fallback)
+    if (policy.unfoldEverything || (parts.length === 0 && restored.length === 0) || !hasValidRanges(plan, body.length) || plan.fallback)
     {
         return null;
     }
@@ -1803,37 +1814,37 @@ export function pdfRanges(
     {
         return null;
     }
-    const out: PdfRange[] = [];
-    cut.ranges.forEach((r, k) =>
+    const printedRanges: PdfRange[] = [];
+    cut.ranges.forEach((range, rangeIndex) =>
     {
-        if (cut.cut[k] !== true)
+        if (cut.cut[rangeIndex] !== true)
         {
-            out.push({ ...r, printedAs: null });
+            printedRanges.push({ ...range, printedAs: null });
             return;
         }
         // A piece left out lies inside the union of the parts, which tile it.
-        let from = r.start;
-        for (const p of parts)
+        let from = range.start;
+        for (const part of parts)
         {
-            if (p.end <= from || p.start >= r.end)
+            if (part.end <= from || part.start >= range.end)
             {
                 continue;
             }
-            const start = Math.max(from, p.start);
-            const end = Math.min(r.end, p.end);
+            const start = Math.max(from, part.start);
+            const end = Math.min(range.end, part.end);
             if (start > from)
             {
-                out.push({ ...r, start: from, end: start, printedAs: null }); // not expected (parts tile it)
+                printedRanges.push({ ...range, start: from, end: start, printedAs: null }); // not expected (parts tile it)
             }
-            out.push({ ...r, start, end, printedAs: p.printedAs });
+            printedRanges.push({ ...range, start, end, printedAs: part.printedAs });
             from = end;
         }
-        if (from < r.end)
+        if (from < range.end)
         {
-            out.push({ ...r, start: from, end: r.end, printedAs: null }); // not expected
+            printedRanges.push({ ...range, start: from, end: range.end, printedAs: null }); // not expected
         }
     });
-    return withRestored(out, restored);
+    return withRestored(printedRanges, restored);
 }
 
 /**
@@ -1849,38 +1860,38 @@ function withRestored<R extends PlanRange & { readonly printedAs?: PrintedAs | n
     {
         return [...ranges];
     }
-    const out: R[] = [];
-    for (const r of ranges)
+    const split: R[] = [];
+    for (const range of ranges)
     {
-        let from = r.start;
-        for (const [a, b] of near(restored, r.start, r.end))
+        let from = range.start;
+        for (const [restoredStart, restoredEnd] of overlappingIntervals(restored, range.start, range.end))
         {
-            const start = Math.max(a, from);
-            const end = Math.min(b, r.end);
+            const start = Math.max(restoredStart, from);
+            const end = Math.min(restoredEnd, range.end);
             if (end <= start)
             {
                 continue;
             }
             if (start > from)
             {
-                out.push({ ...r, start: from, end: start });
+                split.push({ ...range, start: from, end: start });
             }
-            out.push({ ...r, start, end, keep: true, ...('printedAs' in r ? { printedAs: null } : {}) });
+            split.push({ ...range, start, end, keep: true, ...('printedAs' in range ? { printedAs: null } : {}) });
             from = end;
         }
-        if (from < r.end)
+        if (from < range.end)
         {
-            out.push({ ...r, start: from, end: r.end });
+            split.push({ ...range, start: from, end: range.end });
         }
     }
-    return out;
+    return split;
 }
 
 /** What the no-repeat rule needs: the PDF's input, less what only the layout uses. */
 export type NoRepeatInput = Pick<BuildPdfInput, 'result' | 'positions' | 'plans' | 'policy' | 'rebuilt' | 'rebuildingOff' | 'unticked'>;
 
-/** The emails in the PDF and the parts of their bodies printed elsewhere (noRepeat). */
-export interface NoRepeat
+/** The emails in the PDF and the parts of their bodies printed elsewhere (applyNoRepeatRule). */
+export interface NoRepeatResult
 {
     readonly order: PdfOrder;
     /** Per list position, the parts left out and where they are printed (printedElsewhereParts); empty under "Print full original text". */
@@ -1940,8 +1951,8 @@ function printedNowhere(
     const restored = new Map<number, BodyIntervals>();
     const inPdf = (index: unknown): boolean =>
     {
-        const p = typeof index === 'number' ? result.positionByIndex[index] : undefined;
-        return typeof p === 'number' && order.pdfNumberByPosition[p] != null;
+        const position = typeof index === 'number' ? result.positionByIndex[index] : undefined;
+        return typeof position === 'number' && order.pdfNumberByPosition[position] != null;
     };
     const candidates: { readonly position: number; readonly start: number; readonly end: number }[] = [];
     for (const slot of order.slots)
@@ -1950,69 +1961,69 @@ function printedNowhere(
         {
             continue;
         }
-        const m = result.messages[slot.position];
+        const engineMessage = result.messages[slot.position];
         const plan = plans.get(slot.position);
-        if (m === undefined || !validRanges(plan, m.message.bodyText.length) || plan.fallback)
+        if (engineMessage === undefined || !hasValidRanges(plan, engineMessage.message.bodyText.length) || plan.fallback)
         {
             continue;
         }
         // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
-        const isList: boolean = Array.isArray(m.segments);
+        const isList: boolean = Array.isArray(engineMessage.segments);
         if (!isList)
         {
             continue;
         }
-        // Segments are a sorted cover of the body: these intervals are sorted and do not overlap (as `near` needs).
-        const linked = m.segments
+        // Segments are a sorted cover of the body: these intervals are sorted and do not overlap (as `overlappingIntervals` needs).
+        const linked = engineMessage.segments
             .filter(
-                (s) =>
-                    s.folded &&
-                    Array.isArray(s.reasons) &&
-                    s.reasons.length > 0 &&
-                    s.reasons.every((reason) => reason === 'quoted-overlap') &&
-                    Array.isArray(s.related) &&
-                    s.related.some(inPdf),
+                (segment) =>
+                    segment.folded &&
+                    Array.isArray(segment.reasons) &&
+                    segment.reasons.length > 0 &&
+                    segment.reasons.every((reason) => reason === 'quoted-overlap') &&
+                    Array.isArray(segment.related) &&
+                    segment.related.some(inPdf),
             )
             .map((s): [number, number] => [s.start, s.end]);
         if (linked.length === 0)
         {
             continue;
         }
-        let open: { start: number; end: number } | null = null;
-        const close = (): void =>
+        let openCandidate: { start: number; end: number } | null = null;
+        const closeCandidate = (): void =>
         {
-            if (open !== null)
+            if (openCandidate !== null)
             {
-                candidates.push({ position: slot.position, start: open.start, end: open.end });
+                candidates.push({ position: slot.position, start: openCandidate.start, end: openCandidate.end });
             }
-            open = null;
+            openCandidate = null;
         };
-        for (const r of plan.ranges)
+        for (const range of plan.ranges)
         {
-            if (r.keep || r.reason === 'signature' || r.reason === 'repeated-signature')
+            if (range.keep || range.reason === 'signature' || range.reason === 'repeated-signature')
             {
                 continue;
             }
-            for (const s of near(linked, r.start, r.end))
+            for (const linkedInterval of overlappingIntervals(linked, range.start, range.end))
             {
-                const start = Math.max(s[0], r.start);
-                const end = Math.min(s[1], r.end);
+                const start = Math.max(linkedInterval[0], range.start);
+                const end = Math.min(linkedInterval[1], range.end);
                 if (end <= start)
                 {
                     continue;
                 }
-                if (open !== null && open.end === start)
+                if (openCandidate !== null && openCandidate.end === start)
                 {
-                    open.end = end;
+                    openCandidate.end = end;
                 }
                 else
                 {
-                    close();
-                    open = { start, end };
+                    closeCandidate();
+                    openCandidate = { start, end };
                 }
             }
         }
-        close();
+        closeCandidate();
     }
     if (candidates.length === 0)
     {
@@ -2020,7 +2031,7 @@ function printedNowhere(
     }
 
     // The text the PDF prints, before anything is restored.
-    const printed = printedText();
+    const printed = createPrintedText();
     for (const slot of order.slots)
     {
         if (slot.kind === 'rebuilt')
@@ -2030,53 +2041,53 @@ function printedNowhere(
         }
         const body = result.messages[slot.position]?.message.bodyText ?? '';
         const plan = plans.get(slot.position);
-        if (!validRanges(plan, body.length) || plan.fallback)
+        if (!hasValidRanges(plan, body.length) || plan.fallback)
         {
             printed.add(body);
             continue;
         }
         // Each run of kept ranges, as one piece of printed text.
-        let from = -1;
-        let to = -1;
-        for (const r of withoutPrintedElsewhere(body, plan.ranges, elsewhere.get(slot.position) ?? NOWHERE).ranges)
+        let runStart = -1;
+        let runEnd = -1;
+        for (const range of withoutPrintedElsewhere(body, plan.ranges, elsewhere.get(slot.position) ?? NO_INTERVALS).ranges)
         {
-            if (!r.keep)
+            if (!range.keep)
             {
                 continue;
             }
-            if (r.start !== to)
+            if (range.start !== runEnd)
             {
-                if (from >= 0)
+                if (runStart >= 0)
                 {
-                    printed.add(body.slice(from, to));
+                    printed.add(body.slice(runStart, runEnd));
                 }
-                from = r.start;
+                runStart = range.start;
             }
-            to = r.end;
+            runEnd = range.end;
         }
-        if (from >= 0)
+        if (runStart >= 0)
         {
-            printed.add(body.slice(from, to));
+            printed.add(body.slice(runStart, runEnd));
         }
     }
 
-    const found = new Map<number, [number, number][]>();
-    for (const c of candidates)
+    const notFound = new Map<number, [number, number][]>();
+    for (const candidate of candidates)
     {
-        const text = (result.messages[c.position]?.message.bodyText ?? '').slice(c.start, c.end);
+        const text = (result.messages[candidate.position]?.message.bodyText ?? '').slice(candidate.start, candidate.end);
         if (printed.covers(text))
         {
             continue;
         }
         printed.add(text);
-        let list = found.get(c.position);
-        if (list === undefined)
+        let notFoundHere = notFound.get(candidate.position);
+        if (notFoundHere === undefined)
         {
-            found.set(c.position, (list = []));
+            notFound.set(candidate.position, (notFoundHere = []));
         }
-        list.push([c.start, c.end]);
+        notFoundHere.push([candidate.start, candidate.end]);
     }
-    for (const [position, list] of found)
+    for (const [position, list] of notFound)
     {
         restored.set(position, mergeParts(list.map(([start, end]) => ({ start, end }))));
     }
@@ -2091,12 +2102,12 @@ function printedNowhere(
  * the PDF does. Then the PRINTED SOMEWHERE check (printedNowhere), on the
  * same data, for both.
  */
-export function noRepeat(input: NoRepeatInput): NoRepeat
+export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
 {
     const { result, positions, plans } = input;
-    const unfold = input.policy.unfoldEverything === true;
-    const order = planPdfOrder(result, positions, unfold ? [] : (input.rebuilt ?? []));
-    if (unfold)
+    const unfoldEverything = input.policy.unfoldEverything === true;
+    const order = planPdfOrder(result, positions, unfoldEverything ? [] : (input.rebuilt ?? []));
+    if (unfoldEverything)
     {
         return { order, parts: new Map(), elsewhere: new Map(), moved: new Map(), restored: new Map() };
     }
@@ -2110,8 +2121,8 @@ export function noRepeat(input: NoRepeatInput): NoRepeat
     }
     // The rebuilt emails the reader really unticked, for the unticked forwarded parts (Q2; task 8.13a review
     // round 2: never inferred from what `rebuilt` lacks). The switch off: none is unticked. Chosen ones never are.
-    const chosen = new Set(input.rebuilt ?? []);
-    const unticked = input.rebuildingOff === true ? undefined : new Set((input.unticked ?? []).filter((id) => !chosen.has(id)));
+    const chosenIds = new Set(input.rebuilt ?? []);
+    const unticked = input.rebuildingOff === true ? undefined : new Set((input.unticked ?? []).filter((id) => !chosenIds.has(id)));
     // The emails the reader ticked (task 8.14: an attached email left out only for having no text keeps its block).
     const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked, new Set(positions));
     const elsewhere = new Map<number, BodyIntervals>();
@@ -2123,20 +2134,20 @@ export function noRepeat(input: NoRepeatInput): NoRepeat
     return { order, parts, elsewhere, moved, restored };
 }
 
-/** pdfBodyText, and whether the no-repeat rule left something out. `restored`: see NoRepeat.restored. */
+/** pdfBodyText, and whether the no-repeat rule left something out. `restored`: see NoRepeatResult.restored. */
 function bodyTextOf(
     body: string,
     plan: MessagePlan | null | undefined,
     policy: Pick<OutputPolicy, 'unfoldEverything'>,
     elsewhere: BodyIntervals,
-    restored: BodyIntervals = NOWHERE,
+    restored: BodyIntervals = NO_INTERVALS,
 ): { readonly text: string; readonly planFallback: boolean; readonly notLineStarts: ReadonlySet<number>; readonly leftOutElsewhere: boolean }
 {
     if (policy.unfoldEverything)
     {
         return { text: body, planFallback: false, notLineStarts: NO_JOINS, leftOutElsewhere: false };
     }
-    if (!validRanges(plan, body.length))
+    if (!hasValidRanges(plan, body.length))
     {
         return { text: body, planFallback: true, notLineStarts: NO_JOINS, leftOutElsewhere: false };
     }
@@ -2160,7 +2171,7 @@ export function pdfBodyText(
     body: string,
     plan: MessagePlan | null | undefined,
     policy: Pick<OutputPolicy, 'unfoldEverything'>,
-    elsewhere: BodyIntervals = NOWHERE,
+    elsewhere: BodyIntervals = NO_INTERVALS,
 ): { readonly text: string; readonly planFallback: boolean; readonly notLineStarts: ReadonlySet<number> }
 {
     const { text, planFallback, notLineStarts } = bodyTextOf(body, plan, policy, elsewhere);
@@ -2170,26 +2181,26 @@ export function pdfBodyText(
 /** Sanitizes one-line texts (Source/pdf-export/pdf-text-transforms.ts, inlineRuns) and adds up the characters replaced by a code. */
 interface Sanitizer
 {
-    count: number;
+    codedCount: number;
     line(text: string, role: PdfRole): PdfLine;
 }
 
-function sanitizer(): Sanitizer
+function createSanitizer(): Sanitizer
 {
-    const self: Sanitizer = {
-        count: 0,
+    const sanitizer: Sanitizer = {
+        codedCount: 0,
         line(text, role)
         {
-            const s = inlineRuns(text, role);
-            self.count += s.replaced;
-            return s.runs;
+            const sanitized = inlineRuns(text, role);
+            sanitizer.codedCount += sanitized.codedCount;
+            return sanitized.runs;
         },
     };
-    return self;
+    return sanitizer;
 }
 
 /** A line of one run of our own text (no sanitizing needed, but harmless). */
-function own(text: string, role: PdfRole): PdfLine
+function ownTextLine(text: string, role: PdfRole): PdfLine
 {
     return text === '' ? [] : [{ role, text }];
 }
@@ -2205,14 +2216,14 @@ export type ParticipantSource = Pick<NormalizedMessage, 'from' | 'to' | 'cc'> & 
 export function participantsOf(messages: readonly ParticipantSource[], locale: string): PdfParticipant[]
 {
     const byKey = new Map<string, { name: string; address: string }>();
-    const add = (m: EmailAddress | undefined): void =>
+    const addMailbox = (mailbox: EmailAddress | undefined): void =>
     {
-        if (m === undefined || isBlank(m))
+        if (mailbox === undefined || isBlankMailbox(mailbox))
         {
             return;
         }
-        const address = m.address.trim();
-        const name = m.name.trim();
+        const address = mailbox.address.trim();
+        const name = mailbox.name.trim();
         const key = address !== '' ? `a:${address.toLowerCase()}` : `n:${name.toLowerCase()}`;
         const found = byKey.get(key);
         if (found === undefined)
@@ -2228,18 +2239,18 @@ export function participantsOf(messages: readonly ParticipantSource[], locale: s
     };
     for (const message of messages)
     {
-        for (const m of message.from)
+        for (const mailbox of message.from)
         {
-            add(m);
+            addMailbox(mailbox);
         }
-        add(message.sender);
-        for (const m of message.to)
+        addMailbox(message.sender);
+        for (const mailbox of message.to)
         {
-            add(m);
+            addMailbox(mailbox);
         }
-        for (const m of message.cc)
+        for (const mailbox of message.cc)
         {
-            add(m);
+            addMailbox(mailbox);
         }
     }
     const collator = new Intl.Collator(locale, { sensitivity: 'base', numeric: true });
@@ -2253,7 +2264,7 @@ export function participantsOf(messages: readonly ParticipantSource[], locale: s
 /** A date as the cover's date range uses it: a moment to compare, and its text. */
 interface CoverDate
 {
-    readonly ms: number;
+    readonly utcMs: number;
     readonly text: string;
 }
 
@@ -2281,14 +2292,14 @@ export { FILE_CHAIN_SEPARATOR };
  * Source/web-page-logic/file-chain.ts, shared with the preview's "Also in" row (task
  * 8.13b-4, P2), so the two never disagree.
  */
-function fileRowLine(result: EngineResult, index: number, fileName: string, strings: PdfStrings, s: Sanitizer): PdfLine
+function fileRowLine(result: EngineResult, index: number, fileName: string, strings: PdfStrings, sanitizer: Sanitizer): PdfLine
 {
     const chain = fileChain(result, index, fileName, strings);
-    return chain.ownWords ? own(chain.text, 'muted') : s.line(chain.text, 'muted');
+    return chain.ownWords ? ownTextLine(chain.text, 'muted') : sanitizer.line(chain.text, 'muted');
 }
 
 function buildEmail(
-    m: EngineMessage,
+    engineMessage: EngineMessage,
     position: number,
     number: number,
     plan: MessagePlan | undefined,
@@ -2298,37 +2309,37 @@ function buildEmail(
 ): EmailParts
 {
     const { strings, policy, timeZone } = input;
-    const message = m.message;
-    const s = sanitizer();
-    const index = sanitizer(); // the index repeats the header texts: not counted again
+    const message = engineMessage.message;
+    const sanitizer = createSanitizer();
+    const indexSanitizer = createSanitizer(); // the index repeats the header texts: not counted again
 
     // Header rows.
     const fields: PdfFieldRow[] = [];
-    const list = (label: string, mailboxes: readonly EmailAddress[]): void =>
+    const addMailboxRow = (label: string, mailboxes: readonly EmailAddress[]): void =>
     {
-        const shown = mailboxes.filter((x) => !isBlank(x));
+        const shown = mailboxes.filter((x) => !isBlankMailbox(x));
         if (shown.length > 0)
         {
-            fields.push({ label, value: [s.line(joinMailboxes(shown.map((x) => mailboxText(x, strings))), 'field-value')] });
+            fields.push({ label, value: [sanitizer.line(joinMailboxes(shown.map((x) => mailboxText(x, strings))), 'field-value')] });
         }
     };
     const author = displayAuthor(message);
-    const fromShown = message.from.filter((x) => !isBlank(x));
+    const fromShown = message.from.filter((x) => !isBlankMailbox(x));
     if (fromShown.length > 0)
     {
-        list(strings.fromLabel, fromShown);
+        addMailboxRow(strings.fromLabel, fromShown);
     }
     else
     {
-        fields.push({ label: strings.fromLabel, value: [own(strings.unknownSender, 'muted')] });
+        fields.push({ label: strings.fromLabel, value: [ownTextLine(strings.unknownSender, 'muted')] });
     }
-    if (message.sender !== undefined && !isBlank(message.sender))
+    if (message.sender !== undefined && !isBlankMailbox(message.sender))
     {
-        list(strings.senderLabel, [message.sender]);
+        addMailboxRow(strings.senderLabel, [message.sender]);
     }
-    list(strings.toLabel, message.to);
-    list(strings.ccLabel, message.cc);
-    list(strings.bccLabel, message.bcc);
+    addMailboxRow(strings.toLabel, message.to);
+    addMailboxRow(strings.ccLabel, message.cc);
+    addMailboxRow(strings.bccLabel, message.bcc);
 
     const shown = formatInZone(message.date.utcMs, timeZone);
     const dated = shown.kind === 'date' && isDisplayableMs(message.date.utcMs);
@@ -2336,33 +2347,35 @@ function buildEmail(
     const dateLines: PdfLine[] = [];
     if (shown.kind === 'date' && dated)
     {
-        dateLines.push(own(shown.text, 'field-value'));
+        dateLines.push(ownTextLine(shown.text, 'field-value'));
         const local = formatSenderLocal(message.date);
         if (local.kind === 'local' && local.text !== shown.text)
         {
-            dateLines.push(own(strings.senderLocal(local.text), 'muted'));
+            dateLines.push(ownTextLine(strings.senderLocal(local.text), 'muted'));
         }
     }
     else if (message.date.original.trim() !== '')
     {
         // A date that could not be read: its text as written, with no note (task 8.8).
-        dateLines.push(s.line(message.date.original, 'field-value'));
+        dateLines.push(sanitizer.line(message.date.original, 'field-value'));
     }
     else
     {
-        dateLines.push(own(strings.noDate, 'muted'));
+        dateLines.push(ownTextLine(strings.noDate, 'muted'));
     }
     fields.push({ label: strings.dateLabel, value: dateLines });
 
     const hasSubject = message.subject.trim() !== '';
-    fields.push({ label: strings.subjectLabel, value: [hasSubject ? s.line(message.subject, 'field-value') : own(strings.noSubject, 'muted')] });
-    const files = [{ index: m.index, fileName: message.source.fileName }, ...m.duplicates.map((d) => ({ index: d.index, fileName: d.source.fileName }))];
-    fields.push({ label: strings.fileLabel, value: files.map((f) => fileRowLine(input.result, f.index, f.fileName, strings, s)) });
+    fields.push({ label: strings.subjectLabel,
+        value: [hasSubject ? sanitizer.line(message.subject, 'field-value') : ownTextLine(strings.noSubject, 'muted')] });
+    const files = [{ index: engineMessage.index, fileName: message.source.fileName },
+        ...engineMessage.duplicates.map((d) => ({ index: d.index, fileName: d.source.fileName }))];
+    fields.push({ label: strings.fileLabel, value: files.map((f) => fileRowLine(input.result, f.index, f.fileName, strings, sanitizer)) });
 
     // Body.
     const { text, planFallback, notLineStarts, leftOutElsewhere } = bodyTextOf(message.bodyText, plan, policy, elsewhere, restored);
     const lines = bodyLines(text, { notLineStarts });
-    s.count += lines.replaced;
+    sanitizer.codedCount += lines.codedCount;
     const keptAllBecauseEmpty = !policy.unfoldEverything && !planFallback && plan?.keptAllBecauseEmpty === true;
 
     // The only line above the text: the "(no text)" placeholder of an empty
@@ -2370,33 +2383,34 @@ function buildEmail(
     // PDF (user rule, task 8.8). An email with no text at all never gets here
     // (task 8.14, planPdfOrder): the placeholder is for a text that could not
     // be read (Q2) or whose every part is printed elsewhere (Q6).
-    const notes: PdfLine[] = lines.lines.length === 0 ? [own(strings.noText, 'muted')] : [];
-    const w = message.warnings;
+    const notes: PdfLine[] = lines.lines.length === 0 ? [ownTextLine(strings.noText, 'muted')] : [];
+    const warnings = message.warnings;
 
     // Attachments.
-    const items = message.attachments.map((a): PdfLine =>
+    const attachmentLines = message.attachments.map((a): PdfLine =>
     {
-        const name = a.fileName.trim() === '' ? own(strings.noAttachmentName, 'muted') : s.line(a.fileName, 'field-value');
-        const details = s.line(strings.attachmentDetails(strings.size(a.size), a.mimeType), 'muted');
+        const name = a.fileName.trim() === '' ? ownTextLine(strings.noAttachmentName, 'muted') : sanitizer.line(a.fileName, 'field-value');
+        const details = sanitizer.line(strings.attachmentDetails(strings.size(a.size), a.mimeType), 'muted');
         return [...name, { role: 'muted', text: ' ' }, ...details];
     });
 
     // Index entry (texts without codes counted again).
     const anchor = emailAnchor(number);
     const fromIndex: PdfLine =
-        author.source === 'none' ? own(strings.unknownSender, 'muted') : index.line(joinMailboxes(author.mailboxes.map(shortMailbox)), 'body');
-    const subjectIndex = hasSubject ? index.line(message.subject, 'body') : own(strings.noSubject, 'muted');
+        author.source === 'none' ? ownTextLine(strings.unknownSender, 'muted')
+            : indexSanitizer.line(joinMailboxes(author.mailboxes.map(shortMailbox)), 'body');
+    const subjectIndex = hasSubject ? indexSanitizer.line(message.subject, 'body') : ownTextLine(strings.noSubject, 'muted');
     const day = shown.kind === 'date' && dated ? shown.text.slice(0, 10) : strings.noDate;
-    const entry: PdfIndexEntry = {
+    const indexEntry: PdfIndexEntry = {
         number,
         rebuilt: false,
         anchor,
         // Short ("2025-03-04 08:00", one line); the column title names the zone once.
-        date: shown.kind === 'date' && dated ? own(shown.shortText, 'body') : own(strings.noDate, 'muted'),
+        date: shown.kind === 'date' && dated ? ownTextLine(shown.shortText, 'body') : ownTextLine(strings.noDate, 'muted'),
         from: fromIndex,
         subject: subjectIndex,
         attachments: message.attachments.length,
-        attachmentLines: items,
+        attachmentLines,
         bookmark: bookmarkTitle(strings.emailBookmark(number, day, lineText(fromIndex), lineText(subjectIndex))),
     };
 
@@ -2409,20 +2423,20 @@ function buildEmail(
         fields,
         notes,
         body: lines.lines,
-        attachments: items.length === 0 ? null : { label: strings.attachmentsLabel, items },
+        attachments: attachmentLines.length === 0 ? null : { label: strings.attachmentsLabel, items: attachmentLines },
         flags: {
             undated: !dated,
             zoneUnknown,
             keptAllBecauseEmpty,
             planFallback,
-            htmlConverted: w.includes('html-converted-body'),
-            controlChars: s.count,
+            htmlConverted: warnings.includes('html-converted-body'),
+            controlChars: sanitizer.codedCount,
             printedElsewhere: leftOutElsewhere,
         },
     };
     const utcMs = message.date.utcMs;
-    const when = shown.kind === 'date' && isDisplayableMs(utcMs) ? { ms: utcMs, text: shown.text } : null;
-    return { email, entry, when, people: message };
+    const when = shown.kind === 'date' && isDisplayableMs(utcMs) ? { utcMs, text: shown.text } : null;
+    return { email, entry: indexEntry, when, people: message };
 }
 
 // ---------------------------------------------------------------- one rebuilt email
@@ -2463,10 +2477,10 @@ export function dayStartInZone(day: string, zone: string): number | null
         return null;
     }
     // Shown on `day` or later (instants that cannot be shown: by their side of `base`).
-    const reached = (t: number): boolean =>
+    const reached = (instant: number): boolean =>
     {
-        const shown = formatInZone(t, zone);
-        return shown.kind === 'date' ? shown.text.slice(0, 10) >= day : t >= base;
+        const shown = formatInZone(instant, zone);
+        return shown.kind === 'date' ? shown.text.slice(0, 10) >= day : instant >= base;
     };
     const HOURS_26 = 26 * 3_600_000;
     let lo = base - HOURS_26; // not reached
@@ -2497,17 +2511,19 @@ export function dayStartInZone(day: string, zone: string): number | null
  * of its own: data only, the app says it); a day alone as that day; a date
  * that could not be read as written; none: "no date".
  */
-function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer): RebuiltDateParts
+function rebuiltDateParts(rebuiltEntry: EngineRebuilt, input: BuildPdfInput, sanitizer: Sanitizer): RebuiltDateParts
 {
     const { strings, timeZone } = input;
-    const date = rebuiltDate(r);
-    const undated = (lines: readonly PdfLine[]): RebuiltDateParts => ({ lines, index: own(strings.noDate, 'muted'), day: strings.noDate, when: null, zoneUnknown: false });
+    const date = rebuiltDate(rebuiltEntry);
+    const undated = (lines: readonly PdfLine[]): RebuiltDateParts =>
+        ({ lines, index: ownTextLine(strings.noDate, 'muted'), day: strings.noDate, when: null, zoneUnknown: false });
     if (date.kind === 'none')
     {
-        return undated([own(strings.noDate, 'muted')]);
+        return undated([ownTextLine(strings.noDate, 'muted')]);
     }
     // A date that could not be read: its text as written, with no note (task 8.8).
-    const unreadable = (): RebuiltDateParts => undated([date.text.trim() === '' ? own(strings.noDate, 'muted') : s.line(date.text, 'field-value')]);
+    const unreadable = (): RebuiltDateParts =>
+        undated([date.text.trim() === '' ? ownTextLine(strings.noDate, 'muted') : sanitizer.line(date.text, 'field-value')]);
     if (date.kind === 'unreadable')
     {
         return unreadable();
@@ -2515,12 +2531,12 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
     if (date.kind === 'day')
     {
         // The start of that day in the chosen zone, to place it in the cover's date range.
-        const ms = dayStartInZone(date.day, timeZone);
+        const dayStartMs = dayStartInZone(date.day, timeZone);
         return {
-            lines: [own(date.day, 'field-value')],
-            index: own(date.day, 'body'),
+            lines: [ownTextLine(date.day, 'field-value')],
+            index: ownTextLine(date.day, 'body'),
             day: date.day,
-            when: ms === null ? null : { ms, text: date.day },
+            when: dayStartMs === null ? null : { utcMs: dayStartMs, text: date.day },
             zoneUnknown: false,
         };
     }
@@ -2530,10 +2546,10 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
         return unreadable();
     }
     return {
-        lines: [own(shown.text, 'field-value')],
-        index: own(shown.shortText, 'body'),
+        lines: [ownTextLine(shown.text, 'field-value')],
+        index: ownTextLine(shown.shortText, 'body'),
         day: shown.text.slice(0, 10),
-        when: { ms: date.utcMs, text: shown.text },
+        when: { utcMs: date.utcMs, text: shown.text },
         zoneUnknown: date.approximate,
     };
 }
@@ -2544,7 +2560,7 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
  * the rebuilt text (its own quote marks already removed), whole: no plan
  * applies to it. Deeper quotes left in it (">" lines of an older email it
  * quoted) lose their quote marks like a real email's (Source/pdf-export/pdf-text-transforms.ts, transform g).
- * `moved` (task 8.13a, Q4; NoRepeat.moved): original header lines its
+ * `moved` (task 8.13a, Q4; NoRepeatResult.moved): original header lines its
  * header rows cannot show, left out of the emails that quote it; they come
  * first in its text, as plain text (the same role, font and indent as the
  * rest of its text), so nothing is lost and they sit under its header.
@@ -2552,49 +2568,51 @@ function rebuiltDateParts(r: EngineRebuilt, input: BuildPdfInput, s: Sanitizer):
 function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: number, input: BuildPdfInput, moved: readonly string[]): EmailParts
 {
     const { strings } = input;
-    const r = source.shown.rebuilt;
-    const m = r.rebuilt;
-    const s = sanitizer();
-    const index = sanitizer(); // the index repeats the header texts: not counted again
+    const shownEntry = source.shown.rebuilt;
+    const shownMessage = shownEntry.rebuilt;
+    const sanitizer = createSanitizer();
+    const indexSanitizer = createSanitizer(); // the index repeats the header texts: not counted again
 
     const fields: PdfFieldRow[] = [];
-    const shownOf = (list: readonly EmailAddress[]): EmailAddress[] => list.filter((x) => !isBlank(x));
-    const list = (label: string, mailboxes: readonly EmailAddress[]): void =>
+    const nonBlankMailboxes = (list: readonly EmailAddress[]): EmailAddress[] => list.filter((x) => !isBlankMailbox(x));
+    const addMailboxRow = (label: string, mailboxes: readonly EmailAddress[]): void =>
     {
         if (mailboxes.length > 0)
         {
-            fields.push({ label, value: [s.line(joinMailboxes(mailboxes.map((x) => mailboxText(x, strings))), 'field-value')] });
+            fields.push({ label, value: [sanitizer.line(joinMailboxes(mailboxes.map((x) => mailboxText(x, strings))), 'field-value')] });
         }
     };
-    const from = shownOf(m.from);
-    const to = shownOf(m.to);
-    const cc = shownOf(m.cc);
+    const from = nonBlankMailboxes(shownMessage.from);
+    const to = nonBlankMailboxes(shownMessage.to);
+    const cc = nonBlankMailboxes(shownMessage.cc);
     // A From row is never empty: "Unknown sender" when the quote names none, as for a real email.
     if (from.length > 0)
     {
-        list(strings.fromLabel, from);
+        addMailboxRow(strings.fromLabel, from);
     }
     else
     {
-        fields.push({ label: strings.fromLabel, value: [own(strings.unknownSender, 'muted')] });
+        fields.push({ label: strings.fromLabel, value: [ownTextLine(strings.unknownSender, 'muted')] });
     }
-    list(strings.toLabel, to);
-    list(strings.ccLabel, cc);
-    const date = rebuiltDateParts(r, input, s);
+    addMailboxRow(strings.toLabel, to);
+    addMailboxRow(strings.ccLabel, cc);
+    const date = rebuiltDateParts(shownEntry, input, sanitizer);
     fields.push({ label: strings.dateLabel, value: date.lines });
-    const subject = m.subject !== null && m.subject.trim() !== '' ? m.subject : null;
-    fields.push({ label: strings.subjectLabel, value: [subject !== null ? s.line(subject, 'field-value') : own(strings.noSubject, 'muted')] });
+    const subject = shownMessage.subject !== null && shownMessage.subject.trim() !== '' ? shownMessage.subject : null;
+    fields.push({ label: strings.subjectLabel,
+        value: [subject !== null ? sanitizer.line(subject, 'field-value') : ownTextLine(strings.noSubject, 'muted')] });
 
-    const lines = bodyLines(moved.join('') + m.reconstructedText);
-    s.count += lines.replaced;
+    const lines = bodyLines(moved.join('') + shownMessage.reconstructedText);
+    sanitizer.codedCount += lines.codedCount;
     // Not expected since task 8.14 (an entry whose rebuilt text is empty gets no slot, planPdfOrder): only
     // a copy shown in its place (rebuiltInPdf) could still be empty. Kept as the placeholder, never dropped.
-    const notes: PdfLine[] = lines.lines.length === 0 ? [own(strings.noText, 'muted')] : [];
+    const notes: PdfLine[] = lines.lines.length === 0 ? [ownTextLine(strings.noText, 'muted')] : [];
 
     const anchor = emailAnchor(number);
-    const fromIndex: PdfLine = from.length > 0 ? index.line(joinMailboxes(from.map(shortMailbox)), 'body') : own(strings.unknownSender, 'muted');
-    const subjectIndex: PdfLine = subject !== null ? index.line(subject, 'body') : own(strings.noSubject, 'muted');
-    const entryOut: PdfIndexEntry = {
+    const fromIndex: PdfLine = from.length > 0 ? indexSanitizer.line(joinMailboxes(from.map(shortMailbox)), 'body')
+        : ownTextLine(strings.unknownSender, 'muted');
+    const subjectIndex: PdfLine = subject !== null ? indexSanitizer.line(subject, 'body') : ownTextLine(strings.noSubject, 'muted');
+    const indexEntry: PdfIndexEntry = {
         number,
         rebuilt: true,
         anchor,
@@ -2610,7 +2628,7 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
         anchor,
         position: null,
         heading: strings.emailHeading(number),
-        rebuilt: { id: entry.id, shownId: r.id, sourcePosition: source.shown.position, movedHeaders: moved.length },
+        rebuilt: { id: entry.id, shownId: shownEntry.id, sourcePosition: source.shown.position, movedHeaders: moved.length },
         fields,
         notes,
         body: lines.lines,
@@ -2621,11 +2639,11 @@ function buildRebuiltEmail(entry: EngineRebuilt, source: RebuiltInPdf, number: n
             keptAllBecauseEmpty: false,
             planFallback: false,
             htmlConverted: false,
-            controlChars: s.count,
+            controlChars: sanitizer.codedCount,
             printedElsewhere: false,
         },
     };
-    return { email, entry: entryOut, when: date.when, people: { from, to, cc } };
+    return { email, entry: indexEntry, when: date.when, people: { from, to, cc } };
 }
 
 // ---------------------------------------------------------------- the document
@@ -2639,13 +2657,14 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
     // order; the rebuilt ones chosen, at their place (planPdfOrder); none
     // under "Print full original text" (see the top of this file).
     // The no-repeat rule (task 8.10): nothing is printed twice unless the whole
-    // text is. The preview's labels use the same call (noRepeat, task 8.11).
+    // text is. The preview's labels use the same call (applyNoRepeatRule, task 8.11).
     const {
         order: { slots, pdfNumberByPosition },
         elsewhere,
         moved,
         restored,
-    } = noRepeat({ result, positions, plans, policy: input.policy, rebuilt: input.rebuilt, rebuildingOff: input.rebuildingOff, unticked: input.unticked });
+    } = applyNoRepeatRule(
+        { result, positions, plans, policy: input.policy, rebuilt: input.rebuilt, rebuildingOff: input.rebuildingOff, unticked: input.unticked });
     const emails: PdfEmail[] = [];
     const entries: PdfIndexEntry[] = [];
     const people: ParticipantSource[] = [];
@@ -2662,8 +2681,9 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
         }
         else
         {
-            const m = result.messages[slot.position]!;
-            parts = buildEmail(m, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NOWHERE, restored.get(slot.position) ?? NOWHERE);
+            const engineMessage = result.messages[slot.position]!;
+            parts = buildEmail(engineMessage, slot.position, slot.number, plans[slot.plan], input, elsewhere.get(slot.position) ?? NO_INTERVALS,
+                restored.get(slot.position) ?? NO_INTERVALS);
         }
         emails.push(parts.email);
         entries.push(parts.entry);
@@ -2675,11 +2695,11 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
         }
         else
         {
-            if (first === null || when.ms < first.ms)
+            if (first === null || when.utcMs < first.utcMs)
             {
                 first = when;
             }
-            if (last === null || when.ms > last.ms)
+            if (last === null || when.utcMs > last.utcMs)
             {
                 last = when;
             }
@@ -2688,7 +2708,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
     const controlChars = emails.reduce((n, e) => n + e.flags.controlChars, 0);
 
     // Cover.
-    const c = sanitizer(); // the cover repeats names from the emails: not counted
+    const coverSanitizer = createSanitizer(); // the cover repeats names from the emails: not counted
     const generatedShown = formatInZone(generatedAt, timeZone);
     const generated = generatedShown.kind === 'date' ? generatedShown.text : strings.noDate;
     const usedZone = generatedShown.kind === 'date' ? generatedShown.zone : 'UTC';
@@ -2700,28 +2720,28 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
     // No dated email: the same "(no date)" placeholder as an email's own Date row (task 8.8).
     const dateLine: PdfLine =
         dateRange === null
-            ? own(strings.noDate, 'muted')
-            : own(dateRange.first === dateRange.last ? dateRange.first : strings.dateRange(dateRange.first, dateRange.last), 'field-value');
+            ? ownTextLine(strings.noDate, 'muted')
+            : ownTextLine(dateRange.first === dateRange.last ? dateRange.first : strings.dateRange(dateRange.first, dateRange.last), 'field-value');
 
     const participants = participantsOf(people, strings.locale);
 
     const blocks: PdfBlock[] = [
-        { kind: 'heading', level: 1, line: own(strings.title, 'title') },
+        { kind: 'heading', level: 1, line: ownTextLine(strings.title, 'title') },
         {
             kind: 'fields',
             rows: [
                 { label: strings.datesLabel, value: [dateLine] },
-                { label: strings.emailsLabel, value: [own(strings.emailCount(emails.length), 'field-value')] },
+                { label: strings.emailsLabel, value: [ownTextLine(strings.emailCount(emails.length), 'field-value')] },
                 // Just the zone used (UTC after a fallback): the app says when the chosen zone was not recognized (task 8.8).
-                { label: strings.timeZoneLabel, value: [c.line(zoneShown, 'field-value')] },
-                { label: strings.generatedLabel, value: [own(generated, 'field-value')] },
+                { label: strings.timeZoneLabel, value: [coverSanitizer.line(zoneShown, 'field-value')] },
+                { label: strings.generatedLabel, value: [ownTextLine(generated, 'field-value')] },
             ],
         },
     ];
     if (participants.length > 0)
     {
-        blocks.push({ kind: 'heading', level: 2, line: own(strings.peopleHeading, 'heading') });
-        blocks.push({ kind: 'list', items: participants.map((p) => [c.line(mailboxText(p, strings), 'body')]) });
+        blocks.push({ kind: 'heading', level: 2, line: ownTextLine(strings.peopleHeading, 'heading') });
+        blocks.push({ kind: 'list', items: participants.map((p) => [coverSanitizer.line(mailboxText(p, strings), 'body')]) });
     }
 
     return {
@@ -2733,7 +2753,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
         index: {
             heading: strings.indexHeading,
             // The zone name passes the same sanitizer as on the cover (a title is plain text, so codes stay as their text).
-            columns: { ...strings.columns, date: strings.indexDateColumn(lineText(c.line(zoneShown, 'field-label'))) },
+            columns: { ...strings.columns, date: strings.indexDateColumn(lineText(coverSanitizer.line(zoneShown, 'field-label'))) },
             entries,
         },
         emails,

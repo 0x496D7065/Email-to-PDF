@@ -65,28 +65,28 @@ export interface PrintedText
     covers(text: string): boolean;
 }
 
-/** A 32-bit hash of SHINGLE_WORDS word ids starting at `at` (FNV-1a style); collisions are checked by comparing the words. */
-function hashAt(ids: readonly number[], at: number): number
+/** A 32-bit hash of SHINGLE_WORDS word ids starting at `start` (FNV-1a style); collisions are checked by comparing the words. */
+function shingleHashAt(wordIds: readonly number[], start: number): number
 {
-    let h = 0x811c9dc5;
-    for (let t = 0; t < SHINGLE_WORDS; t++)
+    let hash = 0x811c9dc5;
+    for (let offset = 0; offset < SHINGLE_WORDS; offset++)
     {
-        h = Math.imul(h ^ (ids[at + t] ?? 0), 0x01000193);
+        hash = Math.imul(hash ^ (wordIds[start + offset] ?? 0), 0x01000193);
     }
-    return h;
+    return hash;
 }
 
 /** An empty PrintedText. */
-export function printedText(): PrintedText
+export function createPrintedText(): PrintedText
 {
     const vocabulary = new Map<string, number>();
     // Every printed word as an id, and the piece it belongs to.
-    const ids: number[] = [];
-    const pieceOf: number[] = [];
+    const wordIds: number[] = [];
+    const pieceOfWord: number[] = [];
     // Shingle hash -> start positions (the first MAX_POSTINGS); word id -> every position.
     const shingles = new Map<number, number[]>();
     const places = new Map<number, number[]>();
-    let pieces = 0;
+    let pieceCount = 0;
 
     function add(text: string): void
     {
@@ -95,40 +95,40 @@ export function printedText(): PrintedText
         {
             return;
         }
-        const piece = pieces++;
-        const from = ids.length;
-        for (const w of words)
+        const pieceIndex = pieceCount++;
+        const firstNewWord = wordIds.length;
+        for (const word of words)
         {
-            let id = vocabulary.get(w.key);
-            if (id === undefined)
+            let wordId = vocabulary.get(word.key);
+            if (wordId === undefined)
             {
-                id = vocabulary.size;
-                vocabulary.set(w.key, id);
+                wordId = vocabulary.size;
+                vocabulary.set(word.key, wordId);
             }
-            const at = ids.length;
-            ids.push(id);
-            pieceOf.push(piece);
-            const list = places.get(id);
-            if (list === undefined)
+            const position = wordIds.length;
+            wordIds.push(wordId);
+            pieceOfWord.push(pieceIndex);
+            const positions = places.get(wordId);
+            if (positions === undefined)
             {
-                places.set(id, [at]);
+                places.set(wordId, [position]);
             }
             else
             {
-                list.push(at);
+                positions.push(position);
             }
         }
-        for (let g = from; g + SHINGLE_WORDS <= ids.length; g++)
+        for (let shingleStart = firstNewWord; shingleStart + SHINGLE_WORDS <= wordIds.length; shingleStart++)
         {
-            const h = hashAt(ids, g);
-            const list = shingles.get(h);
-            if (list === undefined)
+            const hash = shingleHashAt(wordIds, shingleStart);
+            const starts = shingles.get(hash);
+            if (starts === undefined)
             {
-                shingles.set(h, [g]);
+                shingles.set(hash, [shingleStart]);
             }
-            else if (list.length < MAX_POSTINGS)
+            else if (starts.length < MAX_POSTINGS)
             {
-                list.push(g);
+                starts.push(shingleStart);
             }
         }
     }
@@ -141,42 +141,44 @@ export function printedText(): PrintedText
         {
             return true;
         }
-        const c: number[] = [];
-        for (const w of words)
+        const candidateIds: number[] = [];
+        for (const word of words)
         {
-            const id = vocabulary.get(w.key);
-            if (id === undefined)
+            const wordId = vocabulary.get(word.key);
+            if (wordId === undefined)
             {
                 return false; // a word printed nowhere
             }
-            c.push(id);
+            candidateIds.push(wordId);
         }
-        // Equal words from s (in c) and g (printed), in one piece: how many in a row.
-        const runAt = (s: number, g: number): number =>
+        // Equal words from candidateStart (in candidateIds) and printedStart (printed), in one piece: how many in a row.
+        const runAt = (candidateStart: number, printedStart: number): number =>
         {
-            const piece = pieceOf[g];
-            let len = 0;
-            while (s + len < n && g + len < ids.length && ids[g + len] === c[s + len] && pieceOf[g + len] === piece)
+            const pieceIndex = pieceOfWord[printedStart];
+            let runLength = 0;
+            while (candidateStart + runLength < n && printedStart + runLength < wordIds.length
+                && wordIds[printedStart + runLength] === candidateIds[candidateStart + runLength]
+                && pieceOfWord[printedStart + runLength] === pieceIndex)
             {
-                len++;
+                runLength++;
             }
-            return len;
+            return runLength;
         };
         if (n < SHINGLE_WORDS)
         {
             // All of it in a row: tried at every place of its rarest word.
-            let rare = 0;
+            let rarestAt = 0;
             for (let j = 1; j < n; j++)
             {
-                if ((places.get(c[j]!)?.length ?? 0) < (places.get(c[rare]!)?.length ?? 0))
+                if ((places.get(candidateIds[j]!)?.length ?? 0) < (places.get(candidateIds[rarestAt]!)?.length ?? 0))
                 {
-                    rare = j;
+                    rarestAt = j;
                 }
             }
-            for (const p of places.get(c[rare]!) ?? [])
+            for (const place of places.get(candidateIds[rarestAt]!) ?? [])
             {
-                const g = p - rare;
-                if (g >= 0 && runAt(0, g) === n)
+                const printedStart = place - rarestAt;
+                if (printedStart >= 0 && runAt(0, printedStart) === n)
                 {
                     return true;
                 }
@@ -184,29 +186,29 @@ export function printedText(): PrintedText
             return false;
         }
         const least = Math.min(MIN_RUN_WORDS, n);
-        // `e`: the first word not covered yet. A run covering it that starts before e - least + 1 holds a
+        // `firstUncovered`: the first word not covered yet. A run covering it that starts before firstUncovered - least + 1 holds a
         // run of at least `least` words starting there that covers it too, so those starts are enough.
-        let e = 0;
-        while (e < n)
+        let firstUncovered = 0;
+        while (firstUncovered < n)
         {
-            let reach = -1;
-            const last = Math.min(e, n - SHINGLE_WORDS);
-            for (let s = Math.max(0, e - least + 1); s <= last; s++)
+            let coveredTo = -1;
+            const lastStart = Math.min(firstUncovered, n - SHINGLE_WORDS);
+            for (let candidateStart = Math.max(0, firstUncovered - least + 1); candidateStart <= lastStart; candidateStart++)
             {
-                for (const g of shingles.get(hashAt(c, s)) ?? [])
+                for (const printedStart of shingles.get(shingleHashAt(candidateIds, candidateStart)) ?? [])
                 {
-                    const len = runAt(s, g);
-                    if (len >= least && s + len > e && s + len > reach)
+                    const runLength = runAt(candidateStart, printedStart);
+                    if (runLength >= least && candidateStart + runLength > firstUncovered && candidateStart + runLength > coveredTo)
                     {
-                        reach = s + len;
+                        coveredTo = candidateStart + runLength;
                     }
                 }
             }
-            if (reach < 0)
+            if (coveredTo < 0)
             {
                 return false;
             }
-            e = reach;
+            firstUncovered = coveredTo;
         }
         return true;
     }

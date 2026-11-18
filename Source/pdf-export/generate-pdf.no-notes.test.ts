@@ -217,17 +217,17 @@ function textsOf(value: unknown): string[]
 /** The app's own notes in `locale` (said in step 2, never in the PDF), and the removed PDF texts, cut at their placeholders. */
 function forbidden(locale: Locale): string[]
 {
-    const m = CATALOG[locale]!;
+    const catalog = CATALOG[locale]!;
     const appNotes = [
-        ...textsOf(m.warnings),
-        ...textsOf(m.preview.order),
-        m.preview.zoneNotRecognized,
-        m.preview.dateAsWritten,
-        ...textsOf(m.review.pdfNote),
-        m.review.codedCharacters,
-        m.rebuilt.explain,
-        m.rebuilt.noteMarks,
-        m.rebuilt.noteNoMarks,
+        ...textsOf(catalog.warnings),
+        ...textsOf(catalog.preview.order),
+        catalog.preview.zoneNotRecognized,
+        catalog.preview.dateAsWritten,
+        ...textsOf(catalog.review.pdfNote),
+        catalog.review.codedCharacters,
+        catalog.rebuilt.explain,
+        catalog.rebuilt.noteMarks,
+        catalog.rebuilt.noteNoMarks,
     ];
     return [...REMOVED_PDF_TEXTS[locale], ...appNotes].flatMap((text) => text.split(/\{[a-z]+\}/i).map((piece) => piece.trim())).filter((piece) => piece.length >= 10);
 }
@@ -241,12 +241,12 @@ async function make8(locale: Locale, timeZone: string)
     const rebuilt = rebuiltEntries(result).map((r) => r.id);
     const base = { result, positions, plans, rebuilt, policy: DEFAULT_OUTPUT_POLICY, timeZone, generatedAt: GENERATED_AT };
     const made = await generatePdf({ ...base, fonts, locale });
-    const doc = buildPdfDocument({ ...base, strings: createPdfStrings(locale) });
+    const pdfDocument = buildPdfDocument({ ...base, strings: createPdfStrings(locale) });
     const pdf = readPdf(made.bytes);
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown));
     const all = flat(pages.map((lines) => lines.join(' ')).join(' '));
     const bookmarks = readOutline(pdf)!.items.map((i) => i.title);
-    return { result, before, rebuilt, doc, pages, all, bookmarks };
+    return { result, before, rebuilt, pdfDocument, pages, all, bookmarks };
 }
 
 describe('task 8.8: the PDF holds no notes', () =>
@@ -260,10 +260,10 @@ describe('task 8.8: the PDF holds no notes', () =>
             {
                 expect(keys, `${locale}: pdf.document.${key}`).not.toContain(key);
             }
-            const s = createPdfStrings(locale) as unknown as Record<string, unknown>;
+            const stringsRecord = createPdfStrings(locale) as unknown as Record<string, unknown>;
             for (const key of ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unreadableHeading', 'unreadableIntro', 'noFingerprint', 'controlChars', 'dateAsWritten', 'zoneUnknown', 'keptAllEmpty', 'fallback', 'contentNotes'])
             {
-                expect(s[key], `${locale}: ${key}`).toBeUndefined();
+                expect(stringsRecord[key], `${locale}: ${key}`).toBeUndefined();
             }
             expect(forbidden(locale).length, locale).toBeGreaterThan(20);
         }
@@ -275,60 +275,60 @@ describe('task 8.8: the PDF holds no notes', () =>
         {
             it(`${locale}, ${timeZone}: no note anywhere; placeholders, footer, bookmarks and file list kept`, async () =>
             {
-                const s = createPdfStrings(locale);
-                const { result, before, rebuilt, doc, pages, all, bookmarks } = await make8(locale, timeZone);
+                const strings = createPdfStrings(locale);
+                const { result, before, rebuilt, pdfDocument, pages, all, bookmarks } = await make8(locale, timeZone);
 
                 // The set has every case.
                 expect(rebuilt.length).toBeGreaterThan(0);
-                expect(doc.emails.some((e) => e.rebuilt !== null && e.flags.zoneUnknown)).toBe(true);
+                expect(pdfDocument.emails.some((e) => e.rebuilt !== null && e.flags.zoneUnknown)).toBe(true);
                 expect(result.counts.duplicatesMerged).toBe(1);
                 expect(result.failed).toHaveLength(1);
-                expect(doc.emails.filter((e) => e.flags.planFallback)).toHaveLength(1);
-                expect(doc.emails.filter((e) => e.flags.keptAllBecauseEmpty)).toHaveLength(1);
-                expect(doc.emails.some((e) => e.rebuilt === null && e.flags.zoneUnknown)).toBe(true);
-                expect(doc.cover.undated).toBeGreaterThanOrEqual(2);
-                expect(doc.controlChars).toBeGreaterThanOrEqual(3);
-                expect(doc.zoneFallback).toBe(timeZone === 'Not/A_Zone');
+                expect(pdfDocument.emails.filter((e) => e.flags.planFallback)).toHaveLength(1);
+                expect(pdfDocument.emails.filter((e) => e.flags.keptAllBecauseEmpty)).toHaveLength(1);
+                expect(pdfDocument.emails.some((e) => e.rebuilt === null && e.flags.zoneUnknown)).toBe(true);
+                expect(pdfDocument.cover.undated).toBeGreaterThanOrEqual(2);
+                expect(pdfDocument.controlChars).toBeGreaterThanOrEqual(3);
+                expect(pdfDocument.zoneFallback).toBe(timeZone === 'Not/A_Zone');
 
                 // No removed text and no app note, anywhere: pages and bookmarks.
-                for (const f of forbidden(locale))
+                for (const forbiddenText of forbidden(locale))
                 {
-                    expect(all, `"${f}"`).not.toContain(flat(f));
+                    expect(all, `"${forbiddenText}"`).not.toContain(flat(forbiddenText));
                     for (const title of bookmarks)
                     {
-                        expect(title, `"${f}"`).not.toContain(f);
+                        expect(title, `"${forbiddenText}"`).not.toContain(forbiddenText);
                     }
                 }
                 // Nothing of the file that could not be read.
                 expect(all).not.toContain(UNREADABLE_FILE);
                 expect(bare(all)).not.toContain(UNREADABLE_SHA);
                 // No paragraph on the cover, and no line above an email's text but "(no text)".
-                expect(doc.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
-                for (const e of doc.emails)
+                expect(pdfDocument.cover.blocks.some((b) => b.kind === 'paragraph')).toBe(false);
+                for (const email of pdfDocument.emails)
                 {
-                    for (const line of e.notes)
+                    for (const line of email.notes)
                     {
-                        expect(line.map((r) => r.text).join('')).toBe(s.noText);
+                        expect(line.map((r) => r.text).join('')).toBe(strings.noText);
                     }
                 }
 
                 // Kept: the blank-field placeholders.
-                for (const placeholder of [s.noSubject, s.unknownSender, s.noText, s.noAttachmentName, s.noDate])
+                for (const placeholder of [strings.noSubject, strings.unknownSender, strings.noText, strings.noAttachmentName, strings.noDate])
                 {
                     expect(all, placeholder).toContain(flat(placeholder));
                 }
                 // Kept: the date as written, alone in its row (its control character as a code).
-                expect(bare(all)).toContain(bare(`${s.dateLabel} Someday[U+0007] around noon ${s.subjectLabel}`));
+                expect(bare(all)).toContain(bare(`${strings.dateLabel} Someday[U+0007] around noon ${strings.subjectLabel}`));
                 // Kept: the zone used, and nothing after it.
                 const zoneShown = timeZone === 'Not/A_Zone' ? 'UTC' : 'Africa/Lagos';
-                expect(all).toContain(`${s.timeZoneLabel} ${zoneShown} ${s.generatedLabel}`);
+                expect(all).toContain(`${strings.timeZoneLabel} ${zoneShown} ${strings.generatedLabel}`);
                 // No source file list and no SHA-256 (task 8.12); the merged copy is still named, in its email's File row.
                 expect(bare(all)).not.toMatch(/[0-9a-f]{64}/);
                 expect(bare(all)).toContain(bare(COPY_FILE));
                 // Kept: "Page X of Y" at the foot of every page; one bookmark per email after the cover and the index.
-                pages.forEach((lines, k) => expect(lines.at(-1)).toBe(s.pageFooter(k + 1, pages.length)));
-                expect(bookmarks).toHaveLength(doc.emails.length + 2);
-                expect(bookmarks.slice(0, 2)).toEqual([s.coverBookmark, doc.index.heading]);
+                pages.forEach((lines, k) => expect(lines.at(-1)).toBe(strings.pageFooter(k + 1, pages.length)));
+                expect(bookmarks).toHaveLength(pdfDocument.emails.length + 2);
+                expect(bookmarks.slice(0, 2)).toEqual([strings.coverBookmark, pdfDocument.index.heading]);
 
                 // Collapse, never delete: the engine data is unchanged by making the PDF.
                 expect(JSON.stringify(result)).toBe(before);

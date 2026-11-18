@@ -38,7 +38,7 @@
 //     prefix (quotePrefixLength) is every ">" before the first other
 //     character, with what comes before each: whitespace (JavaScript's \s:
 //     spaces, tabs, U+00A0, U+FEFF...) and the invisible characters drawn
-//     as nothing (beforeMark: ZWSP, ZWNJ, ZWJ, LRM, RLM, ALM, CGJ, word
+//     as nothing (mayPrecedeQuoteMark: ZWSP, ZWNJ, ZWJ, LRM, RLM, ALM, CGJ, word
 //     joiner, variation selectors U+FE00 to U+FE0F and U+E0100 to U+E01EF,
 //     soft hyphen; a ">" after them would look like a quote mark; never the
 //     tag characters, nor other characters our fonts print as a code, such
@@ -162,7 +162,7 @@ export function isDrawnAsNothing(codePoint: number): boolean
  * bodyLines and inlineRuns). Order matters: the flag first, so its tags are
  * never coded; a pair is never split (the lone-surrogate parts look around).
  */
-const SPECIAL = new RegExp(
+const CODED_CHARACTER_OR_FLAG = new RegExp(
     [
         // U+1F3F4, the tags "gb", then "eng" / "sct" / "wls", then U+E007F.
         '(?<flag>\\uD83C\\uDFF4\\uDB40\\uDC67\\uDB40\\uDC62\\uDB40(?:\\uDC65\\uDB40\\uDC6E\\uDB40\\uDC67|\\uDC73\\uDB40\\uDC63\\uDB40\\uDC74|\\uDC77\\uDB40\\uDC6C\\uDB40\\uDC73)\\uDB40\\uDC7F)',
@@ -203,7 +203,7 @@ export function expandTabs(text: string): string
 export interface SanitizedRuns
 {
     readonly runs: PdfRun[];
-    readonly replaced: number;
+    readonly codedCount: number;
 }
 
 /**
@@ -216,39 +216,39 @@ export function sanitizeRuns(text: string, role: PdfRole): SanitizedRuns
 {
     const expanded = expandTabs(text);
     const runs: PdfRun[] = [];
-    let replaced = 0;
+    let codedCount = 0;
     let from = 0;
-    SPECIAL.lastIndex = 0;
-    for (let m = SPECIAL.exec(expanded); m !== null; m = SPECIAL.exec(expanded))
+    CODED_CHARACTER_OR_FLAG.lastIndex = 0;
+    for (let match = CODED_CHARACTER_OR_FLAG.exec(expanded); match !== null; match = CODED_CHARACTER_OR_FLAG.exec(expanded))
     {
-        if (m.groups?.['flag'] !== undefined)
+        if (match.groups?.['flag'] !== undefined)
         {
             continue; // a valid flag: kept as text
         }
-        if (m.index > from)
+        if (match.index > from)
         {
-            runs.push({ role, text: expanded.slice(from, m.index) });
+            runs.push({ role, text: expanded.slice(from, match.index) });
         }
-        const marker = controlMarker(m[0].codePointAt(0)!);
-        const last = runs[runs.length - 1];
-        // Join a code to the codes just before it. `m.index === from` only matters when the caller's own `role` is
+        const marker = controlMarker(match[0].codePointAt(0)!);
+        const previousRun = runs[runs.length - 1];
+        // Join a code to the codes just before it. `match.index === from` only matters when the caller's own `role` is
         // 'code': then the text pushed just above is also a 'code' run, and it must stay apart from the markers.
-        if (last !== undefined && last.role === 'code' && m.index === from)
+        if (previousRun !== undefined && previousRun.role === 'code' && match.index === from)
         {
-            runs[runs.length - 1] = { role: 'code', text: last.text + marker };
+            runs[runs.length - 1] = { role: 'code', text: previousRun.text + marker };
         }
         else
         {
             runs.push({ role: 'code', text: marker });
         }
-        replaced++;
-        from = m.index + m[0].length;
+        codedCount++;
+        from = match.index + match[0].length;
     }
     if (from < expanded.length)
     {
         runs.push({ role, text: expanded.slice(from) });
     }
-    return { runs, replaced };
+    return { runs, codedCount };
 }
 
 /**
@@ -268,7 +268,7 @@ export function inlineRuns(text: string, role: PdfRole): SanitizedRuns
  */
 export function codedCharacterCount(text: string): number
 {
-    return inlineRuns(text, 'body').replaced;
+    return inlineRuns(text, 'body').codedCount;
 }
 
 /** The plain text of a line (its runs joined). */
@@ -281,7 +281,7 @@ export function lineText(line: PdfLine): string
 export interface BodyLines
 {
     readonly lines: PdfLine[];
-    readonly replaced: number;
+    readonly codedCount: number;
 }
 
 /** Most blank lines kept in a row (transform e). */
@@ -302,8 +302,8 @@ export interface BodyLinesOptions
 const LINE_BREAK = /\r\n|[\r\n\u{2028}\u{2029}]/gu;
 
 /** The variation selectors supplement (U+E0100 to U+E01EF): group 2, outside the BMP. */
-const VS_SUPPLEMENT_FIRST = 0xe0100;
-const VS_SUPPLEMENT_LAST = 0xe01ef;
+const VARIATION_SELECTORS_SUPPLEMENT_FIRST = 0xe0100;
+const VARIATION_SELECTORS_SUPPLEMENT_LAST = 0xe01ef;
 
 /**
  * True for a code unit of the BMP that may come before or between the ">"
@@ -325,57 +325,57 @@ const VS_SUPPLEMENT_LAST = 0xe01ef;
  * have no glyph for U+3000, U+205F or U+1680 either, but \s matches them,
  * so they count as spaces and are removed with the marks.
  */
-function beforeMark(code: number): boolean
+function mayPrecedeQuoteMark(codeUnit: number): boolean
 {
-    if (code === 0x0b || code === 0x0c)
+    if (codeUnit === 0x0b || codeUnit === 0x0c)
     {
         return false;
     }
-    return code === SOFT_HYPHEN || isDrawnAsNothing(code) || /\s/u.test(String.fromCharCode(code));
+    return codeUnit === SOFT_HYPHEN || isDrawnAsNothing(codeUnit) || /\s/u.test(String.fromCharCode(codeUnit));
 }
 
 /**
  * The length of the quote prefix at the start of one line (transform g),
  * its line break excluded: 0 when the line does not start with quote marks.
  * After the last ">", one plain space or one no-break space (U+00A0) is
- * part of the prefix too. `line.slice(length)` never starts with
+ * part of the prefix too. `line.slice(prefixLength)` never starts with
  * whitespace (VT and FF aside) or invisible characters followed by a ">".
  * Linear in the prefix length (one pass, no backtracking). Pure.
  */
 export function quotePrefixLength(line: string): number
 {
-    let length = 0;
+    let prefixLength = 0;
     for (let k = 0; k < line.length; k++)
     {
-        const code = line.charCodeAt(k);
-        if (code === 0x3e)
+        const codeUnit = line.charCodeAt(k);
+        if (codeUnit === 0x3e)
         {
-            length = k + 1;
+            prefixLength = k + 1;
         }
-        else if (code >= 0xd800 && code <= 0xdbff)
+        else if (codeUnit >= 0xd800 && codeUnit <= 0xdbff)
         {
             // A high surrogate: only a whole variation selector of the supplement may be in a prefix.
             const codePoint = line.codePointAt(k)!;
-            if (codePoint < VS_SUPPLEMENT_FIRST || codePoint > VS_SUPPLEMENT_LAST)
+            if (codePoint < VARIATION_SELECTORS_SUPPLEMENT_FIRST || codePoint > VARIATION_SELECTORS_SUPPLEMENT_LAST)
             {
                 break;
             }
             k++; // its low surrogate
         }
-        else if (!beforeMark(code))
+        else if (!mayPrecedeQuoteMark(codeUnit))
         {
             break;
         }
     }
-    if (length > 0)
+    if (prefixLength > 0)
     {
-        const after = line.charCodeAt(length);
-        if (after === 0x20 || after === 0xa0)
+        const afterMarks = line.charCodeAt(prefixLength);
+        if (afterMarks === 0x20 || afterMarks === 0xa0)
         {
-            length++;
+            prefixLength++;
         }
     }
-    return length;
+    return prefixLength;
 }
 
 /**
@@ -388,41 +388,41 @@ export function quotePrefixLength(line: string): number
 export function bodyLines(text: string, options: BodyLinesOptions = {}): BodyLines
 {
     const lines: PdfLine[] = [];
-    let replaced = 0;
-    let blanks = 0; // blank lines waiting (written only when a non-blank line follows: trailing ones are dropped)
-    const line = (start: number, end: number): void =>
+    let codedCount = 0;
+    let pendingBlankLines = 0; // blank lines waiting (written only when a non-blank line follows: trailing ones are dropped)
+    const addLine = (start: number, end: number): void =>
     {
         const raw = text.slice(start, end);
         // Transform (g), on the line as written (before tabs are expanded).
         const prefix = options.notLineStarts?.has(start) === true ? 0 : quotePrefixLength(raw);
         const rest = raw.slice(prefix);
-        const s = sanitizeRuns(rest, 'body');
-        replaced += s.replaced;
-        const blank = s.replaced === 0 && /^\s*$/u.test(rest);
-        if (blank && prefix === 0)
+        const sanitized = sanitizeRuns(rest, 'body');
+        codedCount += sanitized.codedCount;
+        const isBlank = sanitized.codedCount === 0 && /^\s*$/u.test(rest);
+        if (isBlank && prefix === 0)
         {
             if (lines.length > 0)
             {
-                blanks++; // leading blank lines are dropped
+                pendingBlankLines++; // leading blank lines are dropped
             }
             return;
         }
-        for (let k = Math.min(blanks, MAX_BLANK_LINES); k > 0; k--)
+        for (let k = Math.min(pendingBlankLines, MAX_BLANK_LINES); k > 0; k--)
         {
             lines.push([]);
         }
-        blanks = 0;
-        lines.push(blank ? [] : s.runs);
+        pendingBlankLines = 0;
+        lines.push(isBlank ? [] : sanitized.runs);
     };
     let start = 0;
     LINE_BREAK.lastIndex = 0;
-    for (let m = LINE_BREAK.exec(text); m !== null; m = LINE_BREAK.exec(text))
+    for (let match = LINE_BREAK.exec(text); match !== null; match = LINE_BREAK.exec(text))
     {
-        line(start, m.index);
-        start = m.index + m[0].length;
+        addLine(start, match.index);
+        start = match.index + match[0].length;
     }
-    line(start, text.length);
-    return { lines, replaced };
+    addLine(start, text.length);
+    return { lines, codedCount };
 }
 
 /** A plan range, as far as joining needs it. */
@@ -458,29 +458,29 @@ export function joinKeptLines(body: string, ranges: readonly KeptRange[]): Joine
 {
     const parts: string[] = [];
     const notLineStarts = new Set<number>();
-    let length = 0;
+    let joinedLength = 0;
     let lastEnd = -1;
-    let endsLine = false; // the last kept piece ends with a line break
-    for (const r of ranges)
+    let endsWithLineBreak = false; // the last kept piece ends with a line break
+    for (const range of ranges)
     {
-        if (!r.keep || r.end <= r.start)
+        if (!range.keep || range.end <= range.start)
         {
             continue;
         }
-        const piece = body.slice(r.start, r.end);
-        if (parts.length > 0 && r.start !== lastEnd && !endsLine && !isLineBreak(piece.charCodeAt(0)))
+        const piece = body.slice(range.start, range.end);
+        if (parts.length > 0 && range.start !== lastEnd && !endsWithLineBreak && !isLineBreak(piece.charCodeAt(0)))
         {
             parts.push('\n');
-            length++;
+            joinedLength++;
         }
-        if (r.start > 0 && !isLineBreak(body.charCodeAt(r.start - 1)))
+        if (range.start > 0 && !isLineBreak(body.charCodeAt(range.start - 1)))
         {
-            notLineStarts.add(length);
+            notLineStarts.add(joinedLength);
         }
         parts.push(piece);
-        length += piece.length;
-        endsLine = isLineBreak(piece.charCodeAt(piece.length - 1));
-        lastEnd = r.end;
+        joinedLength += piece.length;
+        endsWithLineBreak = isLineBreak(piece.charCodeAt(piece.length - 1));
+        lastEnd = range.end;
     }
     return { text: parts.join(''), notLineStarts };
 }

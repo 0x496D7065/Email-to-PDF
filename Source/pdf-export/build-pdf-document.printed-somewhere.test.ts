@@ -15,7 +15,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { createEmlParser } from '../email-reading/eml-parser';
 import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
-import { buildPdfDocument, noRepeat } from './build-pdf-document';
+import { buildPdfDocument, applyNoRepeatRule } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { ParseResult } from '../../Header/parsed-email';
@@ -24,11 +24,11 @@ import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
-const eml = createEmlParser({ htmlToText: stub });
+const emlParser = createEmlParser({ htmlToText: stub });
 const strings = createPdfStrings('en');
 
-const mixed = (b: string, ...parts: string[]): string =>
-    crlf(`Content-Type: multipart/mixed; boundary="${b}"`, '', ...parts.flatMap((p) => [`--${b}`, p]), `--${b}--`, '');
+const mixed = (boundary: string, ...parts: string[]): string =>
+    crlf(`Content-Type: multipart/mixed; boundary="${boundary}"`, '', ...parts.flatMap((p) => [`--${boundary}`, p]), `--${boundary}--`, '');
 const plain = (text: string): string => crlf('Content-Type: text/plain; charset=utf-8', '', text);
 const rfc822 = (message: string): string => crlf('Content-Type: message/rfc822', '', message);
 
@@ -68,39 +68,40 @@ const benBody = `${FINE}\n\n${ATTRIBUTION}\n> ${S}\n`;
 
 async function parse(name: string, text: string): Promise<ParseResult>
 {
-    const r = await eml.parse({ name, bytes: new TextEncoder().encode(text) });
-    if (!r.ok)
+    const parseResult = await emlParser.parse({ name, bytes: new TextEncoder().encode(text) });
+    if (!parseResult.ok)
     {
-        throw new Error(r.detail);
+        throw new Error(parseResult.detail);
     }
-    return r;
+    return parseResult;
 }
 
 const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
-const docOf = (out: EngineResult): PdfDocument =>
+const pdfDocumentOf = (result: EngineResult): PdfDocument =>
 {
-    const positions = out.messages.map((_, k) => k);
+    const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
-        positions.map((p) => out.messages[p]!),
+        positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    return buildPdfDocument({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings });
+    return buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings });
 };
 /** How many emails of the PDF print `text`. */
-const printedIn = (d: PdfDocument, text: string): number => d.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
-const positionOf = (out: EngineResult, name: string): number => out.messages.findIndex((m) => m.message.subject === `${name} subject`);
+const printedIn = (pdfDocument: PdfDocument, text: string): number =>
+    pdfDocument.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
+const positionOf = (result: EngineResult, name: string): number => result.messages.findIndex((m) => m.message.subject === `${name} subject`);
 
-/** The preview's ranges for every email (Source/web-page-logic/printed-elsewhere.ts), and the restored pieces (noRepeat). */
-function previewOf(out: EngineResult)
+/** The preview's ranges for every email (Source/web-page-logic/printed-elsewhere.ts), and the restored pieces (applyNoRepeatRule). */
+function previewOf(result: EngineResult)
 {
-    const positions = out.messages.map((_, k) => k);
+    const positions = result.messages.map((_, k) => k);
     const plans = planOutput(
-        positions.map((p) => out.messages[p]!),
+        positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    const input = { result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] };
-    return { ranges: printedElsewhereRanges(input), restored: noRepeat(input).restored, plans };
+    const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] };
+    return { ranges: printedElsewhereRanges(input), restored: applyNoRepeatRule(input).restored, plans };
 }
 
 /** The real overlap detector, told nothing about which email holds which: the engine's own fixes undone (holds and withHeldReferences). */
@@ -120,43 +121,44 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
     // Review round 4 (M1, user decision option a): Ben's page leaves his quote of S out (quoted history), so
     // that quote stays in Cy's copy of Ben's block (only what Ben's page prints is cut there): S is printed in
     // Ann's email and inside Cy's forward (an accepted repeat, never nowhere).
-    const bodyAt = (d: PdfDocument, out: EngineResult, name: string): string => squash(bodyOf(d.emails.find((e) => e.position === positionOf(out, name))!));
+    const bodyAt = (pdfDocument: PdfDocument, result: EngineResult, name: string): string =>
+        squash(bodyOf(pdfDocument.emails.find((e) => e.position === positionOf(result, name))!));
 
     it('S is printed in Ann\'s email: the engine folds the forward, not Ann (Cy counts as referencing what Ben references)', async () =>
     {
-        const out = analyzeThread(await files());
-        const ann = out.messages[positionOf(out, 'ann')]!;
+        const result = analyzeThread(await files());
+        const ann = result.messages[positionOf(result, 'ann')]!;
         // Ann's own paragraph is not folded as quoted from Cy any more.
         const sAt = ann.message.bodyText.indexOf(S);
         expect(ann.segments.filter((s) => s.folded && s.start <= sAt && s.end > sAt)).toEqual([]);
-        const d = docOf(out);
-        expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+        const pdfDocument = pdfDocumentOf(result);
+        expect(bodyAt(pdfDocument, result, 'ann')).toContain(squash(S));
         // And in Cy's forward, where Ben's quote of it stays (Ben's page leaves it out).
-        expect(bodyAt(d, out, 'cy')).toContain(squash(S));
-        expect(bodyAt(d, out, 'ben')).not.toContain(squash(S));
-        expect(printedIn(d, S)).toBe(2);
-        expect(printedIn(d, HELLO)).toBe(1);
-        expect(printedIn(d, FINE)).toBe(1);
-        expect(printedIn(d, FORWARD)).toBe(1);
+        expect(bodyAt(pdfDocument, result, 'cy')).toContain(squash(S));
+        expect(bodyAt(pdfDocument, result, 'ben')).not.toContain(squash(S));
+        expect(printedIn(pdfDocument, S)).toBe(2);
+        expect(printedIn(pdfDocument, HELLO)).toBe(1);
+        expect(printedIn(pdfDocument, FINE)).toBe(1);
+        expect(printedIn(pdfDocument, FORWARD)).toBe(1);
     });
 
     it('the engine fixes undone: S is still printed, once, in Cy\'s copy of Ben\'s block; nothing to restore', async () =>
     {
-        const out = analyzeThread(await files(), NO_HOLDS);
-        const annPosition = positionOf(out, 'ann');
-        const ann = out.messages[annPosition]!;
+        const result = analyzeThread(await files(), NO_HOLDS);
+        const annPosition = positionOf(result, 'ann');
+        const ann = result.messages[annPosition]!;
         const sAt = ann.message.bodyText.indexOf(S);
         // The setting of the round 3 bug: S folded in Ann's email as quoted from Cy (no quote mark, no reply
         // header), and left out by her plan; Ben's quote of it left out by his (quoted history).
-        const cyIndex = out.messages[positionOf(out, 'cy')]!.index;
+        const cyIndex = result.messages[positionOf(result, 'cy')]!.index;
         expect(ann.segments.some((s) => s.folded && s.start <= sAt && s.end > sAt && s.related.includes(cyIndex) && s.reasons.join() === 'quoted-overlap')).toBe(true);
-        const { restored, plans } = previewOf(out);
+        const { restored, plans } = previewOf(result);
         expect(plans[annPosition]!.ranges.some((r) => !r.keep && r.start <= sAt && r.end > sAt)).toBe(true);
-        const d = docOf(out);
+        const pdfDocument = pdfDocumentOf(result);
         // Ben's quote stays in Cy's copy of his block (Ben's page does not print it), so the PRINTED SOMEWHERE
         // check finds S printed there and restores nothing.
-        expect(printedIn(d, S)).toBe(1);
-        expect(bodyAt(d, out, 'cy')).toContain(squash(S));
+        expect(printedIn(pdfDocument, S)).toBe(1);
+        expect(bodyAt(pdfDocument, result, 'cy')).toContain(squash(S));
         expect(restored.size).toBe(0);
     });
 
@@ -164,21 +166,21 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
     {
         for (const parts of [DEFAULT_THREAD_ANALYSIS_PARTS, NO_HOLDS])
         {
-            const out = analyzeThread(
+            const result = analyzeThread(
                 [
                     await parse('cy.eml', holding({ name: 'cy', date: WED }, FORWARD, simple({ name: 'ben', date: TUE, inReplyTo: 'ann' }, benBody))),
                     await parse('ann.eml', simple({ name: 'ann', date: THU }, annBody)),
                 ],
                 parts,
             );
-            const d = docOf(out);
-            expect(printedIn(d, S)).toBeGreaterThanOrEqual(1);
-            expect(printedIn(d, HELLO)).toBe(1);
+            const pdfDocument = pdfDocumentOf(result);
+            expect(printedIn(pdfDocument, S)).toBeGreaterThanOrEqual(1);
+            expect(printedIn(pdfDocument, HELLO)).toBe(1);
             // Ben's quote of S stays in Cy's forward (round 4, M1).
-            expect(bodyAt(d, out, 'cy')).toContain(squash(S));
+            expect(bodyAt(pdfDocument, result, 'cy')).toContain(squash(S));
             if (parts === DEFAULT_THREAD_ANALYSIS_PARTS)
             {
-                expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+                expect(bodyAt(pdfDocument, result, 'ann')).toContain(squash(S));
             }
         }
     });
@@ -188,19 +190,20 @@ describe('PDF model, printed somewhere: the reviewer\'s M2 case (an attached rep
         const dee = holding({ name: 'dee', date: TUE }, 'Dee passes this on to the team without further comment for now.', simple({ name: 'ben', date: MON, inReplyTo: 'ann' }, benBody));
         for (const parts of [DEFAULT_THREAD_ANALYSIS_PARTS, NO_HOLDS])
         {
-            const out = analyzeThread([await parse('cy.eml', holding({ name: 'cy', date: WED }, FORWARD, dee)), await parse('ann.eml', simple({ name: 'ann', date: null }, annBody))], parts);
-            expect(out.attached?.length).toBe(2);
-            const d = docOf(out);
-            expect(printedIn(d, S)).toBeGreaterThanOrEqual(1);
-            expect(printedIn(d, HELLO)).toBe(1);
-            expect(printedIn(d, FINE)).toBe(1);
+            const result = analyzeThread([await parse('cy.eml', holding({ name: 'cy', date: WED }, FORWARD, dee)),
+                await parse('ann.eml', simple({ name: 'ann', date: null }, annBody))], parts);
+            expect(result.attached?.length).toBe(2);
+            const pdfDocument = pdfDocumentOf(result);
+            expect(printedIn(pdfDocument, S)).toBeGreaterThanOrEqual(1);
+            expect(printedIn(pdfDocument, HELLO)).toBe(1);
+            expect(printedIn(pdfDocument, FINE)).toBe(1);
             // Ben's quote of S stays in Dee's copy of his block (round 4, M1: Ben's page does not print it); Dee's
             // page prints it, so it is cut from Cy's copy of Dee's block, printed as Dee.
-            expect(bodyAt(d, out, 'dee')).toContain(squash(S));
-            expect(bodyAt(d, out, 'cy')).not.toContain(squash(S));
+            expect(bodyAt(pdfDocument, result, 'dee')).toContain(squash(S));
+            expect(bodyAt(pdfDocument, result, 'cy')).not.toContain(squash(S));
             if (parts === DEFAULT_THREAD_ANALYSIS_PARTS)
             {
-                expect(bodyAt(d, out, 'ann')).toContain(squash(S));
+                expect(bodyAt(pdfDocument, result, 'ann')).toContain(squash(S));
             }
         }
     });
@@ -219,18 +222,19 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
     {
         it(`${what}: X's paragraph is printed once, in X, and the preview says it is in the PDF`, async () =>
         {
-            const out = analyzeThread([await parse('x.eml', simple({ name: 'x', date: xDate }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
-            const xPosition = positionOf(out, 'x');
-            const x = out.messages[xPosition]!;
+            const result = analyzeThread(
+                [await parse('x.eml', simple({ name: 'x', date: xDate }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
+            const xPosition = positionOf(result, 'x');
+            const x = result.messages[xPosition]!;
             const sAt = x.message.bodyText.indexOf(S);
             // The setting of the old loss: S folded in X as quoted from Y, left out by X's plan; Y leaves its quote out.
-            const { ranges, restored, plans } = previewOf(out);
+            const { ranges, restored, plans } = previewOf(result);
             expect(plans[xPosition]!.ranges.some((r) => !r.keep && r.start <= sAt && r.end > sAt)).toBe(true);
-            const d = docOf(out);
-            expect(printedIn(d, S)).toBe(1);
-            expect(squash(bodyOf(d.emails.find((e) => e.position === xPosition)!))).toContain(squash(S));
-            expect(printedIn(d, HELLO)).toBe(1);
-            expect(printedIn(d, FINE)).toBe(1);
+            const pdfDocument = pdfDocumentOf(result);
+            expect(printedIn(pdfDocument, S)).toBe(1);
+            expect(squash(bodyOf(pdfDocument.emails.find((e) => e.position === xPosition)!))).toContain(squash(S));
+            expect(printedIn(pdfDocument, HELLO)).toBe(1);
+            expect(printedIn(pdfDocument, FINE)).toBe(1);
             expect(restored.get(xPosition)?.some(([a, b]) => a <= sAt && b > sAt)).toBe(true);
             expect(ranges.get(xPosition)?.some((r) => r.keep && r.start <= sAt && r.end > sAt)).toBe(true);
         });
@@ -238,40 +242,41 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
 
     it('nothing is restored when the text is printed elsewhere (a normal reply: the quote left out, the quoted email printed)', async () =>
     {
-        const out = analyzeThread([
+        const result = analyzeThread([
             await parse('x.eml', simple({ name: 'x', date: MON }, xBody)),
             await parse('y.eml', simple({ name: 'y', date: TUE, inReplyTo: 'x' }, yBody)),
         ]);
-        const { restored } = previewOf(out);
+        const { restored } = previewOf(result);
         expect(restored.size).toBe(0);
-        const d = docOf(out);
-        expect(printedIn(d, S)).toBe(1);
+        const pdfDocument = pdfDocumentOf(result);
+        expect(printedIn(pdfDocument, S)).toBe(1);
     });
 
     it('a quote of an email that is not in the PDF stays left out (not justified by "printed elsewhere": no candidate)', async () =>
     {
-        const out = analyzeThread([
+        const result = analyzeThread([
             await parse('x.eml', simple({ name: 'x', date: MON }, xBody)),
             await parse('y.eml', simple({ name: 'y', date: TUE, inReplyTo: 'x' }, yBody)),
         ]);
-        const y = positionOf(out, 'y');
-        const plans = planOutput([out.messages[y]!], DEFAULT_OUTPUT_POLICY);
-        const input = { result: out, positions: [y], plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] };
-        expect(noRepeat(input).restored.size).toBe(0);
-        const d = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: 0, strings });
-        expect(printedIn(d, S)).toBe(0);
-        expect(printedIn(d, FINE)).toBe(1);
+        const yPosition = positionOf(result, 'y');
+        const plans = planOutput([result.messages[yPosition]!], DEFAULT_OUTPUT_POLICY);
+        const input = { result, positions: [yPosition], plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] };
+        expect(applyNoRepeatRule(input).restored.size).toBe(0);
+        const pdfDocument = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: 0, strings });
+        expect(printedIn(pdfDocument, S)).toBe(0);
+        expect(printedIn(pdfDocument, FINE)).toBe(1);
     });
 
     it('"Print full original text": nothing to restore (every body whole)', async () =>
     {
-        const out = analyzeThread([await parse('x.eml', simple({ name: 'x', date: null }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
-        const positions = out.messages.map((_, k) => k);
+        const result = analyzeThread(
+            [await parse('x.eml', simple({ name: 'x', date: null }, xBody)), await parse('y.eml', simple({ name: 'y', date: TUE }, yBody))]);
+        const positions = result.messages.map((_, k) => k);
         const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
         const plans = planOutput(
-            positions.map((p) => out.messages[p]!),
+            positions.map((p) => result.messages[p]!),
             policy,
         );
-        expect(noRepeat({ result: out, positions, plans, policy, rebuilt: [] }).restored.size).toBe(0);
+        expect(applyNoRepeatRule({ result, positions, plans, policy, rebuilt: [] }).restored.size).toBe(0);
     });
 });

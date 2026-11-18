@@ -80,8 +80,8 @@ function files(styles: readonly QuoteStyle[], mode: 'multi' | 'single'): Normali
     const from = mode === 'multi' ? 0 : messages.length - 1;
     return messages.slice(from).map((_, k) =>
     {
-        const t = buildThread(messages.slice(0, from + k + 1));
-        return message(t.body, t.subject, t.instantUtc);
+        const thread = buildThread(messages.slice(0, from + k + 1));
+        return message(thread.body, thread.subject, thread.instantUtc);
     });
 }
 
@@ -147,41 +147,41 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
                     }
 
                     // No line starts with a quote mark.
-                    for (const l of lines)
+                    for (const line of lines)
                     {
-                        expect(l.text, l.text).not.toMatch(/^\s*>/u);
+                        expect(line.text, line.text).not.toMatch(/^\s*>/u);
                     }
                     // Only three x positions: the margin (heading, header labels, notes), a header value, the body step.
-                    for (const l of lines)
+                    for (const line of lines)
                     {
-                        expect([LEFT, VALUE_X, BODY_X].some((x) => Math.abs(l.x - x) < 1e-3), `${l.text} at ${String(l.x)}`).toBe(true);
+                        expect([LEFT, VALUE_X, BODY_X].some((x) => Math.abs(line.x - x) < 1e-3), `${line.text} at ${String(line.x)}`).toBe(true);
                     }
                     expect(lines.find((l) => l.text.startsWith('Email 1'))!.x).toBeCloseTo(LEFT, 3);
-                    for (const l of lines.filter((r) => /^(From|Date|Subject) /u.test(r.text)))
+                    for (const line of lines.filter((r) => /^(From|Date|Subject) /u.test(r.text)))
                     {
-                        expect(l.x).toBeCloseTo(LEFT, 3);
+                        expect(line.x).toBeCloseTo(LEFT, 3);
                     }
 
                     // Every email's own text is printed, one step in, the ">" inside the line kept; the long line wrapped, every piece one step in.
                     const total = mode === 'multi' ? styles.length + 1 : 1 + (unfold ? 0 : styles.length);
                     const notes = lines.filter((l) => /^Note \d+: price > cost, a -> b\.$/u.test(l.text));
                     expect(new Set(notes.map((l) => l.text)).size).toBe(styles.length + 1);
-                    for (const l of notes)
+                    for (const note of notes)
                     {
-                        expect(l.x).toBeCloseTo(BODY_X, 3);
+                        expect(note.x).toBeCloseTo(BODY_X, 3);
                     }
                     const pieces = lines.filter((l) => /delivery van|side street|hall free of boxes/u.test(l.text));
                     expect(pieces.length).toBeGreaterThanOrEqual(2 * total);
-                    for (const l of pieces)
+                    for (const piece of pieces)
                     {
-                        expect(l.x).toBeCloseTo(BODY_X, 3);
+                        expect(piece.x).toBeCloseTo(BODY_X, 3);
                     }
 
                     // Collapse, never delete: the messages are unchanged; the full text keeps every body whole (only quote prefixes left out).
                     expect(result.messages.map((m) => m.message)).toEqual(before);
                     if (unfold)
                     {
-                        const doc = buildPdfDocument({
+                        const pdfDocument = buildPdfDocument({
                             result,
                             positions: result.messages.map((_, k) => k),
                             plans: planOutput(result.messages, { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true }),
@@ -190,13 +190,13 @@ describe('generatePdf: quoted conversations, one body indent and no quote marks 
                             generatedAt: 0,
                             strings: createPdfStrings('en'),
                         });
-                        const real = doc.emails.filter((e) => e.position !== null);
+                        const real = pdfDocument.emails.filter((e) => e.position !== null);
                         expect(real).toHaveLength(input.length);
-                        for (const e of real)
+                        for (const email of real)
                         {
-                            const body = result.messages[e.position!]!.message.bodyText;
-                            expect(e.body.map(lineText).join('\n')).toBe(referenceDisplayText(body));
-                            expect(quotePrefixProblems(body, e.body.map(lineText))).toEqual([]);
+                            const body = result.messages[email.position!]!.message.bodyText;
+                            expect(email.body.map(lineText).join('\n')).toBe(referenceDisplayText(body));
+                            expect(quotePrefixProblems(body, email.body.map(lineText))).toEqual([]);
                         }
                     }
                 }, 60_000);

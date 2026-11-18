@@ -104,7 +104,7 @@ export interface PdfRebuiltInfo
     /**
      * How many blocks of original header lines were moved to the top of its
      * text (task 8.13a, Q4: the quoted header lines its header rows cannot
-     * show; NoRepeat.moved). 0 usually.
+     * show; NoRepeatResult.moved). 0 usually.
      */
     readonly movedHeaders: number;
 }

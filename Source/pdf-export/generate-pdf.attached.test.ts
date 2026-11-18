@@ -68,9 +68,9 @@ async function made(policy: OutputPolicy): Promise<{ texts: string[]; cover: str
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown).join(' '));
     const dests = readDests(pdf);
     const starts: number[] = [];
-    for (let n = 1; dests.has(`email-${String(n)}`); n++)
+    for (let emailNumber = 1; dests.has(`email-${String(emailNumber)}`); emailNumber++)
     {
-        starts.push(dests.get(`email-${String(n)}`)!.page);
+        starts.push(dests.get(`email-${String(emailNumber)}`)!.page);
     }
     return { texts: starts.map((page, k) => squash(pages.slice(page, starts[k + 1] ?? pages.length).join(' '))), cover: squash(pages.slice(0, starts[0]).join(' ')) };
 }

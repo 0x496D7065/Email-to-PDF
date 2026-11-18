@@ -45,7 +45,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, headerLinesEnd, holdsQuotedText, noRepeat, pdfRanges, type PrintedPart } from './build-pdf-document';
+import { buildPdfDocument, headerLinesEnd, holdsQuotedText, applyNoRepeatRule, pdfRanges, type PrintedPart } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { MessagePlan } from '../../Header/output-plan';
@@ -57,14 +57,14 @@ import type { EngineResult } from '../../Header/thread-analysis-result';
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number
 {
-    let a = seed >>> 0;
+    let state = seed >>> 0;
     return () =>
     {
-        a = (a + 0x6d2b79f5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        state = (state + 0x6d2b79f5) >>> 0;
+        let bits = state;
+        bits = Math.imul(bits ^ (bits >>> 15), bits | 1);
+        bits ^= bits + Math.imul(bits ^ (bits >>> 7), bits | 61);
+        return ((bits ^ (bits >>> 14)) >>> 0) / 4294967296;
     };
 }
 
@@ -165,15 +165,15 @@ const QUOTES: readonly string[] = [
     '\u{E0100}> supplement selector first\n>\u{E01EF}>\u{00A0}no-break space after\n\u{3164}> filler stays\n>\u{2800}> braille blank stays\n',
 ];
 
-/** `body` with one of QUOTES put in at a place given by `k` (every second email). */
-function withQuotes(body: string, k: number): string
+/** `body` with one of QUOTES put in at a place given by `messageIndex` (every second email). */
+function withQuotes(body: string, messageIndex: number): string
 {
-    if (k % 2 === 1)
+    if (messageIndex % 2 === 1)
     {
         return body;
     }
-    const at = (k * 7919) % (body.length + 1);
-    return body.slice(0, at) + QUOTES[(k >> 1) % QUOTES.length]! + body.slice(at);
+    const insertAt = (messageIndex * 7919) % (body.length + 1);
+    return body.slice(0, insertAt) + QUOTES[(messageIndex >> 1) % QUOTES.length]! + body.slice(insertAt);
 }
 
 function randomBody(random: () => number): string
@@ -188,11 +188,11 @@ function randomBody(random: () => number): string
     return body;
 }
 
-function randomMessage(random: () => number, k: number): NormalizedMessage
+function randomMessage(random: () => number, messageIndex: number): NormalizedMessage
 {
     const dated = random() < 0.85;
     return {
-        messageId: random() < 0.9 ? `prop-${String(k)}@example.test` : null,
+        messageId: random() < 0.9 ? `prop-${String(messageIndex)}@example.test` : null,
         inReplyTo: null,
         references: [],
         date: dated
@@ -203,9 +203,10 @@ function randomMessage(random: () => number, k: number): NormalizedMessage
         cc: random() < 0.3 ? [pick(random, PEOPLE)] : [],
         bcc: [],
         subject: random() < 0.1 ? '' : `Re: ${pick(random, PIECES)}`,
-        bodyText: withQuotes(randomBody(random), k),
-        attachments: random() < 0.2 ? [{ fileName: `file\u0007${String(k)}.pdf`, size: Math.floor(random() * 2e6), mimeType: 'application/pdf' }] : [],
-        source: { fileName: `prop-${String(k)}.eml`, sha256: k.toString(16).padStart(64, '0'), kind: 'eml' },
+        bodyText: withQuotes(randomBody(random), messageIndex),
+        attachments: random() < 0.2
+            ? [{ fileName: `file\u0007${String(messageIndex)}.pdf`, size: Math.floor(random() * 2e6), mimeType: 'application/pdf' }] : [],
+        source: { fileName: `prop-${String(messageIndex)}.eml`, sha256: messageIndex.toString(16).padStart(64, '0'), kind: 'eml' },
         warnings: [],
     };
 }
@@ -240,23 +241,23 @@ let noTextSeen = 0;
  * (`printed` equal to `positions`), the slots are the ticked emails, as
  * before. Returns how many were left out.
  */
-function expectOnlyNoTextLeftOut(result: EngineResult, positions: readonly number[], printed: readonly number[], doc: PdfDocument): number
+function expectOnlyNoTextLeftOut(result: EngineResult, positions: readonly number[], printed: readonly number[], pdfDocument: PdfDocument): number
 {
     const left = positions.filter((p) => !printed.includes(p));
-    for (const p of left)
+    for (const position of left)
     {
-        const m = result.messages[p]!.message;
-        expect(m.bodyText, `position ${String(p)}`).not.toMatch(/\S/u);
-        expect(hasNoPrintableText(m)).toBe(true);
-        expect(doc.pdfNumberByPosition[p]).toBeNull();
+        const message = result.messages[position]!.message;
+        expect(message.bodyText, `position ${String(position)}`).not.toMatch(/\S/u);
+        expect(hasNoPrintableText(message)).toBe(true);
+        expect(pdfDocument.pdfNumberByPosition[position]).toBeNull();
     }
-    for (const p of printed)
+    for (const position of printed)
     {
-        expect(hasNoPrintableText(result.messages[p]!.message)).toBe(false);
+        expect(hasNoPrintableText(result.messages[position]!.message)).toBe(false);
     }
     if (left.length === 0)
     {
-        expect(realEmails(doc).map((x) => x.position)).toEqual([...positions]);
+        expect(realEmails(pdfDocument).map((x) => x.position)).toEqual([...positions]);
     }
     return left.length;
 }
@@ -268,7 +269,7 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 /**
  * S6 (review round 3 of task 8.10): every kept range of reason 'text' with
  * text other than white space (the writer's own text, B1) is still in the
- * writer's own PDF email `e`, after the display transforms, white space
+ * writer's own PDF email `email`, after the display transforms, white space
  * squashed. Matched IN ORDER, each range after the end of the one before it
  * (review finding G5, task 8.11): a short range ("Ok") cannot pass by
  * matching the same letters elsewhere in the body (in an earlier range's
@@ -277,63 +278,67 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
  * one (the kept text in between may be quoted text the plan keeps). Returns
  * how many ranges were checked.
  */
-function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEmail, where: string, made?: { doc: PdfDocument; parts: readonly PrintedPart[]; places: readonly ReconstructedMessage[] }): number
+function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: PdfEmail, where: string,
+    made?: { pdfDocument: PdfDocument; parts: readonly PrintedPart[]; places: readonly ReconstructedMessage[] }): number
 {
     if (plan === undefined || plan.fallback)
     {
         return 0;
     }
-    const shown = squash(bodyOf(e));
+    const shown = squash(bodyOf(email));
     // Task 8.13a, Q3: the plan's ranges as the PDF cuts them; a 'text' piece left out names the email that prints it.
     const ranges = (made === undefined ? null : pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, made.parts)) ?? plan.ranges.map((r) => ({ ...r, printedAs: null }));
     let checked = 0;
     let from = 0;
-    for (const r of ranges)
+    for (const range of ranges)
     {
-        if (r.reason !== 'text')
+        if (range.reason !== 'text')
         {
             continue;
         }
-        const own = squash(referenceDisplayText(body.slice(r.start, r.end)));
+        const own = squash(referenceDisplayText(body.slice(range.start, range.end)));
         if (own === '')
         {
             continue;
         }
-        if (r.printedAs != null && made !== undefined)
+        if (range.printedAs != null && made !== undefined)
         {
             // Printed elsewhere: only from a place whose text holds no quoted text, and in the email named.
-            const place = made.places.find((p) => p.start <= r.start && r.end <= p.end);
-            expect(place, `${where}: own text [${String(r.start)}, ${String(r.end)}) cut inside a place`).toBeDefined();
-            expect(r.printedAs.kind, where).not.toBe('unticked');
+            const place = made.places.find((p) => p.start <= range.start && range.end <= p.end);
+            expect(place, `${where}: own text [${String(range.start)}, ${String(range.end)}) cut inside a place`).toBeDefined();
+            expect(range.printedAs.kind, where).not.toBe('unticked');
             const linesEnd = headerLinesEnd(body, place!);
-            if (!/\S/u.test(body.slice(Math.max(r.start, linesEnd), r.end)))
+            if (!/\S/u.test(body.slice(Math.max(range.start, linesEnd), range.end)))
             {
                 // Header lines the plan took for own text (a wrapped list, a Subject line): moved to the rebuilt
                 // email, or dropped for a real file that shows its own header (Q4).
-                if (r.printedAs.kind === 'rebuilt')
+                if (range.printedAs.kind === 'rebuilt')
                 {
-                    expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: header lines "${own.slice(0, 40)}" moved`).toContain(own);
+                    expect(squash(bodyOf(made.pdfDocument.emails[range.printedAs.number - 1]!)),
+                        `${where}: header lines "${own.slice(0, 40)}" moved`).toContain(own);
                 }
             }
             else
             {
                 expect(holdsQuotedText(body, plan.ranges, linesEnd, place!.end), `${where}: own text cut next to quoted text`).toBe(false);
-                if (r.printedAs.kind !== 'unticked' && r.printedAs.kind !== 'unticked-attached')
+                if (range.printedAs.kind !== 'unticked' && range.printedAs.kind !== 'unticked-attached')
                 {
-                    expect(squash(bodyOf(made.doc.emails[r.printedAs.number - 1]!)), `${where}: own text "${own.slice(0, 40)}" in Email ${String(r.printedAs.number)}`).toContain(own);
+                    expect(squash(bodyOf(made.pdfDocument.emails[range.printedAs.number - 1]!)),
+                        `${where}: own text "${own.slice(0, 40)}" in Email ${String(range.printedAs.number)}`).toContain(own);
                 }
             }
             movedOwn++;
             checked++;
             continue;
         }
-        if (!r.keep)
+        if (!range.keep)
         {
             continue;
         }
-        const at = shown.indexOf(own, from);
-        expect(at, `${where}: own text [${String(r.start)}, ${String(r.end)}) "${own.slice(0, 40)}", in order after ${String(from)}`).toBeGreaterThanOrEqual(0);
-        from = at + own.length;
+        const ownStart = shown.indexOf(own, from);
+        expect(ownStart,
+            `${where}: own text [${String(range.start)}, ${String(range.end)}) "${own.slice(0, 40)}", in order after ${String(from)}`).toBeGreaterThanOrEqual(0);
+        from = ownStart + own.length;
         checked++;
     }
     return checked;
@@ -341,8 +346,8 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, e: PdfEm
 /** How many own-text pieces S6 found printed as another email (Q3). */
 let movedOwn = 0;
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */
-const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
-    d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
+const realEmails = (pdfDocument: PdfDocument): { email: PdfEmail; position: number }[] =>
+    pdfDocument.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ email: e, position: e.position }] : []));
 
 describe('PDF document model properties', () =>
 {
@@ -364,30 +369,30 @@ describe('PDF document model properties', () =>
                     positions.map((p) => result.messages[p]!),
                     DEFAULT_OUTPUT_POLICY,
                 );
-                const doc = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings });
+                const pdfDocument = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings });
                 // Task 8.14: only the emails with no text are left out (white space only: nothing printed nowhere).
                 const printed = pdfPositions(result, positions);
-                noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, doc);
-                expect(doc.emails).toHaveLength(printed.length);
+                noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, pdfDocument);
+                expect(pdfDocument.emails).toHaveLength(printed.length);
                 let codes = 0;
-                for (const { e, position } of realEmails(doc))
+                for (const { email, position } of realEmails(pdfDocument))
                 {
-                    const m = result.messages[position]!;
-                    const where = `seed ${String(seed)} position ${String(e.position)}`;
-                    expect(bodyOf(e), where).toBe(referenceDisplayText(m.message.bodyText));
+                    const engineMessage = result.messages[position]!;
+                    const where = `seed ${String(seed)} position ${String(email.position)}`;
+                    expect(bodyOf(email), where).toBe(referenceDisplayText(engineMessage.message.bodyText));
                     // Tasks 8.1 and 8.6: nothing but the quote prefixes is missing.
-                    expect(quotePrefixProblems(m.message.bodyText, e.body.map(lineText)), where).toEqual([]);
-                    quoted += referenceDisplayLines(m.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
-                    for (const line of e.body)
+                    expect(quotePrefixProblems(engineMessage.message.bodyText, email.body.map(lineText)), where).toEqual([]);
+                    quoted += referenceDisplayLines(engineMessage.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
+                    for (const line of email.body)
                     {
                         for (const run of line)
                         {
                             expect(run.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
                         }
                     }
-                    codes += e.flags.controlChars;
+                    codes += email.flags.controlChars;
                 }
-                expect(doc.controlChars).toBe(codes);
+                expect(pdfDocument.controlChars).toBe(codes);
             }
         }
         // The random emails must really hold quoted lines.
@@ -408,16 +413,17 @@ describe('PDF document model properties', () =>
                 const positions = result.messages.map((_, k) => k).filter(() => random() < 0.8);
                 const plans = planOutput(positions.map((p) => result.messages[p]!));
                 withOmissions += plans.filter((p) => p.ranges.some((r) => !r.keep)).length;
-                const doc = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: 0, strings });
+                const pdfDocument = buildPdfDocument(
+                    { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: 0, strings });
                 // Task 8.14: the emails with no text are left out, the others numbered 1..k without a gap.
                 const printed = pdfPositions(result, positions);
-                noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, doc);
-                printed.forEach((p, k) => expect(doc.pdfNumberByPosition[p]).toBe(k + 1));
-                expect(doc.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(printed.length);
-                for (const { e, position } of realEmails(doc))
+                noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, pdfDocument);
+                printed.forEach((p, k) => expect(pdfDocument.pdfNumberByPosition[p]).toBe(k + 1));
+                expect(pdfDocument.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(printed.length);
+                for (const { email, position } of realEmails(pdfDocument))
                 {
                     const full = referenceDisplayText(result.messages[position]!.message.bodyText);
-                    for (const line of e.body)
+                    for (const line of email.body)
                     {
                         const shown = lineText(line);
                         if (shown.trim() !== '')
@@ -446,11 +452,11 @@ describe('PDF document model properties', () =>
                 const random = makeRandom(seed);
                 const messages = Array.from({ length: 12 }, (_, k) =>
                 {
-                    const m = randomMessage(random, seed * 100 + k);
+                    const message = randomMessage(random, seed * 100 + k);
                     // A quoted history after the new text, so the engine has earlier emails to rebuild.
                     const quoted = Array.from({ length: 1 + Math.floor(random() * 4) }, () => `> ${pick(random, PIECES)}`).join('\n');
                     const history = `\n\nOn Tue, 4 Mar 2025 at 09:${String(10 + (k % 50))}, ${pick(random, ['Bob Sample <bob@furniture.example.test>', 'Carol Test <carol@sample.test>'])} wrote:\n> The desks arrive on Monday morning.\n${quoted}\n`;
-                    return random() < 0.7 ? { ...m, bodyText: m.bodyText + history } : m;
+                    return random() < 0.7 ? { ...message, bodyText: message.bodyText + history } : message;
                 });
                 const result = analyzeThread(filesOf(messages, seed, grouping));
                 attachedSeen += result.attached?.length ?? 0;
@@ -473,9 +479,9 @@ describe('PDF document model properties', () =>
                 expect(folded.emails.map((x) => x.number)).toEqual(all);
                 expect(folded.index.entries.map((x) => x.number)).toEqual(all);
                 expect(folded.cover.emailCount).toBe(folded.emails.length);
-                for (const { e, position } of foldedReal)
+                for (const { email, position } of foldedReal)
                 {
-                    expect(folded.pdfNumberByPosition[position]).toBe(e.number);
+                    expect(folded.pdfNumberByPosition[position]).toBe(email.number);
                 }
                 expect(folded.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
                 // Task 8.10 (the no-repeat rule; before it, task 7.7 wanted the real
@@ -489,45 +495,47 @@ describe('PDF document model properties', () =>
                 expect(foldedReal.map((x) => x.position)).toEqual(plain.map((x) => x.position));
                 const inPdf = new Set(folded.emails.flatMap((e) => (e.rebuilt === null ? [] : [e.rebuilt.id])));
                 const otherTexts = (self: PdfEmail): string => folded.emails.filter((e) => e !== self).map(bodyOf).join('\n');
-                for (const [k, { e, position }] of foldedReal.entries())
+                for (const [k, { email, position }] of foldedReal.entries())
                 {
-                    const before = plain[k]!.e;
-                    if (!e.flags.printedElsewhere)
+                    const before = plain[k]!.email;
+                    if (!email.flags.printedElsewhere)
                     {
-                        expect(bodyOf(e), `seed ${String(seed)} position ${String(position)}`).toBe(bodyOf(before));
+                        expect(bodyOf(email), `seed ${String(seed)} position ${String(position)}`).toBe(bodyOf(before));
                         continue;
                     }
                     changed++;
                     const body = result.messages[position]!.message.bodyText;
                     const index = result.messages[position]!.index;
-                    const realInPdf = (r: (typeof result.reconstructed)[number]): boolean =>
+                    const realInPdf = (rebuiltEntry: (typeof result.reconstructed)[number]): boolean =>
                     {
-                        const p = r.realIndex === null ? null : result.positionByIndex[r.realIndex];
-                        return typeof p === 'number' && p !== position && folded.pdfNumberByPosition[p] !== null;
+                        const realPosition = rebuiltEntry.realIndex === null ? null : result.positionByIndex[rebuiltEntry.realIndex];
+                        return typeof realPosition === 'number' && realPosition !== position && folded.pdfNumberByPosition[realPosition] !== null;
                     };
                     const places = result.reconstructed.filter(
-                        (r) =>
-                            r.sourceIndex === index &&
-                        ((r.link === 'entry' && inPdf.has(r.id)) || (r.link === 'same-as' && r.sameAs !== null && inPdf.has(r.sameAs)) || (r.link === 'real' && realInPdf(r))),
+                        (rebuiltEntry) =>
+                            rebuiltEntry.sourceIndex === index &&
+                        ((rebuiltEntry.link === 'entry' && inPdf.has(rebuiltEntry.id))
+                            || (rebuiltEntry.link === 'same-as' && rebuiltEntry.sameAs !== null && inPdf.has(rebuiltEntry.sameAs))
+                            || (rebuiltEntry.link === 'real' && realInPdf(rebuiltEntry))),
                     );
                     expect(places.length, `seed ${String(seed)} position ${String(position)}`).toBeGreaterThan(0);
                     // What is left out: the lines of the text before that are not in the text now (as a multiset).
                     const left = new Map<string, number>();
-                    for (const line of e.body.map(lineText))
+                    for (const line of email.body.map(lineText))
                     {
                         left.set(line, (left.get(line) ?? 0) + 1);
                     }
                     // Whole lines are compared (a short line such as "Ok" must be a line there, not a piece of one).
                     const linesOf = (text: string): Set<string> => new Set(text.split('\n').map((x) => x.trim()));
-                    const others = linesOf(otherTexts(e));
+                    const others = linesOf(otherTexts(email));
                     const placeLines = places.map((r) => linesOf(referenceDisplayText(body.slice(r.rebuilt.start, r.rebuilt.end))));
                     const headerLines = places.map((r) => linesOf(referenceDisplayText(body.slice(r.rebuilt.start, r.rebuilt.headerEnd))));
                     for (const line of before.body.map(lineText))
                     {
-                        const n = left.get(line) ?? 0;
-                        if (n > 0)
+                        const leftCount = left.get(line) ?? 0;
+                        if (leftCount > 0)
                         {
-                            left.set(line, n - 1);
+                            left.set(line, leftCount - 1);
                             continue;
                         }
                         if (line.trim() === '')
@@ -540,30 +548,32 @@ describe('PDF document model properties', () =>
                         expect(asHeader || others.has(line.trim()), where).toBe(true);
                     }
                     // Nothing new: every line now was a line before.
-                    for (const [line, n] of left)
+                    for (const [line, leftCount] of left)
                     {
-                        expect(n, `seed ${String(seed)} position ${String(position)}: extra "${line}"`).toBe(0);
+                        expect(leftCount, `seed ${String(seed)} position ${String(position)}: extra "${line}"`).toBe(0);
                     }
                 }
                 // S6 (review round 3 of task 8.10): the writer's own text is still in the writer's own email.
-                for (const [k, { e, position }] of foldedReal.entries())
+                for (const [k, { email, position }] of foldedReal.entries())
                 {
-                    ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[k], e, `seed ${String(seed)} position ${String(position)}`);
+                    ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[k], email,
+                        `seed ${String(seed)} position ${String(position)}`);
                 }
                 // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
-                const doc = buildPdfDocument({ result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
-                const real = realEmails(doc);
-                expect(doc.emails).toHaveLength(real.length);
-                expect(doc.cover.emailCount).toBe(real.length);
-                expect(doc.index.entries.every((x) => !x.rebuilt)).toBe(true);
+                const pdfDocument = buildPdfDocument(
+                    { result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
+                const real = realEmails(pdfDocument);
+                expect(pdfDocument.emails).toHaveLength(real.length);
+                expect(pdfDocument.cover.emailCount).toBe(real.length);
+                expect(pdfDocument.index.entries.every((x) => !x.rebuilt)).toBe(true);
                 // Every included real email is there once, numbered 1..k in list order, with its full text.
                 expect(real.map((x) => x.position)).toEqual(positions);
-                expect(real.map((x) => x.e.number)).toEqual(positions.map((_, k) => k + 1));
-                for (const { e, position } of real)
+                expect(real.map((x) => x.email.number)).toEqual(positions.map((_, k) => k + 1));
+                for (const { email, position } of real)
                 {
                     const body = result.messages[position]!.message.bodyText;
-                    expect(bodyOf(e), `seed ${String(seed)} position ${String(position)}`).toBe(referenceDisplayText(body));
-                    expect(quotePrefixProblems(body, e.body.map(lineText)), `seed ${String(seed)} position ${String(position)}`).toEqual([]);
+                    expect(bodyOf(email), `seed ${String(seed)} position ${String(position)}`).toBe(referenceDisplayText(body));
+                    expect(quotePrefixProblems(body, email.body.map(lineText)), `seed ${String(seed)} position ${String(position)}`).toEqual([]);
                 }
             }
         }
@@ -583,34 +593,34 @@ describe('PDF document model properties', () =>
         for (let seed = 301; seed <= 360; seed++)
         {
             const random = makeRandom(seed);
-            const c = pick(random, chains);
-            const messages = c.messages!;
+            const threadCase = pick(random, chains);
+            const messages = threadCase.messages!;
             const last = messages.length - 1;
             // The last email, with an answer typed at a random line start inside its quoted history.
             const built = buildThread(messages).body;
             const quoteStart = built.indexOf('\n', built.indexOf(messages[last]!.text.split('\n\n')[1]!.split('\n')[0]!)) + 1;
             const lineStarts = [...built.matchAll(/\n/gu)].map((m) => m.index + 1).filter((at) => at > quoteStart && at < built.length);
-            const at = pick(random, lineStarts);
+            const answerAt = pick(random, lineStarts);
             const answer = `My answer ${String(seed)}: the desks arrive on Thursday morning.\n\n`;
-            const lastBody = built.slice(0, at) + answer + built.slice(at);
-            const files = messages.flatMap((m, i): NormalizedMessage[] =>
+            const lastBody = built.slice(0, answerAt) + answer + built.slice(answerAt);
+            const files = messages.flatMap((threadMessage, i): NormalizedMessage[] =>
             {
                 if (i !== last && random() < 0.5)
                 {
                     return [];
                 }
-                const utcMs = instantOf(m.sent, m.zone);
+                const utcMs = instantOf(threadMessage.sent, threadMessage.zone);
                 return [
                     {
                         messageId: `s6-${String(seed)}-${String(i)}@example.test`,
                         inReplyTo: null,
                         references: [],
-                        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: m.zone.offsetMinutes, zoneKnown: true },
-                        from: [m.from],
-                        to: m.to,
-                        cc: m.cc ?? [],
+                        date: { utcMs, original: new Date(utcMs).toUTCString(), offsetMinutes: threadMessage.zone.offsetMinutes, zoneKnown: true },
+                        from: [threadMessage.from],
+                        to: threadMessage.to,
+                        cc: threadMessage.cc ?? [],
                         bcc: [],
-                        subject: m.subject,
+                        subject: threadMessage.subject,
                         bodyText: i === last ? lastBody : buildThread(messages.slice(0, i + 1)).body,
                         attachments: [],
                         source: { fileName: `s6-${String(i)}.eml`, sha256: (seed * 100 + i).toString(16).padStart(64, '0'), kind: 'eml' },
@@ -624,22 +634,25 @@ describe('PDF document model properties', () =>
             const rebuilt = rebuiltEntries(result)
                 .map((r) => r.id)
                 .filter(() => random() < 0.7);
-            const doc = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt });
-            const { parts } = noRepeat({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
-            for (const { e, position } of realEmails(doc))
+            const pdfDocument = buildPdfDocument(
+                { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt });
+            const { parts } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
+            for (const { email, position } of realEmails(pdfDocument))
             {
                 const body = result.messages[position]!.message.bodyText;
-                const where = `seed ${String(seed)} ${c.id} position ${String(position)}`;
+                const where = `seed ${String(seed)} ${threadCase.id} position ${String(position)}`;
                 const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
-                checked += expectOwnTextKept(body, plans[position], e, where, { doc, parts: parts.get(position) ?? [], places });
+                checked += expectOwnTextKept(body, plans[position], email, where, { pdfDocument, parts: parts.get(position) ?? [], places });
                 // How often own text sits inside a place the rule could cut (the case S6 guards).
-                for (const r of result.reconstructed)
+                for (const rebuiltEntry of result.reconstructed)
                 {
-                    if (r.sourceIndex !== result.messages[position]!.index)
+                    if (rebuiltEntry.sourceIndex !== result.messages[position]!.index)
                     {
                         continue;
                     }
-                    if (plans[position]!.ranges.some((x) => x.keep && x.reason === 'text' && x.start < r.rebuilt.end && r.rebuilt.headerEnd < x.end && /\S/u.test(body.slice(Math.max(x.start, r.rebuilt.headerEnd), Math.min(x.end, r.rebuilt.end)))))
+                    if (plans[position]!.ranges.some((x) => x.keep && x.reason === 'text' && x.start < rebuiltEntry.rebuilt.end
+                        && rebuiltEntry.rebuilt.headerEnd < x.end
+                        && /\S/u.test(body.slice(Math.max(x.start, rebuiltEntry.rebuilt.headerEnd), Math.min(x.end, rebuiltEntry.rebuilt.end)))))
                     {
                         inPlaces++;
                     }
@@ -677,10 +690,10 @@ describe('PDF document model properties', () =>
         const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Australia/Sydney', generatedAt: 0, strings };
         buildPdfDocument(input); // warm-up (formatter caches, JIT)
         const start = performance.now();
-        const doc = buildPdfDocument(input);
-        const ms = performance.now() - start;
-        console.log(`PDF document model: 2000 emails in ${ms.toFixed(1)} ms`);
-        expect(doc.emails).toHaveLength(2000);
-        expect(ms).toBeLessThan(1000);
+        const pdfDocument = buildPdfDocument(input);
+        const elapsedMs = performance.now() - start;
+        console.log(`PDF document model: 2000 emails in ${elapsedMs.toFixed(1)} ms`);
+        expect(pdfDocument.emails).toHaveLength(2000);
+        expect(elapsedMs).toBeLessThan(1000);
     });
 });

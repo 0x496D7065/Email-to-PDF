@@ -26,9 +26,9 @@ import {
 import type { PdfLine } from '../../Header/pdf-document-model';
 
 const linesText = (lines: readonly PdfLine[]): string => lines.map(lineText).join('\n');
-const cp = (codePoint: number): string => String.fromCodePoint(codePoint);
+const characterOf = (codePoint: number): string => String.fromCodePoint(codePoint);
 /** The tag characters spelling the ASCII text `s` (each character c as U+E0000 + c). */
-const tags = (s: string): string => [...s].map((ch) => cp(0xe0000 + ch.charCodeAt(0))).join('');
+const tags = (s: string): string => [...s].map((ch) => characterOf(0xe0000 + ch.charCodeAt(0))).join('');
 /** U+1F3F4, the tags of `s`, then the cancel tag U+E007F. */
 const flag = (s: string): string => `\u{1F3F4}${tags(s)}\u{E007F}`;
 
@@ -71,31 +71,31 @@ describe('sanitizeRuns: what stays as it is', () =>
     it('leaves ordinary text, accents, emoji and combining marks exactly as they are', () =>
     {
         const text = 'Café cafe\u{0301} \u{1F600} \u{1F469}\u{200D}\u{1F4BB} 中文 naïve \u{00A0} end';
-        const s = sanitizeRuns(text, 'body');
-        expect(s.replaced).toBe(0);
-        expect(s.runs).toEqual([{ role: 'body', text }]);
+        const sanitized = sanitizeRuns(text, 'body');
+        expect(sanitized.codedCount).toBe(0);
+        expect(sanitized.runs).toEqual([{ role: 'body', text }]);
         // The combining acute accent stays a separate code point (not composed).
-        expect([...lineText(s.runs)].filter((ch) => ch === '\u{0301}')).toHaveLength(1);
+        expect([...lineText(sanitized.runs)].filter((ch) => ch === '\u{0301}')).toHaveLength(1);
     });
 
     it('gives no run for an empty text', () =>
     {
-        expect(sanitizeRuns('', 'body')).toEqual({ runs: [], replaced: 0 });
+        expect(sanitizeRuns('', 'body')).toEqual({ runs: [], codedCount: 0 });
     });
 
     it('keeps U+FFFD, U+00A0 and U+007E', () =>
     {
-        expect(sanitizeRuns('\u{FFFD}\u{00A0}~', 'body').replaced).toBe(0);
+        expect(sanitizeRuns('\u{FFFD}\u{00A0}~', 'body').codedCount).toBe(0);
     });
 
     it('keeps group 2 (drawn as nothing) unchanged: joiners, direction marks, selectors, BOM, ZWSP', () =>
     {
         const group2 = [0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x061c, 0x034f, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0xfe00, 0xfe0f, 0xfeff, 0xe0100, 0xe01ef];
-        for (const c of group2)
+        for (const codePoint of group2)
         {
-            const text = `a${cp(c)}b`;
-            expect(sanitizeRuns(text, 'body'), c.toString(16)).toEqual({ runs: [{ role: 'body', text }], replaced: 0 });
-            expect(isDrawnAsNothing(c), c.toString(16)).toBe(true);
+            const text = `a${characterOf(codePoint)}b`;
+            expect(sanitizeRuns(text, 'body'), codePoint.toString(16)).toEqual({ runs: [{ role: 'body', text }], codedCount: 0 });
+            expect(isDrawnAsNothing(codePoint), codePoint.toString(16)).toBe(true);
         }
     });
 
@@ -105,13 +105,13 @@ describe('sanitizeRuns: what stays as it is', () =>
         const heart = '\u{2764}\u{FE0F}';
         const rainbowFlag = '\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}';
         const text = `${family} ${heart} ${rainbowFlag}`;
-        expect(sanitizeRuns(text, 'body')).toEqual({ runs: [{ role: 'body', text }], replaced: 0 });
+        expect(sanitizeRuns(text, 'body')).toEqual({ runs: [{ role: 'body', text }], codedCount: 0 });
     });
 
     it('keeps the soft hyphen (group 3)', () =>
     {
         expect(SOFT_HYPHEN).toBe(0xad);
-        expect(sanitizeRuns('hy\u{00AD}phen', 'body')).toEqual({ runs: [{ role: 'body', text: 'hy\u{00AD}phen' }], replaced: 0 });
+        expect(sanitizeRuns('hy\u{00AD}phen', 'body')).toEqual({ runs: [{ role: 'body', text: 'hy\u{00AD}phen' }], codedCount: 0 });
         expect(isDrawnAsNothing(SOFT_HYPHEN)).toBe(false);
     });
 
@@ -121,14 +121,15 @@ describe('sanitizeRuns: what stays as it is', () =>
         // U+1F3F4 + tags "gbeng" + cancel tag U+E007F, written out once by hand.
         const england = '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}';
         expect(flag('gbeng')).toBe(england);
-        for (const t of KEPT_FLAG_TAGS)
+        for (const flagTags of KEPT_FLAG_TAGS)
         {
-            const f = flag(t);
-            expect(sanitizeRuns(`a ${f} b`, 'body'), t).toEqual({ runs: [{ role: 'body', text: `a ${f} b` }], replaced: 0 });
-            expect(sanitizeRuns(`${f}${f}`, 'body').replaced, t).toBe(0);
-            expect(inlineRuns(`Re: ${f}`, 'field-value'), t).toEqual({ runs: [{ role: 'field-value', text: `Re: ${f}` }], replaced: 0 });
+            const flagText = flag(flagTags);
+            expect(sanitizeRuns(`a ${flagText} b`, 'body'), flagTags).toEqual({ runs: [{ role: 'body', text: `a ${flagText} b` }], codedCount: 0 });
+            expect(sanitizeRuns(`${flagText}${flagText}`, 'body').codedCount, flagTags).toBe(0);
+            expect(inlineRuns(`Re: ${flagText}`, 'field-value'), flagTags).toEqual(
+                { runs: [{ role: 'field-value', text: `Re: ${flagText}` }], codedCount: 0 });
         }
-        expect(sanitizeRuns(KEPT_FLAG_TAGS.map(flag).join(''), 'body').replaced).toBe(0);
+        expect(sanitizeRuns(KEPT_FLAG_TAGS.map(flag).join(''), 'body').codedCount).toBe(0);
     });
 });
 
@@ -136,21 +137,21 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
 {
     it('replaces NUL and every other C0 control except tab (expanded) with a code', () =>
     {
-        for (let c = 0; c < 0x20; c++)
+        for (let codePoint = 0; codePoint < 0x20; codePoint++)
         {
-            if (c === 9)
+            if (codePoint === 9)
             {
                 continue;
             }
-            const s = sanitizeRuns(`a${String.fromCharCode(c)}b`, 'body');
-            expect(s.replaced, String(c)).toBe(1);
-            expect(s.runs, String(c)).toEqual([
+            const sanitized = sanitizeRuns(`a${String.fromCharCode(codePoint)}b`, 'body');
+            expect(sanitized.codedCount, String(codePoint)).toBe(1);
+            expect(sanitized.runs, String(codePoint)).toEqual([
                 { role: 'body', text: 'a' },
-                { role: 'code', text: controlMarker(c) },
+                { role: 'code', text: controlMarker(codePoint) },
                 { role: 'body', text: 'b' },
             ]);
         }
-        expect(sanitizeRuns('a\tb', 'body')).toEqual({ runs: [{ role: 'body', text: 'a    b' }], replaced: 0 });
+        expect(sanitizeRuns('a\tb', 'body')).toEqual({ runs: [{ role: 'body', text: 'a    b' }], codedCount: 0 });
     });
 
     it("keeps the caller's own 'code' text apart from the markers next to it", () =>
@@ -162,28 +163,29 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
                 { role: 'code', text: 'cd' },
                 { role: 'code', text: '[U+0007]' },
             ],
-            replaced: 3,
+            codedCount: 3,
         });
     });
 
     it('replaces DEL and the C1 controls, NEL included', () =>
     {
-        for (let c = 0x7f; c <= 0x9f; c++)
+        for (let codePoint = 0x7f; codePoint <= 0x9f; codePoint++)
         {
-            const s = sanitizeRuns(String.fromCharCode(c), 'field-value');
-            expect(s, String(c)).toEqual({ runs: [{ role: 'code', text: controlMarker(c) }], replaced: 1 });
+            const sanitized = sanitizeRuns(String.fromCharCode(codePoint), 'field-value');
+            expect(sanitized, String(codePoint)).toEqual({ runs: [{ role: 'code', text: controlMarker(codePoint) }], codedCount: 1 });
         }
-        expect(sanitizeRuns(`a${cp(0x85)}b`, 'body').runs[1]).toEqual({ role: 'code', text: '[U+0085]' });
+        expect(sanitizeRuns(`a${characterOf(0x85)}b`, 'body').runs[1]).toEqual({ role: 'code', text: '[U+0085]' });
     });
 
     it('replaces the bidi embedding, override and isolate controls, not the direction marks', () =>
     {
-        for (const c of [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069])
+        for (const codePoint of [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069])
         {
-            expect(sanitizeRuns(cp(c), 'body'), c.toString(16)).toEqual({ runs: [{ role: 'code', text: controlMarker(c) }], replaced: 1 });
+            expect(sanitizeRuns(characterOf(codePoint), 'body'), codePoint.toString(16)).toEqual(
+                { runs: [{ role: 'code', text: controlMarker(codePoint) }], codedCount: 1 });
         }
         // LRM, RLM, ALM and the unassigned U+2065 stay.
-        expect(sanitizeRuns('\u{200E}\u{200F}\u{061C}\u{2065}', 'body').replaced).toBe(0);
+        expect(sanitizeRuns('\u{200E}\u{200F}\u{061C}\u{2065}', 'body').codedCount).toBe(0);
     });
 
     it('replaces the interlinear annotation characters', () =>
@@ -193,33 +195,33 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
             { role: 'body', text: 'x' },
             { role: 'code', text: '[U+FFFA][U+FFFB]' },
         ]);
-        expect(sanitizeRuns('\u{FFF8}\u{FFFC}', 'body').replaced).toBe(0);
+        expect(sanitizeRuns('\u{FFF8}\u{FFFC}', 'body').codedCount).toBe(0);
     });
 
     it('replaces the noncharacters of every plane, one code per code point', () =>
     {
-        expect(sanitizeRuns('\u{FFFE}\u{FFFF}', 'body')).toEqual({ runs: [{ role: 'code', text: '[U+FFFE][U+FFFF]' }], replaced: 2 });
-        for (let c = 0xfdd0; c <= 0xfdef; c++)
+        expect(sanitizeRuns('\u{FFFE}\u{FFFF}', 'body')).toEqual({ runs: [{ role: 'code', text: '[U+FFFE][U+FFFF]' }], codedCount: 2 });
+        for (let codePoint = 0xfdd0; codePoint <= 0xfdef; codePoint++)
         {
-            expect(sanitizeRuns(cp(c), 'body').replaced, c.toString(16)).toBe(1);
+            expect(sanitizeRuns(characterOf(codePoint), 'body').codedCount, codePoint.toString(16)).toBe(1);
         }
-        expect(sanitizeRuns('\u{FDCF}\u{FDF0}', 'body').replaced).toBe(0);
+        expect(sanitizeRuns('\u{FDCF}\u{FDF0}', 'body').codedCount).toBe(0);
         for (let plane = 1; plane <= 16; plane++)
         {
             for (const low of [0xfffe, 0xffff])
             {
-                const c = plane * 0x10000 + low;
-                expect(sanitizeRuns(`a${cp(c)}b`, 'body'), c.toString(16)).toEqual({
+                const codePoint = plane * 0x10000 + low;
+                expect(sanitizeRuns(`a${characterOf(codePoint)}b`, 'body'), codePoint.toString(16)).toEqual({
                     runs: [
                         { role: 'body', text: 'a' },
-                        { role: 'code', text: controlMarker(c) },
+                        { role: 'code', text: controlMarker(codePoint) },
                         { role: 'body', text: 'b' },
                     ],
-                    replaced: 1,
+                    codedCount: 1,
                 });
             }
             // Just below: an ordinary (or private use) code point.
-            expect(sanitizeRuns(cp(plane * 0x10000 + 0xfffd), 'body').replaced).toBe(0);
+            expect(sanitizeRuns(characterOf(plane * 0x10000 + 0xfffd), 'body').codedCount).toBe(0);
         }
         expect(sanitizeRuns('\u{1FFFE}', 'body').runs).toEqual([{ role: 'code', text: '[U+1FFFE]' }]);
         expect(sanitizeRuns('\u{10FFFF}', 'body').runs).toEqual([{ role: 'code', text: '[U+10FFFF]' }]);
@@ -234,10 +236,10 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
                 { role: 'code', text: '[U+E0001][U+E0065][U+E006E]' },
                 { role: 'body', text: 'b' },
             ],
-            replaced: 3,
+            codedCount: 3,
         });
-        expect(sanitizeRuns('\u{E0000}\u{E007F}', 'body').replaced).toBe(2);
-        expect(sanitizeRuns('\u{E0080}', 'body').replaced).toBe(0); // just outside the tag block
+        expect(sanitizeRuns('\u{E0000}\u{E007F}', 'body').codedCount).toBe(2);
+        expect(sanitizeRuns('\u{E0080}', 'body').codedCount).toBe(0); // just outside the tag block
     });
 
     it('codes the tags of a broken flag sequence and keeps the black flag', () =>
@@ -254,7 +256,7 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
             { role: 'code', text: '[U+E007F]' },
         ]);
         // A tag outside U+E0020..U+E007E inside the sequence breaks it.
-        expect(sanitizeRuns('\u{1F3F4}\u{E0067}\u{E0001}\u{E007F}', 'body').replaced).toBe(3);
+        expect(sanitizeRuns('\u{1F3F4}\u{E0067}\u{E0001}\u{E007F}', 'body').codedCount).toBe(3);
         // Tags after a kept flag are stray.
         expect(sanitizeRuns(`${flag('gbsct')}\u{E0067}`, 'body').runs).toEqual([
             { role: 'body', text: flag('gbsct') },
@@ -266,16 +268,16 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
     {
         /** Every tag of `s` as a code, as the reader sees it. */
         const coded = (s: string): string => [...tags(s)].map((ch) => controlMarker(ch.codePointAt(0)!)).join('');
-        /** U+1F3F4 + the tags of `s` (+ U+E007F unless `cancel` is false): one body run for the flag, then the codes. */
-        const expectCoded = (s: string, cancel = true): void =>
+        /** U+1F3F4 + the tags of `tagText` (+ U+E007F unless `cancel` is false): one body run for the flag, then the codes. */
+        const expectCoded = (tagText: string, cancel = true): void =>
         {
-            const text = `\u{1F3F4}${tags(s)}${cancel ? '\u{E007F}' : ''}`;
-            const n = [...s].length + (cancel ? 1 : 0);
-            const codes = coded(s) + (cancel ? '[U+E007F]' : '');
-            const expected = { runs: [{ role: 'body', text: 'x\u{1F3F4}' }, { role: 'code', text: codes }, { role: 'body', text: 'y' }], replaced: n };
-            expect(sanitizeRuns(`x${text}y`, 'body'), s).toEqual(expected);
+            const text = `\u{1F3F4}${tags(tagText)}${cancel ? '\u{E007F}' : ''}`;
+            const codedCount = [...tagText].length + (cancel ? 1 : 0);
+            const codes = coded(tagText) + (cancel ? '[U+E007F]' : '');
+            const expected = { runs: [{ role: 'body', text: 'x\u{1F3F4}' }, { role: 'code', text: codes }, { role: 'body', text: 'y' }], codedCount };
+            expect(sanitizeRuns(`x${text}y`, 'body'), tagText).toEqual(expected);
             // The same in a one-line field (subject, name).
-            expect(inlineRuns(`x${text}y`, 'field-value'), s).toEqual({
+            expect(inlineRuns(`x${text}y`, 'field-value'), tagText).toEqual({
                 ...expected,
                 runs: [{ role: 'field-value', text: 'x\u{1F3F4}' }, { role: 'code', text: codes }, { role: 'field-value', text: 'y' }],
             });
@@ -289,10 +291,10 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
         it('codes a very long payload, one code per tag', () =>
         {
             const payload = 'abcdefghij'.repeat(10_000);
-            const s = sanitizeRuns(`\u{1F3F4}${tags(payload)}\u{E007F}`, 'body');
-            expect(s.replaced).toBe(100_001);
-            expect(s.runs[0]).toEqual({ role: 'body', text: '\u{1F3F4}' });
-            expect(s.runs[1]!.role).toBe('code');
+            const sanitized = sanitizeRuns(`\u{1F3F4}${tags(payload)}\u{E007F}`, 'body');
+            expect(sanitized.codedCount).toBe(100_001);
+            expect(sanitized.runs[0]).toEqual({ role: 'body', text: '\u{1F3F4}' });
+            expect(sanitized.runs[1]!.role).toBe('code');
         });
 
         it('codes upper-case tags, space tags and a non-standard subdivision', () =>
@@ -314,8 +316,8 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
 
         it('codes tags with no black flag in front, even if they spell a kept flag', () =>
         {
-            expect(sanitizeRuns(`${tags('gbeng')}\u{E007F}`, 'body').replaced).toBe(6);
-            expect(inlineRuns(`Hi ${tags('hidden')}`, 'field-value').replaced).toBe(6);
+            expect(sanitizeRuns(`${tags('gbeng')}\u{E007F}`, 'body').codedCount).toBe(6);
+            expect(inlineRuns(`Hi ${tags('hidden')}`, 'field-value').codedCount).toBe(6);
         });
     });
 
@@ -329,13 +331,13 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
         expect(sanitizeRuns('\uDE00x', 'body').runs[0]).toEqual({ role: 'code', text: '[U+DE00]' });
         expect(sanitizeRuns('x\uD83D', 'body').runs[1]).toEqual({ role: 'code', text: '[U+D83D]' });
         // Two high surrogates then a low one: the first is lone, the second pairs.
-        const s = sanitizeRuns('\uD83D😀', 'body');
-        expect(s.replaced).toBe(1);
-        expect(s.runs).toEqual([
+        const sanitized = sanitizeRuns('\uD83D😀', 'body');
+        expect(sanitized.codedCount).toBe(1);
+        expect(sanitized.runs).toEqual([
             { role: 'code', text: '[U+D83D]' },
             { role: 'body', text: '\u{1F600}' },
         ]);
-        expect(sanitizeRuns('\u{1F600}', 'body').replaced).toBe(0);
+        expect(sanitizeRuns('\u{1F600}', 'body').codedCount).toBe(0);
         // A lone high surrogate before a tag pair, a lone low one after a noncharacter pair.
         expect(sanitizeRuns('\uD83D\u{E0041}', 'body').runs).toEqual([{ role: 'code', text: '[U+D83D][U+E0041]' }]);
         expect(sanitizeRuns('\u{1FFFE}\uDC00', 'body').runs).toEqual([{ role: 'code', text: '[U+1FFFE][U+DC00]' }]);
@@ -354,13 +356,13 @@ describe('sanitizeRuns: what becomes a code (group 1)', () =>
     it('never modifies its input and never leaves a line break in a run (U+2028 and U+2029 included)', () =>
     {
         const input = 'a\nb\rc\u0000\u{2028}d\u{2029}';
-        const s = sanitizeRuns(input, 'body');
-        expect(input).toBe(`a\nb\rc${cp(0)}${cp(0x2028)}d${cp(0x2029)}`);
-        for (const r of s.runs)
+        const sanitized = sanitizeRuns(input, 'body');
+        expect(input).toBe(`a\nb\rc${characterOf(0)}${characterOf(0x2028)}d${characterOf(0x2029)}`);
+        for (const run of sanitized.runs)
         {
-            expect(r.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
+            expect(run.text).not.toMatch(/[\n\r\u{2028}\u{2029}]/u);
         }
-        expect(s.replaced).toBe(5);
+        expect(sanitized.codedCount).toBe(5);
         expect(sanitizeRuns('\u{2029}', 'body').runs).toEqual([{ role: 'code', text: '[U+2029]' }]);
     });
 });
@@ -384,15 +386,16 @@ describe('the list of characters drawn as nothing (group 2)', () =>
             [0xe0100, 0xe01ef],
         ]);
         // The tags of the kept flags (and the cancel tag) are drawn as nothing.
-        for (const c of [0xe0020, 0xe0062, 0xe0067, 0xe007e, 0xe007f])
+        for (const codePoint of [0xe0020, 0xe0062, 0xe0067, 0xe007e, 0xe007f])
         {
-            expect(isDrawnAsNothing(c), c.toString(16)).toBe(true);
+            expect(isDrawnAsNothing(codePoint), codePoint.toString(16)).toBe(true);
         }
         expect(ZERO_WIDTH_SPACE).toBe(0x200b);
         expect(isDrawnAsNothing(ZERO_WIDTH_SPACE)).toBe(true);
-        for (const c of [0x20, 0xad, 0x200a, 0x2010, 0x2028, 0x202a, 0x205f, 0x2065, 0xfdff, 0xfe10, 0xfefe, 0xe001f, 0xe0080, 0xe00ff, 0xe01f0, 0x1f3f4])
+        for (const codePoint of [0x20, 0xad, 0x200a, 0x2010, 0x2028, 0x202a, 0x205f, 0x2065, 0xfdff, 0xfe10, 0xfefe, 0xe001f, 0xe0080, 0xe00ff,
+            0xe01f0, 0x1f3f4])
         {
-            expect(isDrawnAsNothing(c), c.toString(16)).toBe(false);
+            expect(isDrawnAsNothing(codePoint), codePoint.toString(16)).toBe(false);
         }
     });
 
@@ -400,10 +403,10 @@ describe('the list of characters drawn as nothing (group 2)', () =>
     {
         for (const [from, to] of DRAWN_AS_NOTHING)
         {
-            for (let c = from; c <= to; c++)
+            for (let codePoint = from; codePoint <= to; codePoint++)
             {
-                const coded = sanitizeRuns(cp(c), 'body').replaced;
-                expect(coded, c.toString(16)).toBe(c >= 0xe0020 && c <= 0xe007f ? 1 : 0);
+                const coded = sanitizeRuns(characterOf(codePoint), 'body').codedCount;
+                expect(coded, codePoint.toString(16)).toBe(codePoint >= 0xe0020 && codePoint <= 0xe007f ? 1 : 0);
             }
         }
     });
@@ -415,7 +418,7 @@ describe('inlineRuns', () =>
     {
         expect(inlineRuns('Re: one\r\n two\nthree\rfour\u{2028}five\u{2029}six', 'field-value')).toEqual({
             runs: [{ role: 'field-value', text: 'Re: one  two three four five six' }],
-            replaced: 0,
+            codedCount: 0,
         });
     });
 
@@ -427,7 +430,7 @@ describe('inlineRuns', () =>
                 { role: 'code', text: '[U+0007]' },
                 { role: 'field-value', text: '    b' },
             ],
-            replaced: 1,
+            codedCount: 1,
         });
     });
 });
@@ -436,8 +439,8 @@ describe('bodyLines', () =>
 {
     it('trims leading and trailing blank lines (white space only counts as blank)', () =>
     {
-        const b = bodyLines('\n  \n\t\nHello\n\nBye\n \n\n');
-        expect(b.lines).toEqual([[{ role: 'body', text: 'Hello' }], [], [{ role: 'body', text: 'Bye' }]]);
+        const bodyLinesResult = bodyLines('\n  \n\t\nHello\n\nBye\n \n\n');
+        expect(bodyLinesResult.lines).toEqual([[{ role: 'body', text: 'Hello' }], [], [{ role: 'body', text: 'Bye' }]]);
     });
 
     it('collapses 3 or more blank lines to 2, keeps 1 and 2 as they are', () =>
@@ -465,14 +468,14 @@ describe('bodyLines', () =>
 
     it('never treats a line with a control character as blank', () =>
     {
-        const b = bodyLines('\u0000\n\n\n\n\u000B\nx');
-        expect(linesText(b.lines)).toBe('[U+0000]\n\n\n[U+000B]\nx');
-        expect(b.replaced).toBe(2);
+        const bodyLinesResult = bodyLines('\u0000\n\n\n\n\u000B\nx');
+        expect(linesText(bodyLinesResult.lines)).toBe('[U+0000]\n\n\n[U+000B]\nx');
+        expect(bodyLinesResult.codedCount).toBe(2);
     });
 
     it('keeps a line of only U+200B (not white space); drops a line of only U+00A0 or U+FEFF (white space)', () =>
     {
-        const zwsp = cp(ZERO_WIDTH_SPACE);
+        const zwsp = characterOf(ZERO_WIDTH_SPACE);
         expect(bodyLines(`${zwsp}\na`).lines).toEqual([[{ role: 'body', text: zwsp }], [{ role: 'body', text: 'a' }]]);
         expect(bodyLines(`a\n${zwsp}`).lines).toEqual([[{ role: 'body', text: 'a' }], [{ role: 'body', text: zwsp }]]);
         expect(bodyLines('\u{FEFF}\n\u{00A0} \na\n\u{FEFF}').lines).toEqual([[{ role: 'body', text: 'a' }]]);
@@ -506,7 +509,7 @@ describe('bodyLines: quote marks removed (transform g, tasks 8.1 and 8.6)', () =
             ' Wide.',
             'Own again.',
         ]);
-        expect(bodyLines('> a')).toEqual({ lines: [[{ role: 'body', text: 'a' }]], replaced: 0 });
+        expect(bodyLines('> a')).toEqual({ lines: [[{ role: 'body', text: 'a' }]], codedCount: 0 });
     });
 
     it('removes the spaces before the marks and one space after the last mark, never more', () =>
@@ -621,33 +624,33 @@ describe('bodyLines: quote marks removed (transform g, tasks 8.1 and 8.6)', () =
 
     it('counts codes only in the text kept, and keeps a line with a code in its rest', () =>
     {
-        const b = bodyLines('> \u0007\n>\u0000>');
-        expect(b.lines.map(lineText)).toEqual(['[U+0007]', '[U+0000]>']);
-        expect(b.replaced).toBe(2);
+        const bodyLinesResult = bodyLines('> \u0007\n>\u0000>');
+        expect(bodyLinesResult.lines.map(lineText)).toEqual(['[U+0007]', '[U+0000]>']);
+        expect(bodyLinesResult.codedCount).toBe(2);
     });
 
     it('stops the prefix at a VT or FF, which stays visible as a code with everything after it as written', () =>
     {
         // Before the first mark: no prefix at all.
-        let b = bodyLines('\v> x');
-        expect(b.lines.map(lineText)).toEqual(['[U+000B]> x']);
-        expect(b.replaced).toBe(1);
+        let bodyLinesResult = bodyLines('\v> x');
+        expect(bodyLinesResult.lines.map(lineText)).toEqual(['[U+000B]> x']);
+        expect(bodyLinesResult.codedCount).toBe(1);
         // Between marks: the prefix ends before the control; the next ">" stays, in its place.
-        b = bodyLines('> \f> x');
-        expect(b.lines.map(lineText)).toEqual(['[U+000C]> x']);
-        expect(b.replaced).toBe(1);
+        bodyLinesResult = bodyLines('> \f> x');
+        expect(bodyLinesResult.lines.map(lineText)).toEqual(['[U+000C]> x']);
+        expect(bodyLinesResult.codedCount).toBe(1);
         // After the last mark: never part of the prefix anyway.
-        b = bodyLines('>\v');
-        expect(b.lines.map(lineText)).toEqual(['[U+000B]']);
-        expect(b.replaced).toBe(1);
+        bodyLinesResult = bodyLines('>\v');
+        expect(bodyLinesResult.lines.map(lineText)).toEqual(['[U+000B]']);
+        expect(bodyLinesResult.codedCount).toBe(1);
         // One space after the last mark is removed; a second space and the control stay.
-        b = bodyLines('>  \v');
-        expect(b.lines.map(lineText)).toEqual([' [U+000B]']);
-        expect(b.replaced).toBe(1);
+        bodyLinesResult = bodyLines('>  \v');
+        expect(bodyLinesResult.lines.map(lineText)).toEqual([' [U+000B]']);
+        expect(bodyLinesResult.codedCount).toBe(1);
         // Spaces before the control still count; a later VT is just text.
-        b = bodyLines('  >\v>\n> a\fb');
-        expect(b.lines.map(lineText)).toEqual(['[U+000B]>', 'a[U+000C]b']);
-        expect(b.replaced).toBe(2);
+        bodyLinesResult = bodyLines('  >\v>\n> a\fb');
+        expect(bodyLinesResult.lines.map(lineText)).toEqual(['[U+000B]>', 'a[U+000C]b']);
+        expect(bodyLinesResult.codedCount).toBe(2);
     });
 
     it('quotePrefixLength: only marks, whitespace and invisible characters, and nothing quote-like left after it', () =>
@@ -659,11 +662,11 @@ describe('bodyLines: quote marks removed (transform g, tasks 8.1 and 8.6)', () =
             seed = (seed * 48271) % 2147483647;
             return seed / 2147483647;
         };
-        for (let t = 0; t < 5000; t++)
+        for (let trial = 0; trial < 5000; trial++)
         {
             let line = '';
-            const n = Math.floor(next() * 8);
-            for (let k = 0; k < n; k++)
+            const pieceCount = Math.floor(next() * 8);
+            for (let k = 0; k < pieceCount; k++)
             {
                 line += parts[Math.floor(next() * parts.length)]!;
             }
@@ -713,24 +716,24 @@ describe('joinKeptLines', () =>
     it('gives the same text as joinKept', () =>
     {
         const body = 'own text\n> quoted\nsig\nforwarded';
-        const r = ranges([0, 9, true], [9, 18, false], [18, 22, true], [22, body.length, false]);
-        expect(joinKeptLines(body, r).text).toBe(joinKept(body, r));
+        const keptRanges = ranges([0, 9, true], [9, 18, false], [18, 22, true], [22, body.length, false]);
+        expect(joinKeptLines(body, keptRanges).text).toBe(joinKept(body, keptRanges));
     });
 });
 
 describe('joinKept', () =>
 {
     const body = 'own text\n> quoted\nsig\nforwarded';
-    const at = (s: string): [number, number] =>
+    const spanOf = (text: string): [number, number] =>
     {
-        const i = body.indexOf(s);
-        return [i, i + s.length];
+        const start = body.indexOf(text);
+        return [start, start + text.length];
     };
-    /** Keep [0, a), leave out [a, b), keep [b, length). */
-    const around = (text: string, a: number, b: number): KeptRange[] => [
-        { start: 0, end: a, keep: true },
-        { start: a, end: b, keep: false },
-        { start: b, end: text.length, keep: true },
+    /** Keep [0, leftOutStart), leave out [leftOutStart, leftOutEnd), keep [leftOutEnd, text.length). */
+    const around = (text: string, leftOutStart: number, leftOutEnd: number): KeptRange[] => [
+        { start: 0, end: leftOutStart, keep: true },
+        { start: leftOutStart, end: leftOutEnd, keep: false },
+        { start: leftOutEnd, end: text.length, keep: true },
     ];
 
     it('joins adjacent kept ranges with nothing in between', () =>
@@ -740,8 +743,8 @@ describe('joinKept', () =>
 
     it('inserts nothing where the left-out part ended a line', () =>
     {
-        const [qs, qe] = at('> quoted\n');
-        expect(joinKept(body, around(body, qs, qe))).toBe('own text\nsig\nforwarded');
+        const [quoteStart, quoteEnd] = spanOf('> quoted\n');
+        expect(joinKept(body, around(body, quoteStart, quoteEnd))).toBe('own text\nsig\nforwarded');
     });
 
     it('inserts nothing where the second kept part starts a line', () =>
@@ -777,13 +780,13 @@ describe('joinKept', () =>
 
     it('joins 200,000 separate kept pieces in well under a second', () =>
     {
-        const n = 200_000;
-        const text = 'ab'.repeat(n);
-        const ranges: KeptRange[] = Array.from({ length: 2 * n }, (_, i) => ({ start: i, end: i + 1, keep: i % 2 === 0 }));
+        const pieceCount = 200_000;
+        const text = 'ab'.repeat(pieceCount);
+        const ranges: KeptRange[] = Array.from({ length: 2 * pieceCount }, (_, i) => ({ start: i, end: i + 1, keep: i % 2 === 0 }));
         const start = performance.now();
-        const out = joinKept(text, ranges);
-        const ms = performance.now() - start;
-        expect(out).toBe(Array.from({ length: n }, () => 'a').join('\n'));
-        expect(ms).toBeLessThan(1000);
+        const joined = joinKept(text, ranges);
+        const elapsedMs = performance.now() - start;
+        expect(joined).toBe(Array.from({ length: pieceCount }, () => 'a').join('\n'));
+        expect(elapsedMs).toBeLessThan(1000);
     });
 });

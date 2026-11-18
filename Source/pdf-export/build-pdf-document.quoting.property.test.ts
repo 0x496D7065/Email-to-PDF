@@ -31,7 +31,7 @@ import { DEFAULT_THREAD_ANALYSIS_PARTS, analyzeThread, type ThreadAnalysisParts 
 import { detectQuotedOverlap } from '../thread-analysis/overlap-quote-detection';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, noRepeat } from './build-pdf-document';
+import { buildPdfDocument, applyNoRepeatRule } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
@@ -42,14 +42,14 @@ import type { EngineResult } from '../../Header/thread-analysis-result';
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number
 {
-    let a = seed >>> 0;
+    let state = seed >>> 0;
     return () =>
     {
-        a = (a + 0x6d2b79f5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        state = (state + 0x6d2b79f5) >>> 0;
+        let bits = state;
+        bits = Math.imul(bits ^ (bits >>> 15), bits | 1);
+        bits ^= bits + Math.imul(bits ^ (bits >>> 7), bits | 61);
+        return ((bits ^ (bits >>> 14)) >>> 0) / 4294967296;
     };
 }
 
@@ -61,12 +61,12 @@ type Dropped = 'files' | 'attached';
 
 /**
  * The parse results of a case: each email a file, or grouped with emails attached inside files (and some
- * copies dropped too). The emails of `missing` (indices into c.messages) are in no file at all: emails
+ * copies dropped too). The emails of `missing` (indices into testCase.messages) are in no file at all: emails
  * the reader did not add, whose text is only in the quotes of others (review round 4, M1).
  */
-function filesOf(c: QuotingCase, dropped: Dropped, random: () => number, missing: ReadonlySet<number>): ParseResult[]
+function filesOf(testCase: QuotingCase, dropped: Dropped, random: () => number, missing: ReadonlySet<number>): ParseResult[]
 {
-    const present = c.messages.filter((_, k) => !missing.has(k));
+    const present = testCase.messages.filter((_, k) => !missing.has(k));
     if (dropped === 'files')
     {
         return present.map((message) => ({ ok: true as const, message }));
@@ -75,20 +75,21 @@ function filesOf(c: QuotingCase, dropped: Dropped, random: () => number, missing
     // Copies: some attached emails with none attached inside them also dropped as files of their own
     // (merged with them by Message-ID). One holding others would come with its own attached list, as a
     // parser gives it; a file whose inline forwards were not read as attached emails is another case.
-    for (const f of [...files])
+    for (const file of [...files])
     {
-        if (!f.ok)
+        if (!file.ok)
         {
             continue;
         }
-        const list = f.attached ?? [];
-        list.forEach((a, k) =>
+        const list = file.attached ?? [];
+        list.forEach((attached, k) =>
         {
             if (list.some((x) => x.parent === k) || random() >= 0.2)
             {
                 return;
             }
-            files.push({ ok: true, message: { ...a.message, source: { fileName: `copy-${a.message.messageId ?? ''}.eml`, sha256: 'c'.repeat(64), kind: 'eml' } } });
+            files.push({ ok: true, message: { ...attached.message,
+                source: { fileName: `copy-${attached.message.messageId ?? ''}.eml`, sha256: 'c'.repeat(64), kind: 'eml' } } });
         });
     }
     return files;
@@ -122,37 +123,38 @@ const tally = (): Tally => ({ cases: 0, ticked: 0, lost: 0, twice: 0, unticked: 
  * Every sentence in it must be printed somewhere in the PDF: the no-repeat rule may move text to another
  * email, never lose it (review round 4, M1).
  */
-function keptTexts(out: EngineResult, positions: readonly number[], plans: readonly MessagePlan[], rebuilt: readonly number[], unticked: readonly number[]): Map<number, string>
+function keptTexts(result: EngineResult, positions: readonly number[], plans: readonly MessagePlan[], rebuilt: readonly number[],
+    unticked: readonly number[]): Map<number, string>
 {
-    const { parts } = noRepeat({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt, unticked });
+    const { parts } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt, unticked });
     const texts = new Map<number, string>();
     positions.forEach((position, k) =>
     {
-        const body = out.messages[position]!.message.bodyText;
+        const body = result.messages[position]!.message.bodyText;
         const onPurpose = (parts.get(position) ?? []).filter((p) => p.printedAs.kind === 'unticked' || p.printedAs.kind === 'unticked-attached');
         const pieces: string[] = [];
-        for (const r of plans[k]!.ranges)
+        for (const range of plans[k]!.ranges)
         {
-            if (!r.keep)
+            if (!range.keep)
             {
                 continue;
             }
-            let from = r.start;
-            for (const p of [...onPurpose].sort((a, b) => a.start - b.start))
+            let from = range.start;
+            for (const part of [...onPurpose].sort((a, b) => a.start - b.start))
             {
-                if (p.end <= from || p.start >= r.end)
+                if (part.end <= from || part.start >= range.end)
                 {
                     continue;
                 }
-                if (p.start > from)
+                if (part.start > from)
                 {
-                    pieces.push(body.slice(from, p.start));
+                    pieces.push(body.slice(from, part.start));
                 }
-                from = Math.min(p.end, r.end);
+                from = Math.min(part.end, range.end);
             }
-            if (from < r.end)
+            if (from < range.end)
             {
-                pieces.push(body.slice(from, r.end));
+                pieces.push(body.slice(from, range.end));
             }
         }
         texts.set(position, squash(pieces.map((piece) => referenceDisplayText(piece)).join('\n')));
@@ -161,22 +163,23 @@ function keptTexts(out: EngineResult, positions: readonly number[], plans: reado
 }
 
 /** One case: the folded PDF of a random selection, every own sentence checked; then the full text. */
-function check(c: QuotingCase, out: EngineResult, random: () => number, where: string, t: Tally, missing: ReadonlySet<number>): void
+function check(testCase: QuotingCase, result: EngineResult, random: () => number, where: string, tallyCounts: Tally,
+    missing: ReadonlySet<number>): void
 {
-    t.cases++;
-    t.attached += out.attached?.length ?? 0;
-    const positions = out.messages.map((_, k) => k).filter(() => random() < 0.75);
-    const ids = rebuiltEntries(out).map((r) => r.id);
+    tallyCounts.cases++;
+    tallyCounts.attached += result.attached?.length ?? 0;
+    const positions = result.messages.map((_, k) => k).filter(() => random() < 0.75);
+    const ids = rebuiltEntries(result).map((r) => r.id);
     const rebuilt = ids.filter(() => random() < 0.5);
     const unticked = ids.filter((id) => !rebuilt.includes(id));
     const plansOf = (policy: OutputPolicy): MessagePlan[] =>
         planOutput(
-            positions.map((p) => out.messages[p]!),
+            positions.map((p) => result.messages[p]!),
             policy,
         );
     const make = (policy: OutputPolicy) =>
         buildPdfDocument({
-            result: out,
+            result,
             positions,
             plans: plansOf(policy),
             policy,
@@ -186,80 +189,81 @@ function check(c: QuotingCase, out: EngineResult, random: () => number, where: s
             rebuilt,
             unticked,
         });
-    const doc = make(DEFAULT_OUTPUT_POLICY);
-    const bodies = doc.emails.map((e) => squash(bodyOf(e)));
+    const pdfDocument = make(DEFAULT_OUTPUT_POLICY);
+    const bodies = pdfDocument.emails.map((e) => squash(bodyOf(e)));
     const ticked = new Set(positions);
-    const tickedIds = new Set(positions.map((p) => out.messages[p]!.message.messageId));
+    const tickedIds = new Set(positions.map((p) => result.messages[p]!.message.messageId));
     // No text kept by a ticked email's plan is printed nowhere (the no-repeat rule only moves text).
-    const kept = [...keptTexts(out, positions, plansOf(DEFAULT_OUTPUT_POLICY), rebuilt, unticked).values()];
-    c.sentences.forEach((s, k) =>
+    const kept = [...keptTexts(result, positions, plansOf(DEFAULT_OUTPUT_POLICY), rebuilt, unticked).values()];
+    testCase.sentences.forEach((sentenceText, k) =>
     {
-        const sentence = squash(s);
+        const sentence = squash(sentenceText);
         if (!kept.some((text) => text.includes(sentence)))
         {
             return;
         }
         const isMissing = missing.has(k);
-        t.keptChecked++;
+        tallyCounts.keptChecked++;
         if (isMissing)
         {
-            t.missingChecked++;
+            tallyCounts.missingChecked++;
         }
         if (bodies.some((b) => b.includes(sentence)))
         {
             return;
         }
-        t.keptLost++;
+        tallyCounts.keptLost++;
         if (isMissing)
         {
-            t.missingLost++;
+            tallyCounts.missingLost++;
         }
-        t.failures.push(`${where}: email ${String(k)}${isMissing ? ' (not added)' : ''}: kept by a ticked email's plan, printed nowhere`);
+        tallyCounts.failures.push(`${where}: email ${String(k)}${isMissing ? ' (not added)' : ''}: kept by a ticked email's plan, printed nowhere`);
     });
-    c.messages.forEach((m, k) =>
+    testCase.messages.forEach((message, k) =>
     {
         if (missing.has(k))
         {
             return;
         }
-        const sentence = squash(c.sentences[k]!);
+        const sentence = squash(testCase.sentences[k]!);
         const times = bodies.filter((b) => b.includes(sentence)).length;
-        const position = out.messages.findIndex((x) => x.message.messageId === m.messageId);
+        const position = result.messages.findIndex((x) => x.message.messageId === message.messageId);
         if (ticked.has(position))
         {
-            t.ticked++;
+            tallyCounts.ticked++;
             if (times === 0)
             {
-                t.lost++;
-                t.failures.push(`${where}: email ${String(k)} (ticked) printed nowhere`);
+                tallyCounts.lost++;
+                tallyCounts.failures.push(`${where}: email ${String(k)} (ticked) printed nowhere`);
             }
             if (times > 1)
             {
-                t.twice++;
+                tallyCounts.twice++;
             }
         }
         else
         {
-            t.unticked++;
+            tallyCounts.unticked++;
             // Quoted in the own text of a ticked email (not only in the block of an email holding it): it may be printed there.
-            const quoted = c.messages.some((x, j) => j !== k && tickedIds.has(x.messageId) && squash(referenceDisplayText(x.bodyText)).includes(sentence));
+            const quoted = testCase.messages.some((x, j) => j !== k && tickedIds.has(x.messageId)
+                && squash(referenceDisplayText(x.bodyText)).includes(sentence));
             if (!quoted && times !== 0)
             {
-                t.failures.push(`${where}: email ${String(k)} (unticked, quoted by no ticked email) printed ${String(times)} times`);
+                tallyCounts.failures.push(`${where}: email ${String(k)} (unticked, quoted by no ticked email) printed ${String(times)} times`);
             }
         }
     });
     // "Print full original text": every ticked email whole.
     const full = make({ ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true });
-    for (const e of full.emails)
+    for (const email of full.emails)
     {
-        if (e.position === null)
+        if (email.position === null)
         {
             continue;
         }
-        if (bodyOf(e) !== referenceDisplayText(out.messages[e.position]!.message.bodyText))
+        if (bodyOf(email) !== referenceDisplayText(result.messages[email.position]!.message.bodyText))
         {
-            t.failures.push(`${where}: full text of position ${String(e.position)} not whole`);
+            tallyCounts.failures.push(`${where}: full text of position ${String(email.position)} not whole`);
         }
     }
 }
@@ -272,27 +276,27 @@ const NO_HOLDS: ThreadAnalysisParts = {
 
 function run(dropped: Dropped, seeds: number, quoteShare: number, parts: ThreadAnalysisParts = DEFAULT_THREAD_ANALYSIS_PARTS, label = ''): Tally
 {
-    const t = tally();
+    const tallyCounts = tally();
     for (let seed = 1; seed <= seeds; seed++)
     {
         const random = makeRandom(seed * 7 + Math.round(quoteShare * 100));
-        const c = quotingCase(random, `q${String(seed)}`, { quoteShare });
+        const testCase = quotingCase(random, `q${String(seed)}`, { quoteShare });
         // Some emails not added at all (review round 4, M1): never all of them.
         const missing = new Set<number>();
-        c.messages.forEach((_, k) =>
+        testCase.messages.forEach((_, k) =>
         {
-            if (random() < 0.25 && missing.size + 1 < c.messages.length)
+            if (random() < 0.25 && missing.size + 1 < testCase.messages.length)
             {
                 missing.add(k);
             }
         });
-        const out = analyzeThread(filesOf(c, dropped, random, missing), parts);
-        check(c, out, random, `${dropped}${label} share ${String(quoteShare)} seed ${String(seed)}`, t, missing);
+        const result = analyzeThread(filesOf(testCase, dropped, random, missing), parts);
+        check(testCase, result, random, `${dropped}${label} share ${String(quoteShare)} seed ${String(seed)}`, tallyCounts, missing);
     }
     console.log(
-        `quoting random cases (${dropped}${label}, quote share ${String(quoteShare)}): ${String(t.cases)} cases, ${String(t.attached)} attached emails, ${String(t.ticked)} ticked emails checked: lost ${String(t.lost)}, printed twice ${String(t.twice)}; ${String(t.unticked)} unticked; kept text checked ${String(t.keptChecked)}, printed nowhere ${String(t.keptLost)}; quoted text of emails not added checked ${String(t.missingChecked)}, printed nowhere ${String(t.missingLost)}`,
+        `quoting random cases (${dropped}${label}, quote share ${String(quoteShare)}): ${String(tallyCounts.cases)} cases, ${String(tallyCounts.attached)} attached emails, ${String(tallyCounts.ticked)} ticked emails checked: lost ${String(tallyCounts.lost)}, printed twice ${String(tallyCounts.twice)}; ${String(tallyCounts.unticked)} unticked; kept text checked ${String(tallyCounts.keptChecked)}, printed nowhere ${String(tallyCounts.keptLost)}; quoted text of emails not added checked ${String(tallyCounts.missingChecked)}, printed nowhere ${String(tallyCounts.missingLost)}`,
     );
-    return t;
+    return tallyCounts;
 }
 
 describe('collapse, never delete, with emails quoting each other: random cases (task 8.13b-3, review round 3, M2)', () =>
@@ -301,26 +305,26 @@ describe('collapse, never delete, with emails quoting each other: random cases (
     {
         it(`plain files, quote share ${String(share)}: every ticked email's own text, and all text kept by a ticked email's plan, printed at least once (600 cases)`, () =>
         {
-            const t = run('files', 600, share);
-            expect(t.failures.slice(0, 10)).toEqual([]);
-            expect(t.lost).toBe(0);
-            expect(t.keptLost).toBe(0);
-            expect(t.missingLost).toBe(0);
-            expect(t.ticked).toBeGreaterThan(1000);
-            expect(t.unticked).toBeGreaterThan(300);
+            const tallyCounts = run('files', 600, share);
+            expect(tallyCounts.failures.slice(0, 10)).toEqual([]);
+            expect(tallyCounts.lost).toBe(0);
+            expect(tallyCounts.keptLost).toBe(0);
+            expect(tallyCounts.missingLost).toBe(0);
+            expect(tallyCounts.ticked).toBeGreaterThan(1000);
+            expect(tallyCounts.unticked).toBeGreaterThan(300);
         }, 120_000);
 
         it(`emails attached inside files, quote share ${String(share)}: every ticked email's own text, and all text kept by a ticked email's plan (quoted history of emails not added included), printed at least once (600 cases)`, () =>
         {
-            const t = run('attached', 600, share);
-            expect(t.failures.slice(0, 10)).toEqual([]);
-            expect(t.lost).toBe(0);
-            expect(t.keptLost).toBe(0);
-            expect(t.missingLost).toBe(0);
-            expect(t.attached).toBeGreaterThan(600);
-            expect(t.ticked).toBeGreaterThan(1000);
+            const tallyCounts = run('attached', 600, share);
+            expect(tallyCounts.failures.slice(0, 10)).toEqual([]);
+            expect(tallyCounts.lost).toBe(0);
+            expect(tallyCounts.keptLost).toBe(0);
+            expect(tallyCounts.missingLost).toBe(0);
+            expect(tallyCounts.attached).toBeGreaterThan(600);
+            expect(tallyCounts.ticked).toBeGreaterThan(1000);
             // The cases must really hold quoted history of emails not added, kept inside forwards.
-            expect(t.missingChecked).toBeGreaterThan(15);
+            expect(tallyCounts.missingChecked).toBeGreaterThan(15);
         }, 120_000);
     }
 
@@ -347,30 +351,30 @@ describe('collapse, never delete, with emails quoting each other: random cases (
                 warnings: [],
             });
         }
-        const out = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
-        const positions = out.messages.map((_, k) => k);
-        const plans = planOutput(out.messages, DEFAULT_OUTPUT_POLICY);
-        const input = { result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings };
+        const result = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
+        const positions = result.messages.map((_, k) => k);
+        const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
+        const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings };
         buildPdfDocument(input); // warm-up
         const start = performance.now();
-        const doc = buildPdfDocument(input);
-        const ms = performance.now() - start;
-        const restored = noRepeat({ ...input, rebuilt: [] }).restored.size;
-        console.log(`quoting speed case: 2000 emails in ${ms.toFixed(1)} ms, ${String(restored)} emails with restored text`);
-        expect(doc.emails).toHaveLength(2000);
-        const bodies = doc.emails.map((e) => squash(bodyOf(e)));
+        const pdfDocument = buildPdfDocument(input);
+        const elapsedMs = performance.now() - start;
+        const restored = applyNoRepeatRule({ ...input, rebuilt: [] }).restored.size;
+        console.log(`quoting speed case: 2000 emails in ${elapsedMs.toFixed(1)} ms, ${String(restored)} emails with restored text`);
+        expect(pdfDocument.emails).toHaveLength(2000);
+        const bodies = pdfDocument.emails.map((e) => squash(bodyOf(e)));
         for (let k = 0; k < 2000; k += 97)
         {
             expect(bodies.some((b) => b.includes(squash(quotingSentence(`speed${String(k)}`))))).toBe(true);
         }
-        expect(ms).toBeLessThan(1500);
+        expect(elapsedMs).toBeLessThan(1500);
     }, 120_000);
 
     it('the PRINTED SOMEWHERE check alone (the engine\'s holder links undone): still at least once (400 cases with attached emails)', () =>
     {
-        const t = run('attached', 400, 0.5, NO_HOLDS, ' no holds');
-        expect(t.failures.slice(0, 10)).toEqual([]);
-        expect(t.lost).toBe(0);
-        expect(t.keptLost).toBe(0);
+        const tallyCounts = run('attached', 400, 0.5, NO_HOLDS, ' no holds');
+        expect(tallyCounts.failures.slice(0, 10)).toEqual([]);
+        expect(tallyCounts.lost).toBe(0);
+        expect(tallyCounts.keptLost).toBe(0);
     }, 120_000);
 });

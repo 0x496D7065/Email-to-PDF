@@ -36,25 +36,25 @@ import type { EngineResult } from '../../Header/thread-analysis-result';
 /** mulberry32: a tiny seeded generator, returns numbers in [0, 1). */
 function makeRandom(seed: number): () => number
 {
-    let a = seed >>> 0;
+    let state = seed >>> 0;
     return () =>
     {
-        a = (a + 0x6d2b79f5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        state = (state + 0x6d2b79f5) >>> 0;
+        let bits = state;
+        bits = Math.imul(bits ^ (bits >>> 15), bits | 1);
+        bits ^= bits + Math.imul(bits ^ (bits >>> 7), bits | 61);
+        return ((bits ^ (bits >>> 14)) >>> 0) / 4294967296;
     };
 }
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
-const eml = createEmlParser({ htmlToText: stub });
+const emlParser = createEmlParser({ htmlToText: stub });
 const strings = createPdfStrings('en');
 
 const plain = (text: string): string => crlf('Content-Type: text/plain; charset=utf-8', '', text);
-const mixed = (b: string, ...parts: string[]): string =>
-    crlf(`Content-Type: multipart/mixed; boundary="${b}"`, '', ...parts.flatMap((p) => [`--${b}`, p]), `--${b}--`, '');
+const mixed = (boundary: string, ...parts: string[]): string =>
+    crlf(`Content-Type: multipart/mixed; boundary="${boundary}"`, '', ...parts.flatMap((p) => [`--${boundary}`, p]), `--${boundary}--`, '');
 const rfc822 = (message: string, asFile: boolean, name: string): string =>
     crlf('Content-Type: message/rfc822', ...(asFile ? [`Content-Disposition: attachment; filename="${name}.eml"`] : []), '', message);
 
@@ -73,41 +73,42 @@ const WORDS = ['north', 'warehouse', 'shelf', 'label', 'oak', 'desk', 'invoice',
 /** The sentence of its own of email `name`: long enough to be matched as a quote, and unique. */
 function sentenceOf(name: string): string
 {
-    let h = 0;
-    for (const c of name)
+    let hash = 0;
+    for (const character of name)
     {
-        h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+        hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
     }
-    const words = Array.from({ length: 10 }, (_, k) => WORDS[(h >>> (k * 3)) % WORDS.length]!);
+    const words = Array.from({ length: 10 }, (_, k) => WORDS[(hash >>> (k * 3)) % WORDS.length]!);
     return `Own words of ${name}: the ${words.join(' ')} were checked again this week.`;
 }
 
-/** The .eml text of `s` (its attached emails inside it). */
-function emlOf(s: Spec): string
+/** The .eml text of `spec` (its attached emails inside it). */
+function emlOf(spec: Spec): string
 {
     const head = [
-        `From: ${s.name} <${s.name}@example.test>`,
+        `From: ${spec.name} <${spec.name}@example.test>`,
         'To: Team <team@example.test>',
-        ...(s.date === null ? [] : [`Date: ${s.date}`]),
-        `Subject: ${s.name} subject`,
-        `Message-ID: <${s.name}@example.test>`,
-        ...(s.inReplyTo === null ? [] : [`In-Reply-To: <${s.inReplyTo}@example.test>`]),
+        ...(spec.date === null ? [] : [`Date: ${spec.date}`]),
+        `Subject: ${spec.name} subject`,
+        `Message-ID: <${spec.name}@example.test>`,
+        ...(spec.inReplyTo === null ? [] : [`In-Reply-To: <${spec.inReplyTo}@example.test>`]),
         'MIME-Version: 1.0',
     ];
-    if (s.children.length === 0)
+    if (spec.children.length === 0)
     {
-        return crlf(...head, 'Content-Type: text/plain; charset=utf-8', '', sentenceOf(s.name));
+        return crlf(...head, 'Content-Type: text/plain; charset=utf-8', '', sentenceOf(spec.name));
     }
-    return crlf(...head, mixed(`b-${s.name}`, plain(sentenceOf(s.name)), ...s.children.map((c) => rfc822(emlOf(c.spec), c.asFile, c.spec.name))));
+    return crlf(...head,
+        mixed(`b-${spec.name}`, plain(sentenceOf(spec.name)), ...spec.children.map((c) => rfc822(emlOf(c.spec), c.asFile, c.spec.name))));
 }
 
 function randomDate(random: () => number): string | null
 {
     const kind = random();
-    const hh = String(8 + Math.floor(random() * 10)).padStart(2, '0');
-    const mm = String(Math.floor(random() * 60)).padStart(2, '0');
+    const hours = String(8 + Math.floor(random() * 10)).padStart(2, '0');
+    const minutes = String(Math.floor(random() * 60)).padStart(2, '0');
     const day = 1 + Math.floor(random() * 3);
-    const when = `${['Sun', 'Mon', 'Tue'][day - 1]!}, ${String(day)} Jun 2025 ${hh}:${mm}:00`;
+    const when = `${['Sun', 'Mon', 'Tue'][day - 1]!}, ${String(day)} Jun 2025 ${hours}:${minutes}:00`;
     if (kind < 0.45)
     {
         return `${when} +0200`;
@@ -129,36 +130,36 @@ interface Case
     readonly all: Spec[];
 }
 
-function randomCase(random: () => number, id: number): Case
+function randomCase(random: () => number, caseId: number): Case
 {
     const all: Spec[] = [];
     const make = (depth: number): Spec =>
     {
-        const s: Spec = { name: `c${String(id)}e${String(all.length)}`, date: randomDate(random), inReplyTo: null, children: [] };
-        all.push(s);
+        const spec: Spec = { name: `c${String(caseId)}e${String(all.length)}`, date: randomDate(random), inReplyTo: null, children: [] };
+        all.push(spec);
         const kids = depth >= 3 ? 0 : Math.floor(random() * (depth === 0 ? 3 : 2.4));
         for (let k = 0; k < kids; k++)
         {
-            s.children.push({ spec: make(depth + 1), asFile: random() < 0.3 });
+            spec.children.push({ spec: make(depth + 1), asFile: random() < 0.3 });
         }
-        return s;
+        return spec;
     };
     const roots = Array.from({ length: 1 + Math.floor(random() * 2.5) }, () => make(0));
     // Random In-Reply-To links, to any email of the case (an attached one too, either way round).
-    for (const s of all)
+    for (const spec of all)
     {
         if (random() < 0.4)
         {
-            (s as { inReplyTo: string | null }).inReplyTo = all[Math.floor(random() * all.length)]!.name;
+            (spec as { inReplyTo: string | null }).inReplyTo = all[Math.floor(random() * all.length)]!.name;
         }
     }
     const files: string[] = roots.map(emlOf);
     // Copies: attached emails also dropped on their own, a whole file twice.
-    for (const s of all)
+    for (const spec of all)
     {
-        if (!roots.includes(s) && random() < 0.25)
+        if (!roots.includes(spec) && random() < 0.25)
         {
-            files.push(emlOf(s));
+            files.push(emlOf(spec));
         }
     }
     if (random() < 0.1)
@@ -179,7 +180,7 @@ const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 
 async function parseAll(files: readonly string[]): Promise<ParseResult[]>
 {
-    return Promise.all(files.map((text, k) => eml.parse({ name: `f${String(k)}.eml`, bytes: new TextEncoder().encode(text) })));
+    return Promise.all(files.map((text, k) => emlParser.parse({ name: `f${String(k)}.eml`, bytes: new TextEncoder().encode(text) })));
 }
 
 interface Tally
@@ -191,29 +192,30 @@ interface Tally
     failures: string[];
 }
 
-/** Builds the folded PDF of a random selection of `out` and checks every email's own sentence. */
-function check(out: EngineResult, random: () => number, where: string, tally: Tally): void
+/** Builds the folded PDF of a random selection of `result` and checks every email's own sentence. */
+function check(result: EngineResult, random: () => number, where: string, tally: Tally): void
 {
-    const positions = out.messages.map((_, k) => k).filter(() => random() < 0.75);
+    const positions = result.messages.map((_, k) => k).filter(() => random() < 0.75);
     const plans = planOutput(
-        positions.map((p) => out.messages[p]!),
+        positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    const ids = rebuiltEntries(out).map((r) => r.id);
+    const ids = rebuiltEntries(result).map((r) => r.id);
     const rebuilt = ids.filter(() => random() < 0.5);
     const unticked = ids.filter((id) => !rebuilt.includes(id));
-    const doc: PdfDocument = buildPdfDocument({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt, unticked });
-    const bodies = doc.emails.map((e) => squash(bodyOf(e)));
+    const pdfDocument: PdfDocument = buildPdfDocument(
+        { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt, unticked });
+    const bodies = pdfDocument.emails.map((e) => squash(bodyOf(e)));
     const ticked = new Set(positions);
-    out.messages.forEach((m, position) =>
+    result.messages.forEach((engineMessage, position) =>
     {
-        const name = m.message.subject.replace(/ subject$/u, '');
+        const name = engineMessage.message.subject.replace(/ subject$/u, '');
         const sentence = squash(sentenceOf(name));
         const times = bodies.filter((b) => b.includes(sentence)).length;
         if (ticked.has(position))
         {
             tally.checked++;
-            if (m.message.source.attachedPath !== undefined || m.duplicates.some((d) => d.source.attachedPath !== undefined))
+            if (engineMessage.message.source.attachedPath !== undefined || engineMessage.duplicates.some((d) => d.source.attachedPath !== undefined))
             {
                 tally.attachedChecked++;
             }
@@ -252,13 +254,13 @@ describe('collapse, never delete, with attached emails: random cases (task 8.13b
         for (let seed = 1; seed <= 1000; seed++)
         {
             const random = makeRandom(seed);
-            const c = randomCase(random, seed);
-            const out = analyzeThread(await parseAll(c.files));
-            if ((out.attached?.length ?? 0) > 0)
+            const testCase = randomCase(random, seed);
+            const result = analyzeThread(await parseAll(testCase.files));
+            if ((result.attached?.length ?? 0) > 0)
             {
                 withAttached++;
             }
-            check(out, random, `seed ${String(seed)}`, tally);
+            check(result, random, `seed ${String(seed)}`, tally);
         }
         console.log(`attached random cases: 1000 cases (${String(withAttached)} with attached emails), ${String(tally.checked)} ticked emails checked (${String(tally.attachedChecked)} attached), ${String(tally.unticked)} unticked, printed twice: ${String(tally.twice)}`);
         expect(tally.failures.slice(0, 10)).toEqual([]);
@@ -275,9 +277,9 @@ describe('collapse, never delete, with attached emails: random cases (task 8.13b
         for (let seed = 1; seed <= 400; seed++)
         {
             const random = makeRandom(seed);
-            const c = randomCase(random, seed);
-            const out = analyzeThread(await parseAll(c.files), NO_HOLDS);
-            check(out, random, `seed ${String(seed)} (no holds)`, tally);
+            const testCase = randomCase(random, seed);
+            const result = analyzeThread(await parseAll(testCase.files), NO_HOLDS);
+            check(result, random, `seed ${String(seed)} (no holds)`, tally);
         }
         console.log(`attached random cases, safety net alone: 400 cases, ${String(tally.checked)} ticked emails checked, printed twice: ${String(tally.twice)}`);
         expect(tally.failures.slice(0, 10)).toEqual([]);

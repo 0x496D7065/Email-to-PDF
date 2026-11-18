@@ -20,7 +20,7 @@ import type { HtmlToTextResult } from '../email-reading/html-to-text';
 import { createMsgParser } from '../email-reading/msg-parser';
 import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, FILE_CHAIN_SEPARATOR, noRepeat } from './build-pdf-document';
+import { buildPdfDocument, FILE_CHAIN_SEPARATOR, applyNoRepeatRule } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
@@ -30,13 +30,13 @@ import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const crlf = (...lines: string[]): string => lines.join('\r\n');
 const stub = (html: string): HtmlToTextResult => ({ text: `[html ${String(html.length)}]`, truncated: false });
-const eml = createEmlParser({ htmlToText: stub });
-const msg = createMsgParser({ htmlToText: stub });
+const emlParser = createEmlParser({ htmlToText: stub });
+const msgParser = createMsgParser({ htmlToText: stub });
 const strings = createPdfStrings('en');
 
 const plain = (text: string): string => crlf('Content-Type: text/plain; charset=utf-8', '', text);
-const mixed = (b: string, ...parts: string[]): string =>
-    crlf(`Content-Type: multipart/mixed; boundary="${b}"`, '', ...parts.flatMap((p) => [`--${b}`, p]), `--${b}--`, '');
+const mixed = (boundary: string, ...parts: string[]): string =>
+    crlf(`Content-Type: multipart/mixed; boundary="${boundary}"`, '', ...parts.flatMap((p) => [`--${boundary}`, p]), `--${boundary}--`, '');
 const rfc822 = (message: string, disposition?: string): string =>
     crlf('Content-Type: message/rfc822', ...(disposition === undefined ? [] : [`Content-Disposition: ${disposition}`]), '', message);
 const head = (name: string, date: string | null): string[] => [
@@ -58,41 +58,42 @@ const TUE = 'Tue, 3 Jun 2025 14:00:00 +0200';
 
 async function parseEml(name: string, text: string): Promise<ParseResult>
 {
-    const r = await eml.parse({ name, bytes: new TextEncoder().encode(text) });
-    if (!r.ok)
+    const parseResult = await emlParser.parse({ name, bytes: new TextEncoder().encode(text) });
+    if (!parseResult.ok)
     {
-        throw new Error(r.detail);
+        throw new Error(parseResult.detail);
     }
-    return r;
+    return parseResult;
 }
 
 const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 const fileRow = (e: PdfEmail): string[] => e.fields.find((f) => f.label === strings.fileLabel)!.value.map(lineText);
 
-/** The PDF model of `out` with the emails at `positions` (default: all). */
-function docOf(out: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = out.messages.map((_, k) => k)): PdfDocument
+/** The PDF model of `result` with the emails at `positions` (default: all). */
+function pdfDocumentOf(result: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = result.messages.map((_, k) => k)): PdfDocument
 {
     const plans = planOutput(
-        positions.map((p) => out.messages[p]!),
+        positions.map((p) => result.messages[p]!),
         policy,
     );
-    return buildPdfDocument({ result: out, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 10), strings });
+    return buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 10), strings });
 }
 /** The preview's labels for the same input (Source/web-page-logic/printed-elsewhere.ts). */
-function labelsOf(out: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = out.messages.map((_, k) => k))
+function labelsOf(result: EngineResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = result.messages.map((_, k) => k))
 {
     const plans = planOutput(
-        positions.map((p) => out.messages[p]!),
+        positions.map((p) => result.messages[p]!),
         policy,
     );
-    return printedElsewhereRanges({ result: out, positions, plans, policy, rebuilt: [] });
+    return printedElsewhereRanges({ result, positions, plans, policy, rebuilt: [] });
 }
-const emailOf = (d: PdfDocument, out: EngineResult, subject: string): PdfEmail | undefined =>
-    d.emails.find((e) => e.position !== null && out.messages[e.position]?.message.subject === subject);
-const positionOf = (out: EngineResult, subject: string): number => out.messages.findIndex((m) => m.message.subject === subject);
+const emailOf = (pdfDocument: PdfDocument, result: EngineResult, subject: string): PdfEmail | undefined =>
+    pdfDocument.emails.find((e) => e.position !== null && result.messages[e.position]?.message.subject === subject);
+const positionOf = (result: EngineResult, subject: string): number => result.messages.findIndex((m) => m.message.subject === subject);
 /** How many emails of the PDF print `text`. */
-const printedIn = (d: PdfDocument, text: string): number => d.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
+const printedIn = (pdfDocument: PdfDocument, text: string): number =>
+    pdfDocument.emails.filter((e) => squash(bodyOf(e)).includes(squash(text))).length;
 
 describe('PDF model: an inline forward (.eml) printed as an email of its own', () =>
 {
@@ -101,62 +102,62 @@ describe('PDF model: an inline forward (.eml) printed as an email of its own', (
 
     it('folded: its own entry and page, its block cut from the parent ("printed as" it), never printed twice', async () =>
     {
-        const out = await build();
-        const d = docOf(out);
-        expect(d.emails).toHaveLength(2);
-        expect(d.index.entries.map((e) => e.number)).toEqual([1, 2]);
-        const parent = emailOf(d, out, 'alice subject')!;
-        const attached = emailOf(d, out, 'bob subject')!;
+        const result = await build();
+        const pdfDocument = pdfDocumentOf(result);
+        expect(pdfDocument.emails).toHaveLength(2);
+        expect(pdfDocument.index.entries.map((e) => e.number)).toEqual([1, 2]);
+        const parent = emailOf(pdfDocument, result, 'alice subject')!;
+        const attached = emailOf(pdfDocument, result, 'bob subject')!;
         expect(squash(bodyOf(parent))).toBe(squash(OWN));
         expect(bodyOf(parent)).not.toContain(FORWARDED_SEPARATOR);
         expect(squash(bodyOf(attached))).toContain(squash(A_BODY));
-        expect(printedIn(d, A_BODY)).toBe(1);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(1);
         expect(parent.flags.printedElsewhere).toBe(true);
         // Q5: the File row names the file, then the attachment (no name: its number).
         expect(fileRow(parent)).toEqual(['parent.eml']);
         expect(fileRow(attached)).toEqual([`parent.eml${FILE_CHAIN_SEPARATOR}(attached email 1)`]);
         // The preview labels the same part, with the email it is printed as.
-        const ranges = labelsOf(out).get(positionOf(out, 'alice subject'))!;
+        const ranges = labelsOf(result).get(positionOf(result, 'alice subject'))!;
         const cut = ranges.filter((r) => r.printedAs !== null);
-        expect(cut.map((r) => r.printedAs)).toEqual([{ kind: 'email', position: positionOf(out, 'bob subject'), number: attached.number }]);
-        const body = out.messages[positionOf(out, 'alice subject')]!.message.bodyText;
+        expect(cut.map((r) => r.printedAs)).toEqual([{ kind: 'email', position: positionOf(result, 'bob subject'), number: attached.number }]);
+        const body = result.messages[positionOf(result, 'alice subject')]!.message.bodyText;
         expect(body.slice(cut[0]!.start, cut[0]!.end).startsWith(FORWARDED_SEPARATOR)).toBe(true);
     });
 
     it('unticked (Q3): left out of the PDF and out of its parent too, labelled so in the preview', async () =>
     {
-        const out = await build();
-        const positions = [positionOf(out, 'alice subject')];
-        const d = docOf(out, DEFAULT_OUTPUT_POLICY, positions);
-        expect(d.emails).toHaveLength(1);
-        expect(printedIn(d, A_BODY)).toBe(0);
-        expect(squash(bodyOf(d.emails[0]!))).toBe(squash(OWN));
-        const cut = labelsOf(out, DEFAULT_OUTPUT_POLICY, positions)
+        const result = await build();
+        const positions = [positionOf(result, 'alice subject')];
+        const pdfDocument = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, positions);
+        expect(pdfDocument.emails).toHaveLength(1);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(0);
+        expect(squash(bodyOf(pdfDocument.emails[0]!))).toBe(squash(OWN));
+        const cut = labelsOf(result, DEFAULT_OUTPUT_POLICY, positions)
             .get(positions[0]!)!
             .filter((r) => r.printedAs !== null);
-        expect(cut.map((r) => r.printedAs)).toEqual([{ kind: 'unticked-attached', position: positionOf(out, 'bob subject') }]);
+        expect(cut.map((r) => r.printedAs)).toEqual([{ kind: 'unticked-attached', position: positionOf(result, 'bob subject') }]);
     });
 
     it('the parent unticked: the attached email is still printed on its own', async () =>
     {
-        const out = await build();
-        const d = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'bob subject')]);
-        expect(d.emails).toHaveLength(1);
-        expect(printedIn(d, A_BODY)).toBe(1);
-        expect(printedIn(d, OWN)).toBe(0);
+        const result = await build();
+        const pdfDocument = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, [positionOf(result, 'bob subject')]);
+        expect(pdfDocument.emails).toHaveLength(1);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(1);
+        expect(printedIn(pdfDocument, OWN)).toBe(0);
     });
 
     it('full original text (Q4): the parent whole, the attached email printed as well', async () =>
     {
-        const out = await build();
+        const result = await build();
         const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
-        const d = docOf(out, policy);
-        const parent = emailOf(d, out, 'alice subject')!;
-        expect(bodyOf(parent)).toBe(referenceDisplayText(out.messages[positionOf(out, 'alice subject')]!.message.bodyText));
+        const pdfDocument = pdfDocumentOf(result, policy);
+        const parent = emailOf(pdfDocument, result, 'alice subject')!;
+        expect(bodyOf(parent)).toBe(referenceDisplayText(result.messages[positionOf(result, 'alice subject')]!.message.bodyText));
         expect(bodyOf(parent)).toContain(FORWARDED_SEPARATOR);
-        expect(printedIn(d, A_BODY)).toBe(2);
-        expect(labelsOf(out, policy).size).toBe(0);
-        expect(noRepeat({ result: out, positions: [0, 1], plans: [], policy }).parts.size).toBe(0);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(2);
+        expect(labelsOf(result, policy).size).toBe(0);
+        expect(applyNoRepeatRule({ result, positions: [0, 1], plans: [], policy }).parts.size).toBe(0);
     });
 });
 
@@ -164,15 +165,15 @@ describe('PDF model: other kinds of attached emails', () =>
 {
     it('sent as an attachment (.eml): printed on its own with its name; the parent body is untouched', async () =>
     {
-        const out = analyzeThread([
+        const result = analyzeThread([
             await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY), 'attachment; filename="figures.eml"'))),
         ]);
-        const d = docOf(out);
-        expect(d.emails).toHaveLength(2);
-        expect(fileRow(emailOf(d, out, 'bob subject')!)).toEqual([`parent.eml${FILE_CHAIN_SEPARATOR}figures.eml`]);
-        expect(squash(bodyOf(emailOf(d, out, 'alice subject')!))).toBe(squash(OWN));
-        expect(emailOf(d, out, 'alice subject')!.attachments?.items.map(lineText)[0]).toContain('figures.eml');
-        expect(printedIn(d, A_BODY)).toBe(1);
+        const pdfDocument = pdfDocumentOf(result);
+        expect(pdfDocument.emails).toHaveLength(2);
+        expect(fileRow(emailOf(pdfDocument, result, 'bob subject')!)).toEqual([`parent.eml${FILE_CHAIN_SEPARATOR}figures.eml`]);
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'alice subject')!))).toBe(squash(OWN));
+        expect(emailOf(pdfDocument, result, 'alice subject')!.attachments?.items.map(lineText)[0]).toContain('figures.eml');
+        expect(printedIn(pdfDocument, A_BODY)).toBe(1);
     });
 
     it('an attached Outlook email (.msg): printed on its own, File row "outer.msg › item name"', async () =>
@@ -189,32 +190,33 @@ describe('PDF model: other kinds of attached emails', () =>
             messageId: '<inner-item@example.test>',
         };
         const outer: MsgSpec = { ...inner, id: 'outer', subject: 'Outer item', bodyText: OWN, submitTime: '2025-06-03T08:00:00Z', messageId: '<outer-item@example.test>', attachedItems: [{ displayName: 'Inner item', message: inner }] };
-        const parsed = await msg.parse({ name: 'outer.msg', bytes: buildMsg(outer) });
-        const out = analyzeThread([parsed]);
-        const d = docOf(out);
-        expect(d.emails.map((e) => fileRow(e))).toEqual([[`outer.msg${FILE_CHAIN_SEPARATOR}Inner item.msg`], ['outer.msg']]);
-        expect(printedIn(d, B_BODY)).toBe(1);
-        expect(printedIn(d, OWN)).toBe(1);
+        const parsed = await msgParser.parse({ name: 'outer.msg', bytes: buildMsg(outer) });
+        const result = analyzeThread([parsed]);
+        const pdfDocument = pdfDocumentOf(result);
+        expect(pdfDocument.emails.map((e) => fileRow(e))).toEqual([[`outer.msg${FILE_CHAIN_SEPARATOR}Inner item.msg`], ['outer.msg']]);
+        expect(printedIn(pdfDocument, B_BODY)).toBe(1);
+        expect(printedIn(pdfDocument, OWN)).toBe(1);
     });
 
     it('nested inline forwards: each printed once, each block cut where it is printed; the File row chains every level', async () =>
     {
         const b = simple('carol', 'Sun, 1 Jun 2025 09:00:00 +0200', B_BODY);
         const a = holding('bob', MON, plain(A_BODY), crlf('Content-Type: message/rfc822; name="inner.eml"', '', b));
-        const out = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a)))]);
-        const all = docOf(out);
+        const result = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a)))]);
+        const all = pdfDocumentOf(result);
         expect(all.emails).toHaveLength(3);
         expect(printedIn(all, A_BODY)).toBe(1);
         expect(printedIn(all, B_BODY)).toBe(1);
-        expect(squash(bodyOf(emailOf(all, out, 'alice subject')!))).toBe(squash(OWN));
-        expect(squash(bodyOf(emailOf(all, out, 'bob subject')!))).toBe(squash(A_BODY));
-        expect(fileRow(emailOf(all, out, 'carol subject')!)).toEqual([['parent.eml', '(attached email 1)', 'inner.eml'].join(FILE_CHAIN_SEPARATOR)]);
+        expect(squash(bodyOf(emailOf(all, result, 'alice subject')!))).toBe(squash(OWN));
+        expect(squash(bodyOf(emailOf(all, result, 'bob subject')!))).toBe(squash(A_BODY));
+        expect(fileRow(emailOf(all, result, 'carol subject')!)).toEqual(
+            [['parent.eml', '(attached email 1)', 'inner.eml'].join(FILE_CHAIN_SEPARATOR)]);
         // The middle one unticked: its text nowhere, the innermost still printed once.
-        const noMiddle = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'carol subject'), positionOf(out, 'alice subject')]);
+        const noMiddle = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, [positionOf(result, 'carol subject'), positionOf(result, 'alice subject')]);
         expect(printedIn(noMiddle, A_BODY)).toBe(0);
         expect(printedIn(noMiddle, B_BODY)).toBe(1);
         // The innermost unticked: left out of both emails that print its block.
-        const noInner = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'bob subject'), positionOf(out, 'alice subject')]);
+        const noInner = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, [positionOf(result, 'bob subject'), positionOf(result, 'alice subject')]);
         expect(printedIn(noInner, B_BODY)).toBe(0);
         expect(printedIn(noInner, A_BODY)).toBe(1);
     });
@@ -222,37 +224,38 @@ describe('PDF model: other kinds of attached emails', () =>
     it('a duplicate of a dropped file (Q8): the block is cut and printed as the dropped copy; unticked, left out', async () =>
     {
         const copy = simple('bob', MON, A_BODY);
-        const out = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(copy))), await parseEml('bob.eml', copy)]);
-        expect(out.counts.duplicatesMerged).toBe(1);
-        const d = docOf(out);
-        expect(d.emails).toHaveLength(2);
-        const kept = emailOf(d, out, 'bob subject')!;
+        const result = analyzeThread(
+            [await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(copy))), await parseEml('bob.eml', copy)]);
+        expect(result.counts.duplicatesMerged).toBe(1);
+        const pdfDocument = pdfDocumentOf(result);
+        expect(pdfDocument.emails).toHaveLength(2);
+        const kept = emailOf(pdfDocument, result, 'bob subject')!;
         expect(fileRow(kept)).toEqual(['bob.eml', `parent.eml${FILE_CHAIN_SEPARATOR}(attached email 1)`]);
-        expect(printedIn(d, A_BODY)).toBe(1);
-        const cut = labelsOf(out).get(positionOf(out, 'alice subject'))!.filter((r) => r.printedAs !== null);
-        expect(cut.map((r) => r.printedAs)).toEqual([{ kind: 'email', position: positionOf(out, 'bob subject'), number: kept.number }]);
-        const without = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'alice subject')]);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(1);
+        const cut = labelsOf(result).get(positionOf(result, 'alice subject'))!.filter((r) => r.printedAs !== null);
+        expect(cut.map((r) => r.printedAs)).toEqual([{ kind: 'email', position: positionOf(result, 'bob subject'), number: kept.number }]);
+        const without = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, [positionOf(result, 'alice subject')]);
         expect(printedIn(without, A_BODY)).toBe(0);
     });
 
     it('the same file added twice: each email once, the block cut once', async () =>
     {
         const text = holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY)));
-        const out = analyzeThread([await parseEml('one.eml', text), await parseEml('two.eml', text)]);
-        const d = docOf(out);
-        expect(d.emails).toHaveLength(2);
-        expect(printedIn(d, A_BODY)).toBe(1);
-        expect(printedIn(d, OWN)).toBe(1);
+        const result = analyzeThread([await parseEml('one.eml', text), await parseEml('two.eml', text)]);
+        const pdfDocument = pdfDocumentOf(result);
+        expect(pdfDocument.emails).toHaveLength(2);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(1);
+        expect(printedIn(pdfDocument, OWN)).toBe(1);
     });
 
     it('an undated attached email comes just before its parent in the PDF, with "no date" in the index', async () =>
     {
-        const out = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', null, A_BODY))))]);
-        const d = docOf(out);
-        expect(d.emails.map((e) => out.messages[e.position!]!.message.subject)).toEqual(['bob subject', 'alice subject']);
-        expect(d.emails[0]!.flags.undated).toBe(true);
-        expect(lineText(d.index.entries[0]!.date)).toBe(strings.noDate);
-        expect(d.cover.undated).toBe(1);
+        const result = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', null, A_BODY))))]);
+        const pdfDocument = pdfDocumentOf(result);
+        expect(pdfDocument.emails.map((e) => result.messages[e.position!]!.message.subject)).toEqual(['bob subject', 'alice subject']);
+        expect(pdfDocument.emails[0]!.flags.undated).toBe(true);
+        expect(lineText(pdfDocument.index.entries[0]!.date)).toBe(strings.noDate);
+        expect(pdfDocument.cover.undated).toBe(1);
     });
 });
 
@@ -271,79 +274,81 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
     const build = async (benBody: string): Promise<EngineResult> => analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(simple('ben', TUE, benBody))))]);
 
     /** The PDF and the preview's ranges for Cy, for one way of choosing rebuilt emails. */
-    function both(out: EngineResult, extra: { readonly rebuilt?: number[]; readonly unticked?: number[]; readonly rebuildingOff?: boolean }, positions = out.messages.map((_, k) => k))
+    function both(result: EngineResult, extra: { readonly rebuilt?: number[]; readonly unticked?: number[]; readonly rebuildingOff?: boolean },
+        positions = result.messages.map((_, k) => k))
     {
         const plans = planOutput(
-            positions.map((p) => out.messages[p]!),
+            positions.map((p) => result.messages[p]!),
             DEFAULT_OUTPUT_POLICY,
         );
-        const input = { result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: extra.rebuilt ?? [], ...(extra.unticked === undefined ? {} : { unticked: extra.unticked }), ...(extra.rebuildingOff === undefined ? {} : { rebuildingOff: extra.rebuildingOff }) };
-        const d = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: 0, strings });
-        return { d, ranges: printedElsewhereRanges(input) };
+        const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: extra.rebuilt ?? [], ...(extra.unticked === undefined ? {} : { unticked: extra.unticked }), ...(extra.rebuildingOff === undefined ? {} : { rebuildingOff: extra.rebuildingOff }) };
+        const pdfDocument = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: 0, strings });
+        return { pdfDocument, ranges: printedElsewhereRanges(input) };
     }
 
     /** The checks for one mode: OLD printed in Cy (and labelled so in the preview), Ben's own text once, on his page. */
-    function expectKept(out: EngineResult, d: PdfDocument, ranges: ReturnType<typeof printedElsewhereRanges>): void
+    function expectKept(result: EngineResult, pdfDocument: PdfDocument, ranges: ReturnType<typeof printedElsewhereRanges>): void
     {
-        const cy = positionOf(out, 'cy subject');
-        const cyBody = out.messages[cy]!.message.bodyText;
-        expect(squash(bodyOf(emailOf(d, out, 'cy subject')!))).toContain(squash(OLD));
-        expect(squash(bodyOf(emailOf(d, out, 'ben subject')!))).not.toContain(squash(OLD));
-        expect(printedIn(d, FINE)).toBe(1);
-        expect(printedIn(d, NOTE)).toBe(1);
+        const cyPosition = positionOf(result, 'cy subject');
+        const cyBody = result.messages[cyPosition]!.message.bodyText;
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'cy subject')!))).toContain(squash(OLD));
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'ben subject')!))).not.toContain(squash(OLD));
+        expect(printedIn(pdfDocument, FINE)).toBe(1);
+        expect(printedIn(pdfDocument, NOTE)).toBe(1);
         // The preview says the same: the quote is in a kept piece of Cy, never in one labelled "printed as" Ben.
-        const at = cyBody.indexOf(OLD);
-        const list = ranges.get(cy)!;
-        expect(list.some((r) => r.keep && r.printedAs === null && r.start <= at && at < r.end)).toBe(true);
-        for (const r of list.filter((x) => x.printedAs !== null))
+        const oldStart = cyBody.indexOf(OLD);
+        const list = ranges.get(cyPosition)!;
+        expect(list.some((r) => r.keep && r.printedAs === null && r.start <= oldStart && oldStart < r.end)).toBe(true);
+        for (const range of list.filter((x) => x.printedAs !== null))
         {
-            expect(cyBody.slice(r.start, r.end)).not.toContain(OLD);
+            expect(cyBody.slice(range.start, range.end)).not.toContain(OLD);
         }
         // Ben's own answer is cut from Cy, labelled "printed as" Ben.
         const fine = cyBody.indexOf(FINE);
-        expect(list.some((r) => r.printedAs?.kind === 'email' && r.printedAs.position === positionOf(out, 'ben subject') && r.start <= fine && fine < r.end)).toBe(true);
+        expect(list.some((r) => r.printedAs?.kind === 'email' && r.printedAs.position === positionOf(result, 'ben subject') && r.start <= fine
+            && fine < r.end)).toBe(true);
     }
 
     it('rebuilding off: the old quote stays in Cy\'s forward', async () =>
     {
-        const out = await build(withHeader);
-        const { d, ranges } = both(out, { rebuildingOff: true });
-        expectKept(out, d, ranges);
+        const result = await build(withHeader);
+        const { pdfDocument, ranges } = both(result, { rebuildingOff: true });
+        expectKept(result, pdfDocument, ranges);
     });
 
     it('rebuilding on, no rebuilt email chosen (every one unticked): the old quote stays in Cy\'s forward', async () =>
     {
-        const out = await build(withHeader);
-        const ids = rebuiltEntries(out).map((r) => r.id);
+        const result = await build(withHeader);
+        const ids = rebuiltEntries(result).map((r) => r.id);
         expect(ids.length).toBeGreaterThan(0);
-        const { d, ranges } = both(out, { rebuilt: [], unticked: ids });
-        expectKept(out, d, ranges);
+        const { pdfDocument, ranges } = both(result, { rebuilt: [], unticked: ids });
+        expectKept(result, pdfDocument, ranges);
     });
 
     it('a quote that cannot be rebuilt (a reply header with no date and no sender): the old quote stays in Cy\'s forward', async () =>
     {
-        const out = await build(marksOnly);
-        expect(rebuiltEntries(out)).toEqual([]);
-        const { d, ranges } = both(out, {});
-        expectKept(out, d, ranges);
+        const result = await build(marksOnly);
+        expect(rebuiltEntries(result)).toEqual([]);
+        const { pdfDocument, ranges } = both(result, {});
+        expectKept(result, pdfDocument, ranges);
     });
 
     it('the rebuilt email chosen: the old quote is printed (as the rebuilt email, and still in Cy: a repeat, never a loss)', async () =>
     {
-        const out = await build(withHeader);
-        const ids = rebuiltEntries(out).map((r) => r.id);
-        const { d } = both(out, { rebuilt: ids });
-        expect(printedIn(d, OLD)).toBeGreaterThanOrEqual(1);
-        expect(printedIn(d, FINE)).toBe(1);
+        const result = await build(withHeader);
+        const ids = rebuiltEntries(result).map((r) => r.id);
+        const { pdfDocument } = both(result, { rebuilt: ids });
+        expect(printedIn(pdfDocument, OLD)).toBeGreaterThanOrEqual(1);
+        expect(printedIn(pdfDocument, FINE)).toBe(1);
     });
 
     it('Ben unticked (Q3): his whole block, quote included, is left out of Cy', async () =>
     {
-        const out = await build(withHeader);
-        const { d } = both(out, { rebuildingOff: true }, [positionOf(out, 'cy subject')]);
-        expect(printedIn(d, OLD)).toBe(0);
-        expect(printedIn(d, FINE)).toBe(0);
-        expect(printedIn(d, NOTE)).toBe(1);
+        const result = await build(withHeader);
+        const { pdfDocument } = both(result, { rebuildingOff: true }, [positionOf(result, 'cy subject')]);
+        expect(printedIn(pdfDocument, OLD)).toBe(0);
+        expect(printedIn(pdfDocument, FINE)).toBe(0);
+        expect(printedIn(pdfDocument, NOTE)).toBe(1);
     });
 
     it('nested: the middle email unticked (Q3), the innermost ticked: what the innermost\'s page leaves out stays in the outer holder', async () =>
@@ -354,31 +359,32 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
         const BEA = 'Bea adds that the movers asked for the lift to be reserved from eight until noon on the day.';
         const dan = simple('dan', TUE, withHeader);
         const bea = holding('bea', TUE, plain(BEA), rfc822(dan));
-        const out = analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(bea)))]);
-        expect(out.messages.map((m) => m.message.subject).sort()).toEqual(['bea subject', 'cy subject', 'dan subject']);
-        const cy = positionOf(out, 'cy subject');
-        const positions = [cy, positionOf(out, 'dan subject')].sort((x, y) => x - y);
-        const { d, ranges } = both(out, { rebuildingOff: true }, positions);
-        expect(d.emails).toHaveLength(2);
-        expect(squash(bodyOf(emailOf(d, out, 'cy subject')!))).toContain(squash(OLD));
-        expect(squash(bodyOf(emailOf(d, out, 'dan subject')!))).not.toContain(squash(OLD));
-        expect(printedIn(d, OLD)).toBe(1);
-        expect(printedIn(d, FINE)).toBe(1);
-        expect(printedIn(d, BEA)).toBe(0);
-        expect(printedIn(d, NOTE)).toBe(1);
+        const result = analyzeThread([await parseEml('cy.eml', holding('cy', WED, plain(NOTE), rfc822(bea)))]);
+        expect(result.messages.map((m) => m.message.subject).sort()).toEqual(['bea subject', 'cy subject', 'dan subject']);
+        const cyPosition = positionOf(result, 'cy subject');
+        const positions = [cyPosition, positionOf(result, 'dan subject')].sort((x, y) => x - y);
+        const { pdfDocument, ranges } = both(result, { rebuildingOff: true }, positions);
+        expect(pdfDocument.emails).toHaveLength(2);
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'cy subject')!))).toContain(squash(OLD));
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'dan subject')!))).not.toContain(squash(OLD));
+        expect(printedIn(pdfDocument, OLD)).toBe(1);
+        expect(printedIn(pdfDocument, FINE)).toBe(1);
+        expect(printedIn(pdfDocument, BEA)).toBe(0);
+        expect(printedIn(pdfDocument, NOTE)).toBe(1);
         // The preview agrees: the quote is in a kept piece of Cy, never in one labelled "printed as" or "left out".
-        const cyBody = out.messages[cy]!.message.bodyText;
-        const at = cyBody.indexOf(OLD);
-        expect(at).toBeGreaterThan(0);
-        const list = ranges.get(cy)!;
-        expect(list.some((r) => r.keep && r.printedAs === null && r.start <= at && at < r.end)).toBe(true);
-        for (const r of list.filter((x) => x.printedAs !== null))
+        const cyBody = result.messages[cyPosition]!.message.bodyText;
+        const oldStart = cyBody.indexOf(OLD);
+        expect(oldStart).toBeGreaterThan(0);
+        const list = ranges.get(cyPosition)!;
+        expect(list.some((r) => r.keep && r.printedAs === null && r.start <= oldStart && oldStart < r.end)).toBe(true);
+        for (const range of list.filter((x) => x.printedAs !== null))
         {
-            expect(cyBody.slice(r.start, r.end)).not.toContain(OLD);
+            expect(cyBody.slice(range.start, range.end)).not.toContain(OLD);
         }
         // Bea's own text is labelled as left out with her (unticked attached email).
         const bea0 = cyBody.indexOf(BEA);
-        expect(list.some((r) => r.printedAs?.kind === 'unticked-attached' && r.printedAs.position === positionOf(out, 'bea subject') && r.start <= bea0 && bea0 < r.end)).toBe(true);
+        expect(list.some((r) => r.printedAs?.kind === 'unticked-attached' && r.printedAs.position === positionOf(result, 'bea subject')
+            && r.start <= bea0 && bea0 < r.end)).toBe(true);
     });
 });
 
@@ -400,13 +406,13 @@ describe('PDF model: copies of the email holding an attached email, and copies o
             [noList, withList],
         ])
         {
-            const out = analyzeThread(files);
-            expect(out.counts.duplicatesMerged).toBe(1);
-            expect(out.messages.find((m) => m.message.subject === 'alice subject')!.message.source.fileName).toBe('two.eml');
-            const all = docOf(out);
+            const result = analyzeThread(files);
+            expect(result.counts.duplicatesMerged).toBe(1);
+            expect(result.messages.find((m) => m.message.subject === 'alice subject')!.message.source.fileName).toBe('two.eml');
+            const all = pdfDocumentOf(result);
             expect(printedIn(all, A_BODY)).toBe(1);
             expect(printedIn(all, OWN)).toBe(1);
-            const unticked = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'alice subject')]);
+            const unticked = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, [positionOf(result, 'alice subject')]);
             expect(printedIn(unticked, A_BODY)).toBe(0);
             expect(printedIn(unticked, OWN)).toBe(1);
         }
@@ -414,21 +420,21 @@ describe('PDF model: copies of the email holding an attached email, and copies o
 
     it('D2: the dropped file wins over an attached copy with a Bcc line; that Bcc line stays printed in the holder (header lines only)', async () =>
     {
-        const out = analyzeThread([
+        const result = analyzeThread([
             await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY).replace('MIME-Version', 'Bcc: boss@example.test\r\nMIME-Version')))),
             await parseEml('bob.eml', simple('bob', MON, A_BODY)),
         ]);
-        expect(out.counts.duplicatesMerged).toBe(1);
-        const d = docOf(out);
-        const bob = emailOf(d, out, 'bob subject')!;
+        expect(result.counts.duplicatesMerged).toBe(1);
+        const pdfDocument = pdfDocumentOf(result);
+        const bob = emailOf(pdfDocument, result, 'bob subject')!;
         expect(fileRow(bob)).toEqual(['bob.eml', `parent.eml${FILE_CHAIN_SEPARATOR}(attached email 1)`]);
         expect(bob.fields.some((f) => f.label === 'Bcc')).toBe(false);
-        const parent = bodyOf(emailOf(d, out, 'alice subject')!);
+        const parent = bodyOf(emailOf(pdfDocument, result, 'alice subject')!);
         expect(parent).toContain('Bcc: boss@example.test');
-        expect(printedIn(d, A_BODY)).toBe(1);
+        expect(printedIn(pdfDocument, A_BODY)).toBe(1);
         // The same header data: the header lines go too.
         const same = analyzeThread([await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(simple('bob', MON, A_BODY)))), await parseEml('bob.eml', simple('bob', MON, A_BODY))]);
-        expect(bodyOf(emailOf(docOf(same), same, 'alice subject')!)).not.toContain(FORWARDED_SEPARATOR);
+        expect(bodyOf(emailOf(pdfDocumentOf(same), same, 'alice subject')!)).not.toContain(FORWARDED_SEPARATOR);
     });
 });
 
@@ -438,21 +444,21 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
     {
         const b = simple('carol', null, B_BODY);
         const a = holding('bob', MON, plain(A_BODY), rfc822(b));
-        const dup = simple('dave', 'Wed, 4 Jun 2025 09:00:00 +0200', 'A copy also dropped on its own.');
-        const out = analyzeThread([
-            await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a), rfc822(dup, 'attachment; filename="dup.eml"'))),
-            await parseEml('dup.eml', dup),
+        const duplicate = simple('dave', 'Wed, 4 Jun 2025 09:00:00 +0200', 'A copy also dropped on its own.');
+        const result = analyzeThread([
+            await parseEml('parent.eml', holding('alice', TUE, plain(OWN), rfc822(a), rfc822(duplicate, 'attachment; filename="dup.eml"'))),
+            await parseEml('dup.eml', duplicate),
         ]);
-        const d = docOf(out, { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true });
-        expect(d.emails).toHaveLength(out.messages.length);
-        expect(out.messages).toHaveLength(4);
-        for (const e of d.emails)
+        const pdfDocument = pdfDocumentOf(result, { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true });
+        expect(pdfDocument.emails).toHaveLength(result.messages.length);
+        expect(result.messages).toHaveLength(4);
+        for (const email of pdfDocument.emails)
         {
-            const m = out.messages[e.position!]!;
-            expect(bodyOf(e), m.message.subject).toBe(referenceDisplayText(m.message.bodyText));
+            const engineMessage = result.messages[email.position!]!;
+            expect(bodyOf(email), engineMessage.message.subject).toBe(referenceDisplayText(engineMessage.message.bodyText));
         }
         // Folded: every email's own text is still printed exactly once.
-        const folded = docOf(out);
+        const folded = pdfDocumentOf(result);
         for (const text of [OWN, A_BODY, B_BODY, 'A copy also dropped on its own.'])
         {
             expect(printedIn(folded, text), text).toBe(1);
@@ -467,28 +473,29 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
 
     it('an attached email dated after its holder (a date with no zone) keeps its own text in the PDF', async () =>
     {
-        const out = analyzeThread([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))]);
-        expect(out.messages.map((m) => m.message.subject)).toEqual(['carol subject', 'alice subject', 'bob subject']);
-        const d = docOf(out);
+        const result = analyzeThread([await parseEml('parent.eml',
+            holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))]);
+        expect(result.messages.map((m) => m.message.subject)).toEqual(['carol subject', 'alice subject', 'bob subject']);
+        const pdfDocument = pdfDocumentOf(result);
         for (const text of [OWN, UNIQUE_A, B_BODY])
         {
-            expect(printedIn(d, text), text).toBe(1);
+            expect(printedIn(pdfDocument, text), text).toBe(1);
         }
-        expect(squash(bodyOf(emailOf(d, out, 'bob subject')!))).toContain(squash(UNIQUE_A));
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'bob subject')!))).toContain(squash(UNIQUE_A));
     });
 
     it('an undated attached email also dropped after its undated holder keeps its own text in the PDF', async () =>
     {
-        const out = analyzeThread([
+        const result = analyzeThread([
             await parseEml('parent.eml', holding('alice', null, plain(OWN), rfc822(aWithForward(null)))),
             await parseEml('a.eml', aWithForward(null)),
         ]);
-        const kept = out.messages.find((m) => m.message.subject === 'bob subject')!;
+        const kept = result.messages.find((m) => m.message.subject === 'bob subject')!;
         expect(kept.message.source.fileName).toBe('a.eml');
-        const d = docOf(out);
+        const pdfDocument = pdfDocumentOf(result);
         for (const text of [OWN, UNIQUE_A, B_BODY])
         {
-            expect(printedIn(d, text), text).toBe(1);
+            expect(printedIn(pdfDocument, text), text).toBe(1);
         }
     });
 
@@ -496,34 +503,36 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
     {
         // The overlap detector told nothing about which email holds which: the engine fix undone.
         const noHolds: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, detectQuotedOverlap: (messages) => detectQuotedOverlap(messages.map((m) => ({ bodyText: m.bodyText, messageId: m.messageId, inReplyTo: m.inReplyTo, references: m.references, index: m.index }))) };
-        const out = analyzeThread([await parseEml('parent.eml', holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))], noHolds);
-        const bob = out.messages[positionOf(out, 'bob subject')]!;
+        const result = analyzeThread([await parseEml('parent.eml',
+            holding('alice', 'Mon, 2 Jun 2025 10:30:00 +0200', plain(OWN), rfc822(aWithForward('Mon, 2 Jun 2025 10:00:00'))))], noHolds);
+        const bob = result.messages[positionOf(result, 'bob subject')]!;
         // Bob's own text really is folded as quoted from Alice here.
         expect(bob.segments.some((s) => s.folded && s.related.includes(0))).toBe(true);
-        const d = docOf(out);
-        expect(printedIn(d, UNIQUE_A)).toBeGreaterThanOrEqual(1);
-        expect(squash(bodyOf(emailOf(d, out, 'alice subject')!))).toContain(squash(UNIQUE_A));
+        const pdfDocument = pdfDocumentOf(result);
+        expect(printedIn(pdfDocument, UNIQUE_A)).toBeGreaterThanOrEqual(1);
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'alice subject')!))).toContain(squash(UNIQUE_A));
         // Review round 4 (M1): only what Bob's page prints is cut from Alice's email (his header lines, say),
         // labelled "printed as" Bob; his own text, which his page leaves out here, stays. Carol's block, printed
         // whole on her page, is cut too.
-        const alice = positionOf(out, 'alice subject');
-        const aliceBody = out.messages[alice]!.message.bodyText;
-        const cut = labelsOf(out).get(alice)!.filter((r) => r.printedAs !== null);
-        const asBob = { kind: 'email', position: positionOf(out, 'bob subject'), number: emailOf(d, out, 'bob subject')!.number };
-        const asCarol = { kind: 'email', position: positionOf(out, 'carol subject'), number: emailOf(d, out, 'carol subject')!.number };
+        const alice = positionOf(result, 'alice subject');
+        const aliceBody = result.messages[alice]!.message.bodyText;
+        const cut = labelsOf(result).get(alice)!.filter((r) => r.printedAs !== null);
+        const asBob = { kind: 'email', position: positionOf(result, 'bob subject'), number: emailOf(pdfDocument, result, 'bob subject')!.number };
+        const asCarol = { kind: 'email', position: positionOf(result, 'carol subject'),
+            number: emailOf(pdfDocument, result, 'carol subject')!.number };
         expect(cut.map((r) => r.printedAs)).toContainEqual(asCarol);
         expect(cut.every((r) => [asBob, asCarol].some((x) => JSON.stringify(x) === JSON.stringify(r.printedAs)))).toBe(true);
-        for (const r of cut)
+        for (const range of cut)
         {
-            expect(squash(aliceBody.slice(r.start, r.end))).not.toContain(squash(UNIQUE_A));
+            expect(squash(aliceBody.slice(range.start, range.end))).not.toContain(squash(UNIQUE_A));
         }
-        expect(printedIn(d, UNIQUE_A)).toBe(1);
+        expect(printedIn(pdfDocument, UNIQUE_A)).toBe(1);
         for (const text of [OWN, B_BODY])
         {
-            expect(printedIn(d, text), text).toBe(1);
+            expect(printedIn(pdfDocument, text), text).toBe(1);
         }
         // Bob unticked (Q3): his block is left out of Alice's email too (no safety net needed: nothing is promised).
-        const without = docOf(out, DEFAULT_OUTPUT_POLICY, [positionOf(out, 'alice subject'), positionOf(out, 'carol subject')]);
+        const without = pdfDocumentOf(result, DEFAULT_OUTPUT_POLICY, [positionOf(result, 'alice subject'), positionOf(result, 'carol subject')]);
         expect(printedIn(without, UNIQUE_A)).toBe(0);
     });
 
@@ -539,24 +548,26 @@ describe('PDF model: collapse, never delete, with attached emails', () =>
         expect(realBody.split('north').length).toBe(2);
         const changedBody = realBody.replace('north', 'south');
         const CHANGED = A_BODY.replace('north', 'south');
-        const out: EngineResult = { ...real, messages: real.messages.map((m, k) => (k === alice ? { ...m, message: { ...m.message, bodyText: changedBody } } : m)) };
-        const places = out.attached!.find((a) => out.positionByIndex[a.index] === bob)!.places.filter((p) => out.positionByIndex[p.holderIndex] === alice);
+        const result: EngineResult = { ...real,
+            messages: real.messages.map((m, k) => (k === alice ? { ...m, message: { ...m.message, bodyText: changedBody } } : m)) };
+        const places = result.attached!.find((a) => result.positionByIndex[a.index] === bob)!.places.filter((p) =>
+            result.positionByIndex[p.holderIndex] === alice);
         expect(places).toHaveLength(1);
         const { start, end } = places[0]!;
         expect(changedBody.slice(start, end)).toContain(CHANGED);
-        const positions = out.messages.map((_, k) => k);
+        const positions = result.messages.map((_, k) => k);
         const plans = planOutput(
-            positions.map((p) => out.messages[p]!),
+            positions.map((p) => result.messages[p]!),
             DEFAULT_OUTPUT_POLICY,
         );
-        const parts = noRepeat({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY }).parts.get(alice) ?? [];
-        for (const p of parts)
+        const parts = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY }).parts.get(alice) ?? [];
+        for (const part of parts)
         {
-            expect(p.end <= start || p.start >= end, JSON.stringify(p)).toBe(true);
+            expect(part.end <= start || part.start >= end, JSON.stringify(part)).toBe(true);
         }
-        const d = docOf(out);
-        expect(squash(bodyOf(emailOf(d, out, 'alice subject')!))).toContain(squash(CHANGED));
-        expect(squash(bodyOf(emailOf(d, out, 'alice subject')!))).toContain(squash(OWN));
-        expect(squash(bodyOf(emailOf(d, out, 'bob subject')!))).toContain(squash(A_BODY));
+        const pdfDocument = pdfDocumentOf(result);
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'alice subject')!))).toContain(squash(CHANGED));
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'alice subject')!))).toContain(squash(OWN));
+        expect(squash(bodyOf(emailOf(pdfDocument, result, 'bob subject')!))).toContain(squash(A_BODY));
     });
 });

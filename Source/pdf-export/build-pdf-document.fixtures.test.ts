@@ -17,8 +17,8 @@ import type { EngineResult } from '../../Header/thread-analysis-result';
 
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */
-const realEmails = (d: PdfDocument): { e: PdfEmail; position: number }[] =>
-    d.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ e, position: e.position }] : []));
+const realEmails = (pdfDocument: PdfDocument): { email: PdfEmail; position: number }[] =>
+    pdfDocument.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ email: e, position: e.position }] : []));
 
 describe('PDF document model over the parsed fixtures', () =>
 {
@@ -28,30 +28,31 @@ describe('PDF document model over the parsed fixtures', () =>
         result ??= analyzeThread((await parseAllFixtures()).map((message) => ({ ok: true as const, message })));
         return result;
     }
-    async function doc(policy: OutputPolicy): Promise<{ doc: PdfDocument; result: EngineResult }>
+    async function buildFixtureDocument(policy: OutputPolicy): Promise<{ pdfDocument: PdfDocument; result: EngineResult }>
     {
-        const r = await engine();
-        const positions = r.messages.map((_, k) => k);
-        const plans = planOutput(r.messages, policy);
+        const engineResult = await engine();
+        const positions = engineResult.messages.map((_, k) => k);
+        const plans = planOutput(engineResult.messages, policy);
         return {
-            result: r,
-            doc: buildPdfDocument({ result: r, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: createPdfStrings('en') }),
+            result: engineResult,
+            pdfDocument: buildPdfDocument({ result: engineResult, positions, plans, policy, timeZone: 'America/New_York',
+                generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: createPdfStrings('en') }),
         };
     }
-    const emailOf = (d: PdfDocument, r: EngineResult, file: string): PdfEmail =>
+    const emailOf = (pdfDocument: PdfDocument, engineResult: EngineResult, file: string): PdfEmail =>
     {
-        const position = r.messages.findIndex((m) => m.message.source.fileName === file);
-        const e = d.emails.find((x) => x.position === position);
-        if (e === undefined)
+        const position = engineResult.messages.findIndex((m) => m.message.source.fileName === file);
+        const email = pdfDocument.emails.find((x) => x.position === position);
+        if (email === undefined)
         {
             throw new Error(`no email for ${file}`);
         }
-        return e;
+        return email;
     };
 
     it('shows the new text of the known replies and leaves their quoted history out', async () =>
     {
-        const { doc: d, result: r } = await doc(DEFAULT_OUTPUT_POLICY);
+        const { pdfDocument, result: engineResult } = await buildFixtureDocument(DEFAULT_OUTPUT_POLICY);
         // [file, new text that must be shown, quoted text that must not]
         const replies: [string, string, string][] = [
             ['eml/11-order-2-bob-outlook-en.eml', 'I can come by on Wednesday 5 March', 'We are furnishing a small office for four people'],
@@ -64,7 +65,7 @@ describe('PDF document model over the parsed fixtures', () =>
         ];
         for (const [file, fresh, quoted] of replies)
         {
-            const body = bodyOf(emailOf(d, r, file));
+            const body = bodyOf(emailOf(pdfDocument, engineResult, file));
             expect(body, `${file}: new text`).toContain(fresh);
             expect(body, `${file}: quoted text`).not.toContain(quoted);
             // No blank line at either end, never more than 2 in a row.
@@ -75,34 +76,35 @@ describe('PDF document model over the parsed fixtures', () =>
 
     it('numbers every email, names every file in its email (merged copies too), no source list or hash on the cover', async () =>
     {
-        const { doc: d, result: r } = await doc(DEFAULT_OUTPUT_POLICY);
-        const s = createPdfStrings('en');
-        expect(d.emails.map((e) => e.number)).toEqual(r.messages.map((_, k) => k + 1));
+        const { pdfDocument, result: engineResult } = await buildFixtureDocument(DEFAULT_OUTPUT_POLICY);
+        const strings = createPdfStrings('en');
+        expect(pdfDocument.emails.map((e) => e.number)).toEqual(engineResult.messages.map((_, k) => k + 1));
         // Collapse, never delete: every read file is still named, in the File row of the email it gave.
-        const named = d.emails.flatMap((e) => e.fields.filter((f) => f.label === s.fileLabel).flatMap((f) => f.value.map(lineText)));
-        expect(named).toHaveLength(r.counts.messagesFound);
-        expect(r.counts.duplicatesMerged).toBeGreaterThan(0);
+        const named = pdfDocument.emails.flatMap((e) => e.fields.filter((f) => f.label === strings.fileLabel).flatMap((f) => f.value.map(lineText)));
+        expect(named).toHaveLength(engineResult.counts.messagesFound);
+        expect(engineResult.counts.duplicatesMerged).toBeGreaterThan(0);
         // Task 8.12: the cover is the title, the summary and the people, nothing else.
-        expect(d.cover.blocks.map((b) => b.kind)).toEqual(['heading', 'fields', 'heading', 'list']);
-        expect(d.cover.blocks.flatMap((b) => (b.kind === 'list' ? b.items.flat().map(lineText) : [])).join('\n')).not.toMatch(/[0-9a-f]{64}/);
-        expect(d.cover.participants.length).toBeGreaterThan(2);
-        expect(d.cover.undated).toBe(r.counts.undated);
+        expect(pdfDocument.cover.blocks.map((b) => b.kind)).toEqual(['heading', 'fields', 'heading', 'list']);
+        expect(
+            pdfDocument.cover.blocks.flatMap((b) => (b.kind === 'list' ? b.items.flat().map(lineText) : [])).join('\n')).not.toMatch(/[0-9a-f]{64}/);
+        expect(pdfDocument.cover.participants.length).toBeGreaterThan(2);
+        expect(pdfDocument.cover.undated).toBe(engineResult.counts.undated);
     });
 
     it('with "include everything", every body is the full text after the display transforms only', async () =>
     {
         const policy = { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true };
-        const { doc: d, result: r } = await doc(policy);
+        const { pdfDocument, result: engineResult } = await buildFixtureDocument(policy);
         let quoted = 0;
-        for (const { e, position } of realEmails(d))
+        for (const { email, position } of realEmails(pdfDocument))
         {
-            const m = r.messages[position]!;
-            expect(bodyOf(e), m.message.source.fileName).toBe(referenceDisplayText(m.message.bodyText));
+            const engineMessage = engineResult.messages[position]!;
+            expect(bodyOf(email), engineMessage.message.source.fileName).toBe(referenceDisplayText(engineMessage.message.bodyText));
             // Tasks 8.1 and 8.6: only the quote prefixes are missing; no line starts with a quote mark.
-            expect(quotePrefixProblems(m.message.bodyText, e.body.map(lineText)), m.message.source.fileName).toEqual([]);
-            expect(bodyOf(e), m.message.source.fileName).not.toMatch(/^\s*>/mu);
-            quoted += referenceDisplayLines(m.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
-            expect(e.flags.planFallback).toBe(false);
+            expect(quotePrefixProblems(engineMessage.message.bodyText, email.body.map(lineText)), engineMessage.message.source.fileName).toEqual([]);
+            expect(bodyOf(email), engineMessage.message.source.fileName).not.toMatch(/^\s*>/mu);
+            quoted += referenceDisplayLines(engineMessage.message.bodyText, { quotes: false }).filter((l) => /^\s*>/u.test(l)).length;
+            expect(email.flags.planFallback).toBe(false);
         }
         // The fixtures hold ">" quotes (Gmail, Thunderbird, HTML blockquotes).
         expect(quoted).toBeGreaterThan(10);

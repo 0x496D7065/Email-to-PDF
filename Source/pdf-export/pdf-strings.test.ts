@@ -34,19 +34,19 @@ describe('createPdfStrings', () =>
     it('gives the texts of the language asked for, whatever the page language', () =>
     {
         setLocale('en');
-        const xx = createPdfStrings('xx');
-        expect(xx.locale).toBe('xx');
-        expect(xx.title).toBe(pseudo('Email correspondence'));
-        expect(xx.fromLabel).toBe(pseudo('From'));
-        expect(xx.pageFooter(3, 12)).toBe(pseudo('Page {page} of {total}').replace('{page}', '3').replace('{total}', '12'));
-        expect(xx.fileName('2025-06-02')).toBe(pseudo('correspondence-{date}.pdf').replace('{date}', '2025-06-02'));
+        const pseudoStrings = createPdfStrings('xx');
+        expect(pseudoStrings.locale).toBe('xx');
+        expect(pseudoStrings.title).toBe(pseudo('Email correspondence'));
+        expect(pseudoStrings.fromLabel).toBe(pseudo('From'));
+        expect(pseudoStrings.pageFooter(3, 12)).toBe(pseudo('Page {page} of {total}').replace('{page}', '3').replace('{total}', '12'));
+        expect(pseudoStrings.fileName('2025-06-02')).toBe(pseudo('correspondence-{date}.pdf').replace('{date}', '2025-06-02'));
         // The tool's name is never translated.
-        expect(xx.producer).toBe('Email to PDF');
+        expect(pseudoStrings.producer).toBe('Email to PDF');
 
         setLocale('xx');
-        const en = createPdfStrings('en');
-        expect(en.title).toBe('Email correspondence');
-        expect(en.fileName('2025-06-02')).toBe('correspondence-2025-06-02.pdf');
+        const englishStrings = createPdfStrings('en');
+        expect(englishStrings.title).toBe('Email correspondence');
+        expect(englishStrings.fileName('2025-06-02')).toBe('correspondence-2025-06-02.pdf');
     });
 
     it('refuses a language the page does not ship (no fallback of its own)', () =>
@@ -65,8 +65,8 @@ describe('no text of its own for rebuilt emails (user decision 2026-11-02, task 
         const words: Record<string, RegExp> = { en: /rebuilt/i, fr: /reconstitu/i, nl: /gereconstrueerd/i };
         for (const locale of ['en', 'fr', 'nl'])
         {
-            const s = createPdfStrings(locale);
-            expect(Object.keys(s).filter((k) => /rebuilt|takenFrom|listIncomplete|dateAbout|quoteDate/i.test(k)), locale).toEqual([]);
+            const strings = createPdfStrings(locale);
+            expect(Object.keys(strings).filter((k) => /rebuilt|takenFrom|listIncomplete|dateAbout|quoteDate/i.test(k)), locale).toEqual([]);
             const texts: string[] = [];
             const collect = (value: unknown): void =>
             {
@@ -79,9 +79,10 @@ describe('no text of its own for rebuilt emails (user decision 2026-11-02, task 
                     Object.values(value).forEach(collect);
                 }
             };
-            collect(s);
+            collect(strings);
             // The functions too, with sample values.
-            texts.push(s.emailHeading(3), s.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'), s.senderLocal('2025-03-03 09:00'), s.emailCount(2));
+            texts.push(strings.emailHeading(3), strings.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'),
+                strings.senderLocal('2025-03-03 09:00'), strings.emailCount(2));
             expect(texts.length).toBeGreaterThan(30);
             for (const text of texts)
             {

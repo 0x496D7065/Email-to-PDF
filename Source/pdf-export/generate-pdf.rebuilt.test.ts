@@ -125,9 +125,9 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         const { pdf, pages } = await pdfText();
         const dests = readDests(pdf);
         const indexPage = pages[dests.get('index')!.page]!;
-        for (const n of [1, 2, 3, 4])
+        for (const emailNumber of [1, 2, 3, 4])
         {
-            expect(indexPage.some((l) => l.startsWith(`${String(n)} `)), `row ${String(n)}`).toBe(true);
+            expect(indexPage.some((l) => l.startsWith(`${String(emailNumber)} `)), `row ${String(emailNumber)}`).toBe(true);
         }
         expect(indexPage.join('\n')).toContain('3 2025-03-03');
         expect(indexPage.join('\n')).not.toContain('[Rebuilt]');
@@ -153,9 +153,9 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
     it('a rebuilt email: the heading and rows of a real email, no "Taken from", no note; its text', async () =>
     {
         const { all } = await pdfText();
-        for (const n of [1, 2, 3, 4])
+        for (const emailNumber of [1, 2, 3, 4])
         {
-            expect(all).toContain(`Email ${String(n)} From`);
+            expect(all).toContain(`Email ${String(emailNumber)} From`);
         }
         // The newest rebuilt one (an Outlook block in Dutch, no quote marks), up to the real email.
         const newest = between(all, 'Email 3 From', 'Email 4 From');
@@ -183,13 +183,13 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
             const { all, pdf } = await pdfText({ locale });
             const { fragments, word } = removedTexts(locale);
             expect(all).not.toMatch(word);
-            for (const f of fragments)
+            for (const fragment of fragments)
             {
-                expect(all, `"${f}"`).not.toContain(f);
+                expect(all, `"${fragment}"`).not.toContain(fragment);
             }
-            for (const t of readOutline(pdf)!.items.map((i) => i.title))
+            for (const title of readOutline(pdf)!.items.map((i) => i.title))
             {
-                expect(t).not.toMatch(word);
+                expect(title).not.toMatch(word);
             }
             // Four emails, with the real emails' heading.
             const heading = createPdfStrings(locale).emailHeading(4);
@@ -237,14 +237,14 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         // Index: each row's link goes to its email, the number drawn in the row's page column is that page + 1.
         const pageColumn = CONFIG.page.width - CONFIG.margin.right - CONFIG.index.pageWidth;
         const shown = new Map<string, string[]>();
-        for (const [i, pageDict] of pdf.pages().entries())
+        for (const [pageIndex, pageDict] of pdf.pages().entries())
         {
-            for (const a of (pageDict.get('Annots') as PdfValue[] | undefined) ?? [])
+            for (const annotation of (pageDict.get('Annots') as PdfValue[] | undefined) ?? [])
             {
-                const link = pdf.dict(a);
+                const link = pdf.dict(annotation);
                 const dest = pdf.name(link.get('Dest'));
                 const [, y1, , y2] = link.get('Rect') as number[];
-                shown.set(dest, runs[i]!.filter((r) => r.x >= pageColumn - 0.01 && r.y > y1! && r.y < y2!).map((r) => r.shown));
+                shown.set(dest, runs[pageIndex]!.filter((r) => r.x >= pageColumn - 0.01 && r.y > y1! && r.y < y2!).map((r) => r.shown));
             }
         }
         expect([...shown.keys()].sort()).toEqual([...anchors].sort());

@@ -33,29 +33,29 @@ const PEOPLE = [ALICE, BOB, CAROL];
 const BASE_MS = Date.UTC(2025, 2, 4, 8, 0, 0);
 const GENERATED_AT = Date.UTC(2025, 5, 1, 12, 0, 0);
 
-/** Email k (0-based): one hour after email k - 1, from Alice, Bob, Carol in turn. */
-function make(k: number, fields: Partial<NormalizedMessage> = {}): NormalizedMessage
+/** Email `messageIndex` (0-based): one hour after email `messageIndex` - 1, from Alice, Bob, Carol in turn. */
+function make(messageIndex: number, fields: Partial<NormalizedMessage> = {}): NormalizedMessage
 {
-    const n = String(k + 1);
+    const numberText = String(messageIndex + 1);
     return {
-        messageId: `generate-${n}@example.test`,
+        messageId: `generate-${numberText}@example.test`,
         inReplyTo: null,
         references: [],
-        date: { utcMs: BASE_MS + k * 3_600_000, original: 'Tue, 4 Mar 2025 08:00:00 +0000', offsetMinutes: 0, zoneKnown: true },
-        from: [PEOPLE[k % 3]!],
-        to: [PEOPLE[(k + 1) % 3]!],
+        date: { utcMs: BASE_MS + messageIndex * 3_600_000, original: 'Tue, 4 Mar 2025 08:00:00 +0000', offsetMinutes: 0, zoneKnown: true },
+        from: [PEOPLE[messageIndex % 3]!],
+        to: [PEOPLE[(messageIndex + 1) % 3]!],
         cc: [],
         bcc: [],
-        subject: `Office desks, part ${n}`,
-        bodyText: `Hello,\n\nThe desks arrive on Monday, note ${n}.\n\nRegards\n`,
+        subject: `Office desks, part ${numberText}`,
+        bodyText: `Hello,\n\nThe desks arrive on Monday, note ${numberText}.\n\nRegards\n`,
         attachments: [],
-        source: { fileName: `email-${n}.eml`, sha256: (k + 1).toString(16).padStart(64, '0'), kind: 'eml' },
+        source: { fileName: `email-${numberText}.eml`, sha256: (messageIndex + 1).toString(16).padStart(64, '0'), kind: 'eml' },
         warnings: [],
         ...fields,
     };
 }
 
-const many = (count: number, fields: (k: number) => Partial<NormalizedMessage> = () => ({})): NormalizedMessage[] =>
+const many = (count: number, fields: (messageIndex: number) => Partial<NormalizedMessage> = () => ({})): NormalizedMessage[] =>
     Array.from({ length: count }, (_, k) => make(k, fields(k)));
 
 /** The generatePdf input for these emails, all included, default policy. */
@@ -72,10 +72,10 @@ function inputFor(messages: readonly NormalizedMessage[], extra: Partial<Generat
 }
 
 /** The same steps as generatePdf, keeping the document and the layout to check them. */
-function docAndLayout(input: GeneratePdfInput): { doc: PdfDocument; layout: PdfLayout }
+function pdfDocumentAndLayout(input: GeneratePdfInput): { pdfDocument: PdfDocument; layout: PdfLayout }
 {
-    const doc = buildPdfDocument({ ...input, strings });
-    return { doc, layout: layoutPdf(doc, fonts, { strings }) };
+    const pdfDocument = buildPdfDocument({ ...input, strings });
+    return { pdfDocument, layout: layoutPdf(pdfDocument, fonts, { strings }) };
 }
 
 const BOTTOM = CONFIG.page.height - CONFIG.margin.bottom;
@@ -97,35 +97,35 @@ function indexPages(layout: PdfLayout): number[]
  * page, its destination there; its index row (first link area) shows that
  * page + 1 in the page column; links only on index pages; footers right.
  */
-function checkLayout(doc: PdfDocument, layout: PdfLayout): void
+function checkLayout(pdfDocument: PdfDocument, layout: PdfLayout): void
 {
     const { document, anchorPages, frontPages } = layout;
     const total = document.pages.length;
     const index = indexPages(layout);
-    expect(anchorPages.get(doc.emails[0]!.anchor)).toBe(frontPages);
+    expect(anchorPages.get(pdfDocument.emails[0]!.anchor)).toBe(frontPages);
     // The default (task 8.4): each email from the top of a new page, in order, never an empty page between two.
-    for (const [k, email] of doc.emails.entries())
+    for (const [k, email] of pdfDocument.emails.entries())
     {
         const destination = document.destinations.find((d) => d.name === email.anchor)!;
         expect(destination.y).toBeCloseTo(CONFIG.margin.top - CONFIG.spacing.destinationAbove, 6);
         if (k > 0)
         {
-            expect(anchorPages.get(email.anchor)).toBeGreaterThan(anchorPages.get(doc.emails[k - 1]!.anchor)!);
+            expect(anchorPages.get(email.anchor)).toBeGreaterThan(anchorPages.get(pdfDocument.emails[k - 1]!.anchor)!);
         }
     }
     for (const page of document.pages)
     {
         expect(page.text.some((r) => r.y <= BOTTOM)).toBe(true);
     }
-    for (const entry of doc.index.entries)
+    for (const entry of pdfDocument.index.entries)
     {
         const page = anchorPages.get(entry.anchor)!;
         expect(document.pages[page]!.text.some((r) => r.copyText === `Email ${String(entry.number)}`)).toBe(true);
         expect(document.destinations.find((d) => d.name === entry.anchor)!.page).toBe(page);
-        const p = index.find((i) => document.pages[i]!.links.some((l) => l.destination === entry.anchor));
-        expect(p).toBeDefined();
-        const rect = document.pages[p!]!.links.find((l) => l.destination === entry.anchor)!.rect;
-        const shown = document.pages[p!]!.text.filter((r) => r.x >= PAGE_COLUMN - 1e-6 && r.y > rect.y && r.y < rect.y + rect.height);
+        const linkPage = index.find((i) => document.pages[i]!.links.some((l) => l.destination === entry.anchor));
+        expect(linkPage).toBeDefined();
+        const rect = document.pages[linkPage!]!.links.find((l) => l.destination === entry.anchor)!.rect;
+        const shown = document.pages[linkPage!]!.text.filter((r) => r.x >= PAGE_COLUMN - 1e-6 && r.y > rect.y && r.y < rect.y + rect.height);
         expect(shown.map((r) => r.copyText)).toEqual([String(page + 1)]);
     }
     for (const [i, page] of document.pages.entries())
@@ -141,7 +141,7 @@ function checkLayout(doc: PdfDocument, layout: PdfLayout): void
 /** Each page's drawn runs as read back from the file: position (PDF coordinates, y up) and text. */
 async function pageRuns(pdf: ParsedPdf): Promise<{ x: number; y: number; text: string }[][]>
 {
-    const out: { x: number; y: number; text: string }[][] = [];
+    const runsByPage: { x: number; y: number; text: string }[][] = [];
     for (const pageDict of pdf.pages())
     {
         const fontDict = pdf.dict(pdf.dict(pageDict.get('Resources')).get('Font'));
@@ -151,9 +151,9 @@ async function pageRuns(pdf: ParsedPdf): Promise<{ x: number; y: number; text: s
             maps.set(key, parseToUnicode(await pdf.dataText(pdf.dict(fontDict.get(key)).get('ToUnicode'))));
         }
         const { runs } = readContent(await pdf.dataText(pageDict.get('Contents')));
-        out.push(runs.map((r) => ({ x: r.x, y: r.y, text: r.actualText ?? r.glyphs.map((g) => maps.get(r.font)!.get(g) ?? '').join('') })));
+        runsByPage.push(runs.map((r) => ({ x: r.x, y: r.y, text: r.actualText ?? r.glyphs.map((g) => maps.get(r.font)!.get(g) ?? '').join('') })));
     }
-    return out;
+    return runsByPage;
 }
 
 /**
@@ -161,7 +161,7 @@ async function pageRuns(pdf: ParsedPdf): Promise<{ x: number; y: number; text: s
  * its email's named destination; that destination is on the page of the
  * email's heading, just above it; the number drawn in the row is that page + 1.
  */
-async function checkPdf(bytes: Uint8Array, doc: PdfDocument): Promise<ParsedPdf>
+async function checkPdf(bytes: Uint8Array, pdfDocument: PdfDocument): Promise<ParsedPdf>
 {
     const pdf = readPdf(bytes);
     const dests = readDests(pdf);
@@ -170,9 +170,9 @@ async function checkPdf(bytes: Uint8Array, doc: PdfDocument): Promise<ParsedPdf>
     for (const [i, page] of pdf.pages().entries())
     {
         const annots = page.get('Annots') as PdfValue[] | undefined;
-        for (const a of annots ?? [])
+        for (const annotation of annots ?? [])
         {
-            const link: PdfDict = pdf.dict(a);
+            const link: PdfDict = pdf.dict(annotation);
             expect(pdf.name(link.get('Subtype'))).toBe('Link');
             const dest = pdf.name(link.get('Dest'));
             if (shownFor.has(dest))
@@ -186,8 +186,8 @@ async function checkPdf(bytes: Uint8Array, doc: PdfDocument): Promise<ParsedPdf>
             );
         }
     }
-    expect([...shownFor.keys()].sort()).toEqual(doc.index.entries.map((e) => e.anchor).sort());
-    for (const entry of doc.index.entries)
+    expect([...shownFor.keys()].sort()).toEqual(pdfDocument.index.entries.map((e) => e.anchor).sort());
+    for (const entry of pdfDocument.index.entries)
     {
         const dest = dests.get(entry.anchor)!;
         expect(shownFor.get(entry.anchor)).toEqual([String(dest.page + 1)]);
@@ -217,12 +217,12 @@ describe('generatePdf: index page numbers', () =>
     it.each([1, 2, 3])('small batch of %i: cover and index on page 1, then the emails; numbers, links and destinations agree', async (count) =>
     {
         const input = inputFor(many(count));
-        const { doc, layout } = docAndLayout(input);
+        const { pdfDocument, layout } = pdfDocumentAndLayout(input);
         // Task 8.12: no source files on the cover, the index right below the cover information, on the same page.
         expect(layout.frontPages).toBe(1);
         expect(indexPages(layout)).toEqual([0]);
         expect(layout.passes).toBe(1);
-        checkLayout(doc, layout);
+        checkLayout(pdfDocument, layout);
         // The index heading below the last cover line (the last person), one section gap below it.
         const page0 = layout.document.pages[0]!.text;
         const indexTop = layout.document.destinations.find((d) => d.name === INDEX_DESTINATION)!.y + CONFIG.spacing.destinationAbove;
@@ -232,7 +232,7 @@ describe('generatePdf: index page numbers', () =>
         expect(page0.find((r) => r.copyText === 'Index')!.y).toBeGreaterThanOrEqual(indexTop - 1e-6);
         const { bytes, fileName } = await generatePdf(input);
         expect(fileName).toBe('correspondence-2025-06-01.pdf');
-        const pdf = await checkPdf(bytes, doc);
+        const pdf = await checkPdf(bytes, pdfDocument);
         expect(pdf.pages()).toHaveLength(layout.document.pages.length);
         expect(readDests(pdf).get(COVER_DESTINATION)!.page).toBe(0);
         expect(readDests(pdf).get(INDEX_DESTINATION)!.page).toBe(0);
@@ -247,23 +247,23 @@ describe('generatePdf: index page numbers', () =>
         ];
         const indexDestination = (layout: PdfLayout) => layout.document.destinations.find((d) => d.name === INDEX_DESTINATION)!;
         /** Page (0-based) of the first index row: the page holding email 1's first link area. */
-        const firstRowPage = (doc: PdfDocument, layout: PdfLayout): number =>
-            layout.document.pages.findIndex((p) => p.links.some((l) => l.destination === doc.index.entries[0]!.anchor));
+        const firstRowPage = (pdfDocument: PdfDocument, layout: PdfLayout): number =>
+            layout.document.pages.findIndex((p) => p.links.some((l) => l.destination === pdfDocument.index.entries[0]!.anchor));
         let people = 1;
         let indexPage = 0;
         while (indexPage === 0)
         {
             people++;
             expect(people).toBeLessThan(200);
-            const { layout } = docAndLayout(inputFor(crowd(people)));
+            const { layout } = pdfDocumentAndLayout(inputFor(crowd(people)));
             indexPage = indexDestination(layout).page;
         }
-        const checkNewPage = (doc: PdfDocument, layout: PdfLayout): void =>
+        const checkNewPage = (pdfDocument: PdfDocument, layout: PdfLayout): void =>
         {
             // On a new page, the index (heading and first row) is at its top; the cover's page holds no part of it.
             const dest = indexDestination(layout);
             expect(dest.page).toBe(1);
-            expect(firstRowPage(doc, layout)).toBe(1);
+            expect(firstRowPage(pdfDocument, layout)).toBe(1);
             expect(dest.y).toBeCloseTo(CONFIG.margin.top - CONFIG.spacing.destinationAbove, 6);
             expect(layout.document.pages[0]!.text.some((r) => r.copyText === 'No.' || r.copyText === 'Index')).toBe(false);
             expect(layout.document.pages[0]!.links).toEqual([]);
@@ -273,51 +273,51 @@ describe('generatePdf: index page numbers', () =>
             [people, 1],
         ] as const)
         {
-            const { doc, layout } = docAndLayout(inputFor(crowd(count)));
+            const { pdfDocument, layout } = pdfDocumentAndLayout(inputFor(crowd(count)));
             expect(indexDestination(layout).page, `${String(count)} people`).toBe(page);
             if (page === 0)
             {
-                expect(firstRowPage(doc, layout), 'first index row with the heading').toBe(0);
+                expect(firstRowPage(pdfDocument, layout), 'first index row with the heading').toBe(0);
             }
             else
             {
-                checkNewPage(doc, layout);
+                checkNewPage(pdfDocument, layout);
             }
-            checkLayout(doc, layout);
+            checkLayout(pdfDocument, layout);
         }
         // With people - 1, the heading, column titles and a one-line first row fit below the cover; so
         // do the heading and the column titles alone. A first row made taller (several attachments, one
         // line each) no longer fits there: the whole index moves to page 2, though the cover is the same.
-        const short = docAndLayout(inputFor(crowd(people - 1)));
+        const short = pdfDocumentAndLayout(inputFor(crowd(people - 1)));
         const attachments = Array.from({ length: 6 }, (_, i) => ({ fileName: `plan-${String(i + 1)}.pdf`, size: 2048, mimeType: 'application/pdf' }));
-        const tall = docAndLayout(inputFor(crowd(people - 1, { attachments })));
+        const tall = pdfDocumentAndLayout(inputFor(crowd(people - 1, { attachments })));
         const coverText = (layout: PdfLayout): string[] => layout.document.pages[0]!.text.filter((r) => r.y <= BOTTOM).map((r) => r.copyText);
         expect(coverText(tall.layout)).toEqual(coverText(short.layout).slice(0, coverText(tall.layout).length));
         expect(coverText(short.layout)).toEqual(expect.arrayContaining(['Index', 'No.']));
-        checkNewPage(tall.doc, tall.layout);
-        checkLayout(tall.doc, tall.layout);
+        checkNewPage(tall.pdfDocument, tall.layout);
+        checkLayout(tall.pdfDocument, tall.layout);
     });
 
     it('is right on both sides of the index growing from one page to two', async () =>
     {
         // The smallest batch whose index needs two pages.
-        let n = 1;
-        while (indexPages(docAndLayout(inputFor(many(n))).layout).length < 2)
+        let messageCount = 1;
+        while (indexPages(pdfDocumentAndLayout(inputFor(many(messageCount))).layout).length < 2)
         {
-            n++;
-            expect(n).toBeLessThan(200);
+            messageCount++;
+            expect(messageCount).toBeLessThan(200);
         }
-        expect(n).toBeGreaterThan(10);
+        expect(messageCount).toBeGreaterThan(10);
         for (const [count, pages] of [
-            [n - 1, 1],
-            [n, 2],
+            [messageCount - 1, 1],
+            [messageCount, 2],
         ] as const)
         {
             const input = inputFor(many(count));
-            const { doc, layout } = docAndLayout(input);
+            const { pdfDocument, layout } = pdfDocumentAndLayout(input);
             expect(indexPages(layout)).toHaveLength(pages);
-            checkLayout(doc, layout);
-            await checkPdf((await generatePdf(input)).bytes, doc);
+            checkLayout(pdfDocument, layout);
+            await checkPdf((await generatePdf(input)).bytes, pdfDocument);
         }
     });
 
@@ -326,19 +326,20 @@ describe('generatePdf: index page numbers', () =>
         // Emails of varied length, every fifth with attachments (taller index rows).
         const body = (k: number): string => Array.from({ length: 1 + ((k * 13) % 70) }, (_, i) => `Line ${String(i + 1)} of email ${String(k + 1)}.`).join('\n');
         const input = inputFor(
-            many(240, (k) => ({
-                bodyText: body(k),
-                attachments: k % 5 === 0 ? [{ fileName: `plan-${String(k + 1)}.pdf`, size: 12_345, mimeType: 'application/pdf' }] : [],
+            many(240, (messageIndex) => ({
+                bodyText: body(messageIndex),
+                attachments: messageIndex % 5 === 0
+                    ? [{ fileName: `plan-${String(messageIndex + 1)}.pdf`, size: 12_345, mimeType: 'application/pdf' }] : [],
             })),
             { timeZone: 'America/New_York' },
         );
-        const { doc, layout } = docAndLayout(input);
+        const { pdfDocument, layout } = pdfDocumentAndLayout(input);
         const index = indexPages(layout);
         expect(index.length).toBeGreaterThanOrEqual(3);
-        checkLayout(doc, layout);
-        for (const p of index)
+        checkLayout(pdfDocument, layout);
+        for (const pageIndex of index)
         {
-            expect(layout.document.pages[p]!.text.filter((r) => r.copyText === 'No.')).toHaveLength(1);
+            expect(layout.document.pages[pageIndex]!.text.filter((r) => r.copyText === 'No.')).toHaveLength(1);
         }
         // The date column: its title (bold, here wrapped) the same on every index page; below it, each
         // row's short date in one piece (one line), then only attachment labels and bullets.
@@ -347,21 +348,21 @@ describe('generatePdf: index page numbers', () =>
         const titles = inDateColumn.map((runs) => runs.filter((r) => r.font === titleFont && r.copyText !== 'Attachments').map((r) => r.copyText));
         expect(titles[0]!.length).toBeGreaterThan(1);
         expect(titles[0]!.join('').replace(/\s+/g, ' ')).toBe('Date (America/New York)');
-        for (const t of titles)
+        for (const title of titles)
         {
-            expect(t).toEqual(titles[0]);
+            expect(title).toEqual(titles[0]);
         }
         const dates = inDateColumn.flat().filter((r) => r.font !== titleFont && r.copyText !== '\u{2022}').map((r) => r.copyText);
-        expect(dates).toEqual(doc.index.entries.map((e) => lineText(e.date)));
-        for (const d of dates)
+        expect(dates).toEqual(pdfDocument.index.entries.map((e) => lineText(e.date)));
+        for (const date of dates)
         {
-            expect(d).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+            expect(date).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
         }
         expect(dates[0]).toBe('2025-03-04 03:00'); // 08:00 UTC in New York (UTC-05:00)
         // Index rows inside the text area, the page numbers right-aligned on the right margin.
-        for (const p of index)
+        for (const pageIndex of index)
         {
-            for (const run of layout.document.pages[p]!.text)
+            for (const run of layout.document.pages[pageIndex]!.text)
             {
                 if (run.y > BOTTOM)
                 {
@@ -371,7 +372,7 @@ describe('generatePdf: index page numbers', () =>
                 expect(run.x).toBeLessThan(RIGHT);
             }
         }
-        const pdf = await checkPdf((await generatePdf(input)).bytes, doc);
+        const pdf = await checkPdf((await generatePdf(input)).bytes, pdfDocument);
         expect(pdf.pages()).toHaveLength(layout.document.pages.length);
     }, 30_000);
 
@@ -379,18 +380,18 @@ describe('generatePdf: index page numbers', () =>
     {
         const long = Array.from({ length: 1500 }, (_, i) => `word${String(i)}`).join(' ');
         const input = inputFor([make(0), make(1, { subject: long }), make(2)]);
-        const { doc, layout } = docAndLayout(input);
+        const { pdfDocument, layout } = pdfDocumentAndLayout(input);
         const index = indexPages(layout);
         expect(index.length).toBeGreaterThan(2);
         const withLink = index.filter((p) => layout.document.pages[p]!.links.some((l) => l.destination === 'email-2'));
         expect(withLink.length).toBeGreaterThan(1);
         // The column titles again at the top of each index page.
-        for (const p of index)
+        for (const pageIndex of index)
         {
-            expect(layout.document.pages[p]!.text.some((r) => r.copyText === 'No.')).toBe(true);
+            expect(layout.document.pages[pageIndex]!.text.some((r) => r.copyText === 'No.')).toBe(true);
         }
-        checkLayout(doc, layout);
-        await checkPdf((await generatePdf(input)).bytes, doc);
+        checkLayout(pdfDocument, layout);
+        await checkPdf((await generatePdf(input)).bytes, pdfDocument);
     });
 });
 
@@ -407,7 +408,7 @@ describe('generatePdf: index rows', () =>
             }),
             make(1),
         ]);
-        const { doc, layout } = docAndLayout(input);
+        const { pdfDocument, layout } = pdfDocumentAndLayout(input);
         // The index is on the cover page (task 8.12).
         const page = layout.document.pages[0]!;
         const rect = page.links.find((l) => l.destination === 'email-1')!.rect;
@@ -426,7 +427,7 @@ describe('generatePdf: index rows', () =>
             '\u{2022}',
             '(attachment without a name) (size unknown)',
         ]);
-        expect(doc.index.entries[0]!.attachmentLines).toBe(doc.emails[0]!.attachments!.items);
+        expect(pdfDocument.index.entries[0]!.attachmentLines).toBe(pdfDocument.emails[0]!.attachments!.items);
         // The row without attachments has no attachment lines.
         const rect2 = page.links.find((l) => l.destination === 'email-2')!.rect;
         expect(page.text.filter((r) => r.y > rect2.y && r.y < rect2.y + rect2.height && r.copyText === 'Attachments')).toEqual([]);
@@ -491,13 +492,13 @@ describe('generatePdf: file name and output', () =>
     it('gives the same bytes for the same input', async () =>
     {
         const input = inputFor(many(12, (k) => ({ attachments: k % 3 === 0 ? [{ fileName: 'a.txt', size: 3, mimeType: 'text/plain' }] : [] })));
-        const a = await generatePdf(input);
-        const b = await generatePdf({ ...input });
-        expect(a.bytes.length).toBeGreaterThan(1000);
-        expect(b.bytes).toEqual(a.bytes);
-        expect(b.fileName).toBe(a.fileName);
+        const first = await generatePdf(input);
+        const second = await generatePdf({ ...input });
+        expect(first.bytes.length).toBeGreaterThan(1000);
+        expect(second.bytes).toEqual(first.bytes);
+        expect(second.fileName).toBe(first.fileName);
         // Info: title and producer only (no date, no author).
-        const pdf = readPdf(a.bytes);
+        const pdf = readPdf(first.bytes);
         expect(pdf.info.keys().sort()).toEqual(['Producer', 'Title']);
         expect((pdf.info.get('Title') as PdfString).text).toBe('Email correspondence');
     });
@@ -506,10 +507,10 @@ describe('generatePdf: file name and output', () =>
     {
         const seen: number[] = [];
         const backend = {
-            render: async (doc: Parameters<PdfWriter['render']>[0], set: Parameters<PdfWriter['render']>[1]) =>
+            render: async (laidOutDocument: Parameters<PdfWriter['render']>[0], set: Parameters<PdfWriter['render']>[1]) =>
             {
-                seen.push(doc.pages.length);
-                return new PdfWriter().render(doc, set);
+                seen.push(laidOutDocument.pages.length);
+                return new PdfWriter().render(laidOutDocument, set);
             },
         };
         await generatePdf(inputFor([make(0)], { backend }));
@@ -557,20 +558,21 @@ describe('generatePdf: time bound', () =>
     {
         const body = (k: number): string => Array.from({ length: 10 + (k % 40) }, (_, i) => `Line ${String(i + 1)}: the desks arrive on Monday, email ${String(k + 1)}.`).join('\n');
         const input = inputFor(
-            many(2000, (k) => ({
-                bodyText: body(k),
-                attachments: k % 4 === 0 ? [{ fileName: `plan-${String(k + 1)}.pdf`, size: 2048 * (k + 1), mimeType: 'application/pdf' }] : [],
+            many(2000, (messageIndex) => ({
+                bodyText: body(messageIndex),
+                attachments: messageIndex % 4 === 0
+                    ? [{ fileName: `plan-${String(messageIndex + 1)}.pdf`, size: 2048 * (messageIndex + 1), mimeType: 'application/pdf' }] : [],
             })),
         );
         const start = performance.now();
-        const doc = buildPdfDocument({ ...input, strings });
-        const layout = layoutPdf(doc, fonts, { strings });
+        const pdfDocument = buildPdfDocument({ ...input, strings });
+        const layout = layoutPdf(pdfDocument, fonts, { strings });
         const bytes = await new PdfWriter().render(layout.document, fonts);
-        const ms = performance.now() - start;
-        expect(ms).toBeLessThan(60_000); // about 1.5 s on a developer machine
+        const elapsedMs = performance.now() - start;
+        expect(elapsedMs).toBeLessThan(60_000); // about 1.5 s on a developer machine
         expect(indexPages(layout).length).toBeGreaterThanOrEqual(3);
         expect(layout.passes).toBe(2);
-        checkLayout(doc, layout);
+        checkLayout(pdfDocument, layout);
         expect(readOutline(readPdf(bytes))!.items).toHaveLength(2002);
     }, 180_000);
 });
@@ -579,8 +581,8 @@ describe('generatePdf in French (locale "fr", its own texts)', () =>
 {
     it('writes the French texts with no code for a missing character, the French file name, and the same structure', async () =>
     {
-        const messages = many(3, (k) => ({
-            attachments: k === 0 ? [{ fileName: 'plan.pdf', size: 1.4 * 1024 * 1024, mimeType: 'application/pdf' }] : [],
+        const messages = many(3, (messageIndex) => ({
+            attachments: messageIndex === 0 ? [{ fileName: 'plan.pdf', size: 1.4 * 1024 * 1024, mimeType: 'application/pdf' }] : [],
         }));
         // No `strings`: generatePdf makes them from the locale, as the PDF worker does.
         const { strings: englishStrings, ...input } = inputFor(messages);
@@ -607,8 +609,8 @@ describe('generatePdf in Dutch (locale "nl", its own texts)', () =>
 {
     it('writes the Dutch texts with no code for a missing character, the Dutch file name, and the same structure', async () =>
     {
-        const messages = many(3, (k) => ({
-            attachments: k === 0 ? [{ fileName: 'plan.pdf', size: 1.4 * 1024 * 1024, mimeType: 'application/pdf' }] : [],
+        const messages = many(3, (messageIndex) => ({
+            attachments: messageIndex === 0 ? [{ fileName: 'plan.pdf', size: 1.4 * 1024 * 1024, mimeType: 'application/pdf' }] : [],
         }));
         // No `strings`: generatePdf makes them from the locale, as the PDF worker does.
         const { strings: englishStrings, ...input } = inputFor(messages);
@@ -651,7 +653,7 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
     async function bodyLinesOf(input: GeneratePdfInput): Promise<{ text: string; x: number; inserted: number }[]>
     {
         const made = await generatePdf(input);
-        const { layout } = docAndLayout(input);
+        const { layout } = pdfDocumentAndLayout(input);
         const pages = (await readPageRuns(readPdf(made.bytes))).slice(layout.frontPages);
         return pages.flatMap((runs) =>
             textLines(runs.filter((r) => r.y > CONFIG.margin.bottom && r.size === CONFIG.roles.body.size)).map((l) => ({ text: l.copied, x: l.runs[0]!.x, inserted: l.insertedSpaces })),
@@ -660,7 +662,7 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
 
     function check(lines: readonly { text: string; x: number; inserted: number }[]): void
     {
-        const xOf = (text: string): number =>
+        const lineX = (text: string): number =>
         {
             const found = lines.find((l) => l.text === text);
             if (found === undefined)
@@ -672,21 +674,21 @@ describe('generatePdf: quote marks removed, one body indent of one tab (tasks 8.
         // Own text and every quote level: the same single step in.
         for (const text of ['Hello Bob,', 'Yes, Monday works.', 'Alice', 'Can the desks come on Monday?', 'And the chairs, Alice?', 'They come later.', 'Bob', '-> a mark inside: kept', 'Seven levels deep.'])
         {
-            expect(xOf(text), text).toBeCloseTo(LEFT + STEP, 3);
+            expect(lineX(text), text).toBeCloseTo(LEFT + STEP, 3);
         }
         // The long quoted line wraps; every piece keeps the step, and together they are the text as written.
         const pieces = lines.filter((l) => l.text.includes('alpha') || l.text.includes('theta'));
         expect(pieces.length).toBeGreaterThan(1);
-        for (const p of pieces)
+        for (const piece of pieces)
         {
-            expect(p.x).toBeCloseTo(LEFT + STEP, 3);
+            expect(piece.x).toBeCloseTo(LEFT + STEP, 3);
         }
         expect(pieces.map((p) => p.text.trim()).join(' ')).toBe(long);
         // No ">" at the start of any line (the text copied out follows the printed text), none added inside one.
-        for (const l of lines)
+        for (const line of lines)
         {
-            expect(l.text).not.toMatch(/^\s*>/u);
-            expect(l.inserted).toBe(0);
+            expect(line.text).not.toMatch(/^\s*>/u);
+            expect(line.inserted).toBe(0);
         }
     }
 

@@ -58,7 +58,7 @@ export interface GeneratePdfInput
 export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf>
 {
     const strings = input.strings ?? createPdfStrings(input.locale);
-    const doc = buildPdfDocument({
+    const pdfDocument = buildPdfDocument({
         result: input.result,
         positions: input.positions,
         plans: input.plans,
@@ -70,7 +70,8 @@ export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf
         generatedAt: input.generatedAt,
         strings,
     });
-    const { document } = layoutPdf(doc, input.fonts, { strings, ...(input.config === undefined ? {} : { config: input.config }) });
-    const bytes = await (input.backend ?? new PdfWriter()).render(document, input.fonts);
-    return { bytes, fileName: doc.fileName, pageCount: document.pages.length };
+    const { document: laidOutDocument } = layoutPdf(pdfDocument, input.fonts,
+        { strings, ...(input.config === undefined ? {} : { config: input.config }) });
+    const bytes = await (input.backend ?? new PdfWriter()).render(laidOutDocument, input.fonts);
+    return { bytes, fileName: pdfDocument.fileName, pageCount: laidOutDocument.pages.length };
 }

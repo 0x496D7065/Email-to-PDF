@@ -82,12 +82,12 @@ async function make(set: SetName, locale: Locale, full: boolean)
     const rebuilt = rebuiltEntries(result).map((r) => r.id);
     const input = { result, positions, plans, rebuilt, policy, timeZone: ZONE, generatedAt: GENERATED_AT };
     const made = await generatePdf({ ...input, fonts, locale });
-    const doc = buildPdfDocument({ ...input, strings: createPdfStrings(locale) });
+    const pdfDocument = buildPdfDocument({ ...input, strings: createPdfStrings(locale) });
     const pdf = readPdf(made.bytes);
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown));
     const all = pages.map((lines) => lines.join(' ')).join(' ');
     const bookmarks = readOutline(pdf)!.items.map((i) => i.title);
-    return { result, before, rebuilt, doc, pages, all, bookmarks };
+    return { result, before, rebuilt, pdfDocument, pages, all, bookmarks };
 }
 
 /**
@@ -104,7 +104,7 @@ const REBUILT_WORDS: Record<Locale, RegExp> = {
 /** Every text of the page that is about rebuilt emails (the preview's `rebuilt` group, and any other text naming them), cut at its placeholders. */
 function rebuiltFragments(locale: Locale): string[]
 {
-    const out: string[] = [];
+    const fragments: string[] = [];
     const walk = (value: unknown, inRebuilt: boolean): void =>
     {
         if (typeof value === 'string')
@@ -117,27 +117,27 @@ function rebuiltFragments(locale: Locale): string[]
             {
                 if (piece.trim().length >= 10)
                 {
-                    out.push(piece.trim());
+                    fragments.push(piece.trim());
                 }
             }
         }
         else if (isPluralForms(value))
         {
-            for (const v of Object.values(value))
+            for (const form of Object.values(value))
             {
-                walk(v, inRebuilt);
+                walk(form, inRebuilt);
             }
         }
         else if (typeof value === 'object' && value !== null)
         {
-            for (const [k, v] of Object.entries(value))
+            for (const [key, child] of Object.entries(value))
             {
-                walk(v, inRebuilt || k === 'rebuilt');
+                walk(child, inRebuilt || key === 'rebuilt');
             }
         }
     };
     walk(CATALOG[locale] satisfies Messages | undefined, false);
-    return out;
+    return fragments;
 }
 
 /** What the PDF used to write before tasks 8.3 and 8.7 (those strings are gone from the catalog). */
@@ -211,22 +211,22 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
             {
                 it(`${set}, ${locale}, ${full ? '"Print full original text"' : 'default'}`, async () =>
                 {
-                    const s = createPdfStrings(locale);
-                    const { result, before, rebuilt, doc, pages, all, bookmarks } = await make(set, locale, full);
+                    const strings = createPdfStrings(locale);
+                    const { result, before, rebuilt, pdfDocument, pages, all, bookmarks } = await make(set, locale, full);
                     const cover = pages[0]!;
                     const coverText = flat(cover.join(' '));
 
                     // Rebuilt emails are in the PDF by default (none with the full text), numbered like the others.
                     const real = result.messages.length;
-                    expect(doc.cover.emailCount).toBe(full ? real : real + rebuilt.length);
-                    expect(doc.emails.filter((e) => e.rebuilt !== null)).toHaveLength(full ? 0 : rebuilt.length);
+                    expect(pdfDocument.cover.emailCount).toBe(full ? real : real + rebuilt.length);
+                    expect(pdfDocument.emails.filter((e) => e.rebuilt !== null)).toHaveLength(full ? 0 : rebuilt.length);
 
                     // Nothing about rebuilding, anywhere: cover, index, emails, bookmarks.
                     const text = flat(all);
                     expect(text).not.toMatch(REBUILT_WORDS[locale]);
-                    for (const f of [...rebuiltFragments(locale), ...REMOVED[locale]])
+                    for (const fragment of [...rebuiltFragments(locale), ...REMOVED[locale]])
                     {
-                        expect(text, `"${f}"`).not.toContain(flat(f));
+                        expect(text, `"${fragment}"`).not.toContain(flat(fragment));
                     }
                     for (const title of bookmarks)
                     {
@@ -234,22 +234,24 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                     }
 
                     // The cover: title, dates, count, zone, made on; people. No source files, no SHA-256 (task 8.12).
-                    expect(cover[0]).toBe(s.title);
-                    const range = doc.cover.dateRange!;
-                    expect(coverText).toContain(flat(`${s.datesLabel} ${range.first === range.last ? range.first : s.dateRange(range.first, range.last)}`));
-                    expect(coverText).toContain(`${s.emailsLabel} ${s.emailCount(doc.cover.emailCount)}`);
-                    expect(coverText).toContain(`${s.generatedLabel} ${doc.cover.generated}`);
-                    expect(cover).toContain(s.peopleHeading);
-                    expect(doc.cover.participants.length).toBeGreaterThan(0);
-                    for (const p of doc.cover.participants)
+                    expect(cover[0]).toBe(strings.title);
+                    const range = pdfDocument.cover.dateRange!;
+                    expect(coverText).toContain(
+                        flat(`${strings.datesLabel} ${range.first === range.last ? range.first : strings.dateRange(range.first, range.last)}`));
+                    expect(coverText).toContain(`${strings.emailsLabel} ${strings.emailCount(pdfDocument.cover.emailCount)}`);
+                    expect(coverText).toContain(`${strings.generatedLabel} ${pdfDocument.cover.generated}`);
+                    expect(cover).toContain(strings.peopleHeading);
+                    expect(pdfDocument.cover.participants.length).toBeGreaterThan(0);
+                    for (const participant of pdfDocument.cover.participants)
                     {
-                        expect(coverText).toContain(p.name === '' ? p.address : s.mailbox(p.name, p.address));
+                        expect(coverText).toContain(participant.name === '' ? participant.address
+                            : strings.mailbox(participant.name, participant.address));
                     }
                     // Task 8.12: no source file list, no file names, no SHA-256 anywhere in the PDF.
                     // (The file names are only in each real email's own File row, never before the first email.)
                     expect(text).not.toMatch(/\b[0-9a-f]{64}\b/);
                     expect(text).not.toContain(SOURCES_HEADING[locale]);
-                    const firstEmailPage = pages.findIndex((lines) => lines[0] === doc.emails[0]!.heading);
+                    const firstEmailPage = pages.findIndex((lines) => lines[0] === pdfDocument.emails[0]!.heading);
                     expect(firstEmailPage).toBeGreaterThan(0);
                     const front = pages.slice(0, firstEmailPage);
                     const frontText = flat(front.map((lines) => lines.join(' ')).join(' '));
@@ -257,25 +259,25 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                     {
                         expect(frontText, name).not.toContain(name);
                     }
-                    expect(Object.keys(doc.cover)).not.toContain('sources');
+                    expect(Object.keys(pdfDocument.cover)).not.toContain('sources');
                     // The cover blocks end with the people list: no other heading after it.
-                    const headings = doc.cover.blocks.filter((b) => b.kind === 'heading').map((b) => b.line.map((r) => r.text).join(''));
-                    expect(headings).toEqual([s.title, s.peopleHeading]);
+                    const headings = pdfDocument.cover.blocks.filter((b) => b.kind === 'heading').map((b) => b.line.map((r) => r.text).join(''));
+                    expect(headings).toEqual([strings.title, strings.peopleHeading]);
 
                     // The index follows the cover information on page 1: its heading right after the people list.
-                    const people = cover.indexOf(s.peopleHeading);
-                    const indexAt = cover.indexOf(s.indexHeading);
+                    const people = cover.indexOf(strings.peopleHeading);
+                    const indexAt = cover.indexOf(strings.indexHeading);
                     expect(people).toBeGreaterThan(0);
-                    expect(indexAt).toBe(people + 1 + doc.cover.participants.length);
+                    expect(indexAt).toBe(people + 1 + pdfDocument.cover.participants.length);
                     // Every email starts at the top of a page of its own (its heading first), in order, after the front.
                     let previous = firstEmailPage - 1;
-                    for (const e of doc.emails)
+                    for (const email of pdfDocument.emails)
                     {
-                        const at = pages.findIndex((lines, i) => i > previous && lines[0] === e.heading);
-                        expect(at, e.heading).toBeGreaterThan(previous);
-                        previous = at;
+                        const pageIndex = pages.findIndex((lines, i) => i > previous && lines[0] === email.heading);
+                        expect(pageIndex, email.heading).toBeGreaterThan(previous);
+                        previous = pageIndex;
                     }
-                    expect(cover.at(-1)).toBe(s.pageFooter(1, pages.length));
+                    expect(cover.at(-1)).toBe(strings.pageFooter(1, pages.length));
 
                     // Collapse, never delete: the engine data is unchanged by making the PDF.
                     expect(JSON.stringify(result)).toBe(before);
