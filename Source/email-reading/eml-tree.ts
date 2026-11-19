@@ -57,12 +57,32 @@ export interface EmlTree
  * also what lets the tree's attachments be matched one to one with
  * `email.attachments`. Throws on a malformed file (postal-mime's own errors)
  * and PostalMimeInternalsError if the internals do not look as expected.
+ * One UTF-8 byte order mark at the very start is skipped first (see
+ * withoutLeadingBom). The caller hashes its own bytes, so a file's hash
+ * still covers the mark.
  */
 export async function parseEmlTree(bytes: Uint8Array | ArrayBuffer, options: PostalMimeOptions): Promise<EmlTree>
 {
     const parser = new PostalMime({ ...options, forceRfc822Attachments: true });
-    const email = await parser.parse(bytes);
+    const email = await parser.parse(withoutLeadingBom(bytes));
     return { email, root: readPartsTree(parser, email) };
+}
+
+/**
+ * `bytes` without ONE UTF-8 byte order mark (EF BB BF) at the very start, or
+ * `bytes` itself when it does not start with one. Some tools save an .eml
+ * file with this mark; postal-mime would read it as part of the first header
+ * name (U+FEFF then "From"), and that header would be lost. A U+FEFF
+ * anywhere else is content and stays.
+ */
+export function withoutLeadingBom(bytes: Uint8Array | ArrayBuffer): Uint8Array | ArrayBuffer
+{
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (view.length >= 3 && view[0] === 0xef && view[1] === 0xbb && view[2] === 0xbf)
+    {
+        return view.subarray(3);
+    }
+    return bytes;
 }
 
 /**
