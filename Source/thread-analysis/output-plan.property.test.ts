@@ -356,7 +356,7 @@ describe('planOutput: properties', () =>
         {
             checkAllPolicies(foldSet(seed), `seed ${seed}`);
         }
-    });
+    }, 60_000); // 300 sets x 13 plans: about 1 to 2 s, over 5 s on a busy machine
 
     it('holds the invariants over the real thread analysis (150 seeded sets), and for every subset of included emails', () =>
     {
