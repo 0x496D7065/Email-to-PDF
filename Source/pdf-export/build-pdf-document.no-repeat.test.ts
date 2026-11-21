@@ -1294,7 +1294,7 @@ describe('Q3, option B (user decision 2026-11-09, task 8.13a, replaces 3a option
     }
 });
 
-describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked is left out; one the tool refused to rebuild stays', () =>
+describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked is left out; one the tool refused to rebuild stays, header lines included (F6 and Q3, task 9.9b)', () =>
 {
     // A forward whose forwarded header gives no sender mailbox and no readable date: reconstruct-quoted-messages.ts refuses it (R1).
     const refusedBody =
@@ -1312,7 +1312,7 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         expect(rebuiltEntries(analysisOf(FORWARD, [2]))).toHaveLength(2);
     });
 
-    it('both rebuilt emails unticked: the rebuildable forwarded emails are left out, the refused one stays inline; full text and the preview keep everything', () =>
+    it('both rebuilt emails unticked: the rebuildable forwarded emails are left out, the refused one stays inline with its header lines; full text and the preview keep everything', () =>
     {
         const result = analyzeThread([
             { ok: true, message: refused },
@@ -1324,13 +1324,16 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         const ids = rebuiltEntries(result).map((r) => r.id);
         const pdfDocument = build(result, { rebuilt: [], unticked: ids });
         expect(squash(bodyOf(realOf(pdfDocument, refusedAt)))).toContain(refusedText);
+        // The refused header lines stay (user decision Q3, review round 1 of task 9.9b-1): F6 folds a refused
+        // forward as the preview does, but never header lines with printed text under them (they say who wrote it).
         expect(squash(bodyOf(realOf(pdfDocument, refusedAt)))).toContain('From: the accounting team');
         expect(squash(bodyOf(realOf(pdfDocument, forwardAt)))).toBe(squash(FORWARD.messages![2]!.text));
         for (const sentenceIndex of [0, 1])
         {
             expect(pdfDocument.emails.some((e) => squash(bodyOf(e)).includes(sentence(FORWARD, sentenceIndex)))).toBe(false);
         }
-        // The preview's labels: the left-out parts name no PDF email ('unticked'); the refused forward has no cut.
+        // The preview's labels: the left-out parts name no PDF email ('unticked'); the refused forward has no cut
+        // (its folded header lines have text under them, Q3), so the preview labels them "In the PDF".
         const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
         const { parts } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [], unticked: ids });
         expect(parts.get(refusedAt)).toBeUndefined();
@@ -1348,13 +1351,15 @@ describe('Q2 (user decision 2026-11-09, task 8.13a): a forwarded email unticked 
         {
             expect(squash(bodyOf(realOf(full, forwardAt)))).toContain(sentence(FORWARD, sentenceIndex));
         }
-        // The switch off: nothing is unticked, both forwards as their plans say.
+        // The switch off: nothing is unticked and nothing failed to rebuild (F6 needs rebuilding on), both forwards
+        // as their plans say, header lines included.
         const off = build(result, { rebuilt: [], unticked: ids, rebuildingOff: true });
         for (const sentenceIndex of [0, 1])
         {
             expect(squash(bodyOf(realOf(off, forwardAt)))).toContain(sentence(FORWARD, sentenceIndex));
         }
         expect(squash(bodyOf(realOf(off, refusedAt)))).toContain(refusedText);
+        expect(squash(bodyOf(realOf(off, refusedAt)))).toContain('From: the accounting team');
     });
 
     it('a refused quote NESTED inside an unticked forwarded email is left out with it (it is part of that email\'s place); full text keeps it', () =>

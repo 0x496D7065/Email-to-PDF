@@ -459,6 +459,9 @@ describe('printedAsEmailOfItsOwn (task 8.11, S1, done in task 8.13a)', () =>
     it('is false for an unticked forwarded part (printed nowhere), white space alone, no cut, or no view', () =>
     {
         expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 10, null), range(10, 32, { kind: 'unticked', id: 0 })] }, body)).toBe(false);
+        // Task 9.9b: header lines of a quoted email with no text (F2), a folded part that could not be rebuilt (F6).
+        expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 10, null), range(10, 32, { kind: 'no-text', id: 0 })] }, body)).toBe(false);
+        expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 10, null), range(10, 32, { kind: 'not-rebuilt' })] }, body)).toBe(false);
         expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 30, null), range(30, 32, { kind: 'rebuilt', id: 0, number: 1 })] }, body)).toBe(false);
         expect(printedAsEmailOfItsOwn({ pdfRanges: [range(0, 32, null)] }, body)).toBe(false);
         expect(printedAsEmailOfItsOwn({}, body)).toBe(false);

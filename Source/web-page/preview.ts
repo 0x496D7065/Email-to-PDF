@@ -354,6 +354,10 @@ export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly numbe
  * email in the PDF that its own page prints read like a real file's:
  * "... printed as email #4"; the parts its page does not print stay in
  * this email, with their own label (review round 4 of task 8.13b-3).
+ * Task 9.9b: the header lines of a quoted email with no text (F2): "Not in
+ * the PDF: quoted email with no text (header lines only)"; a folded part of
+ * a forward whose rebuild failed (F6): "Not in the PDF: quoted part that
+ * could not be rebuilt as an email".
  */
 export function pdfLabelText(label: PdfLabel): string
 {
@@ -370,6 +374,10 @@ export function pdfLabelText(label: PdfLabel): string
                 return t('pdf.printedAs.unticked');
             case 'unticked-attached':
                 return t('pdf.printedAs.untickedAttached', { number: messageNumberText(printedAs.position + 1) });
+            case 'no-text':
+                return t('pdf.printedAs.noText');
+            case 'not-rebuilt':
+                return t('pdf.printedAs.notRebuilt');
         }
     }
     const list = label.reasons.length === 0 ? ['text' as const] : label.reasons;

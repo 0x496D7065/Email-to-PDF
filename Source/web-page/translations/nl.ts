@@ -330,6 +330,10 @@ export const nl: Messages = {
             rebuilt: 'Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail {number} in de PDF)',
             unticked: 'Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt',
             untickedAttached: 'Niet in de PDF: e-mail {number} (hier bijgevoegd) is niet aangevinkt',
+            // NEEDS USER PROOFREADING (task 9.9b)
+            noText: 'Niet in de PDF: geciteerde e-mail zonder tekst (alleen kopregels)',
+            // NEEDS USER PROOFREADING (task 9.9b)
+            notRebuilt: 'Niet in de PDF: geciteerd deel dat niet als e-mail kon worden gereconstrueerd',
         },
         messageFailed: 'De tool kon niet tonen wat de PDF van deze e-mail weglaat.',
         document: {

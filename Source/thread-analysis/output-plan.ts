@@ -34,7 +34,10 @@
 // left out that way, and a part that holds one is not cut at all (its
 // header lines and quote stay around it); quoted header lines stay unless
 // the header printed shows all they say (user decisions 2026-11-06, B1 and
-// B2; review round 3 of task 8.10).
+// B2; review round 3 of task 8.10). The same rule leaves out of a forwarded
+// part the header lines of a rebuilt email with no text, and the pieces
+// the preview folds where the rebuild failed (user decisions F2 and F6,
+// task 9.9b): this plan still says 'forwarded', kept, for them.
 // This plan never changes text: it only marks ranges of the original body as
 // kept or left out. The preview, the original files and the "include
 // everything" option still give the full text. When a case is not covered by

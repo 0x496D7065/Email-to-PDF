@@ -39,7 +39,10 @@
 //   unticked (task 8.13a, Q2: `printedAs` kind 'unticked', printed
 //   nowhere in the PDF), and for the printed block of an attached email
 //   the reader unticked (task 8.13b-3, Q3: kind 'unticked-attached'; one
-//   in the PDF is kind 'email', like a real file). Two ADJACENT blocks with the very same "printed
+//   in the PDF is kind 'email', like a real file), and (task 9.9b) for the
+//   place of a rebuilt email with no text (kind 'no-text', F2) and a folded
+//   piece of a forward whose rebuild failed (kind 'not-rebuilt', F6), both
+//   printed nowhere. Two ADJACENT blocks with the very same "printed
 //   as" label (both left out, the same email and number, or the same
 //   unticked email) are then joined into one block with one label
 //   (mergeSamePrintedAs, task 8.13a review round 2): a forward's header
@@ -91,14 +94,25 @@ function printedAsKey(printedAs: PrintedAs | null | undefined): string
             return `u${String(printedAs.id)}`;
         case 'unticked-attached':
             return `a${String(printedAs.position)}`;
+        case 'no-text':
+            return `n${String(printedAs.id)}`;
+        case 'not-rebuilt':
+            return 'f';
     }
+}
+
+/** Whether a part left out with this PrintedAs is printed nowhere in the PDF (not as an email of its own). */
+function printedNowhereKind(printedAs: PrintedAs): boolean
+{
+    return printedAs.kind === 'unticked' || printedAs.kind === 'unticked-attached' || printedAs.kind === 'no-text' || printedAs.kind === 'not-rebuilt';
 }
 
 /**
  * Whether the PDF leaves text (not white space alone) of `body` out because
  * it prints it as an email of its own (a rebuilt email or a real file; not
- * an unticked forwarded part or unticked attached email, which is printed
- * nowhere): then the note of
+ * an unticked forwarded part or unticked attached email, the place of a
+ * rebuilt email with no text or a forward whose rebuild failed, which are
+ * printed nowhere): then the note of
  * an email kept whole says so (task 8.11, finding S1, done in task 8.13a;
  * Source/web-page-logic/message-notes.ts, pdfPlanNote). `view` null or without
  * `pdfRanges`: false.
@@ -107,7 +121,7 @@ export function printedAsEmailOfItsOwn(view: Pick<PdfView, 'pdfRanges'> | null, 
 {
     // 'unticked' never meets keptAllBecauseEmpty anyway: keepsKind always keeps 'forwarded', so a plan with a forwarded part with text is never "kept whole because empty".
     return (view?.pdfRanges ?? []).some(
-        (r) => r.printedAs != null && r.printedAs.kind !== 'unticked' && r.printedAs.kind !== 'unticked-attached' && hasNonSpace(body, r.start, r.end),
+        (r) => r.printedAs != null && !printedNowhereKind(r.printedAs) && hasNonSpace(body, r.start, r.end),
     );
 }
 

@@ -39,6 +39,7 @@ import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { findReplyHeaders } from '../thread-analysis/reply-header';
+import { rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, applyNoRepeatRule, pdfRanges } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
@@ -158,13 +159,19 @@ interface Stats
     moved: number;
     /** Parts left out with an unticked rebuilt email (Q2). */
     unticked: number;
+    /** Parts left out as the place of a rebuilt email with no text (F2, task 9.9b). */
+    noText: number;
+    /** Folded parts left out of a forward whose rebuild failed (F6, task 9.9b). */
+    notRebuilt: number;
+    /** Parts printed nowhere ('unticked', 'no-text') whose very words are the header of another rebuilt place with text. */
+    twinWords: number;
 }
 
 /** Checks the invariant (top of this file) on `made` (folded); returns how many headers were found shown, exempt, and cut. */
 function expectNoHeaderLines(made: Made, what: string): Stats
 {
     const { result, positions, pdfDocument } = made;
-    const stats: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0 };
+    const stats: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0, noText: 0, notRebuilt: 0, twinWords: 0 };
     const violations: string[] = [];
     for (const [k, position] of positions.entries())
     {
@@ -230,23 +237,54 @@ function expectNoHeaderLines(made: Made, what: string): Stats
             {
                 continue;
             }
+            // A part printed nowhere is in no text of the PDF. Except that a part whose very words are the header
+            // of ANOTHER rebuilt place with text cannot be told apart from it by its text (the duplicate pair of
+            // fixtures 94 to 97, 14 Jul 16:53: an empty attribution over the same line with text, which is
+            // printed with its text): such words may be printed at most once per such place. How many parts
+            // need that allowance is counted (twinWords) and checked exactly below.
+            const expectPrintedNowhere = (why: string): void =>
+            {
+                const twins = result.reconstructed.filter((r) =>
+                {
+                    const at = result.positionByIndex[r.sourceIndex];
+                    const itself = at === position && r.rebuilt.start >= range.start && r.rebuilt.start < range.end;
+                    return !itself && at != null && !rebuiltHasNoPrintableText(r)
+                        && squash(result.messages[at]!.message.bodyText.slice(r.rebuilt.start, r.rebuilt.headerEnd)) === text;
+                }).length;
+                const times = pdfDocument.emails.reduce((n, e) => n + squash(bodyOf(e)).split(text).length - 1, 0);
+                expect(times, `${what}: ${why} (words of ${String(twins)} other place(s) with text)`).toBeLessThanOrEqual(twins);
+                stats.twinWords += twins > 0 ? 1 : 0;
+            };
             if (range.printedAs.kind === 'unticked')
             {
                 stats.unticked++;
                 expect(made.rebuilt, what).not.toContain(range.printedAs.id);
                 expect(made.unticked, what).toContain(range.printedAs.id);
-                // An empty part (header lines only, task 9.9a) whose very words are the header of ANOTHER rebuilt
-                // place cannot be told apart from it by its text: fixtures 94 to 97 hold the same empty forward
-                // once per file (an empty rebuilt email is not printed, task 8.14: its lines stay in that file's
-                // text), and the duplicate pair (14 Jul 16:53) one empty attribution over the same line with text.
-                const sameWordsElsewhere = result.reconstructed.some((r) =>
-                {
-                    const at = result.positionByIndex[r.sourceIndex];
-                    const itself = at === position && r.rebuilt.start >= range.start && r.rebuilt.start < range.end;
-                    return !itself && at != null && squash(result.messages[at]!.message.bodyText.slice(r.rebuilt.start, r.rebuilt.headerEnd)) === text;
-                });
-                expect(!sameWordsElsewhere && pdfDocument.emails.some((e) => squash(bodyOf(e)).includes(text)),
-                    `${what}: an unticked forwarded part is nowhere in the PDF`).toBe(false);
+                expectPrintedNowhere('an unticked forwarded part is nowhere in the PDF');
+                continue;
+            }
+            if (range.printedAs.kind === 'no-text')
+            {
+                // F2 (task 9.9b): the place of a rebuilt email with no text, header lines only, printed nowhere.
+                stats.noText++;
+                const place = result.reconstructed[range.printedAs.id]!;
+                expect(rebuiltHasNoPrintableText(place), what).toBe(true);
+                expect(result.positionByIndex[place.sourceIndex], what).toBe(position);
+                expect(place.rebuilt.start <= range.start && range.end <= place.rebuilt.end, what).toBe(true);
+                expect(pdfDocument.emails.some((e) => e.rebuilt?.id === place.id), what).toBe(false);
+                expectPrintedNowhere('the header lines of an empty rebuilt email are nowhere in the PDF');
+                continue;
+            }
+            if (range.printedAs.kind === 'not-rebuilt')
+            {
+                // F6 (task 9.9b): a folded piece of a forwarded part in no rebuilt place (its rebuild failed).
+                stats.notRebuilt++;
+                const plan = made.plans[k]!;
+                const forwardedAt = plan.ranges.find((x) => x.reason === 'forwarded')?.start ?? Number.POSITIVE_INFINITY;
+                expect(range.start, what).toBeGreaterThanOrEqual(forwardedAt);
+                expect(result.reconstructed.some((r) => result.positionByIndex[r.sourceIndex] === position
+                    && r.rebuilt.start < range.end && range.start < r.rebuilt.end), what).toBe(false);
+                expect(result.messages[position]!.segments.some((s) => s.folded && s.start <= range.start && range.end <= s.end), what).toBe(true);
                 continue;
             }
             if (range.printedAs.kind === 'unticked-attached')
@@ -290,20 +328,8 @@ function expectNoHeaderLines(made: Made, what: string): Stats
     // 2. A rebuilt email: no header block in its text below the moved header lines; moved lines printed once
     // per copy moved. Two copies of one email linked together (fixtures 94 and 97, task 9.9a: the same thread
     // in two files) may move the very same lines: then they are printed twice, once per copy, nothing more.
-    // And an empty rebuilt email (no text: not printed, task 8.14) leaves its header lines in its source's
-    // text when it is ticked (unticked, they are left out: Q2): when they are word for word the lines of
-    // another one (the duplicate pair of fixtures 94 to 97), they are printed there too (how empty ones
-    // show is task 9.9b).
-    const keptEmpty = new Map<string, number>();
-    for (const r of result.reconstructed)
-    {
-        const position = result.positionByIndex[r.sourceIndex];
-        if (r.rebuilt.noOwnText && position != null && pdfDocument.pdfNumberByPosition[position] != null)
-        {
-            const lines = squash(result.messages[position]!.message.bodyText.slice(r.rebuilt.start, r.rebuilt.headerEnd));
-            keptEmpty.set(lines, (keptEmpty.get(lines) ?? 0) + 1);
-        }
-    }
+    // An empty rebuilt email (no text) leaves its header lines nowhere in the PDF, ticked or not (F2, task
+    // 9.9b; until then they stayed in its source's text when it was ticked, and could repeat these lines).
     const movedAll = applyNoRepeatRule({ result, positions, plans: made.plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: made.rebuilt,
         rebuildingOff: made.rebuildingOff, unticked: made.unticked }).moved;
     const timesMoved = new Map<string, number>();
@@ -335,10 +361,9 @@ function expectNoHeaderLines(made: Made, what: string): Stats
             {
                 const squashedBlock = squash(block);
                 const inPdf = pdfDocument.emails.reduce((n, x) => n + (squash(bodyOf(x)).split(squashedBlock).length - 1), 0);
-                // Once per copy moved, plus at most once per empty place with the same words (kept when ticked).
+                // Once per copy moved.
                 const once = `${what}: moved header lines "${squashedBlock.slice(0, 60)}" printed once per copy moved`;
-                expect(inPdf, once).toBeGreaterThanOrEqual(timesMoved.get(squashedBlock) ?? 0);
-                expect(inPdf, once).toBeLessThanOrEqual((timesMoved.get(squashedBlock) ?? 0) + (keptEmpty.get(squashedBlock) ?? 0));
+                expect(inPdf, once).toBe(timesMoved.get(squashedBlock) ?? 0);
                 expect(squash(bodyOf(email)).startsWith(squashedBlock) || squash(bodyOf(email)).includes(squashedBlock), what).toBe(true);
             }
             // At the top of its text.
@@ -365,7 +390,7 @@ function expectFullTextWhole(messages: readonly NormalizedMessage[], what: strin
 
 describe('no header lines of another email inside a body, "Print full original text" off (task 8.13a)', () =>
 {
-    const totals: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0 };
+    const totals: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0, noText: 0, notRebuilt: 0, twinWords: 0 };
     const add = (stats: Stats): void =>
     {
         for (const key of Object.keys(totals) as (keyof Stats)[])
@@ -436,5 +461,8 @@ describe('no header lines of another email inside a body, "Print full original t
         expect(totals.unticked).toBeGreaterThan(10);
         expect(totals.inline).toBeGreaterThan(10);
         expect(switchOffInline).toBeGreaterThan(10);
+        // Exactly the parts with the words of another place with text: the empty 14 Jul 16:53 attribution of
+        // fixtures 94 to 97: 4 fixtures alone + the same 4 in "all fixtures", for each of the 3 choices.
+        expect(totals.twinWords).toBe(24);
     });
 });

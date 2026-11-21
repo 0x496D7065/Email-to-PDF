@@ -188,6 +188,31 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
     const last = pdf.emails[10]!;
     expect(last.rebuilt).toBeNull();
     expect(fieldOf(last, 'Subject')).toBe(message.subject);
+    // F2 (user decision 2026-11-19, task 9.9b): no header lines with no text anywhere in the PDF. Every
+    // other part of the file's text is printed as a rebuilt email above (each one's text checked whole),
+    // and the 3 empty ones (the empty forward at the top, the empty attributions over 27 Sep 08:27 and
+    // 14 Jul 16:53) are printed nowhere, not even in the file's own text: that text is empty, so it shows
+    // the "(no text)" placeholder (task 8.14, Q6). Before task 9.9b it printed those 3 header blocks.
+    expect(last.body).toEqual([]);
+    expect(last.notes.map(lineText)).toEqual(['(no text)']);
+    // With rebuilding off, or every rebuilt email unticked, their lines are not printed either. Only the
+    // empty 14 Jul attribution has the very words of another header (the one with text under it), which
+    // the file's text prints once, with its text, when rebuilding is off.
+    const headerOf = (r: (typeof result.reconstructed)[number]): string => squashWhiteSpace(message.bodyText.slice(r.rebuilt.start, r.rebuilt.headerEnd));
+    const emptyHeaders = result.reconstructed.filter((r) => rebuiltHasNoPrintableText(r)).map(headerOf);
+    expect(emptyHeaders).toHaveLength(3);
+    for (const [mode, extra] of [
+        ['rebuilding off', { rebuilt: [], rebuildingOff: true }],
+        ['every rebuilt email unticked', { rebuilt: [], unticked: entries.map((r) => r.id) }],
+    ] as const)
+    {
+        const other = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0,
+            strings: createPdfStrings('en'), ...extra });
+        const text = squashWhiteSpace(other.emails.map((e) => e.body.map(lineText).join('\n')).join('\n'));
+        const withText = (h: string): number => result.reconstructed.filter((r) => !rebuiltHasNoPrintableText(r) && headerOf(r) === h).length;
+        expect(emptyHeaders.map((h) => text.split(h).length - 1), mode)
+            .toEqual(emptyHeaders.map((h) => (mode === 'rebuilding off' ? withText(h) : 0)));
+    }
 }
 
 describe('phone forward of a flat thread: the fixtures (parse -> analysis -> plan -> PDF)', () =>

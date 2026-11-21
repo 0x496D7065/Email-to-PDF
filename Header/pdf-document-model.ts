@@ -166,6 +166,12 @@ export interface PdfDocument
  * or (kind 'unticked-attached', task 8.13b-3, Q3) the printed block of an
  * attached email whose kept copy (list position `position`) is not in the PDF.
  * The printed block of an attached email that IS in the PDF is kind 'email'.
+ * Task 9.9b (user decisions F2 and F6, 2026-11-19), with "Print full
+ * original text" off: kind 'no-text', the place of a rebuilt email with no
+ * text (entry `id` in `result.reconstructed`: header lines only), printed
+ * nowhere; kind 'not-rebuilt', a folded part of a forwarded part that no
+ * rebuilt email covers (its rebuild failed), printed nowhere, as the
+ * preview folds it (never header lines with printed text under them, Q3).
  */
 export type PrintedAs =
     | { readonly kind: 'rebuilt'; readonly id: number; readonly number: number }
@@ -173,7 +179,11 @@ export type PrintedAs =
     | { readonly kind: 'unticked'; readonly id: number }
     // The printed block of an attached email whose kept copy (list position
     // `position`) the reader unticked: not printed anywhere (task 8.13b-3, Q3).
-    | { readonly kind: 'unticked-attached'; readonly position: number };
+    | { readonly kind: 'unticked-attached'; readonly position: number }
+    // The place of a rebuilt email with no text (entry `id`): header lines only, printed nowhere (task 9.9b, F2).
+    | { readonly kind: 'no-text'; readonly id: number }
+    // A folded piece of a forwarded part whose rebuild failed: printed nowhere, folded as in the preview (task 9.9b, F6).
+    | { readonly kind: 'not-rebuilt' };
 
 /** A range of a body as the PDF prints it: a plan range, or a piece of one the no-repeat rule left out (`printedAs`: where the PDF prints it). */
 export interface PdfRange extends PlanRange

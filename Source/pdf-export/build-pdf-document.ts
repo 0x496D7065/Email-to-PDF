@@ -103,9 +103,10 @@
 // something out. Known repeats this
 // rule cannot remove (when unsure, the tool shows text twice rather than
 // lose it): a rebuilt email that link-rebuilt-messages.ts could not prove to be
-// the same as a real file (both are printed), a forwarded part that could
-// not be rebuilt at all (the plan keeps it, even when its email is also in
-// the PDF as a real file), the same old email kept inline in two real
+// the same as a real file (both are printed), the text a forwarded part
+// that could not be rebuilt at all shows unfolded (even when its email is
+// also in the PDF as a real file; its folded pieces are left out, F6 below),
+// the same old email kept inline in two real
 // emails while its rebuilt email is unticked, a body whose plan failed
 // (printed whole), the allowed repeats of B1 and B2 above, and, from B1, a
 // KNOWN, DELIBERATE REPEAT (user decision 2026-11-07, option A of review
@@ -185,12 +186,17 @@
 // holds only white space. Its pdfNumberByPosition is null, so the preview's
 // "Email N in the PDF" labels never name it. A rebuilt email whose rebuilt
 // text has no text is left out the same way (Q4,
-// rebuiltHasNoPrintableText): it gets no slot, so no place in a body prints
-// as it, and its quoted header lines are left to the plan of the email it
-// was read from. There they are quoted history, so the normal PDF folds them
-// out with the rest of the quote: they are printed only with
-// `policy.unfoldEverything` ("Print full original text"), and stay visible
-// in the preview and in the original file. An attached email the reader
+// rebuiltHasNoPrintableText): it gets no slot. And its quoted header lines
+// (its whole place: header lines only) are printed nowhere either (user
+// decision F2, 2026-11-19, task 9.9b: "no lone header lines anywhere in
+// the PDF"): the no-repeat rule leaves them out of the email it was read
+// from (`printedAs` kind 'no-text'), wherever its plan put them (a forward,
+// whose forwarded part the plan keeps, included), whatever the reader
+// ticked, with "Rebuild conversation from replies" on or off. Before task
+// 9.9b they stayed where the plan put them, so a forward printed them. They
+// are printed only with `policy.unfoldEverything` ("Print full original
+// text"), and stay visible in the preview (labelled "Not in the PDF") and in
+// the original file. An attached email the reader
 // TICKED that is left out this way keeps its printed block (its header
 // lines) in the email holding it (attachedBlockParts); one the reader
 // unticked is cut as before (Q3).
@@ -262,6 +268,8 @@
 // transform makes new strings. Pure function, no DOM, no clock (the caller
 // passes `generatedAt`), README.md, rule R7.
 
+import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
+import { lineRanges } from '../thread-analysis/fold-segments';
 import { headerLabelCounts } from '../thread-analysis/quoted-header';
 import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-analysis/link-rebuilt-messages';
 import { mapOffsets } from '../thread-analysis/same-text-offsets';
@@ -280,7 +288,7 @@ import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email'
 import type { PdfBlock, PdfDocument, PdfEmail, PdfFieldRow, PdfIndexEntry, PdfLine, PdfParticipant, PdfRange, PdfRole, PdfStrings, PrintedAs } from '../../Header/pdf-document-model';
 import type { RebuiltInPdf } from '../../Header/preview-display';
 import type { AnalyzedRebuiltMessage, ReconstructedMessage } from '../../Header/rebuilt-emails';
-import type { AnalyzedAttachedMessage, AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
+import type { AnalyzedAttachedMessage, AnalyzedMessage, Segment, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 // ---------------------------------------------------------------- the shape
 
@@ -903,11 +911,28 @@ export function headerLinesEnd(body: string, rebuiltMessage: ReconstructedMessag
  * else, so it stays INLINE (the part ends where it starts, unprintedSignatureStart); only
  * the words the other email prints are cut. When it is unclear where in the
  * body the block starts, the whole place stays (when unsure, keep).
+ * EMPTY PLACES (user decision F2, task 9.9b): the place of a rebuilt
+ * message with no text (rebuiltHasNoPrintableText: header lines only) is
+ * left out too (`printedAs` kind 'no-text'), unless a real file in the
+ * PDF prints it (kind 'email'): no lone header lines in the PDF.
+ * NOT REBUILT (user decision F6, task 9.9b; applyNoRepeatRule only, while
+ * rebuilding is on): in the forwarded part of a body, the pieces the
+ * preview folds that lie in no place (the rebuild failed there:
+ * notRebuiltParts) are left out (kind 'not-rebuilt'), so the PDF folds them
+ * as the preview does; the text the preview shows stays, and so do the
+ * header lines right above it that say who wrote it (Q3, review round 1 of
+ * task 9.9b-1); header lines whose text is only under a later block of
+ * header lines are left out (review rounds 2 and 3 of task 9.9b-1; a block
+ * starts after anything that is not header lines, folded or not; two blocks
+ * with no gap at all count as one and are kept, see notRebuiltParts). A body
+ * with a place whose bounds are malformed is not cut this
+ * way at all (when unsure, keep).
  * Kept INLINE, as the plan says (nothing else would show it): a rebuilt
  * message that is not in the PDF for any other reason (not a forwarded
  * part, its entry chosen but not placed, a real file linked to it that is
  * not in the PDF), and any quoted part the thread analysis could not rebuild at all
- * (reconstruct-quoted-messages.ts, REFUSAL: there is no place for it).
+ * (reconstruct-quoted-messages.ts, REFUSAL: there is no place for it) that
+ * the preview shows unfolded, or that is not in a forwarded part.
  * THE WRITER'S ANSWER STAYS (task 8.10, B1, review round 3, as narrowed by
  * task 8.13a, Q3): a place whose text holds BOTH text the plan calls the
  * writer's own ('text', or a kept signature: holdsOwnText) AND text the
@@ -964,6 +989,10 @@ const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean =>
             return b.kind === 'unticked' && a.id === b.id;
         case 'unticked-attached':
             return b.kind === 'unticked-attached' && a.position === b.position;
+        case 'no-text':
+            return b.kind === 'no-text' && a.id === b.id;
+        case 'not-rebuilt':
+            return b.kind === 'not-rebuilt';
     }
 };
 
@@ -1451,7 +1480,114 @@ function subtractIntervals(start: number, end: number, holes: readonly (readonly
     return remaining;
 }
 
-/** printedElsewhereParts, and the header lines moved to each rebuilt email (see applyNoRepeatRule). */
+/**
+ * F6 (user decision 2026-11-19, task 9.9b): the pieces of a body's FORWARDED
+ * part (rule 1 of Source/thread-analysis/output-plan.ts, read from `ranges`) that the
+ * preview folds (folded `segments`) and that lie in no place rebuilt from
+ * this body (`places`: [start, end) of every rebuilt message read from it):
+ * what is left of a forward whose rebuild failed
+ * (Source/thread-analysis/reconstruct-quoted-messages.ts refused a header and the chain
+ * stopped, a limit was reached, or rebuilding threw). The PDF leaves them
+ * out as the preview folds them (kind 'not-rebuilt': printed nowhere), so
+ * the preview and the PDF agree; text the preview shows unfolded stays.
+ * HEADER LINES WITH TEXT UNDER THEM STAY (user decision Q3, 2026-11-21,
+ * review round 1 of task 9.9b-1): a folded piece of header lines (a
+ * segment with reason 'reply-header': a reply or forward header) is NOT
+ * left out when text the preview shows (in no folded segment, not blank)
+ * follows it before the next place, the next block of header lines or the
+ * end of the forwarded part: it says who wrote that text, so the PDF prints
+ * it, and the preview labels it "In the PDF" (the plan keeps it:
+ * 'forwarded'). Only header lines with nothing printed under them (F2: no
+ * lone header lines) and folded pieces that are not header lines are left
+ * out. A block of header lines starts at a folded 'reply-header' segment
+ * whose previous segment is not header lines (review round 2 of task
+ * 9.9b-1, narrowed in review round 3): the text under a later block (after a
+ * blank line, or after a folded quote that is not header lines, say) is not
+ * under this one, so a header with no text of its own right above another
+ * header is cut.
+ * Known corner (when unsure, keep): two header blocks with no gap at all
+ * between them (no shown line, not even a blank one) count as one block, so
+ * the upper one is kept when the lower one has text under it.
+ * A block of header lines the header detector did not recognise, folded
+ * only as 'quoted-overlap', is treated as a plain folded piece: it can be
+ * cut only when another email quotes those header lines without the text
+ * under them; that text stays printed, the preview labels the cut lines
+ * "Not in the PDF", and "Print full original text" prints them.
+ * The block of an attached email the .eml reader wrote (from the first
+ * FORWARDED_SEPARATOR line of the forwarded part on) is another email,
+ * never such a piece. None when the body has no forwarded part. Malformed
+ * segments are skipped (when unsure, keep): they cut nothing and hide no
+ * shown text.
+ */
+export function notRebuiltParts(
+    body: string,
+    segments: readonly Segment[],
+    ranges: readonly PlanRange[],
+    places: readonly (readonly [number, number])[],
+): PrintedPart[]
+{
+    const from = forwardedPartStart(ranges);
+    if (from === null || !Array.isArray(segments))
+    {
+        return [];
+    }
+    const segmentList: readonly Segment[] = segments;
+    let to = body.length;
+    for (const line of lineRanges(body))
+    {
+        if (line.start >= from && body.slice(line.start, line.contentEnd) === FORWARDED_SEPARATOR)
+        {
+            to = line.start;
+            break;
+        }
+    }
+    const foldedSegments = segmentList.filter((s) => s.folded && Number.isInteger(s.start) && Number.isInteger(s.end) && s.start < s.end);
+    const foldedSpans: [number, number][] = foldedSegments.map((s) => [s.start, s.end]);
+    // Where each block of header lines starts: a folded 'reply-header' segment right after a segment that is not
+    // header lines (review rounds 2 and 3 of task 9.9b-1): shown, or folded for another reason only (a quote
+    // marker, an overlap). A 'reply-header' segment right after a piece of header lines is a later piece of the
+    // same block (buildSegments splits a fold where another overlaps it, and every piece keeps 'reply-header'),
+    // never a block of its own.
+    const isHeaderLines = (s: Segment | undefined): boolean => s !== undefined && Array.isArray(s.reasons) && s.reasons.includes('reply-header');
+    const headerRunStarts = foldedSegments
+        .filter((s) => isHeaderLines(s) && !isHeaderLines(segmentList.find((p) => p.end === s.start)))
+        .map((s) => s.start);
+    // Whether text the preview shows (not blank, in no folded segment) lies between `at` and the next place, the
+    // next block of header lines (that text is under those, not under these) or `to`. `at` is the end of a piece of
+    // the current header block, so the block's own start (before `at`) is never its own limit.
+    const shownTextBelow = (at: number): boolean =>
+    {
+        const nextPlace = places.reduce((min, [placeStart]) => (placeStart >= at && placeStart < min ? placeStart : min), to);
+        const limit = headerRunStarts.reduce((min, runStart) => (runStart >= at && runStart < min ? runStart : min), nextPlace);
+        return subtractIntervals(at, limit, foldedSpans).some(([shownStart, shownEnd]) => /\S/u.test(body.slice(shownStart, shownEnd)));
+    };
+    const parts: PrintedPart[] = [];
+    for (const segment of foldedSegments)
+    {
+        const start = Math.max(segment.start, from);
+        const end = Math.min(segment.end, to);
+        if (start >= end)
+        {
+            continue;
+        }
+        const headerLines = segment.reasons.includes('reply-header');
+        for (const [pieceStart, pieceEnd] of subtractIntervals(start, end, places))
+        {
+            if (headerLines && shownTextBelow(pieceEnd))
+            {
+                continue;
+            }
+            parts.push({ start: pieceStart, end: pieceEnd, printedAs: { kind: 'not-rebuilt' } });
+        }
+    }
+    return parts;
+}
+
+/**
+ * printedElsewhereParts, and the header lines moved to each rebuilt email (see applyNoRepeatRule).
+ * `cutNotRebuilt`: also the folded pieces of a forward whose rebuild failed (notRebuiltParts, F6); only
+ * applyNoRepeatRule asks for them, while "Rebuild conversation from replies" is on.
+ */
 function noRepeatParts(
     result: ThreadAnalysisResult,
     slots: readonly PdfSlot[],
@@ -1459,6 +1595,7 @@ function noRepeatParts(
     plans: ReadonlyMap<number, MessagePlan | undefined> | undefined,
     unticked: ReadonlySet<number> | undefined,
     readerTicked?: ReadonlySet<number>,
+    cutNotRebuilt = false,
 ): { readonly parts: Map<number, readonly PrintedPart[]>; readonly moved: Map<number, readonly string[]> }
 {
     const inPdf = (position: number | null | undefined): position is number => typeof position === 'number' && pdfNumberByPosition[position] != null;
@@ -1476,6 +1613,10 @@ function noRepeatParts(
     // The entries whose printed copy's header lines are printed nowhere (its plan leaves them out, its rows cannot show them).
     const unshown = new Set<number>();
     const reconstructed: readonly AnalyzedRebuiltMessage[] = Array.isArray(result.reconstructed) ? result.reconstructed : [];
+    // Per list position in the PDF, the places [start, end) rebuilt from its body (F6: what is in none was not rebuilt).
+    const placesByPosition = new Map<number, [number, number][]>();
+    // The list positions with a place whose bounds are malformed (F6 skips those bodies).
+    const unsurePlaces = new Set<number>();
     for (const rebuiltEntry of reconstructed)
     {
         const position = result.positionByIndex[rebuiltEntry.sourceIndex];
@@ -1487,8 +1628,17 @@ function noRepeatParts(
         const body = result.messages[position]?.message.bodyText ?? '';
         if (!Number.isInteger(start) || !Number.isInteger(headerEnd) || !Number.isInteger(end) || start < 0 || headerEnd < start || end < headerEnd || end > body.length)
         {
+            // Where this place lies is unknown: F6 cuts nothing in this body (when unsure, keep).
+            unsurePlaces.add(position);
             continue;
         }
+        let placesHere = placesByPosition.get(position);
+        if (placesHere === undefined)
+        {
+            placesHere = [];
+            placesByPosition.set(position, placesHere);
+        }
+        placesHere.push([start, end]);
         const plan = plans?.get(position);
         const trustedRanges = plan !== undefined && hasValidRanges(plan, body.length) && !plan.fallback ? plan.ranges : null;
         let shownAs: PrintedHeader | null = null;
@@ -1530,6 +1680,13 @@ function noRepeatParts(
                 printedAs = { kind: 'email', position: realPosition, number: pdfNumberByPosition[realPosition]! };
                 printedText = typeof message.bodyText === 'string' ? message.bodyText : '';
             }
+        }
+        // F2 (task 9.9b): a rebuilt email with no text (its place is header lines only) is printed nowhere (no slot,
+        // planPdfOrder), and its header lines are not printed in this body either: no lone header lines in the PDF.
+        // Unless a real file in the PDF prints it (kind 'email' above: its header rows are the real header).
+        if (rebuiltHasNoPrintableText(rebuiltEntry) && (printedAs === null || printedAs.kind === 'unticked'))
+        {
+            printedAs = { kind: 'no-text', id: rebuiltEntry.id };
         }
         if (printedAs === null)
         {
@@ -1578,6 +1735,28 @@ function noRepeatParts(
             else if (!headerShown && trustedRanges !== null && entries.get(printedAs.id)?.copy.id === rebuiltEntry.id)
             {
                 unshown.add(printedAs.id);
+            }
+        }
+    }
+    if (cutNotRebuilt && Array.isArray(result.reconstructed))
+    {
+        for (const slot of slots)
+        {
+            if (slot.kind !== 'email')
+            {
+                continue;
+            }
+            const analyzedMessage = result.messages[slot.position];
+            const body = analyzedMessage?.message.bodyText ?? '';
+            const plan = plans?.get(slot.position);
+            if (analyzedMessage === undefined || plan === undefined || !hasValidRanges(plan, body.length) || plan.fallback || unsurePlaces.has(slot.position))
+            {
+                continue;
+            }
+            const notRebuilt = notRebuiltParts(body, analyzedMessage.segments, plan.ranges, placesByPosition.get(slot.position) ?? []);
+            if (notRebuilt.length > 0)
+            {
+                found.set(slot.position, [...(found.get(slot.position) ?? []), ...notRebuilt]);
             }
         }
     }
@@ -2124,7 +2303,9 @@ export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
     const chosenIds = new Set(input.rebuilt ?? []);
     const unticked = input.rebuildingOff === true ? undefined : new Set((input.unticked ?? []).filter((id) => !chosenIds.has(id)));
     // The emails the reader ticked (task 8.14: an attached email left out only for having no text keeps its block).
-    const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked, new Set(positions));
+    // F6 (task 9.9b): a forward whose rebuild failed is folded as the preview folds it, while rebuilding is on.
+    const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked, new Set(positions),
+        input.rebuildingOff !== true);
     const elsewhere = new Map<number, BodyIntervals>();
     for (const [position, list] of parts)
     {

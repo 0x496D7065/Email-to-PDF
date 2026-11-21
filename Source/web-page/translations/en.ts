@@ -496,6 +496,14 @@ export const en = {
             // may be a dropped file's email the attached one was merged into, so
             // the text does not call email #4 itself "attached".
             untickedAttached: 'Not in the PDF: email {number} (attached here) is unticked',
+            // The header lines of an earlier email quoted here with nothing under them
+            // (task 9.9b, user decision F2): its rebuilt email has no text, so the PDF
+            // prints neither it nor these lines ("Print full original text" does).
+            noText: 'Not in the PDF: quoted email with no text (header lines only)',
+            // A folded part of a forward whose earlier emails could not be rebuilt (task
+            // 9.9b, user decision F6): the PDF leaves it out as the preview folds it
+            // ("Print full original text" prints it).
+            notRebuilt: 'Not in the PDF: quoted part that could not be rebuilt as an email',
         },
         // Not expected: one email's labels could not be shown (the others are). Shown above that email's text.
         messageFailed: 'The tool could not show what the PDF leaves out for this email.',

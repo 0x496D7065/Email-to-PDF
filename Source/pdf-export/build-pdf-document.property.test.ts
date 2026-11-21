@@ -308,6 +308,8 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: P
             const place = made.places.find((p) => p.start <= range.start && range.end <= p.end);
             expect(place, `${where}: own text [${String(range.start)}, ${String(range.end)}) cut inside a place`).toBeDefined();
             expect(range.printedAs.kind, where).not.toBe('unticked');
+            // F6 (task 9.9b) cuts only folded pieces of a forwarded part, never the writer's own text.
+            expect(range.printedAs.kind, where).not.toBe('not-rebuilt');
             const linesEnd = headerLinesEnd(body, place!);
             if (!/\S/u.test(body.slice(Math.max(range.start, linesEnd), range.end)))
             {
@@ -322,7 +324,9 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: P
             else
             {
                 expect(holdsQuotedText(body, plan.ranges, linesEnd, place!.end), `${where}: own text cut next to quoted text`).toBe(false);
-                if (range.printedAs.kind !== 'unticked' && range.printedAs.kind !== 'unticked-attached')
+                // An empty rebuilt email's place (F2, 'no-text') has no text below its header lines: never here.
+                expect(range.printedAs.kind, where).not.toBe('no-text');
+                if (range.printedAs.kind === 'rebuilt' || range.printedAs.kind === 'email')
                 {
                     expect(squash(bodyOf(made.pdfDocument.emails[range.printedAs.number - 1]!)),
                         `${where}: own text "${own.slice(0, 40)}" in Email ${String(range.printedAs.number)}`).toContain(own);

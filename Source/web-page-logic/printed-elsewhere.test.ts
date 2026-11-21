@@ -17,6 +17,7 @@ import { attachedResult } from '../../Helper/Test/test-support/attached-builder'
 import { buildPdfDocument, applyNoRepeatRule, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/build-pdf-document';
 import { createPdfStrings } from '../pdf-export/pdf-strings';
 import { bodyLines, lineText } from '../pdf-export/pdf-text-transforms';
+import { rebuiltHasNoPrintableText } from './no-printable-text';
 import { pdfBlocks, signatureSources } from './pdf-plan';
 import { printedElsewhereRanges } from './printed-elsewhere';
 import { rebuiltEntries } from './rebuilt-email-display';
@@ -65,6 +66,10 @@ const keyOf = (printedAs: PrintedAs): string =>
             return `unticked rebuilt ${String(printedAs.id)} (not in the PDF)`;
         case 'unticked-attached':
             return `unticked attached email #${String(printedAs.position + 1)} (not in the PDF)`;
+        case 'no-text':
+            return `rebuilt ${String(printedAs.id)} with no text (not in the PDF)`;
+        case 'not-rebuilt':
+            return 'not rebuilt (not in the PDF)';
     }
 };
 
@@ -200,10 +205,14 @@ interface Counts
     /** Task 8.13b-3: an attached email's block, printed as that email (kind 'email') or left out with it ('unticked-attached'). */
     attachedTargets: number;
     untickedAttachedTargets: number;
+    /** Task 9.9b: the place of a rebuilt email with no text (F2) and a folded piece of a forward whose rebuild failed (F6). */
+    noTextTargets: number;
+    notRebuiltTargets: number;
     sentencesLabelled: number;
     sentencesKept: number;
 }
-const newCounts = (): Counts => ({ labelledSomewhere: 0, rebuiltTargets: 0, realTargets: 0, untickedTargets: 0, attachedTargets: 0, untickedAttachedTargets: 0, sentencesLabelled: 0, sentencesKept: 0 });
+const newCounts = (): Counts => ({ labelledSomewhere: 0, rebuiltTargets: 0, realTargets: 0, untickedTargets: 0, attachedTargets: 0, untickedAttachedTargets: 0, noTextTargets: 0, notRebuiltTargets: 0,
+    sentencesLabelled: 0, sentencesKept: 0 });
 
 /**
  * The checks of this file for one prepared input (every email in `positions`
@@ -244,6 +253,21 @@ function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: r
                 expect(input.rebuilt, keyOf(target)).not.toContain(target.id);
                 expect(input.unticked, keyOf(target)).toContain(target.id);
                 expect(pdfDocument.emails.some((e) => e.rebuilt?.id === target.id), keyOf(target)).toBe(false);
+                continue;
+            }
+            if (target.kind === 'no-text')
+            {
+                // F2 (task 9.9b): the place of a rebuilt email with no text, from this body, printed nowhere.
+                counts.noTextTargets++;
+                expect(result.positionByIndex[result.reconstructed[target.id]!.sourceIndex], keyOf(target)).toBe(position);
+                expect(rebuiltHasNoPrintableText(result.reconstructed[target.id]!), keyOf(target)).toBe(true);
+                expect(pdfDocument.emails.some((e) => e.rebuilt?.id === target.id), keyOf(target)).toBe(false);
+                continue;
+            }
+            if (target.kind === 'not-rebuilt')
+            {
+                // F6 (task 9.9b): a folded piece of a forward whose rebuild failed (rebuilding is on here), printed nowhere.
+                counts.notRebuiltTargets++;
                 continue;
             }
             if (target.kind === 'unticked-attached')
@@ -292,6 +316,10 @@ function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: r
                 if (target.kind === 'unticked')
                 {
                     expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
+                }
+                else if (target.kind === 'no-text' || target.kind === 'not-rebuilt')
+                {
+                    // Task 9.9b: left out of the PDF on purpose (F2, F6); the preview and full text keep it.
                 }
                 else if (target.kind === 'unticked-attached')
                 {

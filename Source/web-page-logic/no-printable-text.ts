@@ -27,10 +27,12 @@
 //   'forwarded-message-not-expanded' (UNREADABLE_BODY_WARNINGS).
 // - A rebuilt email (Source/web-page-logic/rebuilt-email-display.ts) whose rebuilt text has no
 //   text (a quoted header with nothing under it) is left out the same way
-//   (Q4, rebuiltHasNoPrintableText). Its header lines stay in the email it
-//   was read from as quoted history, so the normal PDF folds them out with
-//   the rest of the quote; they are printed only with "Print full original
-//   text", and stay visible in the preview and in the original file.
+//   (Q4, rebuiltHasNoPrintableText). Its header lines are left out of the
+//   email it was read from too, forwards included (user decision F2, task
+//   9.9b: no lone header lines in the PDF; Source/pdf-export/build-pdf-document.ts, kind
+//   'no-text'); they are printed only with "Print full original text", and
+//   stay visible in the preview (labelled "Not in the PDF") and in the
+//   original file.
 // - An .eml with no text that holds an email attached as a FILE that could
 //   not be read is left out too (user decision 2026-11-15): the unread file
 //   is then not named in the PDF, but the preview shows its note

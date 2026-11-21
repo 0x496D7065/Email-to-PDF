@@ -1109,6 +1109,17 @@ describe('PDF labels', () =>
             expect(pdfLabelText(asReal)).toBe('Niet in deze e-mail in de PDF: afgedrukt als e-mail #5');
             expect(pdfLabelText(asRebuilt)).toBe('Niet in deze e-mail in de PDF: afgedrukt als gereconstrueerde e-mail (E-mail 2 in de PDF)');
             expect(pdfLabelText(asUnticked)).toBe('Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt');
+            // Task 9.9b: the header lines of a quoted email with no text (F2), a folded part of a forward that could not be rebuilt (F6).
+            const asNoText = { ...asReal, printedAs: { kind: 'no-text' as const, id: 2 } };
+            const asNotRebuilt = { ...asReal, printedAs: { kind: 'not-rebuilt' as const } };
+            expect(pdfLabelText(asNoText)).toBe('Niet in de PDF: geciteerde e-mail zonder tekst (alleen kopregels)');
+            expect(pdfLabelText(asNotRebuilt)).toBe('Niet in de PDF: geciteerd deel dat niet als e-mail kon worden gereconstrueerd');
+            setLocale('fr');
+            expect(pdfLabelText(asNoText)).toBe('Pas dans le PDF\u00A0: e-mail cit\u00E9 sans texte (lignes d\u2019en-t\u00EAte seulement)');
+            expect(pdfLabelText(asNotRebuilt)).toBe('Pas dans le PDF\u00A0: partie cit\u00E9e qui n\u2019a pas pu \u00EAtre reconstitu\u00E9e en e-mail');
+            setLocale('en');
+            expect(pdfLabelText(asNoText)).toBe('Not in the PDF: quoted email with no text (header lines only)');
+            expect(pdfLabelText(asNotRebuilt)).toBe('Not in the PDF: quoted part that could not be rebuilt as an email');
         }
         finally
         {

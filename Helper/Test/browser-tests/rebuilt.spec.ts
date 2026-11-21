@@ -19,6 +19,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
+import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
 import { phoneForwardThread } from '../test-support/phone-forward-thread.ts';
 import { browserEngineOf, isParseTimeReport, PARSE_TIME_CONSOLE, untoleratedReports, watchPage, withoutSelectConsole, withoutSelectReports,
     workerCspReports, type PageWatch } from './support/network-and-csp-watch.ts';
@@ -98,16 +99,25 @@ async function openWithLastEmail(page: Page): Promise<Locator>
     return items;
 }
 
-/** Nothing left the page, no CSP violation, no console error (see Helper/Test/browser-tests/review.spec.ts). */
-async function expectNothingLeftThePage(page: Page): Promise<void>
+/**
+ * Nothing left the page, no CSP violation, no console error (see Helper/Test/browser-tests/review.spec.ts);
+ * at most `pdfs` own-origin blob: URLs besides the workers (a PDF made: Chromium may list its download as a request).
+ */
+async function expectNothingLeftThePage(page: Page, pdfs = 0): Promise<void>
 {
     await page.waitForTimeout(500);
+    const ownBlob = new RegExp(`^blob:${origin}/[0-9a-f-]+$`);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
     for (const url of workerUrls)
     {
-        expect(url).toMatch(new RegExp(`^blob:${origin}/[0-9a-f-]+$`));
+        expect(url).toMatch(ownBlob);
     }
-    expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
+    const others = watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url));
+    expect(others.length).toBeLessThanOrEqual(pdfs);
+    for (const url of others)
+    {
+        expect(url).toMatch(ownBlob);
+    }
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
@@ -301,4 +311,40 @@ test('a phone forward of a flat thread (Android HTML): 13 rebuilt cards, field b
         expect(text.endsWith(want.last), `${where}: ends with "${want.last}"`).toBe(true);
     }
     await expectNothingLeftThePage(page);
+});
+
+// Task 9.9b (user decision F2, 2026-11-19): the 3 empty emails of fixture 98 put nothing in the PDF, not even
+// their header lines: the PDF holds 11 emails (the 10 rebuilt ones with text and the file), and the lines of
+// the empty forward at the top ("17 nov. 2026 19:23") and of the empty attribution over 27 Sep 08:27
+// ("27 sept. 2026 08:31") are printed nowhere. The preview keeps them in the file's text, labelled.
+test('a phone forward of a flat thread (Android HTML): the empty emails put nothing in the PDF, the preview says so', async ({ page }) =>
+{
+    test.setTimeout(90_000);
+    await page.goto('/', { waitUntil: 'networkidle' });
+    loadedAt = watch.requests.length;
+    await page.locator('#file-input').setInputFiles([fixture('98-phone-forward-android-html.eml')]);
+    await expect(page.locator('#add-summary-text')).toHaveText('1 file added. 1 email found.', { timeout: 30_000 });
+    await expect(page.locator('#preview-list > li')).toHaveCount(14);
+    await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready');
+    const file = page.locator('#preview-list > li:not(.message-rebuilt)');
+    await expect(file).toHaveCount(1);
+    await expect(file.locator('.pdf-label', { hasText: en.pdf.printedAs.noText })).not.toHaveCount(0);
+    await expect(file.locator('.pdf-label', { hasText: en.pdf.printedAs.notRebuilt })).toHaveCount(0);
+
+    const makeButton = page.getByRole('button', { name: en.actions.makePdf });
+    await expect(makeButton).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });
+    const next = page.waitForEvent('download', { timeout: 60_000 });
+    await makeButton.click();
+    const bytes = new Uint8Array(readFileSync(await (await next).path()));
+    const text = (await readPageRuns(readPdf(bytes))).map((runs) => textLines(runs).map((l) => l.shown).join(' ')).join(' ');
+    const heading = (n: number): string => en.pdf.document.emailHeading.replace('{number}', String(n));
+    for (let n = 1; n <= 11; n++)
+    {
+        expect(text.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
+    }
+    expect(text).not.toContain(`${heading(12)} From`);
+    expect(text).not.toContain('17 nov. 2026 19:23');
+    expect(text).not.toContain('27 sept. 2026 08:31');
+    await expectNothingLeftThePage(page, 1);
 });

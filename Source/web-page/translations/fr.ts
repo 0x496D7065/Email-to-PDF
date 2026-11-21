@@ -329,6 +329,10 @@ export const fr: Messages = {
             rebuilt: 'Pas dans cet e-mail dans le PDF\u00A0: imprimé comme e-mail reconstitué (E-mail {number} du PDF)',
             unticked: 'Pas dans le PDF\u00A0: e-mail transféré dont l’e-mail reconstitué est décoché',
             untickedAttached: 'Pas dans le PDF\u00A0: l’e-mail {number} (joint ici) est décoché',
+            // NEEDS USER PROOFREADING (task 9.9b)
+            noText: 'Pas dans le PDF\u00A0: e-mail cité sans texte (lignes d’en-tête seulement)',
+            // NEEDS USER PROOFREADING (task 9.9b)
+            notRebuilt: 'Pas dans le PDF\u00A0: partie citée qui n’a pas pu être reconstituée en e-mail',
         },
         messageFailed: 'L’outil n’a pas pu afficher ce que le PDF laisse de côté pour cet e-mail.',
         document: {
