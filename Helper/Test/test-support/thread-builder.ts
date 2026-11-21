@@ -75,6 +75,11 @@ export interface WallTime
  * - apple-forward-en: "Begin forwarded message:" + block (From, Subject,
  *   Date, To), no ">".
  * - thunderbird-en: numeric-date attribution without an address, ">" quote.
+ * - mobile-xx: a phone mail app forwarding or replying in plain text
+ *   (task 9.9a): an attribution with a short date and a time, the sender's
+ *   name in quotes with a space before the closing quote, then the old body
+ *   WITHOUT ">" (a FLAT thread). Not in QUOTE_STYLES (the ground-truth case
+ *   set): see MOBILE_QUOTE_STYLES.
  */
 export type QuoteStyle =
     | 'outlook-en'
@@ -96,7 +101,10 @@ export type QuoteStyle =
     | 'apple-fr'
     | 'apple-nl'
     | 'apple-forward-en'
-    | 'thunderbird-en';
+    | 'thunderbird-en'
+    | 'mobile-en'
+    | 'mobile-fr'
+    | 'mobile-nl';
 
 export const QUOTE_STYLES: readonly QuoteStyle[] = [
     'outlook-en',
@@ -120,6 +128,9 @@ export const QUOTE_STYLES: readonly QuoteStyle[] = [
     'apple-forward-en',
     'thunderbird-en',
 ];
+
+/** The flat phone styles (task 9.9a), kept out of QUOTE_STYLES so the ground-truth case set stays as measured. */
+export const MOBILE_QUOTE_STYLES: readonly QuoteStyle[] = ['mobile-en', 'mobile-fr', 'mobile-nl'];
 
 /** True for the styles that forward rather than reply. */
 export function isForwardStyle(style: QuoteStyle): boolean
@@ -153,7 +164,10 @@ export interface ThreadMessage
     readonly sent: WallTime;
     readonly zone: Zone;
     readonly subject: string;
-    /** The message's own text, "\n" line breaks, no trailing line break, no line starting with ">" or a space. */
+    /**
+     * The message's own text, "\n" line breaks, no trailing line break, no line starting with ">" or a space.
+     * '' = no own text (task 9.9a): its header is followed directly by the header it quotes.
+     */
     readonly text: string;
     /** How this message quotes the one before it. Required for every message but the first. */
     readonly quote?: QuoteOptions;
@@ -188,10 +202,13 @@ export interface ExpectedHeader
     readonly start: number;
     /** End of the last header line, line break included. */
     readonly headEnd: number;
-    /** [ownStart, ownEnd): the message's own text as rendered (with its quote markers), no trailing line break. */
+    /**
+     * [ownStart, ownEnd): the message's own text as rendered (with its quote markers), no trailing line
+     * break. No own text: both are headEnd.
+     */
     readonly ownStart: number;
     readonly ownEnd: number;
-    /** The message's own text as written (no quote markers). */
+    /** The message's own text as written (no quote markers); '' when it has none. */
     readonly ownText: string;
     readonly fields: ExpectedFields;
     readonly sender: Person;
@@ -229,6 +246,7 @@ const NL_DAYS = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijd
 const NL_DAYS_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 const NL_MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
 const NL_MONTHS_SHORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const FR_MONTHS_SHORT = ['janv.', 'f\u00e9vr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'ao\u00fbt', 'sept.', 'oct.', 'nov.', 'd\u00e9c.'];
 
 const pick = (list: readonly string[], i: number): string => list[i] ?? '?';
 const two = (n: number): string => String(n).padStart(2, '0');
@@ -296,7 +314,10 @@ type DateFormat =
     | 'apple-fr'
     | 'apple-nl'
     | 'apple-forward-en'
-    | 'thunderbird';
+    | 'thunderbird'
+    | 'mobile-en'
+    | 'mobile-fr'
+    | 'mobile-nl';
 
 /** A date as a client writes it in a quote header. */
 export function formatQuotedDate(format: DateFormat, instant: number, zone: Zone): string
@@ -334,6 +355,12 @@ export function formatQuotedDate(format: DateFormat, instant: number, zone: Zone
             // the system locale; this is an en-GB-like form, en-US would be
             // "3/3/25 12:58 PM".
             return `${two(shown.day)}/${two(shown.month + 1)}/${shown.year} ${clock24(shown)}`;
+        case 'mobile-en': // "3 Mar 2025, at 14:02"
+            return `${shown.day} ${pick(EN_MONTHS, shown.month).slice(0, 3)} ${shown.year}, at ${clock24(shown)}`;
+        case 'mobile-fr': // "3 mars 2025 14:02" (short months with a period: "f\u00e9vr.", "avr."; no "\u00e0")
+            return `${shown.day} ${pick(FR_MONTHS_SHORT, shown.month)} ${shown.year} ${clock24(shown)}`;
+        case 'mobile-nl': // "3 mrt. 2025 om 14:02", "3 mei 2025 om 14:02" (a period only where the month is cut short)
+            return `${shown.day} ${pick(NL_MONTHS_SHORT, shown.month)}${pick(NL_MONTHS_SHORT, shown.month) === pick(NL_MONTHS, shown.month) ? '' : '.'} ${shown.year} om ${clock24(shown)}`;
     }
 }
 
@@ -443,7 +470,10 @@ const BLOCKS: Partial<Record<QuoteStyle, BlockSpec>> = {
     },
 };
 
-/** Attribution styles: the line written above (or at the top of) the ">" quote. */
+/** How a phone writes a person in an attribution: the name quoted, a space before the closing quote. */
+const phonePerson = (p: Person): string => `"${p.name} " <${p.address}>`;
+
+/** Attribution styles: the line written above (or at the top of) the ">" quote (or, mobile-xx, the unquoted old body). */
 const ATTRIBUTIONS: Partial<Record<QuoteStyle, { readonly date: DateFormat; readonly line: (date: string, who: Person) => { text: string; from: string } }>> = {
     'gmail-en': { date: 'gmail-en', line: (d, p) => ({ text: `On ${d} ${person(p, 'angle')} wrote:`, from: person(p, 'angle') }) },
     'gmail-en-gb': { date: 'gmail-en-gb', line: (d, p) => ({ text: `On ${d}, ${person(p, 'angle')} wrote:`, from: person(p, 'angle') }) },
@@ -453,12 +483,18 @@ const ATTRIBUTIONS: Partial<Record<QuoteStyle, { readonly date: DateFormat; read
     'apple-fr': { date: 'apple-fr', line: (d, p) => ({ text: `Le ${d}, ${person(p, 'angle')} a \u00e9crit :`, from: person(p, 'angle') }) },
     'apple-nl': { date: 'apple-nl', line: (d, p) => ({ text: `Op ${d} heeft ${person(p, 'angle')} het volgende geschreven:`, from: person(p, 'angle') }) },
     'thunderbird-en': { date: 'thunderbird', line: (d, p) => ({ text: `On ${d}, ${p.name} wrote:`, from: p.name }) },
+    'mobile-en': { date: 'mobile-en', line: (d, p) => ({ text: `On ${d}, ${phonePerson(p)} wrote:`, from: phonePerson(p) }) },
+    'mobile-fr': { date: 'mobile-fr', line: (d, p) => ({ text: `Le ${d}, ${phonePerson(p)} a \u00e9crit :`, from: phonePerson(p) }) },
+    'mobile-nl': { date: 'mobile-nl', line: (d, p) => ({ text: `Op ${d} heeft ${phonePerson(p)} het volgende geschreven:`, from: phonePerson(p) }) },
 };
 
-/** How a style places the old body: below an unquoted block, below an attribution with ">", or with the attribution inside ">". */
+/**
+ * How a style places the old body: below an unquoted block or (mobile-xx) an unquoted attribution, below an
+ * attribution with ">", or with the attribution inside ">".
+ */
 function layoutOf(style: QuoteStyle): 'block' | 'attribution' | 'apple'
 {
-    if (BLOCKS[style] !== undefined)
+    if (BLOCKS[style] !== undefined || style.startsWith('mobile-'))
     {
         return 'block';
     }
@@ -536,7 +572,9 @@ function quoteLines(lines: readonly Line[], style: QuoteStyle): Line[]
     });
 }
 
-const ownLines = (text: string, owner: number): Line[] => text.split('\n').map((t) => ({ text: t, depth: 0, owner, part: t === '' ? 'gap' : 'own' }));
+/** The own text's lines; none for an empty own text. */
+const ownLines = (text: string, owner: number): Line[] =>
+    (text === '' ? [] : text.split('\n').map((t) => ({ text: t, depth: 0, owner, part: t === '' ? 'gap' : 'own' })));
 
 /** Removes `depth` quote levels ("> " or ">") from each line of `rendered`. */
 export function unquote(rendered: string, depth: number): string
@@ -586,18 +624,20 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
         fieldsOf.set(i - 1, fields);
         const header: Line[] = head.map((text) => ({ text, depth: 0, owner: i - 1, part: 'header' }));
         const gap: Line = { text: '', depth: 0, owner: i, part: 'gap' };
+        // No own text: the header starts the body (no blank line above it).
+        const own = message.text === '' ? [] : [...ownLines(message.text, i), gap];
         const layout = layoutOf(style);
         if (layout === 'block')
         {
-            lines = [...ownLines(message.text, i), gap, ...header, { ...gap, owner: i - 1 }, ...lines];
+            lines = [...own, ...header, { ...gap, owner: i - 1 }, ...lines];
         }
         else if (layout === 'attribution')
         {
-            lines = [...ownLines(message.text, i), gap, ...header, ...quoteLines(lines, style)];
+            lines = [...own, ...header, ...quoteLines(lines, style)];
         }
         else
         {
-            lines = [...ownLines(message.text, i), gap, ...quoteLines([...header, { ...gap, owner: i - 1 }, ...lines], style)];
+            lines = [...own, ...quoteLines([...header, { ...gap, owner: i - 1 }, ...lines], style)];
         }
     }
 
@@ -627,21 +667,25 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
         const lastHeaderLine = headerLineIndexes[headerLineIndexes.length - 1];
         const firstOwnLine = ownLineIndexes[0];
         const lastOwnLine = ownLineIndexes[ownLineIndexes.length - 1];
-        if (firstHeaderLine === undefined || lastHeaderLine === undefined || firstOwnLine === undefined || lastOwnLine === undefined)
+        if (firstHeaderLine === undefined || lastHeaderLine === undefined || (quoted.text !== '' && (firstOwnLine === undefined || lastOwnLine === undefined)))
         {
             throw new Error(`message ${j}: no header or no text`);
         }
+        const depth = lines[firstHeaderLine]?.depth ?? 0;
+        const headEnd = endOf(lastHeaderLine) + 1;
+        // No own text: the depth it would have (one more below a Gmail attribution).
+        const emptyDepth = layoutOf(quoting.quote.style) === 'attribution' ? depth + 1 : depth;
         headers.push({
             index: j,
             generation: messages.length - 1 - j,
-            depth: lines[firstHeaderLine]?.depth ?? 0,
-            textDepth: lines[firstOwnLine]?.depth ?? 0,
+            depth,
+            textDepth: firstOwnLine === undefined ? emptyDepth : (lines[firstOwnLine]?.depth ?? 0),
             kind: isForwardStyle(quoting.quote.style) ? 'forward' : 'reply',
             style: quoting.quote.style,
             start: starts[firstHeaderLine] ?? 0,
-            headEnd: endOf(lastHeaderLine) + 1,
-            ownStart: starts[firstOwnLine] ?? 0,
-            ownEnd: endOf(lastOwnLine),
+            headEnd,
+            ownStart: firstOwnLine === undefined ? headEnd : (starts[firstOwnLine] ?? 0),
+            ownEnd: lastOwnLine === undefined ? headEnd : endOf(lastOwnLine),
             ownText: quoted.text,
             fields,
             sender: quoted.from,
@@ -657,7 +701,7 @@ export function buildThread(messages: readonly ThreadMessage[]): BuiltThread
         body,
         subject: last.subject,
         headers,
-        ownEnd: endOf(lastOwn[lastOwn.length - 1] ?? 0),
+        ownEnd: lastOwn.length === 0 ? 0 : endOf(lastOwn[lastOwn.length - 1] ?? 0),
         instantUtc: new Date(instantOf(last.sent, last.zone)).toISOString(),
     };
 }

@@ -566,11 +566,19 @@ describe('mountPreview', () =>
         const parsed = await parseAllFixtures();
         const result = analyzeThread(parsed.map((message): ParseResult => ({ ok: true, message })));
         expect(result.counts.withFolds).toBeGreaterThan(5);
-        mount({ chunkSize: result.messages.length });
+        // The list also holds a card per email rebuilt from quoted text (the phone forward fixtures of task 9.9a
+        // give some): its text is the rebuilt text, whole.
+        const rebuilt = rebuiltEntries(result);
+        expect(rebuilt.length).toBeGreaterThan(0);
+        mount({ chunkSize: result.messages.length + rebuilt.length });
         preview.show(result);
         setShowFolded(true);
-        expect(items()).toHaveLength(result.messages.length);
-        items().forEach((item, k) =>
+        expect(items()).toHaveLength(result.messages.length + rebuilt.length);
+        const cards = items().filter((item) => hasClass(item, 'message-rebuilt'));
+        expect(cards.map((card) => renderedBody(card)).sort()).toEqual(rebuilt.map((r) => r.rebuilt.reconstructedText).sort());
+        const real = items().filter((item) => !hasClass(item, 'message-rebuilt'));
+        expect(real).toHaveLength(result.messages.length);
+        real.forEach((item, k) =>
         {
             const email = result.messages[k]!;
             expect(renderedBody(item), email.message.source.fileName).toBe(email.message.bodyText);

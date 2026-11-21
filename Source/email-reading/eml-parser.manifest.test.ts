@@ -29,7 +29,11 @@ const parser = createEmlParser({
 // Fixtures whose body is HTML-only: their converted text is checked in the
 // browser (see above). Every other field (and the 'html-converted-body' warning)
 // is checked here.
-const BODY_CHECKS_NEED_HTML_TO_TEXT = new Set(['eml/50-html-only.eml']);
+// The value: a piece of markup the decoded HTML holds (the stub was handed the HTML itself).
+const BODY_CHECKS_NEED_HTML_TO_TEXT = new Map([
+    ['eml/50-html-only.eml', '<p>Dear Alice,</p>'],
+    ['eml/98-phone-forward-android-html.eml', 'Date&nbsp;: 6 oct. 2026 13:58<br>'],
+]);
 
 const emlFixtures = FIXTURES.filter((f) => f.kind === 'eml');
 
@@ -51,10 +55,10 @@ async function parseFixture(id: string): Promise<NormalizedMessage>
 
 describe('.eml adapter matches the manifest', () =>
 {
-    it('covers all 34 .eml fixtures', () =>
+    it('covers all 39 .eml fixtures', () =>
     {
-        expect(emlFixtures).toHaveLength(34);
-        expect(Object.keys(files)).toHaveLength(34);
+        expect(emlFixtures).toHaveLength(39);
+        expect(Object.keys(files)).toHaveLength(39);
     });
 
     it.each(emlFixtures.map((f) => [f.id, f] as const))('%s', async (id, expected: FixtureExpectation) =>
@@ -97,8 +101,8 @@ describe('.eml adapter matches the manifest', () =>
             // The converted text itself is checked in Helper/Test/browser-tests/html-to-text.spec.ts.
             expect(message.bodyText.startsWith(STUB_PREFIX)).toBe(true);
             const html = htmlCalls[Number(message.bodyText.slice(STUB_PREFIX.length + 2))] ?? '';
-            expect(html).toContain('<p>Dear Alice,</p>');
-            expect(html).not.toContain('=3D'); // quoted-printable was decoded
+            expect(html).toContain(BODY_CHECKS_NEED_HTML_TO_TEXT.get(id));
+            expect(html).not.toContain('=3D'); // quoted-printable (or base64) was decoded
             for (const snippet of expected.bodyContains)
             {
                 expect(html).toContain(snippet);

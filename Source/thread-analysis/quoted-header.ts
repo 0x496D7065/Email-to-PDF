@@ -56,7 +56,8 @@
 //    a list does not end with ";" or ",", its last mailbox, if it has no
 //    address, may be cut short and is left out ("Ivan" is not shown).
 // 2. ATTRIBUTION ("On <date>, <name> <addr> wrote:", "Le ... a ecrit :",
-//    "Op <date> schreef <name> <addr>:", one line or two). The language
+//    "Op <date> schreef <name> <addr>:", one line or wrapped over two or
+//    three, joined as reply-header.ts joins them: joinAttributionLines). The language
 //    whose ending matches gives the parts (reply-header-patterns.ts, `parts`). The
 //    sender's address is the last address before the tail (rule 3 forms, or
 //    a bare address), a trailing comment ("<addr> (Legal)") left aside.
@@ -132,11 +133,13 @@ import {
     ATTRIBUTION_MAX_LENGTH,
     clean,
     FORWARD_MARKERS,
+    joinAttributionLines,
     LABEL_HEAD_LENGTH,
     LABEL_PATTERN,
     LABEL_ROLE_OF,
     labelKey,
     LANGUAGES,
+    MAX_ATTRIBUTION_LINES,
     SEPARATORS,
     type FoundHeader,
     type Role,
@@ -807,7 +810,7 @@ function splitDateName(before: string, verbs: readonly string[]): { date: string
     return { date, name: attributionName(name) };
 }
 
-/** The sender and date of an attribution (cleaned, one or two lines joined); empty when unclear. */
+/** The sender and date of an attribution (cleaned, one to three lines joined); empty when unclear. */
 function readAttribution(text: string): { from: EmailAddress[]; dateText: string | null }
 {
     const none = { from: [], dateText: null };
@@ -953,11 +956,11 @@ function readHeader(text: string, start: number, headEnd: number): QuotedHeaderF
     if (firstFrom < 0)
     {
         const words = own.filter((line) => !line.gap);
-        if (words.length === 0 || words.length > 2)
+        if (words.length === 0 || words.length > MAX_ATTRIBUTION_LINES)
         {
             return null;
         }
-        const joined = words.map((line) => clean(text, line.textStart, line.contentEnd)).join(' ');
+        const joined = joinAttributionLines(words.map((line) => clean(text, line.textStart, line.contentEnd)));
         const { from, dateText } = readAttribution(joined);
         return { from, to: [], cc: [], subject: null, dateText, headerEnd: headEnd, incomplete: [] };
     }

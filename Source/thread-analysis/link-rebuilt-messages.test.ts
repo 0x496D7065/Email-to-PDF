@@ -99,12 +99,14 @@ function makeRebuilt(text: string, options: RebuiltOptions = {}): ReconstructedM
         to: options.to ?? [BOB],
         cc: [],
         subject: options.subject === undefined ? 'Desks' : options.subject,
+        subjectFromChain: false,
         dateText: options.dateText === undefined ? 'd' : options.dateText,
         incomplete: options.incomplete ?? [],
         date,
         dateApproximate: options.exact !== true,
         reconstructedText: text,
         quoteMarksRemoved: true,
+        noOwnText: !/[^\s>]/u.test(text),
     };
 }
 

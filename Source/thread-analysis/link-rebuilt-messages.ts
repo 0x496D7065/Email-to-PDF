@@ -1036,7 +1036,8 @@ function completeness(item: Item): number
     return (
         (item.key !== null ? 1 : 0) +
         (rebuilt.to.length > 0 ? 1 : 0) +
-        (rebuilt.subject !== null ? 1 : 0) +
+        // A subject taken from the chain (an attribution) is not a field of this copy.
+        (rebuilt.subject !== null && !rebuilt.subjectFromChain ? 1 : 0) +
         (item.estimate !== null ? 1 : 0) +
         (item.estimate !== null && !rebuilt.dateApproximate ? 1 : 0)
     );

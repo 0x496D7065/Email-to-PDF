@@ -218,13 +218,17 @@ function table(measurement: Measurement): string
 
 const current: Detect = (body, subject) => findReplyHeaders(body, subject);
 
-/** The splitter of task 7.4. The source offset does not change boundaries; UTC is used. */
+/**
+ * The splitter of task 7.4. The source offset does not change boundaries; UTC is used. The fields are
+ * the header's own: a subject taken from the chain (subjectFromChain, task 9.9a) is not read from it.
+ */
 const splitter: Detect = (body, subject) =>
     reconstructQuotedMessages(body, { subject, sourceOffsetMinutes: 0 }).map((r) => ({
         start: r.start,
         headEnd: r.headerEnd,
         kind: r.kind,
-        fields: { from: r.from, to: r.to, cc: r.cc, subject: r.subject, dateText: r.dateText, headerEnd: r.headerEnd, incomplete: r.incomplete },
+        fields: { from: r.from, to: r.to, cc: r.cc, subject: r.subjectFromChain ? null : r.subject, dateText: r.dateText, headerEnd: r.headerEnd,
+            incomplete: r.incomplete },
         rebuilt: { generation: r.generation, depth: r.depth, text: r.reconstructedText },
     }));
 

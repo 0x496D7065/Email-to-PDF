@@ -5,7 +5,8 @@
 //
 // 1. "the whole journey": EVERY synthetic fixture (each .eml of
 //    Helper/Test/test-data/eml and each .msg built from Helper/Test/test-data/msg/specs.ts,
-//    among them the HTML-only .msg "msg-13-html-only") is dropped on step 1
+//    among them the HTML-only .msg "msg-13-html-only"; but those whose quoted emails
+//    are not in the set: JOURNEY_FIXTURES in the manifest) is dropped on step 1
 //    with a real DataTransfer and the drag events a browser fires. Then:
 //    counts, date order, the HTML-only .msg shown as plain text, a folded
 //    quote, the time zone, an unticked email, the notes of an undated email,
@@ -43,7 +44,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type FileChooser, type Page } from '@playwright/test';
 import { createServer } from 'vite';
 import { en } from '../../../Source/web-page/translations/en.ts';
-import { FIXTURES, type FixtureExpectation } from '../test-data/manifest.ts';
+import { JOURNEY_FIXTURES as FIXTURES, type FixtureExpectation } from '../test-data/manifest.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';

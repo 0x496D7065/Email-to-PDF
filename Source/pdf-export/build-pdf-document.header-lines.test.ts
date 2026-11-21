@@ -235,7 +235,17 @@ function expectNoHeaderLines(made: Made, what: string): Stats
                 stats.unticked++;
                 expect(made.rebuilt, what).not.toContain(range.printedAs.id);
                 expect(made.unticked, what).toContain(range.printedAs.id);
-                expect(pdfDocument.emails.some((e) => squash(bodyOf(e)).includes(text)),
+                // An empty part (header lines only, task 9.9a) whose very words are the header of ANOTHER rebuilt
+                // place cannot be told apart from it by its text: fixtures 94 to 97 hold the same empty forward
+                // once per file (an empty rebuilt email is not printed, task 8.14: its lines stay in that file's
+                // text), and the duplicate pair (14 Jul 16:53) one empty attribution over the same line with text.
+                const sameWordsElsewhere = result.reconstructed.some((r) =>
+                {
+                    const at = result.positionByIndex[r.sourceIndex];
+                    const itself = at === position && r.rebuilt.start >= range.start && r.rebuilt.start < range.end;
+                    return !itself && at != null && squash(result.messages[at]!.message.bodyText.slice(r.rebuilt.start, r.rebuilt.headerEnd)) === text;
+                });
+                expect(!sameWordsElsewhere && pdfDocument.emails.some((e) => squash(bodyOf(e)).includes(text)),
                     `${what}: an unticked forwarded part is nowhere in the PDF`).toBe(false);
                 continue;
             }
@@ -277,7 +287,33 @@ function expectNoHeaderLines(made: Made, what: string): Stats
             }
         }
     }
-    // 2. A rebuilt email: no header block in its text below the moved header lines; moved lines printed once.
+    // 2. A rebuilt email: no header block in its text below the moved header lines; moved lines printed once
+    // per copy moved. Two copies of one email linked together (fixtures 94 and 97, task 9.9a: the same thread
+    // in two files) may move the very same lines: then they are printed twice, once per copy, nothing more.
+    // And an empty rebuilt email (no text: not printed, task 8.14) leaves its header lines in its source's
+    // text when it is ticked (unticked, they are left out: Q2): when they are word for word the lines of
+    // another one (the duplicate pair of fixtures 94 to 97), they are printed there too (how empty ones
+    // show is task 9.9b).
+    const keptEmpty = new Map<string, number>();
+    for (const r of result.reconstructed)
+    {
+        const position = result.positionByIndex[r.sourceIndex];
+        if (r.rebuilt.noOwnText && position != null && pdfDocument.pdfNumberByPosition[position] != null)
+        {
+            const lines = squash(result.messages[position]!.message.bodyText.slice(r.rebuilt.start, r.rebuilt.headerEnd));
+            keptEmpty.set(lines, (keptEmpty.get(lines) ?? 0) + 1);
+        }
+    }
+    const movedAll = applyNoRepeatRule({ result, positions, plans: made.plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: made.rebuilt,
+        rebuildingOff: made.rebuildingOff, unticked: made.unticked }).moved;
+    const timesMoved = new Map<string, number>();
+    for (const blocks of movedAll.values())
+    {
+        for (const block of blocks)
+        {
+            timesMoved.set(squash(block), (timesMoved.get(squash(block)) ?? 0) + 1);
+        }
+    }
     for (const email of pdfDocument.emails)
     {
         if (email.rebuilt === null)
@@ -293,14 +329,16 @@ function expectNoHeaderLines(made: Made, what: string): Stats
         if (email.rebuilt.movedHeaders > 0)
         {
             stats.moved += email.rebuilt.movedHeaders;
-            const moved = applyNoRepeatRule({ result, positions, plans: made.plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: made.rebuilt,
-                rebuildingOff: made.rebuildingOff, unticked: made.unticked }).moved.get(email.rebuilt.id)!;
+            const moved = movedAll.get(email.rebuilt.id)!;
             expect(moved, what).toHaveLength(email.rebuilt.movedHeaders);
             for (const block of moved)
             {
                 const squashedBlock = squash(block);
                 const inPdf = pdfDocument.emails.reduce((n, x) => n + (squash(bodyOf(x)).split(squashedBlock).length - 1), 0);
-                expect(inPdf, `${what}: moved header lines "${squashedBlock.slice(0, 60)}" printed once`).toBe(1);
+                // Once per copy moved, plus at most once per empty place with the same words (kept when ticked).
+                const once = `${what}: moved header lines "${squashedBlock.slice(0, 60)}" printed once per copy moved`;
+                expect(inPdf, once).toBeGreaterThanOrEqual(timesMoved.get(squashedBlock) ?? 0);
+                expect(inPdf, once).toBeLessThanOrEqual((timesMoved.get(squashedBlock) ?? 0) + (keptEmpty.get(squashedBlock) ?? 0));
                 expect(squash(bodyOf(email)).startsWith(squashedBlock) || squash(bodyOf(email)).includes(squashedBlock), what).toBe(true);
             }
             // At the top of its text.

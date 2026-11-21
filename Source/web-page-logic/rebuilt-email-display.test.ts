@@ -230,8 +230,8 @@ describe('rebuiltCard', () =>
         expect(outlookNl?.quoteMarksRemoved).toBe(false);
         expect(outlookNl?.sourceNumber).toBe(1);
         expect(outlookNl?.date.kind).toBe('moment');
-        // A Gmail attribution: never a subject; ">" marks removed from its text.
-        expect(gmail?.subject).toBeNull();
+        // A Gmail attribution: no subject of its own, the chain's (F3, task 9.9a); ">" marks removed from its text.
+        expect(gmail?.subject).toBe('Re: Office desks and chairs');
         expect(gmail?.quoteMarksRemoved).toBe(true);
         expect(gmail?.text).toContain('I can come by on W');
         expect(gmail?.text).not.toMatch(/^>/m);

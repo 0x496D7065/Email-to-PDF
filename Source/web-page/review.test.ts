@@ -8,6 +8,7 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures
 import { attachedResult } from '../../Helper/Test/test-support/attached-builder';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEDUPE_WARNINGS, THREAD_ANALYSIS_WARNINGS, PARSE_WARNINGS } from '../web-page-logic/message-notes';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { SAFE_TAGS } from './safe-dom';
 import { setLocale, t } from './translations';
 import { headingId, mountPreview, type Preview, type PreviewOptions } from './preview';
@@ -287,8 +288,12 @@ describe('counts', () =>
         expect(counts.filesFailed).toBe(1);
         expect(counts.duplicatesMerged).toBeGreaterThan(0);
         expect(byId('review-files-text').textContent).toBe(`${String(counts.filesGiven)} files, 1 could not be read.`);
+        // The emails rebuilt from quoted text are counted on the same line (the phone forward fixtures of task 9.9a give some).
+        const rebuilt = rebuiltEntries(result).length;
+        expect(rebuilt).toBeGreaterThan(0);
         expect(byId('review-messages').textContent).toBe(
-            `${String(counts.messagesFound)} emails found, ${String(counts.duplicatesMerged)} ${counts.duplicatesMerged === 1 ? 'identical copy' : 'identical copies'} merged.`,
+            `${String(counts.messagesFound)} emails found, ${String(counts.duplicatesMerged)} ${counts.duplicatesMerged === 1 ? 'identical copy' : 'identical copies'} merged, ` +
+                `${String(rebuilt)} earlier emails rebuilt from quoted text.`,
         );
         expect(includedLine()).toBe(`${String(result.messages.length)} of ${String(result.messages.length)} emails will be in the PDF.`);
         // The failed files are listed in step 1 only: a short text points there.

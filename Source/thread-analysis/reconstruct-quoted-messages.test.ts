@@ -3,7 +3,8 @@
 // people. Non-ASCII letters are written as \u escapes.
 
 import { describe, expect, it } from 'vitest';
-import { NEGATIVE_CASES, THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
+import { buildThread, type BuiltThread, type QuoteStyle } from '../../Helper/Test/test-support/thread-builder';
+import { chain as styleChain, NEGATIVE_CASES, THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct-quoted-messages';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
@@ -13,14 +14,14 @@ const rebuild = (body: string, subject = 'Re: Office desks', sourceOffsetMinutes
 
 const lines = (...l: string[]): string => `${l.join('\n')}\n`;
 
-/** An independent reading of option A: up to `depth` ">" marks (spaces before each) and one space after them removed per line. */
+/** An independent reading of option A: up to `depth` ">" marks (spaces before each) and one space (or no-break space) after them removed per line. */
 function oracle(slice: string, depth: number): string
 {
     if (depth === 0)
     {
         return slice;
     }
-    const marks = new RegExp(`^(?:[^\\S\\r\\n]*>){1,${depth}} ?`, 'u');
+    const marks = new RegExp(`^(?:[^\\S\\r\\n]*>){1,${depth}}[ \\u00a0]?`, 'u');
     return slice
         .split(/(\r\n|\r|\n)/u)
         .map((part, i) => (i % 2 === 1 ? part : part.replace(marks, '')))
@@ -275,11 +276,20 @@ describe('reconstructQuotedMessages: refusal rules', () =>
         expect(rebuild(body)).toEqual([]);
     });
 
-    it('R3: an attribution whose quote skips a level, or that has no quote at all, is refused', () =>
+    it('R3: an attribution whose quote skips a level is refused (Gmail and Apple forms)', () =>
     {
         expect(rebuild(lines('Thanks.', '', GMAIL, '>> Hello,', '>> Old text.'))).toEqual([]);
-        expect(rebuild(lines('Thanks.', '', GMAIL, 'Hello,', 'Old text.'))).toEqual([]);
-        expect(rebuild(lines('Thanks.', '', GMAIL, ''))).toEqual([]);
+        expect(rebuild(lines('Thanks.', '', `> ${GMAIL}`, '>> Hello,', '>> Old text.'))).toEqual([]);
+    });
+
+    it('R3: an attribution with no quote after it is refused unless it is strict (F1, task 9.9a: see below)', () =>
+    {
+        // No time in the date, no address, no opener, or prose around it: refused, as before task 9.9a.
+        expect(rebuild(lines('Thanks.', '', 'On Mon, 3 Mar 2025, Bob Sample <bob@furniture.example.test> wrote:', 'Hello,', 'Old text.'))).toEqual([]);
+        expect(rebuild(lines('Thanks.', '', 'On Mon, 3 Mar 2025 at 14:02, Bob Sample wrote:', 'Hello,', 'Old text.'))).toEqual([]);
+        expect(rebuild(lines('Thanks.', '', 'Bob Sample <bob@furniture.example.test> wrote:', 'Hello,', 'Old text.'))).toEqual([]);
+        expect(rebuild(lines('Thanks.', '', 'As I said on Mon, 3 Mar 2025 at 14:02, Bob Sample <bob@furniture.example.test> wrote:', 'Hello,'))).toEqual([]);
+        expect(rebuild(lines('Thanks.', '', 'On Monday, Bob Sample <bob@furniture.example.test> wrote:', '', GMAIL_2, 'Old text.'))).toEqual([]);
     });
 
     it('R1: a header with no readable sender and no readable date is refused', () =>
@@ -339,6 +349,207 @@ describe('reconstructQuotedMessages: refusal rules', () =>
     });
 });
 
+describe('reconstructQuotedMessages: flat threads, empty headers, nested forwards (task 9.9a)', () =>
+{
+    const BOB = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
+    const FORWARD = (date = 'Mon, 3 Mar 2025 at 14:02'): string[] => [
+        '---------- Forwarded message ---------',
+        'From: Bob Sample <bob@furniture.example.test>',
+        `Date: ${date}`,
+        'Subject: Desks for the office',
+        'To: Alice Example <alice@example.test>',
+    ];
+    const summary = (got: readonly ReconstructedMessage[]): unknown[] =>
+        got.map((m) => ({ kind: m.kind, depth: m.depth, empty: m.noOwnText, text: m.reconstructedText.trim(), subject: m.subject, fromChain: m.subjectFromChain }));
+
+    it('F1: a strict attribution with its text at the same depth (no ">") is rebuilt', () =>
+    {
+        const got = rebuild(lines('Thanks.', '', GMAIL, 'Hello,', 'Old text.'));
+        expect(summary(got)).toEqual([{ kind: 'reply', depth: 0, empty: false, text: 'Hello,\nOld text.', subject: 'Re: Office desks', fromChain: true }]);
+        expect(got[0]?.from).toEqual([BOB]);
+        expect(got[0]?.quoteMarksRemoved).toBe(false);
+        expect(got[0]?.reconstructedText).toBe('Hello,\nOld text.\n');
+    });
+
+    it('F1: a flat chain of strict attributions (as phones forward a thread), in French and Dutch too', () =>
+    {
+        const fr = 'Le 3 mars 2025 14:02, "Bob Sample " <bob@furniture.example.test> a \u00e9crit :';
+        const nl = 'Op 3 mrt. 2025 om 09:10 heeft Alice Example <alice@example.test> het volgende geschreven:';
+        const got = rebuild(lines('Thanks.', '', fr, '', 'Bonjour,', '', nl, '', 'Hallo,', 'Oude tekst.'));
+        expect(got.map((m) => [m.depth, m.from[0]?.address, m.dateText, m.reconstructedText.trim()])).toEqual([
+            [0, 'bob@furniture.example.test', '3 mars 2025 14:02', 'Bonjour,'],
+            [0, 'alice@example.test', '3 mrt. 2025 om 09:10', 'Hallo,\nOude tekst.'],
+        ]);
+        expect(got[0]?.from[0]?.name).toBe('Bob Sample');
+    });
+
+    it('F1: a flat attribution after a ">" one keeps the chain rule: going back a level is refused', () =>
+    {
+        const body = lines('Thanks.', '', GMAIL, '> Hello,', '>', GMAIL_2, 'Old text.');
+        expect(rebuild(body)).toEqual([]);
+    });
+
+    it('F1: a flat attribution never claims the writer\'s own answer around a quote (all its text must be at its depth)', () =>
+    {
+        const attribution = 'On 4 May 2026 10:00, Bob <bob@x.test> wrote:';
+        // Flat text, then a quote, then the writer\'s answer: the unquoted lines are not a quoted body.
+        expect(rebuild(lines(attribution, 'quoted?', '', '> real quote', '', 'my answer'))).toEqual([]);
+        // Quote first, then the answer (Gmail shape with an interleaved answer): refused by R4, as before.
+        expect(rebuild(lines(attribution, '> real quote', '', 'my answer'))).toEqual([]);
+        // Mixed depths with no text after the quote: still not all at one depth, refused.
+        expect(rebuild(lines(attribution, 'quoted?', '> real quote', '>> older quote'))).toEqual([]);
+        // Writer\'s text first, then the flat attribution with a quote under it: nothing rebuilt either.
+        expect(rebuild(lines('Thanks.', '', attribution, 'quoted?', '', '> real quote', '', 'my answer'))).toEqual([]);
+        // Control: the same attribution with only flat text is rebuilt.
+        expect(rebuild(lines(attribution, 'quoted?', '', 'more quoted')).map((m) => m.reconstructedText.trim())).toEqual(['quoted?\n\nmore quoted']);
+    });
+
+    it('F2 (R6): an empty Outlook block is rebuilt as an empty email and the chain goes on', () =>
+    {
+        const body = lines('Thanks.', '', ...OUTLOOK(), '', ...OUTLOOK('Carol Test <carol@sample.invalid>'), '', 'Old text.');
+        const got = rebuild(body);
+        expect(summary(got)).toEqual([
+            { kind: 'reply', depth: 0, empty: true, text: '', subject: 'Office desks', fromChain: false },
+            { kind: 'reply', depth: 0, empty: false, text: 'Old text.', subject: 'Office desks', fromChain: false },
+        ]);
+        expect(got[1]?.from[0]?.address).toBe('carol@sample.invalid');
+        expect(checkProperties(body, got)).toEqual([]);
+    });
+
+    it('F2 (R6): an empty strict attribution directly followed by another one; the chain goes on', () =>
+    {
+        const body = lines('Thanks.', '', GMAIL, '', GMAIL_2, '', 'Old text.');
+        const got = rebuild(body);
+        expect(got.map((m) => [m.noOwnText, m.depth, m.from[0]?.address, m.reconstructedText.trim()])).toEqual([
+            [true, 0, BOB.address, ''],
+            [false, 0, 'alice@example.test', 'Old text.'],
+        ]);
+        expect(checkProperties(body, got)).toEqual([]);
+    });
+
+    it('F2 (R6): an empty attribution takes the depth of the next header when that is one deeper', () =>
+    {
+        const got = rebuild(lines('Thanks.', '', GMAIL, `> ${GMAIL_2}`, '>> Hello Bob,', '>> Can you come?'));
+        expect(got.map((m) => [m.noOwnText, m.depth, m.reconstructedText])).toEqual([[true, 1, ''], [false, 2, 'Hello Bob,\nCan you come?\n']]);
+    });
+
+    it('F2 (R6): an empty strict attribution at the end of the quoted history is an empty email', () =>
+    {
+        const got = rebuild(lines('Thanks.', '', GMAIL, ''));
+        expect(got.map((m) => [m.noOwnText, m.depth, m.reconstructedText])).toEqual([[true, 0, '\n']]);
+    });
+
+    it('F2 (R6): an empty NON-strict attribution is still refused (and stops the chain)', () =>
+    {
+        expect(rebuild(lines('Thanks.', '', 'On Monday, Bob Sample <bob@furniture.example.test> wrote:', '', GMAIL_2, 'Old text.'))).toEqual([]);
+        // Inside a chain: its holder is dropped too, the messages before stay.
+        const body = lines('Thanks.', '', ...OUTLOOK(), '', 'First.', '', GMAIL, 'Second.', '', 'On Monday, Carol Test <carol@sample.invalid> wrote:', '', GMAIL_2,
+            'Third.');
+        expect(rebuild(body).map((m) => m.reconstructedText.trim())).toEqual(['First.']);
+    });
+
+    it('P1: a forward whose body is one ">" level deeper than its header lines (Android mail) is rebuilt at that level', () =>
+    {
+        const body = lines('Thanks.', '', ...FORWARD(), '', '> Hello Alice,', '> The desks are ready.', '>', '> Bob');
+        const got = rebuild(body, 'Fwd: Desks for the office');
+        expect(summary(got)).toEqual([
+            { kind: 'forward', depth: 1, empty: false, text: 'Hello Alice,\nThe desks are ready.\n\nBob', subject: 'Desks for the office', fromChain: false },
+        ]);
+        expect(got[0]?.quoteMarksRemoved).toBe(true);
+    });
+
+    it('P1: the nested body may hold the next message (a Gmail quote one level down)', () =>
+    {
+        const body = lines('Thanks.', '', ...FORWARD(), '', `> ${GMAIL_2}`, '>> Hello Bob,', '>> Can you come?');
+        const got = rebuild(body, 'Fwd: Desks for the office');
+        // The forward's own part is empty (its header is followed by the next header, one level deeper): an empty forward
+        // at that depth (R6), then the Gmail quote.
+        expect(got.map((m) => [m.kind, m.noOwnText, m.depth])).toEqual([['forward', true, 1], ['reply', false, 2]]);
+        expect(got[1]?.reconstructedText).toBe('Hello Bob,\nCan you come?\n');
+    });
+
+    it('P1: only when ALL its text lines are one level deeper; else the body stays at the header depth', () =>
+    {
+        const body = lines('Thanks.', '', ...FORWARD(), '', '> Hello Alice,', 'Unquoted line.');
+        const got = rebuild(body, 'Fwd: Desks for the office');
+        expect(got.map((m) => [m.depth, m.reconstructedText.trim()])).toEqual([[0, '> Hello Alice,\nUnquoted line.']]);
+    });
+
+    it('P1: not for an Outlook block (user decision F7), not even in a forwarded email', () =>
+    {
+        for (const subject of ['Re: Office desks', 'FW: Office desks'])
+        {
+            const got = rebuild(lines('Thanks.', '', ...OUTLOOK(), '', '> Old text.', '> More.'), subject);
+            expect(got.map((m) => [m.depth, m.reconstructedText.trim()]), subject).toEqual([[0, '> Old text.\n> More.']]);
+        }
+    });
+
+    it('F3: an attribution takes the subject of the nearest newer header that has one, else the source subject', () =>
+    {
+        const quoted = OUTLOOK().map((l) => `> ${l}`);
+        const body = lines('Thanks.', '', GMAIL, '> Hello,', '>', ...quoted, '>', '> Older.', '>', `> ${GMAIL_2}`, '>> Oldest.');
+        const got = rebuild(body, 'Re: Re: Office desks');
+        expect(got.map((m) => [m.subject, m.subjectFromChain])).toEqual([
+            ['Re: Re: Office desks', true], // nothing newer: the dropped email's own subject
+            ['Office desks', false], // the Outlook block's own
+            ['Office desks', true], // the Outlook block above it
+        ]);
+        // No subject anywhere: none.
+        const none = reconstructQuotedMessages(lines(GMAIL, '> Old text.'), { subject: '', sourceOffsetMinutes: 0 });
+        expect(none.map((m) => [m.subject, m.subjectFromChain])).toEqual([[null, false]]);
+    });
+
+    it('wrapped attributions: over two or three lines, a cut inside the address joined without a space', () =>
+    {
+        const head = 'On Mon, 3 Mar 2025 at 14:02, Bob Sample';
+        for (const wrapped of [
+            [head, '<bob@furniture.example.test> wrote:'],
+            [`${head} <bob@furni`, 'ture.example.test> wrote:'],
+            [head, '<bob@furniture', '.example.test> wrote:'],
+            ['On Mon, 3 Mar 2025 at 14:02,', 'Bob Sample <bob@furniture.example.test>', 'wrote:'],
+        ])
+        {
+            const got = rebuild(lines('Thanks.', '', ...wrapped, 'Hello,', 'Old text.'));
+            expect(got.map((m) => [m.from, m.dateText, m.reconstructedText]), wrapped.join(' / ')).toEqual([[[BOB], 'Mon, 3 Mar 2025 at 14:02', 'Hello,\nOld text.\n']]);
+        }
+        // Four lines are never one attribution.
+        expect(rebuild(lines('Thanks.', '', 'On Mon, 3 Mar 2025', 'at 14:02,', 'Bob Sample <bob@furniture.example.test>', 'wrote:', 'Hello,'))).toEqual([]);
+    });
+});
+
+describe('reconstructQuotedMessages: phone styles and empty own texts, built by the thread builder (task 9.9a)', () =>
+{
+    /** `styles` chained, with the own text of the messages at `empty` left out. */
+    const built = (styles: readonly QuoteStyle[], empty: readonly number[]): BuiltThread =>
+        buildThread(styleChain(styles).map((m, i) => (empty.includes(i) ? { ...m, text: '' } : m)));
+
+    it.each([
+        ['flat FR chain, one empty', ['mobile-fr', 'mobile-fr', 'mobile-fr'], [1]],
+        ['flat EN and NL, two empty in a row', ['mobile-en', 'mobile-nl', 'mobile-en', 'mobile-nl'], [1, 2]],
+        ['flat inside an Outlook block and a Gmail forward, empty forward', ['mobile-fr', 'outlook-fr', 'mobile-fr', 'gmail-forward-fr', 'mobile-fr'], [3, 5]],
+        ['flat inside a Gmail ">" quote', ['mobile-en', 'mobile-en', 'gmail-en', 'mobile-en'], [2]],
+        ['an empty Gmail attribution over a deeper one', ['gmail-en', 'gmail-en', 'mobile-en'], [1]],
+    ] as const)('%s: every earlier message, field by field', (_name, styles, empty) =>
+    {
+        const thread = built(styles, empty);
+        const got = rebuild(thread.body, thread.subject);
+        // The subject an attribution shows: the nearest newer header block's (F3), else the source's.
+        let chainSubject = thread.subject;
+        const want = thread.headers.map((h) =>
+        {
+            const isBlock = !(h.style.startsWith('mobile-') || h.style.startsWith('gmail-en') || h.style.startsWith('apple-') || h.style === 'thunderbird-en');
+            const subject = isBlock ? h.subject : chainSubject;
+            chainSubject = subject;
+            return { generation: h.generation, start: h.start, depth: h.textDepth, from: [h.sender.name, h.sender.address], date: h.fields.date, subject,
+                fromChain: !isBlock, empty: h.ownText === '', text: h.ownText };
+        });
+        const have = got.map((m) => ({ generation: m.generation, start: m.start, depth: m.depth, from: [m.from[0]?.name, m.from[0]?.address], date: m.dateText,
+            subject: m.subject, fromChain: m.subjectFromChain, empty: m.noOwnText, text: m.reconstructedText.trim() }));
+        expect(have).toEqual(want);
+        expect(checkProperties(thread.body, got)).toEqual([]);
+    });
+});
+
 describe('removeQuoteMarks (option A)', () =>
 {
     const strip = (text: string, depth: number): string => removeQuoteMarks(text, 0, text.length, depth);
@@ -353,6 +564,9 @@ describe('removeQuoteMarks (option A)', () =>
         ['>  a\n', 1, ' a\n'], // one space only
         ['  > a\n', 1, 'a\n'], // spaces before a mark belong to it
         ['>\t a\n', 1, '\t a\n'], // a tab is not the space after the mark
+        ['>\u00a0a\n', 1, 'a\n'], // a no-break space is (P3, task 9.9a: "> &nbsp;" from HTML)
+        ['>\u00a0\u00a0a\n', 1, '\u00a0a\n'], // one only
+        ['> \u00a0a\n', 1, '\u00a0a\n'], // a space then a no-break space: the space only
         ['> a\r\n> b\r\n', 1, 'a\r\nb\r\n'],
         ['>\n\n> b', 2, '\n\nb'], // blank lines lose the marks they have
         ['> a -> b > c\n', 1, 'a -> b > c\n'], // only leading marks

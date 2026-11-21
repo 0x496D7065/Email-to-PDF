@@ -10,6 +10,8 @@ import {
     detectReplyHeaders,
     findReplyHeaders,
     isForwardSubject,
+    joinAttributionLines,
+    MAX_ATTRIBUTION_LINES,
     MIN_HEADER_LINES,
 } from './reply-header';
 import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
@@ -174,11 +176,56 @@ describe('detectReplyHeaders: attribution lines', () =>
         expect(detect(lines('We discussed it and', 'Bob Sample <bob@example.test> wrote:', 'normal text'))).toEqual([]);
     });
 
+    it(`wrapped over three lines (MAX_ATTRIBUTION_LINES = ${MAX_ATTRIBUTION_LINES}, task 9.9a): folded with the quote, or alone when strict`, () =>
+    {
+        const three = ['On Mon, 3 Mar 2025 at 14:02,', 'Bob Sample <bob@example.test>', 'wrote:'];
+        expect(foldedTexts(lines('Top.', '', ...three, ...QUOTE, '', 'After.'))).toEqual([`${lines(...three, ...QUOTE)}\n`]);
+        // A phone cuts a long line at a fixed width, inside the address: no quote after it, the text stays shown.
+        const cut = ['Le 3 mars 2025 14:02, "Bob Sample " <bob@exam', 'ple.test> a \u00e9crit :'];
+        expect(foldedTexts(lines('Top.', '', ...cut, '', 'Bonjour,', 'Texte.'))).toEqual([`${lines(...cut)}\n`]);
+        expect(findReplyHeaders(lines('Top.', '', 'On Mon, 3 Mar 2025 at 14:02, Bob Sample', '<bob@exam', 'ple.test> wrote:', 'Hello,')).map((h) => h.kind)).toEqual(['reply']);
+    });
+
+    it('never four lines; and a later line that is an attribution by itself is not joined to the prose above it', () =>
+    {
+        expect(detect(lines('On Mon,', '3 Mar 2025', 'at 14:02, Bob Sample <bob@example.test>', 'wrote:', 'normal text'))).toEqual([]);
+        const attribution = 'On Mon, 3 Mar 2025 at 14:02, Bob Sample <bob@example.test> wrote:';
+        // Before task 9.9a the prose line was joined to it (opener on the first line, ending on the second).
+        expect(foldedTexts(lines('On Monday we met at the office.', attribution, ...QUOTE))).toEqual([lines(attribution, ...QUOTE)]);
+        expect(foldedTexts(lines('On Monday we met', 'at the office as planned.', attribution, ...QUOTE))).toEqual([lines(attribution, ...QUOTE)]);
+    });
+
+    it('a three-line wrap needs the same evidence as one line to fold without a quote', () =>
+    {
+        expect(detect(lines('On Monday', 'the team', 'wrote:', 'normal text'))).toEqual([]);
+    });
+
     it('tolerates nbsp, extra spaces and upper case', () =>
     {
         const attribution = '  ON Mon,\u00a03 Mar 2025, Bob Sample\u00a0WROTE\u00a0:  ';
         const body = lines('Top.', attribution, ...QUOTE);
         expect(foldedTexts(body)).toEqual([lines(attribution, ...QUOTE)]);
+    });
+});
+
+describe('joinAttributionLines (task 9.9a)', () =>
+{
+    it.each([
+        [['On Mon, Bob Sample', '<bob@example.test> wrote:'], 'On Mon, Bob Sample <bob@example.test> wrote:'],
+        [['On Mon, Bob Sample <bob@exam', 'ple.test> wrote:'], 'On Mon, Bob Sample <bob@example.test> wrote:'],
+        [['On Mon, Bob Sample <', 'bob@example.test> wrote:'], 'On Mon, Bob Sample <bob@example.test> wrote:'],
+        [['On Mon, Bob Sample <bob@example', '.test>', 'wrote:'], 'On Mon, Bob Sample <bob@example.test> wrote:'],
+        [['On Mon, Bob Sample <bob@', 'example.test> wrote:'], 'On Mon, Bob Sample <bob@example.test> wrote:'],
+        // Not one address: joined with a space.
+        [['On Mon, <alice@example.test> and <bob', 'and more> wrote:'], 'On Mon, <alice@example.test> and <bob and more> wrote:'],
+        [['On Mon, Bob <bob@exam', 'ple.test and carol@x.test> wrote:'], 'On Mon, Bob <bob@exam ple.test and carol@x.test> wrote:'],
+        [['On Mon, Bob <bob@exam', 'ple@other.test> wrote:'], 'On Mon, Bob <bob@exam ple@other.test> wrote:'],
+        [['On Mon, Bob <bob@example.test>', 'wrote:'], 'On Mon, Bob <bob@example.test> wrote:'],
+        [['one'], 'one'],
+        [[], ''],
+    ] as const)('%j', (parts, want) =>
+    {
+        expect(joinAttributionLines(parts)).toBe(want);
     });
 });
 

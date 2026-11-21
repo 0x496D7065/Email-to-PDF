@@ -207,10 +207,10 @@ describe('rebuilt cards in the list', () =>
         const nlRows = metaRows(outlookNl as FakeElement);
         expect(nlRows[0]).toMatch(/^Date: about 2025-03-03 \d\d:40 UTC-05:00 As written in the quote: maandag 3 maart 2025 15:40$/);
         expect(nlRows[1]).toBe('From: Alice Example <alice@example.test>');
-        // An attribution has no subject: our own placeholder, marked as such.
+        // An attribution holds no subject: the chain's (user decision F3, task 9.9a), shown as it is.
         const subject = one(gmail as FakeElement, 'message-subject');
-        expect(subject.textContent).toBe('(subject not in the quote)');
-        expect(hasClass(subject, 'placeholder')).toBe(true);
+        expect(subject.textContent).toBe('Re: Office desks and chairs');
+        expect(hasClass(subject, 'placeholder')).toBe(false);
         for (const [card, rebuiltEmail] of [outlookEn, gmail, outlookNl].map((c, k) => [c, rebuiltEntries(result)[k]] as const))
         {
             expect(one(card as FakeElement, 'body-text').textContent).toBe(rebuiltEmail?.rebuilt.reconstructedText);

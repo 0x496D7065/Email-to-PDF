@@ -53,6 +53,11 @@ const TAG_EVIDENCE: Readonly<Record<string, string>> = {
     'signature:bob': 'Bob Sample\nSample Furniture',
     'signature:carol': 'Cordialement,',
     'disclaimer:bob': 'DISCLAIMER: ',
+    // Task 9.9a (the phone forward fixtures): a French forward marker, a flat mobile attribution
+    // (its text under it at the same depth, after a blank line) and the workshop's signature.
+    'quote:forward-fr': '---------- Message transféré ----------\n',
+    'quote:mobile-fr': ' a écrit :\n\nChère Madame,',
+    'signature:workshop': 'Mobilier de bureau sur mesure',
 };
 
 /**
@@ -69,6 +74,17 @@ function checkTags(expected: FixtureExpectation, body: string): void
         {
             // Light check: ANY "-- " line satisfies every "*-dashdash" tag; it does not prove whose signature it is.
             expect(text, `${tag}: body should contain a "-- " signature separator line`).toMatch(/(^|\n)-- \n/);
+            continue;
+        }
+        if (tag === 'quotes-not-in-set')
+        {
+            // A property of the set, not of the body: checked in Source/thread-analysis/analyze-thread.fixtures.test.ts.
+            continue;
+        }
+        if (tag === 'own-text:none')
+        {
+            // No own text: the body starts with a forward marker line ("---------- ... ----------").
+            expect(lfBody.trimStart(), `${tag}: body should start with a forward marker line`).toMatch(/^-{5,} .+ -{5,}\n/u);
             continue;
         }
         const evidence = TAG_EVIDENCE[tag];

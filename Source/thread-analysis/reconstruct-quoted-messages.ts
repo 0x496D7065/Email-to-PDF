@@ -27,10 +27,29 @@
 //    (spaces between them allowed, as in quote-markers.ts). A message's body
 //    depth (`depth`) is:
 //    - for a header BLOCK (Outlook, forwards: a From label line), the depth
-//      of its header lines;
+//      of its header lines; for a FORWARD block whose text lines are all
+//      one level deeper than its header lines, that deeper level (P1, task
+//      9.9a: Android mail nests the forwarded email in a blockquote under
+//      its header lines; only forward blocks, user decision F7);
 //    - for an ATTRIBUTION ("On ... wrote:"), the depth of the first line of
 //      text after it: one more than the attribution (Gmail) or the same
-//      depth inside a ">" quote (Apple Mail, "> On ... wrote:").
+//      depth inside a ">" quote (Apple Mail, "> On ... wrote:"). A FLAT
+//      attribution (its text at its own depth, no ">" level added, as
+//      phones write a forwarded thread) is accepted only when it is STRICT
+//      (F1, task 9.9a): its whole line(s) are the attribution (opener to
+//      ending, isStrongAttribution in reply-header.ts), its date is readable
+//      with a time, and its sender has an address. Ordinary prose that ends
+//      with "wrote:" is never one. A flat attribution that has text must
+//      have ALL its text lines at its own depth: a deeper (quoted) line in
+//      its part means the unquoted lines are the writer's own answer around
+//      a quote, so it is refused (review 9.9a). Known limit: in a flat
+//      block, text after the quoted message (e.g. the forwarder's own
+//      signature) becomes part of the last rebuilt message, because plain
+//      text cannot tell them apart; the original stays complete in the source;
+//    - for a header with no text in its part (R6), an attribution or a
+//      forward block (marker line first) takes the next header's depth when
+//      that is one deeper, else its own (an attribution must then be strict,
+//      as above).
 // 4. reconstructedText (user decision, option A) is the body slice
 //    [headerEnd, end) with exactly `depth` leading ">" marks removed from
 //    each line (with the spaces before each mark, and one space after the
@@ -39,6 +58,13 @@
 //    line breaks and everything else are untouched.
 //    This is the ONLY form change, made for rebuilt views; the source text
 //    is never changed. RECONSTRUCTED_FORM_NOTE tells the UI/PDF to say so.
+//    One no-break space right after the last mark goes like a space (P3:
+//    HTML converted to text writes "> &nbsp;").
+// 5. SUBJECT. A header block gives its own Subject. An attribution holds
+//    none: it takes the subject of the conversation, the one of the nearest
+//    NEWER header in the chain that has one, else the dropped email's own
+//    (user decision F3, task 9.9a). It is shown as it is (not marked as
+//    borrowed); subjectFromChain records it for the linking only.
 //
 // REFUSAL (never guess: fewer rebuilt messages, never wrong ones). The chain
 // STOPS at the first header that fails one of the rules below, and the
@@ -57,9 +83,11 @@
 // R3. Depth must follow the chain: with the holder's body depth p (0 for
 //     the source's own text), a block starts at depth p or p + 1 (body at
 //     the same depth); an attribution at depth p has its body at p + 1, one
-//     at depth p + 1 (inside the quote) has its body at p + 1 too. Anything
-//     else (depth going back, skipping a level, an attribution followed by
-//     unquoted text) is refused.
+//     at depth p + 1 (inside the quote) has its body at p + 1 too. A forward
+//     block may have its body at its header depth + 1 (step 3, P1); a strict
+//     attribution at depth p may have its body at p (step 3, F1). Anything
+//     else (depth going back, skipping a level, a non-strict attribution
+//     followed by unquoted text) is refused.
 // R4. No text line of the message's own part [headerEnd, next header) is
 //     less deep than its body: unquoted text between or after quoted lines
 //     (interleaved answers, bottom-posting) means the quote is not one
@@ -68,6 +96,10 @@
 //     MAX_RECONSTRUCTED messages are rebuilt (the last one kept still ends
 //     at the next header, so nothing is merged); a body longer than
 //     MAX_SOURCE_LENGTH is not read at all.
+// R6. A header whose part has no text line (only blank lines and marks:
+//     a header directly followed by the next one) is NOT refused: it gives
+//     an empty rebuilt message (noOwnText) and the chain goes on past it
+//     (user decision F2, task 9.9a). The rules above still apply to it.
 // Text typed BELOW an unmarked Outlook quote cannot be seen (no ">" marks):
 // it ends up in the last rebuilt message, as in reply-header.ts rule 3. It
 // stays in the source; nothing is lost.
@@ -82,7 +114,17 @@
 import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { hasWrittenZone, parseQuotedDate } from './quoted-date';
 import { isPlainName, readQuotedHeader } from './quoted-header';
-import { clean, findReplyHeaders, LABEL_HEAD_LENGTH, LABEL_PATTERN, LABEL_ROLE_OF, labelKey } from './reply-header';
+import {
+    clean,
+    findReplyHeaders,
+    FORWARD_MARKERS,
+    isStrongAttribution,
+    joinAttributionLines,
+    LABEL_HEAD_LENGTH,
+    LABEL_PATTERN,
+    LABEL_ROLE_OF,
+    labelKey,
+} from './reply-header';
 import { lineRanges } from './fold-segments';
 import type { ReconstructedMessage } from '../../Header/rebuilt-emails';
 
@@ -92,6 +134,8 @@ export const MAX_SOURCE_LENGTH = 10_000_000;
 export const MAX_RECONSTRUCTED = 500;
 /** Deepest body depth (">" levels) rebuilt; real threads stay far below. */
 export const MAX_QUOTE_DEPTH = 100;
+/** A longer line is never read as a forward marker (as reply-header.ts reads intro lines). */
+const MAX_MARKER_LENGTH = 120;
 
 /**
  * The fixed note the UI and the PDF show next to a rebuilt message whose
@@ -159,7 +203,8 @@ function classify(text: string, start: number, contentEnd: number, end: number):
 
 /**
  * The text of lines [from, to) with up to `depth` quote marks and their
- * indentation removed per line (file comment, step 4). Exported for the tests.
+ * indentation removed per line, plus one space or no-break space after the
+ * last mark removed (file comment, step 4). Exported for the tests.
  */
 export function removeQuoteMarks(text: string, from: number, to: number, depth: number): string
 {
@@ -188,7 +233,8 @@ export function removeQuoteMarks(text: string, from: number, to: number, depth: 
             i = j + 1;
             removed++;
         }
-        if (removed > 0 && i < contentEnd && text.charCodeAt(i) === 0x20)
+        // One plain space or one no-break space after the last mark (as quotePrefixLength in pdf-text-transforms.ts).
+        if (removed > 0 && i < contentEnd && (text.charCodeAt(i) === 0x20 || text.charCodeAt(i) === 0xa0))
         {
             i++;
         }
@@ -266,6 +312,8 @@ function rebuild(text: string, subject: string | undefined, sourceOffset: number
 
     const kept: ReconstructedMessage[] = [];
     let parentDepth = 0;
+    // Step 5: the subject of the nearest newer header that has one (at first the source's own).
+    let chainSubject = subject !== undefined && subject.trim() !== '' ? subject : null;
     for (let k = 0; k < headers.length && kept.length < MAX_RECONSTRUCTED; k++)
     {
         const header = headers[k];
@@ -273,30 +321,101 @@ function rebuild(text: string, subject: string | undefined, sourceOffset: number
         {
             break;
         }
-        const segmentEnd = Math.min(headers[k + 1]?.start ?? limit, limit);
-        const message = candidate(text, lines, header, segmentEnd, parentDepth, sourceOffset, kept.length + 1);
-        if (message === null)
+        const next = headers[k + 1];
+        const segmentEnd = Math.min(next?.start ?? limit, limit);
+        const nextLine = next === undefined || next.start >= limit ? undefined : lines[lineIndexAt(lines, next.start)];
+        const context: ChainContext = { parentDepth, nextHeaderDepth: nextLine === undefined ? null : nextLine.depth };
+        const found = candidate(text, lines, header, segmentEnd, context, sourceOffset, kept.length + 1);
+        if (found === null)
         {
             kept.pop(); // R1-R4: the holder's end is not known (file comment, REFUSAL)
             break;
         }
-        kept.push(message);
+        const message = found.message;
+        if (found.attribution && chainSubject !== null)
+        {
+            kept.push({ ...message, subject: chainSubject, subjectFromChain: true });
+        }
+        else
+        {
+            kept.push(message);
+            if (message.subject !== null && message.subject.trim() !== '')
+            {
+                chainSubject = message.subject;
+            }
+        }
         parentDepth = message.depth;
     }
     return kept;
 }
 
-/** Message for `header` whose part ends at `segmentEnd`, or null when refused (rules R1-R5). */
+/** What the chain above a header says about it (rules R3 and R6). */
+interface ChainContext
+{
+    /** Body depth of the message that holds the header (0 for the source's own text). */
+    readonly parentDepth: number;
+    /** Depth of the next header's first line; null when the quoted history ends first. */
+    readonly nextHeaderDepth: number | null;
+}
+
+/** Whether the line is a forward marker ("---------- Forwarded message ---------"), as reply-header.ts reads intros. */
+function isForwardMarkerLine(text: string, line: QuotedLine): boolean
+{
+    if (line.gap || line.contentEnd - line.textStart > MAX_MARKER_LENGTH)
+    {
+        return false;
+    }
+    const cleaned = clean(text, line.textStart, line.contentEnd);
+    return FORWARD_MARKERS.some((re) => re.test(cleaned));
+}
+
+/** Whether every text line of lines [first, ...) before `segmentEnd` is at `depth` (at least one text line). */
+function allTextAt(lines: readonly QuotedLine[], first: number, segmentEnd: number, depth: number): boolean
+{
+    let seen = false;
+    for (let j = first; j < lines.length && (lines[j] as QuotedLine).start < segmentEnd; j++)
+    {
+        const line = lines[j] as QuotedLine;
+        if (line.gap)
+        {
+            continue;
+        }
+        if (line.depth !== depth)
+        {
+            return false;
+        }
+        seen = true;
+    }
+    return seen;
+}
+
+/** The header's own text lines, cleaned and joined as findReplyHeaders joins a wrapped attribution. */
+function attributionText(text: string, lines: readonly QuotedLine[], first: number, headerEnd: number): string
+{
+    const parts: string[] = [];
+    for (let j = first; j < lines.length && (lines[j] as QuotedLine).start < headerEnd; j++)
+    {
+        const line = lines[j] as QuotedLine;
+        if (!line.gap)
+        {
+            parts.push(clean(text, line.textStart, line.contentEnd));
+        }
+    }
+    return joinAttributionLines(parts);
+}
+
+/** Message for `header` whose part ends at `segmentEnd`, or null when refused (rules R1-R6). */
 function candidate(
     text: string,
     lines: readonly QuotedLine[],
     header: { readonly start: number; readonly headEnd: number; readonly kind: 'reply' | 'forward' },
     segmentEnd: number,
-    parentDepth: number,
+    context: ChainContext,
     sourceOffset: number | null,
     generation: number,
-): ReconstructedMessage | null
+): { readonly message: ReconstructedMessage; readonly attribution: boolean } | null
 {
+    const parentDepth = context.parentDepth;
     const fields = readQuotedHeader(text, header);
     const headerEnd = fields.headerEnd;
     // R2: the fields end inside the message's part.
@@ -314,6 +433,7 @@ function candidate(
     let headerDepth = -1;
     let block = false;
     let introFirst = false;
+    let forwardMarker = false;
     let k = first;
     for (; k < lines.length && (lines[k] as QuotedLine).start < headerEnd; k++)
     {
@@ -326,6 +446,7 @@ function candidate(
         {
             headerDepth = line.depth;
             introFirst = !isFromLabel(text, line);
+            forwardMarker = introFirst && isForwardMarkerLine(text, line);
         }
         else if (line.depth !== headerDepth)
         {
@@ -341,36 +462,85 @@ function candidate(
         return null;
     }
     const bodyFirst = k; // first line of [headerEnd, segmentEnd)
+    let firstText = -1;
+    for (let j = bodyFirst; j < lines.length && (lines[j] as QuotedLine).start < segmentEnd; j++)
+    {
+        if (!(lines[j] as QuotedLine).gap)
+        {
+            firstText = j;
+            break;
+        }
+    }
+    const noOwnText = firstText < 0; // R6
+
+    // R1: evidence.
+    const date = fields.dateText === null ? null : parseQuotedDate(fields.dateText, sourceOffset);
+    const dateOk = date !== null && date.wallMs !== null;
+    const sender = fields.from.length === 1 ? fields.from[0] : undefined;
+    const senderOk = sender !== undefined;
+    // Without a readable date, a sender is evidence only with an address or a name-shaped name.
+    const senderStrong = sender !== undefined && (sender.address !== '' || (sender.name !== '' && isPlainName(sender.name, false)));
+    const evidence = block && !introFirst ? dateOk && senderOk : dateOk || senderStrong;
+    if (!evidence)
+    {
+        return null;
+    }
 
     // Body depth (step 3) and R3.
     let depth: number;
     if (block)
     {
-        depth = headerDepth;
         if (headerDepth !== parentDepth && headerDepth !== parentDepth + 1)
         {
             return null;
         }
+        // P1: a forward (marker line first) whose body is nested one level deeper than its header lines
+        // (Android mail). Not an Outlook block, even in a forwarded email (user decision F7).
+        // Trade-off: a forward whose whole body is ">" lines is rebuilt one level deeper with its marks removed;
+        // in plain text that cannot be told apart from the Android shape. No text is lost.
+        // With no text of its own (R6), the next header one level deeper tells the same.
+        const deeper = noOwnText ? context.nextHeaderDepth === headerDepth + 1 : allTextAt(lines, bodyFirst, segmentEnd, headerDepth + 1);
+        const nested = header.kind === 'forward' && forwardMarker && deeper;
+        depth = nested ? headerDepth + 1 : headerDepth;
     }
     else
     {
-        let firstText = -1;
-        for (let j = bodyFirst; j < lines.length && (lines[j] as QuotedLine).start < segmentEnd; j++)
+        // A body at the header's own depth (no quote marks added): only with strong evidence (R3).
+        const flatAllowed = date !== null && date.wallMs !== null && date.precision === 'minute' &&
+            sender !== undefined && sender.address !== '' && isStrongAttribution(attributionText(text, lines, first, headerEnd));
+        if (headerDepth === parentDepth + 1)
         {
-            if (!(lines[j] as QuotedLine).gap)
+            // Apple Mail: the attribution is inside the quote, its text at the same depth (none skips a level).
+            depth = headerDepth;
+            if (!noOwnText && (lines[firstText] as QuotedLine).depth !== headerDepth)
             {
-                firstText = j;
-                break;
+                return null;
             }
         }
-        if (firstText < 0)
+        else if (headerDepth !== parentDepth)
         {
             return null;
         }
-        depth = (lines[firstText] as QuotedLine).depth;
-        const gmail = headerDepth === parentDepth && depth === parentDepth + 1;
-        const apple = headerDepth === parentDepth + 1 && depth === headerDepth;
-        if (!gmail && !apple)
+        else if (noOwnText)
+        {
+            // R6: no text to read the depth from: the next header's depth tells.
+            depth = context.nextHeaderDepth === parentDepth + 1 ? parentDepth + 1 : parentDepth;
+        }
+        else
+        {
+            depth = (lines[firstText] as QuotedLine).depth; // Gmail: parentDepth + 1
+        }
+        if (depth !== parentDepth + 1 && depth !== headerDepth)
+        {
+            return null;
+        }
+        if (headerDepth === parentDepth && depth === parentDepth && !flatAllowed)
+        {
+            return null;
+        }
+        // F1: a flat attribution with text owns only text at its own depth: a deeper line in its part
+        // (a quote) means the unquoted text is the writer's answer around a quote, not a quoted body.
+        if (headerDepth === parentDepth && depth === parentDepth && !noOwnText && !allTextAt(lines, bodyFirst, segmentEnd, depth))
         {
             return null;
         }
@@ -390,20 +560,7 @@ function candidate(
         }
     }
 
-    // R1: evidence.
-    const date = fields.dateText === null ? null : parseQuotedDate(fields.dateText, sourceOffset);
-    const dateOk = date !== null && date.wallMs !== null;
-    const sender = fields.from.length === 1 ? fields.from[0] : undefined;
-    const senderOk = sender !== undefined;
-    // Without a readable date, a sender is evidence only with an address or a name-shaped name.
-    const senderStrong = sender !== undefined && (sender.address !== '' || (sender.name !== '' && isPlainName(sender.name, false)));
-    const evidence = block && !introFirst ? dateOk && senderOk : dateOk || senderStrong;
-    if (!evidence)
-    {
-        return null;
-    }
-
-    return {
+    const message: ReconstructedMessage = {
         start: header.start,
         headerEnd,
         end: segmentEnd,
@@ -414,11 +571,14 @@ function candidate(
         to: fields.to,
         cc: fields.cc,
         subject: fields.subject,
+        subjectFromChain: false,
         dateText: fields.dateText,
         incomplete: fields.incomplete,
         date,
         dateApproximate: date === null || date.wallMs === null || !hasWrittenZone(date),
         reconstructedText: removeQuoteMarks(text, headerEnd, segmentEnd, depth),
         quoteMarksRemoved: depth > 0,
+        noOwnText,
     };
+    return { message, attribution: !block };
 }

@@ -546,7 +546,11 @@ describe('PDF document model properties', () =>
                         const where = `seed ${String(seed)} position ${String(position)}: "${line}"`;
                         expect(placeLines.some((set) => set.has(line.trim())), where).toBe(true);
                         const asHeader = headerLines.some((set) => set.has(line.trim()));
-                        expect(asHeader || others.has(line.trim()), where).toBe(true);
+                        // A line with no word in it (only symbols, emoji or characters shown as codes) may
+                        // differ between two copies linked 'same-as': link-rebuilt-messages.ts (rule 2)
+                        // compares words only. Seen since task 9.9a rebuilds more of the random bodies.
+                        const hasWords = /[\p{L}\p{N}]/u.test(line.replace(/\[U\+[0-9A-F]{4,6}\]/gu, ''));
+                        expect(asHeader || others.has(line.trim()) || !hasWords, where).toBe(true);
                     }
                     // Nothing new: every line now was a line before.
                     for (const [line, leftCount] of left)
@@ -554,11 +558,16 @@ describe('PDF document model properties', () =>
                         expect(leftCount, `seed ${String(seed)} position ${String(position)}: extra "${line}"`).toBe(0);
                     }
                 }
-                // S6 (review round 3 of task 8.10): the writer's own text is still in the writer's own email.
+                // S6 (review round 3 of task 8.10): the writer's own text is still in the writer's own email,
+                // or (Q3, task 8.13a) in the rebuilt email that prints its place. Since task 9.9a a strong
+                // "On ... wrote:" line with unquoted text under it is rebuilt too (a flat attribution), so a
+                // random body can hold such a place: its text is printed as that rebuilt email.
+                const { parts: defaultParts } = applyNoRepeatRule({ ...defaultInput, rebuilt });
                 for (const [k, { email, position }] of foldedReal.entries())
                 {
+                    const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
                     ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[k], email,
-                        `seed ${String(seed)} position ${String(position)}`);
+                        `seed ${String(seed)} position ${String(position)}`, { pdfDocument: folded, parts: defaultParts.get(position) ?? [], places });
                 }
                 // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
                 const pdfDocument = buildPdfDocument(

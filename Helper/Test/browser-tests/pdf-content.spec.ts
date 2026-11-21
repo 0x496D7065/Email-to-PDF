@@ -9,7 +9,8 @@
 // expectations made HERE from the fixtures, never from the app's output.
 //
 // The input: every synthetic fixture (each .eml of Helper/Test/test-data/eml and
-// each .msg built from Helper/Test/test-data/msg/specs.ts), dropped on step 1 with a
+// each .msg built from Helper/Test/test-data/msg/specs.ts; but those whose quoted emails
+// are not in the set: JOURNEY_FIXTURES in the manifest), dropped on step 1 with a
 // real DataTransfer, as in Helper/Test/browser-tests/full-flow.spec.ts. One of them, ANSWERS
 // (eml/93-answers-between-lines.eml), holds what no other fixture has:
 // point-by-point answers between quoted lines, an emoji the fonts lack, a
@@ -68,7 +69,7 @@ import type * as ConfigModule from '../../../Source/pdf-export/page-layout/layou
 import type * as EmlModule from '../../../Source/email-reading/eml-parser.ts';
 import type * as MsgModule from '../../../Source/email-reading/msg-parser.ts';
 import { en } from '../../../Source/web-page/translations/en.ts';
-import { FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../test-data/manifest.ts';
+import { JOURNEY_FIXTURES as FIXTURES, type ExpectedAddress, type ExpectedAttachment } from '../test-data/manifest.ts';
 import type * as Builder from '../test-data/msg/builder.ts';
 import type * as Specs from '../test-data/msg/specs.ts';
 import { readDests, readLinks, readOutline, readPageRuns, readPdf, textLines, type PageRun, type TextLine } from '../test-support/pdf-reader.ts';

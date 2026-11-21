@@ -17,10 +17,14 @@
 //    blank lines between two marked lines joining it.
 // 2. ATTRIBUTION. A line (at most ATTRIBUTION_MAX_LENGTH characters once
 //    cleaned) that starts with a language's opener and ends with one of its
-//    endings ("On ... wrote:") is a STRONG attribution. Gmail wraps long
-//    ones, so two lines joined also count when the first starts with the
-//    opener. A line that only ends with an ending ("Bob wrote:") is a BARE
-//    attribution.
+//    endings ("On ... wrote:") is a STRONG attribution. Gmail and phones
+//    wrap long ones, so two or three lines joined also count when the first
+//    starts with the opener and the last ends with an ending (at most
+//    ATTRIBUTION_MAX_LENGTH characters joined). The lines are joined by one
+//    space, except where a line was cut inside an address (joinAttributionLines).
+//    A later line that is a strong attribution by itself (with the lines
+//    after it) is not joined: the line above it is ordinary text. A line
+//    that only ends with an ending ("Bob wrote:") is a BARE attribution.
 //    - If a ">" block follows (blank lines in between allowed), the
 //      attribution and that block are folded, and nothing after the block:
 //      a reply written below the quote stays shown.
@@ -84,7 +88,7 @@
 // later From line inside the same run is not scanned again: it would start
 // a shorter run with fewer labels and values, which cannot be a block
 // either); intros look ahead at most MAX_GAP_LINES + 1 lines and
-// attributions at most 2. Only the first characters of a line are cleaned
+// attributions at most MAX_ATTRIBUTION_LINES - 1. Only the first characters of a line are cleaned
 // to read a label, and long lines are never tested as attributions or
 // markers.
 //
@@ -102,6 +106,9 @@ import { lineRanges, type FoldRange, type LineRange } from './fold-segments';
  * "wrote:".
  */
 export const ATTRIBUTION_MAX_LENGTH = 300;
+
+/** Most lines one attribution is read from (rule 2: one line, or wrapped over two or three). */
+export const MAX_ATTRIBUTION_LINES = 3;
 
 /**
  * A header block needs at least this many label lines. Real blocks have 4
@@ -190,6 +197,50 @@ const DATE_EVIDENCE = /(?<!\d)\d{4}(?!\d)|(?<!\d)\d{1,2}:\d{2}(?!\d)/u;
 
 /** A date or an address: what a real attribution line holds (rule 2). */
 const ATTRIBUTION_EVIDENCE = /[\d@<]/u;
+
+/** A whole address between "<" and ">": one "@", no space, no other "<" or ">". */
+const ONE_ADDRESS = /^[^\s<>@]+@[^\s<>@]+$/u;
+
+/**
+ * Whether `before` ends inside an unclosed "<...>" whose address goes on at
+ * the start of `after` (rule 2: a line cut at a fixed width inside the
+ * address), and the two pieces make ONE address.
+ */
+function cutInsideAddress(before: string, after: string): boolean
+{
+    const open = before.lastIndexOf('<');
+    if (open < 0 || before.includes('>', open))
+    {
+        return false;
+    }
+    const close = after.indexOf('>');
+    return close > 0 && ONE_ADDRESS.test(before.slice(open + 1) + after.slice(0, close));
+}
+
+/**
+ * The cleaned lines of a wrapped attribution as one text (rule 2): joined by
+ * one space, except where a line was cut inside an address
+ * ("... <bob@furniture.exa" / "mple.test> wrote:"): those two pieces are
+ * joined without a space. Two separate addresses are never merged: the
+ * pieces must make one address (no space, "<" or second "@" in it). Also
+ * read by quoted-header.ts and reconstruct-quoted-messages.ts.
+ */
+export function joinAttributionLines(parts: readonly string[]): string
+{
+    let joined = parts[0] ?? '';
+    for (let k = 1; k < parts.length; k++)
+    {
+        const next = parts[k] ?? '';
+        joined = cutInsideAddress(joined, next) ? `${joined}${next}` : `${joined} ${next}`;
+    }
+    return joined;
+}
+
+/** Whether a cleaned attribution text starts with a language's opener and ends with one of that language's endings (rule 2: strong). */
+export function isStrongAttribution(cleaned: string): boolean
+{
+    return LANGUAGES.some((lang) => lang.opener.test(cleaned) && lang.endings.some((re) => re.test(cleaned)));
+}
 
 /** True when `subject` starts with a forward prefix ("Fwd:", "TR:", ...), after optional "[...]" tags. */
 export function isForwardSubject(subject: unknown): boolean
@@ -527,20 +578,33 @@ export function findReplyHeaders(bodyText: string, subject?: string): FoundHeade
                     strong = true;
                 }
             }
-            if (lastLine < 0 && i + 1 < lineCount && !lineInfoAt(i + 1).gap && lineInfoAt(i + 1).marked === line.marked)
+            // Wrapped over two or three lines: only with an opener on the first line.
+            const parts = [one];
+            const opens = LANGUAGES.some((lang) => lang.opener.test(one));
+            for (let next = i + 1; opens && lastLine < 0 && next < i + MAX_ATTRIBUTION_LINES && next < lineCount; next++)
             {
-                // Wrapped over two lines: only with an opener on the first line.
-                const two = cleanedLine(i + 1, ATTRIBUTION_MAX_LENGTH);
-                const joined = two === null ? '' : `${one} ${two}`;
-                if (two !== null && joined.length <= ATTRIBUTION_MAX_LENGTH)
+                if (lineInfoAt(next).gap || lineInfoAt(next).marked !== line.marked)
                 {
-                    const wrapped = LANGUAGES.some((lang) => lang.opener.test(one) && lang.endings.some((re) => re.test(joined)));
-                    if (wrapped)
-                    {
-                        lastLine = i + 1;
-                        attribution = joined;
-                        strong = true;
-                    }
+                    break;
+                }
+                const piece = cleanedLine(next, ATTRIBUTION_MAX_LENGTH);
+                if (piece === null)
+                {
+                    break;
+                }
+                parts.push(piece);
+                const joined = joinAttributionLines(parts);
+                if (joined.length > ATTRIBUTION_MAX_LENGTH)
+                {
+                    break;
+                }
+                // A later line that starts an attribution of its own is not part of this one ("Le ..." prose above it).
+                const later = parts.slice(1).some((_, m) => isStrongAttribution(joinAttributionLines(parts.slice(m + 1))));
+                if (!later && LANGUAGES.some((lang) => lang.opener.test(one) && lang.endings.some((re) => re.test(joined))))
+                {
+                    lastLine = next;
+                    attribution = joined;
+                    strong = true;
                 }
             }
         }

@@ -407,6 +407,8 @@ function wholeBody(body: string): Segment[]
 const isInteger = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 const isNumberOrNull = (v: unknown): v is number | null => v === null || (typeof v === 'number' && Number.isFinite(v));
 const isStringOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
+/** Whether a rebuilt text has a line with something else than quote marks and whitespace. */
+const hasTextLine = (text: string): boolean => /[^\s>]/u.test(text);
 
 /** A plain copy of a mailbox list, or null if it is not one. */
 function mailboxes(value: unknown): ReconstructedMessage['from'] | null
@@ -446,7 +448,7 @@ function validRebuilt(body: string, entry: unknown, minStart: number, generation
         return null;
     }
     const fields = entry as Record<string, unknown>;
-    const { start, headerEnd, end, depth, kind, subject, dateText, date, dateApproximate, reconstructedText, quoteMarksRemoved } = fields;
+    const { start, headerEnd, end, depth, kind, subject, subjectFromChain, dateText, date, dateApproximate, reconstructedText, quoteMarksRemoved, noOwnText } = fields;
     if (!isInteger(start) || !isInteger(headerEnd) || !isInteger(end) || !isInteger(depth))
     {
         return null;
@@ -464,6 +466,11 @@ function validRebuilt(body: string, entry: unknown, minStart: number, generation
         return null;
     }
     if (typeof dateApproximate !== 'boolean' || quoteMarksRemoved !== depth > 0 || typeof reconstructedText !== 'string')
+    {
+        return null;
+    }
+    // A subject taken from the chain is a text; noOwnText says whether the text has a line with text in it.
+    if (typeof subjectFromChain !== 'boolean' || (subjectFromChain && typeof subject !== 'string') || noOwnText !== !hasTextLine(reconstructedText))
     {
         return null;
     }
@@ -518,12 +525,14 @@ function validRebuilt(body: string, entry: unknown, minStart: number, generation
         to,
         cc,
         subject,
+        subjectFromChain,
         dateText,
         incomplete,
         date: quotedDate,
         dateApproximate,
         reconstructedText,
         quoteMarksRemoved,
+        noOwnText,
     };
 }
 

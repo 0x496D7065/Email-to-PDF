@@ -76,7 +76,10 @@ export interface FixtureExpectation
     /**
      * Content features for the quote/signature tests, e.g.
      * "quote:gmail-en", "quote:outlook-nl", "signature:alice-dashdash",
-     * "signature:bob", "disclaimer:bob".
+     * "signature:bob", "disclaimer:bob". "own-text:none": the body has no own text, it starts with
+     * a quoted header (a forward with nothing typed above it), so its first line is folded.
+     * "quotes-not-in-set": the emails it quotes are not fixtures of the set, so even with every
+     * fixture added they are rebuilt from its quoted text (JOURNEY_FIXTURES).
      */
     readonly tags: readonly string[];
 }
@@ -128,6 +131,22 @@ const ORDER_2_FIELDS = {
     duplicateGroup: 'order-2',
     tags: ['quote:outlook-en', ...BOB_BLOCKS, 'signature:alice-dashdash'],
 } as const;
+
+/** What the five "phone forward" fixtures (task 9.9a) share. */
+const PHONE_FORWARD_FIELDS = {
+    ...NO_THREAD_IDS,
+    from: [{ name: 'Claire Exemple', address: 'claire@client.test' }],
+    to: [{ name: '', address: 'bureau@client.test' }],
+    subject: 'Fwd: RE: Tables de r\u{E9}union - commande TEST-4821',
+    bodyContains: [
+        '---------- Message transf\u{E9}r\u{E9} ----------',
+        'Le 6 oct. 2026 09:34, "Atelier Test (Meubles Test - Exemple) " <atelier@meubles-exemple.test> a \u{E9}crit :',
+        'Envoy\u{E9} : lundi 5 octobre 2026 20:07',
+    ],
+    tags: ['quote:forward-fr', 'quote:mobile-fr', 'quote:outlook-fr', 'signature:workshop', 'quotes-not-in-set'],
+} as const;
+/** The text fixtures among them start with the phone's own (empty) forward block: no own text before it. */
+const PHONE_FORWARD_TEXT_TAGS = [...PHONE_FORWARD_FIELDS.tags, 'own-text:none'];
 
 const CONFIRM_FIELDS = {
     ...NO_THREAD_IDS,
@@ -545,6 +564,58 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         tags: ['quote:gmail-en'],
     }),
 
+    // Task 9.9a: a phone forward of a long FLAT French thread (a shape some phone mail apps produce, with
+    // invented content: an office-furniture order). Written by Helper/Test/test-support/phone-forward-fixtures.ts
+    // from the thread of phone-forward-thread.ts (never edit these files by hand). The same 13 earlier messages,
+    // newest first: an empty forward (17 Nov), a forward (6 Oct 13:58), mobile attributions
+    // "Le 6 oct. 2026 09:34, ... a ecrit :" with the text at the SAME depth, four Outlook blocks
+    // (De/Envoye/A/[Cc]/Objet), two empty attributions each followed directly by another one (27 Sep 08:31;
+    // 14 Jul 16:53: a duplicate pair), and a 15-line workshop signature repeated. Five shapes of one email
+    // (the seconds of the Date differ, so they are not duplicates).
+    emlFixture('94-phone-forward-flat.eml', {
+        description: 'Phone forward of a flat FR thread: plain text, no ">" at all (quoted-printable).',
+        messageId: 'phone-forward-a@client.test',
+        ...PHONE_FORWARD_FIELDS,
+        tags: PHONE_FORWARD_TEXT_TAGS,
+        date: emlAt('2026-11-17T18:24:15Z', 60),
+    }),
+    emlFixture('95-phone-forward-wrapped.eml', {
+        description: 'The same flat thread hard-wrapped at 76 characters at spaces (attributions over two lines).',
+        messageId: 'phone-forward-b@client.test',
+        ...PHONE_FORWARD_FIELDS,
+        tags: PHONE_FORWARD_TEXT_TAGS,
+        bodyContains: ['Le 6 oct. 2026 09:34, "Atelier Test (Meubles Test - Exemple) "\n<atelier@meubles-exemple.test> a \u{E9}crit :',
+            'Envoy\u{E9} : lundi 5 octobre 2026 20:07'],
+        date: emlAt('2026-11-17T18:24:16Z', 60),
+    }),
+    emlFixture('96-phone-forward-cut-address.eml', {
+        description: 'The same thread with long attributions cut inside the address (after 13, 16, 17, 24 characters of "<address>"), then wrapped at 76.',
+        messageId: 'phone-forward-b2@client.test',
+        ...PHONE_FORWARD_FIELDS,
+        tags: PHONE_FORWARD_TEXT_TAGS,
+        bodyContains: ['<atelier@meub\nles-exemple.test> a \u{E9}crit :', '<atelier@meubles\n-exemple.test> a \u{E9}crit :',
+            '<atelier@meubles-\nexemple.test> a \u{E9}crit :', '<atelier@meubles-exemple\n.test> a \u{E9}crit :', 'Envoy\u{E9} : lundi 5 octobre 2026 20:07'],
+        date: emlAt('2026-11-17T18:24:17Z', 60),
+    }),
+    emlFixture('97-phone-forward-alternative.eml', {
+        description: 'The same thread as multipart/alternative: the flat text part (read) and a nested HTML part.',
+        messageId: 'phone-forward-c@client.test',
+        ...PHONE_FORWARD_FIELDS,
+        tags: PHONE_FORWARD_TEXT_TAGS,
+        date: emlAt('2026-11-17T18:24:18Z', 60),
+    }),
+    emlFixture('98-phone-forward-android-html.eml', {
+        description:
+            'The same thread as an Android mail app writes it: HTML only (base64), each forward\'s body one blockquote deeper ' +
+            'than its header lines, Outlook HTML inside, &nbsp; before the colons, a tab in a quoted display name.',
+        messageId: 'phone-forward-c3@client.test',
+        ...PHONE_FORWARD_FIELDS,
+        date: emlAt('2026-11-17T18:24:19Z', 60),
+        warnings: ['html-converted-body'],
+        bodyContains: ['Message transf\u{E9}r\u{E9}', 'Je vous remercie pour votre message', 'Je fais suite \u{E0} votre appel.'],
+        bodyExcludes: ['<blockquote', '&nbsp;', 'MsoNormal'],
+    }),
+
     // ------------------------------------------------------------------ .msg (built from msg/specs.ts)
     msgFixture('msg-01-plain-unicode', {
         description: 'Plain Unicode .msg, To + Cc.',
@@ -708,3 +779,14 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         ],
     }),
 ];
+
+/**
+ * The fixtures the whole-set browser journeys drop (Helper/Test/browser-tests/full-flow.spec.ts,
+ * Helper/Test/browser-tests/pdf-content.spec.ts): every fixture but those tagged "quotes-not-in-set".
+ * Those journeys check the list and the PDF of REAL emails only: with these fixtures, every
+ * quoted email is a file of the set, so nothing is rebuilt from quoted text
+ * (Source/thread-analysis/analyze-thread.fixtures.test.ts checks it). The phone forward fixtures
+ * of task 9.9a quote 13 emails found in no file: their rebuilt emails are checked on their own
+ * (Source/thread-analysis/analyze-thread.phone-forward.test.ts, Helper/Test/browser-tests/rebuilt.spec.ts).
+ */
+export const JOURNEY_FIXTURES: readonly FixtureExpectation[] = FIXTURES.filter((f) => !f.tags.includes('quotes-not-in-set'));

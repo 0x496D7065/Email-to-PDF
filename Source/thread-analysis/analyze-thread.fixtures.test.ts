@@ -5,13 +5,17 @@
 // detector fixture tests on the combined result (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
-import { FIXTURES } from '../../Helper/Test/test-data/manifest';
+import { FIXTURES, JOURNEY_FIXTURES } from '../../Helper/Test/test-data/manifest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { normalizeBody } from './dedupe';
 import { primaryReason, analyzeThread } from './analyze-thread';
 import { checkSegments, FOLD_REASONS, joinSegments, visibleView } from './fold-segments';
+import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { AnalyzedMessage, ThreadAnalysisResult, FoldReason } from '../../Header/thread-analysis-result';
+
+// Fixtures with no own text (manifest tag 'own-text:none'): their first line is a quoted header, folded.
+const NO_OWN_TEXT = new Set(FIXTURES.filter((f) => f.tags.includes('own-text:none')).map((f) => f.id));
 
 /** Whether every character of `snippet` (first occurrence) is folded, none is, or some are. */
 function state(message: AnalyzedMessage, snippet: string): 'folded' | 'shown' | 'mixed'
@@ -215,8 +219,26 @@ describe('thread analysis over the parsed fixtures', () =>
             {
                 continue;
             }
-            expect(state(message, firstLine), `${message.message.source.fileName}: first line`).toBe('shown');
+            const file = message.message.source.fileName;
+            expect(state(message, firstLine), `${file}: first line`).toBe(NO_OWN_TEXT.has(file) ? 'folded' : 'shown');
         }
+    });
+
+    it('rebuilds nothing with the journey fixtures (every quoted email is a file); the others add rebuilt emails of their own only', async () =>
+    {
+        // The premise of the whole-set browser journeys (JOURNEY_FIXTURES in the manifest).
+        const parsed = await parseAllFixtures();
+        const journey = new Set(JOURNEY_FIXTURES.map((f) => f.id));
+        const inJourney = parsed.filter((m) => journey.has(m.source.fileName));
+        expect(inJourney).toHaveLength(JOURNEY_FIXTURES.length);
+        const alone = analyzeThread(inJourney.map((message): ParseResult => ({ ok: true, message })));
+        expect(alone.reconstructed.length).toBeGreaterThan(10);
+        expect(rebuiltEntries(alone)).toEqual([]);
+        // All of them: the rebuilt emails that are not real files all come from the fixtures left out.
+        const all = analyzeThread(parsed.map((message): ParseResult => ({ ok: true, message })));
+        const entries = rebuiltEntries(all);
+        expect(entries.length).toBeGreaterThan(0);
+        expect(entries.every((r) => !journey.has(all.messages[all.positionByIndex[r.sourceIndex]!]!.message.source.fileName))).toBe(true);
     });
 
     it('lists failed files next to the fixtures without changing the rest', async () =>

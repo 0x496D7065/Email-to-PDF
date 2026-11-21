@@ -9,9 +9,14 @@
 // or import().
 // readdirSync lists the built files of dist/ (Helper/Test/browser-tests/offline-reload.spec.ts:
 // the service worker's precache list must be exactly those).
+// writeFileSync rewrites the generated phone forward fixtures, only when asked,
+// into the folder that existsSync checks first; both take a file URL built from
+// import.meta.url (Helper/Test/test-support/phone-forward-fixtures.test.ts).
 declare module 'node:fs'
 {
     export function readFileSync(path: string, encoding: 'utf8'): string;
     export function readFileSync(path: string): Uint8Array;
+    export function existsSync(path: URL): boolean;
+    export function writeFileSync(path: URL, data: string): void;
     export function readdirSync(path: string, options: { recursive: true; withFileTypes: true }): { name: string; parentPath: string; isFile(): boolean }[];
 }

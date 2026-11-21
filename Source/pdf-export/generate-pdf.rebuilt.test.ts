@@ -168,9 +168,9 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         expect(newest).not.toContain('As written in the quote');
         expect(newest).not.toContain('incomplete or inexact');
         expect(newest).not.toMatch(/\bFile\b/);
-        // The Gmail quote: its ">" marks removed, no note; "(no subject)" as for a real email.
+        // The Gmail quote: its ">" marks removed, no note; the subject of the header above it (F3, task 9.9a).
         const gmail = between(all, 'Email 2 From', 'Email 3 From');
-        expect(gmail).toContain('Subject (no subject)');
+        expect(gmail).toContain('Subject Re: Office desks and chairs');
         expect(gmail).toContain('Thank you for your message.');
         expect(gmail).not.toMatch(/(^| )> /);
         expect(gmail).not.toContain('Quote marks removed');

@@ -336,9 +336,9 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
             expect(fieldOf(email, 'File')).toBeUndefined();
             expect(fieldOf(email, 'Taken from')).toBeUndefined();
         }
-        // An attribution has no subject: the real emails' "(no subject)", muted.
-        expect(gmail!.fields.find((f) => f.label === 'Subject')!.value).toEqual([[{ role: 'muted', text: EN.noSubject }]]);
-        expect(EN.noSubject).toBe('(no subject)');
+        // An attribution holds no subject: it takes the subject of the nearest newer header in the chain
+        // (user decision F3, task 9.9a: the Outlook NL block above it), printed as it is, not muted.
+        expect(gmail!.fields.find((f) => f.label === 'Subject')!.value).toEqual([[{ role: 'field-value', text: 'Re: Office desks and chairs' }]]);
     });
 
     it('carries no note of its own, and its rebuilt text, whole', () =>
@@ -557,7 +557,8 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
         const entries = build(analysisOf(LAST)).index.entries;
         expect(entries.map((e) => e.rebuilt)).toEqual([true, true, true, false]);
         expect(entries[2]!.bookmark).toBe('3. 2025-03-03, Alice Example: Re: Office desks and chairs');
-        expect(entries[1]!.bookmark).toMatch(/^2\. \d{4}-\d\d-\d\d, .+: \(no subject\)$/);
+        // The attribution's subject is the chain's (user decision F3, task 9.9a).
+        expect(entries[1]!.bookmark).toMatch(/^2\. \d{4}-\d\d-\d\d, .+: Re: Office desks and chairs$/);
         expect(entries[3]!.bookmark.startsWith('4. ')).toBe(true);
     });
 

@@ -11,13 +11,17 @@
 //
 // Every test also checks, once everything has settled, that nothing left the
 // page (only the inlined workers' blob: URLs), that there was no CSP
-// violation (page or worker) and no console error. See Helper/Test/browser-tests/support/network-and-csp-watch.ts.
+// violation (page or worker) and no console error, except the reports Chromium
+// makes while DOMParser PARSES email HTML (inline styles in fixture 98; nothing
+// runs or loads: see Helper/Test/browser-tests/html-to-text.spec.ts) and their console lines.
+// See Helper/Test/browser-tests/support/network-and-csp-watch.ts.
 // The accessibility checks of this state are in Helper/Test/browser-tests/accessibility.spec.ts.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
-    type PageWatch } from './support/network-and-csp-watch.ts';
+import { phoneForwardThread } from '../test-support/phone-forward-thread.ts';
+import { browserEngineOf, isParseTimeReport, PARSE_TIME_CONSOLE, untoleratedReports, watchPage, withoutSelectConsole, withoutSelectReports,
+    workerCspReports, type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -69,10 +73,13 @@ test.beforeEach(async ({ context, page, baseURL }) =>
     await page.addInitScript(() =>
     {
         window.__rebuiltViolations = [];
+        // An inline report made while DOMParser parses is fired at the document;
+        // an inline one about the live page at the element concerned.
         document.addEventListener('securitypolicyviolation', (event) =>
         {
             // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__rebuiltViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            window.__rebuiltViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
 });
@@ -104,9 +111,18 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__rebuiltViolations))).toEqual([]);
+    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__rebuiltViolations));
+    expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    // One console line at most per tolerated parse-time report (as in Helper/Test/browser-tests/full-flow.spec.ts).
+    const directives = violations.filter(isParseTimeReport).map((v) => v.split(' ')[0] ?? '');
+    const consoleProblems = withoutSelectConsole(browserName, problems);
+    for (const known of PARSE_TIME_CONSOLE)
+    {
+        const lines = consoleProblems.filter((p) => known.line.test(p)).length;
+        expect(lines).toBeLessThanOrEqual(directives.filter((d) => known.directives.includes(d)).length);
+    }
+    expect(consoleProblems.filter((p) => !PARSE_TIME_CONSOLE.some((known) => known.line.test(p)))).toEqual([]);
 }
 
 test('by default, rebuilt cards appear before the email they come from, labelled, with their note and no number', async ({ page }) =>
@@ -129,9 +145,10 @@ test('by default, rebuilt cards appear before the email they come from, labelled
     await expect(newest.locator('.message-subject')).toHaveText('Re: Office desks and chairs');
     await expect(newest.locator('dd.meta-author')).toHaveText('Alice Example <alice@example.test>');
     await expect(newest.locator('dd.meta-date')).toHaveText(/^about 2025-03-03 \d\d:40 UTC\+01:00 As written in the quote: maandag 3 maart 2025 15:40$/);
-    // The Gmail quote: no subject in an attribution line, and its text without the ">" marks.
+    // The Gmail quote: an attribution line holds no subject, so the card shows the subject of the
+    // header above it (user decision F3, task 9.9a); its text without the ">" marks.
     const gmail = rebuilt.nth(1);
-    await expect(gmail.locator('.message-subject')).toHaveText(en.rebuilt.noSubject);
+    await expect(gmail.locator('.message-subject')).toHaveText('Re: Office desks and chairs');
     const text = (await gmail.locator('.body-text').textContent()) ?? '';
     expect(text).toContain('Thank you for your message.');
     expect(text).not.toMatch(/^>/m);
@@ -241,5 +258,47 @@ test('the cards follow the page language', async ({ page }) =>
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
     await expect(page.locator('#preview-list > li.message-rebuilt h3 .rebuilt-label').first()).toHaveText('Reconstitu\u00E9');
     await expect(page.locator('#preview-list > li.message-rebuilt .rebuilt-note').first()).toContainText('Reconstitu\u00E9 \u00E0 partir du texte cit\u00E9');
+    await expectNothingLeftThePage(page);
+});
+
+// Task 9.9a: a phone forward of a long FLAT thread, as an Android mail app writes it (fixture 98: HTML
+// only, each forward's body one blockquote deeper than its header lines, Outlook HTML inside, "&nbsp;"
+// before the colons, a tab in a quoted display name). Converted by the real DOMParser path, it must give
+// the 13 earlier emails of Helper/Test/test-support/phone-forward-thread.ts (the French form), 3 of them
+// with no text (left out of the PDF), not one unfolded block.
+test('a phone forward of a flat thread (Android HTML): 13 rebuilt cards, field by field, 10 in the PDF', async ({ page }) =>
+{
+    test.setTimeout(60_000);
+    await page.goto('/', { waitUntil: 'networkidle' });
+    loadedAt = watch.requests.length;
+    await page.locator('#file-input').setInputFiles([fixture('98-phone-forward-android-html.eml')]);
+    await expect(page.locator('#add-summary-text')).toHaveText('1 file added. 1 email found.', { timeout: 30_000 });
+    await expect(page.locator('#preview-list > li')).toHaveCount(14);
+    await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.locator('#review-messages')).toHaveText('1 email found, 13 earlier emails rebuilt from quoted text.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('10 of 13 rebuilt emails will be in the PDF.');
+
+    // Oldest first, as the list shows them.
+    const expected = [...phoneForwardThread('fr').expected].reverse();
+    const cards = page.locator('#preview-list > li.message-rebuilt');
+    await expect(cards).toHaveCount(13);
+    const box = (who: { readonly name: string; readonly address: string }): string => (who.name === '' ? who.address : `${who.name} <${who.address}>`);
+    await expect(cards.locator('dd.meta-author')).toHaveText(expected.map((e) => box(e.from)));
+    await expect(cards.locator('.message-subject')).toHaveText(expected.map((e) => e.subject));
+    for (const [k, want] of expected.entries())
+    {
+        const card = cards.nth(k);
+        const where = `card ${String(k + 1)} (${want.dateText})`;
+        await expect(card.locator('dd.meta-date'), where).toContainText(`As written in the quote: ${want.dateText}`);
+        await expect(card.locator('dd.meta-cc'), where).toHaveCount(want.cc.length === 0 ? 0 : 1);
+        if (want.noOwnText)
+        {
+            await expect(card.locator('.body-empty'), where).toHaveText(en.preview.notInPdfNoText);
+            continue;
+        }
+        const text = ((await card.locator('.body-text').allTextContents()).join('')).replace(/\s+/gu, ' ').trim();
+        expect(text.startsWith(want.first), `${where}: starts with "${want.first}"`).toBe(true);
+        expect(text.endsWith(want.last), `${where}: ends with "${want.last}"`).toBe(true);
+    }
     await expectNothingLeftThePage(page);
 });

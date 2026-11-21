@@ -80,8 +80,17 @@ export interface ReconstructedMessage
     readonly from: readonly EmailAddress[];
     readonly to: readonly EmailAddress[];
     readonly cc: readonly EmailAddress[];
-    /** null = the header holds no subject (attributions never do). */
+    /**
+     * The subject its header holds. An attribution never holds one: it gets the subject of the
+     * nearest newer header in the chain that has one, else the dropped email's own
+     * (subjectFromChain). null = none known.
+     */
     readonly subject: string | null;
+    /**
+     * The subject was taken from the chain (an attribution: user decision F3, task 9.9a). Shown
+     * as it is, NOT marked as borrowed; only the linking reads it (it is not a field of this copy).
+     */
+    readonly subjectFromChain: boolean;
     /** The date as written, or null. */
     readonly dateText: string | null;
     /** To / Cc lists that may go on past what was read (quoted-header.ts). */
@@ -94,6 +103,12 @@ export interface ReconstructedMessage
     readonly reconstructedText: string;
     /** depth > 0: the text differs from the source slice by its quote marks and their indentation (show RECONSTRUCTED_FORM_NOTE). */
     readonly quoteMarksRemoved: boolean;
+    /**
+     * Its part holds no text line (only blank lines and quote marks): a header followed directly
+     * by the next header (user decision F2, task 9.9a). Still rebuilt, so the chain goes on; the
+     * PDF leaves it out, as any rebuilt email with no text (task 8.14).
+     */
+    readonly noOwnText: boolean;
 }
 
 export interface QuotedDate

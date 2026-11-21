@@ -343,6 +343,16 @@ describe('readQuotedHeader: attributions', () =>
         expect(got.dateText).toBe('Mon, Mar 3, 2025 at 2:02 PM');
     });
 
+    it('reads an attribution wrapped over three lines, cut inside the address (task 9.9a)', () =>
+    {
+        const got = readOne('New.\n\nOn Mon, 3 Mar 2025 at 14:02, Bob Sample\n<bob@sam\nple.invalid> wrote:\n> Old text.\n');
+        expect(got.from).toEqual([box('Bob Sample', 'bob@sample.invalid')]);
+        expect(got.dateText).toBe('Mon, 3 Mar 2025 at 14:02');
+        const fr = readOne('Nouveau.\n\nLe 3 mars 2025 14:02, "Bob Sample\t"\n<bob@x.example.test>\na \u00e9crit :\n\nTexte.\n');
+        expect(fr.from).toEqual([box('Bob Sample', 'bob@x.example.test')]);
+        expect(fr.dateText).toBe('3 mars 2025 14:02');
+    });
+
     it('leaves the name and date empty when the split is not clear-cut (the address stays)', () =>
     {
         // An unquoted comma inside the name: the "date" would end with a word.

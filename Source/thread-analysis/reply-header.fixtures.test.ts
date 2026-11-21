@@ -3,9 +3,13 @@
 // message is folded and checks the key expectations (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
+import { FIXTURES } from '../../Helper/Test/test-data/manifest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { detectReplyHeaders } from './reply-header';
 import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
+
+// Fixtures with no own text (manifest tag 'own-text:none'): their first line is a quoted header, folded.
+const NO_OWN_TEXT = new Set(FIXTURES.filter((f) => f.tags.includes('own-text:none')).map((f) => f.id));
 
 interface Measured
 {
@@ -82,7 +86,7 @@ describe('reply-header detection over the parsed fixtures', () =>
             {
                 continue; // no text at all: nothing to fold
             }
-            expect(state(measured, firstLine), `${measured.file}: first line`).toBe('shown');
+            expect(state(measured, firstLine), `${measured.file}: first line`).toBe(NO_OWN_TEXT.has(measured.file) ? 'folded' : 'shown');
         }
 
         // Outlook replies: the whole header block and everything after it folded.

@@ -134,6 +134,57 @@ describe('thread builder: exact rendering', () =>
     });
 });
 
+describe('thread builder: phone styles and empty own text (task 9.9a)', () =>
+{
+    it.each([
+        ['mobile-en', 3, '3 Mar 2025, at 14:02'],
+        ['mobile-fr', 3, '3 mars 2025 14:02'],
+        ['mobile-nl', 3, '3 mrt. 2025 om 14:02'],
+        ['mobile-fr', 2, '14 f\u00e9vr. 2025 14:02'],
+        ['mobile-nl', 5, '3 mei 2025 om 14:02'],
+    ] as const)('%s, month %d: %s', (format, month, expected) =>
+    {
+        const day = month === 2 ? 14 : 3;
+        expect(formatQuotedDate(format, instantOf({ year: 2025, month, day, hour: 14, minute: 2 }, LAGOS), LAGOS)).toBe(expected);
+    });
+
+    it('a phone style writes a flat thread: the attribution and the old body without ">"', () =>
+    {
+        const thread = buildThread(chain(['mobile-fr', 'mobile-en', 'mobile-nl']));
+        expect(thread.body.split('\n').some((line) => line.startsWith('>'))).toBe(false);
+        expect(thread.headers.map((h) => [h.depth, h.textDepth, h.kind])).toEqual([[0, 0, 'reply'], [0, 0, 'reply'], [0, 0, 'reply']]);
+        const attribution = thread.body.slice(thread.headers[0]!.start, thread.headers[0]!.headEnd);
+        expect(attribution).toMatch(/^Op \d+ \S+ 2025 om \d\d:\d\d heeft "(?:Alice Example|Bob Sample) " <[^>]+> het volgende geschreven:\n$/u);
+        expect(thread.headers[0]!.fields.from).toMatch(/^"(?:Alice Example|Bob Sample) " </u);
+        expect(thread.body.slice(thread.headers[2]!.start)).toMatch(/^Le \d+ \S+ 2025 \d\d:\d\d, "/u);
+    });
+
+    it('an empty own text: the header is followed directly (after one blank line) by the header it quotes', () =>
+    {
+        const messages = chain(['mobile-fr', 'outlook-fr', 'mobile-fr']).map((m, i) => (i === 1 || i === 3 ? { ...m, text: '' } : m));
+        const thread = buildThread(messages);
+        // The last message has no own text: the body starts with its quote header.
+        expect(thread.ownEnd).toBe(0);
+        expect(thread.body.startsWith('Le ')).toBe(true);
+        const [newest, middle, oldest] = thread.headers;
+        expect(middle!.ownText).toBe('');
+        expect([middle!.ownStart, middle!.ownEnd]).toEqual([middle!.headEnd, middle!.headEnd]);
+        expect(thread.body.slice(middle!.headEnd, oldest!.start)).toBe('\n');
+        expect(newest!.ownText).not.toBe('');
+        for (const header of thread.headers)
+        {
+            expect(unquote(thread.body.slice(header.ownStart, header.ownEnd), header.textDepth)).toBe(header.ownText);
+        }
+    });
+
+    it('an empty own text under a Gmail quote: its depth is one more than its attribution (where the quote would be)', () =>
+    {
+        const messages = chain(['gmail-en', 'gmail-en']).map((m, i) => (i === 1 ? { ...m, text: '' } : m));
+        const thread = buildThread(messages);
+        expect(thread.headers.map((h) => [h.depth, h.textDepth, h.ownText === ''])).toEqual([[0, 1, true], [1, 2, false]]);
+    });
+});
+
 describe('thread builder: ground truth over every case', () =>
 {
     it('covers every quote style at least once', () =>

@@ -4,11 +4,15 @@
 // each message is folded and checks the key expectations (README.md, rule R7).
 
 import { describe, expect, it } from 'vitest';
+import { FIXTURES } from '../../Helper/Test/test-data/manifest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { dedupe } from './dedupe';
 import { orderMessages } from './chronological-order';
 import { detectQuotedOverlap } from './overlap-quote-detection';
 import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
+
+// Fixtures with no own text (manifest tag 'own-text:none'): their first line is a quoted header, not own text.
+const NO_OWN_TEXT = new Set(FIXTURES.filter((f) => f.tags.includes('own-text:none')).map((f) => f.id));
 
 interface Measured
 {
@@ -123,9 +127,9 @@ describe('overlap detection over the parsed fixtures', () =>
         for (const measured of all.values())
         {
             const firstLine = measured.body.split(/\r\n|\n|\r/).find((line) => line.trim() !== '');
-            if (firstLine === undefined)
+            if (firstLine === undefined || NO_OWN_TEXT.has(measured.file))
             {
-                continue; // no text at all: nothing to fold
+                continue; // no text at all, or no own text: nothing that must stay shown
             }
             expect(state(measured, firstLine), `${measured.file}: first line`).toBe('shown');
         }
