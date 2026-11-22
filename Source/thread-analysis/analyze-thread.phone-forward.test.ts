@@ -270,6 +270,44 @@ describe('phone forward of a flat thread: the fixtures (parse -> analysis -> pla
         expectWholeChain(message, french.expected);
     });
 
+    // Task 9.9b-4: the four files hold the same 13 earlier emails. The 10 with text are linked by their text, and the 3
+    // EMPTY ones by their header facts (link-rebuilt-messages.ts, file comment, 2, EMPTY COPIES): 13 entries, not 22.
+    it('94 to 97 together: 13 rebuilt emails (10 with text, 3 empty), each linked once per other file', async () =>
+    {
+        const names = ['94-phone-forward-flat.eml', '95-phone-forward-wrapped.eml', '96-phone-forward-cut-address.eml', '97-phone-forward-alternative.eml'];
+        const messages = await Promise.all(names.map(parseFixture));
+        const result = analyzeThread(messages.map((message) => ({ ok: true, message })));
+        expect(result.messages).toHaveLength(4);
+        expect(result.reconstructed).toHaveLength(52);
+        const entries = rebuiltEntries(result);
+        expect(entries).toHaveLength(13);
+        expect(entries.filter((r) => !rebuiltHasNoPrintableText(r))).toHaveLength(10);
+        expect(entries.filter((r) => rebuiltHasNoPrintableText(r)).map((r) => r.rebuilt.dateText))
+            .toEqual(['14 juil. 2026 16:53', '27 sept. 2026 08:31', '17 nov. 2026 19:23']);
+        // Each entry is quoted in the 3 other files; every other rebuilt email is a copy of an entry with the same
+        // text (white space aside) or, for an empty one, no text either.
+        const byId = new Map(result.reconstructed.map((r) => [r.id, r]));
+        for (const entry of entries)
+        {
+            expect(entry.copies, entry.rebuilt.dateText ?? '?').toHaveLength(3);
+            expect(new Set([entry.sourceIndex, ...entry.alsoQuotedIn]).size).toBe(4);
+        }
+        for (const copy of result.reconstructed.filter((r) => r.link !== 'entry'))
+        {
+            expect(copy.link).toBe('same-as');
+            const entry = byId.get(copy.sameAs as number)!;
+            expect(squashWhiteSpace(copy.rebuilt.reconstructedText)).toBe(squashWhiteSpace(entry.rebuilt.reconstructedText));
+            expect(copy.rebuilt.dateText).toBe(entry.rebuilt.dateText);
+        }
+        // The PDF: the 10 rebuilt emails with text once each, and the 4 files.
+        const positions = result.messages.map((_, k) => k);
+        const plans = planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY);
+        const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0,
+            strings: createPdfStrings('en'), rebuilt: entries.map((r) => r.id) });
+        expect(pdf.emails.filter((e) => e.rebuilt !== null)).toHaveLength(10);
+        expect(pdf.emails.filter((e) => e.rebuilt === null)).toHaveLength(4);
+    });
+
     it('the fixtures hold the French form: 94 and the text part of 97 exactly, 95 and 96 wrapped', async () =>
     {
         expect((await parseFixture('94-phone-forward-flat.eml')).bodyText).toBe(french.body);

@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
-import { phoneForwardThread } from '../test-support/phone-forward-thread.ts';
+import { phoneForwardParts, phoneForwardThread } from '../test-support/phone-forward-thread.ts';
 import { browserEngineOf, isParseTimeReport, PARSE_TIME_CONSOLE, untoleratedReports, watchPage, withoutSelectConsole, withoutSelectReports,
     workerCspReports, type PageWatch } from './support/network-and-csp-watch.ts';
 
@@ -370,3 +370,65 @@ test('a phone forward of a flat thread (Android HTML): the empty emails put noth
     }
     await expectNothingLeftThePage(page, 1);
 });
+
+// Task 9.9b-4: the phone forward as plain text (fixtures 94 to 97: the same 13 earlier emails, 3 of them empty), each
+// file alone and the four together. Together, the copies of each earlier email are linked (the 3 empty ones by their
+// header facts), so step 2 counts 13 rebuilt emails, not 22. In every run the PDF prints each of the 10 rebuilt emails
+// with text exactly once and no header lines of the 3 empty ones.
+const PLAIN_PHONE_FORWARDS = ['94-phone-forward-flat.eml', '95-phone-forward-wrapped.eml', '96-phone-forward-cut-address.eml', '97-phone-forward-alternative.eml'];
+for (const names of [...PLAIN_PHONE_FORWARDS.map((name) => [name]), PLAIN_PHONE_FORWARDS])
+{
+    const label = names.length === 1 ? (names[0] as string) : '94 to 97 together';
+    test(`a phone forward of a flat thread (plain text), ${label}: 10 of 13 rebuilt emails in the PDF, each once, no header-only blocks`, async ({ page }) =>
+    {
+        test.setTimeout(120_000);
+        await page.goto('/', { waitUntil: 'networkidle' });
+        loadedAt = watch.requests.length;
+        await page.locator('#file-input').setInputFiles(names.map(fixture));
+        const files = names.length;
+        await expect(page.locator('#add-summary-text')).toHaveText(files === 1 ? '1 file added. 1 email found.' : `${String(files)} files added. ${String(files)} emails found.`,
+            { timeout: 30_000 });
+        await expect(page.locator('#preview-list > li')).toHaveCount(13 + files);
+        await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
+        await expect(page.locator('#review-rebuilt')).toHaveText('10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.');
+        await expect(page.locator('#preview-list > li.message-rebuilt')).toHaveCount(13);
+
+        const makeButton = page.getByRole('button', { name: en.actions.makePdf });
+        await expect(makeButton).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });
+        const next = page.waitForEvent('download', { timeout: 60_000 });
+        await makeButton.click();
+        const bytes = new Uint8Array(readFileSync(await (await next).path()));
+        const squash = (text: string): string => text.replace(/\s+/gu, ' ').trim();
+        const text = squash((await readPageRuns(readPdf(bytes))).map((runs) => textLines(runs).map((l) => l.shown).join(' ')).join(' '));
+        const count = (part: string): number => text.split(part).length - 1;
+        // 10 rebuilt emails and the files, numbered.
+        const heading = (n: number): string => en.pdf.document.emailHeading.replace('{number}', String(n));
+        for (let n = 1; n <= 10 + files; n++)
+        {
+            expect(count(`${heading(n)} From`), heading(n)).toBe(1);
+        }
+        expect(text).not.toContain(`${heading(11 + files)} From`);
+        // Each rebuilt email with text once: its longest line that no other earlier email has (not a signature line).
+        const parts = phoneForwardParts('fr').parts;
+        const linesOf = (part: (typeof parts)[number]): string[] => part.body.flatMap((p) => p.split('\n')).map(squash).filter((l) => l !== '');
+        const everyLine = parts.flatMap(linesOf);
+        const withText = parts.filter((p) => !p.expected.noOwnText);
+        expect(withText).toHaveLength(10);
+        for (const part of withText)
+        {
+            const own = linesOf(part).filter((l) => everyLine.filter((x) => x === l).length === 1).sort((a, b) => b.length - a.length)[0];
+            expect(own, part.expected.dateText).toBeDefined();
+            expect(count(own as string), `${part.expected.dateText}: "${own as string}"`).toBe(1);
+        }
+        // The workshop's signature once (folded in its 4 emails, printed in the first: task 9.9b-2).
+        expect(count('Zone artisanale Exemple, hall B')).toBe(1);
+        // No header lines of the 3 empty emails: the empty forward at the top and the empty attribution over 27 Sep
+        // 08:27 are printed nowhere; the empty 14 Jul attribution has the very words of the one with text under it,
+        // whose attribution line is printed exactly once, as the first body line over that text (0 would mean the
+        // email with text lost its attribution line).
+        expect(text).not.toContain('17 nov. 2026 19:23');
+        expect(text).not.toContain('27 sept. 2026 08:31');
+        expect(count('14 juil. 2026 16:53')).toBe(1);
+        await expectNothingLeftThePage(page, 1);
+    });
+}

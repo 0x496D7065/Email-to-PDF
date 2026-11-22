@@ -158,6 +158,38 @@
 //    lower share, closer date, lower id). Again at most MAX_CANDIDATES
 //    entries are compared. A rebuilt message without a sender is never
 //    linked; one without any date text is never merged with another copy.
+//    EMPTY COPIES (task 9.9b-4). A rebuilt message with NO text (its text
+//    is white space only: a header with nothing under it, such as an empty
+//    forward block) has no words, so the text rule above never links it,
+//    and the same empty header quoted in four dropped emails gave four
+//    entries. Such a message is linked by its header alone (emptyHeaderKey)
+//    to an earlier empty entry of a DIFFERENT dropped email (as above, never
+//    two of one email), when ALL of these are known and equal:
+//    - the sender: exactly one From mailbox WITH an address (sender key
+//      'a:', as above; a name alone is not enough);
+//    - the date and time: a readable date with minutes, the same wall-clock
+//      time as written (QuotedDate.wallMs) AND the same estimated moment
+//      (so the same zone assumed), and both exact or both approximate. No
+//      zone allowance: a time read in another zone, or a date without
+//      minutes, is no link;
+//    - the subject (white space squashed, NFC, letter case kept), and taken
+//      from the chain on both or on neither (subjectFromChain: an
+//      attribution borrows it, so it is only compared with another
+//      borrowed one);
+//    - the To and the Cc lists, as sets of mailbox keys (address, else
+//      name), with no list read short (`incomplete`). An empty email IS its
+//      header: a copy with other recipients says something the entry does
+//      not, so it stays an entry of its own. Two attributions (no To / Cc
+//      at all) agree here.
+//    Anything missing or unsure: no link (a visible repeat). Why this is
+//    safe (brief section 8.2, only provably identical messages are merged):
+//    the two copies show the very same header facts and no text at all, so
+//    the link hides no word, and no fact beyond how names and the date
+//    are written (addresses and the instant are compared, not their
+//    wording); each copy's own header stays in its email. A
+//    rebuilt message WITH text never takes this path: it is linked by the
+//    text rule above only, and an empty message never joins one with text
+//    (no words, no link), nor one with text an empty one.
 // 3. Timeline (TimelineEntry). Real messages keep their order (the order of
 //    ThreadAnalysisResult.messages, dated first, then undated by file order). Each
 //    rebuilt message with a readable date gets a time KEY from its own
@@ -1029,6 +1061,45 @@ function estimateOf(rebuilt: ReconstructedMessage): number | null
     return typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
 }
 
+/**
+ * The header facts that link an EMPTY rebuilt message to an empty copy (file comment, 2, EMPTY
+ * COPIES), as one string; null when the message has text, or any fact is missing or unsure.
+ */
+export function emptyHeaderKey(rebuilt: ReconstructedMessage): string | null
+{
+    if (!/^\s*$/u.test(rebuilt.reconstructedText) || rebuilt.incomplete.length !== 0)
+    {
+        return null;
+    }
+    const sender = rebuiltSenderKey(rebuilt);
+    const date = rebuilt.date;
+    const wallMs = date?.wallMs;
+    const estimate = date?.estimatedUtcMs;
+    if (sender === null || !sender.startsWith('a:') || date === null || date.precision !== 'minute'
+        || typeof wallMs !== 'number' || !Number.isFinite(wallMs) || typeof estimate !== 'number' || !Number.isFinite(estimate))
+    {
+        return null;
+    }
+    const subject = rebuilt.subject?.normalize('NFC').replace(/\s+/gu, ' ').trim() ?? '';
+    if (subject === '')
+    {
+        return null;
+    }
+    // Each mailbox by its address, else its name; a mailbox with neither makes the list unsure.
+    const listKeys = (list: readonly EmailAddress[]): string[] | null =>
+    {
+        const keys = list.map((mailbox) => mailboxKey(mailbox, false) ?? mailboxKey(mailbox, true));
+        return keys.some((key) => key === null) ? null : [...new Set(keys as string[])].sort();
+    };
+    const to = listKeys(rebuilt.to);
+    const cc = listKeys(rebuilt.cc);
+    if (to === null || cc === null)
+    {
+        return null;
+    }
+    return JSON.stringify([sender, wallMs, estimate, rebuilt.dateApproximate, subject, rebuilt.subjectFromChain, to, cc]);
+}
+
 /** Known fields, for the best-copy order. */
 function completeness(item: Item): number
 {
@@ -1223,6 +1294,8 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
         const text = item.rebuilt.dateText?.replace(/\s+/gu, ' ').trim() ?? '';
         return item.key === null || item.estimate !== null || !datedText(text) || sourceTime(item) === null ? null : JSON.stringify([item.key, text]);
     };
+    // Empty entries (no text) by their header facts (emptyHeaderKey), in best-copy order.
+    const emptyEntries = new Map<string, Item[]>();
     const groupSources = new Map<number, Set<number>>();
     const members = new Map<number, number[]>();
     for (const item of unmatched)
@@ -1291,7 +1364,18 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
                 consider(candidate, 0, 'strict');
             }
         }
-        const chosen = best as { entry: Item } | null;
+        // An empty message (no words: the text rule above never links it) joins an empty entry of another email
+        // with the very same header facts (file comment, 2, EMPTY COPIES), the first in best-copy order.
+        const emptyKey = emptyHeaderKey(item.rebuilt);
+        let chosen = best as { entry: Item } | null;
+        if (chosen === null && emptyKey !== null)
+        {
+            const entry = (emptyEntries.get(emptyKey) ?? []).find((x) => !(groupSources.get(x.id) as Set<number>).has(item.pos));
+            if (entry !== undefined)
+            {
+                chosen = { entry };
+            }
+        }
         if (chosen !== null)
         {
             item.groupOf = chosen.entry.id;
@@ -1326,6 +1410,15 @@ export function linkRebuilt(sources: readonly LinkSource[]): RebuildLinks
                 if (list === undefined)
                 {
                     undatedEntries.set(undatedTextKey, (list = []));
+                }
+                list.push(item);
+            }
+            if (emptyKey !== null)
+            {
+                let list = emptyEntries.get(emptyKey);
+                if (list === undefined)
+                {
+                    emptyEntries.set(emptyKey, (list = []));
                 }
                 list.push(item);
             }

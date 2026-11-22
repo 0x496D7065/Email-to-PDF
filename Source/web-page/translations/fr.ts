@@ -260,14 +260,10 @@ export const fr: Messages = {
             one: 'E-mail reconstitué dans le PDF\u00A0: {included} sur {count}.',
             other: 'E-mails reconstitués dans le PDF\u00A0: {included} sur {count}.',
         },
-        // NEEDS USER PROOFREADING (task 9.9b-3)
         rebuiltLeftOut: 'Hors du PDF\u00A0: {reasons}',
         rebuiltLeftOutReason: {
-            // NEEDS USER PROOFREADING (task 9.9b-3)
             'no-text': { one: '{count} n’a pas de texte', other: '{count} n’ont pas de texte' },
-            // NEEDS USER PROOFREADING (task 9.9b-3)
             unticked: { one: '{count} est décoché', other: '{count} sont décochés' },
-            // NEEDS USER PROOFREADING (task 9.9b-3)
             'source-left-out': { one: '{count} vient d’un e-mail laissé de côté', other: '{count} viennent d’e-mails laissés de côté' },
         },
         withNotes: {

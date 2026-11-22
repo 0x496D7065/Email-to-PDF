@@ -261,14 +261,10 @@ export const nl: Messages = {
             one: 'In de PDF: {included} van {count} gereconstrueerde e-mail.',
             other: 'In de PDF: {included} van {count} gereconstrueerde e-mails.',
         },
-        // NEEDS USER PROOFREADING (task 9.9b-3)
         rebuiltLeftOut: 'Weggelaten: {reasons}',
         rebuiltLeftOutReason: {
-            // NEEDS USER PROOFREADING (task 9.9b-3)
             'no-text': { one: '{count} heeft geen tekst', other: '{count} hebben geen tekst' },
-            // NEEDS USER PROOFREADING (task 9.9b-3)
             unticked: { one: '{count} is niet aangevinkt', other: '{count} zijn niet aangevinkt' },
-            // NEEDS USER PROOFREADING (task 9.9b-3)
             'source-left-out': { one: '{count} komt uit een e-mail die wordt weggelaten', other: '{count} komen uit e-mails die worden weggelaten' },
         },
         withNotes: {

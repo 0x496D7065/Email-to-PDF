@@ -239,14 +239,29 @@ describe('copies of quoted messages that must not be merged', () =>
         expectNoLink(out);
     });
 
-    it('empty quoted bodies at the same minute', () =>
+    // Task 9.9b-4: two EMPTY quoted bodies under the very same header (sender address, date and time, subject, To, Cc)
+    // are now linked by that header (link-rebuilt-messages.ts, file comment, 2, EMPTY COPIES): there is no text to lose.
+    // Any header fact that differs still means no link.
+    it('empty quoted bodies at the same minute: linked only when every header fact is the same', () =>
     {
         const header = ['From: Alice Example <alice@example.test>', 'Sent: Monday, March 3, 2025 10:00 AM', 'To: Bob Sample <bob@example.test>', 'Subject: Delivery'];
-        const one = email(BOB, '2025-03-03T11:00:00Z', outlookReply('Empty one.', header, '\n'));
-        const two = email(BOB, '2025-03-03T12:00:00Z', outlookReply('Empty two.', header, '\n'));
-        const out = run(one, two);
-        aliceRebuilt(out, 2);
-        expectNoLink(out);
+        const pair = (other: readonly string[]): ThreadAnalysisResult =>
+            run(email(BOB, '2025-03-03T11:00:00Z', outlookReply('Empty one.', header, '\n')), email(BOB, '2025-03-03T12:00:00Z', outlookReply('Empty two.', other, '\n')));
+        const same = pair(header);
+        expect(aliceRebuilt(same, 2).map((r) => r.link)).toEqual(['entry', 'same-as']);
+        for (const [k, line] of [
+            [1, 'Sent: Monday, March 3, 2025 10:01 AM'],
+            [0, 'From: Alice Example <alice@sample.invalid>'],
+            [2, 'To: Carol Test <carol@sample.invalid>'],
+            [3, 'Subject: Re: Delivery'],
+        ] as const)
+        {
+            const other = header.map((l, i) => (i === k ? line : l));
+            const out = pair(other);
+            expect(out.reconstructed.length, line).toBeGreaterThanOrEqual(2);
+            expectNoLink(out);
+        }
+        expectNoLink(pair([...header.slice(0, 3), 'Cc: Carol Test <carol@sample.invalid>', header[3] as string]));
     });
 });
 

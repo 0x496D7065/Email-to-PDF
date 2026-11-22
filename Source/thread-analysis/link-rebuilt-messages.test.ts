@@ -12,6 +12,7 @@ import {
     datedText,
     digitsOf,
     distinctShingles,
+    emptyHeaderKey,
     linkRebuilt,
     MATCH_WINDOW_MS,
     MIN_SHINGLES,
@@ -766,6 +767,143 @@ describe('linkRebuilt: the same quoted text in several emails', () =>
         expect(links('04/03/2025 05:21', TEXT_A, 27 * HOUR)).toEqual(['entry', 'entry']);
         expect(links('yesterday', TEXT_A, HOUR)).toEqual(['entry', 'entry']);
         expect(links('04/03/2025 05:21', 'OK, thanks.', HOUR)).toEqual(['entry', 'entry']);
+    });
+});
+
+// Task 9.9b-4: an EMPTY rebuilt message (no text: a header with nothing under it) has no words, so the text rule never
+// links it. It is linked to an empty copy from another email by its header facts alone (link-rebuilt-messages.ts,
+// file comment, 2, EMPTY COPIES): sender address, date and time, subject, To and Cc, all known and equal.
+describe('linkRebuilt: empty copies, linked by their header facts (task 9.9b-4)', () =>
+{
+    const quoter = (k: number, body = TEXT_B): NormalizedMessage => make({ from: [BOB], date: dated(T0 + (5 + k) * HOUR), bodyText: body });
+    /** An empty rebuilt message with the default header facts, then `fields` over them. */
+    const empty = (fields: Partial<ReconstructedMessage> = {}, options: RebuiltOptions = {}): ReconstructedMessage => ({ ...makeRebuilt('\n', options), ...fields });
+    /** The links of one rebuilt message per dropped email (each from another email). */
+    const links = (...rebuilt: ReconstructedMessage[]): string[] =>
+        linkRebuilt(rebuilt.map((r, k) => makeSource(k, quoter(k), [r]))).reconstructed.map((r) => r.link);
+    /** A readable date with minutes at `ms` (wall clock and estimate alike). */
+    const at = (ms: number, approximate = true): Partial<ReconstructedMessage> => ({
+        date: { text: 'd', wallMs: ms, precision: 'minute', estimatedUtcMs: ms, basis: approximate ? 'source-offset' : 'rfc-zone' },
+        dateApproximate: approximate,
+    });
+
+    it('links an empty copy to an empty entry of another email with the very same header; the entry lists it', () =>
+    {
+        const out = linkRebuilt([makeSource(3, quoter(0), [empty()]), makeSource(7, quoter(1), [empty()]), makeSource(9, quoter(2), [empty()])]);
+        expect(out.reconstructed.map((r) => r.link)).toEqual(['entry', 'same-as', 'same-as']);
+        expect(out.reconstructed[0]).toMatchObject({ copies: [1, 2], alsoQuotedIn: [7, 9] });
+        expect(out.reconstructed[1]).toMatchObject({ sameAs: 0 });
+        expect(out.reconstructed[2]).toMatchObject({ sameAs: 0 });
+        expect(labels(out.timeline)).toEqual(['r0', 'm0', 'm1', 'm2']);
+        // White space only is no text either; the address in another letter case is the same sender; the To list in
+        // another order or with other display names is the same list; two exact dates at the same moment.
+        expect(links(empty(), empty({ reconstructedText: ' \n\t\n' }))).toEqual(['entry', 'same-as']);
+        expect(links(empty(), empty({ from: [{ name: 'A.', address: 'ALICE@Example.test' }] }))).toEqual(['entry', 'same-as']);
+        expect(links(empty({ to: [BOB, CAROL] }), empty({ to: [{ name: '', address: CAROL.address }, BOB] }))).toEqual(['entry', 'same-as']);
+        expect(links(empty(at(T0, false)), empty(at(T0, false)))).toEqual(['entry', 'same-as']);
+        // Two attributions: no To / Cc on either, the subject taken from the chain on both.
+        expect(links(empty({ to: [], subjectFromChain: true }), empty({ to: [], subjectFromChain: true }))).toEqual(['entry', 'same-as']);
+        // Subjects that differ only in spacing.
+        expect(links(empty({ subject: 'Re:  Desks ' }), empty({ subject: 'Re: Desks' }))).toEqual(['entry', 'same-as']);
+    });
+
+    it('needs the same date AND time: another minute, another day or another zone assumed is no link', () =>
+    {
+        expect(links(empty(at(T0)), empty(at(T0)))).toEqual(['entry', 'same-as']);
+        expect(links(empty(at(T0)), empty(at(T0 + 60_000)))).toEqual(['entry', 'entry']);
+        expect(links(empty(at(T0)), empty(at(T0 + 24 * HOUR)))).toEqual(['entry', 'entry']);
+        // The same wall clock read in two zones: two moments.
+        expect(links(empty(at(T0)), empty({ date: { text: 'd', wallMs: T0, precision: 'minute', estimatedUtcMs: T0 - HOUR, basis: 'source-offset' } })))
+            .toEqual(['entry', 'entry']);
+        // The same moment, written as another wall clock.
+        expect(links(empty(at(T0)), empty({ date: { text: 'd', wallMs: T0 + HOUR, precision: 'minute', estimatedUtcMs: T0, basis: 'source-offset' } })))
+            .toEqual(['entry', 'entry']);
+        // One exact, one approximate.
+        expect(links(empty(at(T0, false)), empty(at(T0, true)))).toEqual(['entry', 'entry']);
+    });
+
+    it('needs every fact: a missing or unreadable date, a date without minutes, no subject, no sender address: no link', () =>
+    {
+        expect(links(empty({}, { estimate: null, dateText: null }), empty({}, { estimate: null, dateText: null }))).toEqual(['entry', 'entry']);
+        // An unreadable date with the very same text (enough for copies WITH text) does not link empty ones.
+        expect(links(empty({}, { estimate: null, dateText: '04/03/2025 05:21' }), empty({}, { estimate: null, dateText: '04/03/2025 05:21' })))
+            .toEqual(['entry', 'entry']);
+        expect(links(empty({}, { precision: 'day' }), empty({}, { precision: 'day' }))).toEqual(['entry', 'entry']);
+        expect(links(empty({ subject: null }), empty({ subject: null }))).toEqual(['entry', 'entry']);
+        expect(links(empty({ subject: ' ' }), empty({ subject: ' ' }))).toEqual(['entry', 'entry']);
+        const nameOnly = { name: ALICE.name, address: '' };
+        expect(links(empty({ from: [nameOnly] }), empty({ from: [nameOnly] }))).toEqual(['entry', 'entry']);
+        expect(links(empty({ from: [] }), empty({ from: [] }))).toEqual(['entry', 'entry']);
+        expect(links(empty({ from: [ALICE, CAROL] }), empty({ from: [ALICE, CAROL] }))).toEqual(['entry', 'entry']);
+        // A To / Cc list read short, or holding a mailbox with neither address nor name.
+        expect(links(empty({ incomplete: ['to'] }), empty({ incomplete: ['to'] }))).toEqual(['entry', 'entry']);
+        expect(links(empty({ incomplete: ['cc'], cc: [CAROL] }), empty({ incomplete: ['cc'], cc: [CAROL] }))).toEqual(['entry', 'entry']);
+        const blank = { name: '', address: '' };
+        expect(links(empty({ cc: [blank] }), empty({ cc: [blank] }))).toEqual(['entry', 'entry']);
+    });
+
+    it('needs the same sender, subject, To and Cc', () =>
+    {
+        expect(links(empty(), empty({ from: [CAROL] }))).toEqual(['entry', 'entry']);
+        expect(links(empty(), empty({ subject: 'Re: Desks' }))).toEqual(['entry', 'entry']);
+        // The letter case of the subject counts.
+        expect(links(empty({ subject: 'desks' }), empty({ subject: 'Desks' }))).toEqual(['entry', 'entry']);
+        // A subject taken from the chain is only compared with another one taken from the chain.
+        expect(links(empty({ subjectFromChain: true }), empty())).toEqual(['entry', 'entry']);
+        expect(links(empty(), empty({ to: [CAROL] }))).toEqual(['entry', 'entry']);
+        expect(links(empty(), empty({ to: [BOB, CAROL] }))).toEqual(['entry', 'entry']);
+        expect(links(empty(), empty({ to: [] }))).toEqual(['entry', 'entry']);
+        expect(links(empty(), empty({ cc: [CAROL] }))).toEqual(['entry', 'entry']);
+        expect(links(empty({ cc: [BOB] }), empty({ to: [], cc: [BOB] }))).toEqual(['entry', 'entry']);
+    });
+
+    it('never links two empty messages of the same email, nor an empty one with one that has text', () =>
+    {
+        const same = linkRebuilt([makeSource(0, quoter(0), [empty(), empty({ generation: 2 })])]);
+        expect(same.reconstructed.map((r) => r.link)).toEqual(['entry', 'entry']);
+        // The same header, one with text under it: the text rule applies (no words on one side: no link), both stay.
+        expect(links(empty(), makeRebuilt(TEXT_A))).toEqual(['entry', 'entry']);
+        expect(links(makeRebuilt(TEXT_A), empty())).toEqual(['entry', 'entry']);
+        // A lone ">" left in the text is text (the PDF prints it): no header link.
+        expect(links(empty(), empty({ reconstructedText: '>\n' }))).toEqual(['entry', 'entry']);
+        // The very same header over OTHER texts: the header alone never links copies with text.
+        expect(links(makeRebuilt(TEXT_A), makeRebuilt(TEXT_C))).toEqual(['entry', 'entry']);
+        // Email 0 holds an empty one AND one with text under the same header, email 1 the empty one: only the empty
+        // ones link; the one with text stays an entry, in the timeline.
+        const mixed = linkRebuilt([makeSource(0, quoter(0), [empty(), makeRebuilt(TEXT_A, { generation: 2 })]), makeSource(1, quoter(1), [empty()])]);
+        expect(mixed.reconstructed.map((r) => r.link)).toEqual(['entry', 'entry', 'same-as']);
+        expect(mixed.reconstructed[2]).toMatchObject({ sameAs: 0 });
+        expect(labels(mixed.timeline)).toContain('r1');
+    });
+
+    it('a linked empty copy never hides text: each copy and its entry have none, each message with text keeps its entry', () =>
+    {
+        const out = linkRebuilt([
+            makeSource(0, quoter(0), [empty(), makeRebuilt(TEXT_A, { generation: 2 })]),
+            makeSource(1, quoter(1), [empty({ reconstructedText: '\n\n' }), makeRebuilt(TEXT_C, { generation: 2 })]),
+            makeSource(2, quoter(2), [empty(), empty({ ...at(T0 + HOUR), generation: 2 })]),
+        ]);
+        const byId = new Map(out.reconstructed.map((r) => [r.id, r]));
+        const linked = out.reconstructed.filter((r) => r.link === 'same-as');
+        expect(linked.map((r) => r.id)).toEqual([2, 4]);
+        for (const copy of linked)
+        {
+            expect(copy.rebuilt.reconstructedText.trim()).toBe('');
+            expect(byId.get(copy.sameAs as number)?.rebuilt.reconstructedText.trim()).toBe('');
+        }
+        const inTimeline = new Set(out.timeline.flatMap((e) => (e.kind === 'rebuilt' ? [e.id] : [])));
+        const withText = out.reconstructed.filter((r) => r.rebuilt.reconstructedText.trim() !== '');
+        expect(withText).toHaveLength(2);
+        expect(withText.every((r) => r.link === 'entry' && inTimeline.has(r.id))).toBe(true);
+    });
+
+    it('emptyHeaderKey: null with text or a fact missing, one same string for the same facts', () =>
+    {
+        expect(emptyHeaderKey(empty())).not.toBeNull();
+        expect(emptyHeaderKey(empty())).toBe(emptyHeaderKey(empty({ reconstructedText: '' })));
+        expect(emptyHeaderKey(makeRebuilt(TEXT_A))).toBeNull();
+        expect(emptyHeaderKey(empty({ date: null }))).toBeNull();
+        expect(emptyHeaderKey(empty())).not.toBe(emptyHeaderKey(empty(at(T0 + 60_000))));
     });
 });
 
