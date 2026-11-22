@@ -119,7 +119,8 @@ const tally = (): Tally => ({ cases: 0, ticked: 0, lost: 0, twice: 0, unticked: 
 /**
  * Per email in the PDF (list position): the text its plan KEEPS, less the parts the no-repeat rule leaves
  * out on purpose (kind 'unticked': a forwarded part of an unticked rebuilt email, Q2 of task 8.13a;
- * 'unticked-attached': the block of an unticked attached email, Q3), as display text (no ">" marks).
+ * 'unticked-attached': the block of an unticked attached email, Q3; 'no-text-attached': the block of an attached
+ * email with no text and no attachments, Q5), as display text (no ">" marks).
  * Every sentence in it must be printed somewhere in the PDF: the no-repeat rule may move text to another
  * email, never lose it (review round 4, M1).
  */
@@ -131,7 +132,8 @@ function keptTexts(result: ThreadAnalysisResult, positions: readonly number[], p
     positions.forEach((position, k) =>
     {
         const body = result.messages[position]!.message.bodyText;
-        const onPurpose = (parts.get(position) ?? []).filter((p) => p.printedAs.kind === 'unticked' || p.printedAs.kind === 'unticked-attached');
+        const onPurpose = (parts.get(position) ?? []).filter((p) => p.printedAs.kind === 'unticked' || p.printedAs.kind === 'unticked-attached'
+            || p.printedAs.kind === 'no-text-attached');
         const pieces: string[] = [];
         for (const range of plans[k]!.ranges)
         {

@@ -164,7 +164,12 @@ export interface PdfDocument
  * 'unticked', task 8.13a, Q2) it does not print it at all: a forwarded part
  * whose rebuilt email (entry `id`) the reader unticked (BuildPdfInput.unticked);
  * or (kind 'unticked-attached', task 8.13b-3, Q3) the printed block of an
- * attached email whose kept copy (list position `position`) is not in the PDF.
+ * attached email whose kept copy (list position `position`) the reader
+ * unticked; or (kind 'no-text-attached', user decision Q5, 2026-11-21)
+ * the printed block of an attached email (kept copy at list position
+ * `position`) left out of the PDF for having no text (task 8.14) and that
+ * has no attachments: its separator and header lines, printed nowhere (F2).
+ * One with attachments keeps its block (user decision 2026-11-22).
  * The printed block of an attached email that IS in the PDF is kind 'email'.
  * Task 9.9b (user decisions F2 and F6, 2026-11-19), with "Print full
  * original text" off: kind 'no-text', the place of a rebuilt email with no
@@ -180,9 +185,15 @@ export type PrintedAs =
     // The printed block of an attached email whose kept copy (list position
     // `position`) the reader unticked: not printed anywhere (task 8.13b-3, Q3).
     | { readonly kind: 'unticked-attached'; readonly position: number }
-    // The place of a rebuilt email with no text (entry `id`): header lines only, printed nowhere (task 9.9b, F2).
+    // The printed block of an attached email (kept copy at list position
+    // `position`) with no text (task 8.14) and no attachments: its separator
+    // and header lines only, printed nowhere (user decision Q5, rule F2).
+    | { readonly kind: 'no-text-attached'; readonly position: number }
+    // The place of a rebuilt email with no text (entry `id`): header lines
+    // only, printed nowhere (task 9.9b, F2).
     | { readonly kind: 'no-text'; readonly id: number }
-    // A folded piece of a forwarded part whose rebuild failed: printed nowhere, folded as in the preview (task 9.9b, F6).
+    // A folded piece of a forwarded part whose rebuild failed: printed
+    // nowhere, folded as in the preview (task 9.9b, F6).
     | { readonly kind: 'not-rebuilt' };
 
 /** A range of a body as the PDF prints it: a plan range, or a piece of one the no-repeat rule left out (`printedAs`: where the PDF prints it). */

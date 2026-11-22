@@ -41,10 +41,12 @@
 //   the reader unticked (task 8.13b-3, Q3: kind 'unticked-attached'; one
 //   in the PDF is kind 'email', like a real file), and (task 9.9b) for the
 //   place of a rebuilt email with no text (kind 'no-text', F2) and a folded
-//   piece of a forward whose rebuild failed (kind 'not-rebuilt', F6), both
-//   printed nowhere. Two ADJACENT blocks with the very same "printed
-//   as" label (both left out, the same email and number, or the same
-//   unticked email) are then joined into one block with one label
+//   piece of a forward whose rebuild failed (kind 'not-rebuilt', F6), and
+//   (user decision Q5) the printed block of an attached email with no text
+//   and no attachments (kind 'no-text-attached'), all printed nowhere. Two
+//   ADJACENT blocks with the very same "printed as" label (both left out,
+//   the same email and number, or the same unticked email) are then joined
+//   into one block with one label
 //   (mergeSamePrintedAs, task 8.13a review round 2): a forward's header
 //   lines and its text, say, no longer show the label twice. The joined
 //   block is folded only when both were, else shown.
@@ -94,6 +96,8 @@ function printedAsKey(printedAs: PrintedAs | null | undefined): string
             return `u${String(printedAs.id)}`;
         case 'unticked-attached':
             return `a${String(printedAs.position)}`;
+        case 'no-text-attached':
+            return `t${String(printedAs.position)}`;
         case 'no-text':
             return `n${String(printedAs.id)}`;
         case 'not-rebuilt':
@@ -104,7 +108,8 @@ function printedAsKey(printedAs: PrintedAs | null | undefined): string
 /** Whether a part left out with this PrintedAs is printed nowhere in the PDF (not as an email of its own). */
 function printedNowhereKind(printedAs: PrintedAs): boolean
 {
-    return printedAs.kind === 'unticked' || printedAs.kind === 'unticked-attached' || printedAs.kind === 'no-text' || printedAs.kind === 'not-rebuilt';
+    return printedAs.kind === 'unticked' || printedAs.kind === 'unticked-attached' || printedAs.kind === 'no-text-attached' || printedAs.kind === 'no-text'
+        || printedAs.kind === 'not-rebuilt';
 }
 
 /**

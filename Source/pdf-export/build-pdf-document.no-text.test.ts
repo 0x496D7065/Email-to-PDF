@@ -6,9 +6,12 @@
 // it does not count on the cover (count, date range, people, undated). An
 // unreadable body keeps the "(no text)" placeholder (Q2), and so does a
 // forward whose forwarded emails print on pages of their own (Q6, see
-// Source/pdf-export/build-pdf-document.no-repeat.test.ts). An attached email the reader ticked
-// that is left out this way keeps its header lines in the email holding it;
-// one the reader unticked is cut as before. An .eml with no text holding an
+// Source/pdf-export/build-pdf-document.no-repeat.test.ts). An attached email left out this way
+// with no attachments has its block (separator and header lines) printed
+// nowhere, ticked or not (user decision Q5: F2); one WITH attachments keeps
+// its block while the reader ticks it (user decision 2026-11-22; see
+// Source/pdf-export/build-pdf-document.no-text-attached.test.ts); one the
+// reader unticked is cut as before. An .eml with no text holding an
 // email attached as a file that was not read is left out too (decision B).
 // A rebuilt email with no text is left out too (Q4), its header lines
 // staying where the plan puts them (folded as quoted history).
@@ -25,7 +28,7 @@ import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { generatePdf, type PdfFonts } from './generate-pdf';
 import { loadPdfFonts } from './load-bundled-fonts';
-import { buildPdfDocument, planPdfOrder } from './build-pdf-document';
+import { applyNoRepeatRule, buildPdfDocument, planPdfOrder, printedElsewhereParts } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { OutputPolicy } from '../../Header/output-plan';
@@ -230,19 +233,50 @@ describe('attached emails with no text (task 8.14)', () =>
     const holder = positionOf(result, 'Holder');
     const attached = positionOf(result, 'Header only child');
 
-    it('ticked by the reader: left out, its block (header lines) stays in the holder', () =>
+    it('ticked by the reader, no attachments: left out, and its block (header lines) is printed nowhere either (Q5)', () =>
     {
         expect(result.attached).toHaveLength(1);
         expect(hasNoPrintableText(result.messages[attached]!.message)).toBe(true);
         const pdfDocument = build(result);
         expect(pdfDocument.emails.map((e) => e.position)).toEqual([holder]);
         const body = bodyOf(pdfDocument.emails[0]!);
-        expect(body).toContain('Subject: Header only child');
+        // Before user decision Q5 the block stayed in the holder (its header lines printed alone).
+        expect(body).not.toContain('Subject: Header only child');
         expect(body).toContain('This is note number');
-        // The preview's labels agree: nothing of the holder is left out.
+        // The preview's labels agree: the block is labelled as left out with the attached email with no text.
         const ticked = result.messages.map((_, k) => k);
         const ranges = printedElsewhereRanges({ result, positions: ticked, plans: planOutput(ticked.map((p) => result.messages[p]!)), policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] });
-        expect(ranges.has(holder)).toBe(false);
+        expect(ranges.get(holder)!.filter((r) => r.printedAs !== null).map((r) => r.printedAs)).toEqual([{ kind: 'no-text-attached', position: attached }]);
+    });
+
+    it('ticked by the reader, WITH an attachment: left out, its block (header lines) stays in the holder (decision 2026-11-22)', () =>
+    {
+        const scan = { fileName: 'scan.pdf', size: 2_048, mimeType: 'application/pdf' };
+        // The holder lists the attached email's attachment too, flat, as the .eml parser does (attachedIndex).
+        const withFile = analyzeThread([attachedResult({
+            message: make('File holder', { attachments: [{ ...scan, attachedIndex: 0 }] }),
+            children: [{ node: { message: make('Phone forward', { bodyText: '', attachments: [scan] }) },
+                inline: true, name: 'fwd.eml' }],
+        })]);
+        const fileHolder = positionOf(withFile, 'File holder');
+        const forward = positionOf(withFile, 'Phone forward');
+        expect(withFile.attached).toHaveLength(1);
+        expect(withFile.attached![0]!.places).toHaveLength(1);
+        expect(hasNoPrintableText(withFile.messages[forward]!.message)).toBe(true);
+        const pdfDocument = build(withFile);
+        expect(pdfDocument.emails.map((e) => e.position)).toEqual([fileHolder]);
+        const body = bodyOf(pdfDocument.emails[0]!);
+        expect(body).toContain('Subject: Phone forward');
+        expect(body).toContain('This is note number');
+        expect(pdfDocument.emails[0]!.attachments?.items.map(lineText).join('\n')).toContain('scan.pdf');
+        // The preview's labels agree: nothing of the holder is left out.
+        const ticked = withFile.messages.map((_, k) => k);
+        const ranges = printedElsewhereRanges({ result: withFile, positions: ticked, plans: planOutput(ticked.map((p) => withFile.messages[p]!)), policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] });
+        expect(ranges.has(fileHolder)).toBe(false);
+        // Unticked by the reader: cut, as before (Q3); the attachment still listed.
+        const unticked = build(withFile, { positions: [fileHolder] });
+        expect(bodyOf(unticked.emails[0]!)).not.toContain('Subject: Phone forward');
+        expect(unticked.emails[0]!.attachments?.items.map(lineText).join('\n')).toContain('scan.pdf');
     });
 
     it('unticked by the reader: its block is cut from the holder, as before (Q3 of task 8.13b-3)', () =>
@@ -251,6 +285,20 @@ describe('attached emails with no text (task 8.14)', () =>
         const body = bodyOf(pdfDocument.emails[0]!);
         expect(body).not.toContain('Subject: Header only child');
         expect(body).toContain('This is note number');
+    });
+
+    it('printedElsewhereParts (no reader ticks known): an attached email with no text counts as ticked', () =>
+    {
+        // Unticked by the reader: applyNoRepeatRule (the PDF and the preview) knows it and says 'unticked-attached';
+        // printedElsewhereParts does not and says 'no-text-attached'. The same part is cut either way.
+        const positions = [holder];
+        const plans = planOutput(positions.map((p) => result.messages[p]!));
+        const order = planPdfOrder(result, positions);
+        const unknown = printedElsewhereParts(result, order.slots, order.pdfNumberByPosition, new Map([[holder, plans[0]]])).get(holder)!;
+        const known = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] }).parts.get(holder)!;
+        expect(unknown.map((p) => p.printedAs)).toEqual([{ kind: 'no-text-attached', position: attached }]);
+        expect(known.map((p) => p.printedAs)).toEqual([{ kind: 'unticked-attached', position: attached }]);
+        expect(unknown.map((p) => [p.start, p.end])).toEqual(known.map((p) => [p.start, p.end]));
     });
 
     it('a holder with no text and an email attached as a file: the attached email is printed on its own', () =>

@@ -331,6 +331,8 @@ export const nl: Messages = {
             unticked: 'Niet in de PDF: doorgestuurde e-mail waarvan de gereconstrueerde e-mail niet is aangevinkt',
             untickedAttached: 'Niet in de PDF: e-mail {number} (hier bijgevoegd) is niet aangevinkt',
             // NEEDS USER PROOFREADING (task 9.9b)
+            noTextAttached: 'Niet in de PDF: e-mail {number} (hier bijgevoegd) heeft geen tekst',
+            // NEEDS USER PROOFREADING (task 9.9b)
             noText: 'Niet in de PDF: geciteerde e-mail zonder tekst (alleen kopregels)',
             // NEEDS USER PROOFREADING (task 9.9b)
             notRebuilt: 'Niet in de PDF: geciteerd deel dat niet als e-mail kon worden gereconstrueerd',

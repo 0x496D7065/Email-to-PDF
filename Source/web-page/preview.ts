@@ -350,7 +350,10 @@ export function pdfReasonText(reason: PlanReason, signaturesFrom: readonly numbe
  * "Not in the PDF: forwarded email whose rebuilt email is unticked"; for the
  * printed block of an unticked attached email (task 8.13b-3, Q3): "Not in
  * the PDF: email #4 (attached here) is unticked" (#4 may be the dropped
- * file's copy it was merged into). The parts of the block of an attached
+ * file's copy it was merged into); for the printed block of an attached
+ * email with no text and no attachments (user decision Q5): "Not in the
+ * PDF: email #4 (attached here) has no text" (one with attachments keeps
+ * its block, so it has no label). The parts of the block of an attached
  * email in the PDF that its own page prints read like a real file's:
  * "... printed as email #4"; the parts its page does not print stay in
  * this email, with their own label (review round 4 of task 8.13b-3).
@@ -374,6 +377,8 @@ export function pdfLabelText(label: PdfLabel): string
                 return t('pdf.printedAs.unticked');
             case 'unticked-attached':
                 return t('pdf.printedAs.untickedAttached', { number: messageNumberText(printedAs.position + 1) });
+            case 'no-text-attached':
+                return t('pdf.printedAs.noTextAttached', { number: messageNumberText(printedAs.position + 1) });
             case 'no-text':
                 return t('pdf.printedAs.noText');
             case 'not-rebuilt':

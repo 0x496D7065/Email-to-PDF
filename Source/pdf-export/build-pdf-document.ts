@@ -140,7 +140,10 @@
 //   be matched for certain, the whole block stays.
 // - Not in the PDF (the reader unticked it; kind 'unticked-attached', Q3):
 //   the whole block, like an unticked forward of task 8.13a, less what an
-//   attached email in the PDF inside it does not print itself.
+//   attached email in the PDF inside it does not print itself. Not in the
+//   PDF for having no text and no attachments (kind 'no-text-attached'):
+//   the whole block too; one with attachments keeps its block (see NO-TEXT
+//   EMAILS below).
 // A merged copy: the block follows the kept copy (printed as it, or left
 // out when it is unticked; Q8); a dropped file's copy is always the one
 // kept (D2), and when it lacks header data the attached copy has (a Bcc
@@ -196,10 +199,18 @@
 // 9.9b they stayed where the plan put them, so a forward printed them. They
 // are printed only with `policy.unfoldEverything` ("Print full original
 // text"), and stay visible in the preview (labelled "Not in the PDF") and in
-// the original file. An attached email the reader
-// TICKED that is left out this way keeps its printed block (its header
-// lines) in the email holding it (attachedBlockParts); one the reader
-// unticked is cut as before (Q3).
+// the original file. An attached email left out this way (no text) that
+// has NO attachments has its printed block (the attached-email separator
+// line and its header lines) printed nowhere either (user decision Q5,
+// 2026-11-21: F2 for attached emails): the no-repeat rule leaves it out of
+// every email holding it (`printedAs` kind 'no-text-attached',
+// attachedBlockParts). One WITH attachments (a phone forward of a PDF, say)
+// keeps its block in every email holding it, as the holder's plan says
+// (user decision 2026-11-22): the PDF still says who sent the files and
+// when, and the preview labels nothing of it as left out. One the reader
+// unticked is cut either way (kind 'unticked-attached', Q3). Its
+// attachments stay listed where they were (the holder's list); "Print full
+// original text" prints the block, as before.
 // The "(no text)" placeholder stays for a text that could not be read (Q2:
 // the warnings of Source/web-page-logic/no-printable-text.ts) and for a body with text whose
 // every part is printed elsewhere (a forward whose forwarded emails are on
@@ -989,6 +1000,8 @@ const samePrintedAs = (a: PrintedAs, b: PrintedAs): boolean =>
             return b.kind === 'unticked' && a.id === b.id;
         case 'unticked-attached':
             return b.kind === 'unticked-attached' && a.position === b.position;
+        case 'no-text-attached':
+            return b.kind === 'no-text-attached' && a.position === b.position;
         case 'no-text':
             return b.kind === 'no-text' && a.id === b.id;
         case 'not-rebuilt':
@@ -1067,6 +1080,10 @@ function disjointParts(places: readonly PrintedPart[]): PrintedPart[]
  * and the preview read the same parts). Per list position: parts sorted,
  * not overlapping (disjointParts); mergeParts of them is printedElsewhere's
  * value. Same rules, same arguments (see printedElsewhere).
+ * Without `readerTicked`, an attached email with no text counts as ticked:
+ * its block is 'no-text-attached' (same cut as 'unticked-attached', other
+ * label), or kept when it has attachments. applyNoRepeatRule, which the PDF
+ * and the preview use, passes the ticked positions.
  * Pure: `result` and `plans` are never changed.
  */
 export function printedElsewhereParts(
@@ -1299,12 +1316,20 @@ function blockClaims(holderBody: string, start: number, end: number, ownBody: st
  *   does not print (those parts stay: its text is never left out because
  *   the email around it is unticked), less nothing for the emails attached
  *   inside it that are unticked too.
- * - One NOT in the PDF only because it has no text (task 8.14, see NO-TEXT
- *   EMAILS at the top; the reader ticked it, `readerTicked`): nothing of its
- *   block is left out, so its header lines stay in the holder's body as the
- *   holder's plan says. Without `readerTicked` (not known), such an email
- *   keeps its block too (when unsure, keep). One the reader unticked is
- *   left out as above.
+ * - One NOT in the PDF because it has no text (task 8.14, see NO-TEXT
+ *   EMAILS at the top) and NOT unticked by the reader (ticked in
+ *   `readerTicked`, or `readerTicked` not known):
+ *   - with no attachments: its whole block too, kind 'no-text-attached'
+ *     (user decision Q5, 2026-11-21: rule F2, no lone header lines in the
+ *     PDF). Such a block is only its separator line, its header lines and
+ *     white space: an email with no text has no email printed inside it (an
+ *     inline one would give it text), and the block is the parser's own
+ *     text, so no writer's answer sits in it.
+ *   - with attachments (or when unsure whether it has any): nothing of its
+ *     block is left out (user decision 2026-11-22): its header lines stay in
+ *     the holder's body as the holder's plan says, so the PDF still says
+ *     who sent the files (listed in the holder's list) and when.
+ *   One the reader unticked keeps kind 'unticked-attached', as above.
  * A place is used only in the very body it names (the holder's own copy, or
  * the kept copy it was moved to, analyze-thread.ts settleAttached), in the PDF, with
  * valid offsets, and not in the email's own body.
@@ -1398,13 +1423,17 @@ function attachedBlockParts(
             continue;
         }
         const ticked = inPdf(attachedPosition);
-        // Left out for having no text, not by the reader (task 8.14): its block stays in every holder.
-        if (!ticked && hasNoPrintableText(attachedMessage.message) && (readerTicked === undefined || readerTicked.has(attachedPosition)))
+        // Left out for having no text, not by the reader (task 8.14).
+        const noText = !ticked && hasNoPrintableText(attachedMessage.message) && (readerTicked === undefined || readerTicked.has(attachedPosition));
+        // With attachments: its block stays in every holder, it says who sent them and when (decision 2026-11-22).
+        if (noText && listsAttachments(attachedMessage.message))
         {
             continue;
         }
+        // With none: its block is printed nowhere (Q5, F2).
         const printedAsItself: PrintedAs = ticked ? { kind: 'email', position: attachedPosition, number: pdfNumberByPosition[attachedPosition]! }
-            : { kind: 'unticked-attached', position: attachedPosition };
+            : noText ? { kind: 'no-text-attached', position: attachedPosition }
+                : { kind: 'unticked-attached', position: attachedPosition };
         let pieces: PrintedPart[] | null = null;
         for (const place of listOrNone(attached.places))
         {
@@ -1450,6 +1479,18 @@ function attachedBlockParts(
             addPart(holder, part);
         }
     }
+}
+
+/**
+ * Whether `message` lists attachments; when unsure (no list), true, so its
+ * block is kept. Any listed attachment counts, inline images included: that
+ * keeps the header lines (who sent the file), the safe direction.
+ */
+function listsAttachments(message: Pick<NormalizedMessage, 'attachments'>): boolean
+{
+    // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+    const isList: boolean = Array.isArray(message.attachments);
+    return !isList || message.attachments.length > 0;
 }
 
 /** [start, end) less every interval of `holes` (in any order, may overlap), as sorted pieces; none when nothing is left. */
@@ -2302,7 +2343,8 @@ export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
     // round 2: never inferred from what `rebuilt` lacks). The switch off: none is unticked. Chosen ones never are.
     const chosenIds = new Set(input.rebuilt ?? []);
     const unticked = input.rebuildingOff === true ? undefined : new Set((input.unticked ?? []).filter((id) => !chosenIds.has(id)));
-    // The emails the reader ticked (task 8.14: an attached email left out only for having no text keeps its block).
+    // The emails the reader ticked (an attached email left out only for having no text, and with no attachments:
+    // its block is labelled 'no-text-attached', one the reader unticked 'unticked-attached').
     // F6 (task 9.9b): a forward whose rebuild failed is folded as the preview folds it, while rebuilding is on.
     const { parts, moved } = noRepeatParts(result, order.slots, order.pdfNumberByPosition, planByPosition, unticked, new Set(positions),
         input.rebuildingOff !== true);

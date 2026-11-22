@@ -496,6 +496,11 @@ export const en = {
             // may be a dropped file's email the attached one was merged into, so
             // the text does not call email #4 itself "attached".
             untickedAttached: 'Not in the PDF: email {number} (attached here) is unticked',
+            // An email attached inside this one (printed in its text) that has no text
+            // and no attachments (user decision Q5): the PDF leaves it out (task 8.14) and
+            // its separator and header lines too ({number} as in untickedAttached;
+            // "Print full original text" prints them). One with attachments keeps them.
+            noTextAttached: 'Not in the PDF: email {number} (attached here) has no text',
             // The header lines of an earlier email quoted here with nothing under them
             // (task 9.9b, user decision F2): its rebuilt email has no text, so the PDF
             // prints neither it nor these lines ("Print full original text" does).

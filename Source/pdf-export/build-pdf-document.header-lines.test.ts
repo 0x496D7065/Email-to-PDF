@@ -39,7 +39,7 @@ import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { findReplyHeaders } from '../thread-analysis/reply-header';
-import { rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
+import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { buildPdfDocument, applyNoRepeatRule, pdfRanges } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
@@ -293,6 +293,16 @@ function expectNoHeaderLines(made: Made, what: string): Stats
                 const untickedAt = range.printedAs.position;
                 expect(pdfDocument.pdfNumberByPosition[untickedAt] ?? null, what).toBeNull();
                 expect((result.attached ?? []).some((a) => result.positionByIndex[a.index] === untickedAt), what).toBe(true);
+                continue;
+            }
+            if (range.printedAs.kind === 'no-text-attached')
+            {
+                // Q5: the block of an attached email with no text and no attachments (separator and header lines), printed nowhere.
+                const emptyAt = range.printedAs.position;
+                expect(pdfDocument.pdfNumberByPosition[emptyAt] ?? null, what).toBeNull();
+                expect(hasNoPrintableText(result.messages[emptyAt]!.message), what).toBe(true);
+                expect((result.attached ?? []).some((a) => result.positionByIndex[a.index] === emptyAt), what).toBe(true);
+                expectPrintedNowhere('the block of an attached email with no text is nowhere in the PDF');
                 continue;
             }
             const target = pdfDocument.emails[range.printedAs.number - 1]!;

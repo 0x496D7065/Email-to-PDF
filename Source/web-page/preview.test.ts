@@ -1120,6 +1120,14 @@ describe('PDF labels', () =>
             setLocale('en');
             expect(pdfLabelText(asNoText)).toBe('Not in the PDF: quoted email with no text (header lines only)');
             expect(pdfLabelText(asNotRebuilt)).toBe('Not in the PDF: quoted part that could not be rebuilt as an email');
+            // Q5: the printed block of an attached email with no text and no attachments, named by its list number.
+            const asNoTextAttached = { ...asReal, printedAs: { kind: 'no-text-attached' as const, position: 3 } };
+            expect(pdfLabelText(asNoTextAttached)).toBe('Not in the PDF: email #4 (attached here) has no text');
+            setLocale('fr');
+            expect(pdfLabelText(asNoTextAttached)).toBe('Pas dans le PDF : l’e-mail #4 (joint ici) n’a pas de texte');
+            setLocale('nl');
+            expect(pdfLabelText(asNoTextAttached)).toBe('Niet in de PDF: e-mail #4 (hier bijgevoegd) heeft geen tekst');
+            setLocale('en');
         }
         finally
         {

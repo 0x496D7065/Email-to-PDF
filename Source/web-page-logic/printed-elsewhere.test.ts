@@ -17,7 +17,7 @@ import { attachedResult } from '../../Helper/Test/test-support/attached-builder'
 import { buildPdfDocument, applyNoRepeatRule, pdfBodyText, withoutPrintedElsewhere } from '../pdf-export/build-pdf-document';
 import { createPdfStrings } from '../pdf-export/pdf-strings';
 import { bodyLines, lineText } from '../pdf-export/pdf-text-transforms';
-import { rebuiltHasNoPrintableText } from './no-printable-text';
+import { hasNoPrintableText, rebuiltHasNoPrintableText } from './no-printable-text';
 import { pdfBlocks, signatureSources } from './pdf-plan';
 import { printedElsewhereRanges } from './printed-elsewhere';
 import { rebuiltEntries } from './rebuilt-email-display';
@@ -66,6 +66,8 @@ const keyOf = (printedAs: PrintedAs): string =>
             return `unticked rebuilt ${String(printedAs.id)} (not in the PDF)`;
         case 'unticked-attached':
             return `unticked attached email #${String(printedAs.position + 1)} (not in the PDF)`;
+        case 'no-text-attached':
+            return `attached email #${String(printedAs.position + 1)} with no text (not in the PDF)`;
         case 'no-text':
             return `rebuilt ${String(printedAs.id)} with no text (not in the PDF)`;
         case 'not-rebuilt':
@@ -205,13 +207,15 @@ interface Counts
     /** Task 8.13b-3: an attached email's block, printed as that email (kind 'email') or left out with it ('unticked-attached'). */
     attachedTargets: number;
     untickedAttachedTargets: number;
+    /** Q5: the block of an attached email with no text and no attachments, printed nowhere. */
+    noTextAttachedTargets: number;
     /** Task 9.9b: the place of a rebuilt email with no text (F2) and a folded piece of a forward whose rebuild failed (F6). */
     noTextTargets: number;
     notRebuiltTargets: number;
     sentencesLabelled: number;
     sentencesKept: number;
 }
-const newCounts = (): Counts => ({ labelledSomewhere: 0, rebuiltTargets: 0, realTargets: 0, untickedTargets: 0, attachedTargets: 0, untickedAttachedTargets: 0, noTextTargets: 0, notRebuiltTargets: 0,
+const newCounts = (): Counts => ({ labelledSomewhere: 0, rebuiltTargets: 0, realTargets: 0, untickedTargets: 0, attachedTargets: 0, untickedAttachedTargets: 0, noTextAttachedTargets: 0, noTextTargets: 0, notRebuiltTargets: 0,
     sentencesLabelled: 0, sentencesKept: 0 });
 
 /**
@@ -270,6 +274,18 @@ function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: r
                 counts.notRebuiltTargets++;
                 continue;
             }
+            if (target.kind === 'no-text-attached')
+            {
+                // Q5: the block of an attached email with no text and no attachments, held in this body, printed nowhere.
+                counts.noTextAttachedTargets++;
+                expect(pdfDocument.pdfNumberByPosition[target.position] ?? null, keyOf(target)).toBeNull();
+                expect(hasNoPrintableText(result.messages[target.position]!.message), keyOf(target)).toBe(true);
+                expect(
+                    (result.attached ?? []).some((a) => result.positionByIndex[a.index] === target.position && a.places.some((p) => p.holderIndex === index)),
+                    keyOf(target),
+                ).toBe(true);
+                continue;
+            }
             if (target.kind === 'unticked-attached')
             {
                 // Q3 (task 8.13b-3): the block of an attached email whose kept copy is unticked: that copy is
@@ -317,7 +333,7 @@ function checkLabels(where: string, prepared: ReturnType<typeof prepare>, all: r
                 {
                     expect(printedNowhere(sentence), `${where}: "${sentence}" nowhere in the PDF`).toBe(true);
                 }
-                else if (target.kind === 'no-text' || target.kind === 'not-rebuilt')
+                else if (target.kind === 'no-text' || target.kind === 'not-rebuilt' || target.kind === 'no-text-attached')
                 {
                     // Task 9.9b: left out of the PDF on purpose (F2, F6); the preview and full text keep it.
                 }
@@ -401,7 +417,7 @@ describe('"printed as email #N" labels say exactly what the PDF leaves out (task
         expect(counts.sentencesLabelled).toBeGreaterThan(80);
         expect(counts.sentencesKept).toBeGreaterThan(500);
         // No attached email in these inputs (see the next block).
-        expect(counts.attachedTargets + counts.untickedAttachedTargets).toBe(0);
+        expect(counts.attachedTargets + counts.untickedAttachedTargets + counts.noTextAttachedTargets).toBe(0);
     });
 });
 
