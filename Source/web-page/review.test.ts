@@ -12,7 +12,7 @@ import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { SAFE_TAGS } from './safe-dom';
 import { setLocale, t } from './translations';
 import { headingId, mountPreview, type Preview, type PreviewOptions } from './preview';
-import { createReview, filesText, includedText, messagesText, noteText, relatedText, type Review, type ReviewOptions } from './review';
+import { createReview, filesText, includedText, messagesText, rebuiltIncludedText, noteText, relatedText, type Review, type ReviewOptions } from './review';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { MessageNote } from '../../Header/preview-display';
 import type { AnalyzedMessage, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
@@ -208,6 +208,56 @@ describe('texts', () =>
             expect(includedText(result, withText)).toBe('In de PDF: 3 van 5 e-mails.');
             expect(includedText(result, [...withText, empty[0]!].sort())).toBe('In de PDF: 3 van 5 e-mails. 1 weggelaten omdat er geen tekst in staat.');
             expect(includedText(result, all)).toBe('In de PDF: 3 van 5 e-mails. 2 weggelaten omdat er geen tekst in staat.');
+        }
+        finally
+        {
+            setLocale('en');
+        }
+    });
+
+    it('says why rebuilt emails are not in the PDF, each counted once, in the priority order, in every language (task 9.9b-3)', () =>
+    {
+        // All in: the line alone, as before.
+        expect(rebuiltIncludedText(['in-pdf', 'in-pdf'])).toBe('2 of 2 rebuilt emails will be in the PDF.');
+        expect(rebuiltIncludedText(['in-pdf'])).toBe('1 of 1 rebuilt email will be in the PDF.');
+        // One reason each, singular and plural.
+        expect(rebuiltIncludedText(['no-text'])).toBe('0 of 1 rebuilt email will be in the PDF. Left out: 1 has no text.');
+        expect(rebuiltIncludedText(['no-text', 'in-pdf', 'no-text'])).toBe('1 of 3 rebuilt emails will be in the PDF. Left out: 2 have no text.');
+        expect(rebuiltIncludedText(['unticked', 'in-pdf'])).toBe('1 of 2 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
+        expect(rebuiltIncludedText(['unticked', 'unticked'])).toBe('0 of 2 rebuilt emails will be in the PDF. Left out: 2 are unticked.');
+        expect(rebuiltIncludedText(['source-left-out', 'in-pdf']))
+            .toBe('1 of 2 rebuilt emails will be in the PDF. Left out: 1 comes from an email that is left out.');
+        expect(rebuiltIncludedText(['source-left-out', 'source-left-out']))
+            .toBe('0 of 2 rebuilt emails will be in the PDF. Left out: 2 come from emails that are left out.');
+        // Several reasons: always in the priority order, whatever the list order.
+        const mixed = ['source-left-out', 'in-pdf', 'unticked', 'no-text', 'unticked'] as const;
+        expect(rebuiltIncludedText(mixed))
+            .toBe('1 of 5 rebuilt emails will be in the PDF. Left out: 1 has no text, 2 are unticked, 1 comes from an email that is left out.');
+        setLocale('fr');
+        try
+        {
+            expect(rebuiltIncludedText(['in-pdf', 'in-pdf'])).toBe('E-mails reconstitués dans le PDF\u{00A0}: 2 sur 2.');
+            expect(rebuiltIncludedText(['no-text'])).toBe('E-mail reconstitué dans le PDF\u{00A0}: 0 sur 1. Hors du PDF\u{00A0}: 1 n’a pas de texte.');
+            expect(rebuiltIncludedText(['no-text', 'no-text', 'in-pdf'])).toBe('E-mails reconstitués dans le PDF\u{00A0}: 1 sur 3. Hors du PDF\u{00A0}: 2 n’ont pas de texte.');
+            expect(rebuiltIncludedText(mixed)).toBe('E-mails reconstitués dans le PDF\u{00A0}: 1 sur 5. '
+                + 'Hors du PDF\u{00A0}: 1 n’a pas de texte, 2 sont décochés et 1 vient d’un e-mail laissé de côté.');
+            expect(rebuiltIncludedText(['unticked', 'source-left-out', 'source-left-out'])).toBe('E-mails reconstitués dans le PDF\u{00A0}: 0 sur 3. '
+                + 'Hors du PDF\u{00A0}: 1 est décoché et 2 viennent d’e-mails laissés de côté.');
+        }
+        finally
+        {
+            setLocale('en');
+        }
+        setLocale('nl');
+        try
+        {
+            expect(rebuiltIncludedText(['in-pdf', 'in-pdf'])).toBe('In de PDF: 2 van 2 gereconstrueerde e-mails.');
+            expect(rebuiltIncludedText(['no-text'])).toBe('In de PDF: 0 van 1 gereconstrueerde e-mail. Weggelaten: 1 heeft geen tekst.');
+            expect(rebuiltIncludedText(['no-text', 'no-text', 'in-pdf'])).toBe('In de PDF: 1 van 3 gereconstrueerde e-mails. Weggelaten: 2 hebben geen tekst.');
+            expect(rebuiltIncludedText(mixed)).toBe('In de PDF: 1 van 5 gereconstrueerde e-mails. '
+                + 'Weggelaten: 1 heeft geen tekst, 2 zijn niet aangevinkt, 1 komt uit een e-mail die wordt weggelaten.');
+            expect(rebuiltIncludedText(['unticked', 'source-left-out', 'source-left-out'])).toBe('In de PDF: 0 van 3 gereconstrueerde e-mails. '
+                + 'Weggelaten: 1 is niet aangevinkt, 2 komen uit e-mails die worden weggelaten.');
         }
         finally
         {

@@ -213,7 +213,7 @@ test('the email they were taken from unticked: the cards say so, and nothing reb
     await open(page, [OTHER, LAST], 5);
     const source = page.locator('#preview-list > li:not(.message-rebuilt)').filter({ hasText: 'RE: Office desks and chairs' });
     await source.getByRole('checkbox', { name: en.actions.include }).uncheck();
-    await expect(page.locator('#review-rebuilt')).toHaveText('0 of 3 rebuilt emails will be in the PDF.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('0 of 3 rebuilt emails will be in the PDF. Left out: 3 come from emails that are left out.');
     const cards = page.locator('#preview-list > li.message-rebuilt');
     for (const card of await cards.all())
     {
@@ -262,7 +262,7 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
     const source = page.locator('#preview-list > li:not(.message-rebuilt)');
     // One card unticked first: the state to come back to.
     await cards.first().getByRole('checkbox').uncheck();
-    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
 
     await everything.check();
     // Rebuilt emails are then not mentioned at all: no rebuilt line, no rebuilt part in the counts, nothing announced about them.
@@ -305,7 +305,7 @@ test('"Print full original text" ticked: the switch is unticked and disabled, no
     expect(all).not.toContain('Source files');
 
     await everything.uncheck();
-    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
     await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
     await expect(rebuild).toBeChecked();
     await expect(rebuild).toBeEnabled();
@@ -359,7 +359,7 @@ test('the switch off, then "Print full original text" ticked and unticked: the s
     expect(off).not.toContain(heading(2));
     expect(off).not.toMatch(/rebuilt/i);
     await rebuild.check();
-    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
     await expect(page.locator('#review-messages')).toHaveText('1 email found, 3 earlier emails rebuilt from quoted text.');
     const ticks = [true, false, true];
     for (const [k, card] of (await cards.all()).entries())

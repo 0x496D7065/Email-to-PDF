@@ -242,7 +242,7 @@ test('the keyboard goes through the toolbar, then each card in list order; a car
     await expect(card).toBeVisible();
     await expect(card).toHaveAttribute('data-included', 'false');
     await expect(card.locator('.excluded-note')).toHaveText(en.review.excluded);
-    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
     await expect(page.locator('#review-included')).toHaveText('1 of 1 email will be in the PDF.');
 
     // "Clear everything" forgets the choices: the same file again shows every card ticked.
@@ -295,7 +295,7 @@ test('a phone forward of a flat thread (Android HTML): 13 rebuilt cards, field b
     await expect(page.locator('#preview-list > li')).toHaveCount(14);
     await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
     await expect(page.locator('#review-messages')).toHaveText('1 email found, 13 earlier emails rebuilt from quoted text.');
-    await expect(page.locator('#review-rebuilt')).toHaveText('10 of 13 rebuilt emails will be in the PDF.');
+    await expect(page.locator('#review-rebuilt')).toHaveText('10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.');
 
     // Oldest first, as the list shows them.
     const expected = [...phoneForwardThread('fr').expected].reverse();

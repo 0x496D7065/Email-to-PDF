@@ -19,6 +19,8 @@
 // same shape, typed as `Messages` (see index.ts), listed in catalog.ts.
 
 import type { PdfNoteCode } from '../../web-page-logic/message-notes';
+import type { RebuiltLeftOutReason } from '../../web-page-logic/rebuilt-left-out';
+import type { PluralForms } from './index';
 import type { PdfError, PdfUnavailable } from '../pdf-job';
 import type { ProcessErrorCode } from '../../../Header/file-processing';
 import type { PlanReason } from '../../../Header/output-plan';
@@ -357,6 +359,20 @@ export const en = {
             one: '{included} of {count} rebuilt email will be in the PDF.',
             other: '{included} of {count} rebuilt emails will be in the PDF.',
         },
+        // After `rebuiltIncluded`, as a sentence of its own (counts.sentence), only
+        // when some rebuilt emails are not in the PDF (task 9.9b-3, user decision
+        // F5): why, e.g. "Left out: 1 has no text, 2 are unticked." {reasons} is the parts of rebuiltLeftOutReason
+        // with a count, joined as a list. Each email left out is counted once
+        // (Source/web-page-logic/rebuilt-left-out.ts says which reason wins).
+        rebuiltLeftOut: 'Left out: {reasons}',
+        rebuiltLeftOutReason: {
+            // Its rebuilt text is empty (a quoted header with nothing under it).
+            'no-text': { one: '{count} has no text', other: '{count} have no text' },
+            // The reader unticked its card.
+            unticked: { one: '{count} is unticked', other: '{count} are unticked' },
+            // Every email it was rebuilt from is left out of the PDF.
+            'source-left-out': { one: '{count} comes from an email that is left out', other: '{count} come from emails that are left out' },
+        } satisfies Record<RebuiltLeftOutReason, PluralForms>,
         withNotes: {
             one: '{count} email has notes, shown with it below.',
             other: '{count} emails have notes, shown with each email below.',

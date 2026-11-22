@@ -68,7 +68,7 @@
 // kept). A card in the PDF whose own email is unticked, but whose text is
 // also quoted in a ticked email, gets a muted "In the PDF: taken from #K"
 // line naming the email the PDF takes it from. The counts say how many were found and how many will be in the
-// PDF. includedRebuilt() gives the PDF step (task 7.7) the ones to put in.
+// PDF, and why the others are not (task 9.9b-3). includedRebuilt() gives the PDF step (task 7.7) the ones to put in.
 // A change of the switch or of a card is told through `onRebuiltChange`
 // (not `onChange`: the PDF labels of the real emails do not depend on it);
 // a real email's tick is told through `onChange`, with the rebuilt line
@@ -103,6 +103,7 @@ import { attachedCount, attachedLinks } from '../web-page-logic/attached-links';
 import { messageNotes } from '../web-page-logic/message-notes';
 import { pdfPositions, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { createRebuiltSelection, rebuiltEntries, rebuiltInPdf } from '../web-page-logic/rebuilt-email-display';
+import { rebuiltPdfStatus, tallyRebuiltPdf, type RebuiltLeftOutReason } from '../web-page-logic/rebuilt-left-out';
 import { createEmailSelection } from '../web-page-logic/email-selection';
 import { createSafeElement, setSafeAttribute } from './safe-dom';
 import { t } from './translations';
@@ -215,6 +216,27 @@ export function includedText(result: ThreadAnalysisResult, ticked: readonly numb
     const line = t('counts.included', { included: printed, count: result.messages.length });
     const leftOut = ticked.length - printed;
     return leftOut > 0 ? `${line} ${t('counts.sentence', { text: t('counts.noTextLeftOut', { count: leftOut }) })}` : line;
+}
+
+/**
+ * "2 of 4 rebuilt emails will be in the PDF." for the status of each rebuilt
+ * email counted (Source/web-page-logic/rebuilt-left-out.ts, rebuiltPdfStatus); when some are
+ * not in the PDF, followed by a sentence of its own saying why, each one
+ * counted once (task 9.9b-3, user decision F5):
+ * "2 of 4 rebuilt emails will be in the PDF. Left out: 1 has no text, 1 is unticked."
+ * When all are in the PDF, the line alone, as before.
+ */
+export function rebuiltIncludedText(statuses: readonly ('in-pdf' | RebuiltLeftOutReason)[]): string
+{
+    const tally = tallyRebuiltPdf(statuses);
+    const line = t('counts.rebuiltIncluded', { included: tally.inPdf, count: statuses.length });
+    if (tally.leftOut.length === 0)
+    {
+        return line;
+    }
+    const reasons = joinList(tally.leftOut.map(({ reason, count }) => t(`counts.rebuiltLeftOutReason.${reason}`, { count })));
+    const why = t('counts.rebuiltLeftOut', { reasons });
+    return `${line} ${t('counts.sentence', { text: why })}`;
 }
 
 /** The notes of one email, or none if they cannot be worked out (a broken entry: never stops the page). */
@@ -365,7 +387,8 @@ export interface ReviewOptions
     readonly onChange?: (announcement: string) => void;
     /**
      * Called after the switch or a rebuilt card's checkbox changed, with the
-     * new "N of M rebuilt emails will be in the PDF" line to announce (the
+     * new "N of M rebuilt emails will be in the PDF" line to announce, with
+     * why the others are left out (rebuiltIncludedText, task 9.9b-3) (the
      * switch turned off: the "N of M emails will be in the PDF" line, see
      * rebuiltAnnouncement). Source/web-page/mount-page.ts: step 3 drops a PDF made before
      * and announces the line ('' announces nothing but the drop).
@@ -615,7 +638,34 @@ export function createReview(options: ReviewOptions = {}): Review
         }
         const complete = renderedResult === current;
         const included = new Set(positions());
-        return rebuiltList.filter((r) => ((complete && !rebuiltItems.has(r.id)) || isRebuiltTicked(r)) && sourceInPdf(r, included));
+        // Keep in step with rebuiltStatuses: both apply the same checks.
+        return rebuiltList.filter((r) => countsAsTicked(r, complete) && sourceInPdf(r, included));
+    }
+
+    /**
+     * True if this rebuilt email counts as ticked for the PDF: ticked, or (once
+     * the list is complete) a card the page could not decorate (see rebuiltIncluded).
+     */
+    function countsAsTicked(rebuiltEmail: AnalyzedRebuiltMessage, complete: boolean): boolean
+    {
+        return (complete && !rebuiltItems.has(rebuiltEmail.id)) || isRebuiltTicked(rebuiltEmail);
+    }
+
+    /**
+     * Each counted rebuilt email (rebuiltList) in the PDF or the one reason it
+     * is not (task 9.9b-3; Source/web-page-logic/rebuilt-left-out.ts), from the same facts as
+     * rebuiltIncluded and the PDF (planPdfOrder): its tick, the follow-source
+     * rule and rebuiltHasNoPrintableText. Only asked while rebuilding is on.
+     */
+    function rebuiltStatuses(): ('in-pdf' | RebuiltLeftOutReason)[]
+    {
+        const complete = renderedResult === current;
+        const included = new Set(positions());
+        return rebuiltList.map((r) => rebuiltPdfStatus({
+            noText: rebuiltHasNoPrintableText(r),
+            ticked: countsAsTicked(r, complete),
+            sourceInPdf: sourceInPdf(r, included),
+        }));
     }
 
     /**
@@ -672,8 +722,8 @@ export function createReview(options: ReviewOptions = {}): Review
         const on = rebuiltOn();
         const shown = current !== null && rebuiltList.length > 0 && on;
         // A rebuilt email with no text is left out of the PDF (task 8.14, Q4): not counted as in it.
-        const printedRebuilt = shown ? rebuiltIncluded().filter((r) => !rebuiltHasNoPrintableText(r)).length : 0;
-        rebuiltLine.textContent = shown ? t('counts.rebuiltIncluded', { included: printedRebuilt, count: rebuiltList.length }) : '';
+        // Those left out are followed by why (task 9.9b-3).
+        rebuiltLine.textContent = shown ? rebuiltIncludedText(rebuiltStatuses()) : '';
         setSafeAttribute(rebuiltLine, 'hidden', !shown);
         if (current === null)
         {

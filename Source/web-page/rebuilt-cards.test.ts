@@ -382,7 +382,7 @@ describe('rebuilt cards in the list', () =>
             expect(withClass(card, 'body-text').map((e) => e.textContent)).toEqual(text === '' ? [] : [text]);
             // Its tick box stays (Q5); it is not counted in, and its "taken from" line is not shown.
             expect(one(card, 'include-checkbox').checked).toBe(true);
-            expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF.');
+            expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF. Left out: 1 has no text.');
             const ids = rebuiltEntries(result).map((r) => r.id);
             const slots = planPdfOrder(result, [0], ids).slots.flatMap((s) => (s.kind === 'rebuilt' ? [s.entry.id] : []));
             expect(slots).toEqual(ids.filter((x) => x !== id));
@@ -507,7 +507,7 @@ describe('the switch, the checkboxes and the counts', () =>
         expect(review.untickedRebuilt()).toEqual([]);
         tick(byId('rebuilt-include-all'), true);
         expect(review.untickedRebuilt()).toEqual([2]);
-        expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF.');
+        expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
         expect(byId('review-included').textContent).toBe('1 of 1 email will be in the PDF.');
         // Its checkbox is named by its label and its heading.
         expect(one(card, 'include-checkbox').getAttribute('aria-labelledby')).toBe('include-rebuilt-2-label rebuilt-2-title');
@@ -523,9 +523,9 @@ describe('the switch, the checkboxes and the counts', () =>
         const source = one(realItems()[0] as FakeElement, 'include-checkbox');
         tick(source, false);
         expect(byId('review-included').textContent).toBe('0 of 1 email will be in the PDF.');
-        expect(byId('review-rebuilt').textContent).toBe('0 of 3 rebuilt emails will be in the PDF.');
+        expect(byId('review-rebuilt').textContent).toBe('0 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked, 2 come from emails that are left out.');
         // One announcement with both lines (the rebuilt line changed too).
-        expect(changes).toEqual(['0 of 1 email will be in the PDF. 0 of 3 rebuilt emails will be in the PDF.']);
+        expect(changes).toEqual(['0 of 1 email will be in the PDF. 0 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked, 2 come from emails that are left out.']);
         expect(review.includedRebuilt()).toEqual([]);
         // Only the card unticked by itself is reported as unticked; the others are out because of their source.
         expect(review.untickedRebuilt()).toEqual([2]);
@@ -554,7 +554,56 @@ describe('the switch, the checkboxes and the counts', () =>
         expect(review.includedRebuilt().map((r) => r.id)).toEqual([1, 0]);
         expect(rebuiltItems().map((c) => c.getAttribute('data-included'))).toEqual(['false', 'true', 'true']);
         expect(isHidden(one(rebuiltItems()[1] as FakeElement, 'excluded-note'))).toBe(true);
-        expect(changes.at(-1)).toBe('1 of 1 email will be in the PDF. 2 of 3 rebuilt emails will be in the PDF.');
+        expect(changes.at(-1)).toBe('1 of 1 email will be in the PDF. 2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
+    });
+
+    it('the rebuilt line says why the others are not in the PDF, one reason each, matching what the PDF prints (task 9.9b-3, user decision F5)', () =>
+    {
+        const base = analysisOf(LAST);
+        const empty = rebuiltEntries(base)[1]!.id;
+        const result = withRebuilt(base, empty, (r) => ({ ...r, rebuilt: { ...r.rebuilt, reconstructedText: '' } }));
+        show(result);
+        const line = (): string | null => byId('review-rebuilt').textContent;
+        // How many rebuilt emails the PDF itself prints, from what the review gives the PDF step.
+        const printed = (): number => planPdfOrder(result, review.includedPositions(), review.includedRebuilt().map((r) => r.id))
+            .slots.filter((s) => s.kind === 'rebuilt').length;
+        const cardOf = (id: number): FakeElement => rebuiltItems().find((c) => c.getAttribute('data-rebuilt-id') === String(id)) as FakeElement;
+        expect(line()).toBe('2 of 3 rebuilt emails will be in the PDF. Left out: 1 has no text.');
+        expect(printed()).toBe(2);
+        // Unticking the email with no text changes nothing: "no text" comes first.
+        tick(one(cardOf(empty), 'include-checkbox'), false);
+        expect(line()).toBe('2 of 3 rebuilt emails will be in the PDF. Left out: 1 has no text.');
+        expect(printed()).toBe(2);
+        const other = rebuiltEntries(result).find((r) => r.id !== empty)!.id;
+        tick(one(cardOf(other), 'include-checkbox'), false);
+        expect(line()).toBe('1 of 3 rebuilt emails will be in the PDF. Left out: 1 has no text, 1 is unticked.');
+        expect(printed()).toBe(1);
+        // Announced as it is shown (the status line reads the reasons too).
+        expect(announced.at(-1)).toBe(line());
+        // The email they come from unticked: the last one follows it; the unticked one stays "unticked".
+        tick(one(realItems()[0] as FakeElement, 'include-checkbox'), false);
+        expect(line()).toBe('0 of 3 rebuilt emails will be in the PDF. Left out: 1 has no text, 1 is unticked, 1 comes from an email that is left out.');
+        expect(printed()).toBe(0);
+        const translated = {
+            fr: 'E-mails reconstitués dans le PDF\u{00A0}: 0 sur 3. Hors du PDF\u{00A0}: 1 n’a pas de texte, 1 est décoché et 1 vient d’un e-mail laissé de côté.',
+            nl: 'In de PDF: 0 van 3 gereconstrueerde e-mails. Weggelaten: 1 heeft geen tekst, 1 is niet aangevinkt, 1 komt uit een e-mail die wordt weggelaten.',
+        } as const;
+        for (const locale of ['fr', 'nl'] as const)
+        {
+            setLocale(locale);
+            review.relabel();
+            expect(line()).toBe(translated[locale]);
+        }
+        setLocale('en');
+        review.relabel();
+        // All ticked again, with text: the line alone, as before.
+        show(base);
+        tick(one(realItems()[0] as FakeElement, 'include-checkbox'), true);
+        for (const card of rebuiltItems())
+        {
+            tick(one(card, 'include-checkbox'), true);
+        }
+        expect(line()).toBe('3 of 3 rebuilt emails will be in the PDF.');
     });
 
     it('a text quoted in two emails stays in while one of them is ticked (follow-source rule)', () =>
@@ -758,7 +807,7 @@ describe('the switch, the checkboxes and the counts', () =>
         // Turned on by the reader: the cards come back with their own ticks.
         tick(all, true);
         expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
-        expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF.');
+        expect(byId('review-rebuilt').textContent).toBe('2 of 3 rebuilt emails will be in the PDF. Left out: 1 is unticked.');
         expect(rebuiltItems().some(isHidden)).toBe(false);
         expect(rebuiltItems().map((c) => one(c, 'include-checkbox').checked)).toEqual([true, false, true]);
         expect(review.includedRebuilt()).toHaveLength(2);
