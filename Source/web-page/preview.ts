@@ -107,7 +107,11 @@
 //   day alone as written, never "about" (user decision Q2); both always as
 //   written too; a date that could not be read only as written;
 // - shows the rebuilt text as text (quote marks removed, the one form change
-//   the user allowed), never folded.
+//   the user allowed). Its signature blocks (task 9.9b-2, user decision F4:
+//   folded as in a real email; AnalyzedRebuiltMessage.segments) are folded
+//   blocks with their PDF labels (PreviewPdfPlans.rebuiltViews: the PDF's
+//   own plan of that text, "Not in the PDF: repeated signature" once the
+//   sender's block was printed earlier); nothing else of it is folded.
 // Nothing of the source email changes: its card is built exactly as before,
 // with all its text (README.md, rule R6). The rebuilt cards' checkboxes and
 // the switch that leaves them all out are Source/web-page/review.ts's
@@ -132,6 +136,7 @@
 // to the toolbar (the "Print full original text" checkbox of
 // Source/web-page/pdf-labels.ts).
 
+import { checkSegments, joinSegments } from '../thread-analysis/fold-segments';
 import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, isValidTimeZone, listTimeZones } from '../thread-analysis/time-format';
 import { attachedLinks } from '../web-page-logic/attached-links';
 import { displayAuthor } from '../web-page-logic/display-author';
@@ -151,7 +156,7 @@ import type { AttachmentInfo, EmailAddress, EmailDate } from '../../Header/parse
 import type { DisplayBlock, LabeledBlock, PdfLabel, PdfView } from '../../Header/pdf-plan';
 import type { AttachedLinks, PreviewSlot, RebuiltCard, RebuiltDate } from '../../Header/preview-display';
 import type { AnalyzedRebuiltMessage } from '../../Header/rebuilt-emails';
-import type { AnalyzedMessage, ThreadAnalysisResult, MergedCopy } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, ThreadAnalysisResult, MergedCopy, Segment } from '../../Header/thread-analysis-result';
 
 /** Emails built per chunk (at least one per chunk, see MAX_CHUNK_CHARS). */
 export const DEFAULT_CHUNK_SIZE = 40;
@@ -549,6 +554,11 @@ export interface PreviewPdfPlans
     readonly result: ThreadAnalysisResult;
     /** List position -> its plan. An email that is not in the map is not in the PDF (no labels). */
     readonly views: ReadonlyMap<number, PdfView>;
+    /**
+     * Rebuilt id -> the signature plan of its card's text (task 9.9b-2; Source/web-page-logic/printed-elsewhere.ts,
+     * pdfCut). A rebuilt card that is not in the map has no labels. Absent: none.
+     */
+    readonly rebuiltViews?: ReadonlyMap<number, PdfView>;
 }
 
 /**
@@ -675,6 +685,41 @@ interface RebuiltSlot
     readonly empty: HTMLParagraphElement | null;
     /** Its rebuilt text has no text, so the PDF leaves it out (task 8.14, Source/web-page-logic/no-printable-text.ts). */
     readonly noText: boolean;
+    /** Its body with signature folds (task 9.9b-2), or null: the text is one shown block. */
+    readonly body: RebuiltBody | null;
+}
+
+/** A rebuilt card's body with folds (task 9.9b-2), redrawn when its PDF plan changes (drawRebuiltBody). */
+interface RebuiltBody
+{
+    readonly id: number;
+    readonly text: string;
+    readonly segments: readonly Segment[];
+    /** The card's message-body element. */
+    readonly element: HTMLDivElement;
+    /** The note under the text ("(no text)" and the like), or null. */
+    readonly tail: HTMLParagraphElement | null;
+    readonly positionByIndex: readonly (number | null)[];
+    blocks: BuiltBlock[];
+    /** As BodySlot.shape and BodySlot.key. */
+    shape: string;
+    key: string;
+}
+
+/**
+ * The signature folds of a rebuilt card's text (AnalyzedRebuiltMessage.segments, task 9.9b-2), or
+ * null when there is none or they are not a valid cover of the text (data from a worker: then the
+ * text is shown as one block, as before; when unsure, show).
+ */
+export function rebuiltFolds(text: string, segments: readonly Segment[] | undefined): readonly Segment[] | null
+{
+    // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+    const isList: boolean = Array.isArray(segments);
+    if (!isList || segments === undefined || !segments.some((s) => s.folded))
+    {
+        return null;
+    }
+    return checkSegments(text, segments).length === 0 && joinSegments(text, segments) === text ? segments : null;
 }
 
 /** A rebuilt card's stand-in: its own words. */
@@ -1098,6 +1143,34 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     function drawBlocks(slot: BodySlot, blocks: readonly LabeledBlock[], wasOpen: readonly { start: number; end: number }[]): void
     {
         const focusSpot = focusSpotIn(slot);
+        const { built, children } = blockNodes(blocks, wasOpen, slot.position, slot.positionByIndex);
+        // An email with no text (task 8.14): "Not in the PDF: this email has no text." instead of "(no text)",
+        // also under a body of white space only (its blank block stays: nothing is ever dropped from the page).
+        const noText = hasNoPrintableText(slot.email.message);
+        const empty = noText || blocks.length === 0 ? createSafeElement('p', { attrs: { class: 'note body-empty' }, text: t(emptyKey(noText)) }) : null;
+        if (empty !== null)
+        {
+            children.push(empty);
+        }
+        slot.body.replaceChildren(...children);
+        slot.empty = empty;
+        // Recorded only once in the page: a build that threw above leaves nothing behind.
+        swapFolds(slot.blocks, built);
+        slot.blocks = built;
+        if (focusSpot !== null)
+        {
+            restoreFocus(slot, focusSpot);
+        }
+    }
+
+    /**
+     * The elements of a body's blocks (see drawBlocks), and the blocks as built. A folded block is open
+     * when "show folded text" is ticked or it overlaps a block in `wasOpen`. `position` and
+     * `positionByIndex`: for the fold's "from email #N" (foldSummaryText).
+     */
+    function blockNodes(blocks: readonly LabeledBlock[], wasOpen: readonly { start: number; end: number }[], position: number,
+        positionByIndex: readonly (number | null)[]): { readonly built: BuiltBlock[]; readonly children: Node[] }
+    {
         const built: BuiltBlock[] = [];
         const children: Node[] = [];
         for (const { block, label } of blocks)
@@ -1122,7 +1195,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
             const mark = createSafeElement('span', { attrs: { class: 'pdf-label' } });
             applyLabel(mark, label);
             const open = showFolded || wasOpen.some((o) => o.start < block.end && block.start < o.end);
-            const what = createSafeElement('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, slot.position, slot.positionByIndex) });
+            const what = createSafeElement('span', { attrs: { class: 'fold-what' }, text: foldSummaryText(block, position, positionByIndex) });
             const summary = createSafeElement('summary', { attrs: { class: 'fold-label' }, children: [mark, what] });
             const details = createSafeElement('details', {
                 attrs: { class: 'fold', open },
@@ -1131,18 +1204,13 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
             children.push(details);
             built.push({ start: block.start, end: block.end, details, summary, nodes: [details], label: mark, pdf: label, what: { element: what, block } });
         }
-        // An email with no text (task 8.14): "Not in the PDF: this email has no text." instead of "(no text)",
-        // also under a body of white space only (its blank block stays: nothing is ever dropped from the page).
-        const noText = hasNoPrintableText(slot.email.message);
-        const empty = noText || blocks.length === 0 ? createSafeElement('p', { attrs: { class: 'note body-empty' }, text: t(emptyKey(noText)) }) : null;
-        if (empty !== null)
-        {
-            children.push(empty);
-        }
-        slot.body.replaceChildren(...children);
-        slot.empty = empty;
-        // Recorded only once in the page: a build that threw above leaves nothing behind.
-        for (const builtBlock of slot.blocks)
+        return { built, children };
+    }
+
+    /** The folds the "show folded text" checkbox opens and closes: those of `old` out, those of `built` in. */
+    function swapFolds(old: readonly BuiltBlock[], built: readonly BuiltBlock[]): void
+    {
+        for (const builtBlock of old)
         {
             if (builtBlock.details !== null)
             {
@@ -1155,11 +1223,6 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
             {
                 folds.add(builtBlock.details);
             }
-        }
-        slot.blocks = built;
-        if (focusSpot !== null)
-        {
-            restoreFocus(slot, focusSpot);
         }
     }
 
@@ -1387,24 +1450,115 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         };
         applyRebuiltDate(date, zone);
         const meta = createSafeElement('dl', { attrs: { class: 'message-meta' }, children: rebuiltMetaRows(card, date) });
-        // The rebuilt text, as text, never folded; "(no text)" if there is none. A rebuilt email with no text
+        // The rebuilt text, as text; "(no text)" if there is none. A rebuilt email with no text
         // (task 8.14, Q4) says "Not in the PDF: this email has no text." instead, under its text when that is
-        // white space only (shown all the same: nothing is ever dropped from the page).
+        // white space only (shown all the same: nothing is ever dropped from the page). Its signature
+        // folds (task 9.9b-2, AnalyzedRebuiltMessage.segments) are folded blocks with their PDF labels,
+        // as in a real email's body (drawRebuiltBody); without folds the text is one block, as before.
         const noText = rebuiltHasNoPrintableText(rebuiltEmail);
         const empty = noText || card.text === '' ? createSafeElement('p', { attrs: { class: 'note body-empty' }, text: t(emptyKey(noText)) }) : null;
-        const text = card.text === '' ? null : createSafeElement('div', { attrs: { class: 'body-text' }, text: card.text });
+        const segments = card.text === '' ? null : rebuiltFolds(card.text, rebuiltEmail.segments);
+        const text = card.text === '' || segments !== null ? null : createSafeElement('div', { attrs: { class: 'body-text' }, text: card.text });
         const body = createSafeElement('div', {
             attrs: { class: 'message-body' },
             children: [...(text === null ? [] : [text]), ...(empty === null ? [] : [empty])],
         });
+        const foldedBody: RebuiltBody | null = segments === null ? null
+            : { id: rebuiltEmail.id, text: card.text, segments, element: body, tail: empty, positionByIndex: result.positionByIndex,
+                blocks: [], shape: NOT_DRAWN, key: NOT_DRAWN };
+        if (foldedBody !== null)
+        {
+            drawRebuiltBody(foldedBody);
+        }
         const item = createSafeElement('li', {
             attrs: { class: 'message message-rebuilt', 'data-rebuilt-id': String(rebuiltEmail.id) },
             children: [heading, note, ...(also === null ? [] : [also]), meta, body],
         });
         options.decorateRebuilt?.(item, rebuiltEmail, result);
         // Recorded last: a card whose decoration threw is not in the page (safeRebuiltItemOf).
-        rebuiltSlots.set(rebuiltEmail.id, { card, label, noSubject: hasSubject ? null : subject, note, also, meta, date, empty, noText });
+        rebuiltSlots.set(rebuiltEmail.id, { card, label, noSubject: hasSubject ? null : subject, note, also, meta, date, empty, noText, body: foldedBody });
         return item;
+    }
+
+    /** The PDF view of a rebuilt card's own text under the plans in use (task 9.9b-2); null: no labels (not in the PDF, or no plans). */
+    function rebuiltViewFor(id: number): PdfView | null
+    {
+        if (pdfPlans === null || pdfPlans.result !== currentResult)
+        {
+            return null;
+        }
+        return pdfPlans.rebuiltViews?.get(id) ?? null;
+    }
+
+    /**
+     * Brings a rebuilt card's folded body up to date with the plans in use (task 9.9b-2), like
+     * updateBody for a real email: labels changed in place when the blocks stay the same, else the
+     * body is drawn again (the folds the reader opened stay open). Left out of the PDF (unticked):
+     * what was drawn stays, its labels hidden (`data-pdf-out`, as for a real email), so the cards
+     * below do not move; a card drawn while left out simply has no labels.
+     */
+    function drawRebuiltBody(rebuiltBody: RebuiltBody): void
+    {
+        const view = rebuiltViewFor(rebuiltBody.id);
+        const out = view === null && pdfPlans !== null && rebuiltBody.shape !== NOT_DRAWN;
+        setSafeAttribute(rebuiltBody.element, 'data-pdf-out', out);
+        if (out)
+        {
+            return;
+        }
+        const key = viewKey(view);
+        if (key === rebuiltBody.key)
+        {
+            return;
+        }
+        const blocks = pdfBlocks(rebuiltBody.text, rebuiltBody.segments, view);
+        const shape = shapeOf(blocks);
+        if (shape === rebuiltBody.shape)
+        {
+            blocks.forEach((pdfBlock, i) =>
+            {
+                const built = rebuiltBody.blocks[i];
+                if (built !== undefined)
+                {
+                    setBlockLabel(built, pdfBlock.label);
+                }
+            });
+        }
+        else
+        {
+            const wasOpen = rebuiltBody.blocks.filter((b) => b.details?.hasAttribute('open') === true);
+            const { built, children } = blockNodes(blocks, wasOpen, -1, rebuiltBody.positionByIndex);
+            rebuiltBody.element.replaceChildren(...children, ...(rebuiltBody.tail === null ? [] : [rebuiltBody.tail]));
+            swapFolds(rebuiltBody.blocks, built);
+            rebuiltBody.blocks = built;
+            rebuiltBody.shape = shape;
+        }
+        rebuiltBody.key = key;
+    }
+
+    /** drawRebuiltBody for every rebuilt card with folds, never throwing (a card that fails keeps what it shows). */
+    function updateRebuiltBodies(): void
+    {
+        for (const slot of rebuiltSlots.values())
+        {
+            if (slot.body === null)
+            {
+                continue;
+            }
+            try
+            {
+                drawRebuiltBody(slot.body);
+            }
+            catch
+            {
+                // Not expected. Its text stays in the page; its labels are hidden (never a stale one).
+                for (const builtBlock of slot.body.blocks)
+                {
+                    setBlockLabel(builtBlock, null);
+                }
+                slot.body.key = NOT_DRAWN;
+            }
+        }
     }
 
     /** A rebuilt card's stand-in: its label, a calm note and its text (the text is in its source email's card anyway). */
@@ -1562,6 +1716,8 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         }
         pdfPlans = plans;
         setPdfState('updating');
+        // Rebuilt cards with folds (task 9.9b-2) are few and small: updated at once.
+        updateRebuiltBodies();
         // Stand-ins are few (only a bug makes one) and cheap: updated at once.
         for (const [position, standIn] of standIns)
         {
@@ -1778,6 +1934,17 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
                 }
                 slot.meta.replaceChildren(...rebuiltMetaRows(slot.card, slot.date));
                 applyRebuiltDate(slot.date, zone);
+                for (const builtBlock of slot.body?.blocks ?? [])
+                {
+                    if (builtBlock.what !== null)
+                    {
+                        builtBlock.what.element.textContent = foldSummaryText(builtBlock.what.block, -1, slot.body?.positionByIndex ?? []);
+                    }
+                    if (builtBlock.label !== null)
+                    {
+                        applyLabel(builtBlock.label, builtBlock.pdf);
+                    }
+                }
                 if (slot.empty !== null)
                 {
                     slot.empty.textContent = t(emptyKey(slot.noText));

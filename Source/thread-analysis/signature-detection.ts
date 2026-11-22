@@ -28,7 +28,12 @@
 //    SAFETY below): a message that is only "-- / Dana Writer / Sales" stays
 //    shown.
 // 2. FREQUENCY RULE. For every sender (`senderKey`, '' = unknown, then this
-//    rule is skipped) with at least MIN_MESSAGES_PER_SENDER messages:
+//    rule is skipped) with at least MIN_MESSAGES_PER_SENDER messages
+//    (COUNTED messages only: an input with `counted: false`, a second copy of
+//    a message that is in the list already, such as an email rebuilt from
+//    quoted text that is linked to a real file, is folded by the same rules
+//    but adds nothing to the counts, so one message quoted five times is
+//    still one message):
 //    a. Own lines are compared NORMALIZED: Unicode NFC, every run of
 //       whitespace (nbsp, tabs, CR included) made one space, trimmed. Case
 //       is kept: a block must be identical after this cleaning, so a changed
@@ -109,7 +114,7 @@
 
 import { authorKey } from './dedupe';
 import { lineRanges, type FoldRange, type LineRange } from './fold-segments';
-import type { NormalizedMessage } from '../../Header/parsed-email';
+import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
 
 /**
  * Longest fold of the delimiter rule, in lines, the "-- " line and blank
@@ -157,6 +162,11 @@ export interface SignatureInput
     readonly senderKey: string;
     /** Offset where the sender's own text ends (start of the quoted history). Default: body length. */
     readonly ownTextEnd?: number;
+    /**
+     * False: a copy of a message that is in the list already (see FREQUENCY RULE at the top). Its
+     * folds follow the same rules, but it adds nothing to the counts. Default: true.
+     */
+    readonly counted?: boolean;
 }
 
 /**
@@ -178,6 +188,24 @@ export function senderKeyOf(message: NormalizedMessage): string
     return message.sender?.address.toLowerCase() ?? '';
 }
 
+/**
+ * The sender key of an email rebuilt from quoted text (its From as the quoted header line gives it,
+ * ReconstructedMessage.from): the lower-cased address of its first mailbox, as `senderKeyOf` for a
+ * real email, so "Bob <BOB@x.test>" in an attribution and a file from bob@x.test are one sender.
+ * Spaces around the address are dropped (a header line read from a wrapped quote may keep one).
+ * '' when it has no address (a name alone: the frequency rule is skipped, as for a real email).
+ */
+export function senderKeyOfMailboxes(from: readonly EmailAddress[]): string
+{
+    const first: unknown = Array.isArray(from) ? from[0] : undefined;
+    if (typeof first !== 'object' || first === null)
+    {
+        return '';
+    }
+    const address: unknown = (first as EmailAddress).address;
+    return typeof address === 'string' ? address.trim().toLowerCase() : '';
+}
+
 /** Messages of one sender a pair must occur in: max(2, ceil(30% of them)). */
 export function minRepeat(senderMessages: number): number
 {
@@ -190,6 +218,8 @@ interface Prepared
     readonly body: string;
     readonly senderKey: string;
     readonly ownTextEnd: number;
+    /** Adds to the frequency counts (SignatureInput.counted). */
+    readonly counted: boolean;
     readonly lines: readonly LineRange[];
     /** Indices (into `lines`) of the non-blank own lines, in order. */
     readonly nonBlank: readonly number[];
@@ -265,7 +295,9 @@ function prepare(input: SignatureInput): Prepared | null
         nonBlank.push(i);
         keys.push(key);
     }
-    return { body, senderKey, ownTextEnd, lines, nonBlank, keys };
+    // Only an explicit false leaves a message out of the counts (when unsure, it counts, as before).
+    const counted = (input.counted as unknown) !== false;
+    return { body, senderKey, ownTextEnd, counted, lines, nonBlank, keys };
 }
 
 /** "--" then at least one space, tab or nbsp, nothing else: the RFC 3676 delimiter. */
@@ -445,10 +477,10 @@ export function detectSignatures(messages: readonly SignatureInput[]): FoldRange
 
     // Per sender: how many messages, and in how many of them each pair occurs.
     const senders = new Map<string, { messages: number; pairs: Map<string, number> }>();
-    const pairSets = prepared.map((message) => (message !== null && message.senderKey !== '' ? pairsOf(message) : null));
+    const pairSets = prepared.map((message) => (message !== null && message.senderKey !== '' && message.counted ? pairsOf(message) : null));
     prepared.forEach((message, i) =>
     {
-        if (message === null || message.senderKey === '')
+        if (message === null || message.senderKey === '' || !message.counted)
         {
             return;
         }

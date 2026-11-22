@@ -165,14 +165,31 @@ interface Stats
     notRebuilt: number;
     /** Parts printed nowhere ('unticked', 'no-text') whose very words are the header of another rebuilt place with text. */
     twinWords: number;
+    /** Lines of a place left out of its rebuilt email as a signature block printed before (task 9.9b-2). */
+    signatureLeftOut: number;
 }
 
 /** Checks the invariant (top of this file) on `made` (folded); returns how many headers were found shown, exempt, and cut. */
 function expectNoHeaderLines(made: Made, what: string): Stats
 {
     const { result, positions, pdfDocument } = made;
-    const stats: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0, noText: 0, notRebuilt: 0, twinWords: 0 };
+    const stats: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0, noText: 0, notRebuilt: 0, twinWords: 0, signatureLeftOut: 0 };
     const violations: string[] = [];
+    // Task 9.9b-2: per rebuilt email in the PDF, the lines of the signature blocks its text leaves out (its
+    // sender printed them in an earlier email: rule 3), squashed; and the text of the emails before it.
+    const noRepeat = applyNoRepeatRule({ result, positions, plans: made.plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: made.rebuilt,
+        rebuildingOff: made.rebuildingOff, unticked: made.unticked });
+    const leftOutLines = new Map<number, Set<string>>();
+    for (const slot of noRepeat.order.slots)
+    {
+        if (slot.kind === 'rebuilt')
+        {
+            const text = slot.source.shown.rebuilt.rebuilt.reconstructedText;
+            leftOutLines.set(slot.entry.id, new Set((noRepeat.rebuiltPlans.get(slot.entry.id)?.shown.ranges ?? []).filter((r) => !r.keep)
+                .flatMap((r) => text.slice(r.start, r.end).split(/\r\n?|\n/u).map(squash)).filter((line) => line !== '')));
+        }
+    }
+    const printedBefore = (number: number): string => squash(pdfDocument.emails.slice(0, number - 1).map((e) => bodyOf(e)).join('\n'));
     for (const [k, position] of positions.entries())
     {
         const message = result.messages[position]!.message;
@@ -330,6 +347,14 @@ function expectNoHeaderLines(made: Made, what: string): Stats
                 // rebuilt email's header rows and its "reconstructed" mark say so (as before task 8.13a). A date
                 // line: the Date row shows that moment in the PDF's time zone (headerShownInPdf checked it).
                 const dateLine = /^(?:date|sent|envoyé|datum|verzonden|gesendet)\s?:/iu.test(squashedLine) && /\bDate\b/u.test(rowsOf(target));
+                // A line of a signature block the rebuilt email leaves out (task 9.9b-2): printed in an email before it.
+                if (!there.includes(squashedLine) && target.rebuilt !== null && leftOutLines.get(target.rebuilt.id)?.has(squashedLine) === true)
+                {
+                    expect(printedBefore(target.number), `${what}: left-out signature line "${squashedLine}" printed before Email ${String(target.number)}`)
+                        .toContain(squashedLine);
+                    stats.signatureLeftOut++;
+                    continue;
+                }
                 expect(there.includes(squashedLine) || value === '' || dateLine || there.includes(value) || target.position !== null,
                     `${what}: "${squashedLine}" of email at ${String(position)} printed in Email ${String(target.number)}`).toBe(true);
             }
@@ -400,7 +425,7 @@ function expectFullTextWhole(messages: readonly NormalizedMessage[], what: strin
 
 describe('no header lines of another email inside a body, "Print full original text" off (task 8.13a)', () =>
 {
-    const totals: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0, noText: 0, notRebuilt: 0, twinWords: 0 };
+    const totals: Stats = { exempt: 0, inline: 0, cut: 0, moved: 0, unticked: 0, noText: 0, notRebuilt: 0, twinWords: 0, signatureLeftOut: 0 };
     const add = (stats: Stats): void =>
     {
         for (const key of Object.keys(totals) as (keyof Stats)[])
@@ -474,5 +499,7 @@ describe('no header lines of another email inside a body, "Print full original t
         // Exactly the parts with the words of another place with text: the empty 14 Jul 16:53 attribution of
         // fixtures 94 to 97: 4 fixtures alone + the same 4 in "all fixtures", for each of the 3 choices.
         expect(totals.twinWords).toBe(24);
+        // Task 9.9b-2: the workshop signature of fixtures 94 to 97, left out of the later workshop emails.
+        expect(totals.signatureLeftOut).toBeGreaterThan(0);
     });
 });

@@ -11,6 +11,8 @@
 // all because it is printed nowhere else (the PRINTED SOMEWHERE check of
 // Source/pdf-export/build-pdf-document.ts, NoRepeatResult.restored; task 8.13b-3, review round 3) comes
 // back kept, so its label says "In the PDF".
+// It also hands over the signature plans of the rebuilt emails in the PDF
+// (pdfCut, task 9.9b-2), for the labels of the folds of their cards.
 //
 // It decides nothing on its own: it calls the PDF model's own functions
 // (Source/pdf-export/build-pdf-document.ts: applyNoRepeatRule, which buildPdfDocument calls too, and
@@ -54,12 +56,36 @@ export interface PrintedElsewhereInput
  */
 export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number, readonly PdfRange[]>
 {
+    return pdfCut(input).ranges;
+}
+
+/** What the preview needs from the PDF model's no-repeat calculation (pdfCut). */
+export interface PdfCut
+{
+    /** As printedElsewhereRanges. */
+    readonly ranges: Map<number, readonly PdfRange[]>;
+    /**
+     * Per rebuilt entry in the PDF (its id), the signature plan of its OWN text, as its preview card
+     * shows it (Source/pdf-export/build-pdf-document.ts, rebuiltPlans, `own`; task 9.9b-2). An entry
+     * not in the PDF is not in the map. Empty under "Print full original text".
+     */
+    readonly rebuiltPlans: Map<number, MessagePlan>;
+}
+
+/** printedElsewhereRanges, and the signature plans of the rebuilt emails in the PDF, from ONE run of the PDF model's calculation. */
+export function pdfCut(input: PrintedElsewhereInput): PdfCut
+{
     const out = new Map<number, readonly PdfRange[]>();
+    const plansOfRebuilt = new Map<number, MessagePlan>();
     if (input.policy.unfoldEverything)
     {
-        return out;
+        return { ranges: out, rebuiltPlans: plansOfRebuilt };
     }
-    const { order, parts, restored } = applyNoRepeatRule(input);
+    const { order, parts, restored, rebuiltPlans } = applyNoRepeatRule(input);
+    for (const [id, plan] of rebuiltPlans)
+    {
+        plansOfRebuilt.set(id, plan.own);
+    }
     for (const slot of order.slots)
     {
         if (slot.kind !== 'email')
@@ -79,5 +105,5 @@ export function printedElsewhereRanges(input: PrintedElsewhereInput): Map<number
             out.set(slot.position, ranges);
         }
     }
-    return out;
+    return { ranges: out, rebuiltPlans: plansOfRebuilt };
 }

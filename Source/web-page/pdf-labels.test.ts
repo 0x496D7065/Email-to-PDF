@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
 import { THREAD_CASES } from '../../Helper/Test/test-support/thread-cases';
-import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
+import { pdfCut, printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
@@ -480,5 +480,53 @@ describe('the no-repeat cut in the views (task 8.11)', () =>
         rebuiltChosen = () => [];
         labels.rebuiltChanged();
         expect(last()).not.toBeNull();
+    });
+});
+
+describe('the signature plans of the rebuilt cards (task 9.9b-2)', () =>
+{
+    /** Bob quoting two emails of Alice's, each ending with her "-- " signature: two rebuilt emails with a fold. */
+    function quotesAlice(): ThreadAnalysisResult
+    {
+        const quoted = (day: string, text: string): string =>
+            [`On ${day} 2025 at 10:00, Alice Example <alice@example.test> wrote:`, ...`${text}\n${SIGNATURE}`.split('\n').map((l) => (l === '' ? '>' : `> ${l}`))].join('\n');
+        const nested = quoted('Mon, 3 Mar', 'The bench is delivered.').split('\n').map((l) => `>${l.startsWith('>') ? '' : ' '}${l}`).join('\n');
+        return analysisOf([make(BOB, `Thanks, noted.\n\n${quoted('Tue, 4 Mar', 'The bench is green.')}\n>\n${nested}\n`)]);
+    }
+
+    it('hands over, per rebuilt email in the PDF, the PDF\'s own plan of its text; none for one not chosen or under "Print full original text"', () =>
+    {
+        const result = quotesAlice();
+        const ids = rebuiltEntries(result).map((r) => r.id);
+        expect(ids).toHaveLength(2);
+        expect(result.reconstructed.every((r) => r.segments?.some((s) => s.folded) === true)).toBe(true);
+        included = [0];
+        rebuiltChosen = () => ids;
+        labels.show(result);
+        runAll();
+        const plans = labels.currentPlans()!;
+        const expected = pdfCut({ ...plans, rebuilt: ids }).rebuiltPlans;
+        expect(expected.size).toBe(2);
+        for (const id of ids)
+        {
+            expect(last()?.rebuiltViews?.get(id)).toEqual({ plan: expected.get(id), signatureFrom: new Map() });
+        }
+        // Her signature: printed in the older one only (rule 3).
+        const reasons = ids.map((id) => last()?.rebuiltViews?.get(id)?.plan.ranges.filter((r) => r.reason !== 'text').map((r) => `${r.reason}${r.keep ? '+' : '-'}`));
+        expect(reasons.sort()).toEqual([['repeated-signature-'], ['signature+']]);
+        // One not chosen: no view for it.
+        rebuiltChosen = () => [ids[0]!];
+        labels.rebuiltChanged();
+        expect([...last()?.rebuiltViews?.keys() ?? []]).toEqual([ids[0]]);
+        // None chosen: no rebuilt views at all.
+        rebuiltChosen = () => [];
+        labels.rebuiltChanged();
+        expect(last()?.rebuiltViews).toBeUndefined();
+        // "Print full original text": none either.
+        rebuiltChosen = () => ids;
+        checkbox().checked = true;
+        checkbox().fire('change');
+        runAll();
+        expect(last()?.rebuiltViews).toBeUndefined();
     });
 });

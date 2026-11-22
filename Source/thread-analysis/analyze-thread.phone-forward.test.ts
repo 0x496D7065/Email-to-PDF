@@ -158,6 +158,12 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
     const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0,
         strings: createPdfStrings('en'), rebuilt: entries.map((r) => r.id) });
     const printed = [...expected].reverse().filter((e) => !e.noOwnText);
+    // Signatures (task 9.9b-2, user decision F4): each workshop email ends with the same closing line and
+    // 15-line signature, folded in every one of them (rebuilt emails, counted together), and printed in the
+    // first one only (rule 3 of output-plan.ts, as for real emails). Sender -> folded blocks printed so far.
+    const printedBlocks = new Map<string, Set<string>>();
+    let foldedEmails = 0;
+    let leftOut = 0;
     expect(pdf.emails).toHaveLength(11);
     expect(pdf.index.entries).toHaveLength(11);
     expect(pdf.cover.emailCount).toBe(11);
@@ -170,21 +176,53 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
         expect(fieldOf(email, 'From'), where).toBe(mailbox(want.from));
         expect(fieldOf(email, 'Subject'), where).toBe(want.subject);
         expect(fieldOf(email, 'Cc'), where).toBe(want.cc.length === 0 ? undefined : want.cc.map(mailbox).join(', '));
-        // The text, whole. Until dates are printed as written (task 9.9c), a header whose time is only
-        // estimated cannot be shown by the header rows: its lines are moved to the top of the text
-        // (task 8.13a, Q4; PdfRebuiltInfo.movedHeaders).
-        const rebuilt = result.reconstructed[email.rebuilt!.shownId]!.rebuilt;
+        // The text, whole but for a signature block its sender's earlier email printed already. Until dates are
+        // printed as written (task 9.9c), a header whose time is only estimated cannot be shown by the header
+        // rows: its lines are moved to the top of the text (task 8.13a, Q4; PdfRebuiltInfo.movedHeaders).
+        const shownEntry = result.reconstructed[email.rebuilt!.shownId]!;
+        const rebuilt = shownEntry.rebuilt;
         const headerLines = message.bodyText.slice(rebuilt.start, rebuilt.headerEnd);
         const body = squashWhiteSpace(email.body.map(lineText).join('\n'));
         const text = squashWhiteSpace(rebuilt.reconstructedText);
-        expect(body, where).toBe(email.rebuilt!.movedHeaders === 0 ? text : squashWhiteSpace(`${headerLines}\n${rebuilt.reconstructedText}`));
+        const folds = (shownEntry.segments ?? []).filter((s) => s.folded);
+        expect(folds.every((s) => s.reasons.join() === 'signature'), where).toBe(true);
+        const sender = want.from.address;
+        const seen = printedBlocks.get(sender) ?? new Set<string>();
+        printedBlocks.set(sender, seen);
+        let kept = rebuilt.reconstructedText;
+        for (const fold of [...folds].reverse())
+        {
+            const block = squashWhiteSpace(rebuilt.reconstructedText.slice(fold.start, fold.end));
+            if (seen.has(block))
+            {
+                kept = kept.slice(0, fold.start) + kept.slice(fold.end);
+                leftOut++;
+            }
+            seen.add(block);
+        }
+        foldedEmails += folds.length > 0 ? 1 : 0;
+        expect(body, where).toBe(squashWhiteSpace(email.rebuilt!.movedHeaders === 0 ? kept : `${headerLines}\n${kept}`));
         expect(text.startsWith(want.first), `${where}: starts with "${want.first}"`).toBe(true);
-        expect(body.endsWith(want.last), `${where}: ends with "${want.last}"`).toBe(true);
+        expect(text.endsWith(want.last), `${where}: ends with "${want.last}"`).toBe(true);
         // The bookmark ends with the subject; a long one is cut (MAX_BOOKMARK_LENGTH, ending with U+2026).
         const bookmark = pdf.index.entries[k]!.bookmark;
         const shownSubject = bookmark.slice(bookmark.indexOf(': ') + 2);
         expect(shownSubject === want.subject || (shownSubject.endsWith('\u2026') && want.subject.startsWith(shownSubject.slice(0, -1))), where).toBe(true);
     });
+    // The four workshop emails fold their block; the first one printed keeps it, the three later ones leave it
+    // out, so the PDF prints the signature once. The client's emails end differently each time: nothing folded.
+    expect([foldedEmails, leftOut]).toEqual([4, 3]);
+    const pdfText = squashWhiteSpace(pdf.emails.map((e) => e.body.map(lineText).join('\n')).join('\n'));
+    const workshopEmail = result.reconstructed.find((r) => r.segments !== undefined)!;
+    const signatureFold = workshopEmail.segments!.find((s) => s.folded)!;
+    const signatureText = squashWhiteSpace(workshopEmail.rebuilt.reconstructedText.slice(signatureFold.start, signatureFold.end));
+    expect(signatureText.split(' ').length).toBeGreaterThan(30);
+    expect(pdfText.split(signatureText).length - 1).toBe(1);
+    // Collapse, never delete: each folded block is still in its rebuilt text (the preview shows it, folded).
+    for (const r of result.reconstructed)
+    {
+        expect((r.segments ?? []).map((s) => r.rebuilt.reconstructedText.slice(s.start, s.end)).join('')).toBe(r.segments === undefined ? '' : r.rebuilt.reconstructedText);
+    }
     const last = pdf.emails[10]!;
     expect(last.rebuilt).toBeNull();
     expect(fieldOf(last, 'Subject')).toBe(message.subject);

@@ -49,6 +49,10 @@
 // Source/web-page-logic/rebuilt-email-display.ts); for a text quoted in several emails, the text
 // and header shown are the ones read from its own source when that one is
 // in the PDF, else from the source in the PDF that comes first.
+// Its text is the rebuilt text (under the moved header lines, see below)
+// less the signature blocks rule 3 of Source/thread-analysis/output-plan.ts
+// leaves out, applied across the real and rebuilt emails in PDF order
+// (task 9.9b-2, user decision F4; rebuiltPlans, SIGNATURES IN REBUILT EMAILS).
 // NO-REPEAT RULE (user decision 2026-11-06, task 8.10): when "Print full
 // original text" is off, no email is printed twice. A part of a real
 // email's body that the PDF prints as an email of its own is left out of
@@ -283,7 +287,9 @@ import { FORWARDED_SEPARATOR } from '../email-reading/forwarded-block';
 import { lineRanges } from '../thread-analysis/fold-segments';
 import { headerLabelCounts } from '../thread-analysis/quoted-header';
 import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-analysis/link-rebuilt-messages';
+import { planRebuiltText } from '../thread-analysis/output-plan';
 import { mapOffsets } from '../thread-analysis/same-text-offsets';
+import { senderKeyOf, senderKeyOfMailboxes, signatureBlockKey } from '../thread-analysis/signature-detection';
 import { formatInZone, formatSenderLocal, isDisplayableMs } from '../thread-analysis/time-format';
 import { displayAuthor } from '../web-page-logic/display-author';
 import { FILE_CHAIN_SEPARATOR, fileChain } from '../web-page-logic/file-chain';
@@ -2134,6 +2140,113 @@ export interface NoRepeatResult
      * full original text".
      */
     readonly restored: ReadonlyMap<number, BodyIntervals>;
+    /**
+     * Per rebuilt entry in the PDF (its id), its signature plans (rebuiltPlans, task 9.9b-2). Empty
+     * under "Print full original text" (no rebuilt email is in the PDF then).
+     */
+    readonly rebuiltPlans: ReadonlyMap<number, RebuiltPlan>;
+}
+
+/** The signature plans of one rebuilt entry in the PDF (NoRepeatResult.rebuiltPlans). */
+export interface RebuiltPlan
+{
+    /** Over the text of the copy the PDF prints (slot.source.shown, rebuiltInPdf). */
+    readonly shown: MessagePlan;
+    /** Over the entry's own text (what its preview card shows); the same plan when the PDF prints the entry itself. */
+    readonly own: MessagePlan;
+}
+
+/**
+ * SIGNATURES IN REBUILT EMAILS (task 9.9b-2, user decision F4: "the same way as real emails"). The
+ * thread analysis folds a rebuilt email's signature by the rules of a real email
+ * (AnalyzedRebuiltMessage.segments); this decides which of those blocks the PDF prints, as rule 3
+ * of Source/thread-analysis/output-plan.ts does for a real email: walking the PDF order, a block is
+ * left out when the same block (signatureBlockKey) was already KEPT for the same sender in an email
+ * before it, real or rebuilt (a real one as the PDF prints it: its plan's kept ranges after the
+ * no-repeat cut `elsewhere`, as printedNowhere reads them; a rebuilt one as planRebuiltText keeps
+ * it); the first one is printed. The card's own plan (`own`) and the printed copy's plan
+ * (`shown`) are each decided on what was kept BEFORE this email (also when the PDF prints the entry
+ * as another copy); `own` works on a copy of the kept set, so it never marks a block as printed that
+ * only the card holds. The sender of a rebuilt email is the address of its quoted From
+ * (senderKeyOfMailboxes), compared as a real email's (senderKeyOf). The real emails' plans are
+ * not changed: a real email AFTER a rebuilt one still prints a block that only the rebuilt one kept
+ * (printed twice rather than lost). A rebuilt email with no folds is printed whole, as before.
+ * The preview labels the folds of a rebuilt card from these plans
+ * (Source/web-page-logic/printed-elsewhere.ts), so it says what the PDF does.
+ */
+function rebuiltPlans(
+    result: ThreadAnalysisResult,
+    slots: readonly PdfSlot[],
+    plans: ReadonlyMap<number, MessagePlan | undefined>,
+    elsewhere: ReadonlyMap<number, BodyIntervals>,
+    policy: OutputPolicy,
+): Map<number, RebuiltPlan>
+{
+    const out = new Map<number, RebuiltPlan>();
+    const kept = new Map<string, Set<string>>();
+    const senderOf = (read: () => string): string =>
+    {
+        try
+        {
+            return read();
+        }
+        catch
+        {
+            return '';
+        }
+    };
+    for (const slot of slots)
+    {
+        if (slot.kind === 'email')
+        {
+            const message = result.messages[slot.position]?.message;
+            const plan = plans.get(slot.position);
+            if (message === undefined || !hasValidRanges(plan, message.bodyText.length) || plan.fallback)
+            {
+                continue;
+            }
+            const sender = senderOf(() => senderKeyOf(message));
+            if (sender === '')
+            {
+                continue;
+            }
+            // What the PDF prints of it: its plan after the no-repeat cut, as printedNowhere reads it (a kept
+            // block inside a part printed elsewhere is not printed HERE, so it does not count as printed before).
+            for (const range of withoutPrintedElsewhere(message.bodyText, plan.ranges, elsewhere.get(slot.position) ?? NO_INTERVALS).ranges)
+            {
+                if (range.keep && range.reason === 'signature')
+                {
+                    let set = kept.get(sender);
+                    if (set === undefined)
+                    {
+                        set = new Set();
+                        kept.set(sender, set);
+                    }
+                    set.add(signatureBlockKey(message.bodyText.slice(range.start, range.end)));
+                }
+            }
+            continue;
+        }
+        const planFor = (rebuiltEntry: AnalyzedRebuiltMessage, memory: Map<string, Set<string>>): MessagePlan =>
+            planRebuiltText(rebuiltEntry.rebuilt.reconstructedText, rebuiltEntry.segments,
+                senderOf(() => senderKeyOfMailboxes(rebuiltEntry.rebuilt.from)), policy, memory);
+        const shownCopy = slot.source.shown.rebuilt;
+        // The card's own text when the PDF prints another copy: decided on a copy of what was kept so far.
+        const own = shownCopy.id === slot.entry.id ? null : planFor(slot.entry, new Map([...kept].map(([sender, set]) => [sender, new Set(set)])));
+        const shown = planFor(shownCopy, kept);
+        out.set(slot.entry.id, { shown, own: own ?? shown });
+    }
+    return out;
+}
+
+/** What the PDF prints of a rebuilt email's text: its signature plan's kept ranges (rebuiltPlans); the whole text without a usable plan. */
+function rebuiltPrintedText(text: string, plan: MessagePlan | undefined): { readonly text: string; readonly notLineStarts: ReadonlySet<number> }
+{
+    if (!hasValidRanges(plan, text.length) || plan.fallback)
+    {
+        return { text, notLineStarts: NO_JOINS };
+    }
+    return joinKeptLines(text, plan.ranges);
 }
 
 /**
@@ -2166,6 +2279,7 @@ function printedNowhere(
     plans: ReadonlyMap<number, MessagePlan | undefined>,
     elsewhere: ReadonlyMap<number, BodyIntervals>,
     moved: ReadonlyMap<number, readonly string[]>,
+    plansOfRebuilt: ReadonlyMap<number, RebuiltPlan>,
 ): Map<number, BodyIntervals>
 {
     const restored = new Map<number, BodyIntervals>();
@@ -2256,7 +2370,8 @@ function printedNowhere(
     {
         if (slot.kind === 'rebuilt')
         {
-            printed.add((moved.get(slot.entry.id) ?? []).join('') + slot.source.shown.rebuilt.rebuilt.reconstructedText);
+            const shownText = slot.source.shown.rebuilt.rebuilt.reconstructedText;
+            printed.add((moved.get(slot.entry.id) ?? []).join('') + rebuiltPrintedText(shownText, plansOfRebuilt.get(slot.entry.id)?.shown).text);
             continue;
         }
         const body = result.messages[slot.position]?.message.bodyText ?? '';
@@ -2329,7 +2444,7 @@ export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
     const order = planPdfOrder(result, positions, unfoldEverything ? [] : (input.rebuilt ?? []));
     if (unfoldEverything)
     {
-        return { order, parts: new Map(), elsewhere: new Map(), moved: new Map(), restored: new Map() };
+        return { order, parts: new Map(), elsewhere: new Map(), moved: new Map(), restored: new Map(), rebuiltPlans: new Map() };
     }
     const planByPosition = new Map<number, MessagePlan | undefined>();
     for (const slot of order.slots)
@@ -2353,8 +2468,9 @@ export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
     {
         elsewhere.set(position, mergeParts(list));
     }
-    const restored = printedNowhere(result, order, planByPosition, elsewhere, moved);
-    return { order, parts, elsewhere, moved, restored };
+    const plansOfRebuilt = rebuiltPlans(result, order.slots, planByPosition, elsewhere, input.policy);
+    const restored = printedNowhere(result, order, planByPosition, elsewhere, moved, plansOfRebuilt);
+    return { order, parts, elsewhere, moved, restored, rebuiltPlans: plansOfRebuilt };
 }
 
 /** pdfBodyText, and whether the no-repeat rule left something out. `restored`: see NoRepeatResult.restored. */
@@ -2789,7 +2905,7 @@ function rebuiltDateParts(rebuiltEntry: AnalyzedRebuiltMessage, input: BuildPdfI
  * rest of its text), so nothing is lost and they sit under its header.
  */
 function buildRebuiltEmail(entry: AnalyzedRebuiltMessage, source: RebuiltInPdf, number: number, input: BuildPdfInput,
-    moved: readonly string[]): EmailParts
+    moved: readonly string[], plan: MessagePlan | undefined): EmailParts
 {
     const { strings } = input;
     const shownEntry = source.shown.rebuilt;
@@ -2826,7 +2942,11 @@ function buildRebuiltEmail(entry: AnalyzedRebuiltMessage, source: RebuiltInPdf, 
     fields.push({ label: strings.subjectLabel,
         value: [subject !== null ? sanitizer.line(subject, 'field-value') : ownTextLine(strings.noSubject, 'muted')] });
 
-    const lines = bodyLines(moved.join('') + shownMessage.reconstructedText);
+    // Its text less the signature blocks its plan leaves out (rebuiltPlans, task 9.9b-2), under the moved header lines.
+    const movedText = moved.join('');
+    const printed = rebuiltPrintedText(shownMessage.reconstructedText, plan);
+    const notLineStarts = new Set([...printed.notLineStarts].map((offset) => offset + movedText.length));
+    const lines = bodyLines(movedText + printed.text, { notLineStarts });
     sanitizer.codedCount += lines.codedCount;
     // Not expected since task 8.14 (an entry whose rebuilt text is empty gets no slot, planPdfOrder): only
     // a copy shown in its place (rebuiltInPdf) could still be empty. Kept as the placeholder, never dropped.
@@ -2887,6 +3007,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
         elsewhere,
         moved,
         restored,
+        rebuiltPlans: plansOfRebuilt,
     } = applyNoRepeatRule(
         { result, positions, plans, policy: input.policy, rebuilt: input.rebuilt, rebuildingOff: input.rebuildingOff, unticked: input.unticked });
     const emails: PdfEmail[] = [];
@@ -2901,7 +3022,7 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
         let parts: EmailParts;
         if (slot.kind === 'rebuilt')
         {
-            parts = buildRebuiltEmail(slot.entry, slot.source, slot.number, input, moved.get(slot.entry.id) ?? []);
+            parts = buildRebuiltEmail(slot.entry, slot.source, slot.number, input, moved.get(slot.entry.id) ?? [], plansOfRebuilt.get(slot.entry.id)?.shown);
         }
         else
         {

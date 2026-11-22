@@ -31,6 +31,10 @@
 //    result: messages, segments, counts and positionByIndex are exactly
 //    what they would be without it. A rebuilt message is a view of a slice
 //    of its source body; the source body stays whole in `messages`.
+// 7. Fold the signatures of the rebuilt messages (task 9.9b-2, user decision
+//    F4; withRebuiltSignatures): the rules of step 4c, the frequency rule
+//    counting the sender's real AND rebuilt messages (each email once). Only
+//    ADDS `segments` to a rebuilt message; the real messages stay as above.
 //
 // Indices: every `index` and `related` number in the result (AnalyzedMessage.index,
 // MergedCopy.index, DedupeWarning.related, Segment.related) is an INPUT
@@ -117,7 +121,7 @@ import { detectQuoteMarkers } from './quote-markers';
 import { detectReplyHeaders } from './reply-header';
 import { mapOffsets } from './same-text-offsets';
 import { buildSegments, checkSegments, joinSegments, type FoldRange } from './fold-segments';
-import { detectSignatures, senderKeyOf } from './signature-detection';
+import { detectSignatures, senderKeyOf, senderKeyOfMailboxes, type SignatureInput } from './signature-detection';
 import { linkRebuilt, type LinkSource } from './link-rebuilt-messages';
 import { MAX_QUOTE_DEPTH, MAX_RECONSTRUCTED, MAX_SOURCE_LENGTH, reconstructQuotedMessages, removeQuoteMarks } from './reconstruct-quoted-messages';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
@@ -943,6 +947,123 @@ function heldByKept(
 }
 
 /**
+ * Where the own text of a rebuilt message ends, for the signature detector (step 7): the start of
+ * the first quote-marker or reply-header fold in its text (a deeper quote, or a header the rebuild
+ * did not read), as `ownTextEnd` for a real email (step 4c); the text length when there is none.
+ * null when a detector throws or does not return a list: that text then gets no signature fold.
+ */
+function rebuiltOwnTextEnd(rebuilt: ReconstructedMessage, parts: ThreadAnalysisParts): number | null
+{
+    const text = rebuilt.reconstructedText;
+    const subject = typeof rebuilt.subject === 'string' ? rebuilt.subject : undefined;
+    let end = text.length;
+    for (const detect of [(): unknown => parts.detectQuoteMarkers(text), (): unknown => parts.detectReplyHeaders(text, subject)])
+    {
+        try
+        {
+            const folds = detect();
+            if (!Array.isArray(folds))
+            {
+                return null;
+            }
+            for (const fold of folds as readonly unknown[])
+            {
+                const start: unknown = isFoldObject(fold) ? fold.start : undefined;
+                if (isInteger(start) && start >= 0 && start < end)
+                {
+                    end = start;
+                }
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+    return end;
+}
+
+/**
+ * Step 7 (task 9.9b-2, user decision F4): the signature folds of every rebuilt message, by the rules
+ * of a real email (signature-detection.ts: the "-- " delimiter, and the frequency rule with the same
+ * thresholds), as its `segments`. ONE detector run over the real kept messages (their own text up to
+ * `ownTextEnd`, exactly as in step 4c) and the rebuilt texts, so the frequency rule counts both: a
+ * block the sender repeats in their rebuilt emails and in their files. Each email is counted once: a
+ * rebuilt message linked to a real file (link 'real': the file is counted) or to another rebuilt one
+ * ('same-as': that entry is counted) is folded but not counted (SignatureInput.counted), so one email
+ * quoted in five later emails is never "five messages" whose own text all looks repeated. The sender
+ * is the address of the quoted header's From (senderKeyOfMailboxes), compared as a real email's.
+ * The real messages are NOT changed: their segments were made in step 5 from the real messages
+ * alone (the result stays what it would be without rebuilding), and the folds this run gives them
+ * are dropped.
+ * Safety net (when unsure, show): a detector that throws or returns something that is not a list
+ * leaves every rebuilt text unfolded; a bad list for one text, or segments that are not a valid
+ * cover of it (checkSegments, joinSegments), leave that one unfolded. Only folds with reason
+ * 'signature' are used. A rebuilt message with no fold gets no `segments` (shown whole, as before).
+ */
+function withRebuiltSignatures(reconstructed: readonly AnalyzedRebuiltMessage[], work: readonly Work[], ownTextEnd: readonly number[],
+    parts: ThreadAnalysisParts): readonly AnalyzedRebuiltMessage[]
+{
+    if (reconstructed.length === 0)
+    {
+        return reconstructed;
+    }
+    let lists: readonly unknown[];
+    try
+    {
+        const inputs: SignatureInput[] = work.map((item, k) => ({ bodyText: item.message.bodyText, senderKey: senderKeyOf(item.message), ownTextEnd: ownTextEnd[k] }));
+        for (const rebuiltEntry of reconstructed)
+        {
+            const end = rebuiltOwnTextEnd(rebuiltEntry.rebuilt, parts);
+            // A text whose own end is unknown has no own line (end 0) and is not counted.
+            inputs.push({
+                bodyText: rebuiltEntry.rebuilt.reconstructedText,
+                senderKey: senderKeyOfMailboxes(rebuiltEntry.rebuilt.from),
+                ownTextEnd: end ?? 0,
+                counted: end !== null && rebuiltEntry.link === 'entry',
+            });
+        }
+        const result: unknown = parts.detectSignatures(inputs);
+        if (!Array.isArray(result))
+        {
+            return reconstructed;
+        }
+        lists = result;
+    }
+    catch
+    {
+        return reconstructed;
+    }
+    return reconstructed.map((rebuiltEntry, k) =>
+    {
+        const text = rebuiltEntry.rebuilt.reconstructedText;
+        try
+        {
+            const list: unknown = lists[work.length + k];
+            if (!Array.isArray(list))
+            {
+                return rebuiltEntry;
+            }
+            const folds = (list as readonly unknown[]).filter((fold): fold is FoldRange => isFoldObject(fold) && fold.reason === 'signature');
+            if (folds.length === 0)
+            {
+                return rebuiltEntry;
+            }
+            const segments = parts.buildSegments(text, folds);
+            if (checkSegments(text, segments).length > 0 || joinSegments(text, segments) !== text || !segments.some((s) => s.folded))
+            {
+                return rebuiltEntry;
+            }
+            return { ...rebuiltEntry, segments };
+        }
+        catch
+        {
+            return rebuiltEntry;
+        }
+    });
+}
+
+/**
  * Runs the whole thread analysis (see the steps at the top of this file).
  * `results`: one parse result per dropped file, in drop order.
  * `parts`: tests only (see ThreadAnalysisParts).
@@ -1156,6 +1277,9 @@ export function analyzeThread(results: readonly ParseResult[], parts: ThreadAnal
             reconstructionWarnings.push({ index: item.index, code: 'reconstruct-failed' });
         }
     }
+
+    // 7. Signatures in the rebuilt messages (task 9.9b-2), counted with the real ones.
+    reconstructed = withRebuiltSignatures(reconstructed, work, ownTextEnd, parts);
 
     parts.onStage?.('done');
     return {

@@ -364,6 +364,14 @@ unticked).
   test conversations this happened in Dutch Outlook quotes (2 of 11), but
   the rule is the same in every language. The text itself is not lost: it
   is all still in the email that quotes it.
+- A repeated signature is folded in a rebuilt email as in any other email,
+  and the PDF prints it the first time only. But an email you added that
+  comes after a rebuilt one in the PDF may print the same signature again:
+  it can repeat, it is never lost.
+- A rebuilt email that is almost a copy of another email by the same
+  sender can have nearly all of its text folded as "signature" in the
+  preview. Nothing is lost: the PDF still prints that text at least once.
+  The emails you added have the same limit.
 
 ### Accuracy on synthetic test conversations
 

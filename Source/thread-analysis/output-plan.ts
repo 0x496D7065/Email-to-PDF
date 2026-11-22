@@ -166,6 +166,9 @@
 //    are left out with it and do not count as kept. (Cosmetic, not handled: a
 //    signature fold that includes the closing name can leave the "Thanks,"
 //    above it dangling.)
+//    Emails rebuilt from quoted text get the same rule (planRebuiltText,
+//    task 9.9b-2), walked in PDF order together with the real ones by
+//    Source/pdf-export/build-pdf-document.ts (rebuiltPlans).
 // 4. Never left out: text that is not folded, and anything at all when
 //    unfoldEverything is true. If the plan would leave an email with no
 //    non-whitespace text kept, the WHOLE body is kept instead and
@@ -983,5 +986,114 @@ export function* planOutputSteps(messages: readonly PlanInput[], policy: OutputP
         }
 
         return { ranges, tailStart: classified.tailStart, omittedSignatures, keptAllBecauseEmpty, fallback: false };
+    }
+}
+
+// ------------------------------------------------------- rebuilt emails
+
+/**
+ * The plan of the text of an email REBUILT from quoted text (task 9.9b-2, user decision F4):
+ * `text` is its rebuilt text (ReconstructedMessage.reconstructedText), `segments` its signature
+ * folds (AnalyzedRebuiltMessage.segments, absent when nothing is folded), `sender` its sender key
+ * (senderKeyOfMailboxes). Rule 3 as for a real email: a run of folded 'signature' segments is one
+ * block, decided by decideSignature; with 'first-per-sender' it is left out only when `kept` (sender
+ * key -> signature blocks, signatureBlockKey) already holds it for that sender. Everything else is
+ * the writer's text, kept (a rebuilt text has no quoted history of its own to leave out: its quote
+ * is the next rebuilt email). Rule 4: when nothing with text would be kept, the whole text is kept.
+ * Rule 5: segments that are not a valid cover of the text, or a rule that throws, keep it whole
+ * (`fallback`). The blocks it keeps are added to `kept` after the whole text (a block repeated
+ * inside one text is not "earlier"), so the caller walks the emails in PDF order with one `kept`
+ * shared by the real and the rebuilt ones (Source/pdf-export/build-pdf-document.ts, rebuiltPlans).
+ * Never changes text: only ranges of `text`.
+ */
+export function planRebuiltText(
+    text: string,
+    segments: readonly Segment[] | undefined,
+    sender: string,
+    policy: OutputPolicy,
+    kept: Map<string, Set<string>>,
+): MessagePlan
+{
+    if (text.length === 0)
+    {
+        return wholeBody(text, false);
+    }
+    // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+    const isList: boolean = Array.isArray(segments);
+    if (!isList || segments === undefined)
+    {
+        return wholeBody(text, false); // nothing folded
+    }
+    try
+    {
+        if (checkSegments(text, segments).length > 0)
+        {
+            return wholeBody(text, true);
+        }
+        const isSignature = (segment: Segment | undefined): boolean =>
+            segment !== undefined && segment.folded && segment.reasons.includes('signature') && /\S/u.test(text.slice(segment.start, segment.end));
+        let ranges: PlanRange[] = [];
+        const newlyKept: string[] = [];
+        let omittedSignatures = 0;
+        let i = 0;
+        while (i < segments.length)
+        {
+            const segment = segments[i]!;
+            if (!isSignature(segment))
+            {
+                push(ranges, { start: segment.start, end: segment.end, keep: true, reason: 'text' });
+                i++;
+                continue;
+            }
+            let j = i;
+            while (isSignature(segments[j + 1]))
+            {
+                j++;
+            }
+            const end = segments[j]!.end;
+            const key = signatureBlockKey(text.slice(segment.start, end));
+            const decision = decideSignature(policy, sender !== '' && (kept.get(sender)?.has(key) ?? false));
+            if (decision.keep)
+            {
+                newlyKept.push(key);
+            }
+            else
+            {
+                omittedSignatures++;
+            }
+            push(ranges, { start: segment.start, end, keep: decision.keep, reason: decision.reason });
+            i = j + 1;
+        }
+        // Rule 4: nothing with text left -> keep the whole text.
+        const keptAllBecauseEmpty = /\S/u.test(text) && !ranges.some((r) => r.keep && /\S/u.test(text.slice(r.start, r.end)));
+        if (keptAllBecauseEmpty)
+        {
+            // The blocks forced back in here are not added to `kept`, so a later email from the same sender may print that signature again (a repeat, never a loss).
+            const all: PlanRange[] = [];
+            for (const range of ranges)
+            {
+                push(all, { ...range, keep: true });
+            }
+            ranges = all;
+            omittedSignatures = 0;
+        }
+        if (sender !== '')
+        {
+            let set = kept.get(sender);
+            if (set === undefined)
+            {
+                set = new Set();
+                kept.set(sender, set);
+            }
+            for (const key of newlyKept)
+            {
+                set.add(key);
+            }
+        }
+        return { ranges, tailStart: null, omittedSignatures, keptAllBecauseEmpty, fallback: false };
+    }
+    catch
+    {
+        return wholeBody(text, true);
     }
 }

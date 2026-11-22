@@ -159,9 +159,15 @@ test('by default, rebuilt cards appear before the email they come from, labelled
     // header above it (user decision F3, task 9.9a); its text without the ">" marks.
     const gmail = rebuilt.nth(1);
     await expect(gmail.locator('.message-subject')).toHaveText('Re: Office desks and chairs');
-    const text = (await gmail.locator('.body-text').textContent()) ?? '';
+    const text = (await gmail.locator('.body-text').allTextContents()).join('');
     expect(text).toContain('Thank you for your message.');
     expect(text).not.toMatch(/^>/m);
+    // Its signature and disclaimer, folded as in a real email (task 9.9b-2, user decision F4), one click away.
+    const fold = gmail.locator('details.fold');
+    await expect(fold).toHaveCount(1);
+    await expect(fold).not.toHaveAttribute('open', /.*/);
+    await expect(fold.locator('.fold-what')).toHaveText(/^Signature or repeated notice, \d+ lines$/);
+    await expect(fold.locator('.pdf-label')).toHaveText(`${en.pdf.label.in.replace('{reasons}', en.pdf.reason.signature)}`);
     // The email added keeps all its text, quotes included (folded, one click away).
     const source = items.nth(3);
     await expect(source.locator('.message-body')).toContainText('Thank you for your message.');
@@ -225,7 +231,10 @@ test('the keyboard goes through the toolbar, then each card in list order; a car
         await page.keyboard.press('Tab');
         order.push(await page.evaluate(() => document.activeElement?.id ?? ''));
     }
-    expect(order).toEqual(['preview-show-folded', 'pdf-everything', 'rebuilt-include-all', 'include-rebuilt-2', 'include-rebuilt-1', 'include-rebuilt-0', 'include-0']);
+    // Each card's folded signature (task 9.9b-2) is a Tab stop too, after its checkbox, as a fold in a real email.
+    const summaries = await page.locator('#preview-list > li.message-rebuilt details.fold > summary').count();
+    expect(summaries).toBe(3);
+    expect(order).toEqual(['preview-show-folded', 'pdf-everything', 'rebuilt-include-all', 'include-rebuilt-2', '', 'include-rebuilt-1', '']);
 
     const card = page.locator('#preview-list > li.message-rebuilt').nth(1);
     await card.getByRole('checkbox').focus();
@@ -346,5 +355,18 @@ test('a phone forward of a flat thread (Android HTML): the empty emails put noth
     expect(text).not.toContain(`${heading(12)} From`);
     expect(text).not.toContain('17 nov. 2026 19:23');
     expect(text).not.toContain('27 sept. 2026 08:31');
+    // Task 9.9b-2 (user decision F4): the workshop's 15-line signature is folded in its 4 rebuilt emails,
+    // printed in the first one only; the preview's labels say the same.
+    const signatureLine = 'Zone artisanale Exemple, hall B';
+    expect(text.split(signatureLine)).toHaveLength(2);
+    const rebuiltFolds = page.locator('#preview-list > li.message-rebuilt details.fold');
+    await expect(rebuiltFolds).toHaveCount(4);
+    const signatureIn = en.pdf.label.in.replace('{reasons}', en.pdf.reason.signature);
+    const signatureOut = en.pdf.label.out.replace('{reasons}', en.pdf.reason['repeated-signature']);
+    await expect(rebuiltFolds.locator('.pdf-label')).toHaveText([signatureIn, signatureOut, signatureOut, signatureOut]);
+    for (const fold of await rebuiltFolds.all())
+    {
+        await expect(fold.locator('.body-folded')).toContainText(signatureLine);
+    }
     await expectNothingLeftThePage(page, 1);
 });

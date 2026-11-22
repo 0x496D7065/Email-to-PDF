@@ -9,6 +9,7 @@ import {
     detectSignatures,
     minRepeat,
     senderKeyOf,
+    senderKeyOfMailboxes,
     type SignatureInput,
 } from './signature-detection';
 import type { NormalizedMessage } from '../../Header/parsed-email';
@@ -82,6 +83,23 @@ describe('senderKeyOf', () =>
         expect(senderKeyOf({ ...base, sender: { name: 'Bob', address: 'BOB@furniture.example.test' } })).toBe(BOB);
         expect(senderKeyOf({ ...base, from: [{ name: 'Bob', address: '' }], sender: { name: 'B', address: BOB } })).toBe(BOB);
         expect(senderKeyOf(base)).toBe('');
+    });
+});
+
+describe('senderKeyOfMailboxes (a rebuilt email\'s quoted From, task 9.9b-2)', () =>
+{
+    it('uses the first address, lower-cased and trimmed, as senderKeyOf does for a real email', () =>
+    {
+        expect(senderKeyOfMailboxes([{ name: 'Bob (Sample Furniture) ', address: ' Bob@Furniture.Example.TEST ' }, { name: 'A', address: ALICE }])).toBe(BOB);
+        expect(senderKeyOfMailboxes([{ name: 'Bob', address: BOB }])).toBe(senderKeyOf({ from: [{ name: 'Bob', address: 'BOB@furniture.example.test' }] } as unknown as NormalizedMessage));
+    });
+    it('is empty for a name alone, no mailbox, or data that is not a mailbox list', () =>
+    {
+        expect(senderKeyOfMailboxes([{ name: 'Bob Sample', address: '' }])).toBe('');
+        expect(senderKeyOfMailboxes([])).toBe('');
+        expect(senderKeyOfMailboxes(null as unknown as [])).toBe('');
+        expect(senderKeyOfMailboxes([null, { name: 'x', address: 5 }] as unknown as [])).toBe('');
+        expect(senderKeyOfMailboxes([{ name: 'x', address: 5 }] as unknown as [])).toBe('');
     });
 });
 
@@ -189,6 +207,37 @@ describe('detectSignatures: frequency rule', () =>
         const withDashes = 'Hi\n-- \nBob Sample\n';
         const [only] = detect([{ bodyText: withDashes, senderKey: '' }]);
         expect(foldedText(withDashes, only ?? [])).toEqual(['-- \nBob Sample\n']);
+    });
+
+    it('a message with counted: false is folded by the counts of the others but adds nothing to them (task 9.9b-2)', () =>
+    {
+        // Two of Bob's messages: the block repeats; a third input, a copy of one of them, is folded the same way.
+        const both = detect([
+            { bodyText: bob1, senderKey: BOB },
+            { bodyText: bob2, senderKey: BOB },
+            { bodyText: bob2, senderKey: BOB, counted: false },
+        ]);
+        expect(foldedText(bob2, both[2] ?? [])).toEqual([`${BOB_TAIL}\n`]);
+        // One message of Bob's and copies of it that do not count: still one message, nothing folds.
+        expect(detect([
+            { bodyText: bob1, senderKey: BOB },
+            { bodyText: bob1, senderKey: BOB, counted: false },
+            { bodyText: bob2, senderKey: BOB, counted: false },
+        ])).toEqual([[], [], []]);
+        // They do not raise the share needed either: 2 counted messages need 2 (minRepeat(2)); counted, 20 more
+        // messages without the block would need 7 (minRepeat(22)) and the block would stay shown.
+        const copies = Array.from({ length: 20 }, (_, k) => ({ bodyText: `Hello Alice,\n\nShort note ${String(k)}.\n\nBob\n`, senderKey: BOB, counted: false }));
+        const withCopies = detect([{ bodyText: bob1, senderKey: BOB }, { bodyText: bob2, senderKey: BOB }, ...copies]);
+        expect(detect([{ bodyText: bob1, senderKey: BOB }, { bodyText: bob2, senderKey: BOB }, ...copies.map((c) => ({ ...c, counted: true }))])[0]).toEqual([]);
+        expect(foldedText(bob1, withCopies[0] ?? [])).toEqual([`${BOB_TAIL}\n`]);
+        // Only an explicit false: any other value counts (when unsure, as before).
+        expect(detect([
+            { bodyText: bob1, senderKey: BOB },
+            { bodyText: bob2, senderKey: BOB, counted: 'no' as unknown as boolean },
+        ]).map((folds) => folds.length > 0)).toEqual([true, true]);
+        // The delimiter rule applies to them as to any message.
+        const withDashes = 'Hi\n-- \nBob Sample\n';
+        expect(foldedText(withDashes, detect([{ bodyText: withDashes, senderKey: BOB, counted: false }])[0] ?? [])).toEqual(['-- \nBob Sample\n']);
     });
 
     it('does not fold a repeated one-line greeting or closing', () =>

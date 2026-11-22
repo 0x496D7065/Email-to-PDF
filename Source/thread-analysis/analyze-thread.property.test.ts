@@ -452,6 +452,9 @@ function onlyMarksRemoved(slice: string, text: string): boolean
 const NO_REBUILD: ThreadAnalysisParts = { ...DEFAULT_THREAD_ANALYSIS_PARTS, reconstructQuotedMessages: () => [] };
 
 /** The rebuild invariants of one thread analysis run (see the file comment); `baseline` = the same run with rebuilding off. */
+/** Rebuilt messages with signature folds seen by checkRebuilt (task 9.9b-2). */
+let rebuiltWithFolds = 0;
+
 function checkRebuilt(out: ThreadAnalysisResult, baseline?: ThreadAnalysisResult): void
 {
     if (baseline !== undefined)
@@ -477,6 +480,20 @@ function checkRebuilt(out: ThreadAnalysisResult, baseline?: ThreadAnalysisResult
             expect(rebuiltEntry.rebuilt.reconstructedText).toBe(slice);
         }
         expect(rebuiltEntry.rebuilt.quoteMarksRemoved).toBe(depth > 0);
+        // Task 9.9b-2: its signature folds only group its text (collapse, never delete), only as 'signature',
+        // and never its first line with text (some own words always stay shown).
+        if (rebuiltEntry.segments !== undefined)
+        {
+            const text = rebuiltEntry.rebuilt.reconstructedText;
+            const segments = rebuiltEntry.segments;
+            expect(checkSegments(text, segments), `rebuilt ${id}: segments`).toEqual([]);
+            expect(joinSegments(text, segments), `rebuilt ${id}: segments give the text back`).toBe(text);
+            expect(segments.some((s) => s.folded), `rebuilt ${id}: segments only with a fold`).toBe(true);
+            expect(segments.every((s) => !s.folded || (s.reasons.join() === 'signature' && s.related.length === 0)), `rebuilt ${id}: reasons`).toBe(true);
+            const line = firstLine(text);
+            expect(line !== null && segments.every((s) => !s.folded || s.start >= line.offset + line.text.length), `rebuilt ${id}: first line folded`).toBe(true);
+            rebuiltWithFolds++;
+        }
         const list = bySource.get(rebuiltEntry.sourceIndex) ?? [];
         list.push(id);
         bySource.set(rebuiltEntry.sourceIndex, list);
@@ -642,6 +659,8 @@ describe('analyzeThread: collapse-never-delete over random synthetic threads', (
         expect(conflictCount).toBeGreaterThan(10);
         expect(rebuilt).toBeGreaterThan(300);
         expect(links.get('entry') ?? 0).toBeGreaterThan(50);
+        // Task 9.9b-2: rebuilt messages get their signature folded too.
+        expect(rebuiltWithFolds).toBeGreaterThan(10);
         for (const reason of FOLD_REASONS)
         {
             expect(reasonsSeen.get(reason) ?? 0, `fold reason ${reason}`).toBeGreaterThan(0);

@@ -13,15 +13,16 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../web-page/translations';
+import { pdfCut } from '../web-page-logic/printed-elsewhere';
 import { previewOrder, rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder } from './build-pdf-document';
+import { applyNoRepeatRule, buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder, type NoRepeatInput } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { bodyLines, lineText } from './pdf-text-transforms';
-import type { OutputPolicy } from '../../Header/output-plan';
+import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage } from '../../Header/parsed-email';
 import type { PdfBlock, PdfDocument, PdfEmail, PdfLine, PdfStrings } from '../../Header/pdf-document-model';
 import type { AnalyzedRebuiltMessage, QuotedDate } from '../../Header/rebuilt-emails';
-import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
+import type { Segment, ThreadAnalysisResult } from '../../Header/thread-analysis-result';
 
 let fixtures: Map<string, NormalizedMessage>;
 beforeAll(async () =>
@@ -341,18 +342,35 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
         expect(gmail!.fields.find((f) => f.label === 'Subject')!.value).toEqual([[{ role: 'field-value', text: 'Re: Office desks and chairs' }]]);
     });
 
-    it('carries no note of its own, and its rebuilt text, whole', () =>
+    it('carries no note of its own, and its rebuilt text, whole but for a signature block already printed (task 9.9b-2)', () =>
     {
         const result = analysisOf(LAST);
         const pdfDocument = build(result);
         expect(rebuiltOf(pdfDocument).map((e) => e.notes)).toEqual([[], [], []]);
-        for (const email of rebuiltOf(pdfDocument))
+        // Oldest first: Alice's request, Bob's answer, Alice's "Wednesday" reply. Both of Alice's texts end
+        // with the same block (her closing name and her "-- " signature): folded in both (the frequency
+        // rule counts her two rebuilt emails), printed the first time only, as for real emails (rule 3).
+        const signature = ['Alice', '', '-- ', 'Alice Example', 'Sent from my laptop'];
+        const [request, answer, reply] = rebuiltOf(pdfDocument);
+        expect(reply!.body.map(text)).toEqual(['Wednesday at 10:00 works for me. See you then.']);
+        expect(request!.body.map(text).slice(-signature.length)).toEqual(signature);
+        for (const email of [request!, answer!])
         {
             const rebuiltEntry = result.reconstructed[email.rebuilt!.id]!;
+            expect(rebuiltEntry.segments?.some((s) => s.folded && s.reasons.includes('signature'))).toBe(true);
             const lines = bodyLines(rebuiltEntry.rebuilt.reconstructedText);
             expect(email.body.map(text)).toEqual(lines.lines.map(text));
+        }
+        for (const email of rebuiltOf(pdfDocument))
+        {
             expect(email.body.map(text).join('\n')).not.toMatch(/^>/m);
             expect(email.attachments).toBeNull();
+        }
+        // Policy 'all' (rule 3): every signature printed, so every rebuilt text whole.
+        const all = build(result, { policy: { ...DEFAULT_OUTPUT_POLICY, signatures: 'all' } });
+        for (const email of rebuiltOf(all))
+        {
+            expect(email.body.map(text)).toEqual(bodyLines(result.reconstructed[email.rebuilt!.id]!.rebuilt.reconstructedText).lines.map(text));
         }
     });
 
@@ -823,5 +841,196 @@ describe('"Print full original text" (policy.unfoldEverything; user decision 202
         expect(rebuiltOf(pdfDocument)).toEqual([]);
         expect(pdfDocument.emails.map((e) => e.number)).toEqual([1, 2]);
         expect(rebuiltOf(build(result))).not.toEqual([]);
+    });
+});
+
+describe('signatures of rebuilt emails in the PDF (task 9.9b-2, user decision F4: as for real emails)', () =>
+{
+    const ALICE = { name: 'Alice Example', address: 'alice@example.test' };
+    const CAROL = { name: 'Carol Writer', address: 'carol@client.test' };
+    const BLOCK = 'Kind regards,\nAlice Example\nExample Office Supplies\nPhone: +00 0 000 00 00\n';
+    let serial = 0;
+    const mail = (from: typeof ALICE, minutes: number, bodyText: string): NormalizedMessage => ({
+        ...fixture(LAST),
+        messageId: `rebuilt-signature-pdf-${String(++serial)}@example.test`,
+        inReplyTo: null,
+        references: [],
+        date: { utcMs: Date.UTC(2025, 2, 10, 9, minutes), original: '', offsetMinutes: 0, zoneKnown: true },
+        from: [from],
+        to: [],
+        cc: [],
+        subject: 'Re: Paper order',
+        bodyText,
+        source: { fileName: `rebuilt-signature-pdf-${String(serial)}.eml`, sha256: serial.toString(16).padStart(64, '0'), kind: 'eml' },
+    });
+    // Two files of Alice's (her block folded there: two real messages), then Carol quoting a THIRD email of Alice's.
+    const first = (): NormalizedMessage => mail(ALICE, 0, `Hello Carol,\nThe paper is ordered.\n\n${BLOCK}`);
+    const second = (): NormalizedMessage => mail(ALICE, 10, `Hello Carol,\nIt ships on Monday.\n\n${BLOCK}`);
+    const quoting = (): NormalizedMessage => mail(CAROL, 40, [
+        'Thanks Alice, noted.',
+        '',
+        'On Mon, 10 Mar 2025 at 09:20, Alice Example <alice@example.test> wrote:',
+        ...`Hello Carol,\nThe invoice follows tomorrow.\n\n${BLOCK}`.split('\n').map((line) => (line === '' ? '>' : `> ${line}`)),
+        '',
+    ].join('\n'));
+    const bodyText = (email: PdfEmail): string => email.body.map(text).join('\n');
+
+    it('a rebuilt email leaves out a block its sender\'s REAL email printed earlier in the PDF', () =>
+    {
+        const result = analyzeThread([first(), second(), quoting()].map((message) => ({ ok: true as const, message })));
+        expect(result.reconstructed.map((r) => r.link)).toEqual(['entry']);
+        expect(result.reconstructed[0]!.segments?.some((s) => s.folded)).toBe(true);
+        const pdfDocument = build(result);
+        expect(pdfDocument.emails.map((e) => (e.rebuilt === null ? 'real' : 'rebuilt'))).toEqual(['real', 'real', 'rebuilt', 'real']);
+        const [one, two, rebuilt] = pdfDocument.emails;
+        expect(bodyText(one!)).toContain('Example Office Supplies');
+        // Rule 3 for the real ones (unchanged) and, now, for the rebuilt one: printed once, in the first email.
+        expect(bodyText(two!)).not.toContain('Example Office Supplies');
+        expect(bodyText(rebuilt!)).toBe('Hello Carol,\nThe invoice follows tomorrow.');
+        // Her files out of the PDF: the rebuilt email is the first of hers, so it prints the block.
+        const without = build(result, { positions: [2] });
+        expect(bodyText(without.emails.find((e) => e.rebuilt !== null)!)).toContain('Example Office Supplies');
+    });
+
+    it('a real email AFTER a rebuilt one keeps its own plan (known limit: printed twice rather than lost)', () =>
+    {
+        // Alice's quoted email is the oldest: the rebuilt one keeps the block; her later files (their own
+        // plans, made from the real emails only) keep it in the first of them, as before task 9.9b-2.
+        const early = mail(CAROL, 40, quoting().bodyText.replace('09:20', '08:00'));
+        const result = analyzeThread([first(), second(), early].map((message) => ({ ok: true as const, message })));
+        const pdfDocument = build(result);
+        const texts = pdfDocument.emails.map(bodyText);
+        expect(texts.filter((t) => t.includes('Example Office Supplies'))).toHaveLength(2);
+        expect(pdfDocument.emails.findIndex((e) => e.rebuilt !== null)).toBe(0);
+    });
+
+    /** The reasons of a plan's folded ranges, "+" kept, "-" left out. */
+    const foldReasons = (plan: MessagePlan | undefined): string[] =>
+        (plan?.ranges ?? []).filter((r) => r.reason !== 'text').map((r) => `${r.reason}${r.keep ? '+' : '-'}`);
+    /** The no-repeat input the PDF step gets for `positions` and the rebuilt ids `rebuilt`. */
+    const noRepeatInput = (result: ThreadAnalysisResult, positions: readonly number[], rebuilt: readonly number[]): NoRepeatInput => ({
+        result,
+        positions,
+        plans: planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY),
+        policy: DEFAULT_OUTPUT_POLICY,
+        rebuilt,
+    });
+    /** Carol quoting Alice's email of 09:20 ("> " marks), its middle line given. */
+    const quotingAs = (minutes: number, note: string, line: string): NormalizedMessage => mail(CAROL, minutes, [
+        note,
+        '',
+        'On Mon, 10 Mar 2025 at 09:20, Alice Example <alice@example.test> wrote:',
+        ...`Hello Carol,\n${line}\n\n${BLOCK}`.split('\n').map((l) => (l === '' ? '>' : `> ${l}`)),
+        '',
+    ].join('\n'));
+
+    it('a card whose entry the PDF prints as another copy: each plan decided on what was printed BEFORE it, the preview gets the card\'s own', () =>
+    {
+        // Alice's email quoted in two of Carol's files, one with an extra blank line; her files (her block) are not in the PDF.
+        const result = analyzeThread([first(), second(), quotingAs(40, 'Thanks Alice, noted.', 'The invoice follows tomorrow.'),
+            quotingAs(50, 'Great, thank you.', 'The invoice follows tomorrow.\n')].map((message) => ({ ok: true as const, message })));
+        const entry = result.reconstructed.find((r) => r.link === 'entry')!;
+        const copy = result.reconstructed.find((r) => r.link === 'same-as')!;
+        expect(result.reconstructed).toHaveLength(2);
+        expect(copy.sameAs).toBe(entry.id);
+        expect(entry.rebuilt.reconstructedText).not.toBe(copy.rebuilt.reconstructedText);
+        expect([entry, copy].every((r) => r.segments?.some((s) => s.folded && s.reasons.includes('signature')) === true)).toBe(true);
+        // Only the COPY's file in the PDF: the entry is printed as that copy.
+        const positions = [result.positionByIndex[copy.sourceIndex]!];
+        const input = noRepeatInput(result, positions, [entry.id]);
+        const plans = applyNoRepeatRule(input).rebuiltPlans.get(entry.id)!;
+        expect(plans.shown).not.toBe(plans.own);
+        expect(plans.shown.ranges.at(-1)!.end).toBe(copy.rebuilt.reconstructedText.length);
+        expect(plans.own.ranges.at(-1)!.end).toBe(entry.rebuilt.reconstructedText.length);
+        // Nothing of Alice's printed before: the printed copy keeps her block (the card's own plan, decided first on
+        // a COPY of what was printed, must not mark it as printed), and so does the card's own plan.
+        expect(foldReasons(plans.shown)).toEqual(['signature+']);
+        expect(foldReasons(plans.own)).toEqual(['signature+']);
+        const printedCopy = rebuiltById(build(result, { positions, rebuilt: [entry.id] }), entry.id);
+        expect(bodyText(printedCopy)).toContain('Kind regards,\nAlice Example\nExample Office Supplies');
+        // The preview's card shows the entry's own text: it gets `own`, not the printed copy's plan.
+        const cardPlans = pdfCut({ ...input, rebuilt: [entry.id] }).rebuiltPlans;
+        expect(cardPlans.get(entry.id)).toEqual(plans.own);
+        expect(cardPlans.get(entry.id)).not.toEqual(plans.shown);
+    });
+
+    /** `result` with the segments of the real email at list position `position` replaced (a hand-made case). */
+    const withSegments = (result: ThreadAnalysisResult, position: number, segments: readonly Segment[]): ThreadAnalysisResult =>
+        ({ ...result, messages: result.messages.map((m, k) => (k === position ? { ...m, segments } : m)) });
+    /** A cover of `body`: shown up to `start`, folded from there to the end for `reasons`. */
+    const foldFrom = (body: string, start: number, reasons: Segment['reasons'], related: readonly number[]): Segment[] => [
+        { start: 0, end: start, folded: false, reasons: [], related: [] },
+        { start, end: body.length, folded: true, reasons, related },
+    ];
+
+    it('the PRINTED SOMEWHERE check reads a rebuilt email as printed, without the signature block it leaves out', () =>
+    {
+        // Hand-made (output-plan.ts rule 2, an overlap start): Carol's later file holds Alice's 09:20 email
+        // pasted without quote marks, folded as 'quoted-overlap' linked to Alice's file in the PDF. Its words
+        // are printed nowhere in a row (the rebuilt email prints her text WITHOUT the block her file printed
+        // first), so the check must give the piece back to Carol's file.
+        const pasted = `Hello Carol,\nThe invoice follows tomorrow.\n\n${BLOCK}`;
+        const forwardedBy = mail(CAROL, 50, `FYI, below is what Alice wrote.\n\n${pasted}`);
+        const analysed = analyzeThread([first(), second(), quoting(), forwardedBy].map((message) => ({ ok: true as const, message })));
+        expect(analysed.reconstructed.map((r) => r.link)).toEqual(['entry']);
+        const position = analysed.positionByIndex[3]!;
+        const body = forwardedBy.bodyText;
+        const result = withSegments(analysed, position, foldFrom(body, body.indexOf('Hello Carol'), ['quoted-overlap'], [0]));
+        const positions = result.messages.map((_, k) => k);
+        const ids = [result.reconstructed[0]!.id];
+        const rebuiltPlan = applyNoRepeatRule(noRepeatInput(result, positions, ids)).rebuiltPlans.get(ids[0]!)!;
+        expect(foldReasons(rebuiltPlan.shown)).toEqual(['repeated-signature-']);
+        const restored = applyNoRepeatRule(noRepeatInput(result, positions, ids)).restored.get(position);
+        expect(restored).toEqual([[body.indexOf('Hello Carol'), body.length]]);
+        const pdfDocument = build(result, { positions, rebuilt: ids });
+        const carolsFile = pdfDocument.emails.find((e) => e.rebuilt === null && bodyText(e).startsWith('FYI'))!;
+        expect(bodyText(carolsFile)).toContain('The invoice follows tomorrow.');
+    });
+
+    it('a real email\'s kept block counts as printed only where the no-repeat cut leaves it in that email', () =>
+    {
+        // Hand-made (the plan of her file is set by hand): Alice forwards her own 09:05 email, rebuilt and in the
+        // PDF. Her file's plan takes the forwarded part for her own text (no quote in it, so the PDF cuts that
+        // part whole: it is printed as the rebuilt email) and keeps a signature block at its end, INSIDE that
+        // part. The rebuilt 09:05 email has no folds (set by hand) and keeps no block. So no email before it
+        // printed her block as a signature: her later rebuilt 09:20 email (quoted by Carol) must print it.
+        const forward = mail(ALICE, 10, [
+            'Carol, my note again, see below.',
+            '',
+            '---------- Forwarded message ---------',
+            'From: Alice Example <alice@example.test>',
+            'Date: Mon, 10 Mar 2025 at 09:05',
+            'Subject: Paper order',
+            'To: Carol Writer <carol@client.test>',
+            '',
+            `Hello Carol,\nThe paper is ordered.\n\n${BLOCK}`,
+        ].join('\n'));
+        const analysed = analyzeThread([forward, quoting()].map((message) => ({ ok: true as const, message })));
+        const forwarded = analysed.reconstructed.find((r) => r.rebuilt.reconstructedText.includes('The paper is ordered.'))!;
+        const later = analysed.reconstructed.find((r) => r.rebuilt.reconstructedText.includes('The invoice follows tomorrow.'))!;
+        expect([forwarded.link, later.link]).toEqual(['entry', 'entry']);
+        expect(later.segments?.some((s) => s.folded && s.reasons.includes('signature'))).toBe(true);
+        const result = withRebuilt(analysed, forwarded.id, (r) => ({ ...r, segments: undefined }));
+        const position = result.positionByIndex[0]!;
+        const body = forward.bodyText;
+        const blockStart = body.indexOf('Kind regards,');
+        const positions = result.messages.map((_, k) => k);
+        const ids = [forwarded.id, later.id];
+        const input = noRepeatInput(result, positions, ids);
+        const k = positions.indexOf(position);
+        const plan = input.plans[k]!;
+        expect(foldReasons(plan)).toEqual(['forwarded+']);
+        const handMade: MessagePlan = { ...plan, ranges: [
+            { start: 0, end: blockStart, keep: true, reason: 'text' },
+            { start: blockStart, end: body.length, keep: true, reason: 'signature' },
+        ] };
+        const plans = input.plans.map((p, j) => (j === k ? handMade : p));
+        const cut = applyNoRepeatRule({ ...input, plans });
+        // Her block lies in the part of her file the PDF prints as the rebuilt 09:05 email: cut there.
+        expect((cut.elsewhere.get(position) ?? []).some(([start, end]) => start <= blockStart && end >= body.length - 1)).toBe(true);
+        // So it was not printed as a signature before the 09:20 email: kept there.
+        expect(foldReasons(cut.rebuiltPlans.get(later.id)?.shown)).toEqual(['signature+']);
+        const pdfDocument = buildPdfDocument({ ...input, plans, timeZone: 'Africa/Lagos', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
+        expect(bodyText(rebuiltById(pdfDocument, later.id))).toContain('Example Office Supplies');
     });
 });

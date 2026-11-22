@@ -9,6 +9,8 @@ import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-d
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { planPdfOrder } from '../pdf-export/build-pdf-document';
+import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
+import { pdfCut } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
 import { setLocale, t } from './translations';
 import { mountPreview, rebuiltAlsoText, rebuiltDateTexts, rebuiltNoteText, type Preview, type PreviewOptions } from './preview';
@@ -211,11 +213,68 @@ describe('rebuilt cards in the list', () =>
         const subject = one(gmail as FakeElement, 'message-subject');
         expect(subject.textContent).toBe('Re: Office desks and chairs');
         expect(hasClass(subject, 'placeholder')).toBe(false);
+        // The whole text, as text (its signature folded since task 9.9b-2: the blocks give it back whole).
         for (const [card, rebuiltEmail] of [outlookEn, gmail, outlookNl].map((c, k) => [c, rebuiltEntries(result)[k]] as const))
         {
-            expect(one(card as FakeElement, 'body-text').textContent).toBe(rebuiltEmail?.rebuilt.reconstructedText);
+            expect(withClass(card as FakeElement, 'body-text').map((e) => e.textContent).join('')).toBe(rebuiltEmail?.rebuilt.reconstructedText);
         }
-        expect(one(gmail as FakeElement, 'body-text').textContent).not.toMatch(/^>/m);
+        expect(withClass(gmail as FakeElement, 'body-text').map((e) => e.textContent).join('')).not.toMatch(/^>/m);
+    });
+
+    it('fold a signature block as a real email body does, labelled from the PDF\'s own plan (task 9.9b-2, user decision F4)', () =>
+    {
+        const result = analysisOf(LAST);
+        show(result);
+        const cards = rebuiltItems();
+        const entries = rebuiltEntries(result);
+        // Each of the three texts ends with its sender's repeated block: one fold, closed, its text in the page.
+        for (const [k, card] of cards.entries())
+        {
+            const folds = withClass(card, 'fold');
+            expect(folds).toHaveLength(1);
+            expect(folds[0]!.hasAttribute('open')).toBe(false);
+            const folded = one(folds[0]!, 'body-folded').textContent;
+            const segment = entries[k]!.segments!.find((s) => s.folded)!;
+            expect(folded).toBe(entries[k]!.rebuilt.reconstructedText.slice(segment.start, segment.end));
+            expect(one(card, 'fold-what').textContent).toMatch(/^Signature or repeated notice, \d+ lines$/);
+            // No plans yet: no label.
+            expect(one(card, 'pdf-label').hasAttribute('hidden')).toBe(true);
+        }
+        // The plans the PDF uses: Alice's block is printed in her first email only (rule 3), Bob's in his.
+        const positions = result.messages.map((_, k) => k);
+        const plans = planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY);
+        const cut = pdfCut({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: entries.map((r) => r.id) });
+        const rebuiltViews = new Map([...cut.rebuiltPlans].map(([id, plan]) => [id, { plan, signatureFrom: new Map<number, number>() }]));
+        preview.setPdfPlans({ result, views: new Map(), rebuiltViews });
+        const labels = (): (string | null)[] => cards.map((card) => (one(card, 'pdf-label').hasAttribute('hidden') ? null : one(card, 'pdf-label').textContent));
+        expect(labels()).toEqual(['In the PDF: signature ', 'In the PDF: signature ', 'Not in the PDF: repeated signature ']);
+        // The PDF agrees: the third card's block is not in its email, the first one's is.
+        const pdfText = (id: number): string => cut.rebuiltPlans.get(id)!.ranges.filter((r) => r.keep)
+            .map((r) => entries.find((e) => e.id === id)!.rebuilt.reconstructedText.slice(r.start, r.end)).join('');
+        expect(pdfText(entries[2]!.id)).not.toContain('Sent from my laptop');
+        expect(pdfText(entries[0]!.id)).toContain('Sent from my laptop');
+        // "Show quoted text and signatures" opens them, as it does in real emails.
+        const toggle = byId('preview-show-folded');
+        toggle.checked = true;
+        toggle.fire('change');
+        expect(cards.every((card) => one(card, 'fold').hasAttribute('open'))).toBe(true);
+        // Another language: the fold's line and its label are written again, in place.
+        setLocale('fr');
+        preview.relabel();
+        expect(one(cards[2]!, 'fold-what').textContent).toMatch(/lignes$/);
+        expect(one(cards[2]!, 'pdf-label').textContent).toMatch(/^Pas dans le PDF/);
+        // The reader unticks the third card: no plan for it. As for an unticked real email, what was drawn
+        // stays (the cards below do not move), its labels hidden by `data-pdf-out` (app.css).
+        const unticked = new Map(rebuiltViews);
+        unticked.delete(entries[2]!.id);
+        preview.setPdfPlans({ result, views: new Map(), rebuiltViews: unticked });
+        expect(one(cards[2]!, 'message-body').hasAttribute('data-pdf-out')).toBe(true);
+        expect(one(cards[0]!, 'message-body').hasAttribute('data-pdf-out')).toBe(false);
+        expect(one(cards[2]!, 'pdf-label').textContent).toMatch(/^Pas dans le PDF/);
+        // Ticked back: its labels show again.
+        preview.setPdfPlans({ result, views: new Map(), rebuiltViews });
+        expect(one(cards[2]!, 'message-body').hasAttribute('data-pdf-out')).toBe(false);
+        expect(one(cards[2]!, 'pdf-label').hasAttribute('hidden')).toBe(false);
     });
 
     it('leave the source email exactly as it was without rebuilt emails (collapse, never delete)', () =>

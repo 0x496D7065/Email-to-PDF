@@ -10,6 +10,7 @@ import {
     DEFAULT_OUTPUT_POLICY,
     normalizeLine,
     planOutput,
+    planRebuiltText,
     quotedChain,
     type PlanInput,
     type QuoteContext,
@@ -19,7 +20,7 @@ import { detectReplyHeaders } from './reply-header';
 import { buildSegments, type FoldRange } from './fold-segments';
 import type { MessagePlan, OutputPolicy, PlanReason } from '../../Header/output-plan';
 import type { EmailAddress, NormalizedMessage } from '../../Header/parsed-email';
-import type { AnalyzedMessage } from '../../Header/thread-analysis-result';
+import type { AnalyzedMessage, Segment } from '../../Header/thread-analysis-result';
 
 const ALICE: EmailAddress = { name: 'Alice Example', address: 'alice@example.test' };
 const BOB: EmailAddress = { name: 'Bob Sample', address: 'bob@furniture.example.test' };
@@ -1352,5 +1353,72 @@ describe('planOutput: when unsure, keep (review round 1)', () =>
         };
         const [messagePlan] = plan([input]);
         expect(messagePlan!.ranges).toEqual([{ start: 0, end: body.length, keep: true, reason: 'text' }]);
+    });
+});
+
+describe('planRebuiltText: rule 3 for an email rebuilt from quoted text (task 9.9b-2)', () =>
+{
+    const TEXT = 'Hello Carol,\nThe desks are ready.\n\nBest regards,\nBob Sample\nSample Furniture\n';
+    const blockStart = TEXT.indexOf('Best regards');
+    const SEGMENTS = buildSegments(TEXT, [{ start: blockStart, end: TEXT.length, reason: 'signature' }]);
+    const KEY = 'Best regards,\nBob Sample\nSample Furniture';
+
+    it('keeps the first block of a sender and records it; leaves the same block out the next time', () =>
+    {
+        const memory = new Map<string, Set<string>>();
+        const first = planRebuiltText(TEXT, SEGMENTS, BOB.address, DEFAULT_OUTPUT_POLICY, memory);
+        expect(first.ranges).toEqual([
+            { start: 0, end: blockStart, keep: true, reason: 'text' },
+            { start: blockStart, end: TEXT.length, keep: true, reason: 'signature' },
+        ]);
+        expect([first.omittedSignatures, first.keptAllBecauseEmpty, first.fallback, first.tailStart]).toEqual([0, false, false, null]);
+        expect([...memory.get(BOB.address) ?? []]).toEqual([KEY]);
+        const second = planRebuiltText(TEXT, SEGMENTS, BOB.address, DEFAULT_OUTPUT_POLICY, memory);
+        expect(second.ranges[1]).toEqual({ start: blockStart, end: TEXT.length, keep: false, reason: 'repeated-signature' });
+        expect(second.omittedSignatures).toBe(1);
+        // Another sender, or an unknown one (''), keeps it.
+        expect(planRebuiltText(TEXT, SEGMENTS, ALICE.address, DEFAULT_OUTPUT_POLICY, memory).ranges[1]?.keep).toBe(true);
+        expect(planRebuiltText(TEXT, SEGMENTS, '', DEFAULT_OUTPUT_POLICY, memory).ranges[1]?.keep).toBe(true);
+        expect(memory.has('')).toBe(false);
+    });
+
+    it('follows the policy: "all" keeps every block, "none" leaves every one out, "include everything" keeps all', () =>
+    {
+        const seen = (): Map<string, Set<string>> => new Map([[BOB.address, new Set([KEY])]]);
+        expect(planRebuiltText(TEXT, SEGMENTS, BOB.address, { ...DEFAULT_OUTPUT_POLICY, signatures: 'all' }, seen()).ranges[1]?.keep).toBe(true);
+        expect(planRebuiltText(TEXT, SEGMENTS, BOB.address, { ...DEFAULT_OUTPUT_POLICY, signatures: 'none' }, new Map()).ranges[1]).toEqual(
+            { start: blockStart, end: TEXT.length, keep: false, reason: 'signature' });
+        expect(planRebuiltText(TEXT, SEGMENTS, BOB.address, { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true }, seen()).ranges.every((r) => r.keep)).toBe(true);
+    });
+
+    it('keeps the whole text without folds, with segments that are not a cover (fallback), and when nothing with text would stay (rule 4)', () =>
+    {
+        const whole = { ranges: [{ start: 0, end: TEXT.length, keep: true, reason: 'text' }], tailStart: null, omittedSignatures: 0, keptAllBecauseEmpty: false };
+        expect(planRebuiltText(TEXT, undefined, BOB.address, DEFAULT_OUTPUT_POLICY, new Map())).toEqual({ ...whole, fallback: false });
+        expect(planRebuiltText(TEXT, 'x' as never, BOB.address, DEFAULT_OUTPUT_POLICY, new Map())).toEqual({ ...whole, fallback: false });
+        expect(planRebuiltText(TEXT, [{ start: 0, end: 3, folded: true, reasons: ['signature'], related: [] }], BOB.address, DEFAULT_OUTPUT_POLICY, new Map()))
+            .toEqual({ ...whole, fallback: true });
+        expect(planRebuiltText('', [], BOB.address, DEFAULT_OUTPUT_POLICY, new Map())).toEqual({ ...whole, ranges: [], fallback: false });
+        // A text that is all one repeated block (never given by the detector, SAFETY a): kept whole.
+        const all = buildSegments(TEXT, [{ start: 0, end: TEXT.length, reason: 'signature' }]);
+        const memory = new Map([[BOB.address, new Set(['Hello Carol,\nThe desks are ready.\nBest regards,\nBob Sample\nSample Furniture'])]]);
+        const allPlan = planRebuiltText(TEXT, all, BOB.address, DEFAULT_OUTPUT_POLICY, memory);
+        expect(allPlan.keptAllBecauseEmpty).toBe(true);
+        expect(allPlan.ranges).toEqual([{ start: 0, end: TEXT.length, keep: true, reason: 'repeated-signature' }]);
+        expect(allPlan.omittedSignatures).toBe(0);
+    });
+
+    it('a fold with another reason than signature is the writer\'s text (only signature folds are planned)', () =>
+    {
+        const nameAt = TEXT.indexOf('Bob Sample');
+        const fold = (start: number, end: number, reason: 'signature' | 'quote-marker'): Segment => ({ start, end, folded: true, reasons: [reason], related: [] });
+        const shown: Segment = { start: 0, end: blockStart, folded: false, reasons: [], related: [] };
+        const mixed = planRebuiltText(TEXT, [shown, fold(blockStart, nameAt, 'signature'), fold(nameAt, TEXT.length, 'quote-marker')], BOB.address,
+            DEFAULT_OUTPUT_POLICY, new Map());
+        expect(mixed.ranges.map((r) => [TEXT.slice(r.start, r.end), r.reason])).toEqual([
+            ['Hello Carol,\nThe desks are ready.\n\n', 'text'],
+            ['Best regards,\n', 'signature'],
+            ['Bob Sample\nSample Furniture\n', 'text'],
+        ]);
     });
 });

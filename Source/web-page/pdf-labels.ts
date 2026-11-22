@@ -53,7 +53,7 @@
 
 import { DEFAULT_OUTPUT_POLICY, planOutputSteps } from '../thread-analysis/output-plan';
 import { signatureSources } from '../web-page-logic/pdf-plan';
-import { printedElsewhereRanges } from '../web-page-logic/printed-elsewhere';
+import { pdfCut } from '../web-page-logic/printed-elsewhere';
 import { createSafeElement } from './safe-dom';
 import { createStaticLabels } from './static-labels';
 import type { PreviewPdfPlans } from './preview';
@@ -233,10 +233,17 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         }
         const rebuilt = [...(options.includedRebuilt?.() ?? [])];
         const unticked = [...(options.untickedRebuilt?.() ?? [])];
-        const cut = printedElsewhereRanges({ ...madePlans.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
+        const { ranges: cut, rebuiltPlans } = pdfCut({ ...madePlans.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
+        // The signature plans of the rebuilt cards in the PDF (task 9.9b-2): the labels of their folds.
+        const rebuiltViews = new Map<number, PdfView>();
+        for (const [id, plan] of rebuiltPlans)
+        {
+            rebuiltViews.set(id, { plan, signatureFrom: new Map() });
+        }
+        const withRebuilt = (preview: PreviewPdfPlans): PreviewPdfPlans => (rebuiltViews.size === 0 ? preview : { ...preview, rebuiltViews });
         if (cut.size === 0)
         {
-            return madePlans.preview;
+            return withRebuilt(madePlans.preview);
         }
         const views = new Map(madePlans.preview.views);
         for (const [position, pdfRanges] of cut)
@@ -247,7 +254,7 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
                 views.set(position, { ...view, pdfRanges });
             }
         }
-        return { result: madePlans.preview.result, views };
+        return withRebuilt({ result: madePlans.preview.result, views });
     }
 
     /** Hands the plans of `madePlans` to the preview, with the no-repeat cut; if that cannot be worked out, the labels fail (never a wrong one). */

@@ -4,6 +4,7 @@
 // part of ThreadAnalysisResult; web-page-logic/, web-page/ and pdf-export/ show and print them.
 
 import type { EmailAddress } from './parsed-email';
+import type { Segment } from './thread-analysis-result';
 
 /** One message rebuilt from quoted text, with its links. Plain data. */
 export interface AnalyzedRebuiltMessage
@@ -25,6 +26,13 @@ export interface AnalyzedRebuiltMessage
     readonly copies: readonly number[];
     /** link 'entry': input positions of the other emails that quote the same text, ascending, unique. */
     readonly alsoQuotedIn: readonly number[];
+    /**
+     * Its signature folds (task 9.9b-2, user decision F4): a valid cover of `rebuilt.reconstructedText`
+     * (fold-segments.ts), folded parts with reason 'signature' only (signature-detection.ts, the same
+     * rules as for a real email; Source/thread-analysis/analyze-thread.ts, step 7). Absent when nothing
+     * is folded: the whole text is shown. Collapse, never delete: the segments only group the text.
+     */
+    readonly segments?: readonly Segment[];
 }
 
 export type TimelineEntry =

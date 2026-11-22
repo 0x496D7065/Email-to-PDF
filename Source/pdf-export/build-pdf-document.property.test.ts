@@ -265,6 +265,29 @@ function expectOnlyNoTextLeftOut(result: ThreadAnalysisResult, positions: readon
 
 const strings = createPdfStrings('en');
 const bodyOf = (e: PdfEmail): string => e.body.map(lineText).join('\n');
+
+/**
+ * Per rebuilt entry in the PDF, the signature blocks its PDF text leaves out (task 9.9b-2: printed in an
+ * earlier email of the same sender), as display text, squashed (the plans of applyNoRepeatRule).
+ */
+function leftOutSignatures(result: ThreadAnalysisResult, rebuiltPlans: ReturnType<typeof applyNoRepeatRule>['rebuiltPlans'],
+    order: ReturnType<typeof applyNoRepeatRule>['order']): Map<number, string[]>
+{
+    const out = new Map<number, string[]>();
+    for (const slot of order.slots)
+    {
+        if (slot.kind !== 'rebuilt')
+        {
+            continue;
+        }
+        const text = slot.source.shown.rebuilt.rebuilt.reconstructedText;
+        const blocks = (rebuiltPlans.get(slot.entry.id)?.shown.ranges ?? []).filter((r) => !r.keep)
+            .map((r) => squash(referenceDisplayText(text.slice(r.start, r.end)))).filter((b) => b !== '');
+        out.set(slot.entry.id, blocks);
+        expect(result.reconstructed[slot.entry.id]?.id).toBe(slot.entry.id);
+    }
+    return out;
+}
 const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
 
 /**
@@ -280,7 +303,7 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
  * how many ranges were checked.
  */
 function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: PdfEmail, where: string,
-    made?: { pdfDocument: PdfDocument; parts: readonly PrintedPart[]; places: readonly ReconstructedMessage[] }): number
+    made?: { pdfDocument: PdfDocument; parts: readonly PrintedPart[]; places: readonly ReconstructedMessage[]; leftOut?: ReadonlyMap<number, readonly string[]> }): number
 {
     if (plan === undefined || plan.fallback)
     {
@@ -326,10 +349,36 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: P
                 expect(holdsQuotedText(body, plan.ranges, linesEnd, place!.end), `${where}: own text cut next to quoted text`).toBe(false);
                 // An empty rebuilt email's place (F2, 'no-text') has no text below its header lines: never here.
                 expect(range.printedAs.kind, where).not.toBe('no-text');
-                if (range.printedAs.kind === 'rebuilt' || range.printedAs.kind === 'email')
+                if (range.printedAs.kind === 'email')
                 {
                     expect(squash(bodyOf(made.pdfDocument.emails[range.printedAs.number - 1]!)),
                         `${where}: own text "${own.slice(0, 40)}" in Email ${String(range.printedAs.number)}`).toContain(own);
+                }
+                if (range.printedAs.kind === 'rebuilt')
+                {
+                    // Task 9.9b-2: a rebuilt email leaves out a signature block of its sender that an email
+                    // before it printed (rule 3): the own text is in it but for those blocks, printed earlier.
+                    const number = range.printedAs.number;
+                    const blocks = made.leftOut?.get(range.printedAs.id) ?? [];
+                    let rest = own;
+                    for (const block of blocks)
+                    {
+                        const earlier = made.pdfDocument.emails.slice(0, number - 1).map((e) => squash(bodyOf(e))).join('\n');
+                        expect(earlier, `${where}: left-out signature "${block.slice(0, 40)}" printed before Email ${String(number)}`).toContain(block);
+                        if (rest.includes(block))
+                        {
+                            leftOutSignatureSeen++;
+                        }
+                        rest = rest.split(block).join('\u0000');
+                    }
+                    const printedThere = squash(bodyOf(made.pdfDocument.emails[number - 1]!));
+                    let at = 0;
+                    for (const piece of rest.split('\u0000').map((x) => x.trim()).filter((x) => x !== ''))
+                    {
+                        const found = printedThere.indexOf(piece, at);
+                        expect(found, `${where}: own text "${piece.slice(0, 40)}" in Email ${String(number)}`).toBeGreaterThanOrEqual(0);
+                        at = found + piece.length;
+                    }
                 }
             }
             movedOwn++;
@@ -350,6 +399,8 @@ function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: P
 }
 /** How many own-text pieces S6 found printed as another email (Q3). */
 let movedOwn = 0;
+/** Own-text pieces whose rebuilt email left out a repeated signature block of it (task 9.9b-2). */
+let leftOutSignatureSeen = 0;
 /** The real emails of a document with their list position (rebuilt emails have none: left out first). */
 const realEmails = (pdfDocument: PdfDocument): { email: PdfEmail; position: number }[] =>
     pdfDocument.emails.flatMap((e) => (e.rebuilt === null && e.position !== null ? [{ email: e, position: e.position }] : []));
@@ -566,12 +617,13 @@ describe('PDF document model properties', () =>
                 // or (Q3, task 8.13a) in the rebuilt email that prints its place. Since task 9.9a a strong
                 // "On ... wrote:" line with unquoted text under it is rebuilt too (a flat attribution), so a
                 // random body can hold such a place: its text is printed as that rebuilt email.
-                const { parts: defaultParts } = applyNoRepeatRule({ ...defaultInput, rebuilt });
+                const { parts: defaultParts, rebuiltPlans: defaultRebuiltPlans, order: defaultOrder } = applyNoRepeatRule({ ...defaultInput, rebuilt });
+                const leftOut = leftOutSignatures(result, defaultRebuiltPlans, defaultOrder);
                 for (const [k, { email, position }] of foldedReal.entries())
                 {
                     const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
                     ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[k], email,
-                        `seed ${String(seed)} position ${String(position)}`, { pdfDocument: folded, parts: defaultParts.get(position) ?? [], places });
+                        `seed ${String(seed)} position ${String(position)}`, { pdfDocument: folded, parts: defaultParts.get(position) ?? [], places, leftOut });
                 }
                 // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
                 const pdfDocument = buildPdfDocument(
@@ -650,13 +702,14 @@ describe('PDF document model properties', () =>
                 .filter(() => random() < 0.7);
             const pdfDocument = buildPdfDocument(
                 { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt });
-            const { parts } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
+            const { parts, rebuiltPlans, order } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
+            const leftOut = leftOutSignatures(result, rebuiltPlans, order);
             for (const { email, position } of realEmails(pdfDocument))
             {
                 const body = result.messages[position]!.message.bodyText;
                 const where = `seed ${String(seed)} ${threadCase.id} position ${String(position)}`;
                 const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
-                checked += expectOwnTextKept(body, plans[position], email, where, { pdfDocument, parts: parts.get(position) ?? [], places });
+                checked += expectOwnTextKept(body, plans[position], email, where, { pdfDocument, parts: parts.get(position) ?? [], places, leftOut });
                 // How often own text sits inside a place the rule could cut (the case S6 guards).
                 for (const rebuiltEntry of result.reconstructed)
                 {
@@ -688,6 +741,9 @@ describe('PDF document model properties', () =>
         expect(attachedSeen).toBeGreaterThan(500);
         // Task 8.14: the random emails include some with no text (an empty random body), left out of the PDF.
         expect(noTextSeen).toBeGreaterThan(0);
+        // Task 9.9b-2: some rebuilt emails left out a signature block their sender printed earlier.
+        console.log(`PDF model properties: ${String(leftOutSignatureSeen)} own-text pieces with a repeated signature left out`);
+        expect(leftOutSignatureSeen).toBeGreaterThan(0);
     });
 
     it('builds 2000 emails in well under a second', () =>
