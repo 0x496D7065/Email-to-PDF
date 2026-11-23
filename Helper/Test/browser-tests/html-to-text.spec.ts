@@ -59,7 +59,6 @@ import {
     isWebKitBlobRead,
     parseTimeReportFilter,
     untoleratedReports,
-    withoutSelectReports,
     type ExactParseTimeReport,
 } from './support/network-and-csp-watch.ts';
 
@@ -215,15 +214,11 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         // an inline one about the live page at the element concerned (see the header).
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
 });
-
-/** How many CSPs the page was opened with (header and <meta>: 2; none: 0). */
-let cspPolicies = 2;
 
 /** Opens the site, with or without its CSP, and notes where its own requests end. */
 async function open(page: Page, csp: 'with-csp' | 'without-csp'): Promise<void>
@@ -232,7 +227,6 @@ async function open(page: Page, csp: 'with-csp' | 'without-csp'): Promise<void>
     {
         await removeCsp(page);
     }
-    cspPolicies = csp === 'with-csp' ? 2 : 0;
     await page.goto('/', { waitUntil: 'networkidle' });
     loadedAt = requestUrls.length;
     if (csp === 'without-csp')
@@ -261,7 +255,7 @@ async function expectNothingHappened(page: Page): Promise<void>
     expect(requestsAfterLoad()).toEqual([]);
     expect(websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), cspPolicies);
+    const violations = await page.evaluate(() => window.__e2eViolations);
     expect(untoleratedReports(browserName, violations, isParseTimeReport)).toEqual([]);
 }
 

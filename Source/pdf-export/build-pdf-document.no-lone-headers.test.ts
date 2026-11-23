@@ -87,7 +87,7 @@ function makeFrom(files: readonly ParseResult[], mode: Mode, policy: OutputPolic
     const plans = planOutput(positions.map((p) => result.messages[p]!), policy);
     const ids = rebuiltEntries(result).map((r) => r.id);
     const input: PrintedElsewhereInput = { result, positions, plans, policy, rebuilt: mode.rebuilt(ids), unticked: mode.unticked(ids), rebuildingOff: mode.off };
-    const pdf = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
+    const pdf = buildPdfDocument({ ...input, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
     return { result, positions, plans, input, pdf };
 }
 

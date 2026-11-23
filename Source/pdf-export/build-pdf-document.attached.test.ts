@@ -78,7 +78,7 @@ function pdfDocumentOf(result: ThreadAnalysisResult, policy: OutputPolicy = DEFA
         positions.map((p) => result.messages[p]!),
         policy,
     );
-    return buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 10), strings });
+    return buildPdfDocument({ result, positions, plans, policy, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 10), strings });
 }
 /** The preview's labels for the same input (Source/web-page-logic/printed-elsewhere.ts). */
 function labelsOf(result: ThreadAnalysisResult, policy: OutputPolicy = DEFAULT_OUTPUT_POLICY, positions = result.messages.map((_, k) => k))
@@ -285,7 +285,7 @@ describe('PDF model: only what an attached email\'s page prints is left out of t
             DEFAULT_OUTPUT_POLICY,
         );
         const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: extra.rebuilt ?? [], ...(extra.unticked === undefined ? {} : { unticked: extra.unticked }), ...(extra.rebuildingOff === undefined ? {} : { rebuildingOff: extra.rebuildingOff }) };
-        const pdfDocument = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: 0, strings });
+        const pdfDocument = buildPdfDocument({ ...input, generatedOffsetMinutes: 0, generatedAt: 0, strings });
         return { pdfDocument, ranges: printedElsewhereRanges(input) };
     }
 

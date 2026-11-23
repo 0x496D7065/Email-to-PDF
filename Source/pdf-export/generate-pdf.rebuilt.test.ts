@@ -51,7 +51,7 @@ async function pdfText(options: { rebuilt?: readonly number[]; positions?: reado
         plans,
         rebuilt: options.rebuilt ?? rebuiltEntries(result).map((r) => r.id),
         policy: DEFAULT_OUTPUT_POLICY,
-        timeZone: 'Africa/Lagos',
+        generatedOffsetMinutes: 0,
         generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
         fonts,
         locale: options.locale ?? 'en',
@@ -95,7 +95,6 @@ function removedTexts(locale: 'en' | 'fr' | 'nl'): { fragments: string[]; word: 
             t('rebuilt.listIncomplete'),
             t('rebuilt.noSubject'),
             before(t('rebuilt.dateAsWritten', { text: '\u0000' })),
-            t('rebuilt.dateAbout', { date: '2025' }),
         ],
         word: { en: /rebuilt/i, fr: /reconstitu/i, nl: /gereconstrueerd/i }[locale],
     };
@@ -160,7 +159,8 @@ describe('the PDF with rebuilt emails, read back (task 8.3: shown like real emai
         // The newest rebuilt one (an Outlook block in Dutch, no quote marks), up to the real email.
         const newest = between(all, 'Email 3 From', 'Email 4 From');
         expect(newest).toContain('From Alice Example <alice@example.test>');
-        expect(newest).toMatch(/Date 2025-03-03 \d\d:40:00 UTC\+01:00/);
+        // As written in the quote ("Verzonden: maandag 3 maart 2025 15:40"), never converted (task 9.9c).
+        expect(newest).toContain('Date 2025-03-03 15:40:00 Subject');
         // No "time zone not given" line (task 8.8: the app says it).
         expect(newest).not.toContain("The sender's time zone is not given");
         expect(newest).toContain('Subject Re: Office desks and chairs');

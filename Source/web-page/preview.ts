@@ -2,13 +2,12 @@
 // order, each with its date, author, recipients, subject, attachments and body.
 //
 // What it shows, and how:
-// - Dates in the time zone picked in the toolbar (default: the browser's).
-//   When the sender's own clock (from their Date header) differs from the
-//   shown time, it is shown too. Changing the zone only rewrites the date
-//   texts; the bodies are not rebuilt. A date that could not be read shows
-//   "(no date)" and the date as written (the PDF shows that text alone),
-//   and a zone the browser does not know gets a note under the list (dates
-//   then in UTC). Task 8.8: the PDF has no notes, so the page says these.
+// - Dates as written (user decision, task 9.9c): the sender's own
+//   wall-clock date and time, never converted to another time zone, with no
+//   offset (Source/thread-analysis/time-format.ts); the same text as in the
+//   PDF. A date that could not be read shows "(no date)" and the date as
+//   written (the PDF shows that text alone). Task 8.8: the PDF has no
+//   notes, so the page says this.
 // - The body as display blocks (Source/web-page-logic/display-blocks.ts). Shown text
 //   goes into the page as text. Each folded block is a <details> element
 //   with a short label (why it was folded, how long it is, which earlier
@@ -21,14 +20,14 @@
 //
 // Safety: every email field is untrusted. It only ever reaches the page as
 // text, through createSafeElement() (Source/web-page/safe-dom.ts), never as HTML (README.md, rule R4).
-// Nothing is stored: the zone and the checkbox live in memory only
+// Nothing is stored: the checkbox lives in memory only
 // (README.md, rule R5).
 //
 // Big batches: the list is built in chunks (the first one at once, the
 // others in later tasks), so the page stays responsive with thousands of
 // emails. A new result or reset() cancels the chunks still waiting; reset()
-// ("Clear everything") also puts the zone and the checkbox back to their
-// defaults. If one
+// ("Clear everything") also puts the checkbox back to its
+// default. If one
 // email's item cannot be built, a stand-in with its number and whole text
 // takes its place and the rest of the list is still built: no email is ever
 // silently missing.
@@ -82,13 +81,12 @@
 //
 // Language change (relabel): nothing is rebuilt, and no body is redrawn, so
 // open folds, the focus and the scroll position stay. Written again in
-// place, from what the preview keeps anyway: the toolbar's words (and the
-// "this computer" zone's name), the status line, each email's number, its
+// place, from what the preview keeps anyway: the toolbar's words, the
+// status line, each email's number, its
 // "(no subject)" placeholder, its details list (<dl>: labels and mailbox,
-// attachment and "also in" lines, the date and sender-time elements kept),
+// attachment and "also in" lines, the date elements kept),
 // each fold's "what" line and PDF label, the PDF and "no text" notes, and
-// the stand-ins' notes. The time zones' own names and the dates' numbers
-// are the same in every language.
+// the stand-ins' notes. The dates' numbers are the same in every language.
 //
 // Rebuilt emails (milestone 7, task 7.6; Source/web-page-logic/rebuilt-email-display.ts): the
 // list follows the thread analysis's timeline, so an earlier email rebuilt from the
@@ -103,9 +101,10 @@
 //   were), plus "same quoted text also in email #K" for copies;
 // - shows the sender, recipients ("list may be incomplete" when the quoted
 //   list may go on), subject and date read from the quoted header. A quoted
-//   time without its own zone is shown in the chosen zone with "about"; a
-//   day alone as written, never "about" (user decision Q2); both always as
-//   written too; a date that could not be read only as written;
+//   time is shown as written (its wall-clock time, never converted and
+//   never marked as a guess, task 9.9c); a day alone as written; both with
+//   the date text as written too; a date that could not be read only as
+//   written;
 // - shows the rebuilt text as text (quote marks removed, the one form change
 //   the user allowed). Its signature blocks (task 9.9b-2, user decision F4:
 //   folded as in a real email; AnalyzedRebuiltMessage.segments) are folded
@@ -137,7 +136,7 @@
 // Source/web-page/pdf-labels.ts).
 
 import { checkSegments, joinSegments } from '../thread-analysis/fold-segments';
-import { browserTimeZone, formatInZone, formatOffset, formatSenderLocal, isDisplayableMs, isValidTimeZone, listTimeZones } from '../thread-analysis/time-format';
+import { formatEmailDate, formatWallClock, isDisplayableMs } from '../thread-analysis/time-format';
 import { attachedLinks } from '../web-page-logic/attached-links';
 import { displayAuthor } from '../web-page-logic/display-author';
 import { fileChain } from '../web-page-logic/file-chain';
@@ -243,32 +242,28 @@ export function attachmentText(attachment: AttachmentInfo): string
     return t('preview.attachment', { name, size, type: attachment.mimeType });
 }
 
-/** The date texts of one email in `zone`. */
+/** The date texts of one email. */
 export interface DateTexts
 {
-    /** "2025-03-03 09:15:00 UTC+01:00", or the "no date" text. */
+    /** "2025-03-03 09:15:00", as written (the sender's own clock, never converted), or the "no date" text. */
     readonly main: string;
-    /** The moment for <time datetime>, null without a date. */
+    /** For <time datetime>: the time as written, with its offset when known; null without a date. */
     readonly iso: string | null;
-    /** "Sender's local time: ...", only when known and different from `main`; else null. */
-    readonly senderLocal: string | null;
     /** "As written in the email: ...": without a usable date, the date text the email gave, if any; else null. */
     readonly asWritten: string | null;
 }
 
-export function dateTexts(date: EmailDate, zone: string): DateTexts
+export function dateTexts(date: EmailDate): DateTexts
 {
-    const shown = formatInZone(date.utcMs, zone, getLocale());
+    const shown = formatEmailDate(date);
     if (shown.kind === 'no-date' || !isDisplayableMs(date.utcMs))
     {
         // The PDF shows this text alone in the Date row (task 8.8): the reader sees it here first.
         const original = typeof date.original === 'string' ? date.original : '';
         const asWritten = original.trim() === '' ? null : t('preview.dateAsWritten', { text: original });
-        return { main: t('preview.noDate'), iso: null, senderLocal: null, asWritten };
+        return { main: t('preview.noDate'), iso: null, asWritten };
     }
-    const sender = formatSenderLocal(date);
-    const senderLocal = sender.kind === 'local' && sender.text !== shown.text ? t('preview.senderTime', { time: sender.text }) : null;
-    return { main: shown.text, iso: new Date(Math.floor(date.utcMs)).toISOString(), senderLocal, asWritten: null };
+    return { main: shown.text, iso: shown.iso, asWritten: null };
 }
 
 /**
@@ -417,10 +412,10 @@ export function rebuiltHeadingId(id: number): string
     return `rebuilt-${String(id)}-title`;
 }
 
-/** The date texts of a rebuilt email in `zone`. */
+/** The date texts of a rebuilt email. */
 export interface RebuiltDateTexts
 {
-    /** "about 2025-03-03 09:15 UTC+01:00", "2025-03-03", or a "no date" / "could not be read" text. */
+    /** "2025-03-03 09:15" (as written), "2025-03-03", or a "no date" / "could not be read" text. */
     readonly main: string;
     /** For <time datetime>: the moment, or the day; null without a readable date. */
     readonly iso: string | null;
@@ -429,12 +424,12 @@ export interface RebuiltDateTexts
 }
 
 /**
- * A rebuilt email's date in `zone`. A quoted time has no seconds, so none
- * are shown; "about" marks a time read without a zone of its own (its
- * zone was assumed to be the source email's). A day alone is shown as
+ * A rebuilt email's date. A quoted time is shown as written, its
+ * wall-clock time, never converted and never marked as a guess (task
+ * 9.9c); it has no seconds, so none are shown. A day alone is shown as
  * written. The date text as written is always given too.
  */
-export function rebuiltDateTexts(date: RebuiltDate, zone: string): RebuiltDateTexts
+export function rebuiltDateTexts(date: RebuiltDate): RebuiltDateTexts
 {
     if (date.kind === 'none')
     {
@@ -451,17 +446,12 @@ export function rebuiltDateTexts(date: RebuiltDate, zone: string): RebuiltDateTe
     {
         return { main: date.day, iso: date.day, asWritten };
     }
-    const shown = formatInZone(date.utcMs, zone, getLocale());
+    const shown = formatWallClock(date.wallMs, date.writtenOffsetMinutes);
     if (shown.kind === 'no-date')
     {
         return unreadable;
     }
-    const text = `${shown.shortText} ${formatOffset(shown.offsetMinutes)}`;
-    return {
-        main: date.approximate ? t('rebuilt.dateAbout', { date: text }) : text,
-        iso: new Date(Math.floor(date.utcMs)).toISOString(),
-        asWritten,
-    };
+    return { main: shown.shortText, iso: shown.iso, asWritten };
 }
 
 /** The fixed note of a rebuilt card: where it was taken from, may be incomplete or inexact (quote marks removed, if so). */
@@ -486,13 +476,6 @@ export function rebuiltAlsoText(numbers: readonly number[]): string
     return numbers.length === 1 ? t('rebuilt.alsoOne', { list }) : t('rebuilt.alsoMany', { list });
 }
 
-/** The shown time-zone name: underscores as spaces, and the browser's own zone marked. */
-export function zoneLabel(zone: string, browserZone: string): string
-{
-    const name = zone.replaceAll('_', ' ');
-    return zone === browserZone ? t('preview.zoneThisComputer', { zone: name }) : name;
-}
-
 // ---------------------------------------------------------------------------
 // The step 2 interface.
 
@@ -504,10 +487,6 @@ export interface PreviewOptions
     readonly schedule?: (task: () => void) => unknown;
     /** Cancels a scheduled task (default: clearTimeout). */
     readonly cancel?: (handle: unknown) => void;
-    /** The zones offered (default: listTimeZones()). */
-    readonly zones?: readonly string[];
-    /** The zone selected at the start, also marked "this computer" (default: browserTimeZone()). */
-    readonly initialZone?: string;
     /** Nodes shown above the toolbar (the counts of Source/web-page/review.ts). Default: none. */
     readonly header?: readonly Node[];
     /**
@@ -543,8 +522,6 @@ export interface PreviewOptions
     readonly onRendered?: (result: ThreadAnalysisResult) => void;
     /** Controls added at the end of the toolbar (Source/web-page/pdf-labels.ts). Default: none. */
     readonly toolbarItems?: readonly Node[];
-    /** Called after the user picked another time zone (Source/web-page/mount-page.ts: a PDF made before is dropped). */
-    readonly onZoneChange?: () => void;
 }
 
 /** The PDF plans of a result, for the labels (see the top of this file). */
@@ -576,12 +553,10 @@ export interface Preview
     showResult(result: ProcessResult): void;
     /**
      * Empties the list, cancels any chunk still waiting and puts the toolbar
-     * back to its defaults (the start zone, folded text closed), for "Clear
+     * back to its defaults (folded text closed), for "Clear
      * everything".
      */
     reset(): void;
-    /** The selected time zone. */
-    zone(): string;
     /** True while chunks are still waiting to be built. */
     isRendering(): boolean;
     /**
@@ -661,7 +636,7 @@ interface ItemSlot
     readonly links: ItemLinks;
 }
 
-/** A rebuilt card's date element, rewritten when the zone changes. */
+/** A rebuilt card's date element, rewritten when the language changes. */
 interface RebuiltDateSlot
 {
     readonly time: HTMLTimeElement;
@@ -669,7 +644,7 @@ interface RebuiltDateSlot
     readonly date: RebuiltDate;
 }
 
-/** One rebuilt card in the page (not a stand-in): what relabel() and a zone change write again. */
+/** One rebuilt card in the page (not a stand-in): what relabel() writes again. */
 interface RebuiltSlot
 {
     readonly card: RebuiltCard;
@@ -776,11 +751,12 @@ function applyLabel(element: HTMLElement, label: PdfLabel | null): void
     setSafeAttribute(element, 'hidden', label === null);
 }
 
-/** One email's date element, rewritten when the zone changes. */
+/** One email's date element, rewritten when the language changes. */
 interface DateSlot
 {
     readonly time: HTMLTimeElement;
-    readonly senderNote: HTMLSpanElement;
+    /** The date as written, under a date that could not be read (hidden otherwise). */
+    readonly asWritten: HTMLSpanElement;
     readonly date: EmailDate;
 }
 
@@ -828,7 +804,7 @@ function metaRows(email: AnalyzedMessage, date: DateSlot, result: ThreadAnalysis
     const message = email.message;
     const author = displayAuthor(message);
     const meta: Node[] = [
-        ...row('date', t('preview.date'), [date.time, ' ', date.senderNote]),
+        ...row('date', t('preview.date'), [date.time, ' ', date.asWritten]),
         ...(author.source === 'none'
             ? row('author', t('preview.from'), [createSafeElement('span', { attrs: { class: 'placeholder' }, text: t('preview.author.none') })])
             : row('author', t(`preview.author.${author.source}`), [mailboxListText(author.mailboxes)])),
@@ -878,10 +854,10 @@ interface ItemLinks
 
 const NO_LINKS: ItemLinks = { attachedTo: [], attachedEmails: [] };
 
-/** One rebuilt card's date element texts in `zone`. */
-function applyRebuiltDate(slot: RebuiltDateSlot, zone: string): void
+/** One rebuilt card's date element texts. */
+function applyRebuiltDate(slot: RebuiltDateSlot): void
 {
-    const texts = rebuiltDateTexts(slot.date, zone);
+    const texts = rebuiltDateTexts(slot.date);
     slot.time.textContent = texts.main;
     setSafeAttribute(slot.time, 'datetime', texts.iso ?? false);
     slot.asWritten.textContent = texts.asWritten ?? '';
@@ -936,15 +912,8 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     const chunkSize = Math.max(1, options.chunkSize ?? DEFAULT_CHUNK_SIZE);
     const schedule = options.schedule ?? ((task: () => void): unknown => setTimeout(task, 0));
     const cancel = options.cancel ?? ((handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>));
-    const homeZone = options.initialZone ?? browserTimeZone();
-    const zones = [...(options.zones ?? listTimeZones())];
-    if (!zones.includes(homeZone))
-    {
-        zones.unshift(homeZone);
-    }
 
     // --- State (memory only, README.md, rule R5) ------------------------------
-    let zone = homeZone;
     let showFolded = false;
     let slots: DateSlot[] = [];
     let folds = new Set<HTMLDetailsElement>();
@@ -975,21 +944,10 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
 
     // --- Toolbar --------------------------------------------------------------
     const labels = createStaticLabels();
-    const zoneOptions = zones.map((z) => createSafeElement('option', { attrs: { value: z, selected: z === zone }, text: zoneLabel(z, homeZone) }));
-    // Only the browser's own zone has words of ours ("(this computer)").
-    const homeOption = zoneOptions[zones.indexOf(homeZone)] ?? null;
-    const zoneSelect = createSafeElement('select', { attrs: { id: 'preview-zone', class: 'zone-select' }, children: zoneOptions });
-    zoneSelect.value = zone;
-    // Shown only while the zone picked is not one this browser knows (see syncZoneNote).
-    const zoneNote = labels.text(createSafeElement('p', { attrs: { id: 'preview-zone-note', class: 'field-note zone-note', hidden: true } }), 'preview.zoneNotRecognized');
     const foldToggle = createSafeElement('input', { attrs: { type: 'checkbox', id: 'preview-show-folded' } });
     const toolbar = createSafeElement('div', {
         attrs: { id: 'preview-toolbar', class: 'preview-toolbar' },
         children: [
-            createSafeElement('div', {
-                attrs: { class: 'field' },
-                children: [labels.text(createSafeElement('label', { attrs: { for: 'preview-zone' } }), 'preview.zone'), zoneSelect, zoneNote],
-            }),
             createSafeElement('div', {
                 attrs: { class: 'field field-checkbox' },
                 children: [foldToggle, labels.text(createSafeElement('label', { attrs: { for: 'preview-show-folded' } }), 'preview.showFolded')],
@@ -1022,31 +980,15 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     }
     setPdfState('off');
 
-    /**
-     * The zone note: shown (and read as the list's description) only while the
-     * zone picked is not one this browser knows, so its dates, here and in the
-     * PDF, are in UTC (Source/thread-analysis/time-format.ts, formatInZone). Not expected:
-     * the list only offers zones the browser knows. The PDF names just "UTC"
-     * then, without a note (task 8.8).
-     */
-    function syncZoneNote(): void
-    {
-        const unknown = !isValidTimeZone(zone);
-        setSafeAttribute(zoneNote, 'hidden', !unknown);
-        setSafeAttribute(zoneSelect, 'aria-describedby', unknown ? 'preview-zone-note' : false);
-    }
-    syncZoneNote();
-
     // --- Building one email ---------------------------------------------------
     function applyDate(slot: DateSlot): void
     {
-        const texts = dateTexts(slot.date, zone);
+        const texts = dateTexts(slot.date);
         slot.time.textContent = texts.main;
         setSafeAttribute(slot.time, 'datetime', texts.iso ?? false);
-        // One line under the date: the sender's own time, or the date as written when it could not be read.
-        const extra = texts.senderLocal ?? texts.asWritten;
-        slot.senderNote.textContent = extra ?? '';
-        setSafeAttribute(slot.senderNote, 'hidden', extra === null);
+        // One line under the date: the date as written, when it could not be read.
+        slot.asWritten.textContent = texts.asWritten ?? '';
+        setSafeAttribute(slot.asWritten, 'hidden', texts.asWritten === null);
     }
 
     /** The attached-email links of the email at `position` in the result shown. */
@@ -1316,8 +1258,8 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         });
 
         const time = createSafeElement('time', { attrs: { class: 'message-date' } });
-        const senderNote = createSafeElement('span', { attrs: { class: 'sender-time' } });
-        const slot: DateSlot = { time, senderNote, date: message.date };
+        const asWritten = createSafeElement('span', { attrs: { class: 'date-as-written' } });
+        const slot: DateSlot = { time, asWritten, date: message.date };
         applyDate(slot);
         slots.push(slot);
 
@@ -1445,10 +1387,10 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         const also = alsoText === '' ? null : createSafeElement('p', { attrs: { class: 'note rebuilt-also' }, text: alsoText });
         const date: RebuiltDateSlot = {
             time: createSafeElement('time', { attrs: { class: 'message-date' } }),
-            asWritten: createSafeElement('span', { attrs: { class: 'sender-time' } }),
+            asWritten: createSafeElement('span', { attrs: { class: 'date-as-written' } }),
             date: card.date,
         };
-        applyRebuiltDate(date, zone);
+        applyRebuiltDate(date);
         const meta = createSafeElement('dl', { attrs: { class: 'message-meta' }, children: rebuiltMetaRows(card, date) });
         // The rebuilt text, as text; "(no text)" if there is none. A rebuilt email with no text
         // (task 8.14, Q4) says "Not in the PDF: this email has no text." instead, under its text when that is
@@ -1859,10 +1801,6 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     function relabel(): void
     {
         labels.relabel();
-        if (homeOption !== null)
-        {
-            homeOption.textContent = zoneLabel(homeZone, homeZone);
-        }
         setPdfState(pdfState);
         for (const [position, item] of itemSlots)
         {
@@ -1933,7 +1871,7 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
                     slot.also.textContent = rebuiltAlsoText(slot.card.alsoNumbers);
                 }
                 slot.meta.replaceChildren(...rebuiltMetaRows(slot.card, slot.date));
-                applyRebuiltDate(slot.date, zone);
+                applyRebuiltDate(slot.date);
                 for (const builtBlock of slot.body?.blocks ?? [])
                 {
                     if (builtBlock.what !== null)
@@ -1964,27 +1902,6 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
     }
 
     // --- Controls -------------------------------------------------------------
-    zoneSelect.addEventListener('change', () =>
-    {
-        zone = zoneSelect.value;
-        syncZoneNote();
-        for (const slot of slots)
-        {
-            applyDate(slot);
-        }
-        for (const slot of rebuiltSlots.values())
-        {
-            applyRebuiltDate(slot.date, zone);
-        }
-        try
-        {
-            options.onZoneChange?.();
-        }
-        catch
-        {
-            // The dates are shown in the new zone either way.
-        }
-    });
     foldToggle.addEventListener('change', () =>
     {
         showFolded = foldToggle.checked;
@@ -2011,13 +1928,9 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
         {
             clear();
             // Back to the start: the next person or batch begins from the defaults.
-            zone = homeZone;
-            zoneSelect.value = homeZone;
-            syncZoneNote();
             showFolded = false;
             foldToggle.checked = false;
         },
-        zone: () => zone,
         isRendering: () => pending !== null,
         setPdfPlans,
         pdfPlansFailed()

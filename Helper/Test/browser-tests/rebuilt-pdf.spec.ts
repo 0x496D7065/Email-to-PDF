@@ -37,7 +37,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+import { watchPage, workerCspReports,
     type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -93,8 +93,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__rebuiltPdfViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__rebuiltPdfViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__rebuiltPdfViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -143,10 +142,9 @@ async function expectNothingLeftThePage(page: Page, pdfs = 1): Promise<void>
     }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = browserEngineOf(page.context());
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__rebuiltPdfViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__rebuiltPdfViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
     const stored = await page.evaluate(async () => ({
         localStorage: localStorage.length,
         sessionStorage: sessionStorage.length,
@@ -184,8 +182,8 @@ test('by default the PDF holds the three rebuilt emails, shown and numbered like
         expect(all.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
     }
     expect(all.indexOf(`${heading(3)} From`)).toBeLessThan(all.indexOf(`${heading(4)} From`));
-    // A quoted time is shown as a real email's date (no "about").
-    expect(all).toMatch(/Date 2025-03-03 \d\d:40:00 UTC\+01:00/);
+    // A quoted time is shown as a real email's date, as written in the quote (no "about", never converted, task 9.9c).
+    expect(all).toContain('Date 2025-03-03 15:40:00 Subject');
     expect(all).not.toMatch(/Date about/);
     // No SHA-256 at all (task 8.12).
     expect(all).not.toMatch(/\b[0-9a-f]{64}\b/);

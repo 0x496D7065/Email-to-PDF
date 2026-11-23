@@ -130,7 +130,7 @@ function prepare(result: ThreadAnalysisResult, positions: readonly number[], cho
     // Every rebuilt email not chosen is one the reader unticked (Source/web-page/review.ts, untickedRebuilt, with every card shown).
     const unticked = ids.filter((id) => !rebuilt.includes(id));
     const input = { result, positions, plans, policy, rebuilt, unticked };
-    const pdfDocument: PdfDocument = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
+    const pdfDocument: PdfDocument = buildPdfDocument({ ...input, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
     // The preview's views, as Source/web-page/pdf-labels.ts makes them.
     const sources = signatureSources(
         positions.map((p) => ({ message: result.messages[p]!.message, position: p })),

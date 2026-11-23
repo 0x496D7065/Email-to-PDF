@@ -5,8 +5,8 @@
 //
 // - the whole flow: files added, the button pressed with the keyboard, the
 //   PDF downloaded once by itself (Playwright's download event) with the
-//   name correspondence-YYYY-MM-DD.pdf of the generation day in the page's
-//   time zone; the file is a PDF whose pages and bookmarks are read back
+//   name correspondence-YYYY-MM-DD.pdf of the generation day on the
+//   computer's clock; the file is a PDF whose pages and bookmarks are read back
 //   with the test reader (Helper/Test/test-support/pdf-reader.ts); "Download again"
 //   gives the same file again;
 // - offline: the page loaded, then the network switched off, then files
@@ -38,8 +38,6 @@ import {
     browserEngineOf,
     untoleratedReports,
     watchPage,
-    withoutSelectConsole,
-    withoutSelectReports,
     workerCspReports,
     workersNamed,
     type PageWatch,
@@ -106,7 +104,7 @@ function syntheticEmail(emailNumber: number): InputFile
     return textFile(`bench-order-${numberText}.eml`, text);
 }
 
-// The browser's zone: Tokyo (UTC+9, no daylight saving time), so the day of
+// The computer's clock: Tokyo (UTC+9, no daylight saving time), so the day of
 // a PDF made at 20:00 UTC is already the next day there.
 const ZONE = 'Asia/Tokyo';
 test.use({ timezoneId: ZONE });
@@ -145,8 +143,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__downloadViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__downloadViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -206,13 +203,13 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__downloadViolations));
+    const violations = await page.evaluate(() => window.__downloadViolations);
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     const named = (['parse-worker', 'engine-worker', 'pdf-worker'] as const).reduce((sum, name) => sum + workersNamed(watch, watch.workers, name).length, 0);
     expect(named).toBe(watch.workers.length);
     await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
     const stored = await page.evaluate(async () => ({
         localStorage: localStorage.length,
         sessionStorage: sessionStorage.length,
@@ -229,7 +226,6 @@ test('makes the PDF with the keyboard, downloads it once by itself, and offers i
     await page.clock.setFixedTime(FIXED_NOW);
     await open(page);
     await addFiles(page, FILES, FILE_COUNT);
-    await expect(page.getByLabel(en.preview.zone)).toHaveValue(ZONE);
     expect(downloads).toEqual([]);
     await expect(link(page)).toBeHidden();
 
@@ -256,7 +252,7 @@ test('makes the PDF with the keyboard, downloads it once by itself, and offers i
     expect(titles[0]).toBe(en.pdf.document.coverBookmark);
     expect(titles.filter((title) => title.includes('Office desks and chairs'))).toHaveLength(4);
     expect(titles.filter((title) => title.includes('Spare chair'))).toHaveLength(1);
-    // Dated in Tokyo time: the first email (2025-03-03 08:15 UTC) is on 3 March there too.
+    // Dated as written (task 9.9c): the first email ("08:15 ... +0000") is on 3 March.
     expect(titles.some((title) => title.startsWith('1. 2025-03-03, '))).toBe(true);
 
     // "Download again": a link in the page, with the PDF's blob: URL and name.

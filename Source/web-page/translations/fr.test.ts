@@ -66,7 +66,6 @@ const SAME_AS_ENGLISH: ReadonlySet<string> = new Set([
     'preview.foldLabelFrom',
     'counts.sentence',
     'counts.messagesFoundAttached',
-    'pdf.document.column.dateInZone',
     'pdf.document.attachment',
     'pdf.document.attachmentNoType',
 ]);

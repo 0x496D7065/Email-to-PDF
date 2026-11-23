@@ -193,8 +193,19 @@ const REMOVED_PDF_TEXTS: Record<Locale, string[]> = {
     ],
 };
 
-/** The pdf.document keys removed in task 8.8. */
-const REMOVED_KEYS = ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unreadable', 'unreadableIntro', 'noFingerprint', 'controlChars', 'dateAsWritten', 'keptAllEmpty', 'fallback'];
+/** The pdf.document keys removed in task 8.8, and the time-zone row removed in task 9.9c (dates are printed as written). */
+const REMOVED_KEYS = ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unreadable', 'unreadableIntro', 'noFingerprint', 'controlChars', 'dateAsWritten', 'keptAllEmpty', 'fallback',
+    'timeZone'];
+
+/**
+ * The time-zone texts removed in task 9.9c (every date printed as written, user decision): the cover's
+ * zone row, the zone in the index's date column title and the "sender's local time" line, as they read before.
+ */
+const REMOVED_ZONE_TEXTS: Record<Locale, string[]> = {
+    en: ['Dates shown in', "Sender's local time: {time}"],
+    fr: ['Fuseau horaire', 'Heure locale de l’expéditeur\u00A0: {time}'],
+    nl: ['Lokale tijd van de afzender: {time}'],
+};
 
 /** Every text of a catalog value, plural forms included. */
 function textsOf(value: unknown): string[]
@@ -221,7 +232,6 @@ function forbidden(locale: Locale): string[]
     const appNotes = [
         ...textsOf(catalog.warnings),
         ...textsOf(catalog.preview.order),
-        catalog.preview.zoneNotRecognized,
         catalog.preview.dateAsWritten,
         ...textsOf(catalog.review.pdfNote),
         catalog.review.codedCharacters,
@@ -229,17 +239,17 @@ function forbidden(locale: Locale): string[]
         catalog.rebuilt.noteMarks,
         catalog.rebuilt.noteNoMarks,
     ];
-    return [...REMOVED_PDF_TEXTS[locale], ...appNotes].flatMap((text) => text.split(/\{[a-z]+\}/i).map((piece) => piece.trim())).filter((piece) => piece.length >= 10);
+    return [...REMOVED_PDF_TEXTS[locale], ...REMOVED_ZONE_TEXTS[locale], ...appNotes].flatMap((text) => text.split(/\{[a-z]+\}/i).map((piece) => piece.trim())).filter((piece) => piece.length >= 10);
 }
 
-async function make8(locale: Locale, timeZone: string)
+async function make8(locale: Locale, generatedOffsetMinutes: number)
 {
     const result = analyzeThread(input().results);
     const before = JSON.stringify(result);
     const positions = result.messages.map((_, k) => k);
     const plans = plansOf(result, positions);
     const rebuilt = rebuiltEntries(result).map((r) => r.id);
-    const base = { result, positions, plans, rebuilt, policy: DEFAULT_OUTPUT_POLICY, timeZone, generatedAt: GENERATED_AT };
+    const base = { result, positions, plans, rebuilt, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes, generatedAt: GENERATED_AT };
     const made = await generatePdf({ ...base, fonts, locale });
     const pdfDocument = buildPdfDocument({ ...base, strings: createPdfStrings(locale) });
     const pdf = readPdf(made.bytes);
@@ -260,8 +270,10 @@ describe('task 8.8: the PDF holds no notes', () =>
             {
                 expect(keys, `${locale}: pdf.document.${key}`).not.toContain(key);
             }
+            expect(Object.keys(CATALOG[locale]!.pdf.document.column), `${locale}: pdf.document.column.dateInZone`).not.toContain('dateInZone');
             const stringsRecord = createPdfStrings(locale) as unknown as Record<string, unknown>;
-            for (const key of ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unreadableHeading', 'unreadableIntro', 'noFingerprint', 'controlChars', 'dateAsWritten', 'zoneUnknown', 'keptAllEmpty', 'fallback', 'contentNotes'])
+            for (const key of ['noDates', 'undated', 'zoneFallback', 'sourceCopy', 'unreadableHeading', 'unreadableIntro', 'noFingerprint', 'controlChars', 'dateAsWritten', 'zoneUnknown', 'keptAllEmpty', 'fallback', 'contentNotes',
+                'timeZoneLabel', 'indexDateColumn', 'senderLocal'])
             {
                 expect(stringsRecord[key], `${locale}: ${key}`).toBeUndefined();
             }
@@ -271,12 +283,12 @@ describe('task 8.8: the PDF holds no notes', () =>
 
     for (const locale of LOCALES)
     {
-        for (const timeZone of ['Africa/Lagos', 'Not/A_Zone'])
+        for (const generatedOffsetMinutes of [60, -300])
         {
-            it(`${locale}, ${timeZone}: no note anywhere; placeholders, footer, bookmarks and file list kept`, async () =>
+            it(`${locale}, reader at ${String(generatedOffsetMinutes)} minutes: no note anywhere; placeholders, footer, bookmarks and file list kept`, async () =>
             {
                 const strings = createPdfStrings(locale);
-                const { result, before, rebuilt, pdfDocument, pages, all, bookmarks } = await make8(locale, timeZone);
+                const { result, before, rebuilt, pdfDocument, pages, all, bookmarks } = await make8(locale, generatedOffsetMinutes);
 
                 // The set has every case.
                 expect(rebuilt.length).toBeGreaterThan(0);
@@ -288,7 +300,7 @@ describe('task 8.8: the PDF holds no notes', () =>
                 expect(pdfDocument.emails.some((e) => e.rebuilt === null && e.flags.zoneUnknown)).toBe(true);
                 expect(pdfDocument.cover.undated).toBeGreaterThanOrEqual(2);
                 expect(pdfDocument.controlChars).toBeGreaterThanOrEqual(3);
-                expect(pdfDocument.zoneFallback).toBe(timeZone === 'Not/A_Zone');
+                expect(Object.keys(pdfDocument)).not.toContain('zoneFallback');
 
                 // No removed text and no app note, anywhere: pages and bookmarks.
                 for (const forbiddenText of forbidden(locale))
@@ -319,9 +331,11 @@ describe('task 8.8: the PDF holds no notes', () =>
                 }
                 // Kept: the date as written, alone in its row (its control character as a code).
                 expect(bare(all)).toContain(bare(`${strings.dateLabel} Someday[U+0007] around noon ${strings.subjectLabel}`));
-                // Kept: the zone used, and nothing after it.
-                const zoneShown = timeZone === 'Not/A_Zone' ? 'UTC' : 'Africa/Lagos';
-                expect(all).toContain(`${strings.timeZoneLabel} ${zoneShown} ${strings.generatedLabel}`);
+                // No time-zone row (task 9.9c): the email count, then the generation date on the reader's clock.
+                // No offset after any date either.
+                const generated = new Date(GENERATED_AT + generatedOffsetMinutes * 60_000).toISOString().replace('T', ' ').slice(0, 19);
+                expect(all).toContain(`${strings.emailCount(pdfDocument.emails.length)} ${strings.generatedLabel} ${generated}`);
+                expect(all).not.toMatch(/UTC[+-]\d\d:\d\d/);
                 // No source file list and no SHA-256 (task 8.12); the merged copy is still named, in its email's File row.
                 expect(bare(all)).not.toMatch(/[0-9a-f]{64}/);
                 expect(bare(all)).toContain(bare(COPY_FILE));

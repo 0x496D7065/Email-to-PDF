@@ -31,8 +31,6 @@ import {
     browserEngineOf,
     untoleratedReports,
     watchPage,
-    withoutSelectConsole,
-    withoutSelectReports,
     workerCspReports,
     workersNamed,
     type PageWatch,
@@ -99,8 +97,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__languageViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__languageViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -141,13 +138,13 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__languageViolations));
+    const violations = await page.evaluate(() => window.__languageViolations);
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     const named = (['parse-worker', 'engine-worker', 'pdf-worker'] as const).reduce((sum, name) => sum + workersNamed(watch, watch.workers, name).length, 0);
     expect(named).toBe(watch.workers.length);
     await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
     const stored = await page.evaluate(async () => ({
         localStorage: localStorage.length,
         sessionStorage: sessionStorage.length,

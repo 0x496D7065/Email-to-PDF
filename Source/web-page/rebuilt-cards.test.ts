@@ -77,8 +77,6 @@ function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}):
     preview = mountPreview(
         { checkArea: area as unknown as HTMLDivElement },
         {
-            zones: ['America/New_York', 'Asia/Tokyo'],
-            initialZone: 'America/New_York',
             chunkSize: 1000,
             header: [review.element],
             toolbarItems: [review.rebuiltSwitch],
@@ -207,7 +205,8 @@ describe('rebuilt cards in the list', () =>
         const [outlookEn, gmail, outlookNl] = rebuiltItems();
         expect(one(outlookNl as FakeElement, 'message-subject').textContent).toBe('Re: Office desks and chairs');
         const nlRows = metaRows(outlookNl as FakeElement);
-        expect(nlRows[0]).toMatch(/^Date: about 2025-03-03 \d\d:40 UTC-05:00 As written in the quote: maandag 3 maart 2025 15:40$/);
+        // As written in the quote, never converted and never "about" (task 9.9c).
+        expect(nlRows[0]).toBe('Date: 2025-03-03 15:40 As written in the quote: maandag 3 maart 2025 15:40');
         expect(nlRows[1]).toBe('From: Alice Example <alice@example.test>');
         // An attribution holds no subject: the chain's (user decision F3, task 9.9a), shown as it is.
         const subject = one(gmail as FakeElement, 'message-subject');
@@ -314,41 +313,44 @@ describe('rebuilt cards in the list', () =>
         expect(rows).toContain('Cc: (list may be incomplete)');
     });
 
-    it('show the date again in another zone when the zone changes', () =>
+    it('show the quoted time as written, with no time-zone list to change it (task 9.9c)', () =>
     {
         show(analysisOf(LAST));
         const card = rebuiltItems()[2] as FakeElement;
         const time = card.descendants().find((d) => d.tagName === 'time') as FakeElement;
-        const before = time.textContent;
-        const zone = byId('preview-zone');
-        zone.value = 'Asia/Tokyo';
-        zone.fire('change');
-        expect(time.textContent).not.toBe(before);
-        expect(time.textContent).toMatch(/^about 2025-03-0\d \d\d:40 UTC\+09:00$/);
-        expect(time.getAttribute('datetime')).toMatch(/^2025-03-03T\d\d:40:00\.000Z$/);
+        // "Verzonden: maandag 3 maart 2025 15:40": no zone written, so none in <time datetime> either.
+        expect(time.textContent).toBe('2025-03-03 15:40');
+        expect(time.getAttribute('datetime')).toBe('2025-03-03T15:40:00');
+        expect(area.descendants().some((e) => e.tagName === 'select' || e.getAttribute('id') === 'preview-zone')).toBe(false);
     });
 
-    it('write the dates as the quote allows: "about" for a guessed time only, a day as written (never "about", user decision Q2), an unreadable one only as written', () =>
+    it('write the dates as the quote allows: a time as written (never "about", never converted), a day as written, an unreadable one only as written', () =>
     {
-        const timestamp = Date.parse('2025-03-03T14:40:00Z');
-        expect(rebuiltDateTexts({ kind: 'moment', utcMs: timestamp, approximate: false, text: 'x' }, 'UTC')).toEqual({
-            main: '2025-03-03 14:40 UTC+00:00',
-            iso: '2025-03-03T14:40:00.000Z',
-            asWritten: 'As written in the quote: x',
+        // Winter, no zone written: the estimated moment (13:40 UTC, read at +01:00) is never shown.
+        const wall = Date.parse('2025-03-03T14:40:00Z');
+        const guess = { kind: 'moment' as const, utcMs: Date.parse('2025-03-03T13:40:00Z'), wallMs: wall, writtenOffsetMinutes: null, approximate: true, text: 'x' };
+        expect(rebuiltDateTexts(guess)).toEqual({ main: '2025-03-03 14:40', iso: '2025-03-03T14:40:00', asWritten: 'As written in the quote: x' });
+        // Summer, a zone written in the quote ("+0200"): the same time, the zone in <time datetime> only.
+        const summer = {
+            kind: 'moment' as const, utcMs: Date.parse('2026-04-21T11:54:00Z'), wallMs: Date.parse('2026-04-21T13:54:00Z'), writtenOffsetMinutes: 120,
+            approximate: false, text: 'Tue, 21 Apr 2026 13:54:00 +0200',
+        };
+        expect(rebuiltDateTexts(summer)).toEqual({
+            main: '2026-04-21 13:54', iso: '2026-04-21T13:54:00+02:00', asWritten: 'As written in the quote: Tue, 21 Apr 2026 13:54:00 +0200',
         });
-        expect(rebuiltDateTexts({ kind: 'moment', utcMs: timestamp, approximate: true, text: 'x' }, 'UTC').main).toBe('about 2025-03-03 14:40 UTC+00:00');
-        expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', approximate: true, text: '3 maart 2025' }, 'UTC')).toEqual({
+        expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', utcMs: null, approximate: true, text: '3 maart 2025' })).toEqual({
             main: '2025-03-03',
             iso: '2025-03-03',
             asWritten: 'As written in the quote: 3 maart 2025',
         });
-        expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', approximate: false, text: '3 March 2025' }, 'UTC').main).toBe('2025-03-03');
-        expect(rebuiltDateTexts({ kind: 'unreadable', text: 'gisteren' }, 'UTC')).toEqual({
+        expect(rebuiltDateTexts({ kind: 'day', day: '2025-03-03', utcMs: wall, approximate: false, text: '3 March 2025' }).main).toBe('2025-03-03');
+        expect(rebuiltDateTexts({ kind: 'unreadable', text: 'gisteren' })).toEqual({
             main: '(date could not be read)',
             iso: null,
             asWritten: 'As written in the quote: gisteren',
         });
-        expect(rebuiltDateTexts({ kind: 'none' }, 'UTC')).toEqual({ main: '(no date)', iso: null, asWritten: null });
+        expect(rebuiltDateTexts({ ...guess, wallMs: Number.NaN })).toEqual({ main: '(date could not be read)', iso: null, asWritten: 'As written in the quote: x' });
+        expect(rebuiltDateTexts({ kind: 'none' })).toEqual({ main: '(no date)', iso: null, asWritten: null });
         expect(() => rebuiltNoteText({ sourceNumber: null, quoteMarksRemoved: false })).toThrow();
     });
 

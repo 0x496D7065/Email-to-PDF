@@ -59,7 +59,6 @@ import {
     isWebKitBlobRead,
     untoleratedReports,
     watchWorkers,
-    withoutSelectReports,
     workerCspReports as sharedWorkerCspReports,
 } from './support/network-and-csp-watch.ts';
 import type { ProcessProgress, ProcessResult } from '../../../Header/file-processing.ts';
@@ -276,8 +275,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         // an inline one about the live page at the element concerned.
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__e2eViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -324,7 +322,7 @@ async function expectNoNetworkAndPageAlive(page: Page): Promise<void>
     // CSP). Anything else, including the same directive fired at a live
     // element, would be an attempted load or execution.
     const pageViolations = await page.evaluate(() => window.__e2eViolations);
-    expect(untoleratedReports(browserEngineOf(page.context()), withoutSelectReports(browserEngineOf(page.context()), pageViolations))).toEqual([]);
+    expect(untoleratedReports(browserEngineOf(page.context()), pageViolations)).toEqual([]);
     expect(workerCspReports()).toEqual([]);
     expect(await page.title()).toBe('Email to PDF');
     expect(await page.evaluate(() => 6 * 7)).toBe(42);
@@ -793,7 +791,7 @@ for (const which of ['parse', 'engine', 'pdf'] as const)
             // Blocked by the CSP before any request was made.
             expect(requestsAfterLoad()).toEqual([]);
             // The page itself saw nothing: its listener does not see worker violations.
-            expect(withoutSelectReports(browserName, await page.evaluate(() => window.__e2eViolations), policies.length)).toEqual([]);
+            expect(await page.evaluate(() => window.__e2eViolations)).toEqual([]);
         });
     }
 

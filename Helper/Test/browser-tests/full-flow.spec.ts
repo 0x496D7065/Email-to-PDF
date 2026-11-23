@@ -9,7 +9,7 @@
 //    are not in the set: JOURNEY_FIXTURES in the manifest) is dropped on step 1
 //    with a real DataTransfer and the drag events a browser fires. Then:
 //    counts, date order, the HTML-only .msg shown as plain text, a folded
-//    quote, the time zone, an unticked email, the notes of an undated email,
+//    quote, the dates as written, an unticked email, the notes of an undated email,
 //    and finally "Clear everything". The expected values come from the
 //    fixture manifest (Helper/Test/test-data/manifest.ts), not from the app.
 // 2. "keyboard only": from page load, every control is reached and operated
@@ -54,8 +54,6 @@ import {
     PARSE_TIME_CONSOLE,
     untoleratedReports,
     watchPage,
-    withoutSelectConsole,
-    withoutSelectReports,
     workerCspReports,
     workersNamed,
     type PageWatch,
@@ -104,6 +102,8 @@ interface Expected
     readonly id: string;
     readonly fileName: string;
     readonly utcMs: number | null;
+    /** The offset the date was written with (null: none written; see dateText). */
+    readonly offsetMinutes: number | null;
     readonly subject: string;
     readonly group: string;
 }
@@ -164,6 +164,7 @@ test.beforeAll(async () =>
         id: f.id,
         fileName: fileNameOf(f),
         utcMs: f.date.utcMs,
+        offsetMinutes: f.date.offsetMinutes ?? null,
         subject: f.subject === null || f.subject.trim() === '' ? en.preview.noSubject : f.subject,
         group: f.duplicateGroup ?? f.id,
     }));
@@ -176,8 +177,11 @@ test.beforeAll(async () =>
  */
 function expectedList(): Expected[]
 {
+    const dropIndex = (e: Expected): number => dropFiles.findIndex((f) => f.name === e.fileName);
+    // The copy kept of a duplicate group (whose date is shown, as written): the first dropped, as
+    // they all cover each other (Source/thread-analysis/dedupe.ts, pickRepresentative).
     const kept = new Map<string, Expected>();
-    for (const expectedEmail of expected)
+    for (const expectedEmail of [...expected].sort((a, b) => dropIndex(a) - dropIndex(b)))
     {
         if (!kept.has(expectedEmail.group))
         {
@@ -193,25 +197,28 @@ function expectedList(): Expected[]
             throw new Error(`same date: ${dated[i]?.id ?? ''}`);
         }
     }
-    const dropIndex = (e: Expected): number => dropFiles.findIndex((f) => f.name === e.fileName);
     const undated = list.filter((e) => e.utcMs === null).sort((a, b) => dropIndex(a) - dropIndex(b));
     return [...dated, ...undated];
 }
 
-/** "2025-03-03 08:15:00 UTC+00:00" shifted by `offsetMinutes`, as the preview writes a date. */
-function dateText(utcMs: number, offsetMinutes: number): string
+/**
+ * An email's date as the preview writes it (task 9.9c): as written, "2025-03-03 09:15:00" for
+ * "Mon, 3 Mar 2025 09:15:00 +0100", never converted; an exact moment of unknown sender zone (a .msg
+ * date) as its UTC time, plain, with no mark; "(no date)" without one.
+ */
+function dateText(e: Expected): string
 {
-    const shifted = new Date(utcMs + offsetMinutes * 60_000).toISOString();
-    const sign = offsetMinutes < 0 ? '-' : '+';
-    const abs = Math.abs(offsetMinutes);
-    const offset = `${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
-    return `${shifted.slice(0, 10)} ${shifted.slice(11, 19)} UTC${sign}${offset}`;
+    if (e.utcMs === null)
+    {
+        return en.preview.noDate;
+    }
+    const wall = new Date(e.utcMs + (e.offsetMinutes ?? 0) * 60_000).toISOString();
+    return `${wall.slice(0, 10)} ${wall.slice(11, 19)}`;
 }
 
-// A zone with a half-hour offset and no daylight saving time, so the dates
-// shown at first are known and differ from every fixture's own zone.
+// A zone with a half-hour offset and no daylight saving time, far from every
+// fixture's own zone: the dates must still show as written.
 const BROWSER_ZONE = 'Australia/Darwin';
-const BROWSER_OFFSET = 570;
 test.use({ timezoneId: BROWSER_ZONE });
 
 let origin = '';
@@ -245,8 +252,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         // an inline one about the live page at the element concerned (see the top).
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__flowViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -320,14 +326,14 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__flowViolations));
+    const violations = await page.evaluate(() => window.__flowViolations);
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     const named = workersNamed(watch, watch.workers, 'parse-worker').length + workersNamed(watch, watch.workers, 'engine-worker').length;
     expect(named).toBe(watch.workers.length);
     await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
     const directives = violations.filter(isParseTimeReport).map((v) => v.split(' ')[0] ?? '');
-    const consoleProblems = withoutSelectConsole(browserName, problems);
+    const consoleProblems = problems;
     for (const known of PARSE_TIME_CONSOLE)
     {
         const lines = consoleProblems.filter((p) => known.line.test(p)).length;
@@ -382,10 +388,9 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     await expect(items.locator('.message-subject')).toHaveText(list.map((e) => e.subject));
     await expect(items.locator('.message-number')).toHaveText(list.map((_, i) => `#${String(i + 1)}`));
 
-    // Dates in the browser's zone at first.
-    const dates = list.map((e) => (e.utcMs === null ? en.preview.noDate : dateText(e.utcMs, BROWSER_OFFSET)));
-    await expect(items.locator('.message-date')).toHaveText(dates);
-    await expect(page.getByLabel(en.preview.zone)).toHaveValue(BROWSER_ZONE);
+    // Dates as written in each email, whatever the browser's zone; no time-zone list.
+    await expect(items.locator('.message-date')).toHaveText(list.map(dateText));
+    await expect(page.locator('select')).toHaveCount(0);
 
     // Every email's text is in the page (folded or not), and no element was
     // made from email content: no link, image, frame, script or style.
@@ -450,13 +455,6 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     await expect(page.locator('#preview-list details.fold[open]')).toHaveCount(0);
     // The merged copies are named on the email kept.
     await expect(reply.locator('dd.meta-also-in')).toHaveCount(1);
-
-    // --- Another zone rewrites every date, nothing else. --------------------
-    await reply.locator('.message-body').evaluate((body) => body.setAttribute('data-test-mark', 'kept'));
-    await page.getByLabel(en.preview.zone).selectOption('UTC');
-    await expect(items.locator('.message-date')).toHaveText(list.map((e) => (e.utcMs === null ? en.preview.noDate : dateText(e.utcMs, 0))));
-    await expect(items.locator('.message-subject')).toHaveText(list.map((e) => e.subject));
-    await expect(reply.locator('.message-body')).toHaveAttribute('data-test-mark', 'kept');
 
     // --- Untick one email: it stays, dimmed; the count follows. -------------
     const untick = items.nth(1);
@@ -535,7 +533,6 @@ test('the whole journey: drop every fixture, check the list, change the choices,
     }
     expect(after.text).not.toMatch(/@example\.test|@sample\.invalid|@furniture\.example\.test/);
     expect(after.html).not.toMatch(/@[\w.-]+\.(?:test|invalid)\b/);
-    await expect(page.getByLabel(en.preview.zone)).toHaveValue(BROWSER_ZONE);
     await expect(toggle).not.toBeChecked();
     expect(page.url()).toBe(url);
 
@@ -717,22 +714,6 @@ test('keyboard only: every control is reached in order, shows its focus and work
             await expect(here).toHaveAccessibleName(en.actions.clearEverything);
             await expect(here).not.toHaveAttribute('aria-disabled', /.*/);
         }
-        else if (focus.tag === 'SELECT')
-        {
-            // Typing picks an option, as on a closed native list: the first one
-            // whose label starts with the typed text. Which one that is depends on
-            // the zone list (its labels and order), which this test does not own,
-            // so if typing picked another zone, choose "UTC" directly instead.
-            // The value is asserted either way.
-            await page.keyboard.type('UTC');
-            if ((await here.inputValue()) !== 'UTC')
-            {
-                await here.selectOption('UTC');
-                await here.focus();
-            }
-            await expect(here).toHaveValue('UTC');
-            await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 08:15:00 UTC+00:00');
-        }
         else if (focus.tag === 'INPUT' && (await here.getAttribute('id')) === 'preview-show-folded')
         {
             await page.keyboard.press('Space');
@@ -790,19 +771,19 @@ test('keyboard only: every control is reached in order, shows its focus and work
 
     // The stops, in order: the language picker (its ticked radio), the Ko-fi
     // button (not in WebKit), the privacy panel's summary, step 1's help,
-    // choose, clear, zone, folded-text toggle, "Print full original text",
+    // choose, clear, folded-text toggle, "Print full original text",
     // then per email its checkbox and its folded blocks, and the download
     // button last.
     const tags = walk.map((f) => f.tag);
     const links = donateFocus.length;
-    expect(tags.slice(0, 8 + links)).toEqual(['INPUT', ...donateFocus.map(() => 'A'), 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'SELECT', 'INPUT', 'INPUT']);
+    expect(tags.slice(0, 7 + links)).toEqual(['INPUT', ...donateFocus.map(() => 'A'), 'SUMMARY', 'SUMMARY', 'BUTTON', 'BUTTON', 'INPUT', 'INPUT']);
     expect(walk[0]?.key).toBe('language');
     if (links > 0)
     {
         expect(walk[1]?.key).toBe('donate');
     }
     expect(walk[2 + links]?.key).toBe('help');
-    expect(walk[7 + links]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
+    expect(walk[6 + links]?.key).toBe(await page.locator('#pdf-everything').getAttribute('data-test-focus'));
     // The Ko-fi button is the only link (and a Tab stop where Tab stops on links).
     expect(tags.filter((tag) => tag === 'A')).toHaveLength(linksSkipped ? 0 : 1);
     await expect(page.locator('a[href]')).toHaveCount(1);

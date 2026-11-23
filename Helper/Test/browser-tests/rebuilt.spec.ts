@@ -21,7 +21,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts';
 import { phoneForwardParts, phoneForwardThread } from '../test-support/phone-forward-thread.ts';
-import { browserEngineOf, isParseTimeReport, PARSE_TIME_CONSOLE, untoleratedReports, watchPage, withoutSelectConsole, withoutSelectReports,
+import { browserEngineOf, isParseTimeReport, PARSE_TIME_CONSOLE, untoleratedReports, watchPage,
     workerCspReports, type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -78,8 +78,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         // an inline one about the live page at the element concerned.
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__rebuiltViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -121,12 +120,12 @@ async function expectNothingLeftThePage(page: Page, pdfs = 0): Promise<void>
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__rebuiltViolations));
+    const violations = await page.evaluate(() => window.__rebuiltViolations);
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     // One console line at most per tolerated parse-time report (as in Helper/Test/browser-tests/full-flow.spec.ts).
     const directives = violations.filter(isParseTimeReport).map((v) => v.split(' ')[0] ?? '');
-    const consoleProblems = withoutSelectConsole(browserName, problems);
+    const consoleProblems = problems;
     for (const known of PARSE_TIME_CONSOLE)
     {
         const lines = consoleProblems.filter((p) => known.line.test(p)).length;
@@ -150,11 +149,12 @@ test('by default, rebuilt cards appear before the email they come from, labelled
     await expect(rebuilt.nth(0)).toHaveCSS('border-top-style', 'dashed');
     await expect(rebuilt.locator('.rebuilt-note')).toHaveText([NOTE_MARKS, NOTE_MARKS, NOTE_NO_MARKS]);
     await expect(rebuilt.locator('dd.meta-source')).toHaveText(['email #1', 'email #1', 'email #1']);
-    // The newest quoted email: an Outlook block in Dutch; its date is a guess ("about"), shown as written too.
+    // The newest quoted email: an Outlook block in Dutch; its time as written, never converted and never
+    // "about" (task 9.9c), and the date text as written too.
     const newest = rebuilt.nth(2);
     await expect(newest.locator('.message-subject')).toHaveText('Re: Office desks and chairs');
     await expect(newest.locator('dd.meta-author')).toHaveText('Alice Example <alice@example.test>');
-    await expect(newest.locator('dd.meta-date')).toHaveText(/^about 2025-03-03 \d\d:40 UTC\+01:00 As written in the quote: maandag 3 maart 2025 15:40$/);
+    await expect(newest.locator('dd.meta-date')).toHaveText('2025-03-03 15:40 As written in the quote: maandag 3 maart 2025 15:40');
     // The Gmail quote: an attribution line holds no subject, so the card shows the subject of the
     // header above it (user decision F3, task 9.9a); its text without the ">" marks.
     const gmail = rebuilt.nth(1);
@@ -224,9 +224,10 @@ test('the keyboard goes through the toolbar, then each card in list order; a car
 {
     test.setTimeout(60_000);
     await openWithLastEmail(page);
-    await page.locator('#preview-zone').focus();
+    // The toolbar's first control (there is no time-zone list any more, task 9.9c).
+    await page.locator('#preview-show-folded').focus();
     const order: string[] = [];
-    for (let i = 0; i < 7; i++)
+    for (let i = 0; i < 6; i++)
     {
         await page.keyboard.press('Tab');
         order.push(await page.evaluate(() => document.activeElement?.id ?? ''));
@@ -234,7 +235,7 @@ test('the keyboard goes through the toolbar, then each card in list order; a car
     // Each card's folded signature (task 9.9b-2) is a Tab stop too, after its checkbox, as a fold in a real email.
     const summaries = await page.locator('#preview-list > li.message-rebuilt details.fold > summary').count();
     expect(summaries).toBe(3);
-    expect(order).toEqual(['preview-show-folded', 'pdf-everything', 'rebuilt-include-all', 'include-rebuilt-2', '', 'include-rebuilt-1', '']);
+    expect(order).toEqual(['pdf-everything', 'rebuilt-include-all', 'include-rebuilt-2', '', 'include-rebuilt-1', '']);
 
     const card = page.locator('#preview-list > li.message-rebuilt').nth(1);
     await card.getByRole('checkbox').focus();

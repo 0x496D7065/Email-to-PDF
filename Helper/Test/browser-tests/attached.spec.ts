@@ -16,7 +16,7 @@ import { readPageRuns, readPdf, textLines } from '../test-support/pdf-reader.ts'
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { fr } from '../../../Source/web-page/translations/fr.ts';
 import { nl } from '../../../Source/web-page/translations/nl.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+import { watchPage, workerCspReports,
     type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -92,7 +92,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__attachedViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            window.__attachedViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__attachedViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -156,10 +156,9 @@ test('an attached email is an email of its own in the preview and in the PDF', a
     expect(others).toEqual([]);
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = browserEngineOf(page.context());
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__attachedViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__attachedViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
     expect(downloads).toHaveLength(1);
 });
 
@@ -301,8 +300,7 @@ test('attached emails: where they come from, the unread note and the counts, in 
     const others = watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url));
     expect(others).toEqual([]);
     expect(watch.websockets).toEqual([]);
-    const browserName = browserEngineOf(page.context());
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__attachedViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__attachedViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
 });

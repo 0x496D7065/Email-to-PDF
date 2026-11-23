@@ -56,7 +56,6 @@ export function createPdfStrings(locale: string): PdfStrings
         emailsLabel: t('pdf.document.emails'),
         emailCount: (count) => t('pdf.document.emailCount', { count }),
         generatedLabel: t('pdf.document.generated'),
-        timeZoneLabel: t('pdf.document.timeZone'),
         peopleHeading: t('pdf.document.people'),
         noFileName: t('added.noName'),
         indexHeading: t('pdf.document.index'),
@@ -68,7 +67,6 @@ export function createPdfStrings(locale: string): PdfStrings
             attachments: t('pdf.document.column.attachments'),
             page: t('pdf.document.column.page'),
         },
-        indexDateColumn: (zone) => t('pdf.document.column.dateInZone', { zone }),
         emailHeading: (number) => t('pdf.document.emailHeading', { number: String(number) }),
         fromLabel: t('preview.from'),
         senderLabel: t('preview.author.sender'),
@@ -85,7 +83,6 @@ export function createPdfStrings(locale: string): PdfStrings
         noText: t('preview.noText'),
         unknownSender: t('preview.author.none'),
         noAttachmentName: t('preview.noAttachmentName'),
-        senderLocal: (time) => t('preview.senderTime', { time }),
         mailbox: (name, address) => t('preview.mailbox', { name, address }),
         size: formatSize,
         attachmentDetails: (sizeText, type) =>

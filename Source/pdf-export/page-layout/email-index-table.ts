@@ -13,8 +13,8 @@
 // 6 digits at 10 pt); a longer number would reach into the subject column,
 // still on one line, so even then no row grows.
 //
-// The date column holds the short form "YYYY-MM-DD HH:mm" on one line (its
-// title names the zone); its title, like any column title, may wrap: the
+// The date column holds the short form "YYYY-MM-DD HH:mm" on one line (as
+// written, task 9.9c); its title, like any column title, may wrap: the
 // titles are wrapped once, so they are equally tall on every index page.
 //
 // Pagination: the index starts right after the cover information, on the

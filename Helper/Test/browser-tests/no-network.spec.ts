@@ -17,8 +17,6 @@ interface Violation
     blockedURI: string;
     /** The policy that was violated: tells the header CSP and the meta CSP apart. */
     policy: string;
-    /** Fired at a <select>: WebKit's report about its own <select> parts (see withoutSelectReports in Helper/Test/browser-tests/support/network-and-csp-watch.ts). */
-    select: boolean;
 }
 
 declare global
@@ -96,23 +94,10 @@ test.beforeEach(async ({ context, page, baseURL }) =>
                 directive: event.effectiveDirective,
                 blockedURI: event.blockedURI,
                 policy: event.originalPolicy,
-                select: event.target instanceof HTMLSelectElement,
             });
         });
     });
 });
-
-/**
- * The violations without WebKit's <select> reports, after checking there is
- * exactly one per policy in force (`policies`) in WebKit and none elsewhere
- * (see withoutSelectReports in Helper/Test/browser-tests/support/network-and-csp-watch.ts).
- */
-function withoutSelect(browserName: string, list: readonly Violation[], policies: string[]): Omit<Violation, 'select'>[]
-{
-    const quirk = list.filter((v) => v.select).map((v) => `${v.directive} ${v.blockedURI} | ${v.policy}`);
-    expect(quirk.sort()).toEqual(browserName === 'webkit' ? policies.map((policy) => `style-src-attr inline | ${policy}`).sort() : []);
-    return list.filter((v) => !v.select).map(({ directive, blockedURI, policy }) => ({ directive, blockedURI, policy }));
-}
 
 test('loads with zero requests outside its own origin', async ({ page }) =>
 {
@@ -131,10 +116,10 @@ test('loads with zero requests outside its own origin', async ({ page }) =>
     expect(websockets).toEqual([]);
 });
 
-test('loads with zero CSP violations', async ({ page, browserName }) =>
+test('loads with zero CSP violations', async ({ page }) =>
 {
     await page.goto('/', { waitUntil: 'networkidle' });
-    expect(withoutSelect(browserName, await violations(page), [cspForHeader(), cspForMeta()])).toEqual([]);
+    expect(await violations(page)).toEqual([]);
 });
 
 test('sends the security headers and the meta CSP', async ({ page }) =>
@@ -191,10 +176,10 @@ async function tryForbiddenThings(page: Page): Promise<void>
     });
 }
 
-/** Violations as sorted "directive blockedURI | policy" strings (`policies`: those in force, see withoutSelect). */
-async function violationKeys(page: Page, browserName: string, policies: string[]): Promise<string[]>
+/** Violations as sorted "directive blockedURI | policy" strings. */
+async function violationKeys(page: Page): Promise<string[]>
 {
-    return withoutSelect(browserName, await violations(page), policies)
+    return (await violations(page))
         .map((v) => `${v.directive} ${v.blockedURI} | ${v.policy}`)
         .sort();
 }
@@ -244,7 +229,7 @@ test('the CSP blocks fetch() and remote images (header and meta)', async ({ page
         expected.push(`connect-src https://example.invalid/x | ${policy}`);
         expected.push(`img-src https://example.invalid/p.png | ${policy}`);
     }
-    await expect.poll(() => violationKeys(page, browserName, policies)).toEqual(expected.sort());
+    await expect.poll(() => violationKeys(page)).toEqual(expected.sort());
 
     await expectImageBlockedByCsp(browserName);
 });
@@ -270,12 +255,12 @@ test('the meta CSP alone blocks fetch() and remote images', async ({ page, brows
     // The bundled Ko-fi image loads under the meta CSP alone too (img-src 'self').
     expect(await page.locator('#donate-link img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
     const policy = cspForMeta();
-    expect(withoutSelect(browserName, await violations(page), [policy])).toEqual([]);
+    expect(await violations(page)).toEqual([]);
 
     await tryForbiddenThings(page);
 
     await expect
-        .poll(() => violationKeys(page, browserName, [policy]))
+        .poll(() => violationKeys(page))
         .toEqual(
             [
                 `script-src-elem inline | ${policy}`,
@@ -290,7 +275,7 @@ test('the meta CSP alone blocks fetch() and remote images', async ({ page, brows
 // The Ko-fi donation button (Source/web-page/safe-dom.ts, donationLink): the one link to
 // another website (README.md, rule R1). It must be a plain link that loads
 // nothing from Ko-fi, with Ko-fi's image served by this site.
-test('the Ko-fi button is a plain link with its image from this site, and Ko-fi is never contacted', async ({ page, browserName }) =>
+test('the Ko-fi button is a plain link with its image from this site, and Ko-fi is never contacted', async ({ page }) =>
 {
     await page.goto('/', { waitUntil: 'networkidle' });
     const link = page.locator('#donate-link');
@@ -337,7 +322,7 @@ test('the Ko-fi button is a plain link with its image from this site, and Ko-fi 
         expect(new URL(request.url()).origin, request.url()).toBe(origin);
     }
     expect(websockets).toEqual([]);
-    expect(withoutSelect(browserName, await violations(page), [cspForHeader(), cspForMeta()])).toEqual([]);
+    expect(await violations(page)).toEqual([]);
 });
 
 // What a click does: a new tab goes to Ko-fi (here stopped by the safety net

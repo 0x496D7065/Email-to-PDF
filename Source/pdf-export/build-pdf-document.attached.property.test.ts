@@ -204,7 +204,7 @@ function check(result: ThreadAnalysisResult, random: () => number, where: string
     const rebuilt = ids.filter(() => random() < 0.5);
     const unticked = ids.filter((id) => !rebuilt.includes(id));
     const pdfDocument: PdfDocument = buildPdfDocument(
-        { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt, unticked });
+        { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings, rebuilt, unticked });
     const bodies = pdfDocument.emails.map((e) => squash(bodyOf(e)));
     const ticked = new Set(positions);
     result.messages.forEach((analyzedMessage, position) =>

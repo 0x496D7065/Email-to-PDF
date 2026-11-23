@@ -11,7 +11,6 @@ import { DONATION_IMAGE, DONATION_URL } from '../../../Source/web-page/safe-dom.
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { withoutSelectConsole, withoutSelectReports } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -42,8 +41,7 @@ test.beforeEach(async ({ page }) =>
         window.__shellViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__shellViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__shellViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -79,7 +77,7 @@ test('shows the three steps in order, with landmarks, language and title', async
     }
 });
 
-test('starts with step 2 waiting and the download unavailable but explained', async ({ page, browserName }) =>
+test('starts with step 2 waiting and the download unavailable but explained', async ({ page }) =>
 {
     await open(page);
 
@@ -102,7 +100,7 @@ test('starts with step 2 waiting and the download unavailable but explained', as
     expect(page.url()).toBe(url);
     await expect(page.locator('#download-area')).toHaveAttribute('data-state', 'idle');
     await expect(page.locator('#download-link')).toBeHidden();
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
 });
 
 test('has one polite live region for status messages', async ({ page }) =>
@@ -206,12 +204,12 @@ test('has no inline styles, no inline handlers and no links to other sites but t
     expect(found).toEqual([`A#donate-link href=${DONATION_URL}`, `IMG src=${DONATION_IMAGE.src}`]);
 });
 
-test('loads without console errors, page errors or CSP violations', async ({ page, browserName }) =>
+test('loads without console errors, page errors or CSP violations', async ({ page }) =>
 {
     await open(page);
     await page.keyboard.press('Tab');
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__shellViolations))).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(await page.evaluate(() => window.__shellViolations)).toEqual([]);
+    expect(problems).toEqual([]);
 });
 
 test.describe('without JavaScript', () =>

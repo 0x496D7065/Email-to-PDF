@@ -13,7 +13,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports, workersNamed,
+import { watchPage, workerCspReports, workersNamed,
     type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -106,8 +106,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__clearViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__clearViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__clearViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -176,8 +175,8 @@ async function expectEmptyApp(page: Page): Promise<void>
     await expect(page.locator('#clear-everything')).toHaveAccessibleDescription(`${en.clear.unavailable} ${en.clear.note}`);
 }
 
-/** Nothing left the page, no CSP violation, no console error (see Helper/Test/browser-tests/review.spec.ts). `loads`: page loads since the test began. */
-async function expectNothingLeftThePage(page: Page, loads = 1): Promise<void>
+/** Nothing left the page, no CSP violation, no console error (see Helper/Test/browser-tests/review.spec.ts). */
+async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const workerUrls = new Set(watch.workers.map((w) => w.url()));
@@ -188,11 +187,9 @@ async function expectNothingLeftThePage(page: Page, loads = 1): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = browserEngineOf(page.context());
-    // The recorder starts again with each load; the console lines add up.
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__clearViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__clearViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems, 2, loads)).toEqual([]);
+    expect(problems).toEqual([]);
 }
 
 test('"Clear everything" is there from the start, unavailable but focusable and explained', async ({ page, browserName }) =>
@@ -241,14 +238,10 @@ test('after adding files, Clear removes every email text, file name and count; a
     expect(await storedState(page)).toEqual(NOTHING_STORED);
     await addFixtures(page);
 
-    // Some choices: one email unticked, folded text shown, another zone.
+    // Some choices: one email unticked, folded text shown.
     const items = page.locator('#preview-list > li');
     await items.nth(1).getByRole('checkbox', { name: en.actions.include }).uncheck();
     await page.getByLabel(en.preview.showFolded).check();
-    const zone = page.getByLabel(en.preview.zone);
-    const homeZone = await zone.inputValue();
-    expect(homeZone).toBe('America/New_York');
-    await zone.selectOption('Asia/Tokyo');
 
     // The texts that must disappear: every subject, a piece of every shown and
     // folded text block, every attachment line and every file name.
@@ -296,7 +289,6 @@ test('after adding files, Clear removes every email text, file name and count; a
     expect(after.chosenFiles).toBe(0);
     await expect(page.locator('#file-input')).toHaveValue('');
     // The toolbar is back to its defaults.
-    await expect(zone).toHaveValue(homeZone);
     await expect(page.getByLabel(en.preview.showFolded)).not.toBeChecked();
     expect(await contrastFailures(page, '#step-add', 6)).toEqual([]);
 
@@ -368,5 +360,5 @@ test('reloading after adding files shows an empty app: nothing was kept', async 
     expect(after.text).not.toContain('Office desks');
     expect(after.chosenFiles).toBe(0);
     expect(await storedState(page)).toEqual(NOTHING_STORED);
-    await expectNothingLeftThePage(page, 2);
+    await expectNothingLeftThePage(page);
 });

@@ -45,6 +45,7 @@
 //
 // Pure functions, no DOM (README.md, rule R7).
 
+import { hasWrittenZone } from '../thread-analysis/quoted-date';
 import { selectionKeys } from './email-selection';
 import type { EmailAddress } from '../../Header/parsed-email';
 import type { PreviewSlot, RebuiltCard, RebuiltDate, RebuiltInPdf, RebuiltSource } from '../../Header/preview-display';
@@ -335,7 +336,13 @@ export function rebuiltInPdf(
     return { shown: chosen.source, number: chosen.number, also: [...numbers].filter((n) => n !== chosen.number).sort((a, b) => a - b) };
 }
 
-/** The date of a rebuilt message (see RebuiltDate). */
+const isFiniteNumber = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+
+/**
+ * The date of a rebuilt message (see RebuiltDate): its wall-clock time as
+ * written (never converted, task 9.9c), and its estimated moment for
+ * ordering only.
+ */
 export function rebuiltDate(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'rebuilt'>): RebuiltDate
 {
     const { dateText, date, dateApproximate } = rebuiltEmail.rebuilt;
@@ -348,16 +355,19 @@ export function rebuiltDate(rebuiltEmail: Pick<AnalyzedRebuiltMessage, 'rebuilt'
     {
         return { kind: 'unreadable', text };
     }
-    if (date.precision === 'minute' && typeof date.estimatedUtcMs === 'number' && Number.isFinite(date.estimatedUtcMs))
+    if (date.precision === 'minute' && isFiniteNumber(date.estimatedUtcMs) && isFiniteNumber(date.wallMs))
     {
-        return { kind: 'moment', utcMs: date.estimatedUtcMs, approximate: dateApproximate, text };
+        // The zone the date wrote itself: the gap between the time as written and the exact moment.
+        const writtenOffsetMinutes = hasWrittenZone(date) ? (date.wallMs - date.estimatedUtcMs) / 60_000 : null;
+        return { kind: 'moment', utcMs: date.estimatedUtcMs, wallMs: date.wallMs, writtenOffsetMinutes, approximate: dateApproximate, text };
     }
-    if (date.precision === 'day' && typeof date.wallMs === 'number' && Number.isFinite(date.wallMs))
+    if (date.precision === 'day' && isFiniteNumber(date.wallMs))
     {
         const wallDate = new Date(date.wallMs);
         if (!Number.isNaN(wallDate.getTime()))
         {
-            return { kind: 'day', day: wallDate.toISOString().slice(0, 10), approximate: dateApproximate, text };
+            const utcMs = isFiniteNumber(date.estimatedUtcMs) ? date.estimatedUtcMs : null;
+            return { kind: 'day', day: wallDate.toISOString().slice(0, 10), utcMs, approximate: dateApproximate, text };
         }
     }
     return { kind: 'unreadable', text };

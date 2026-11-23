@@ -78,7 +78,7 @@ export interface PdfEmailFlags
 {
     /** No usable date: shown with the "no date" text. */
     readonly undated: boolean;
-    /** The sender's time zone is not known (the time may be off by hours). */
+    /** The sender's time zone is not known: the time is shown as written, but its place in the order may be off by hours. */
     readonly zoneUnknown: boolean;
     /** Plan rule 4: nothing would have been left, so the whole body is shown. */
     readonly keptAllBecauseEmpty: boolean;
@@ -141,10 +141,6 @@ export interface PdfDocument
     readonly title: string;
     /** Suggested file name (pdfFileName). */
     readonly fileName: string;
-    /** The zone the dates are shown in, as Intl names it ("UTC" after a fallback). */
-    readonly timeZone: string;
-    /** True when the asked-for zone was not valid and UTC was used (data only: the cover names just the zone used, task 8.8). */
-    readonly zoneFallback: boolean;
     readonly cover: PdfCover;
     readonly index: PdfIndex;
     /** The real and the rebuilt emails, in PDF order (see planPdfOrder). */
@@ -245,7 +241,6 @@ export interface PdfStrings
     readonly emailsLabel: string;
     emailCount(count: number): string;
     readonly generatedLabel: string;
-    readonly timeZoneLabel: string;
     readonly peopleHeading: string;
     /** An email's File row when the file has no name. */
     readonly noFileName: string;
@@ -260,8 +255,6 @@ export interface PdfStrings
         readonly attachments: string;
         readonly page: string;
     };
-    /** The index's date column title, naming the zone its short dates are in: "Date (America/New York)". */
-    indexDateColumn(zone: string): string;
 
     // One email.
     emailHeading(number: number): string;
@@ -281,8 +274,6 @@ export interface PdfStrings
     readonly noText: string;
     readonly unknownSender: string;
     readonly noAttachmentName: string;
-    /** "Sender's local time: ..." under the date, when the sender's clock showed another time. */
-    senderLocal(time: string): string;
     // No note of any kind: what the tool was unsure about is said in the app,
     // never in the PDF (user rule 2026-11-05, task 8.8).
     // Emails rebuilt from quoted text use the texts above, like real emails:
@@ -302,7 +293,7 @@ export interface PdfStrings
 export interface GeneratedPdf
 {
     readonly bytes: Uint8Array;
-    /** "correspondence-YYYY-MM-DD.pdf" in English: the generation date in the chosen zone, the name in the PDF's language. */
+    /** "correspondence-YYYY-MM-DD.pdf" in English: the generation date on the reader's clock, the name in the PDF's language. */
     readonly fileName: string;
     /** How many pages the PDF has (for the page's "ready" message). */
     readonly pageCount: number;

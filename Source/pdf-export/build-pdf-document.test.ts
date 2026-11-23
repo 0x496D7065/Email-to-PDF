@@ -3,6 +3,7 @@
 // output plan, as the app does.
 
 import { describe, expect, it } from 'vitest';
+import { parseEmailDate } from '../email-reading/date-header';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { sizeText } from '../web-page/preview';
@@ -53,7 +54,7 @@ const undatedDate: NormalizedMessage['date'] = { utcMs: null, original: '', offs
 function build(
     results: readonly ParseResult[],
     options: {
-        positions?: (r: ThreadAnalysisResult) => number[]; policy?: OutputPolicy; timeZone?: string; generatedAt?: number;
+        positions?: (r: ThreadAnalysisResult) => number[]; policy?: OutputPolicy; generatedOffsetMinutes?: number; generatedAt?: number;
         plans?: (r: ThreadAnalysisResult, p: number[]) => MessagePlan[] } = {},
 ): { pdfDocument: PdfDocument; result: ThreadAnalysisResult; input: BuildPdfInput }
 {
@@ -66,8 +67,8 @@ function build(
         positions,
         plans,
         policy,
-        timeZone: options.timeZone ?? 'UTC',
         generatedAt: options.generatedAt ?? Date.UTC(2025, 5, 1, 12, 0, 0),
+        generatedOffsetMinutes: options.generatedOffsetMinutes ?? 0,
         strings,
     };
     return { pdfDocument: buildPdfDocument(input), result, input };
@@ -111,25 +112,24 @@ describe('numbering and the index', () =>
 
     it('shows date, short author and subject in the index', () =>
     {
-        const date = { utcMs: Date.UTC(2025, 2, 4, 9, 0, 0), original: 'x', offsetMinutes: 0, zoneKnown: true };
-        const { pdfDocument } = build([make({ date, from: [ALICE, { name: '', address: 'dan@example.test' }] })].map(parsedOk),
-            { timeZone: 'Africa/Lagos' });
+        const date = { utcMs: Date.UTC(2025, 2, 4, 9, 0, 0), original: 'Tue, 4 Mar 2025 10:00:00 +0100', offsetMinutes: 60, zoneKnown: true };
+        const { pdfDocument } = build([make({ date, from: [ALICE, { name: '', address: 'dan@example.test' }] })].map(parsedOk));
         const entry = pdfDocument.index.entries[0]!;
-        // Short in the index (no seconds, no offset); the column title names the zone once.
+        // Short in the index (no seconds), as written (task 9.9c).
         expect(entry.date).toEqual([{ role: 'body', text: '2025-03-04 10:00' }]);
-        expect(pdfDocument.index.columns.date).toBe('Date (Africa/Lagos)');
+        expect(pdfDocument.index.columns.date).toBe('Date');
         expect(pdfDocument.index.columns.from).toBe('From');
         // The email's own header keeps the full form.
-        expect(field(pdfDocument.emails[0]!, 'Date')!.map(text)[0]).toBe('2025-03-04 10:00:00 UTC+01:00');
+        expect(field(pdfDocument.emails[0]!, 'Date')!.map(text)[0]).toBe('2025-03-04 10:00:00');
         expect(text(entry.from)).toBe('Alice Example, dan@example.test');
         expect(entry.attachments).toBe(0);
     });
 
-    it('names the zone in the index date column title as the cover does, UTC after a fallback', () =>
+    it('names no time zone in the index date column title: its dates are as written (task 9.9c)', () =>
     {
-        expect(build([parsedOk(make())], { timeZone: 'America/New_York' }).pdfDocument.index.columns.date).toBe('Date (America/New York)');
-        expect(build([parsedOk(make())], { timeZone: 'UTC' }).pdfDocument.index.columns.date).toBe('Date (UTC)');
-        expect(build([parsedOk(make())], { timeZone: 'Not/A_Zone' }).pdfDocument.index.columns.date).toBe('Date (UTC)');
+        const { pdfDocument } = build([parsedOk(make())], { generatedOffsetMinutes: -300 });
+        expect(pdfDocument.index.columns).toEqual(strings.columns);
+        expect(pdfDocument.index.columns.date).toBe('Date');
     });
 
     it('gives an empty document for no included email', () =>
@@ -192,15 +192,40 @@ describe('header fields', () =>
         expect(text(pdfDocument.index.entries[0]!.from)).toBe('Unknown sender');
     });
 
-    it('shows the date in the chosen zone, with the sender local time when it differs', () =>
+    it('shows the date as written, winter and summer, never converted and with no "sender\'s local time" line (task 9.9c)', () =>
     {
-        const message = make(
-            { date: { utcMs: Date.UTC(2025, 2, 4, 8, 0, 0), original: 'Tue, 4 Mar 2025 09:00:00 +0100', offsetMinutes: 60, zoneKnown: true } });
-        const tokyo = build([parsedOk(message)], { timeZone: 'Asia/Tokyo' }).pdfDocument.emails[0]!;
-        expect(field(tokyo, 'Date')!.map(text)).toEqual(['2025-03-04 17:00:00 UTC+09:00', "Sender's local time: 2025-03-04 09:00:00 UTC+01:00"]);
-        // A zone at the sender's own offset (+01:00 all year): one line only.
-        const lagos = build([parsedOk(message)], { timeZone: 'Africa/Lagos' }).pdfDocument.emails[0]!;
-        expect(field(lagos, 'Date')!.map(text)).toEqual(['2025-03-04 09:00:00 UTC+01:00']);
+        const winter = make({ date: parseEmailDate('Tue, 17 Feb 2026 13:59:00 +0100'), subject: 'Winter' });
+        const summer = make({ date: parseEmailDate('Tue, 21 Apr 2026 13:54:00 +0200'), subject: 'Summer' });
+        const tokyo = make({ date: parseEmailDate('Wed, 22 Apr 2026 13:59:00 +0900'), subject: 'Tokyo' });
+        // The reader's own clock (generatedOffsetMinutes) changes nothing in the emails' dates.
+        for (const generatedOffsetMinutes of [0, 60, -300, 780])
+        {
+            const { pdfDocument } = build([winter, summer, tokyo].map(parsedOk), { generatedOffsetMinutes });
+            expect(pdfDocument.emails.map((e) => field(e, 'Date')!.map(text))).toEqual([['2026-02-17 13:59:00'], ['2026-04-21 13:54:00'], ['2026-04-22 13:59:00']]);
+            expect(pdfDocument.index.entries.map((e) => text(e.date))).toEqual(['2026-02-17 13:59', '2026-04-21 13:54', '2026-04-22 13:59']);
+            expect(pdfDocument.emails.flatMap((e) => e.fields.flatMap((f) => f.value.map(text))).join('\n')).not.toMatch(/UTC|local time/);
+        }
+    });
+
+    it('keeps the true order of the moments when the written times would sort the other way', () =>
+    {
+        // 13:00 in Tokyo (04:00 UTC) was sent before 09:00 in Brussels (08:00 UTC) the same day.
+        const brussels = make({ date: parseEmailDate('Tue, 17 Feb 2026 09:00:00 +0100'), subject: 'Brussels' });
+        const tokyo = make({ date: parseEmailDate('Tue, 17 Feb 2026 13:00:00 +0900'), subject: 'Tokyo' });
+        const { pdfDocument } = build([brussels, tokyo].map(parsedOk));
+        expect(pdfDocument.emails.map((e) => field(e, 'Subject')!.map(text)[0])).toEqual(['Tokyo', 'Brussels']);
+        expect(pdfDocument.emails.map((e) => field(e, 'Date')!.map(text)[0])).toEqual(['2026-02-17 13:00:00', '2026-02-17 09:00:00']);
+        // The cover's first and last dates follow the moments too, each printed as written.
+        expect(pdfDocument.cover.dateRange).toEqual({ first: '2026-02-17 13:00:00', last: '2026-02-17 09:00:00' });
+    });
+
+    it('writes a .msg date of unknown sender zone (an exact UTC moment) as its plain UTC time, with no mark; the index keeps the short form', () =>
+    {
+        const message = make({ date: { utcMs: Date.UTC(2025, 3, 2, 9, 0, 0), original: '2025-04-02T09:00:00.000Z', offsetMinutes: null, zoneKnown: true } });
+        const { pdfDocument } = build([parsedOk(message)]);
+        expect(field(pdfDocument.emails[0]!, 'Date')!.map(text)).toEqual(['2025-04-02 09:00:00']);
+        // 16 characters, one line in the index's date column.
+        expect(text(pdfDocument.index.entries[0]!.date)).toBe('2025-04-02 09:00');
     });
 
     it('flags an unknown sender time zone, but writes no note about it (task 8.8: the app says it)', () =>
@@ -210,7 +235,8 @@ describe('header fields', () =>
             warnings: ['unknown-time-zone'],
         });
         const email = build([parsedOk(message)]).pdfDocument.emails[0]!;
-        expect(field(email, 'Date')!.map(text)).toEqual(['2025-03-04 08:00:00 UTC+00:00']);
+        // As written in the header.
+        expect(field(email, 'Date')!.map(text)).toEqual(['2025-03-04 08:00:00']);
         expect(email.flags.zoneUnknown).toBe(true);
         expect(email.notes).toEqual([]);
     });
@@ -254,10 +280,10 @@ describe('undated emails', () =>
         expect(field(fourth!, 'Date')).toEqual([[{ role: 'muted', text: '(no date)' }]]);
         expect(pdfDocument.index.entries[2]!.date).toEqual([{ role: 'muted', text: '(no date)' }]);
         expect(third!.notes).toEqual([]);
-        expect(pdfDocument.cover.dateRange).toEqual({ first: '2025-03-01 09:00:00 UTC+00:00', last: '2025-04-02 09:00:00 UTC+00:00' });
+        expect(pdfDocument.cover.dateRange).toEqual({ first: '2025-03-01 09:00:00', last: '2025-04-02 09:00:00' });
         // Counted in the data, not written on the cover.
         expect(pdfDocument.cover.undated).toBe(2);
-        expect(coverRow(pdfDocument, 'Dates').map(text)).toEqual(['2025-03-01 09:00:00 UTC+00:00 to 2025-04-02 09:00:00 UTC+00:00']);
+        expect(coverRow(pdfDocument, 'Dates').map(text)).toEqual(['2025-03-01 09:00:00 to 2025-04-02 09:00:00']);
     });
 
     it('writes an unreadable date with control characters as codes, counted', () =>
@@ -302,48 +328,46 @@ function coverRow(pdfDocument: PdfDocument, label: string): readonly PdfLine[]
 
 describe('cover', () =>
 {
-    it('gives the date range in the chosen zone (first and last may change day)', () =>
+    it('gives the date range as written in the first and the last email (no conversion, task 9.9c)', () =>
     {
-        const earlyMessage = make({ date: { utcMs: Date.UTC(2025, 2, 1, 23, 30, 0), original: 'x', offsetMinutes: 0, zoneKnown: true } });
-        const lateMessage = make({ date: { utcMs: Date.UTC(2025, 2, 9, 2, 15, 0), original: 'x', offsetMinutes: 0, zoneKnown: true } });
-        const utc = build([earlyMessage, lateMessage].map(parsedOk), { timeZone: 'UTC' }).pdfDocument.cover.dateRange;
-        const tokyo = build([earlyMessage, lateMessage].map(parsedOk), { timeZone: 'Asia/Tokyo' }).pdfDocument.cover.dateRange;
-        const newYorkRange = build([earlyMessage, lateMessage].map(parsedOk), { timeZone: 'America/New_York' }).pdfDocument.cover.dateRange;
-        expect(utc).toEqual({ first: '2025-03-01 23:30:00 UTC+00:00', last: '2025-03-09 02:15:00 UTC+00:00' });
-        expect(tokyo).toEqual({ first: '2025-03-02 08:30:00 UTC+09:00', last: '2025-03-09 11:15:00 UTC+09:00' });
-        // 2025-03-09 is the US switch to summer time (at 07:00 UTC): both dates still in winter time.
-        expect(newYorkRange).toEqual({ first: '2025-03-01 18:30:00 UTC-05:00', last: '2025-03-08 21:15:00 UTC-05:00' });
+        const earlyMessage = make({ date: parseEmailDate('Sat, 1 Mar 2025 23:30:00 -0500') });
+        const lateMessage = make({ date: parseEmailDate('Sun, 9 Mar 2025 02:15:00 +0900') });
+        for (const generatedOffsetMinutes of [0, 540, -300])
+        {
+            const { pdfDocument } = build([earlyMessage, lateMessage].map(parsedOk), { generatedOffsetMinutes });
+            expect(pdfDocument.cover.dateRange).toEqual({ first: '2025-03-01 23:30:00', last: '2025-03-09 02:15:00' });
+            expect(coverRow(pdfDocument, 'Dates').map(text)).toEqual(['2025-03-01 23:30:00 to 2025-03-09 02:15:00']);
+        }
     });
 
     it('shows one date when every email has the same moment', () =>
     {
         const message = make({ date: { utcMs: BASE_MS, original: 'x', offsetMinutes: 0, zoneKnown: true } });
         const { pdfDocument } = build([parsedOk(message)]);
-        expect(coverRow(pdfDocument, 'Dates').map(text)).toEqual(['2025-03-04 08:00:00 UTC+00:00']);
+        expect(coverRow(pdfDocument, 'Dates').map(text)).toEqual(['2025-03-04 08:00:00']);
     });
 
-    it('has the title, count, zone and generation date', () =>
+    it('has the title, count and generation date on the reader\'s clock, and no time-zone row (task 9.9c)', () =>
     {
-        const { pdfDocument } = build([make(), make()].map(parsedOk), { timeZone: 'America/New_York', generatedAt: Date.UTC(2025, 5, 1, 3, 0, 0) });
+        const { pdfDocument } = build([make(), make()].map(parsedOk), { generatedOffsetMinutes: -240, generatedAt: Date.UTC(2025, 5, 1, 3, 0, 0) });
         const first = pdfDocument.cover.blocks[0]!;
         expect(first).toEqual({ kind: 'heading', level: 1, line: [{ role: 'title', text: 'Email correspondence' }] });
         expect(pdfDocument.title).toBe('Email correspondence');
         expect(coverRow(pdfDocument, 'Emails').map(text)).toEqual(['2 emails']);
-        expect(coverRow(pdfDocument, 'Dates shown in').map(text)).toEqual(['America/New York']);
-        expect(coverRow(pdfDocument, 'Made on').map(text)).toEqual(['2025-05-31 23:00:00 UTC-04:00']);
-        expect(pdfDocument.cover.generated).toBe('2025-05-31 23:00:00 UTC-04:00');
-        expect(pdfDocument.timeZone).toBe('America/New_York');
-        expect(pdfDocument.zoneFallback).toBe(false);
+        expect(coverRow(pdfDocument, 'Made on').map(text)).toEqual(['2025-05-31 23:00:00']);
+        expect(pdfDocument.cover.generated).toBe('2025-05-31 23:00:00');
+        const fields = pdfDocument.cover.blocks.find((b) => b.kind === 'fields');
+        expect(fields?.kind === 'fields' ? fields.rows.map((r) => r.label) : null).toEqual(['Dates', 'Emails', 'Made on']);
+        expect(Object.keys(pdfDocument)).not.toContain('timeZone');
+        expect(Object.keys(pdfDocument)).not.toContain('zoneFallback');
         expect(
             build([parsedOk(make())]).pdfDocument.cover.blocks.some((b) => b.kind === 'paragraph' && text(b.line).includes('control'))).toBe(false);
     });
 
-    it('falls back to UTC for an unknown zone, and names just UTC (task 8.8: the app says the zone was not recognized)', () =>
+    it('takes the generation date in UTC when the reader\'s offset is not a number', () =>
     {
-        const { pdfDocument } = build([parsedOk(make())], { timeZone: 'Not/AZone' });
-        expect(pdfDocument.timeZone).toBe('UTC');
-        expect(pdfDocument.zoneFallback).toBe(true);
-        expect(coverRow(pdfDocument, 'Dates shown in').map(text)).toEqual(['UTC']);
+        const { pdfDocument } = build([parsedOk(make())], { generatedOffsetMinutes: Number.NaN });
+        expect(pdfDocument.cover.generated).toBe('2025-06-01 12:00:00');
         expect(pdfDocument.fileName).toBe('correspondence-2025-06-01.pdf');
     });
 
@@ -618,29 +642,29 @@ describe('attachments', () =>
 
 describe('pdfFileName', () =>
 {
-    it('uses the generation date in the chosen zone', () =>
+    it('uses the generation date on the reader\'s clock', () =>
     {
         const lateUtc = Date.UTC(2025, 2, 1, 23, 30, 0); // 2025-03-01 23:30 UTC
-        expect(pdfFileName(lateUtc, 'UTC', strings)).toBe('correspondence-2025-03-01.pdf');
-        expect(pdfFileName(lateUtc, 'Africa/Lagos', strings)).toBe('correspondence-2025-03-02.pdf'); // 00:30 the next day at +01:00
-        expect(pdfFileName(lateUtc - 3_600_000, 'Africa/Lagos', strings)).toBe('correspondence-2025-03-01.pdf'); // 23:30 at +01:00
-        expect(pdfFileName(lateUtc, 'America/New_York', strings)).toBe('correspondence-2025-03-01.pdf');
+        expect(pdfFileName(lateUtc, 0, strings)).toBe('correspondence-2025-03-01.pdf');
+        expect(pdfFileName(lateUtc, 60, strings)).toBe('correspondence-2025-03-02.pdf'); // 00:30 the next day at +01:00
+        expect(pdfFileName(lateUtc - 3_600_000, 60, strings)).toBe('correspondence-2025-03-01.pdf'); // 23:30 at +01:00
+        expect(pdfFileName(lateUtc, -300, strings)).toBe('correspondence-2025-03-01.pdf');
         const earlyUtc = Date.UTC(2025, 2, 2, 0, 30, 0); // 2025-03-02 00:30 UTC
-        expect(pdfFileName(earlyUtc, 'UTC', strings)).toBe('correspondence-2025-03-02.pdf');
-        expect(pdfFileName(earlyUtc, 'America/Los_Angeles', strings)).toBe('correspondence-2025-03-01.pdf');
-        expect(pdfFileName(earlyUtc, 'Pacific/Kiritimati', strings)).toBe('correspondence-2025-03-02.pdf');
-        expect(pdfFileName(Date.UTC(2024, 11, 31, 11, 0, 0), 'Pacific/Kiritimati', strings)).toBe('correspondence-2025-01-01.pdf');
+        expect(pdfFileName(earlyUtc, 0, strings)).toBe('correspondence-2025-03-02.pdf');
+        expect(pdfFileName(earlyUtc, -480, strings)).toBe('correspondence-2025-03-01.pdf');
+        expect(pdfFileName(earlyUtc, 840, strings)).toBe('correspondence-2025-03-02.pdf');
+        expect(pdfFileName(Date.UTC(2024, 11, 31, 11, 0, 0), 840, strings)).toBe('correspondence-2025-01-01.pdf');
     });
 
-    it('falls back to UTC for an unknown zone and to a plain name without a usable moment', () =>
+    it('falls back to UTC for an offset that is not a number and to a plain name without a usable moment', () =>
     {
-        expect(pdfFileName(Date.UTC(2025, 2, 1, 23, 30, 0), 'Not/AZone', strings)).toBe('correspondence-2025-03-01.pdf');
-        expect(pdfFileName(Number.NaN, 'UTC', strings)).toBe('correspondence.pdf');
+        expect(pdfFileName(Date.UTC(2025, 2, 1, 23, 30, 0), Number.NaN, strings)).toBe('correspondence-2025-03-01.pdf');
+        expect(pdfFileName(Number.NaN, 0, strings)).toBe('correspondence.pdf');
     });
 
     it('is the document file name', () =>
     {
-        const { pdfDocument } = build([parsedOk(make())], { generatedAt: Date.UTC(2025, 2, 1, 23, 30, 0), timeZone: 'Asia/Tokyo' });
+        const { pdfDocument } = build([parsedOk(make())], { generatedAt: Date.UTC(2025, 2, 1, 23, 30, 0), generatedOffsetMinutes: 540 });
         expect(pdfDocument.fileName).toBe('correspondence-2025-03-02.pdf');
     });
 });
@@ -669,7 +693,7 @@ describe('purity', () =>
         const before = JSON.stringify({ result, plans });
         deepFreeze(result);
         deepFreeze(plans);
-        const input: BuildPdfInput = { result, positions: [0, 1], plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'America/New_York', generatedAt: BASE_MS, strings };
+        const input: BuildPdfInput = { result, positions: [0, 1], plans, policy: DEFAULT_OUTPUT_POLICY, generatedAt: BASE_MS, generatedOffsetMinutes: -300, strings };
         const first = buildPdfDocument(input);
         const second = buildPdfDocument(input);
         expect(JSON.stringify({ result, plans })).toBe(before);
@@ -681,7 +705,7 @@ describe('purity', () =>
 
 describe('bookmarks', () =>
 {
-    it('gives each email a one-line bookmark: number, day in the zone, sender, subject', () =>
+    it('gives each email a one-line bookmark: number, day as written, sender, subject', () =>
     {
         const { pdfDocument } = build(
             [
@@ -689,10 +713,10 @@ describe('bookmarks', () =>
                 parsedOk(make({ subject: '', from: [], date: undatedDate })),
                 parsedOk(make({ subject: 'y'.repeat(200), from: [CAROL] })),
             ],
-            { timeZone: 'Asia/Tokyo' },
+            { generatedOffsetMinutes: 540 },
         );
         const [first, second, third] = pdfDocument.index.entries.map((e) => e.bookmark);
-        // The day as shown in the chosen zone (the first 10 characters of the email's date there).
+        // The day as written (the first 10 characters of the email's date).
         expect(first).toBe(`1. ${lineText(pdfDocument.index.entries[0]!.date).slice(0, 10)}, Alice Example: Desks for the    office [U+0007]`);
         expect(first).toMatch(/^1\. \d{4}-\d{2}-\d{2}, /);
         expect(third).toBe('3. (no date), Unknown sender: (no subject)');
@@ -701,13 +725,13 @@ describe('bookmarks', () =>
         expect(second!.endsWith('y\u{2026}')).toBe(true);
     });
 
-    it('gives the day in the CHOSEN zone: 02:00 UTC is still the day before in New York', () =>
+    it('gives the day AS WRITTEN: 22:00 in New York stays that day, though it is the next day in UTC (task 9.9c)', () =>
     {
-        const date = { utcMs: Date.UTC(2025, 5, 2, 2, 0, 0), original: 'Mon, 2 Jun 2025 02:00:00 +0000', offsetMinutes: 0, zoneKnown: true };
-        const message = make({ date, subject: 'Chairs' });
-        expect(build([parsedOk(message)], { timeZone: 'America/New_York' }).pdfDocument.index.entries[0]!.bookmark)
-            .toBe('1. 2025-06-01, Alice Example: Chairs');
-        expect(build([parsedOk(message)], { timeZone: 'UTC' }).pdfDocument.index.entries[0]!.bookmark).toBe('1. 2025-06-02, Alice Example: Chairs');
+        const message = make({ date: parseEmailDate('Sun, 1 Jun 2025 22:00:00 -0400'), subject: 'Chairs' });
+        for (const generatedOffsetMinutes of [0, -240, 120])
+        {
+            expect(build([parsedOk(message)], { generatedOffsetMinutes }).pdfDocument.index.entries[0]!.bookmark).toBe('1. 2025-06-01, Alice Example: Chairs');
+        }
     });
 
     // The text before the part that crosses the cut: `pad` characters, so that part sits on code point MAX_BOOKMARK_LENGTH - 1.

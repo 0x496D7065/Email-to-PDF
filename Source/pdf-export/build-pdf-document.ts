@@ -6,10 +6,10 @@
 // buildPdfDocument() takes the thread analysis result, the INCLUDED emails (list
 // positions, in list order) with their output plans (Source/thread-analysis/output-plan.ts,
 // the same plans the preview labels show, Source/web-page/pdf-labels.ts), the policy,
-// the time zone, the generation moment and the fixed texts, and returns a
+// the generation moment and the fixed texts, and returns a
 // PdfDocument:
-// - cover: title, date range, people, email count, generation date and time
-//   zone (as `blocks` for the renderer, and as data), of the emails in the
+// - cover: title, date range, people, email count and generation date (as
+//   `blocks` for the renderer, and as data), of the emails in the
 //   PDF (an email left out for having no text does not count, task 8.14);
 //   no source files and no SHA-256 (user decision 2026-11-09, task 8.12);
 // - index: one entry per email (number, date, author, subject, attachment
@@ -37,8 +37,9 @@
 // that it was rebuilt: the same heading ("Email N"), the same rows (From, To
 // and Cc when there are any, Date, Subject; no File row, as it has no
 // file), the same "Unknown sender", "(no subject)" and "no date" texts as a
-// real email, its date shown as a real email's (a time in the chosen zone,
-// a day alone as that day, a date that could not be read as written), no
+// real email, its date shown as a real email's (a time as written, never
+// converted, task 9.9c; a day alone as that day; a date that could not be
+// read as written), no
 // marker in the index or the bookmarks. On the cover it counts in "Emails", the date
 // range and the people like a real email. The
 // PREVIEW keeps marking rebuilt emails (Source/web-page/preview.ts), unchanged.
@@ -258,14 +259,22 @@
 // "(attachment without a name)"), the page
 // footer, headings, labels, the index and the bookmarks. The data behind the
 // removed notes stays in the model (`flags`, `cover.undated`,
-// `zoneFallback`, `controlChars`), for tests and checks; the renderer never
-// prints it.
+// `controlChars`), for tests and checks; the renderer never prints it.
+//
+// Dates (user decision, task 9.9c): every date is printed AS WRITTEN, the
+// sender's own wall-clock time, never converted to another time zone, with
+// no offset and no time-zone row (Source/thread-analysis/time-format.ts). A
+// rebuilt email's date is its quoted time as written, never marked as a
+// guess. Only the ORDER uses true moments: the cover's first and last dates
+// are the earliest and latest moments (a real email's UTC moment, a rebuilt
+// email's estimated one, QuotedDate.estimatedUtcMs), printed as written.
+// The generation date is the reader's own clock (`generatedOffsetMinutes`).
 //
 // Undated emails: shown with the "no date" text in the index; their Date
 // row shows the date text as written when there is one, else "no date". The
 // cover's date range covers the dated emails only (real and rebuilt; a
-// rebuilt email dated by a day alone counts from the start of that day in
-// the chosen zone, dayStartInZone, and shows as that day); with no dated
+// rebuilt email dated by a day alone counts from the estimated start of
+// that day and shows as that day); with no dated
 // email at all it shows "no date". Real undated emails are at the end of
 // the list, in file order (Source/thread-analysis/chronological-order.ts).
 //
@@ -290,7 +299,7 @@ import { comparableText, nameWordsOf, signatureStart, wordsOf } from '../thread-
 import { planRebuiltText } from '../thread-analysis/output-plan';
 import { mapOffsets } from '../thread-analysis/same-text-offsets';
 import { senderKeyOf, senderKeyOfMailboxes, signatureBlockKey } from '../thread-analysis/signature-detection';
-import { formatInZone, formatSenderLocal, isDisplayableMs } from '../thread-analysis/time-format';
+import { formatEmailDate, formatWallClock, isDisplayableMs, type WallClockTime } from '../thread-analysis/time-format';
 import { displayAuthor } from '../web-page-logic/display-author';
 import { FILE_CHAIN_SEPARATOR, fileChain } from '../web-page-logic/file-chain';
 import { joinMailboxes } from '../web-page-logic/mailbox-list';
@@ -317,10 +326,14 @@ export interface BuildPdfInput
     /** One plan per position, same order (Source/web-page/pdf-labels.ts, currentPlans). */
     readonly plans: readonly MessagePlan[];
     readonly policy: OutputPolicy;
-    /** IANA zone name (an invalid one falls back to UTC; the cover then names UTC). */
-    readonly timeZone: string;
     /** When the PDF is made, in ms since 1970 UTC. */
     readonly generatedAt: number;
+    /**
+     * The offset of the reader's clock from UTC at `generatedAt`, in minutes
+     * (e.g. 60 in Brussels in winter): the generation date is printed on the
+     * reader's own clock. Not a finite number: UTC.
+     */
+    readonly generatedOffsetMinutes: number;
     readonly strings: PdfStrings;
     /**
      * Ids (in `result.reconstructed`) of the rebuilt emails the reader wants in
@@ -353,13 +366,24 @@ export interface BuildPdfInput
 
 // ---------------------------------------------------------------- helpers
 
+/** The reader's clock at `generatedAt` (see BuildPdfInput.generatedOffsetMinutes), as a wall-clock time. */
+function generatedTime(generatedAt: number, generatedOffsetMinutes: number): WallClockTime
+{
+    if (!isDisplayableMs(generatedAt))
+    {
+        return { kind: 'no-date' };
+    }
+    const offset = Number.isFinite(generatedOffsetMinutes) ? generatedOffsetMinutes : 0;
+    return formatWallClock(generatedAt + offset * 60_000);
+}
+
 /**
  * The PDF file name in the PDF's language, from the date of `generatedAt`
- * in `timeZone`: "correspondence-YYYY-MM-DD.pdf" in English.
+ * on the reader's clock: "correspondence-YYYY-MM-DD.pdf" in English.
  */
-export function pdfFileName(generatedAt: number, timeZone: string, strings: Pick<PdfStrings, 'fileName'>): string
+export function pdfFileName(generatedAt: number, generatedOffsetMinutes: number, strings: Pick<PdfStrings, 'fileName'>): string
 {
-    const shown = formatInZone(generatedAt, timeZone);
+    const shown = generatedTime(generatedAt, generatedOffsetMinutes);
     return strings.fileName(shown.kind === 'date' ? shown.text.slice(0, 10) : null);
 }
 
@@ -682,8 +706,10 @@ const amongMailboxes = (mailbox: EmailAddress, list: readonly EmailAddress[]): b
  * a Subject line that was not read.
  * - `printed` a rebuilt copy: also false when the sender has no name (an
  *   attribution whose name could not be split from the date) or the time is
- *   only estimated (no zone of its own: the date printed is not the one
- *   written). A day alone and a date that could not be read are printed as
+ *   only estimated (no zone of its own). That last rule dates from before
+ *   task 9.9c, when such a time was printed converted; it is printed as
+ *   written now, and the rule is kept so that task changed only the dates
+ *   shown (when unsure, keep). A day alone and a date that could not be read are printed as
  *   written: they do not stop it. That copy's fields must be the ones read
  *   here (a copy read from another email may differ in its header).
  * - `printed` a real file: the date must be a moment that carries its own
@@ -2647,7 +2673,7 @@ function buildEmail(
     restored: BodyIntervals,
 ): EmailParts
 {
-    const { strings, policy, timeZone } = input;
+    const { strings, policy } = input;
     const message = analyzedMessage.message;
     const sanitizer = createSanitizer();
     const indexSanitizer = createSanitizer(); // the index repeats the header texts: not counted again
@@ -2680,18 +2706,14 @@ function buildEmail(
     addMailboxRow(strings.ccLabel, message.cc);
     addMailboxRow(strings.bccLabel, message.bcc);
 
-    const shown = formatInZone(message.date.utcMs, timeZone);
+    // As written: the sender's own clock, never converted (task 9.9c).
+    const shown = formatEmailDate(message.date);
     const dated = shown.kind === 'date' && isDisplayableMs(message.date.utcMs);
     const zoneUnknown = dated && message.warnings.includes('unknown-time-zone');
     const dateLines: PdfLine[] = [];
     if (shown.kind === 'date' && dated)
     {
         dateLines.push(ownTextLine(shown.text, 'field-value'));
-        const local = formatSenderLocal(message.date);
-        if (local.kind === 'local' && local.text !== shown.text)
-        {
-            dateLines.push(ownTextLine(strings.senderLocal(local.text), 'muted'));
-        }
     }
     else if (message.date.original.trim() !== '')
     {
@@ -2744,7 +2766,7 @@ function buildEmail(
         number,
         rebuilt: false,
         anchor,
-        // Short ("2025-03-04 08:00", one line); the column title names the zone once.
+        // Short ("2025-03-04 08:00", one line), as written.
         date: shown.kind === 'date' && dated ? ownTextLine(shown.shortText, 'body') : ownTextLine(strings.noDate, 'muted'),
         from: fromIndex,
         subject: subjectIndex,
@@ -2787,72 +2809,21 @@ interface RebuiltDateParts
     readonly index: PdfLine;
     readonly day: string;
     readonly when: CoverDate | null;
-    /** A time read without a zone of its own (data only: the PDF does not say it, task 8.8). */
+    /** A time read without a zone of its own, so its place in the order is a guess (data only: the PDF does not say it, task 8.8). */
     readonly zoneUnknown: boolean;
 }
 
 /**
- * The first moment of `day` ("YYYY-MM-DD") in `zone` as the real emails'
- * dates are shown (formatInZone, UTC when the zone is not valid): the
- * smallest instant whose shown day is `day` or later, so that a real email
- * shown on an earlier day comes before it and one shown on that day or later
- * does not. Found by halving the interval from 26 hours before to 26 hours
- * after `day` 00:00 UTC (wider than any offset), to the millisecond: exact
- * across daylight-saving changes, a midnight that does not exist included.
- * In a zone whose clocks go back across midnight (e.g. older Sao Paulo
- * rules) the start found may be either midnight, at most an hour apart; the
- * search still ends.
- * null when `day` is not a date.
- */
-export function dayStartInZone(day: string, zone: string): number | null
-{
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day))
-    {
-        return null;
-    }
-    const base = Date.parse(`${day}T00:00:00Z`);
-    if (!Number.isFinite(base))
-    {
-        return null;
-    }
-    // Shown on `day` or later (instants that cannot be shown: by their side of `base`).
-    const reached = (instant: number): boolean =>
-    {
-        const shown = formatInZone(instant, zone);
-        return shown.kind === 'date' ? shown.text.slice(0, 10) >= day : instant >= base;
-    };
-    const HOURS_26 = 26 * 3_600_000;
-    let lo = base - HOURS_26; // not reached
-    let hi = base + HOURS_26; // reached
-    if (reached(lo) || !reached(hi))
-    {
-        return base;
-    }
-    while (hi - lo > 1)
-    {
-        const mid = Math.floor((lo + hi) / 2);
-        if (reached(mid))
-        {
-            hi = mid;
-        }
-        else
-        {
-            lo = mid;
-        }
-    }
-    return hi;
-}
-
-/**
  * The date of a rebuilt email, shown as a real email's (task 8.3; see the
- * top of this file), from the best value read: a time in the chosen zone,
- * written as a real email's date (`zoneUnknown` when the quote gave no zone
- * of its own: data only, the app says it); a day alone as that day; a date
- * that could not be read as written; none: "no date".
+ * top of this file), from the best value read: a time as written, never
+ * converted and never marked as a guess (task 9.9c; `zoneUnknown` when the
+ * quote gave no zone of its own: data only); a day alone as that day; a date
+ * that could not be read as written; none: "no date". The cover places it by
+ * its estimated moment (`when.utcMs`).
  */
 function rebuiltDateParts(rebuiltEntry: AnalyzedRebuiltMessage, input: BuildPdfInput, sanitizer: Sanitizer): RebuiltDateParts
 {
-    const { strings, timeZone } = input;
+    const { strings } = input;
     const date = rebuiltDate(rebuiltEntry);
     const undated = (lines: readonly PdfLine[]): RebuiltDateParts =>
         ({ lines, index: ownTextLine(strings.noDate, 'muted'), day: strings.noDate, when: null, zoneUnknown: false });
@@ -2869,17 +2840,16 @@ function rebuiltDateParts(rebuiltEntry: AnalyzedRebuiltMessage, input: BuildPdfI
     }
     if (date.kind === 'day')
     {
-        // The start of that day in the chosen zone, to place it in the cover's date range.
-        const dayStartMs = dayStartInZone(date.day, timeZone);
+        // The estimated start of that day, to place it in the cover's date range.
         return {
             lines: [ownTextLine(date.day, 'field-value')],
             index: ownTextLine(date.day, 'body'),
             day: date.day,
-            when: dayStartMs === null ? null : { utcMs: dayStartMs, text: date.day },
+            when: date.utcMs === null ? null : { utcMs: date.utcMs, text: date.day },
             zoneUnknown: false,
         };
     }
-    const shown = formatInZone(date.utcMs, timeZone);
+    const shown = formatWallClock(date.wallMs);
     if (shown.kind !== 'date')
     {
         return unreadable();
@@ -2995,7 +2965,7 @@ function buildRebuiltEmail(entry: AnalyzedRebuiltMessage, source: RebuiltInPdf, 
 /** Builds the whole PDF document model (see the top of this file). */
 export function buildPdfDocument(input: BuildPdfInput): PdfDocument
 {
-    const { result, positions, plans, strings, timeZone, generatedAt } = input;
+    const { result, positions, plans, strings, generatedAt, generatedOffsetMinutes } = input;
 
     // The included emails: positions that exist, each once, in the given
     // order; the rebuilt ones chosen, at their place (planPdfOrder); none
@@ -3054,13 +3024,9 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
 
     // Cover.
     const coverSanitizer = createSanitizer(); // the cover repeats names from the emails: not counted
-    const generatedShown = formatInZone(generatedAt, timeZone);
+    const generatedShown = generatedTime(generatedAt, generatedOffsetMinutes);
     const generated = generatedShown.kind === 'date' ? generatedShown.text : strings.noDate;
-    const usedZone = generatedShown.kind === 'date' ? generatedShown.zone : 'UTC';
-    const zoneFallback = generatedShown.kind === 'date' && generatedShown.zoneFallback;
     const dateRange = first === null || last === null ? null : { first: first.text, last: last.text };
-    // The zone as the cover's "Time zone" row writes it (underscores as spaces).
-    const zoneShown = usedZone.replaceAll('_', ' ');
 
     // No dated email: the same "(no date)" placeholder as an email's own Date row (task 8.8).
     const dateLine: PdfLine =
@@ -3077,8 +3043,6 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
             rows: [
                 { label: strings.datesLabel, value: [dateLine] },
                 { label: strings.emailsLabel, value: [ownTextLine(strings.emailCount(emails.length), 'field-value')] },
-                // Just the zone used (UTC after a fallback): the app says when the chosen zone was not recognized (task 8.8).
-                { label: strings.timeZoneLabel, value: [coverSanitizer.line(zoneShown, 'field-value')] },
                 { label: strings.generatedLabel, value: [ownTextLine(generated, 'field-value')] },
             ],
         },
@@ -3091,14 +3055,11 @@ export function buildPdfDocument(input: BuildPdfInput): PdfDocument
 
     return {
         title: strings.title,
-        fileName: pdfFileName(generatedAt, timeZone, strings),
-        timeZone: usedZone,
-        zoneFallback,
+        fileName: pdfFileName(generatedAt, generatedOffsetMinutes, strings),
         cover: { blocks, dateRange, undated, emailCount: emails.length, generated, participants },
         index: {
             heading: strings.indexHeading,
-            // The zone name passes the same sanitizer as on the cover (a title is plain text, so codes stay as their text).
-            columns: { ...strings.columns, date: strings.indexDateColumn(lineText(coverSanitizer.line(zoneShown, 'field-label'))) },
+            columns: strings.columns,
             entries,
         },
         emails,

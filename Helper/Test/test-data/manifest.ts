@@ -23,8 +23,10 @@
 //   `bodyExcludes`: text that must never reach the plain-text body (script
 //   code, event handlers, remote URLs).
 // - .msg dates: a .msg stores the sent time as an exact UTC instant without
-//   the sender's offset, so `zoneKnown` is true and `offsetMinutes` is not
-//   asserted (left undefined) for .msg entries.
+//   the sender's offset, so `zoneKnown` is true and `offsetMinutes` is null
+//   (the page shows its UTC time, plain, with no mark, task 9.9c), unless its
+//   transport headers hold a Date header for the same second with a real
+//   zone: then that header's offset (msg-04).
 
 import type { ParseWarning } from '../../../Header/parsed-email';
 
@@ -54,7 +56,7 @@ export interface FixtureExpectation
     readonly date: {
         readonly utcMs: number | null;
         readonly zoneKnown: boolean;
-        /** undefined = not asserted (used for .msg, see the header comment). */
+        /** undefined = not asserted. */
         readonly offsetMinutes?: number | null;
     };
     readonly from: readonly ExpectedAddress[];
@@ -117,8 +119,8 @@ function msgFixture(
 
 /** Zone known, with its offset in minutes. */
 const emlAt = (iso: string, offsetMinutes: number) => ({ utcMs: utc(iso), zoneKnown: true, offsetMinutes });
-/** .msg time: exact UTC instant, offset not asserted. */
-const msgAt = (iso: string) => ({ utcMs: utc(iso), zoneKnown: true });
+/** .msg time: exact UTC instant; no sender offset unless its transport headers give one (see the header comment). */
+const msgAt = (iso: string, offsetMinutes: number | null = null) => ({ utcMs: utc(iso), zoneKnown: true, offsetMinutes });
 
 const ORDER_2_FIELDS = {
     messageId: 'order-2.bob@furniture.example.test',
@@ -659,7 +661,8 @@ export const FIXTURES: readonly FixtureExpectation[] = [
         messageId: 'msg-chain-3.bob@furniture.example.test',
         inReplyTo: 'msg-chain-2.alice@example.test',
         references: ['msg-chain-1.bob@furniture.example.test', 'msg-chain-2.alice@example.test'],
-        date: msgAt('2025-04-03T06:40:00Z'),
+        // The transport headers' "Date: Thu, 3 Apr 2025 08:40:00 +0200" (the same second as the property).
+        date: msgAt('2025-04-03T06:40:00Z', 120),
         from: [BOB],
         to: [ALICE],
         subject: 'RE: Offerte vergadertafel',

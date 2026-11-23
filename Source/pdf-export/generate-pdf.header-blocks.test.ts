@@ -101,7 +101,7 @@ async function makePdf(messages: readonly NormalizedMessage[], policy: OutputPol
             .map((r) => r.id)
             .filter((id) => !chosen.includes(id)),
         policy,
-        timeZone: 'UTC',
+        generatedOffsetMinutes: 0,
         generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
         fonts,
         locale: 'en',

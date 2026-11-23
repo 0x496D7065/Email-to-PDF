@@ -66,7 +66,7 @@ beforeEach(() =>
     vi.stubGlobal('document', fakeDocument);
     vi.stubGlobal('window', { innerHeight: 600 });
     area = new FakeElement('div');
-    preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, { zones: ['UTC'], initialZone: 'UTC', chunkSize: 1000 });
+    preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, { chunkSize: 1000 });
 });
 
 afterEach(() =>
@@ -215,7 +215,7 @@ describe('"Also in": the same chain as the PDF File row (P2)', () =>
             DEFAULT_OUTPUT_POLICY,
         );
         const strings = createPdfStrings(locale);
-        const pdfDocument = buildPdfDocument({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 10), strings });
+        const pdfDocument = buildPdfDocument({ result: out, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 10), strings });
         const email = pdfDocument.emails.find((e) => e.position !== null && out.messages[e.position]?.message.subject === subject);
         return email?.fields.find((f) => f.label === strings.fileLabel)?.value.map(lineText) ?? [];
     }

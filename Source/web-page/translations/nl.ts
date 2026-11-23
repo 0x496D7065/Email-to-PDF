@@ -18,7 +18,7 @@
 // - Numbers in `{count}` and the like are written by t() with the browser's
 //   Dutch rules (Intl), never by hand.
 // - Not translated (user decision): the app's name, mail program names,
-//   time zone names, MIME types, hashes. The PDF's file name is ASCII only.
+//   "UTC", MIME types, hashes. The PDF's file name is ASCII only.
 
 import type { Messages } from './index';
 
@@ -191,13 +191,9 @@ export const nl: Messages = {
         noText: '(geen tekst)',
         notInPdfNoText: 'Niet in de PDF: deze e-mail heeft geen tekst.',
         itemFailed: 'Er ging iets mis bij het tonen van deze e-mail. De tekst ervan, als die er is, staat hieronder zoals hij is.',
-        zone: 'Datums tonen in deze tijdzone',
-        zoneThisComputer: '{zone} (deze computer)',
-        zoneNotRecognized: 'Deze tijdzone werd niet herkend, dus de datums staan in UTC, hier en in de PDF.',
         showFolded: 'Geciteerde tekst en handtekeningen tonen',
         listLabel: 'Uw e-mails, de oudste eerst',
         messageNumber: '#{number}',
-        senderTime: 'Lokale tijd van de afzender: {time}',
         dateAsWritten: 'Zoals geschreven in de e-mail: {text}',
         mailbox: '{name} <{address}>',
         alsoIn: 'Ook in',
@@ -298,7 +294,6 @@ export const nl: Messages = {
         takenFrom: 'Overgenomen uit',
         takenFromValue: 'e-mail {number}',
         listIncomplete: '(lijst mogelijk onvolledig)',
-        dateAbout: 'omstreeks {date}',
         dateAsWritten: 'Zoals geschreven in het citaat: {text}',
         dateUnreadable: '(datum kon niet worden gelezen)',
         rebuildConversation: 'Gesprek reconstrueren uit de antwoorden',
@@ -351,13 +346,11 @@ export const nl: Messages = {
             emails: 'E-mails',
             emailCount: { one: '{count} e-mail', other: '{count} e-mails' },
             generated: 'Gemaakt op',
-            timeZone: 'Tijdzone',
             people: 'Personen',
             index: 'Inhoudsopgave',
             column: {
                 number: 'Nr.',
                 date: 'Datum',
-                dateInZone: 'Datum ({zone})',
                 from: 'Van',
                 subject: 'Onderwerp',
                 attachments: 'Bijlagen',
@@ -381,7 +374,7 @@ export const nl: Messages = {
         parse: {
             'missing-date': 'Er is geen datum gevonden in deze e-mail.',
             'unparseable-date': 'De datum van deze e-mail kon niet worden gelezen.',
-            'unknown-time-zone': 'De tijdzone van de afzender staat er niet bij, dus de tijd kan een paar uur afwijken.',
+            'unknown-time-zone': 'De tijdzone van de afzender staat er niet bij. De tijd wordt getoond zoals geschreven, maar de plaats van deze e-mail in de lijst kan afwijken.',
             'missing-message-id': 'Deze e-mail heeft geen verborgen referentienummer, dus identieke kopieën zijn moeilijker te herkennen.',
             'html-converted-body': 'Deze e-mail is van de opgemaakte versie omgezet naar gewone tekst. De opmaak kan er anders uitzien.',
             'html-body-truncated': 'Deze e-mail is erg lang, dus de tekst is hier ingekort. De volledige tekst staat nog in het originele bestand.',

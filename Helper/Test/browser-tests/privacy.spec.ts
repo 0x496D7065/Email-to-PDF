@@ -13,7 +13,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { watchPage, withoutSelectConsole, withoutSelectReports, type PageWatch } from './support/network-and-csp-watch.ts';
+import { watchPage, type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -50,8 +50,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__privacyViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__privacyViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__privacyViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -158,11 +157,11 @@ test('the panel is the first Tab stop after the header top row, opens and closes
     // Nothing was loaded and nothing was blocked.
     expect(watch.requests.slice(loaded)).toEqual([]);
     expect(watch.websockets).toEqual([]);
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__privacyViolations))).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(await page.evaluate(() => window.__privacyViolations)).toEqual([]);
+    expect(problems).toEqual([]);
 });
 
-test('the open panel fits a narrow phone screen', async ({ page, browserName }) =>
+test('the open panel fits a narrow phone screen', async ({ page }) =>
 {
     await page.setViewportSize({ width: 320, height: 640 });
     await open(page);
@@ -170,10 +169,10 @@ test('the open panel fits a narrow phone screen', async ({ page, browserName }) 
     await expect(page.locator('.privacy-body')).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
 });
 
-test('step 3 ends with the disclaimer, shown from the start, readable', async ({ page, browserName }) =>
+test('step 3 ends with the disclaimer, shown from the start, readable', async ({ page }) =>
 {
     const loaded = await open(page);
     const step = page.getByRole('region', { name: `Step 3 ${en.steps.download.title}` });
@@ -184,6 +183,6 @@ test('step 3 ends with the disclaimer, shown from the start, readable', async ({
     await expect(page.getByRole('button', { name: en.actions.makePdf })).toHaveAccessibleDescription(en.download.unavailable['no-emails']);
     expect(await contrastFailures(page, '#download-disclaimer', 1)).toEqual([]);
     expect(watch.requests.slice(loaded)).toEqual([]);
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__privacyViolations))).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(await page.evaluate(() => window.__privacyViolations)).toEqual([]);
+    expect(problems).toEqual([]);
 });

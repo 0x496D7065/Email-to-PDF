@@ -39,8 +39,6 @@ import {
     browserEngineOf,
     untoleratedReports,
     watchPage,
-    withoutSelectConsole,
-    withoutSelectReports,
     workerCspReports,
     workersNamed,
     type PageWatch,
@@ -116,8 +114,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__offlineViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__offlineViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -155,19 +152,19 @@ async function addFiles(page: Page): Promise<void>
 }
 
 /** Nothing outside the site, no WebSocket, no CSP report (page and workers), no console error. */
-async function expectCleanRun(page: Page, loads: number): Promise<void>
+async function expectCleanRun(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     expect(watch.requests.filter((url) => !url.startsWith(`blob:${origin}/`) && new URL(url).origin !== origin)).toEqual([]);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
     // One page load since the recorder was (re)installed: the reload starts it afresh.
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__offlineViolations));
+    const violations = await page.evaluate(() => window.__offlineViolations);
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     const named = (['parse-worker', 'engine-worker', 'pdf-worker'] as const).reduce((sum, name) => sum + workersNamed(watch, watch.workers, name).length, 0);
     expect(named).toBe(watch.workers.length);
-    expect(withoutSelectConsole(browserName, problems, 2, loads)).toEqual([]);
+    expect(problems).toEqual([]);
 }
 
 /** Is `request` a blob: read (in memory, never the network)? */
@@ -276,7 +273,7 @@ test('after one visit online, the page reloads offline and the whole tool works 
         expect(request.failure(), request.url()).toBeNull();
         expect(paths, request.url()).toContain(new URL(request.url()).pathname);
     }
-    await expectCleanRun(page, 2);
+    await expectCleanRun(page);
 
     // 4. Nothing was stored at run time: the copy is exactly the list, still.
     expect(await cacheContents(page)).toEqual(stored);
@@ -373,7 +370,7 @@ test('online, the service worker answers only listed files: an unlisted or "?...
     }
     // Positive control: a listed file, online too, is answered from the copy.
     expect(await open('/THIRD_PARTY_NOTICES.txt')).toEqual({ fromServiceWorker: true, status: 200 });
-    await expectCleanRun(page, 1);
+    await expectCleanRun(page);
 });
 
 /**
@@ -404,7 +401,7 @@ test('a refused registration is calm: no error, no service worker, the tool work
     expect(await page.evaluate(() => navigator.serviceWorker.controller)).toBeNull();
     await addFiles(page);
     expect(await page.evaluate(async () => (await caches.keys()).length)).toBe(0);
-    await expectCleanRun(page, 1);
+    await expectCleanRun(page);
 });
 
 test('a missing sw.js is calm: only the browser notes the 404, the tool works', async ({ context, page, browserName }) =>
@@ -428,7 +425,7 @@ test('a missing sw.js is calm: only the browser notes the 404, the tool works', 
             : 'console: Failed to load resource: the server responded with a status of 404 (Not Found)';
     expect(problems.filter((line) => line === own)).toHaveLength(1);
     problems = problems.filter((line) => line !== own);
-    await expectCleanRun(page, 1);
+    await expectCleanRun(page);
 });
 
 test('a new version deletes only the older caches of this service worker, never another cache', async ({ page }) =>
@@ -461,5 +458,5 @@ test('a new version deletes only the older caches of this service worker, never 
     expect(current).toMatch(/^email-to-pdf-offline-[0-9a-f]{20}$/);
     expect(contents[current]).toEqual(expectedPaths());
     expect(contents[FOREIGN]).toEqual([]);
-    await expectCleanRun(page, 1);
+    await expectCleanRun(page);
 });

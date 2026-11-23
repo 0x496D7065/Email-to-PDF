@@ -37,9 +37,14 @@ export interface PdfJobInput
      */
     readonly unticked?: readonly number[];
     readonly policy: OutputPolicy;
-    readonly timeZone: string;
     /** When the PDF is made (ms since 1970 UTC), taken on the page. */
     readonly generatedAt: number;
+    /**
+     * The offset of the page's clock from UTC at `generatedAt`, in minutes,
+     * taken on the page: the PDF prints its generation date on the reader's
+     * own clock (Source/pdf-export/build-pdf-document.ts, BuildPdfInput.generatedOffsetMinutes).
+     */
+    readonly generatedOffsetMinutes: number;
     /**
      * The PDF's language: the page language when the button was pressed (a
      * language the page ships, e.g. 'en'). The worker uses this, never a

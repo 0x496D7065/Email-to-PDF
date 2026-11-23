@@ -43,8 +43,9 @@ export function isToPdfWorker(data: unknown): data is ToPdfWorker
         (input.rebuildingOff === undefined || typeof input.rebuildingOff === 'boolean') &&
         (input.unticked === undefined || (Array.isArray(input.unticked) && input.unticked.every((id) => Number.isInteger(id) && (id as number) >= 0))) &&
         isRecord(input.policy) &&
-        typeof input.timeZone === 'string' &&
         typeof input.generatedAt === 'number' &&
+        typeof input.generatedOffsetMinutes === 'number' &&
+        Number.isFinite(input.generatedOffsetMinutes) &&
         isSupportedLocale(input.locale) &&
         PDF_FONT_NAMES.every((name) => fonts[name] instanceof Uint8Array)
     );

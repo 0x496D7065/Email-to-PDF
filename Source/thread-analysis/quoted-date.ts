@@ -11,6 +11,8 @@
 //   DROPPED email (the source file, whose Date header has an offset), and
 //   the result is marked approximate: basis 'source-offset'. If the source
 //   offset is unknown too, the wall time is taken as UTC: basis 'none'.
+//   That estimate is for ORDERING and linking only: the time shown is the
+//   wall-clock time as written (`wallMs`), never converted (task 9.9c).
 // - Sometimes the text carries its own zone: an RFC 5322 date in a forward
 //   block ("Mon, 3 Mar 2025 14:02:00 +0900", basis 'rfc-zone') or a written
 //   offset ("3 March 2025 at 14:02:00 GMT+9" from Apple Mail, "+0100",

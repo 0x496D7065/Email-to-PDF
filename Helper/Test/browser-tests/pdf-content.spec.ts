@@ -15,15 +15,16 @@
 // (eml/93-answers-between-lines.eml), holds what no other fixture has:
 // point-by-point answers between quoted lines, an emoji the fonts lack, a
 // tab, a control character, and a Sender and a Cc mailbox found in no other
-// email. Then one email is unticked ("Parking") and the zone
-// "America/New_York" is picked (the browser's own zone is Tokyo).
+// email. Then one email is unticked ("Parking"). The browser's zone is Tokyo,
+// far from every fixture's: every email date must still be printed as
+// written (task 9.9c); only the generation time is on the computer's clock.
 //
 // 1. "the PDF as made by default": the cover (title, date range, count,
-//    zone, generation time, no note of any kind (task 8.8), the people, and
+//    generation time, no time zone, no note of any kind (task 8.8), the people, and
 //    no source file list: no file name before the emails and no SHA-256
 //    (computed here, in Node, over the exact bytes dropped) anywhere, task
 //    8.12); the index right after the cover (one row per email, in order: number, short
-//    date in the chosen zone, sender, subject, attachments, and the page
+//    date as written, sender, subject, attachments, and the page
 //    where that email's heading really is; each row a link to it); the
 //    bookmarks; "Page X of Y" on every page; the unticked email nowhere;
 //    the first line of every email; the PDF-only policy (Source/thread-analysis/
@@ -80,8 +81,6 @@ import {
     PARSE_TIME_CONSOLE,
     untoleratedReports,
     watchPage,
-    withoutSelectConsole,
-    withoutSelectReports,
     workerCspReports,
     workersNamed,
     type PageWatch,
@@ -112,11 +111,11 @@ const UNTICKED_ID = 'eml/74-date-localized-weekday.eml';
 const UNTICKED_SUBJECT = 'Parking';
 const UNTICKED_TEXT = 'park the van in front of the office';
 
-// The browser's zone, and the one picked in the page (both with no half hours; New York has DST).
+// The browser's zone (UTC+09:00, no daylight saving time): far from every fixture's own zone.
 const BROWSER_ZONE = 'Asia/Tokyo';
-const ZONE = 'America/New_York';
+const BROWSER_OFFSET_MINUTES = 540;
 test.use({ timezoneId: BROWSER_ZONE });
-/** "Now" for the page: 2025-06-01 20:00 UTC = 16:00 in New York, already 2 June in Tokyo. */
+/** "Now" for the page: 2025-06-01 20:00 UTC, already 2 June 05:00 in Tokyo. */
 const FIXED_NOW = Date.UTC(2025, 5, 1, 20, 0, 0);
 
 /** One dropped file and what this test expects of it. */
@@ -131,6 +130,8 @@ interface Source
     /** Duplicate group (the id when it has none). */
     readonly group: string;
     readonly utcMs: number | null;
+    /** The offset its date was written with (null: none written). */
+    readonly offsetMinutes: number | null;
     /** As the PDF names them when missing. */
     readonly subject: string;
     readonly author: string;
@@ -236,6 +237,7 @@ test.beforeAll(async () =>
                 sha256: await sha256(bytes),
                 group: fixture.duplicateGroup ?? fixture.id,
                 utcMs: fixture.date.utcMs,
+                offsetMinutes: fixture.date.offsetMinutes ?? null,
                 subject: fixture.subject === null || fixture.subject.trim() === '' ? en.preview.noSubject : fixture.subject,
                 author: authorOf(fixture.from, fixture.sender),
                 fromAddress: fixture.from[0]?.address ?? '',
@@ -294,25 +296,21 @@ const fill = (template: string, values: Record<string, string | number>): string
         return String(value);
     });
 
-/** A moment in the chosen zone, with Intl in Node: "YYYY-MM-DD", "YYYY-MM-DD HH:mm", "YYYY-MM-DD HH:mm:ss UTC-04:00". */
-function inZone(utcMs: number): { day: string; short: string; full: string }
+/**
+ * A wall-clock time (`utcMs` plus `offsetMinutes`) as the PDF writes it (task 9.9c: as written, never
+ * converted, no offset or zone mark, also for a .msg date of unknown sender zone, shown as its UTC
+ * time): "YYYY-MM-DD", "YYYY-MM-DD HH:mm" (the index), "YYYY-MM-DD HH:mm:ss".
+ */
+function wallClock(utcMs: number, offsetMinutes: number): { day: string; short: string; full: string }
 {
-    const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: ZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-        timeZoneName: 'longOffset',
-    }).formatToParts(new Date(utcMs));
-    const part = (type: Intl.DateTimeFormatPartTypes): string => parts.find((p) => p.type === type)?.value ?? '';
-    const day = `${part('year')}-${part('month')}-${part('day')}`;
-    const offset = part('timeZoneName').replace('GMT', '') || '+00:00';
-    return { day, short: `${day} ${part('hour')}:${part('minute')}`, full: `${day} ${part('hour')}:${part('minute')}:${part('second')} UTC${offset}` };
+    const iso = new Date(utcMs + offsetMinutes * 60_000).toISOString();
+    const day = iso.slice(0, 10);
+    return { day, short: `${day} ${iso.slice(11, 16)}`, full: `${day} ${iso.slice(11, 19)}` };
 }
+
+/** An email's date as written (see wallClock). */
+const asWritten = (source: Pick<Source, 'offsetMinutes'>, utcMs: number): ReturnType<typeof wallClock> =>
+    wallClock(utcMs, source.offsetMinutes ?? 0);
 
 /** White space runs as one space, trimmed (the PDF wraps lines where it likes). */
 const norm = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -427,7 +425,7 @@ async function readBack(bytes: Uint8Array, emails: number): Promise<ReadBack>
     // item. (The index table is read by column instead.)
     const documentText = en.pdf.document;
     const previewText = en.preview;
-    const labels = new Set([documentText.dates, documentText.emails, documentText.generated, documentText.timeZone, previewText.from,
+    const labels = new Set([documentText.dates, documentText.emails, documentText.generated, previewText.from,
         previewText.author.sender, previewText.to, previewText.cc, previewText.bcc, previewText.date, previewText.subject, documentText.file,
         '\u{2022}']);
     for (const line of [...coverLines, ...flat.map((x) => x.line)])
@@ -484,14 +482,19 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     const cover = doc.cover.map((l) => l.copied).join('\n');
     const coverText = norm(cover);
     expect(doc.cover[0]?.copied).toBe(documentText.title);
-    const dated = emails.map((e) => e.first.utcMs).filter((ms): ms is number => ms !== null);
-    const range = fill(documentText.dateRange, { first: inZone(Math.min(...dated)).full, last: inZone(Math.max(...dated)).full });
+    // The first and last emails by their true moment, each date as written.
+    const datedEmails = emails.filter((e) => e.first.utcMs !== null);
+    const dated = datedEmails.map((e) => e.first.utcMs!);
+    const firstEmail = datedEmails.find((e) => e.first.utcMs === Math.min(...dated))!.first;
+    const lastEmail = datedEmails.find((e) => e.first.utcMs === Math.max(...dated))!.first;
+    const range = fill(documentText.dateRange, { first: asWritten(firstEmail, firstEmail.utcMs!).full, last: asWritten(lastEmail, lastEmail.utcMs!).full });
     expect(coverText).toContain(`${documentText.dates} ${range}`);
     const undated = emailCount - dated.length;
     expect(undated).toBe(3);
     expect(coverText).toContain(`${documentText.emails} ${fill(documentText.emailCount.other, { count: emailCount })}`);
-    expect(coverText).toContain(`${documentText.timeZone} ${ZONE.replaceAll('_', ' ')}`);
-    expect(coverText).toContain(`${documentText.generated} ${made}`);
+    // No time-zone row (task 9.9c): the count is followed by the generation time.
+    expect(coverText).toContain(`${fill(documentText.emailCount.other, { count: emailCount })} ${documentText.generated} ${made}`);
+    expect(coverText).not.toMatch(/UTC[+-]\d|Tokyo|Dates shown in/u);
     // No notes on the cover (task 8.8): not about the undated emails, nor about
     // ANSWERS's control character (a BEL, quoted-printable encoded), which the
     // app notes on its card instead.
@@ -595,8 +598,8 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
     };
     const firstRow = doc.links.find((l) => l.dest === 'email-1');
     const headerLines = (doc.pages[doc.indexPages[0]!] ?? []).filter((l) => l.y <= titleLine.y && l.y > (firstRow?.rect[3] ?? 0));
-    const dateTitle = fill(documentText.column.dateInZone, { zone: ZONE.replaceAll('_', ' ') });
-    expect(cellText(headerLines, columns.date, columns.from, dateTitle)).toBe(dateTitle);
+    // The date column's title names no time zone (task 9.9c).
+    expect(cellText(headerLines, columns.date, columns.from, documentText.column.date)).toBe(documentText.column.date);
 
     const rowLinks = doc.links.filter((l) => l.dest.startsWith('email-'));
     expect(new Set(rowLinks.map((l) => l.dest)).size).toBe(emailCount);
@@ -613,7 +616,7 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
         const utcMs = email.first.utcMs;
         const want = {
             number: String(k + 1),
-            date: utcMs === null ? en.preview.noDate : inZone(utcMs).short,
+            date: utcMs === null ? en.preview.noDate : asWritten(email.first, utcMs).short,
             from: norm(email.first.author),
             subject: norm(email.first.subject),
             // The page where that email's heading really is.
@@ -655,7 +658,7 @@ function checkFront(doc: ReadBack, emails: ReturnType<typeof expectedEmails>, ma
         ...emails.map((e, k) =>
         {
             const utcMs = e.first.utcMs;
-            const day = utcMs === null ? en.preview.noDate : inZone(utcMs).day;
+            const day = utcMs === null ? en.preview.noDate : asWritten(e.first, utcMs).day;
             return [fill(documentText.emailBookmark, { number: k + 1, date: day, from: e.first.author, subject: e.first.subject }),
                 `email-${String(k + 1)}`];
         }),
@@ -705,8 +708,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__contentViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            const where = event.target === document ? 'parse' : event.target instanceof HTMLSelectElement ? 'select' : 'live';
+            const where = event.target === document ? 'parse' : 'live';
             window.__contentViolations.push(`${event.effectiveDirective} ${event.blockedURI} ${where}`);
         });
     });
@@ -714,7 +716,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
 
 const makeButton = (page: Page) => page.getByRole('button', { name: en.actions.makePdf });
 
-/** Opens the page, drops every file, unticks one email, picks the zone: ready to make the PDF. */
+/** Opens the page, drops every file, unticks one email: ready to make the PDF. */
 async function prepare(page: Page): Promise<ReturnType<typeof expectedEmails>>
 {
     await page.clock.setFixedTime(FIXED_NOW);
@@ -757,8 +759,6 @@ async function prepare(page: Page): Promise<ReturnType<typeof expectedEmails>>
         .getByRole('checkbox', { name: en.actions.include })
         .uncheck();
     await expect(page.locator('#review-included')).toHaveText(`${String(groups - 1)} of ${String(groups)} emails will be in the PDF.`);
-    await page.getByLabel(en.preview.zone).selectOption(ZONE);
-    await expect(page.getByLabel(en.preview.zone)).toHaveValue(ZONE);
     await expect(makeButton(page)).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });
     await expect(page.locator('#download-note')).toHaveText(en.download.available);
     const emails = expectedEmails();
@@ -772,8 +772,9 @@ async function makePdf(page: Page): Promise<Uint8Array>
     const next = page.waitForEvent('download', { timeout: 60_000 });
     await makeButton(page).click();
     const download = await next;
-    // Named after the day it was made in the CHOSEN zone (still 1 June in New York, 2 June in Tokyo).
-    expect(download.suggestedFilename()).toBe(`correspondence-${inZone(FIXED_NOW).day}.pdf`);
+    // Named after the day it was made on the computer's clock (already 2 June in Tokyo, still 1 June in UTC).
+    expect(download.suggestedFilename()).toBe(`correspondence-${wallClock(FIXED_NOW, BROWSER_OFFSET_MINUTES).day}.pdf`);
+    expect(download.suggestedFilename()).toBe('correspondence-2025-06-02.pdf');
     return new Uint8Array(readFileSync(await download.path()));
 }
 
@@ -800,14 +801,14 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    const violations = withoutSelectReports(browserName, await page.evaluate(() => window.__contentViolations));
+    const violations = await page.evaluate(() => window.__contentViolations);
     expect(untoleratedReports(browserName, violations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
     const named = (['parse-worker', 'engine-worker', 'pdf-worker'] as const).reduce((sum, name) => sum + workersNamed(watch, watch.workers, name).length, 0);
     expect(named).toBe(watch.workers.length);
     await expect.poll(() => watch.closedWorkers.length).toBe(watch.workers.length);
     const directives = violations.filter(isParseTimeReport).map((v) => v.split(' ')[0] ?? '');
-    const consoleProblems = withoutSelectConsole(browserName, problems);
+    const consoleProblems = problems;
     for (const known of PARSE_TIME_CONSOLE)
     {
         expect(consoleProblems.filter((p) => known.line.test(p)).length).toBeLessThanOrEqual(directives.filter((x) => known.directives.includes(x)).length);
@@ -843,7 +844,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     test.setTimeout(90_000);
     const emails = await prepare(page);
     const doc = await readBack(await makePdf(page), emails.length);
-    checkFront(doc, emails, inZone(FIXED_NOW).full);
+    checkFront(doc, emails, wallClock(FIXED_NOW, BROWSER_OFFSET_MINUTES).full);
     const sectionText = doc.sections.map((s) => norm(s.copied));
 
     // Each email: its first own line (the first line of its body with text; the manifest's first snippet for the HTML-only ones).
@@ -944,7 +945,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
     }
 
     // ANSWERS' header rows, from the manifest: each label, then its value, in
-    // order (From, Sent by, To, Cc, Date in the chosen zone, Subject).
+    // order (From, Sent by, To, Cc, Date as written, Subject).
     const fixture = FIXTURES.find((f) => f.id === ANSWERS_ID);
     const answersMs = fixture?.date.utcMs;
     if (fixture === undefined || fixture.sender === undefined || answersMs === null || answersMs === undefined)
@@ -965,7 +966,7 @@ test('the PDF as made by default: cover, index, pages, and only what each writer
         `${previewText.author.sender} ${mailboxes([fixture.sender])}`,
         `${previewText.to} ${mailboxes(fixture.to)}`,
         `${previewText.cc} ${mailboxes(fixture.cc)}`,
-        `${previewText.date} ${inZone(answersMs).full}`,
+        `${previewText.date} ${wallClock(answersMs, fixture.date.offsetMinutes ?? 0).full}`,
         `${previewText.subject} ${fixture.subject ?? '?'}`,
     ]);
 
@@ -1002,7 +1003,7 @@ test('"Print full original text": every email\'s whole text, in order', async ({
     await expect(page.locator('#preview-list[data-pdf-labels="ready"]')).toHaveCount(1);
     await expect(makeButton(page)).not.toHaveAttribute('aria-disabled', /.*/);
     const doc = await readBack(await makePdf(page), emails.length);
-    checkFront(doc, emails, inZone(FIXED_NOW).full);
+    checkFront(doc, emails, wallClock(FIXED_NOW, BROWSER_OFFSET_MINUTES).full);
 
     // Invisible characters (Source/pdf-export/pdf-text-transforms.ts, group 2) are not in the copy
     // layer: the copy layer is what you see. The fixtures have none; dropped
@@ -1133,7 +1134,6 @@ async function prepareNoText(page: Page): Promise<void>
     const items = page.locator('#preview-list > li');
     await expect(items).toHaveCount(4, { timeout: 60_000 });
     await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/, { timeout: 60_000 });
-    await page.getByLabel(en.preview.zone).selectOption(ZONE);
     // The two without text: still in the list, ticked, with the note.
     for (const subject of [EMPTY_SUBJECT, BLANK_SUBJECT])
     {
@@ -1220,7 +1220,7 @@ test('emails with no text: only those ticked, no PDF can be made and the page sa
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.websockets).toEqual([]);
     const browserName = browserEngineOf(page.context());
-    expect(untoleratedReports(browserName, withoutSelectReports(browserName, await page.evaluate(() => window.__contentViolations)))).toEqual([]);
+    expect(untoleratedReports(browserName, await page.evaluate(() => window.__contentViolations))).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
 });

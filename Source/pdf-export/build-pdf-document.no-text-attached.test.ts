@@ -101,7 +101,7 @@ function make(result: ThreadAnalysisResult, mode: Mode, policy: OutputPolicy = D
     const plans = planOutput(positions.map((p) => result.messages[p]!), policy);
     const ids = rebuiltEntries(result).map((r) => r.id);
     const input: PrintedElsewhereInput = { result, positions, plans, policy, rebuilt: mode.rebuilt(ids), unticked: mode.unticked(ids), rebuildingOff: mode.off };
-    const pdf = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 10, 12, 0, 0), strings: EN });
+    const pdf = buildPdfDocument({ ...input, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 10, 12, 0, 0), strings: EN });
     return { result, positions, plans, input, pdf };
 }
 
@@ -541,7 +541,7 @@ describe('an attached email with no text but WITH attachments: its block stays i
                 positions,
                 plans: planOutput(positions.map((p) => result.messages[p]!)),
                 policy: DEFAULT_OUTPUT_POLICY,
-                timeZone: 'UTC',
+                generatedOffsetMinutes: 0,
                 generatedAt: Date.UTC(2025, 5, 10, 12, 0, 0),
                 fonts,
                 locale: 'en',

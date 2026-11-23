@@ -325,39 +325,3 @@ export const PARSE_TIME_CONSOLE: readonly { readonly line: RegExp; readonly dire
         directives: ['style-src-elem', 'style-src-attr'],
     },
 ];
-
-// WebKit and <select>. WebKit builds every <select> element with an inner
-// part of its own (not the page's), styled inline, and checks that style
-// against the page's CSP: each <select> made in a page with this CSP gives
-// one style-src-attr report per policy (header, <meta>), fired at the
-// <select>, and one console error for each. Seen for a <select> in the HTML
-// and one made by script alike; Chromium and Firefox report nothing. The
-// page has exactly one <select> (the time zone of the preview), so a spec's
-// recorder labels a report fired at a <select> "select" and these helpers
-// take out exactly that many, after checking the count: one per policy in
-// WebKit, none elsewhere. Any other report or console error still fails.
-
-/** A recorded report ("directive blockedURI label") of that <select> quirk. */
-export const SELECT_REPORT = 'style-src-attr inline select';
-
-/** WebKit's console line for each of those reports (as a spec records it, "console: ..."). */
-export const WEBKIT_SELECT_CONSOLE =
-    "console: Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy.";
-
-/**
- * `records` without the <select> reports, after checking there are exactly
- * `policies` of them in WebKit (2: header and <meta>) and none in another
- * browser. For a page loaded once since the recorder started.
- */
-export function withoutSelectReports(browserName: string, records: readonly string[], policies = 2): string[]
-{
-    expect(records.filter((r) => r === SELECT_REPORT), 'WebKit <select> reports').toHaveLength(browserName === 'webkit' ? policies : 0);
-    return records.filter((r) => r !== SELECT_REPORT);
-}
-
-/** Same for the console lines (`problems`), with `loads` page loads recorded. */
-export function withoutSelectConsole(browserName: string, problems: readonly string[], policies = 2, loads = 1): string[]
-{
-    expect(problems.filter((p) => p === WEBKIT_SELECT_CONSOLE), 'WebKit <select> console lines').toHaveLength(browserName === 'webkit' ? policies * loads : 0);
-    return problems.filter((p) => p !== WEBKIT_SELECT_CONSOLE);
-}

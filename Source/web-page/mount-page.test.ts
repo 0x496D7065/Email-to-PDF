@@ -89,8 +89,6 @@ function mount(chunkSize = 1000): void
     page = mountPage(root as unknown as HTMLElement, {
         addFiles: { process: control.process, listenerTarget: new FakeEventTarget() as unknown as ListenerTarget },
         preview: {
-            zones: ['America/New_York', 'Asia/Tokyo', 'UTC'],
-            initialZone: 'America/New_York',
             chunkSize,
             schedule,
             cancel,
@@ -404,7 +402,7 @@ describe('mountPage', () =>
     it('a control that lost the focus to <body> but is still in the page: left alone', async () =>
     {
         await addAndShow();
-        focusOn(byId('preview-zone'));
+        focusOn(byId('preview-show-folded'));
         fakeDocument.activeElement = fakeDocument.body; // blurred, not removed
         await addAndShow();
         expect(chooseButton().focuses).toBe(0);
@@ -413,7 +411,7 @@ describe('mountPage', () =>
     it('a focus elsewhere on the page is left alone', async () =>
     {
         await addAndShow();
-        focusOn(byId('preview-zone'));
+        focusOn(byId('preview-show-folded'));
         firstCheckbox().isConnected = false;
         await addAndShow();
         expect(chooseButton().focuses).toBe(0);
@@ -498,14 +496,11 @@ describe('"Clear everything": after a finished batch', () =>
     it('empties every part of the page, announces it and moves the focus to the "choose" button', async () =>
     {
         const { messages } = await addAndShow();
-        // Some choices to forget: one email unticked, another zone, folded text shown.
+        // Some choices to forget: one email unticked, folded text shown.
         const box = items()[0]!.descendants().find((e) => hasClass(e, 'include-checkbox'))!;
         box.checked = false;
         box.fire('change');
         expect(page.review.includedPositions()).toEqual([1]);
-        const zone = byId('preview-zone');
-        zone.value = 'Asia/Tokyo';
-        zone.fire('change');
         const folded = byId('preview-show-folded');
         folded.checked = true;
         folded.fire('change');
@@ -523,8 +518,6 @@ describe('"Clear everything": after a finished batch', () =>
         expect(status()).toBe(t('clear.done'));
         expect(status()).toBe('Everything was cleared.');
         expect(chooseButton().focuses).toBe(1);
-        expect(page.preview.zone()).toBe('America/New_York');
-        expect(zone.value).toBe('America/New_York');
         expect(folded.checked).toBe(false);
     });
 

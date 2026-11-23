@@ -199,12 +199,17 @@ describe('rebuiltDate', () =>
         expect(rebuiltDate(rebuiltWithDate('yesterday', { wallMs: null }))).toEqual({ kind: 'unreadable', text: 'yesterday' });
     });
 
-    it('gives a moment with "approximate" when the date has a time, and a day as written when it has none', () =>
+    it('gives a moment with its time as written (wallMs, shown) and its estimated moment (utcMs, ordering only), and a day as written', () =>
     {
-        const timestamp = Date.parse('2025-03-03T14:40:00Z');
-        expect(rebuiltDate(rebuiltWithDate('maandag 3 maart 2025 15:40', { wallMs: timestamp, precision: 'minute', estimatedUtcMs: timestamp }))).toEqual({
+        // "15:40" with no zone, read in the source email's zone (+01:00): the estimate is 14:40 UTC, the time shown stays 15:40.
+        const wall = Date.parse('2025-03-03T15:40:00Z');
+        const estimate = Date.parse('2025-03-03T14:40:00Z');
+        expect(rebuiltDate(rebuiltWithDate('maandag 3 maart 2025 15:40',
+            { wallMs: wall, precision: 'minute', estimatedUtcMs: estimate, basis: 'source-offset' }))).toEqual({
             kind: 'moment',
-            utcMs: timestamp,
+            utcMs: estimate,
+            wallMs: wall,
+            writtenOffsetMinutes: null,
             approximate: true,
             text: 'maandag 3 maart 2025 15:40',
         });
@@ -212,9 +217,29 @@ describe('rebuiltDate', () =>
         expect(rebuiltDate(rebuiltWithDate('3 March 2025', { wallMs: day, precision: 'day', estimatedUtcMs: day - 3_600_000 }, false))).toEqual({
             kind: 'day',
             day: '2025-03-03',
+            utcMs: day - 3_600_000,
             approximate: false,
             text: '3 March 2025',
         });
+    });
+
+    it('keeps the offset a date wrote itself (for <time datetime> only), summer and winter', () =>
+    {
+        const summer = rebuiltWithDate('Tue, 21 Apr 2026 13:54:00 +0200', {
+            wallMs: Date.parse('2026-04-21T13:54:00Z'), precision: 'minute', estimatedUtcMs: Date.parse('2026-04-21T11:54:00Z'), basis: 'rfc-zone',
+        }, false);
+        expect(rebuiltDate(summer)).toMatchObject({ kind: 'moment', wallMs: Date.parse('2026-04-21T13:54:00Z'), writtenOffsetMinutes: 120, approximate: false });
+        const winter = rebuiltWithDate('17 February 2026 at 13:59 GMT+1', {
+            wallMs: Date.parse('2026-02-17T13:59:00Z'), precision: 'minute', estimatedUtcMs: Date.parse('2026-02-17T12:59:00Z'), basis: 'written-zone',
+        }, false);
+        expect(rebuiltDate(winter)).toMatchObject({ kind: 'moment', wallMs: Date.parse('2026-02-17T13:59:00Z'), writtenOffsetMinutes: 60 });
+    });
+
+    it('is unreadable for a time without a wall-clock value or an estimate', () =>
+    {
+        const wall = Date.parse('2025-03-03T15:40:00Z');
+        expect(rebuiltDate(rebuiltWithDate('15:40', { wallMs: null, precision: 'minute', estimatedUtcMs: wall }))).toEqual({ kind: 'unreadable', text: '15:40' });
+        expect(rebuiltDate(rebuiltWithDate('15:40', { wallMs: wall, precision: 'minute', estimatedUtcMs: null }))).toEqual({ kind: 'unreadable', text: '15:40' });
     });
 });
 

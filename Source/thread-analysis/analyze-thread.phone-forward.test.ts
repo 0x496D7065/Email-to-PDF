@@ -155,7 +155,7 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
     // The PDF with every rebuilt email chosen (the default): 10 rebuilt emails, oldest first, then the file's.
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY);
-    const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0,
+    const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0,
         strings: createPdfStrings('en'), rebuilt: entries.map((r) => r.id) });
     const printed = [...expected].reverse().filter((e) => !e.noOwnText);
     // Signatures (task 9.9b-2, user decision F4): each workshop email ends with the same closing line and
@@ -244,7 +244,7 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
         ['every rebuilt email unticked', { rebuilt: [], unticked: entries.map((r) => r.id) }],
     ] as const)
     {
-        const other = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0,
+        const other = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0,
             strings: createPdfStrings('en'), ...extra });
         const text = squashWhiteSpace(other.emails.map((e) => e.body.map(lineText).join('\n')).join('\n'));
         const withText = (h: string): number => result.reconstructed.filter((r) => !rebuiltHasNoPrintableText(r) && headerOf(r) === h).length;
@@ -302,7 +302,7 @@ describe('phone forward of a flat thread: the fixtures (parse -> analysis -> pla
         // The PDF: the 10 rebuilt emails with text once each, and the 4 files.
         const positions = result.messages.map((_, k) => k);
         const plans = planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY);
-        const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0,
+        const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0,
             strings: createPdfStrings('en'), rebuilt: entries.map((r) => r.id) });
         expect(pdf.emails.filter((e) => e.rebuilt !== null)).toHaveLength(10);
         expect(pdf.emails.filter((e) => e.rebuilt === null)).toHaveLength(4);

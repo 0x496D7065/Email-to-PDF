@@ -45,7 +45,8 @@ const SETS = {
 type SetName = keyof typeof SETS;
 
 const GENERATED_AT = Date.UTC(2025, 5, 1, 12, 0, 0);
-const ZONE = 'Africa/Lagos';
+/** The reader's clock (Africa/Lagos, +01:00): only the generation date uses it. */
+const READER_OFFSET_MINUTES = 60;
 
 let fonts: PdfFonts;
 let parsed: NormalizedMessage[];
@@ -80,7 +81,7 @@ async function make(set: SetName, locale: Locale, full: boolean)
         policy,
     );
     const rebuilt = rebuiltEntries(result).map((r) => r.id);
-    const input = { result, positions, plans, rebuilt, policy, timeZone: ZONE, generatedAt: GENERATED_AT };
+    const input = { result, positions, plans, rebuilt, policy, generatedOffsetMinutes: READER_OFFSET_MINUTES, generatedAt: GENERATED_AT };
     const made = await generatePdf({ ...input, fonts, locale });
     const pdfDocument = buildPdfDocument({ ...input, strings: createPdfStrings(locale) });
     const pdf = readPdf(made.bytes);
@@ -233,7 +234,7 @@ describe('tasks 8.7 and 8.12: no text about rebuilt emails, no source files or S
                         expect(title).not.toMatch(REBUILT_WORDS[locale]);
                     }
 
-                    // The cover: title, dates, count, zone, made on; people. No source files, no SHA-256 (task 8.12).
+                    // The cover: title, dates, count, made on; people. No time zone (task 9.9c), no source files, no SHA-256 (task 8.12).
                     expect(cover[0]).toBe(strings.title);
                     const range = pdfDocument.cover.dateRange!;
                     expect(coverText).toContain(

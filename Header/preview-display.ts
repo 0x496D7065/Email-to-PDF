@@ -84,16 +84,34 @@ export interface RebuiltInPdf
     readonly also: readonly number[];
 }
 
-/** A rebuilt message's date, as the card shows it. */
+/**
+ * A rebuilt message's date, as the card shows it: as written, never
+ * converted to another time zone (user decision, task 9.9c). `utcMs` is the
+ * estimated true moment (QuotedDate.estimatedUtcMs), for ordering only (the
+ * PDF cover's first and last dates); it is never shown.
+ */
 export type RebuiltDate =
     /** The quoted header has no date. */
     | { readonly kind: 'none' }
     /** A date text that could not be read: shown as written only. */
     | { readonly kind: 'unreadable'; readonly text: string }
-    /** A date with a time: shown in the chosen zone, "about" when approximate. */
-    | { readonly kind: 'moment'; readonly utcMs: number; readonly approximate: boolean; readonly text: string }
-    /** A day without a time: shown as written (YYYY-MM-DD), never "about" (user decision Q2, task 7.7). */
-    | { readonly kind: 'day'; readonly day: string; readonly approximate: boolean; readonly text: string };
+    /**
+     * A date with a time: shown as its wall-clock time (`wallMs`, the time as
+     * written read as if it were UTC). `writtenOffsetMinutes`: the zone the
+     * date itself wrote (an RFC 5322 or a written offset), for <time datetime>
+     * only; null when it wrote none. `approximate`: the moment `utcMs` is a
+     * guess (no zone written), for the linking checks only: never shown.
+     */
+    | {
+        readonly kind: 'moment';
+        readonly utcMs: number;
+        readonly wallMs: number;
+        readonly writtenOffsetMinutes: number | null;
+        readonly approximate: boolean;
+        readonly text: string;
+    }
+    /** A day without a time: shown as written (YYYY-MM-DD). `utcMs`: the estimated start of that day (null: none), for ordering only. */
+    | { readonly kind: 'day'; readonly day: string; readonly utcMs: number | null; readonly approximate: boolean; readonly text: string };
 
 /** What a rebuilt card shows (no DOM; the words come from the strings module). */
 export interface RebuiltCard

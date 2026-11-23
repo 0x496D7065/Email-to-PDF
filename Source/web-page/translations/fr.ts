@@ -17,7 +17,7 @@
 // - Numbers in `{count}` and the like are written by t() with the browser's
 //   French rules (Intl), never by hand.
 // - Not translated (user decision): the app's name, mail program names,
-//   time zone names, MIME types, hashes. The PDF's file name is ASCII only.
+//   "UTC", MIME types, hashes. The PDF's file name is ASCII only.
 
 import type { Messages } from './index';
 
@@ -191,13 +191,9 @@ export const fr: Messages = {
         noText: '(aucun texte)',
         notInPdfNoText: 'Pas dans le PDF\u{00A0}: cet e-mail n’a pas de texte.',
         itemFailed: 'Un problème est survenu pendant l’affichage de cet e-mail. Son texte, s’il en a un, est affiché ci-dessous tel quel.',
-        zone: 'Afficher les dates dans ce fuseau horaire',
-        zoneThisComputer: '{zone} (cet ordinateur)',
-        zoneNotRecognized: 'Ce fuseau horaire n’a pas été reconnu\u00A0: les dates sont donc affichées en UTC, ici et dans le PDF.',
         showFolded: 'Afficher les citations et les signatures',
         listLabel: 'Vos e-mails, du plus ancien au plus récent',
         messageNumber: '#{number}',
-        senderTime: 'Heure locale de l’expéditeur\u00A0: {time}',
         dateAsWritten: 'Date telle qu’écrite dans l’e-mail\u00A0: {text}',
         mailbox: '{name} <{address}>',
         alsoIn: 'Également dans',
@@ -297,7 +293,6 @@ export const fr: Messages = {
         takenFrom: 'Tiré de',
         takenFromValue: 'l’e-mail {number}',
         listIncomplete: '(liste peut-être incomplète)',
-        dateAbout: 'vers {date}',
         dateAsWritten: 'Telle qu’écrite dans la citation\u00A0: {text}',
         dateUnreadable: '(date illisible)',
         rebuildConversation: 'Reconstituer la conversation à partir des réponses',
@@ -350,13 +345,11 @@ export const fr: Messages = {
             emails: 'E-mails',
             emailCount: { one: '{count} e-mail', other: '{count} e-mails' },
             generated: 'Créé le',
-            timeZone: 'Fuseau horaire',
             people: 'Participants',
             index: 'Sommaire',
             column: {
                 number: 'Nº',
                 date: 'Date',
-                dateInZone: 'Date ({zone})',
                 from: 'De',
                 subject: 'Objet',
                 attachments: 'Pièces jointes',
@@ -380,7 +373,7 @@ export const fr: Messages = {
         parse: {
             'missing-date': 'Aucune date n’a été trouvée dans cet e-mail.',
             'unparseable-date': 'La date de cet e-mail n’a pas pu être lue.',
-            'unknown-time-zone': 'Le fuseau horaire de l’expéditeur n’est pas indiqué, l’heure peut donc être décalée de quelques heures.',
+            'unknown-time-zone': 'Le fuseau horaire de l’expéditeur n’est pas indiqué. L’heure est affichée telle qu’écrite, mais la place de cet e-mail dans la liste peut être décalée.',
             'missing-message-id': 'Cet e-mail n’a pas de numéro de référence caché, les copies identiques sont donc plus difficiles à repérer.',
             'html-converted-body': 'Cet e-mail a été converti en texte simple à partir de sa version mise en forme. La présentation peut être différente.',
             'html-body-truncated': 'Cet e-mail est très long, son texte a donc été coupé ici. Le texte complet se trouve toujours dans le fichier d’origine.',

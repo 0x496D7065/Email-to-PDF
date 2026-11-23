@@ -174,7 +174,7 @@ export const en = {
         } satisfies Record<PdfUnavailable, string>,
         available: 'Makes one PDF of the emails ticked in step 2, here on this computer.',
         // Shown (and announced in the status line) after a PDF being made or
-        // ready was dropped because a choice changed (time zone, ticks, files...).
+        // ready was dropped because a choice changed (ticks, files...).
         changed: 'Your choices changed, so the previous PDF was removed. Make the PDF again to include them.',
         // One announcement when the same action also has news of its own, e.g.
         // "{2 of 3 emails will be in the PDF.} {Your choices changed, ...}".
@@ -248,19 +248,11 @@ export const en = {
         // An email whose item could not be built: its text is still shown under this note.
         itemFailed: 'Something went wrong while showing this email. Its text, if it has any, is shown below as it is.',
         // The toolbar above the list.
-        zone: 'Show dates in this time zone',
-        zoneThisComputer: '{zone} (this computer)',
-        // Under the zone list, only when the zone picked is not one this browser
-        // knows (not expected: the list only offers zones it knows). The PDF then
-        // names just "UTC", without this note (task 8.8).
-        zoneNotRecognized: 'This time zone was not recognized, so dates are shown in UTC, here and in the PDF.',
         showFolded: 'Show quoted text and signatures',
         // Accessible name of the list of emails.
         listLabel: 'Your emails, oldest first',
         // An email's number in the list, e.g. "#3".
         messageNumber: '#{number}',
-        // Shown under the date when the sender's own clock showed another time.
-        senderTime: "Sender's local time: {time}",
         // Shown after "(no date)" when the email's date could not be read: the
         // date exactly as the email wrote it (the PDF shows that text alone, task 8.8).
         dateAsWritten: 'As written in the email: {text}',
@@ -427,8 +419,6 @@ export const en = {
         takenFromValue: 'email {number}',
         // After a To or Cc list that may go on past what could be read.
         listIncomplete: '(list may be incomplete)',
-        // A quoted date read without a time zone of its own: the time is a best guess.
-        dateAbout: 'about {date}',
         // The date exactly as the quote wrote it, under the date shown.
         dateAsWritten: 'As written in the quote: {text}',
         // A quoted date the tool could not read (it is shown as written below).
@@ -535,20 +525,17 @@ export const en = {
             title: 'Email correspondence',
             // Cover page: the rows of the summary.
             dates: 'Dates',
-            // E.g. "2025-03-01 09:00:00 UTC+01:00 to 2025-04-02 11:00:42 UTC+02:00".
+            // E.g. "2025-03-01 09:00:00 to 2025-04-02 11:00:42" (dates as written in the emails).
             dateRange: '{first} to {last}',
             emails: 'Emails',
             emailCount: { one: '{count} email', other: '{count} emails' },
             generated: 'Made on',
-            timeZone: 'Dates shown in',
             people: 'People',
             // The index (table of contents).
             index: 'Index',
             column: {
                 number: 'No.',
                 date: 'Date',
-                // The index's date column title: its dates are "YYYY-MM-DD HH:mm" in this zone, e.g. "Date (America/New York)".
-                dateInZone: 'Date ({zone})',
                 from: 'From',
                 subject: 'Subject',
                 attachments: 'Attachments',
@@ -572,7 +559,7 @@ export const en = {
             // e.g. "3. 2025-03-04, Alice Example: Desks for the office".
             coverBookmark: 'Cover',
             emailBookmark: '{number}. {date}, {from}: {subject}',
-            // The PDF's file name, from the day it is made in the chosen zone
+            // The PDF's file name, from the day it is made on this computer's clock
             // (YYYY-MM-DD). ASCII letters, digits and dashes only: some systems
             // mangle other characters in a file name.
             fileName: 'correspondence-{date}.pdf',
@@ -586,7 +573,8 @@ export const en = {
         parse: {
             'missing-date': 'No date was found in this email.',
             'unparseable-date': 'The date of this email could not be read.',
-            'unknown-time-zone': "The sender's time zone is not given, so the time may be off by a few hours.",
+            // The time is shown as written; only the email's place in the date order can be off (task 9.9c).
+            'unknown-time-zone': "The sender's time zone is not given. The time is shown as written, but this email's place in the list may be off.",
             'missing-message-id': 'This email has no hidden reference number, so identical copies are harder to spot.',
             'html-converted-body': 'This email was turned into plain text from its formatted version. The layout may look different.',
             'html-body-truncated': 'This email is very long, so its text was cut short here. The full text is still in the original file.',

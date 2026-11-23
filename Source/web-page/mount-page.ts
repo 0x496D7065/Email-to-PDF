@@ -44,7 +44,7 @@
 // and only once they are up to date (pdfUnavailable). Every change of what
 // goes into the PDF drops a PDF made or being made (choicesChanged): files
 // added, a new result, an email ticked or unticked, "Print full original
-// text", the time zone, and new plans. So a PDF that no longer matches the
+// text", and new plans. So a PDF that no longer matches the
 // page is never offered.
 //
 // "Clear everything" (README.md, rule R5: in memory only). The button is
@@ -56,8 +56,8 @@
 //   the file input, the summary, the failed-files list and the notices, and
 //   hides step 2;
 // - step 2 (preview.reset, review.reset): empties the list, cancels the
-//   chunks still waiting, puts the time zone and the "show quoted text"
-//   checkbox back to their defaults, forgets every include choice and
+//   chunks still waiting, puts the "show quoted text"
+//   checkbox back to its default, forgets every include choice and
 //   empties the counts; (pdfLabels.reset) unticks "Print full original
 //   text", stops the planning still going and drops every plan;
 // - step 3 (download.reset): stops a PDF being made (its worker is
@@ -76,7 +76,7 @@
 // Language (setLanguage, called by the picker in the header, Source/web-page/page-shell.ts):
 // makes the new language the page language, then each part writes its own
 // words again from its own state (relabel: nothing is rebuilt, so ticks,
-// the time zone, open folds, "show quoted text", "Print full original
+// open folds, "show quoted text", "Print full original
 // text", the plans, the focus and the scroll position all stay), sets
 // <html lang> and the title, and makes ONE announcement through step 3
 // (inputsChanged): the PDF's words and file name follow the language, so a
@@ -103,8 +103,8 @@ export interface PageOptions
 {
     /** Passed to step 1 (unit tests: a fake process function and a fake window). */
     readonly addFiles?: Pick<AddFilesOptions, 'process' | 'listenerTarget'>;
-    /** Passed to step 2 (unit tests: fixed zones, chunk scheduling). */
-    readonly preview?: Pick<PreviewOptions, 'chunkSize' | 'schedule' | 'cancel' | 'zones' | 'initialZone'>;
+    /** Passed to step 2 (unit tests: chunk scheduling). */
+    readonly preview?: Pick<PreviewOptions, 'chunkSize' | 'schedule' | 'cancel'>;
     /** Passed to the PDF labels (unit tests: scheduling and clock). */
     readonly pdfLabels?: Pick<PdfLabelsOptions, 'schedule' | 'cancel' | 'now'>;
     /**
@@ -282,7 +282,6 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
             pdfLabels.rebuiltChanged();
             download.refresh();
         },
-        onZoneChange: choicesChanged,
     });
     // Step 1 opens or closes step 2 itself; step 2 shows each new result.
     const addFiles = mountAddFiles(shell, {
@@ -339,7 +338,9 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
     /**
      * What goes in the PDF: exactly the plans the preview's labels show
      * (currentPlans is null while they are being worked out again, and the
-     * button is unavailable then), and the time zone picked in step 2.
+     * button is unavailable then), and the offset of this computer's clock
+     * at `generatedAt`, for the PDF's generation date (every email date is
+     * printed as written, task 9.9c).
      */
     function pdfInput(generatedAt: number): PdfJobInput | null
     {
@@ -361,8 +362,8 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
             // The rebuilt cards the reader unticked: only their forwarded parts are left out (an entry merely not chosen stays inline).
             unticked: plans.policy.unfoldEverything ? [] : [...review.untickedRebuilt()],
             policy: plans.policy,
-            timeZone: preview.zone(),
             generatedAt,
+            generatedOffsetMinutes: -new Date(generatedAt).getTimezoneOffset(),
             // The PDF's words and file name are in the page language.
             locale: getLocale(),
         };

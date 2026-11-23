@@ -9,7 +9,7 @@
 // catalog for this file only: since every one of its strings differs from
 // English, it shows any word of ours that a switch did not rewrite. What
 // changes (every word of ours, <html lang>, the title, one announcement,
-// the PDF dropped) and what must not (ticks, time zone, open folds, focus, the
+// the PDF dropped) and what must not (ticks, open folds, focus, the
 // elements themselves, stand-ins, the plans).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget, FakeText } from '../../Helper/Test/test-support/fake-dom';
@@ -139,7 +139,7 @@ function mount(): void
             process: (files, options) => new Promise((resolve) => calls.push({ files, options, resolve })),
             listenerTarget: new FakeEventTarget() as unknown as ListenerTarget,
         },
-        preview: { zones: ['America/New_York', 'Asia/Tokyo', 'UTC'], initialZone: 'America/New_York', schedule, cancel },
+        preview: { schedule, cancel },
         pdfLabels: { schedule, cancel },
         download: {
             run: (request, signal) => new Promise((resolve) => runs.push({ request, signal, resolve })),
@@ -266,7 +266,7 @@ const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\
  * The English words of ours still on the page: every text piece and
  * aria-label / aria-description, without what is allowed to stay as it is
  * (the emails' own content, file names, the parser's technical details,
- * time zone names, dates and MIME types, the app's name, the languages' own
+ * dates and MIME types, the app's name, the languages' own
  * names). Empty when every word of ours was rewritten.
  */
 function englishLeft(emailSet: ReturnType<typeof emails>, sameInBoth: readonly string[] = []): string[]
@@ -276,9 +276,6 @@ function englishLeft(emailSet: ReturnType<typeof emails>, sameInBoth: readonly s
         t('app.name'),
         'English',
         testLanguageName(TEST_LOCALE),
-        'America/New York',
-        'Asia/Tokyo',
-        'UTC',
         'application/pdf',
         'plan.pdf',
         'notes.txt',
@@ -417,20 +414,17 @@ describe('the language picker (English, French, Dutch, and the test-only languag
 
 describe('setLanguage with files loaded', () =>
 {
-    it('rewrites every word of ours and keeps ticks, zone, open folds, focus, elements, stand-ins and plans', async () =>
+    it('rewrites every word of ours and keeps ticks, open folds, focus, elements, stand-ins and plans', async () =>
     {
         const emailSet = await addAndShow();
         const list = items();
         expect(list).toHaveLength(4);
 
-        // The reader's choices: one email unticked, another zone, a fold opened by hand.
+        // The reader's choices: one email unticked, a fold opened by hand.
         const boxes = byClass('include-checkbox');
         boxes[0]!.checked = false;
         boxes[0]!.fire('change');
         runAll();
-        const zone = byId('preview-zone');
-        zone.value = 'Asia/Tokyo';
-        zone.fire('change');
         const folds = byClass('fold');
         expect(folds.length).toBeGreaterThan(1);
         folds[0]!.setAttribute('open', '');
@@ -463,11 +457,9 @@ describe('setLanguage with files loaded', () =>
         expect(byClass('fold').map((f) => f.hasAttribute('open'))).toEqual(openBefore);
         expect(folds[0]!.hasAttribute('open')).toBe(true);
         expect(root.descendants().filter((e) => ['details', 'summary', 'input', 'select', 'button', 'option'].includes(e.tagName))).toEqual(controlsBefore);
-        // Ticks, zone, "show quoted text", "Print full original text" and the plans are untouched.
+        // Ticks, "show quoted text", "Print full original text" and the plans are untouched.
         expect(page.review.includedPositions()).toEqual(included);
         expect(boxes.map((b) => b.checked)).toEqual([false, true, true, true]);
-        expect(page.preview.zone()).toBe('Asia/Tokyo');
-        expect(zone.value).toBe('Asia/Tokyo');
         expect(byId('preview-show-folded').checked).toBe(false);
         expect(byId('pdf-everything').checked).toBe(false);
         expect(page.pdfLabels.currentPlans()).toBe(plans);

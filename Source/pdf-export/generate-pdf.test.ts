@@ -68,7 +68,7 @@ function inputFor(messages: readonly NormalizedMessage[], extra: Partial<Generat
         positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: GENERATED_AT, fonts, locale: 'en', strings, ...extra };
+    return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: GENERATED_AT, fonts, locale: 'en', strings, ...extra };
 }
 
 /** The same steps as generatePdf, keeping the document and the layout to check them. */
@@ -331,7 +331,7 @@ describe('generatePdf: index page numbers', () =>
                 attachments: messageIndex % 5 === 0
                     ? [{ fileName: `plan-${String(messageIndex + 1)}.pdf`, size: 12_345, mimeType: 'application/pdf' }] : [],
             })),
-            { timeZone: 'America/New_York' },
+            { generatedOffsetMinutes: -300 },
         );
         const { pdfDocument, layout } = pdfDocumentAndLayout(input);
         const index = indexPages(layout);
@@ -341,13 +341,13 @@ describe('generatePdf: index page numbers', () =>
         {
             expect(layout.document.pages[pageIndex]!.text.filter((r) => r.copyText === 'No.')).toHaveLength(1);
         }
-        // The date column: its title (bold, here wrapped) the same on every index page; below it, each
-        // row's short date in one piece (one line), then only attachment labels and bullets.
+        // The date column: its title (bold, no time zone: the dates are as written, task 9.9c) the same on
+        // every index page; below it, each row's short date in one piece (one line), then only attachment
+        // labels and bullets.
         const titleFont = CONFIG.roles['field-label'].font;
         const inDateColumn = index.map((p) => layout.document.pages[p]!.text.filter((r) => Math.abs(r.x - DATE_COLUMN) < 1e-6 && r.y <= BOTTOM));
         const titles = inDateColumn.map((runs) => runs.filter((r) => r.font === titleFont && r.copyText !== 'Attachments').map((r) => r.copyText));
-        expect(titles[0]!.length).toBeGreaterThan(1);
-        expect(titles[0]!.join('').replace(/\s+/g, ' ')).toBe('Date (America/New York)');
+        expect(titles[0]).toEqual(['Date']);
         for (const title of titles)
         {
             expect(title).toEqual(titles[0]);
@@ -358,7 +358,7 @@ describe('generatePdf: index page numbers', () =>
         {
             expect(date).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
         }
-        expect(dates[0]).toBe('2025-03-04 03:00'); // 08:00 UTC in New York (UTC-05:00)
+        expect(dates[0]).toBe('2025-03-04 08:00'); // as written ("08:00:00 +0000"), whatever the reader's clock
         // Index rows inside the text area, the page numbers right-aligned on the right margin.
         for (const pageIndex of index)
         {
@@ -475,17 +475,17 @@ describe('generatePdf: file name and output', () =>
     const lateUtc = Date.UTC(2025, 5, 1, 23, 30, 0);
     // 02:00 UTC on 2 June 2025: still 1 June in New York.
     const earlyUtc = Date.UTC(2025, 5, 2, 2, 0, 0);
-    it.each<[string, number, string]>([
-        ['UTC', lateUtc, 'correspondence-2025-06-01.pdf'],
-        ['America/New_York', lateUtc, 'correspondence-2025-06-01.pdf'],
-        ['America/New_York', earlyUtc, 'correspondence-2025-06-01.pdf'],
-        ['Africa/Lagos', lateUtc, 'correspondence-2025-06-02.pdf'],
-        ['Asia/Tokyo', lateUtc, 'correspondence-2025-06-02.pdf'],
-        ['Australia/Sydney', lateUtc, 'correspondence-2025-06-02.pdf'],
-        ['UTC', earlyUtc, 'correspondence-2025-06-02.pdf'],
-    ])('names the file with the generation date in the chosen zone (%s)', async (timeZone, generatedAt, fileName) =>
+    it.each<[number, number, string]>([
+        [0, lateUtc, 'correspondence-2025-06-01.pdf'],
+        [-240, lateUtc, 'correspondence-2025-06-01.pdf'],
+        [-240, earlyUtc, 'correspondence-2025-06-01.pdf'],
+        [60, lateUtc, 'correspondence-2025-06-02.pdf'],
+        [540, lateUtc, 'correspondence-2025-06-02.pdf'],
+        [600, lateUtc, 'correspondence-2025-06-02.pdf'],
+        [0, earlyUtc, 'correspondence-2025-06-02.pdf'],
+    ])('names the file with the generation date on the reader\'s clock (offset %d minutes)', async (generatedOffsetMinutes, generatedAt, fileName) =>
     {
-        const result = await generatePdf(inputFor([make(0)], { timeZone, generatedAt }));
+        const result = await generatePdf(inputFor([make(0)], { generatedOffsetMinutes, generatedAt }));
         expect(result.fileName).toBe(fileName);
     });
 

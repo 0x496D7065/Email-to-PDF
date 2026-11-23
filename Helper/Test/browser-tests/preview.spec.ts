@@ -3,9 +3,10 @@
 // playwright.config.ts). The real pipeline runs on synthetic fixtures from
 // Helper/Test/test-data/eml, added through the file input.
 //
-// The browser's time zone is fixed to Africa/Lagos (UTC+01:00 all year, no
-// daylight saving time) so the default dates are known, and match the +0100
-// of the fixtures, so the sender's own time is hidden. Every test also
+// Every date is shown as written in its email, whatever the browser's time
+// zone (task 9.9c): the browser's zone is fixed to Africa/Lagos (UTC+01:00
+// all year, like the fixtures' +0100), and one test runs in Asia/Tokyo
+// (UTC+09:00) to show the dates do not move. Every test also
 // checks, once everything has settled, that nothing left the page (only the inlined workers' blob: URLs), that there
 // was no CSP violation (page or worker) and no console error. See
 // Helper/Test/browser-tests/support/network-and-csp-watch.ts for the detectors.
@@ -13,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+import { watchPage, workerCspReports,
     type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -87,8 +88,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__previewViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__previewViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__previewViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -122,13 +122,12 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = browserEngineOf(page.context());
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__previewViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__previewViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
 }
 
-test('lists the emails by date, with their details, in the browser zone', async ({ page }) =>
+test('lists the emails by date, with their details, the dates as written', async ({ page }) =>
 {
     test.setTimeout(60_000);
     const items = await openWithFixtures(page);
@@ -138,10 +137,11 @@ test('lists the emails by date, with their details, in the browser zone', async 
     await expect(items.locator('.message-number')).toHaveText(['#1', '#2', '#3', '#4', '#5', '#6']);
     await expect(items.locator('h3')).toHaveCount(6);
 
-    const zone = page.getByLabel(en.preview.zone);
-    await expect(zone).toHaveValue('Africa/Lagos');
-    await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 09:15:00 UTC+01:00');
-    await expect(items.nth(0).locator('.sender-time')).toBeHidden();
+    // No time-zone list and no "sender's local time" line: "Mon, 3 Mar 2025 09:15:00 +0100" shows 09:15:00.
+    await expect(page.locator('select, #preview-zone, .sender-time')).toHaveCount(0);
+    await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 09:15:00');
+    await expect(items.nth(0).locator('.message-date')).toHaveAttribute('datetime', '2025-03-03T09:15:00+01:00');
+    await expect(items.nth(0).locator('.date-as-written')).toBeHidden();
     await expect(items.nth(0).locator('dd.meta-author')).toHaveText('Alice Example <alice@example.test>');
     await expect(items.nth(0).locator('dd.meta-to')).toHaveText('Bob Sample <bob@furniture.example.test>');
     await expect(items.nth(5).locator('.message-date')).toHaveText(en.preview.noDate);
@@ -153,26 +153,22 @@ test('lists the emails by date, with their details, in the browser zone', async 
     await expectNothingLeftThePage(page);
 });
 
-test('changing the time zone changes the dates only', async ({ page }) =>
+test.describe('in a browser eight hours east of the senders', () =>
 {
-    test.setTimeout(60_000);
-    const items = await openWithFixtures(page);
-    // Marks a body element: if the bodies were rebuilt, the mark would be gone.
-    await items.nth(1).locator('.message-body').evaluate((body) => body.setAttribute('data-test-mark', 'kept'));
+    test.use({ timezoneId: 'Asia/Tokyo' });
 
-    await page.getByLabel(en.preview.zone).selectOption('Asia/Tokyo');
-    await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 17:15:00 UTC+09:00');
-    await expect(items.nth(0).locator('.sender-time')).toHaveText("Sender's local time: 2025-03-03 09:15:00 UTC+01:00");
-    await expect(items.nth(3).locator('.message-date')).toHaveText('2025-03-07 00:20:00 UTC+09:00');
-    await expect(items.nth(5).locator('.message-date')).toHaveText(en.preview.noDate);
-    await expect(items.nth(1).locator('.message-body')).toHaveAttribute('data-test-mark', 'kept');
-    // The order does not depend on the zone.
-    await expect(items.locator('.message-subject')).toHaveText(SUBJECTS_IN_ORDER);
+    test('shows the same dates, as written, in the same order (task 9.9c: never converted)', async ({ page }) =>
+    {
+        test.setTimeout(60_000);
+        const items = await openWithFixtures(page);
+        await expect(page.locator('select, #preview-zone, .sender-time')).toHaveCount(0);
+        await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 09:15:00');
+        await expect(items.nth(3).locator('.message-date')).toHaveText('2025-03-06 16:20:00');
+        await expect(items.nth(5).locator('.message-date')).toHaveText(en.preview.noDate);
+        await expect(items.locator('.message-subject')).toHaveText(SUBJECTS_IN_ORDER);
 
-    await page.getByLabel(en.preview.zone).selectOption('UTC');
-    await expect(items.nth(0).locator('.message-date')).toHaveText('2025-03-03 08:15:00 UTC+00:00');
-
-    await expectNothingLeftThePage(page);
+        await expectNothingLeftThePage(page);
+    });
 });
 
 test('quoted text is folded and can be shown, one block or all at once', async ({ page }) =>

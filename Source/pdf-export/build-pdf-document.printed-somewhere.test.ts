@@ -85,7 +85,7 @@ const pdfDocumentOf = (result: ThreadAnalysisResult): PdfDocument =>
         positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    return buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings });
+    return buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings });
 };
 /** How many emails of the PDF print `text`. */
 const printedIn = (pdfDocument: PdfDocument, text: string): number =>
@@ -262,7 +262,7 @@ describe('PDF model, printed somewhere: plain files (the loss that existed befor
         const plans = planOutput([result.messages[yPosition]!], DEFAULT_OUTPUT_POLICY);
         const input = { result, positions: [yPosition], plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: [] };
         expect(applyNoRepeatRule(input).restored.size).toBe(0);
-        const pdfDocument = buildPdfDocument({ ...input, timeZone: 'UTC', generatedAt: 0, strings });
+        const pdfDocument = buildPdfDocument({ ...input, generatedOffsetMinutes: 0, generatedAt: 0, strings });
         expect(printedIn(pdfDocument, S)).toBe(0);
         expect(printedIn(pdfDocument, FINE)).toBe(1);
     });

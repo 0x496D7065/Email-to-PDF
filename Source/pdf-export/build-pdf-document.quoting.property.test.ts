@@ -185,7 +185,7 @@ function check(testCase: QuotingCase, result: ThreadAnalysisResult, random: () =
             positions,
             plans: plansOf(policy),
             policy,
-            timeZone: 'UTC',
+            generatedOffsetMinutes: 0,
             generatedAt: 0,
             strings,
             rebuilt,
@@ -356,7 +356,7 @@ describe('collapse, never delete, with emails quoting each other: random cases (
         const result = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
         const positions = result.messages.map((_, k) => k);
         const plans = planOutput(result.messages, DEFAULT_OUTPUT_POLICY);
-        const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings };
+        const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings };
         buildPdfDocument(input); // warm-up
         const start = performance.now();
         const pdfDocument = buildPdfDocument(input);

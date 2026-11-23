@@ -35,7 +35,7 @@ describe('PDF document model over the parsed fixtures', () =>
         const plans = planOutput(threadAnalysis.messages, policy);
         return {
             result: threadAnalysis,
-            pdfDocument: buildPdfDocument({ result: threadAnalysis, positions, plans, policy, timeZone: 'America/New_York',
+            pdfDocument: buildPdfDocument({ result: threadAnalysis, positions, plans, policy, generatedOffsetMinutes: 0,
                 generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: createPdfStrings('en') }),
         };
     }

@@ -42,7 +42,8 @@ function inputFor(count: number): PdfJobInput
         positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: Date.UTC(2025, 5, 1, 20, 0, 0), locale: 'en' };
+    // The page's clock at +09:00 (Tokyo): 20:00 UTC is already the next day there.
+    return { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedAt: Date.UTC(2025, 5, 1, 20, 0, 0), generatedOffsetMinutes: 540, locale: 'en' };
 }
 
 const REQUEST: MakePdfRequest = { type: 'make', input: inputFor(3), fonts: PDF_FONTS };
@@ -76,7 +77,9 @@ describe('message checks', () =>
         ['a missing font', { ...REQUEST, fonts: { ...PDF_FONTS, 'mono-regular': undefined } }],
         ['a font that is not bytes', { ...REQUEST, fonts: { ...PDF_FONTS, 'sans-bold': [1, 2, 3] } }],
         ['positions and plans of different lengths', { ...REQUEST, input: { ...REQUEST.input, positions: [0, 1] } }],
-        ['no time zone', { ...REQUEST, input: { ...REQUEST.input, timeZone: undefined } }],
+        ['no clock offset', { ...REQUEST, input: { ...REQUEST.input, generatedOffsetMinutes: undefined } }],
+        ['a clock offset that is not a number', { ...REQUEST, input: { ...REQUEST.input, generatedOffsetMinutes: '+09:00' } }],
+        ['a clock offset that is not finite', { ...REQUEST, input: { ...REQUEST.input, generatedOffsetMinutes: Number.NaN } }],
         ['no generation time', { ...REQUEST, input: { ...REQUEST.input, generatedAt: '2025-06-01' } }],
         ['no result', { ...REQUEST, input: { ...REQUEST.input, result: null } }],
         ['no policy', { ...REQUEST, input: { ...REQUEST.input, policy: null } }],
@@ -138,7 +141,7 @@ describe('ownBuffer', () =>
 
 describe('makePdf (the worker\'s work, fonts parsed from their bytes)', () =>
 {
-    it('makes the PDF of the request, named after the generation day in the chosen zone', async () =>
+    it('makes the PDF of the request, named after the generation day on the page\'s clock', async () =>
     {
         const pdf = await makePdf(structuredClone(REQUEST));
         expect(new TextDecoder().decode(pdf.bytes.subarray(0, 5))).toBe('%PDF-');

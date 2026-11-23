@@ -69,7 +69,7 @@ function buildDocument(messages: readonly NormalizedMessage[]): PdfDocument
         positions.map((p) => result.messages[p]!),
         DEFAULT_OUTPUT_POLICY,
     );
-    return buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings });
+    return buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings });
 }
 
 /**
@@ -94,7 +94,7 @@ function buildRebuilt(earlier: number): PdfDocument
         plans: planOutput([result.messages[0]!], DEFAULT_OUTPUT_POLICY),
         rebuilt,
         policy: DEFAULT_OUTPUT_POLICY,
-        timeZone: 'UTC',
+        generatedOffsetMinutes: 0,
         generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
         strings,
     });
@@ -722,7 +722,7 @@ describe('layoutPdf: one body indent for every line, one tab wide (tasks 8.6 and
             positions: [0],
             plans: planOutput(result.messages),
             policy: { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true },
-            timeZone: 'UTC',
+            generatedOffsetMinutes: 0,
             generatedAt: 0,
             strings,
         });
@@ -939,7 +939,7 @@ function syntheticEmail(emailNumber: number, body: readonly string[]): PdfEmail
         fields: [
             { label: 'From', value: value('Alice Example <alice@example.test>') },
             { label: 'To', value: value('Bob Sample <bob@furniture.example.test>') },
-            { label: 'Date', value: value('2025-03-04 08:00:00 UTC') },
+            { label: 'Date', value: value('2025-03-04 08:00:00') },
             { label: 'Subject', value: value(`Desks ${String(emailNumber)}`) },
         ],
         notes: [],

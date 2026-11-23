@@ -425,7 +425,7 @@ describe('PDF document model properties', () =>
                     positions.map((p) => result.messages[p]!),
                     DEFAULT_OUTPUT_POLICY,
                 );
-                const pdfDocument = buildPdfDocument({ result, positions, plans, policy, timeZone: 'America/New_York', generatedAt: 0, strings });
+                const pdfDocument = buildPdfDocument({ result, positions, plans, policy, generatedOffsetMinutes: 0, generatedAt: 0, strings });
                 // Task 8.14: only the emails with no text are left out (white space only: nothing printed nowhere).
                 const printed = pdfPositions(result, positions);
                 noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, pdfDocument);
@@ -470,7 +470,7 @@ describe('PDF document model properties', () =>
                 const plans = planOutput(positions.map((p) => result.messages[p]!));
                 withOmissions += plans.filter((p) => p.ranges.some((r) => !r.keep)).length;
                 const pdfDocument = buildPdfDocument(
-                    { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Asia/Tokyo', generatedAt: 0, strings });
+                    { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings });
                 // Task 8.14: the emails with no text are left out, the others numbered 1..k without a gap.
                 const printed = pdfPositions(result, positions);
                 noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, pdfDocument);
@@ -524,7 +524,7 @@ describe('PDF document model properties', () =>
                 const everythingPlans = planOutput(included, policy);
                 const rebuilt = rebuiltEntries(result).map((r) => r.id);
                 // The default policy: the rebuilt emails chosen are in, between the real ones (which all stay, numbered alike).
-                const defaultInput = { result, positions, plans: defaultPlans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'America/New_York', generatedAt: 0, strings };
+                const defaultInput = { result, positions, plans: defaultPlans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings };
                 const folded = buildPdfDocument({ ...defaultInput, rebuilt });
                 const foldedReal = realEmails(folded);
                 rebuiltShown += folded.emails.length - foldedReal.length;
@@ -627,7 +627,7 @@ describe('PDF document model properties', () =>
                 }
                 // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
                 const pdfDocument = buildPdfDocument(
-                    { result, positions, plans: everythingPlans, policy, timeZone: 'America/New_York', generatedAt: 0, strings, rebuilt });
+                    { result, positions, plans: everythingPlans, policy, generatedOffsetMinutes: 0, generatedAt: 0, strings, rebuilt });
                 const real = realEmails(pdfDocument);
                 expect(pdfDocument.emails).toHaveLength(real.length);
                 expect(pdfDocument.cover.emailCount).toBe(real.length);
@@ -701,7 +701,7 @@ describe('PDF document model properties', () =>
                 .map((r) => r.id)
                 .filter(() => random() < 0.7);
             const pdfDocument = buildPdfDocument(
-                { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'UTC', generatedAt: 0, strings, rebuilt });
+                { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings, rebuilt });
             const { parts, rebuiltPlans, order } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
             const leftOut = leftOutSignatures(result, rebuiltPlans, order);
             for (const { email, position } of realEmails(pdfDocument))
@@ -757,7 +757,7 @@ describe('PDF document model properties', () =>
         const result = analyzeThread(messages.map((message) => ({ ok: true as const, message })));
         const positions = result.messages.map((_, k) => k);
         const plans = planOutput(result.messages);
-        const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, timeZone: 'Australia/Sydney', generatedAt: 0, strings };
+        const input = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings };
         buildPdfDocument(input); // warm-up (formatter caches, JIT)
         const start = performance.now();
         const pdfDocument = buildPdfDocument(input);

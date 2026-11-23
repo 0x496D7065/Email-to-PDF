@@ -32,7 +32,7 @@ index and page numbers. One screen, three steps:
 1. **Add your emails:** drag the files onto the page, or choose them. You
    can add more at any time.
 2. **Check:** look over the emails, oldest first. Untick any email you do
-   not want in the PDF, pick the time zone for the dates, and see what each
+   not want in the PDF, and see what each
    folded part is and whether it goes into the PDF.
 3. **Download PDF:** the PDF is made on your computer and saved as
    `correspondence-YYYY-MM-DD.pdf`.
@@ -164,9 +164,6 @@ by anyone, as described next.
 red error lines that mention a Content Security Policy. That is the browser
 refusing styles, scripts or links, for example ones found inside your
 emails: the protection working. Nothing from your emails was run or loaded.
-In WebKit (the engine behind Safari) the browser tests also see
-one such line per policy when the page opens, caused by the page's own
-time-zone drop-down list; it blocks nothing the page needs.
 
 ## Collapse, never delete
 
@@ -207,8 +204,20 @@ The tool never throws message text away on its own:
   header data must cover the other's (so nothing is lost by keeping it).
   Anything less, and both copies are kept, with a note. The page says how
   many copies were merged.
+- **Dates as written.** Every date and time, on the page and in the PDF,
+  is shown as the email wrote it: the sender's own clock, never converted
+  to another time zone, with no offset after it. "Tue, 17 Feb 2026
+  13:59:00 +0100" shows 13:59, whatever your computer's time zone or the
+  season, and so does a quoted "Le 21 avr. 2026 13:54, ..." line. The
+  order still follows the true moment each email was sent, so two emails
+  written in different time zones are in the right order even when their
+  times seem to say otherwise. The cover's first and last dates are
+  picked by the true moment too but shown as written, so across time
+  zones they can look reversed. A .msg file that stores only the exact
+  moment, without the sender's own time, shows that moment in UTC, with
+  nothing after it. The date the PDF was made is on your computer's clock.
 - **The cover page and the index.** The PDF's first page shows the title,
-  the date range, the number of emails, the time zone used, the date the
+  the date range, the number of emails, the date the
   PDF was made and the people (rebuilt emails count in the number of
   emails, the date range and the people). The index follows directly
   below, on the same page when it fits, and goes on over as many pages as
@@ -222,8 +231,8 @@ The tool never throws message text away on its own:
   explains how the tool works. All of that is shown in step 2 before you
   download: emails without a usable date and where they are placed, a
   date that could not be read (the PDF shows it as written), a sender's
-  time zone that is not given, a time zone that was not recognized (the
-  PDF then names just UTC), characters the PDF shows as codes such as
+  time zone that is not given (the time is shown as written, but the
+  email's place in the order may be off), characters the PDF shows as codes such as
   "[U+0000]", an email the PDF prints whole because the tool could not tell
   what to leave out, text that could not be shown in full, identical
   copies merged (the "Also in" line, which names the same file and
@@ -292,9 +301,8 @@ text" the email you added is printed whole.
   are numbered 1, 2, 3... in date order, so two rebuilt earlier emails and
   the email you added are emails 1, 2 and 3 (the preview's "#N" numbers
   count only the emails you added, so they can differ). Its date is shown
-  like a real email's: a quoted time without a time zone of its own is
-  shown in the chosen zone with no note (the preview says "about ..."), a
-  quoted day alone is shown as that day. The cover's number of emails, date range and people include
+  like a real email's: a quoted time is shown as written, never converted,
+  a quoted day alone as that day. The cover's number of emails, date range and people include
   rebuilt emails. A rebuilt email has no file, so it has no File row:
   only the File row shows which emails came from a file.
 
@@ -302,9 +310,9 @@ text" the email you added is printed whole.
 are read from the quoted header ("From: / Sent: / To:", "On ... wrote:",
 and their French and Dutch forms). In the text, only the "> " quote marks at
 the start of the lines (and the spaces before them) are removed; words and
-line breaks are kept exactly as quoted. A quoted date usually has no time
-zone, so the time is a best guess, shown in the preview as "about ..." with
-the date as written; a date that could be read two ways (such as
+line breaks are kept exactly as quoted. A quoted time is shown as written,
+with the date text as written under it. It usually has no time zone, so
+its place in the order is a best guess; a date that could be read two ways (such as
 `03/04/2025`) is shown only as written (in the PDF too, alone in its Date
 row, as for an email you added).
 
@@ -602,7 +610,7 @@ limit, so a broken file gives an error message, not a crash (see
 Message data, and anything made from it, stays in memory only: no
 `localStorage`, `sessionStorage`, `IndexedDB`, cookies or Cache Storage.
 Closing or reloading the tab wipes everything; "Clear everything" does the
-same at any time. The language, time zone and checkbox choices are not
+same at any time. The language and checkbox choices are not
 saved either. The offline copy keeps only the site's own static files.
 
 ### R6: Collapse, never delete
@@ -692,7 +700,7 @@ at all (see "Emails with no text" below).
     is not exactly one sender ("Unknown sender", several senders), when no
     date could be found, when a To or Cc list may be incomplete, when the
     sender has no name (an "On ... wrote:" line that could not be read),
-    when the date has no time zone of its own (the PDF shows an estimate),
+    when the date has no time zone of its own (its moment is a guess),
     or when the tool read a wrapped To or Cc line or a Subject line of the
     header as the writer's own text. When the email they match is one you
     added, they are not printed again: that email's own header rows are

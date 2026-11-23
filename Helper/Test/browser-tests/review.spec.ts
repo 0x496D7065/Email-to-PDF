@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+import { watchPage, workerCspReports,
     type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -72,8 +72,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__reviewViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__reviewViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__reviewViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -106,10 +105,9 @@ async function expectNothingLeftThePage(page: Page): Promise<void>
     expect(watch.requests.slice(loadedAt).filter((url) => !workerUrls.has(url))).toEqual([]);
     expect(watch.requests.every((url) => new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    const browserName = browserEngineOf(page.context());
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__reviewViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__reviewViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(problems).toEqual([]);
 }
 
 test('shows the counts, and points to step 1 for the file that could not be read', async ({ page }) =>
@@ -237,8 +235,8 @@ test('task 8.8: what the PDF no longer says is shown in step 2 before the downlo
     await expect(page.locator('#rebuilt-explain')).toHaveText(en.rebuilt.explain);
     await expect(page.locator('#rebuilt-explain')).toBeVisible();
     await expect(rebuild).toHaveAccessibleDescription(en.rebuilt.explain);
-    // A zone the browser knows: no zone note.
-    await expect(page.locator('#preview-zone-note')).toBeHidden();
+    // No time-zone list and no zone note (task 9.9c: dates as written).
+    await expect(page.locator('#preview-zone, #preview-zone-note')).toHaveCount(0);
     // Calm and readable: the new texts meet the contrast rules.
     expect(await contrastFailures(page, '#step-check', 20)).toEqual([]);
     await expectNothingLeftThePage(page);

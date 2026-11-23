@@ -35,10 +35,10 @@ export interface GeneratePdfInput
     /** Ids of the rebuilt emails the reader unticked (Source/web-page/review.ts, untickedRebuilt). See BuildPdfInput.unticked. */
     readonly unticked?: readonly number[];
     readonly policy: OutputPolicy;
-    /** IANA zone the dates are shown in (an invalid one falls back to UTC; the cover then names UTC). */
-    readonly timeZone: string;
     /** When the PDF is made, in ms since 1970 UTC. */
     readonly generatedAt: number;
+    /** The offset of the reader's clock at `generatedAt`, in minutes. See BuildPdfInput.generatedOffsetMinutes. */
+    readonly generatedOffsetMinutes: number;
     readonly fonts: PdfFonts;
     /** The PDF's language (a language the page ships, e.g. 'en'): its words and its file name. */
     readonly locale: string;
@@ -66,8 +66,8 @@ export async function generatePdf(input: GeneratePdfInput): Promise<GeneratedPdf
         ...(input.rebuildingOff === undefined ? {} : { rebuildingOff: input.rebuildingOff }),
         ...(input.unticked === undefined ? {} : { unticked: input.unticked }),
         policy: input.policy,
-        timeZone: input.timeZone,
         generatedAt: input.generatedAt,
+        generatedOffsetMinutes: input.generatedOffsetMinutes,
         strings,
     });
     const { document: laidOutDocument } = layoutPdf(pdfDocument, input.fonts,

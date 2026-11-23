@@ -102,7 +102,7 @@ function mount(settings: MountOptions = {}): void
             process: (files, options) => new Promise((resolve) => calls.push({ files, options, resolve })),
             listenerTarget: window as unknown as ListenerTarget,
         },
-        preview: { zones: ['America/New_York', 'Asia/Tokyo', 'UTC'], initialZone: 'America/New_York', chunkSize: settings.chunkSize ?? 1000, schedule, cancel },
+        preview: { chunkSize: settings.chunkSize ?? 1000, schedule, cancel },
         pdfLabels: { schedule, cancel, ...(settings.labelsNow === undefined ? {} : { now: settings.labelsNow }) },
         download: {
             run: (request, signal) => new Promise((resolve) => runs.push({ request, signal, resolve })),
@@ -371,11 +371,9 @@ describe('step 3: when the PDF can be made', () =>
 
 describe('step 3: making the PDF', () =>
 {
-    it('sends exactly the preview\'s plans, the chosen zone, the page\'s time and the fonts', async () =>
+    it('sends exactly the preview\'s plans, the page\'s time and its clock offset, and the fonts (no time zone, task 9.9c)', async () =>
     {
         const result = await addAndShow(3);
-        byId('preview-zone').value = 'Asia/Tokyo';
-        byId('preview-zone').fire('change');
         const plans = page.pdfLabels.currentPlans();
         expect(plans).not.toBeNull();
         button().click();
@@ -388,8 +386,10 @@ describe('step 3: making the PDF', () =>
         expect(request.input.plans).toBe(plans?.plans);
         expect(request.input.positions).toBe(plans?.positions);
         expect(request.input.policy).toBe(plans?.policy);
-        expect(request.input.timeZone).toBe('Asia/Tokyo');
         expect(request.input.generatedAt).toBe(NOW);
+        // For the PDF's generation date only: every email date is printed as written.
+        expect(request.input.generatedOffsetMinutes).toBe(-new Date(NOW).getTimezoneOffset());
+        expect(Object.keys(request.input)).not.toContain('timeZone');
     });
 
     it('sends the rebuilt emails chosen (task 7.7): all by default, none with the switch off or with their source email unticked', async () =>
@@ -573,14 +573,6 @@ describe('step 3: a change of choice drops the PDF', () =>
             },
         ],
         [
-            'another time zone',
-            () =>
-            {
-                byId('preview-zone').value = 'UTC';
-                byId('preview-zone').fire('change');
-            },
-        ],
-        [
             '"Print full original text"',
             () =>
             {
@@ -623,7 +615,7 @@ describe('step 3: a change of choice drops the PDF', () =>
 
     // The status line (the page's one live region) must not keep announcing a
     // PDF that is gone: "Making your PDF..." or "Your PDF is ready".
-    const announced: [string, () => void][] = [changes[1]!, changes[2]!];
+    const announced: [string, () => void][] = [changes[1]!];
 
     it.each(announced)('%s while the PDF is being made: the status line says the PDF was removed', async (_label, change) =>
     {
@@ -735,7 +727,7 @@ describe('step 3: a change of choice drops the PDF', () =>
             expect(said).toEqual(['2 of 3 emails will be in the PDF.']);
         });
 
-        it('another time zone when the PDF is ready: the removal alone', async () =>
+        it('"Print full original text" when the PDF is ready: the removal alone', async () =>
         {
             await addAndShow(3);
             await makeReady();

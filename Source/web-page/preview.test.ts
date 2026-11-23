@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement } from '../../Helper/Test/test-support/fake-dom';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
+import { parseEmailDate } from '../email-reading/date-header';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { buildThread, instantOf } from '../../Helper/Test/test-support/thread-builder';
@@ -27,7 +28,6 @@ import {
     pdfReasonText,
     relatedNumbers,
     sizeText,
-    zoneLabel,
     type Preview,
     type PreviewOptions,
     type PreviewPdfPlans,
@@ -105,12 +105,10 @@ let fakeDocument: FakeDocument;
 let area: FakeElement;
 let preview: Preview;
 
-const ZONES = ['America/New_York', 'Asia/Tokyo', 'UTC'];
-
 function mount(options: PreviewOptions = {}): Preview
 {
     area = new FakeElement('div');
-    preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, { zones: ZONES, initialZone: 'America/New_York', ...options });
+    preview = mountPreview({ checkArea: area as unknown as HTMLDivElement }, options);
     return preview;
 }
 
@@ -167,13 +165,6 @@ function meta(item: FakeElement, name: string): string | null
 }
 const label = (item: FakeElement, name: string): string | undefined =>
     item.descendants().find((e) => e.tagName === 'dt' && hasClass(e, `meta-${name}`))?.textContent;
-
-function chooseZone(zone: string): void
-{
-    const select = byId('preview-zone');
-    select.value = zone;
-    select.fire('change');
-}
 
 function setShowFolded(on: boolean): void
 {
@@ -275,34 +266,27 @@ describe('helpers', () =>
         }
     });
 
-    it('names zones readably and marks this computer', () =>
+    it('shows dates as written, winter and summer, never converted and with no offset (task 9.9c)', () =>
     {
-        expect(zoneLabel('America/New_York', 'Asia/Tokyo')).toBe('America/New York');
-        expect(zoneLabel('America/New_York', 'America/New_York')).toBe('America/New York (this computer)');
-    });
-
-    it('shows dates in the zone, the sender time only when known and different', () =>
-    {
-        const date = dateAt('2025-03-03T08:15:00Z', -300);
-        expect(dateTexts(date, 'America/New_York')).toEqual({ main: '2025-03-03 03:15:00 UTC-05:00', iso: '2025-03-03T08:15:00.000Z', senderLocal: null, asWritten: null });
-        expect(dateTexts(date, 'Asia/Tokyo')).toEqual({
-            main: '2025-03-03 17:15:00 UTC+09:00',
-            iso: '2025-03-03T08:15:00.000Z',
-            senderLocal: "Sender's local time: 2025-03-03 03:15:00 UTC-05:00",
-            asWritten: null,
-        });
-        expect(dateTexts(dateAt('2025-03-03T08:15:00Z', null, false), 'Asia/Tokyo').senderLocal).toBeNull();
-        expect(dateTexts(NO_DATE, 'UTC')).toEqual({ main: t('preview.noDate'), iso: null, senderLocal: null, asWritten: null });
-        expect(dateTexts({ ...NO_DATE, utcMs: 1e18 }, 'UTC').main).toBe(t('preview.noDate'));
+        // 08:15 UTC written at -05:00: 03:15 as the sender's clock showed it.
+        expect(dateTexts(dateAt('2025-03-03T08:15:00Z', -300))).toEqual({ main: '2025-03-03 03:15:00', iso: '2025-03-03T03:15:00-05:00', asWritten: null });
+        expect(dateTexts(parseEmailDate('Tue, 17 Feb 2026 13:59:00 +0100'))).toEqual({ main: '2026-02-17 13:59:00', iso: '2026-02-17T13:59:00+01:00', asWritten: null });
+        expect(dateTexts(parseEmailDate('Tue, 21 Apr 2026 13:54:00 +0200'))).toEqual({ main: '2026-04-21 13:54:00', iso: '2026-04-21T13:54:00+02:00', asWritten: null });
+        // No zone in the header: the time as written, with no offset for <time datetime> either.
+        expect(dateTexts(dateAt('2025-03-03T08:15:00Z', null, false))).toEqual({ main: '2025-03-03 08:15:00', iso: '2025-03-03T08:15:00', asWritten: null });
+        // An exact moment of unknown sender zone (a .msg date): its UTC time, plain, with no mark.
+        expect(dateTexts(dateAt('2025-03-03T08:15:00Z', null, true))).toEqual({ main: '2025-03-03 08:15:00', iso: '2025-03-03T08:15:00Z', asWritten: null });
+        expect(dateTexts(NO_DATE)).toEqual({ main: t('preview.noDate'), iso: null, asWritten: null });
+        expect(dateTexts({ ...NO_DATE, utcMs: 1e18 }).main).toBe(t('preview.noDate'));
     });
 
     it('gives the date as written when it could not be read (task 8.8: the PDF shows that text alone)', () =>
     {
         const bad = { ...NO_DATE, original: 'Someday, around noon' };
-        expect(dateTexts(bad, 'UTC')).toEqual({ main: '(no date)', iso: null, senderLocal: null, asWritten: 'As written in the email: Someday, around noon' });
-        expect(dateTexts({ ...bad, original: '   ' }, 'UTC').asWritten).toBeNull();
+        expect(dateTexts(bad)).toEqual({ main: '(no date)', iso: null, asWritten: 'As written in the email: Someday, around noon' });
+        expect(dateTexts({ ...bad, original: '   ' }).asWritten).toBeNull();
         // A usable date never shows it.
-        expect(dateTexts(dateAt('2025-03-03T08:15:00Z'), 'UTC').asWritten).toBeNull();
+        expect(dateTexts(dateAt('2025-03-03T08:15:00Z')).asWritten).toBeNull();
     });
 });
 
@@ -312,7 +296,7 @@ describe('task 8.8: what the PDF no longer says, shown in step 2', () =>
     {
         const bad = make({ date: { ...NO_DATE, original: 'Someday, around noon' }, warnings: ['unparseable-date'] });
         preview.show(analysisOf([bad]));
-        const note = one(items()[0]!, 'sender-time');
+        const note = one(items()[0]!, 'date-as-written');
         expect(note.textContent).toBe('As written in the email: Someday, around noon');
         expect(note.hasAttribute('hidden')).toBe(false);
         setLocale('fr');
@@ -328,21 +312,18 @@ describe('task 8.8: what the PDF no longer says, shown in step 2', () =>
         }
     });
 
-    it('says when the zone picked is not recognized (dates in UTC), and only then', () =>
+    it('has no time-zone list, no zone note and no "sender\'s local time" line: dates are as written (task 9.9c)', () =>
     {
-        expect(byId('preview-zone-note').hasAttribute('hidden')).toBe(true);
-        expect(byId('preview-zone').hasAttribute('aria-describedby')).toBe(false);
-        mount({ zones: ['UTC', 'Not/A_Zone'], initialZone: 'Not/A_Zone' });
-        const note = byId('preview-zone-note');
-        expect(note.hasAttribute('hidden')).toBe(false);
-        expect(note.textContent).toBe('This time zone was not recognized, so dates are shown in UTC, here and in the PDF.');
-        expect(byId('preview-zone').getAttribute('aria-describedby')).toBe('preview-zone-note');
-        // Picking a zone the browser knows hides it.
-        const select = byId('preview-zone');
-        select.value = 'UTC';
-        select.fire('change');
-        expect(note.hasAttribute('hidden')).toBe(true);
-        expect(select.hasAttribute('aria-describedby')).toBe(false);
+        preview.show(analysisOf([make({ date: parseEmailDate('Tue, 17 Feb 2026 13:59:00 +0100') }), make({ date: parseEmailDate('Tue, 21 Apr 2026 13:54:00 +0200') })]));
+        expect(area.descendants().filter((e) => e.tagName === 'select')).toEqual([]);
+        expect(area.descendants().some((e) => ['preview-zone', 'preview-zone-note'].includes(e.getAttribute('id') ?? ''))).toBe(false);
+        expect(items().map((i) => one(i, 'message-date').textContent)).toEqual(['2026-02-17 13:59:00', '2026-04-21 13:54:00']);
+        for (const item of items())
+        {
+            expect(one(item, 'date-as-written').hasAttribute('hidden')).toBe(true);
+            expect(withClass(item, 'sender-time')).toEqual([]);
+        }
+        expect(area.textContent).not.toMatch(/time zone|local time|UTC/i);
     });
 });
 
@@ -350,29 +331,13 @@ describe('task 8.8: what the PDF no longer says, shown in step 2', () =>
 
 describe('mountPreview', () =>
 {
-    it('builds a labelled time-zone list and a labelled checkbox', () =>
+    it('builds a labelled checkbox, and no time-zone list (task 9.9c)', () =>
     {
-        const select = byId('preview-zone');
-        expect(select.tagName).toBe('select');
-        expect(select.value).toBe('America/New_York');
-        const options = select.children as FakeElement[];
-        expect(options.map((o) => o.getAttribute('value'))).toEqual(ZONES);
-        expect(options.filter((o) => o.hasAttribute('selected')).map((o) => o.getAttribute('value'))).toEqual(['America/New_York']);
-        expect(options.map((o) => o.textContent)).toContain('America/New York (this computer)');
         const labels = area.descendants().filter((e) => e.tagName === 'label');
-        expect(labels.map((l) => [l.getAttribute('for'), l.textContent])).toEqual([
-            ['preview-zone', t('preview.zone')],
-            ['preview-show-folded', t('preview.showFolded')],
-        ]);
+        expect(labels.map((l) => [l.getAttribute('for'), l.textContent])).toEqual([['preview-show-folded', t('preview.showFolded')]]);
         expect(byId('preview-show-folded').getAttribute('type')).toBe('checkbox');
         expect(byId('preview-list').getAttribute('aria-label')).toBe(t('preview.listLabel'));
-        expect(preview.zone()).toBe('America/New_York');
-    });
-
-    it('adds the starting zone to the list if it is missing', () =>
-    {
-        mount({ zones: ['UTC'], initialZone: 'Asia/Tokyo' });
-        expect((byId('preview-zone').children as FakeElement[]).map((o) => o.getAttribute('value'))).toEqual(['Asia/Tokyo', 'UTC']);
+        expect(area.descendants().filter((e) => e.tagName === 'select')).toEqual([]);
     });
 
     it('shows the emails in the thread analysis order, numbered', () =>
@@ -393,7 +358,7 @@ describe('mountPreview', () =>
         }
     });
 
-    it('shows author, recipients and dates; the sender time only when it differs', () =>
+    it('shows author, recipients and dates as written', () =>
     {
         const carol: EmailAddress = { name: '', address: 'carol@example.test' };
         preview.show(analysisOf([make({ cc: [carol], bcc: [BOB], date: dateAt('2025-03-03T08:15:00Z', -300) })]));
@@ -406,9 +371,9 @@ describe('mountPreview', () =>
         expect(label(item, 'bcc')).toBe(t('preview.bcc'));
         const time = one(item, 'message-date');
         expect(time.tagName).toBe('time');
-        expect(time.textContent).toBe('2025-03-03 03:15:00 UTC-05:00');
-        expect(time.getAttribute('datetime')).toBe('2025-03-03T08:15:00.000Z');
-        expect(one(item, 'sender-time').hasAttribute('hidden')).toBe(true);
+        expect(time.textContent).toBe('2025-03-03 03:15:00');
+        expect(time.getAttribute('datetime')).toBe('2025-03-03T03:15:00-05:00');
+        expect(one(item, 'date-as-written').hasAttribute('hidden')).toBe(true);
     });
 
     it('shows a three-recipient To row with a plain ", " in English and in French', () =>
@@ -588,31 +553,27 @@ describe('mountPreview', () =>
         expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
     });
 
-    it('rewrites only the dates when the zone changes', () =>
+    it('keeps the dates as written across a language change, rewriting only the "(no date)" text', () =>
     {
         const result = analysisOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) }), make({ date: NO_DATE }), ...thread()]);
         preview.show(result);
-        const bodies = items().map((i) => one(i, 'message-body'));
-        const bodyNodes = bodies.map((b) => [...b.descendants()]);
-        const created = fakeDocument.created.length;
-
-        chooseZone('Asia/Tokyo');
-        expect(preview.zone()).toBe('Asia/Tokyo');
-        const first = items()[0]!;
-        expect(one(first, 'message-date').textContent).toBe('2025-03-03 17:15:00 UTC+09:00');
-        expect(one(first, 'sender-time').textContent).toBe("Sender's local time: 2025-03-03 03:15:00 UTC-05:00");
-        expect(one(first, 'sender-time').hasAttribute('hidden')).toBe(false);
-        expect(items().map((i) => one(i, 'message-date').textContent).filter((d) => d === t('preview.noDate'))).toHaveLength(1);
-        // Same body elements, same children, nothing new built.
-        expect(items().map((i) => one(i, 'message-body'))).toEqual(bodies);
-        items().forEach((i, k) => expect(one(i, 'message-body').descendants()).toEqual(bodyNodes[k]));
-        expect(fakeDocument.created.length).toBe(created);
-
-        chooseZone('UTC');
-        expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
-        // The zone stays for the next result.
-        preview.show(analysisOf([make({ date: dateAt('2025-03-03T08:15:00Z', -300) })]));
-        expect(one(items()[0]!, 'message-date').textContent).toBe('2025-03-03 08:15:00 UTC+00:00');
+        const dates = items().map((i) => one(i, 'message-date'));
+        const before = dates.map((d) => d.textContent);
+        expect(before[0]).toBe('2025-03-03 03:15:00');
+        setLocale('fr');
+        try
+        {
+            preview.relabel();
+            // The same elements: the dated ones unchanged, the undated one in French.
+            expect(items().map((i) => one(i, 'message-date'))).toEqual(dates);
+            expect(dates.map((d) => d.textContent)).toEqual(before.map((d) => (d === '(no date)' ? '(sans date)' : d)));
+        }
+        finally
+        {
+            setLocale('en');
+            preview.relabel();
+        }
+        expect(dates.map((d) => d.textContent)).toEqual(before);
     });
 
     it('shows hostile content as literal text and builds no element from it', () =>
@@ -711,17 +672,18 @@ describe('chunked building', () =>
         expect(items().map((i) => one(i, 'message-subject').textContent)).toEqual(result.messages.map((m) => m.message.subject));
     });
 
-    it('builds later chunks with the zone and fold state of the moment', () =>
+    it('builds later chunks with the fold state of the moment, every date as written', () =>
     {
-        preview.show(analysisOf([...thread(), ...thread(), ...thread()]));
-        chooseZone('Asia/Tokyo');
+        const result = analysisOf([...thread(), ...thread(), ...thread()]);
+        preview.show(result);
         setShowFolded(true);
         while (tasks.length > 0)
         {
             runNext();
         }
         expect(items()).toHaveLength(6);
-        expect(items().every((i) => one(i, 'message-date').textContent.endsWith('UTC+09:00'))).toBe(true);
+        expect(items().map((i) => one(i, 'message-date').textContent)).toEqual(result.messages.map((m) => dateTexts(m.message.date).main));
+        expect(items().every((i) => /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(one(i, 'message-date').textContent))).toBe(true);
         // Folds built in the later chunks (emails 3 to 6) are open too.
         expect(items().slice(2).flatMap((i) => withClass(i, 'fold')).length).toBeGreaterThanOrEqual(2);
         expect(folds().every((d) => d.hasAttribute('open'))).toBe(true);
@@ -805,29 +767,22 @@ describe('chunked building', () =>
         expect(preview.isRendering()).toBe(false);
     });
 
-    it('reset() puts the zone and the "show quoted text" checkbox back to their defaults', () =>
+    it('reset() puts the "show quoted text" checkbox back to its default', () =>
     {
         preview.show(analysisOf([...thread(), ...thread()]));
-        chooseZone('Asia/Tokyo');
         setShowFolded(true);
         preview.reset();
-        expect(preview.zone()).toBe('America/New_York');
-        expect(byId('preview-zone').value).toBe('America/New_York');
         expect(byId('preview-show-folded').checked).toBe(false);
-        // The next list follows the defaults: dates in the start zone, folds closed.
+        // The next list follows the default: folds closed.
         preview.show(analysisOf(thread()));
-        // New York: UTC-05:00, or UTC-04:00 once summer time starts (the synthetic thread moves on a day per call).
-        expect(items().every((i) => /UTC-0[45]:00$/.test(one(i, 'message-date').textContent))).toBe(true);
         expect(folds().length).toBeGreaterThan(0);
         expect(folds().some((d) => d.hasAttribute('open'))).toBe(false);
     });
 
-    it('a failed batch keeps the zone and checkbox (only reset() restores them)', () =>
+    it('a failed batch keeps the checkbox (only reset() restores it)', () =>
     {
-        chooseZone('Asia/Tokyo');
         setShowFolded(true);
         preview.showResult({ ok: false, error: 'engine-failed', detail: 'synthetic', parsed: [] });
-        expect(preview.zone()).toBe('Asia/Tokyo');
         expect(byId('preview-show-folded').checked).toBe(true);
     });
 
@@ -868,8 +823,9 @@ describe('chunked building', () =>
                 throw new Error('synthetic decorate failure');
             },
         });
-        const result = analysisOf(
-            Array.from({ length: 6 }, (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n\n-- \nSender ${String(k)}\n` })));
+        // Undated, so a language change rewrites every date ("(no date)" -> "(sans date)") but the half-built one's.
+        const result = analysisOf(Array.from({ length: 6 },
+            (_, k) => make({ subject: `Mail ${String(k)}`, bodyText: `Body ${String(k)}\n\n-- \nSender ${String(k)}\n`, date: NO_DATE })));
         preview.show(result);
         while (tasks.length > 0)
         {
@@ -894,18 +850,27 @@ describe('chunked building', () =>
             expect(hasClass(item, 'message-failed')).toBe(false);
             expect(one(item, 'message-subject').textContent).toBe(`Mail ${String(k)}`);
         }
-        // The half-built item left nothing behind: changing the zone and showing
-        // the folded sections still work, and no longer reach that item.
+        // The half-built item left nothing behind: rewriting the dates (a language change) and
+        // showing the folded sections still work, and no longer reach that item.
         expect(halfBuilt).toBeDefined();
         const halfBuiltDate = one(halfBuilt!, 'message-date').textContent;
+        expect(halfBuiltDate).toBe('(no date)');
         const halfBuiltFolds = withClass(halfBuilt!, 'fold');
         expect(halfBuiltFolds.length).toBeGreaterThan(0);
-        chooseZone('UTC');
-        setShowFolded(true);
-        expect(list.filter((i) => i !== failed).every((i) => one(i, 'message-date').textContent === t('preview.noDate') || one(i, 'message-date').textContent.endsWith('UTC+00:00'))).toBe(true);
-        expect(one(halfBuilt!, 'message-date').textContent).toBe(halfBuiltDate);
-        expect(halfBuiltDate.endsWith('UTC+00:00')).toBe(false);
-        expect(halfBuiltFolds.every((d) => !d.hasAttribute('open'))).toBe(true);
+        setLocale('fr');
+        try
+        {
+            preview.relabel();
+            setShowFolded(true);
+            expect(list.filter((i) => i !== failed).every((i) => one(i, 'message-date').textContent === '(sans date)')).toBe(true);
+            expect(one(halfBuilt!, 'message-date').textContent).toBe(halfBuiltDate);
+            expect(halfBuiltFolds.every((d) => !d.hasAttribute('open'))).toBe(true);
+        }
+        finally
+        {
+            setLocale('en');
+            preview.relabel();
+        }
     });
 
     it('a stand-in for an email without text has no body text', () =>
@@ -1664,7 +1629,7 @@ describe('PDF labels', () =>
         {
             const { result, reply } = ready();
             // On a control outside the list (or nowhere): nothing is focused by the redraw.
-            for (const active of [byId('preview-zone'), fakeDocument.body, null])
+            for (const active of [byId('preview-show-folded'), fakeDocument.body, null])
             {
                 fakeDocument.activeElement = active;
                 preview.setPdfPlans(plansFor(result, [0, 1, 2], true));

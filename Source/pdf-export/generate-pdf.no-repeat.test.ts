@@ -105,7 +105,7 @@ async function emailTexts(threadCase: ThreadCase, dropped: readonly number[],
     const unticked = rebuiltEntries(result)
         .map((r) => r.id)
         .filter((id) => !rebuilt.includes(id));
-    const made = await generatePdf({ result, positions, plans, rebuilt, rebuildingOff: options.rebuildingOff ?? false, unticked, policy, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), fonts, locale: 'en' });
+    const made = await generatePdf({ result, positions, plans, rebuilt, rebuildingOff: options.rebuildingOff ?? false, unticked, policy, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), fonts, locale: 'en' });
     const pdf = readPdf(made.bytes);
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown).join(' '));
     const dests = readDests(pdf);

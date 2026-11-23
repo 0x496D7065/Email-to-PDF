@@ -116,7 +116,7 @@ function make(messages: readonly NormalizedMessage[], rebuilt: (ids: readonly nu
     const ids = rebuiltEntries(result).map((r) => r.id);
     const chosen = rebuilt(ids);
     const unticked = ids.filter((id) => !chosen.includes(id));
-    const pdfDocument = buildPdfDocument({ result, positions, plans, policy, rebuilt: chosen, rebuildingOff, unticked, timeZone: 'UTC',
+    const pdfDocument = buildPdfDocument({ result, positions, plans, policy, rebuilt: chosen, rebuildingOff, unticked, generatedOffsetMinutes: 0,
         generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
     return { result, positions, plans, rebuilt: chosen, rebuildingOff, unticked, pdfDocument };
 }
@@ -345,7 +345,7 @@ function expectNoHeaderLines(made: Made, what: string): Stats
                 // A header line printed as a row shows its value (the row's own label may be another word). A
                 // marker line with no value ("Begin forwarded message:") says only that a quoted email starts: the
                 // rebuilt email's header rows and its "reconstructed" mark say so (as before task 8.13a). A date
-                // line: the Date row shows that moment in the PDF's time zone (headerShownInPdf checked it).
+                // line: the Date row shows that date as written (headerShownInPdf checked it).
                 const dateLine = /^(?:date|sent|envoyé|datum|verzonden|gesendet)\s?:/iu.test(squashedLine) && /\bDate\b/u.test(rowsOf(target));
                 // A line of a signature block the rebuilt email leaves out (task 9.9b-2): printed in an email before it.
                 if (!there.includes(squashedLine) && target.rebuilt !== null && leftOutLines.get(target.rebuilt.id)?.has(squashedLine) === true)

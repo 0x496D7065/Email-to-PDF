@@ -66,8 +66,6 @@ function mount(options: PreviewOptions = {}, reviewOptions: ReviewOptions = {}):
     preview = mountPreview(
         { checkArea: area as unknown as HTMLDivElement },
         {
-            zones: ['America/New_York', 'Asia/Tokyo'],
-            initialZone: 'America/New_York',
             chunkSize: 1000,
             header: [review.element],
             decorate: review.decorate,

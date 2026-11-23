@@ -10,12 +10,13 @@
 // without a time, no sender, a list read short).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
+import { parseEmailDate } from '../email-reading/date-header';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
 import { translator } from '../web-page/translations';
 import { pdfCut } from '../web-page-logic/printed-elsewhere';
 import { previewOrder, rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { applyNoRepeatRule, buildPdfDocument, dayStartInZone, emailAnchor, planPdfOrder, type NoRepeatInput } from './build-pdf-document';
+import { applyNoRepeatRule, buildPdfDocument, emailAnchor, planPdfOrder, type NoRepeatInput } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { bodyLines, lineText } from './pdf-text-transforms';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
@@ -56,7 +57,7 @@ function withRebuilt(
 /** Builds the document of `result` with the given real positions (default all) and rebuilt ids (default every entry). */
 function build(
     result: ThreadAnalysisResult,
-    options: { positions?: readonly number[]; rebuilt?: readonly number[] | null; timeZone?: string; strings?: PdfStrings; policy?: OutputPolicy } = {},
+    options: { positions?: readonly number[]; rebuilt?: readonly number[] | null; strings?: PdfStrings; policy?: OutputPolicy } = {},
 ): PdfDocument
 {
     const positions = options.positions ?? result.messages.map((_, k) => k);
@@ -71,8 +72,8 @@ function build(
         positions,
         plans,
         policy,
-        timeZone: options.timeZone ?? 'Africa/Lagos',
         generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
+        generatedOffsetMinutes: 60,
         strings: options.strings ?? EN,
         ...(rebuilt === null ? {} : { rebuilt }),
     });
@@ -148,8 +149,6 @@ function removedTexts(locale: 'en' | 'fr' | 'nl'): { fragments: string[]; word: 
             t('rebuilt.noSubject'),
             t('rebuilt.dateUnreadable'),
             before(t('rebuilt.dateAsWritten', { text: '\u0000' })),
-            // "about 2025-...": the dates shown all start with their year.
-            t('rebuilt.dateAbout', { date: '2025' }),
         ],
         word: { en: /rebuilt/i, fr: /reconstitu/i, nl: /gereconstrueerd/i }[locale],
     };
@@ -329,8 +328,9 @@ describe('a rebuilt email in the PDF document (task 8.3: shown like a real email
         expect(fieldOf(outlookNl!, 'From')).toEqual(['Alice Example <alice@example.test>']);
         expect(fieldOf(outlookNl!, 'Subject')).toEqual(['Re: Office desks and chairs']);
         // A time read without a zone of its own: written as a real email's date, alone (task 8.8: no
-        // "time zone not given" line, the app says it); no "about", no "As written in the quote".
-        expect(fieldOf(outlookNl!, 'Date')).toEqual([expect.stringMatching(/^2025-03-03 \d\d:40:00 UTC\+01:00$/)]);
+        // "time zone not given" line, the app says it); as written in the quote ("Verzonden: maandag
+        // 3 maart 2025 15:40"), never converted (task 9.9c); no "about", no "As written in the quote".
+        expect(fieldOf(outlookNl!, 'Date')).toEqual(['2025-03-03 15:40:00']);
         expect(outlookNl!.flags.zoneUnknown).toBe(true);
         for (const email of rebuiltOf(pdfDocument))
         {
@@ -642,42 +642,50 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
         }
     });
 
-    it('cover: a rebuilt email dated by a day alone starts at the start of that day IN THE CHOSEN ZONE, so the range never runs backwards', () =>
+    it('cover: a rebuilt email dated by a day alone is placed by its estimated start of day, and every date is printed as written', () =>
     {
-        /** LAST with rebuilt email 0 dated by the day 2025-03-03 and the real email at `realIso`; only rebuilt email 0 in the PDF. */
-        const pdfDocumentFor = (realIso: string, timeZone: string): PdfDocument =>
+        /**
+         * LAST with rebuilt email 0 dated by the day 2025-03-03 (its estimated start: midnight at
+         * `dayOffset` minutes, as read in its source's zone) and the real email written at
+         * `realHeader`; only rebuilt email 0 in the PDF.
+         */
+        const pdfDocumentFor = (realHeader: string, dayOffset: number): PdfDocument =>
         {
             const base = withRebuilt(analysisOf(LAST), 0, (rebuiltEntry) => ({
                 ...rebuiltEntry,
                 rebuilt: {
                     ...rebuiltEntry.rebuilt,
                     dateText: '3 March 2025',
-                    dateApproximate: false,
-                    date: { text: '3 March 2025', wallMs: Date.UTC(2025, 2, 3), precision: 'day', estimatedUtcMs: Date.UTC(2025, 2, 3), basis: 'source-offset' },
+                    dateApproximate: true,
+                    date: {
+                        text: '3 March 2025', wallMs: Date.UTC(2025, 2, 3), precision: 'day',
+                        estimatedUtcMs: Date.UTC(2025, 2, 3) - dayOffset * 60_000, basis: 'source-offset',
+                    },
                 },
             }));
             const result: ThreadAnalysisResult = {
                 ...base,
-                messages: base.messages.map((m) => ({ ...m, message: { ...m.message, date: { ...m.message.date, utcMs: Date.parse(realIso) } } })),
+                messages: base.messages.map((m) => ({ ...m, message: { ...m.message, date: parseEmailDate(realHeader) } })),
             };
-            const pdfDocument = build(result, { rebuilt: [0], timeZone });
+            const pdfDocument = build(result, { rebuilt: [0] });
             expect(pdfDocument.emails.map((e) => (e.rebuilt === null ? 'real' : 'rebuilt'))).toEqual(['rebuilt', 'real']);
             return pdfDocument;
         };
-        // West: the real email is shown on the day before (21:00 on 2 March in New York): it comes first.
-        const west = pdfDocumentFor('2025-03-03T02:00:00Z', 'America/New_York');
-        expect(fieldOf(west.emails[1]!, 'Date')![0]).toBe('2025-03-02 21:00:00 UTC-05:00');
-        expect(west.cover.dateRange).toEqual({ first: '2025-03-02 21:00:00 UTC-05:00', last: '2025-03-03' });
-        // West, the real email later the same day: the day comes first.
-        expect(pdfDocumentFor('2025-03-03T06:00:00Z', 'America/New_York').cover.dateRange).toEqual(
-            { first: '2025-03-03', last: '2025-03-03 01:00:00 UTC-05:00' });
-        // East: the real email is shown on 3 March (05:00 in Tokyo) though it is still 2 March in UTC: the day comes first.
-        const east = pdfDocumentFor('2025-03-02T20:00:00Z', 'Asia/Tokyo');
-        expect(fieldOf(east.emails[1]!, 'Date')![0]).toBe('2025-03-03 05:00:00 UTC+09:00');
-        expect(east.cover.dateRange).toEqual({ first: '2025-03-03', last: '2025-03-03 05:00:00 UTC+09:00' });
-        // East, the real email on the day before in Tokyo (23:00 on 2 March): it comes first.
-        expect(pdfDocumentFor('2025-03-02T14:00:00Z', 'Asia/Tokyo').cover.dateRange).toEqual(
-            { first: '2025-03-02 23:00:00 UTC+09:00', last: '2025-03-03' });
+        // West: the real email was written at 21:00 on 2 March in New York (02:00 UTC on 3 March), after the
+        // day's estimated start in Brussels (23:00 UTC on 2 March): the day comes first, each printed as written.
+        const west = pdfDocumentFor('Sun, 2 Mar 2025 21:00:00 -0500', 60);
+        expect(fieldOf(west.emails[1]!, 'Date')![0]).toBe('2025-03-02 21:00:00');
+        expect(west.cover.dateRange).toEqual({ first: '2025-03-03', last: '2025-03-02 21:00:00' });
+        // The same email with the day estimated in New York (05:00 UTC): the real email (02:00 UTC) comes first.
+        expect(pdfDocumentFor('Sun, 2 Mar 2025 21:00:00 -0500', -300).cover.dateRange).toEqual(
+            { first: '2025-03-02 21:00:00', last: '2025-03-03' });
+        // East: written at 05:00 on 3 March in Tokyo (20:00 UTC on 2 March), the day estimated in UTC: the real email first.
+        const east = pdfDocumentFor('Mon, 3 Mar 2025 05:00:00 +0900', 0);
+        expect(fieldOf(east.emails[1]!, 'Date')![0]).toBe('2025-03-03 05:00:00');
+        expect(east.cover.dateRange).toEqual({ first: '2025-03-03 05:00:00', last: '2025-03-03' });
+        // The day estimated in Tokyo (15:00 UTC on 2 March): the day first.
+        expect(pdfDocumentFor('Mon, 3 Mar 2025 05:00:00 +0900', 540).cover.dateRange).toEqual(
+            { first: '2025-03-03', last: '2025-03-03 05:00:00' });
     });
 
     it('several real files and rebuilt emails between them: each real file named in its own email, under its PDF number; none on the cover', () =>
@@ -751,40 +759,6 @@ describe('the index, the bookmarks and the cover with rebuilt emails', () =>
         const pdfDocument = build(result, { positions: [] });
         expect(pdfDocument.emails).toEqual([]);
         expect(pdfDocument.cover.emailCount).toBe(0);
-    });
-});
-
-describe('dayStartInZone (a rebuilt email dated by a day alone, on the cover)', () =>
-{
-    it("gives the first moment of the day as the real emails' dates are shown in that zone", () =>
-    {
-        expect(dayStartInZone('2025-03-03', 'UTC')).toBe(Date.parse('2025-03-03T00:00:00Z'));
-        expect(dayStartInZone('2025-03-03', 'America/New_York')).toBe(Date.parse('2025-03-03T05:00:00Z'));
-        expect(dayStartInZone('2025-07-03', 'America/New_York')).toBe(Date.parse('2025-07-03T04:00:00Z'));
-        expect(dayStartInZone('2025-03-03', 'Asia/Tokyo')).toBe(Date.parse('2025-03-02T15:00:00Z'));
-        expect(dayStartInZone('2025-03-03', 'Asia/Kolkata')).toBe(Date.parse('2025-03-02T18:30:00Z'));
-        expect(dayStartInZone('2025-03-03', 'Pacific/Kiritimati')).toBe(Date.parse('2025-03-02T10:00:00Z'));
-        // The day daylight-saving time starts (at 02:00, after midnight).
-        expect(dayStartInZone('2025-03-09', 'America/New_York')).toBe(Date.parse('2025-03-09T05:00:00Z'));
-    });
-
-    it('is exact when the day does not exist in that zone, and falls back to UTC for a zone that is not valid', () =>
-    {
-        // Kiritimati skipped 31 December 1994: 1994-12-30 23:59:59 UTC-10:00 is followed by 1995-01-01 00:00:00 UTC+14:00.
-        expect(dayStartInZone('1994-12-31', 'Pacific/Kiritimati')).toBe(Date.parse('1994-12-31T10:00:00Z'));
-        expect(dayStartInZone('1995-01-01', 'Pacific/Kiritimati')).toBe(Date.parse('1994-12-31T10:00:00Z'));
-        expect(dayStartInZone('1994-12-30', 'Pacific/Kiritimati')).toBe(Date.parse('1994-12-30T10:00:00Z'));
-        // The day daylight-saving time ends (Sydney, 03:00 back to 02:00): still from midnight.
-        expect(dayStartInZone('2025-04-06', 'Australia/Sydney')).toBe(Date.parse('2025-04-05T13:00:00Z'));
-        expect(dayStartInZone('2025-03-03', 'Not/AZone')).toBe(Date.parse('2025-03-03T00:00:00Z'));
-    });
-
-    it('gives null for a text that is not a day', () =>
-    {
-        for (const bad of ['', '2025-3-3', '2025-03-03x', 'gisteren', '2025-13-45'])
-        {
-            expect(dayStartInZone(bad, 'UTC')).toBeNull();
-        }
     });
 });
 
@@ -1030,7 +1004,7 @@ describe('signatures of rebuilt emails in the PDF (task 9.9b-2, user decision F4
         expect((cut.elsewhere.get(position) ?? []).some(([start, end]) => start <= blockStart && end >= body.length - 1)).toBe(true);
         // So it was not printed as a signature before the 09:20 email: kept there.
         expect(foldReasons(cut.rebuiltPlans.get(later.id)?.shown)).toEqual(['signature+']);
-        const pdfDocument = buildPdfDocument({ ...input, plans, timeZone: 'Africa/Lagos', generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
+        const pdfDocument = buildPdfDocument({ ...input, plans, generatedOffsetMinutes: 60, generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0), strings: EN });
         expect(bodyText(rebuiltById(pdfDocument, later.id))).toContain('Example Office Supplies');
     });
 });

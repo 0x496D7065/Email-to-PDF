@@ -102,7 +102,7 @@ function build(
                 policy,
             ),
         policy,
-        timeZone: 'UTC',
+        generatedOffsetMinutes: 0,
         generatedAt: Date.UTC(2025, 5, 1, 12, 0, 0),
         strings: EN,
         rebuilt: options.rebuilt ?? rebuiltEntries(result).map((r) => r.id),

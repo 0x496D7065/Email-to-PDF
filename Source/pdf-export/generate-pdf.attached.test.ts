@@ -64,7 +64,7 @@ async function made(policy: OutputPolicy): Promise<{ texts: string[]; cover: str
         positions.map((p) => result.messages[p]!),
         policy,
     );
-    const pdf = readPdf((await generatePdf({ result, positions, plans, policy, timeZone: 'UTC', generatedAt: Date.UTC(2025, 5, 10), fonts, locale: 'en' })).bytes);
+    const pdf = readPdf((await generatePdf({ result, positions, plans, policy, generatedOffsetMinutes: 0, generatedAt: Date.UTC(2025, 5, 10), fonts, locale: 'en' })).bytes);
     const pages = (await readPageRuns(pdf)).map((runs) => textLines(runs).map((l) => l.shown).join(' '));
     const dests = readDests(pdf);
     const starts: number[] = [];

@@ -81,8 +81,7 @@ describe('no text of its own for rebuilt emails (user decision 2026-11-02, task 
             };
             collect(strings);
             // The functions too, with sample values.
-            texts.push(strings.emailHeading(3), strings.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'),
-                strings.senderLocal('2025-03-03 09:00'), strings.emailCount(2));
+            texts.push(strings.emailHeading(3), strings.emailBookmark(3, '2025-03-03', 'Alice Example', 'Desks'), strings.emailCount(2));
             expect(texts.length).toBeGreaterThan(30);
             for (const text of texts)
             {

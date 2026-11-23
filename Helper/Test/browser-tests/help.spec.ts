@@ -13,7 +13,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
 import { tabSkipsLinks } from './support/keyboard.ts';
-import { watchPage, withoutSelectConsole, withoutSelectReports, type PageWatch } from './support/network-and-csp-watch.ts';
+import { watchPage, type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
 {
@@ -50,8 +50,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__helpViolations = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__helpViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__helpViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
     });
 });
@@ -164,8 +163,8 @@ test('the help sits by step 1, opens and closes with Enter and Space, and reads 
     // Nothing was loaded and nothing was blocked.
     expect(watch.requests.slice(loaded)).toEqual([]);
     expect(watch.websockets).toEqual([]);
-    expect(withoutSelectReports(browserName, await page.evaluate(() => window.__helpViolations))).toEqual([]);
-    expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+    expect(await page.evaluate(() => window.__helpViolations)).toEqual([]);
+    expect(problems).toEqual([]);
 });
 
 test('whether the help is open is not kept: a reload shows it closed, and nothing is stored', async ({ page }) =>
@@ -185,7 +184,7 @@ for (const [label, size] of [
     ['200% zoom (640 CSS px wide)', { width: 640, height: 400 }],
 ] as const)
 {
-    test(`the open help fits ${label}`, async ({ page, browserName }) =>
+    test(`the open help fits ${label}`, async ({ page }) =>
     {
         await page.setViewportSize(size);
         await open(page);
@@ -194,6 +193,6 @@ for (const [label, size] of [
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         expect(overflow).toBeLessThanOrEqual(0);
         expect(await contrastFailures(page, '#help', 13)).toEqual([]);
-        expect(withoutSelectConsole(browserName, problems)).toEqual([]);
+        expect(problems).toEqual([]);
     });
 }

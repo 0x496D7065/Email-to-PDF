@@ -37,7 +37,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { en } from '../../../Source/web-page/translations/en.ts';
 import { contrastFailures } from './support/contrast.ts';
-import { browserEngineOf, watchPage, withoutSelectConsole, withoutSelectReports, workerCspReports,
+import { watchPage, workerCspReports,
     type PageWatch } from './support/network-and-csp-watch.ts';
 
 declare global
@@ -163,8 +163,7 @@ test.beforeEach(async ({ context, page, baseURL }) =>
         window.__a11yProgress = [];
         document.addEventListener('securitypolicyviolation', (event) =>
         {
-            // "select": WebKit's report about a <select> (see withoutSelectReports).
-            window.__a11yViolations.push(`${event.effectiveDirective} ${event.blockedURI}${event.target instanceof HTMLSelectElement ? ' select' : ''}`);
+            window.__a11yViolations.push(`${event.effectiveDirective} ${event.blockedURI}`);
         });
         // Records each text the status line and the progress line show (each
         // change, also the same text set again), from before the app starts.
@@ -208,7 +207,7 @@ async function addFiles(page: Page): Promise<void>
  * Nothing left the page: after loading, only the inlined workers' own blob:
  * URLs; before, only the page's own files. No WebSocket, no console error.
  */
-async function expectNoRequestLeftThePage(page: Page, cspPolicies = 2): Promise<void>
+async function expectNoRequestLeftThePage(page: Page): Promise<void>
 {
     await page.waitForTimeout(500);
     const ownBlob = new RegExp(`^blob:${origin}/[0-9a-f-]+$`);
@@ -218,14 +217,14 @@ async function expectNoRequestLeftThePage(page: Page, cspPolicies = 2): Promise<
     }
     expect(watch.requests.every((url) => url.startsWith('blob:') || new URL(url).origin === origin)).toBe(true);
     expect(watch.websockets).toEqual([]);
-    expect(withoutSelectConsole(browserEngineOf(page.context()), problems, cspPolicies)).toEqual([]);
+    expect(problems).toEqual([]);
 }
 
 /** Nothing left the page, no CSP violation, no console error (see Helper/Test/browser-tests/preview.spec.ts). */
 async function expectNothingLeftThePage(page: Page): Promise<void>
 {
     await expectNoRequestLeftThePage(page);
-    expect(withoutSelectReports(browserEngineOf(page.context()), await page.evaluate(() => window.__a11yViolations))).toEqual([]);
+    expect(await page.evaluate(() => window.__a11yViolations)).toEqual([]);
     expect(workerCspReports(watch)).toEqual([]);
 }
 
@@ -554,10 +553,10 @@ test('a new result that removes the focused control puts the focus on "choose"; 
     });
     await expect.poll(() => focusedId(page)).toBe('choose-files');
 
-    // Focus outside the rebuilt parts (the time-zone select, the privacy panel's
+    // Focus outside the rebuilt parts (the "show quoted text" checkbox, the privacy panel's
     // and step 1's help summaries): left where it is.
     for (const [id, added] of [
-        ['preview-zone', 2],
+        ['preview-show-folded', 2],
         ['privacy-summary', 3],
         ['help-summary', 4],
     ] as const)
@@ -609,7 +608,7 @@ test('a focus on <body> that no removal caused is never moved: page just loaded,
 
     // A control that lost the focus to <body> without being removed (and
     // without a mouse press): a new result does not move the focus either.
-    await page.locator('#preview-zone').focus();
+    await page.locator('#preview-show-folded').focus();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     expect(await focusedId(page)).toBe('BODY');
     await addAndWait(page, [batchEmail(19)], 20);
@@ -688,7 +687,7 @@ test.describe('with larger text spacing (WCAG 1.4.12)', () =>
             expect(await sidewaysScroll(page), String(width)).toBeLessThanOrEqual(0);
         }
         // The CSP is off here, so only the requests can be checked: still none leave the page.
-        await expectNoRequestLeftThePage(page, 0);
+        await expectNoRequestLeftThePage(page);
     });
 });
 
