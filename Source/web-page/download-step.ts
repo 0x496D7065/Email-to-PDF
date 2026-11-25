@@ -26,6 +26,10 @@
 //   announcement of it: the news alone, or the news followed by
 //   download.changed when the PDF was dropped (download.changedAfter). Two
 //   announcements in a row would replace each other in the one live region.
+//   When that news turns out to word otherwise once final (the count line
+//   waits for the PDF labels' cut, task 9.9f), newsCorrected says it again in
+//   its place, the same way (with download.changed if it had it), but only
+//   while the status line still says it.
 // - The link sits in a line that keeps its place when empty (see app.css),
 //   so the page below does not jump when it appears.
 // Only our own words are shown, with textContent (README.md, rule R4).
@@ -70,6 +74,15 @@ export interface DownloadStep
      * line then gets it, alone or with download.changed, in one announcement.
      */
     inputsChanged(news?: string): void;
+    /**
+     * The news last given to inputsChanged (`said`) turned out to word
+     * otherwise once final (task 9.9f review: the count line, once the PDF
+     * labels' cut came). If the status line still says `said` (nothing else
+     * was announced since), it says `news` instead, in the same way: alone,
+     * or followed by download.changed when that change dropped the PDF.
+     * Otherwise nothing.
+     */
+    newsCorrected(said: string, news: string): void;
     /** "Clear everything": stops and drops everything. */
     reset(): void;
     /** Writes the note (and the link, if any) again in the page language, from the state. */
@@ -98,7 +111,7 @@ export function noteText(state: PdfJobState, unavailable: PdfUnavailable | null)
     }
 }
 
-export function mountDownloadStep(shell: Pick<PageShell, 'downloadButton' | 'downloadNote' | 'downloadArea' | 'setStatus'>, options: DownloadStepOptions): DownloadStep
+export function mountDownloadStep(shell: Pick<PageShell, 'downloadButton' | 'downloadNote' | 'downloadArea' | 'setStatus' | 'statusText'>, options: DownloadStepOptions): DownloadStep
 {
     const button = shell.downloadButton;
     const note = shell.downloadNote;
@@ -109,6 +122,19 @@ export function mountDownloadStep(shell: Pick<PageShell, 'downloadButton' | 'dow
     // whether its drop of the PDF was announced (with that news).
     let news: string | null = null;
     let dropAnnounced = false;
+    // The last news inputsChanged put in the status line: the news, whether
+    // with the drop, and the words written (newsCorrected corrects them only
+    // while the status line still says them).
+    let shown: { readonly news: string; readonly dropped: boolean; readonly text: string } | null = null;
+
+    /** Writes `news` in the status line, alone or with the drop, and remembers it. */
+    function showNews(text: string, dropped: boolean): void
+    {
+        const changed = t('download.changed');
+        const written = dropped ? t('download.changedAfter', { news: text, changed }) : text;
+        shell.setStatus(written);
+        shown = { news: text, dropped, text: written };
+    }
 
     const job: PdfJob = createPdfJob({
         run: options.run,
@@ -135,8 +161,14 @@ export function mountDownloadStep(shell: Pick<PageShell, 'downloadButton' | 'dow
             {
                 // A choice dropped a PDF being made or ready: the status line must
                 // not keep saying "Making your PDF..." or "Your PDF is ready".
-                const changed = t('download.changed');
-                shell.setStatus(news === null ? changed : t('download.changedAfter', { news, changed }));
+                if (news === null)
+                {
+                    shell.setStatus(t('download.changed'));
+                }
+                else
+                {
+                    showNews(news, true);
+                }
                 dropAnnounced = true;
             }
         },
@@ -242,9 +274,18 @@ export function mountDownloadStep(shell: Pick<PageShell, 'downloadButton' | 'dow
             // No PDF was dropped: the news alone.
             if (!dropAnnounced && text !== undefined)
             {
-                shell.setStatus(text);
+                showNews(text, false);
             }
             render();
+        },
+        newsCorrected(said, text)
+        {
+            // Only while the status line still says that news (nothing announced since).
+            if (shown === null || shown.news !== said || shell.statusText() !== shown.text)
+            {
+                return;
+            }
+            showNews(text, shown.dropped);
         },
         reset: () => job.reset(),
         relabel: render,

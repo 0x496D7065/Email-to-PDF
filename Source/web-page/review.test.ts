@@ -213,6 +213,44 @@ describe('texts', () =>
         }
     });
 
+    it('counts out the ticked emails whose text is all printed as other emails, with a sentence of its own, in every language (task 9.9f)', () =>
+    {
+        const result = analysisOf([make(), make(), make({ bodyText: '' }), make()]);
+        const empty = result.messages.findIndex((m) => m.message.bodyText === '');
+        const withText = [0, 1, 2, 3].filter((k) => k !== empty);
+        const [a, b, c] = withText as [number, number, number];
+        expect(includedText(result, withText, new Set([a]))).toBe('2 of 4 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        expect(includedText(result, withText, new Set([a, c]))).toBe('1 of 4 emails will be in the PDF. 2 left out: all of their text is printed as other emails.');
+        // An email not ticked is not counted out again; an email with no text is counted under that reason only.
+        expect(includedText(result, [a, b], new Set([c]))).toBe('2 of 4 emails will be in the PDF.');
+        expect(includedText(result, [a, b, c, empty].sort(), new Set([a, b, c, empty])))
+            .toBe('0 of 4 emails will be in the PDF. 1 left out because it has no text. 3 left out: all of their text is printed as other emails.');
+        // No set (or an empty one): the line as before.
+        expect(includedText(result, withText, new Set())).toBe(includedText(result, withText));
+        expect(includedText(result, withText)).toBe('3 of 4 emails will be in the PDF.');
+        setLocale('fr');
+        try
+        {
+            expect(includedText(result, withText, new Set([a]))).toBe('E-mails dans le PDF\u{00A0}: 2 sur 4. 1 exclu\u{00A0}: tout son texte est imprimé dans d’autres e-mails.');
+            expect(includedText(result, [a, b, c, empty].sort(), new Set([a, c]))).toBe('E-mails dans le PDF\u{00A0}: 1 sur 4. 1 exclu car sans texte. '
+                + '2 exclus\u{00A0}: tout leur texte est imprimé dans d’autres e-mails.');
+        }
+        finally
+        {
+            setLocale('en');
+        }
+        setLocale('nl');
+        try
+        {
+            expect(includedText(result, withText, new Set([a]))).toBe('In de PDF: 2 van 4 e-mails. 1 weggelaten: de tekst ervan staat al in andere e-mails.');
+            expect(includedText(result, withText, new Set([a, c]))).toBe('In de PDF: 1 van 4 e-mails. 2 weggelaten: hun tekst staat al in andere e-mails.');
+        }
+        finally
+        {
+            setLocale('en');
+        }
+    });
+
     it('says why rebuilt emails are not in the PDF, each counted once, in the priority order, in every language (task 9.9b-3)', () =>
     {
         // All in: the line alone, as before.
@@ -427,6 +465,136 @@ describe('include checkboxes', () =>
         expect(review.includedPositions()).toEqual([0, 1, 2]);
         expect(second.getAttribute('data-included')).toBe('true');
         expect(mark.hasAttribute('hidden')).toBe(true);
+    });
+
+    it('counts out the emails the PDF labels\' cut says are printed as other emails, only for the choices it was made for (task 9.9f)', () =>
+    {
+        const result = analysisOf([make({ subject: 'One' }), make({ subject: 'Two' }), make({ subject: 'Three' })]);
+        show(result);
+        const line = byId('review-included');
+        // No cut yet: the count without it, marked busy.
+        expect(includedLine()).toBe('3 of 3 emails will be in the PDF.');
+        expect(line.getAttribute('aria-busy')).toBe('true');
+        // The cut for these choices: #2 is left out, the line is final.
+        review.printedAllElsewhereKnown(result, new Set([1]));
+        expect(includedLine()).toBe('2 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        expect(line.hasAttribute('aria-busy')).toBe(false);
+        // A cut for another result changes nothing.
+        review.printedAllElsewhereKnown(analysisOf([make()]), new Set([0]));
+        expect(includedLine()).toBe('2 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        // Another choice: busy until its own cut comes, #2 still counted out (the last cut said so of it).
+        toggle(items()[0]!, false);
+        expect(includedLine()).toBe('1 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        expect(line.getAttribute('aria-busy')).toBe('true');
+        // The cut for this choice: it is what the line says.
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
+        expect(line.hasAttribute('aria-busy')).toBe(false);
+        // Ticked back: #1 counted in (the last cut that saw it ticked said so) until the new cut comes.
+        toggle(items()[0]!, true);
+        expect(includedLine()).toBe('3 of 3 emails will be in the PDF.');
+        expect(line.getAttribute('aria-busy')).toBe('true');
+        review.printedAllElsewhereKnown(result, new Set([0, 1]));
+        expect(includedLine()).toBe('1 of 3 emails will be in the PDF. 2 left out: all of their text is printed as other emails.');
+        // #2 unticked and back: counted out again at once (what a cut said of it is kept while it is unticked).
+        toggle(items()[1]!, false);
+        expect(includedLine()).toBe('1 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        review.printedAllElsewhereKnown(result, new Set([0]));
+        toggle(items()[1]!, true);
+        expect(includedLine()).toBe('1 of 3 emails will be in the PDF. 2 left out: all of their text is printed as other emails.');
+        // A new result starts with no cut.
+        const next = analysisOf([make(), make()]);
+        show(next);
+        expect(includedLine()).toBe('2 of 2 emails will be in the PDF.');
+        expect(byId('review-included').getAttribute('aria-busy')).toBe('true');
+        review.reset();
+        expect(includedLine()).toBe('');
+        expect(byId('review-included').hasAttribute('aria-busy')).toBe(false);
+    });
+
+    it('under "Print full original text" no email is counted out as printed as other emails (task 9.9f)', () =>
+    {
+        let everything = false;
+        preview.reset();
+        mount({}, { unfoldEverything: () => everything });
+        const result = analysisOf([make(), make()]);
+        show(result);
+        review.printedAllElsewhereKnown(result, new Set([0]));
+        expect(includedLine()).toBe('1 of 2 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        everything = true;
+        review.everythingChanged();
+        expect(includedLine()).toBe('2 of 2 emails will be in the PDF.');
+        expect(byId('review-included').getAttribute('aria-busy')).toBe('true');
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(byId('review-included').hasAttribute('aria-busy')).toBe(false);
+        // Unticked again: what the last cut made without it said, until the new cut comes.
+        everything = false;
+        review.everythingChanged();
+        expect(includedLine()).toBe('1 of 2 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        expect(byId('review-included').getAttribute('aria-busy')).toBe('true');
+    });
+
+    it('a tick announced while the line was busy is announced again once the cut makes the line word otherwise, once (task 9.9f review)', () =>
+    {
+        const said: string[] = [];
+        const corrected: [string, string][] = [];
+        preview.reset();
+        mount({}, { onChange: (text) => said.push(text), onAnnouncementCorrected: (before, now) => corrected.push([before, now]) });
+        const result = analysisOf([make({ subject: 'One' }), make({ subject: 'Two' }), make({ subject: 'Three' })]);
+        show(result);
+        // The first cut, on load: nothing was announced, nothing is said again.
+        review.printedAllElsewhereKnown(result, new Set([1]));
+        expect(corrected).toEqual([]);
+        // #1 unticked: the provisional line (#2 still counted out) is announced at once...
+        toggle(items()[0]!, false);
+        expect(said).toEqual(['1 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.']);
+        // ...the cut for it puts #2 back in: the final line is announced again, in place of the provisional one.
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
+        expect(corrected).toEqual([[said[0], '2 of 3 emails will be in the PDF.']]);
+        // A second cut for the same choices says nothing more.
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(corrected).toHaveLength(1);
+        // #3 unticked: the cut agrees with the provisional line, nothing is said again.
+        toggle(items()[2]!, false);
+        expect(said.at(-1)).toBe('1 of 3 emails will be in the PDF.');
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(corrected).toHaveLength(1);
+        // A new result forgets an announcement still waiting for its cut.
+        toggle(items()[2]!, true);
+        const next = analysisOf([make(), make()]);
+        show(next);
+        review.printedAllElsewhereKnown(next, new Set([0]));
+        expect(corrected).toHaveLength(1);
+    });
+
+    it('the PDF labels failing leave the line final without a cut, not busy; a tick waiting for it is announced again if it changed (task 9.9f review)', () =>
+    {
+        const corrected: [string, string][] = [];
+        preview.reset();
+        mount({}, { onChange: () => undefined, onAnnouncementCorrected: (before, now) => corrected.push([before, now]) });
+        const result = analysisOf([make(), make(), make()]);
+        show(result);
+        const line = byId('review-included');
+        expect(line.getAttribute('aria-busy')).toBe('true');
+        review.cutUnavailable();
+        expect(includedLine()).toBe('3 of 3 emails will be in the PDF.');
+        expect(line.hasAttribute('aria-busy')).toBe(false);
+        expect(corrected).toEqual([]);
+        // A cut says #2 is left out; then #1 unticked, and the labels fail: the count without the cut, as before task 9.9f.
+        review.printedAllElsewhereKnown(result, new Set([1]));
+        toggle(items()[0]!, false);
+        expect(includedLine()).toBe('1 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.');
+        expect(line.getAttribute('aria-busy')).toBe('true');
+        review.cutUnavailable();
+        expect(includedLine()).toBe('2 of 3 emails will be in the PDF.');
+        expect(line.hasAttribute('aria-busy')).toBe(false);
+        expect(corrected).toEqual([['1 of 3 emails will be in the PDF. 1 left out: all of its text is printed as other emails.', '2 of 3 emails will be in the PDF.']]);
+        // Nothing shown: nothing to do.
+        review.reset();
+        review.cutUnavailable();
+        expect(includedLine()).toBe('');
+        expect(line.hasAttribute('aria-busy')).toBe(false);
     });
 
     it('an email with no text keeps its tick box; the line counts it out and says why, following its tick (task 8.14)', () =>

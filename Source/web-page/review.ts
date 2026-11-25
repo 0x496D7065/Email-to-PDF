@@ -199,23 +199,40 @@ export function messagesText(counts: ThreadAnalysisCounts, rebuilt = 0, attached
  * Source/web-page-logic/no-printable-text.ts, pdfPositions); when some ticked emails are left
  * out because they have no text, followed by a sentence of its own:
  * "3 of 5 emails will be in the PDF. 1 left out because it has no text."
- * If that cannot be worked out (a broken entry), every ticked email is
+ * `printedAllElsewhere`: the list positions the PDF leaves out because all
+ * of their text is printed as other emails (task 9.9f; the no-repeat rule's
+ * NoRepeatResult.printedAllElsewhere, as the PDF labels hand it over:
+ * printedAllElsewherePositions in Source/web-page/pdf-labels.ts). Those
+ * ticked are not counted either, and get a sentence of their own:
+ * "0 of 1 email will be in the PDF. 1 left out: all of its text is printed as other emails."
+ * An email is counted under one reason only (no text first, as the PDF
+ * drops those before the no-repeat rule runs).
+ * If pdfPositions cannot be worked out (a broken entry), every ticked email is
  * counted, as before.
  */
-export function includedText(result: ThreadAnalysisResult, ticked: readonly number[]): string
+export function includedText(result: ThreadAnalysisResult, ticked: readonly number[], printedAllElsewhere: ReadonlySet<number> = new Set()): string
 {
-    let printed = ticked.length;
+    let withText: readonly number[] = ticked;
     try
     {
-        printed = pdfPositions(result, ticked).length;
+        withText = pdfPositions(result, ticked);
     }
     catch
     {
         // Counted as before: never a wrong "left out".
     }
-    const line = t('counts.included', { included: printed, count: result.messages.length });
-    const leftOut = ticked.length - printed;
-    return leftOut > 0 ? `${line} ${t('counts.sentence', { text: t('counts.noTextLeftOut', { count: leftOut }) })}` : line;
+    const allElsewhere = withText.filter((position) => printedAllElsewhere.has(position)).length;
+    const sentences = [t('counts.included', { included: withText.length - allElsewhere, count: result.messages.length })];
+    const noText = ticked.length - withText.length;
+    if (noText > 0)
+    {
+        sentences.push(t('counts.sentence', { text: t('counts.noTextLeftOut', { count: noText }) }));
+    }
+    if (allElsewhere > 0)
+    {
+        sentences.push(t('counts.sentence', { text: t('counts.printedAllElsewhereLeftOut', { count: allElsewhere }) }));
+    }
+    return sentences.join(' ');
 }
 
 /**
@@ -335,6 +352,22 @@ export interface Review
      * (preview.refreshRebuilt, which asks rebuiltShown).
      */
     everythingChanged(): string;
+    /**
+     * The PDF labels handed over the no-repeat cut for the choices made now
+     * (Source/web-page/mount-page.ts, setPdfPlans): `positions` are the
+     * emails the PDF leaves out because all of their text is printed as
+     * other emails (task 9.9f; printedAllElsewherePositions in
+     * Source/web-page/pdf-labels.ts). The "N of M emails" line counts them out
+     * (includedText). Ignored for a result not shown.
+     */
+    printedAllElsewhereKnown(result: ThreadAnalysisResult, positions: ReadonlySet<number>): void;
+    /**
+     * The PDF labels could not work out their plans (Source/web-page/mount-page.ts,
+     * failed): no cut will come for the choices made now. The "N of M emails"
+     * line is then final without one (no email counted out as printed as
+     * other emails, as before task 9.9f) and no longer busy.
+     */
+    cutUnavailable(): void;
 }
 
 /** What build() added to an item (see Entry). */
@@ -390,10 +423,24 @@ export interface ReviewOptions
      * new "N of M rebuilt emails will be in the PDF" line to announce, with
      * why the others are left out (rebuiltIncludedText, task 9.9b-3) (the
      * switch turned off: the "N of M emails will be in the PDF" line, see
-     * rebuiltAnnouncement). Source/web-page/mount-page.ts: step 3 drops a PDF made before
+     * rebuiltAnnouncement), after the "N of M emails will be in the PDF" line
+     * when the change made that line word otherwise (rebuiltChoiceAnnouncement,
+     * task 9.9f review). Source/web-page/mount-page.ts: step 3 drops a PDF made before
      * and announces the line ('' announces nothing but the drop).
      */
     readonly onRebuiltChange?: (announcement: string) => void;
+    /**
+     * Called when the "N of M emails will be in the PDF" line was announced
+     * (onChange, onRebuiltChange or everythingChanged) while it was still busy
+     * (the PDF labels' cut for the new choices not known yet; task 9.9f), and
+     * the line, once final, makes that announcement word otherwise: `said` is
+     * what was announced, `announcement` the same announcement made from the
+     * final line. Called at most once per announcement, never when the words
+     * are the same, never without a choice made (a result just shown).
+     * Source/web-page/mount-page.ts: step 3 says it again in the status line,
+     * in place of `said` (Source/web-page/download-step.ts, newsCorrected).
+     */
+    readonly onAnnouncementCorrected?: (said: string, announcement: string) => void;
     /**
      * True while "Print full original text" is ticked (Source/web-page/mount-page.ts: the
      * PDF labels' policy): no rebuilt email is shown or in the PDF then, and
@@ -430,6 +477,18 @@ export function createReview(options: ReviewOptions = {}): Review
     let rebuiltItems = new Map<number, RebuiltEntry>();
     const addedRebuilt = new WeakMap<HTMLLIElement, RebuiltParts>();
     let rebuiltList: readonly AnalyzedRebuiltMessage[] = [];
+    // The emails the PDF leaves out because all of their text is printed as
+    // other emails (task 9.9f), as the last cuts the PDF labels handed over for
+    // the result shown said: per list position ticked then, true if left out
+    // that way. `cutKey`: the choices (cutChoices) of the latest cut, or null
+    // when none came for the result shown. See showIncludedLine.
+    let cutStatus = new Map<number, boolean>();
+    let cutKey: string | null = null;
+    // Whether the line is busy (showIncludedLine), and the announcement the
+    // last choice made of it while it was busy: what was said, and how to
+    // word it again from the final line (settleAnnouncement).
+    let includedBusy = false;
+    let pendingAnnouncement: { readonly said: string; readonly compose: () => string } | null = null;
 
     // --- Counts box -----------------------------------------------------------
     const filesLine = createSafeElement('span', { attrs: { id: 'review-files-text' } });
@@ -507,9 +566,102 @@ export function createReview(options: ReviewOptions = {}): Review
         return found;
     }
 
+    /**
+     * Everything the PDF labels' no-repeat cut depends on, as they read it
+     * from this review (Source/web-page/mount-page.ts: includedPositions,
+     * includedRebuilt, rebuildingOff, untickedRebuilt; the policy's
+     * unfoldEverything), or null if it cannot be worked out (a broken entry:
+     * no cut is then taken for the current one).
+     */
+    function cutChoices(): string | null
+    {
+        try
+        {
+            return [everythingOn() ? 'all' : '', positions().join(','), rebuiltIncluded().map((r) => r.id).join(','), rebuiltOn() ? 'on' : 'off',
+                rebuiltUnticked().join(',')].join('|');
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /**
+     * The "N of M emails will be in the PDF" line (includedText), counting out
+     * the emails the PDF leaves out because all of their text is printed as
+     * other emails (task 9.9f). That is known only from the PDF labels' cut
+     * (printedAllElsewhereKnown), which comes after a short pause when the
+     * choices change (Source/web-page/pdf-labels.ts, DEBOUNCE_MS; at once when
+     * its plans are already made). Until the cut for the current choices
+     * came, the line is marked aria-busy="true" and counts out the ticked
+     * emails the last cut of this result said were left out that way (none
+     * while "Print full original text" is ticked: the PDF prints every email
+     * whole then); when it comes, the line is written again from it and is no
+     * longer busy. A cut made for other choices is never taken for the
+     * current one.
+     */
     function showIncludedLine(): void
     {
-        includedLine.textContent = current === null ? '' : includedText(current, positions());
+        if (current === null)
+        {
+            includedLine.textContent = '';
+            includedBusy = false;
+            setSafeAttribute(includedLine, 'aria-busy', false);
+            return;
+        }
+        const ticked = positions();
+        const known = cutKey !== null && cutKey === choicesKey();
+        const leftOut = new Set(everythingOn() ? [] : ticked.filter((position) => cutStatus.get(position) === true));
+        includedLine.textContent = includedText(current, ticked, leftOut);
+        includedBusy = !known;
+        setSafeAttribute(includedLine, 'aria-busy', known ? false : 'true');
+    }
+
+    /** cutChoices, with one key of its own for "cannot be worked out" (a real key always has a '|'). */
+    function choicesKey(): string
+    {
+        return cutChoices() ?? '!';
+    }
+
+    /**
+     * Returns the announcement `compose` makes now, for a choice the reader
+     * just made (call after showIncludedLine). While the line is busy, it is
+     * kept, to be made again from the final line (settleAnnouncement).
+     */
+    function announced(compose: () => string): string
+    {
+        const said = compose();
+        pendingAnnouncement = includedBusy && said !== '' ? { said, compose } : null;
+        return said;
+    }
+
+    /**
+     * Once the line is final: the announcement kept by announced(), made
+     * again from it, goes to onAnnouncementCorrected when its words changed
+     * (task 9.9f review: screen readers hear the true count, not the
+     * provisional one). Nothing when they are the same.
+     */
+    function settleAnnouncement(): void
+    {
+        if (pendingAnnouncement === null || includedBusy)
+        {
+            return;
+        }
+        const { said, compose } = pendingAnnouncement;
+        pendingAnnouncement = null;
+        let now = said;
+        try
+        {
+            now = compose();
+        }
+        catch
+        {
+            // Nothing said again rather than a wrong line.
+        }
+        if (now !== said && now !== '')
+        {
+            options.onAnnouncementCorrected?.(said, now);
+        }
     }
 
     /** Shows or hides the switch (shown only when switchNeeded). */
@@ -756,6 +908,24 @@ export function createReview(options: ReviewOptions = {}): Review
     }
 
     /**
+     * What to announce after the switch or a rebuilt card changed (task 9.9f
+     * review): rebuiltAnnouncement, after the "N of M emails will be in the
+     * PDF" line when that line no longer says `countBefore` (its words before
+     * the change: a forward whose text is all printed as rebuilt emails can
+     * leave the PDF). The line only once: not added when rebuiltAnnouncement
+     * already is that line.
+     */
+    function rebuiltChoiceAnnouncement(countBefore: string): () => string
+    {
+        return () =>
+        {
+            const said = rebuiltAnnouncement();
+            const count = includedLine.textContent;
+            return said === '' || said === count || count === '' || count === countBefore ? said : `${count} ${said}`;
+        };
+    }
+
+    /**
      * Shows a rebuilt card's state: its own tick, and "Not in the PDF" when it
      * is unticked, or when every email it was read from is unticked (then the
      * mark says so; the card's own tick is kept, and counts again once one of
@@ -844,6 +1014,11 @@ export function createReview(options: ReviewOptions = {}): Review
         setSafeAttribute(failedPointer, 'hidden', true);
         messagesLine.textContent = '';
         includedLine.textContent = '';
+        setSafeAttribute(includedLine, 'aria-busy', false);
+        includedBusy = false;
+        pendingAnnouncement = null;
+        cutStatus = new Map();
+        cutKey = null;
         notesLine.textContent = '';
         setSafeAttribute(notesLine, 'hidden', true);
         rebuiltList = [];
@@ -862,6 +1037,10 @@ export function createReview(options: ReviewOptions = {}): Review
         }
         current = result;
         entries = new Map();
+        // The cuts of an older result say nothing about this one (task 9.9f), nor what was announced of it.
+        cutStatus = new Map();
+        cutKey = null;
+        pendingAnnouncement = null;
         setSafeAttribute(failedPointer, 'hidden', result.counts.filesFailed === 0);
         withNotes = 0;
         withNotesNoRebuild = 0;
@@ -944,9 +1123,10 @@ export function createReview(options: ReviewOptions = {}): Review
             // The rebuilt emails follow the emails they were read from (rebuiltInPdf).
             applyAllRebuilt();
             showRebuiltLine();
-            // One announcement: the rebuilt line too when this changed it.
+            // One announcement: the rebuilt line too when this changed it (made again from the final line, task 9.9f).
             const rebuiltAfter = rebuiltLine.textContent;
-            options.onChange?.(rebuiltAfter !== rebuiltBefore && rebuiltAfter !== '' ? `${includedLine.textContent} ${rebuiltAfter}` : includedLine.textContent);
+            const withRebuilt = rebuiltAfter !== rebuiltBefore && rebuiltAfter !== '';
+            options.onChange?.(announced(() => (withRebuilt ? `${includedLine.textContent} ${rebuiltAfter}` : includedLine.textContent)));
         });
         // Right after the heading (the item's first child), before the details.
         item.insertBefore(createSafeElement('div', { attrs: { class: 'message-review' }, children }), item.children[1] ?? null);
@@ -970,6 +1150,7 @@ export function createReview(options: ReviewOptions = {}): Review
         writeRebuiltParts(parts);
         checkbox.addEventListener('change', () =>
         {
+            const countBefore = includedLine.textContent;
             if (current !== null)
             {
                 rebuiltSelection.setTicked(rebuiltEmail, current, checkbox.checked);
@@ -977,7 +1158,9 @@ export function createReview(options: ReviewOptions = {}): Review
             // Every shown card: two cards could share a key (see Source/web-page-logic/rebuilt-email-display.ts).
             applyAllRebuilt();
             showRebuiltLine();
-            options.onRebuiltChange?.(rebuiltAnnouncement());
+            // The no-repeat cut depends on the rebuilt emails chosen (task 9.9f): busy until the new one comes.
+            showIncludedLine();
+            options.onRebuiltChange?.(announced(rebuiltChoiceAnnouncement(countBefore)));
         });
         const field = createSafeElement('div', { attrs: { class: 'field field-checkbox message-include' }, children: [checkbox, label, excludedNote] });
         item.insertBefore(createSafeElement('div', { attrs: { class: 'message-review' }, children: [field, pdfSourceNote] }), item.children[1] ?? null);
@@ -1010,10 +1193,13 @@ export function createReview(options: ReviewOptions = {}): Review
 
     rebuiltCheckbox.addEventListener('change', () =>
     {
+        const countBefore = includedLine.textContent;
         rebuiltSelection.setIncludeAll(rebuiltCheckbox.checked);
         applyAllRebuilt();
         showRebuiltLine();
-        options.onRebuiltChange?.(rebuiltAnnouncement());
+        // The no-repeat cut depends on the switch (task 9.9f): busy until the new one comes.
+        showIncludedLine();
+        options.onRebuiltChange?.(announced(rebuiltChoiceAnnouncement(countBefore)));
     });
 
     const decorate: Review['decorate'] = (item, email, position, result) =>
@@ -1081,6 +1267,8 @@ export function createReview(options: ReviewOptions = {}): Review
         },
         relabel()
         {
+            // The page announces the new language itself: an earlier announcement is not made again in it.
+            pendingAnnouncement = null;
             labels.relabel();
             if (current !== null)
             {
@@ -1106,7 +1294,42 @@ export function createReview(options: ReviewOptions = {}): Review
             syncSwitch();
             applyAllRebuilt();
             showRebuiltLine();
-            return rebuiltAnnouncement();
+            // Under "Print full original text" no email is printed as other emails (task 9.9f): busy until the new cut comes.
+            showIncludedLine();
+            return announced(rebuiltAnnouncement);
+        },
+        printedAllElsewhereKnown(result, leftOut)
+        {
+            if (result !== current)
+            {
+                return;
+            }
+            const choices = cutChoices();
+            // What it says of each email ticked now, kept for the next change of choices (see showIncludedLine).
+            // Not under "Print full original text": that cut says nothing of the emails printed as other emails otherwise.
+            if (choices !== null && !everythingOn())
+            {
+                for (const position of positions())
+                {
+                    cutStatus.set(position, leftOut.has(position));
+                }
+            }
+            // choicesKey, as cutUnavailable: a key that cannot be worked out still matches the line, never left busy.
+            cutKey = choicesKey();
+            showIncludedLine();
+            settleAnnouncement();
+        },
+        cutUnavailable()
+        {
+            if (current === null)
+            {
+                return;
+            }
+            // No cut will come for these choices: the line without one, final (task 9.9f review).
+            cutStatus = new Map();
+            cutKey = choicesKey();
+            showIncludedLine();
+            settleAnnouncement();
         },
         includedPositions: positions,
         includedMessages()

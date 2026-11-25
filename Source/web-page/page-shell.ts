@@ -94,6 +94,8 @@ export interface PageShell
     setClearAvailable(available: boolean): void;
     /** Shows (and lets screen readers announce) a short status message. '' clears it. */
     setStatus(message: string): void;
+    /** What the status line says now (step 3 checks it still says its own words before correcting them). */
+    statusText(): string;
     /** Switches step 2 between "waiting for emails" and showing its container. */
     setCheckReady(ready: boolean): void;
     /** Writes the shell's own words again in the page language now (and ticks its radio in the picker). */
@@ -394,6 +396,7 @@ export function mountPageShell(root: HTMLElement, options: PageShellOptions = {}
         {
             status.textContent = message;
         },
+        statusText: () => status.textContent ?? '',
         setCheckReady(ready)
         {
             setSafeAttribute(checkStep, 'data-state', ready ? 'ready' : 'waiting');

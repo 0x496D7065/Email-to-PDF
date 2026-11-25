@@ -91,7 +91,7 @@ import { mountAddFiles, type AddFiles, type AddFilesOptions } from './add-files'
 import { applyDocumentLanguage, mountPageShell, type PageShell } from './page-shell';
 import { mountDownloadStep, type DownloadStep, type DownloadStepOptions } from './download-step';
 import { getLocale, isSupportedLocale, setLocale, t } from './translations';
-import { createPdfLabels, type PdfLabels, type PdfLabelsOptions } from './pdf-labels';
+import { createPdfLabels, printedAllElsewherePositions, type PdfLabels, type PdfLabelsOptions } from './pdf-labels';
 import type { PdfUnavailable } from './pdf-job';
 import { mountPreview, type Preview, type PreviewOptions } from './preview';
 import { createReview, type Review } from './review';
@@ -219,6 +219,11 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
             download.inputsChanged(announcement === '' ? undefined : announcement);
             pdfLabels.rebuiltChanged();
         },
+        // The "N of M emails" line was announced before the PDF labels' cut for the new
+        // choices came (it waits for it, task 9.9f): once final, if its words changed,
+        // step 3 says the announcement again in place of the old one (with "the previous
+        // PDF was removed" again when it said so), unless something else was said since.
+        onAnnouncementCorrected: (said, announcement) => download.newsCorrected(said, announcement),
         // "Print full original text" ticked: no rebuilt email shown or in the PDF (Source/web-page/review.ts).
         unfoldEverything: () => pdfLabels.getPdfPolicy().unfoldEverything,
     });
@@ -237,12 +242,20 @@ export function mountPage(root: HTMLElement, options: PageOptions = {}): Page
         {
             plansFailed = false;
             preview.setPdfPlans(plans);
+            // The count line counts out the emails these labels say are not in the PDF, all of
+            // their text printed as other emails (task 9.9f): the same cut, for the same choices.
+            if (plans !== null)
+            {
+                review.printedAllElsewhereKnown(plans.result, printedAllElsewherePositions(plans));
+            }
             choicesChanged();
         },
         failed: () =>
         {
             plansFailed = true;
             preview.pdfPlansFailed();
+            // No cut will come: the count line is final without it (not left busy).
+            review.cutUnavailable();
             choicesChanged();
         },
         // Deliberately a second path besides setPdfPlans and failed: the PDF is

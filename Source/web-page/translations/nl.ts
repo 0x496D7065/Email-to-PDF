@@ -253,6 +253,10 @@ export const nl: Messages = {
             other: 'In de PDF: {included} van {count} e-mails.',
         },
         noTextLeftOut: { one: '{count} weggelaten omdat er geen tekst in staat', other: '{count} weggelaten omdat er geen tekst in staat' },
+        printedAllElsewhereLeftOut: {
+            one: '{count} weggelaten: de tekst ervan staat al in andere e-mails',
+            other: '{count} weggelaten: hun tekst staat al in andere e-mails',
+        },
         rebuiltIncluded: {
             one: 'In de PDF: {included} van {count} gereconstrueerde e-mail.',
             other: 'In de PDF: {included} van {count} gereconstrueerde e-mails.',

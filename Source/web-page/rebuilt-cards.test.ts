@@ -494,6 +494,71 @@ describe('the switch, the checkboxes and the counts', () =>
         expect(byId('review-messages').textContent).toBe('1 email found, 3 earlier emails rebuilt from quoted text.');
     });
 
+    it('the switch turned off while a cut left the email out: the final line is announced again once its cut came (task 9.9f review)', () =>
+    {
+        const corrected: [string, string][] = [];
+        preview.reset();
+        mount({}, { onAnnouncementCorrected: (said, now) => corrected.push([said, now]) });
+        // A phone forward whose whole text is printed as rebuilt emails (plain text: 98, its HTML form, is read only in the browser): the cut leaves #1 out.
+        const result = analysisOf('94-phone-forward-flat.eml');
+        show(result);
+        review.printedAllElsewhereKnown(result, new Set([0]));
+        const leftOut = '0 of 1 email will be in the PDF. 1 left out: all of its text is printed as other emails.';
+        expect(byId('review-included').textContent).toBe(leftOut);
+        expect(corrected).toEqual([]);
+        // Off: announced at once with the old cut (busy), then its own cut (nothing printed as rebuilt emails) corrects it.
+        const all = byId('rebuilt-include-all');
+        tick(all, false);
+        expect(announced).toEqual([leftOut]);
+        expect(byId('review-included').getAttribute('aria-busy')).toBe('true');
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(byId('review-included').textContent).toBe('1 of 1 email will be in the PDF.');
+        expect(byId('review-included').hasAttribute('aria-busy')).toBe(false);
+        expect(corrected).toEqual([[leftOut, '1 of 1 email will be in the PDF.']]);
+        // On again: the rebuilt line is announced at once; its cut brings the emails line back to the
+        // left-out one, so it is announced again with that line first (task 9.9f review: the forward left the PDF).
+        tick(all, true);
+        const rebuiltText = '10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.';
+        expect(announced.at(-1)).toBe(rebuiltText);
+        review.printedAllElsewhereKnown(result, new Set([0]));
+        expect(byId('review-included').textContent).toBe(leftOut);
+        expect(corrected).toEqual([[leftOut, '1 of 1 email will be in the PDF.'], [rebuiltText, `${leftOut} ${rebuiltText}`]]);
+        // A card unticked: the emails line does not change, so only the rebuilt line, nothing said again.
+        const card = rebuiltItems().find((c) => !isHidden(c) && one(c, 'include-checkbox').checked) as FakeElement;
+        tick(one(card, 'include-checkbox'), false);
+        expect(byId('review-included').getAttribute('aria-busy')).toBe('true');
+        const said = announced.at(-1) ?? '';
+        expect(said.startsWith('9 of 13 rebuilt emails will be in the PDF.')).toBe(true);
+        expect(said).not.toContain(leftOut);
+        review.printedAllElsewhereKnown(result, new Set([0]));
+        expect(byId('review-included').hasAttribute('aria-busy')).toBe(false);
+        expect(corrected).toHaveLength(2);
+    });
+
+    it('a card unticked that brings the forward back into the PDF: the emails line is announced too, once, before the rebuilt line (task 9.9f review)', () =>
+    {
+        const corrected: [string, string][] = [];
+        preview.reset();
+        mount({}, { onAnnouncementCorrected: (said, now) => corrected.push([said, now]) });
+        const result = analysisOf('94-phone-forward-flat.eml');
+        show(result);
+        review.printedAllElsewhereKnown(result, new Set([0]));
+        const card = rebuiltItems().find((c) => !isHidden(c) && one(c, 'include-checkbox').checked) as FakeElement;
+        tick(one(card, 'include-checkbox'), false);
+        const said = announced.at(-1) ?? '';
+        expect(said.startsWith('9 of 13 rebuilt emails will be in the PDF.')).toBe(true);
+        // Its cut: some of the forward's text is no longer printed elsewhere, so it is back in the PDF.
+        review.printedAllElsewhereKnown(result, new Set());
+        const back = '1 of 1 email will be in the PDF.';
+        expect(byId('review-included').textContent).toBe(back);
+        expect(corrected).toEqual([[said, `${back} ${said}`]]);
+        // Ticked back, the same cut again (the line says the same before and after): only the rebuilt line, nothing said again.
+        tick(one(card, 'include-checkbox'), true);
+        expect(announced.at(-1)).toBe('10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.');
+        review.printedAllElsewhereKnown(result, new Set());
+        expect(corrected).toHaveLength(1);
+    });
+
     it('a card unticked stays in the list, dimmed and marked "Not in the PDF"', () =>
     {
         show(analysisOf(LAST));

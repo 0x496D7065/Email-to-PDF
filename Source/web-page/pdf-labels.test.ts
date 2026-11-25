@@ -14,7 +14,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { setLocale } from './translations';
 import { en } from './translations/en';
 import { fr } from './translations/fr';
-import { DEBOUNCE_MS, SLICE_MS, createPdfLabels, type PdfLabels } from './pdf-labels';
+import { DEBOUNCE_MS, SLICE_MS, createPdfLabels, printedAllElsewherePositions, type PdfLabels } from './pdf-labels';
 import type { PreviewPdfPlans } from './preview';
 import type { EmailAddress, NormalizedMessage, ParseResult } from '../../Header/parsed-email';
 import type { ThreadAnalysisResult } from '../../Header/thread-analysis-result';
@@ -446,12 +446,15 @@ describe('the no-repeat cut in the views (task 8.11)', () =>
         labels.show(result);
         runAll();
         expect(last()?.views.get(0)?.printedAllElsewhere).toBe(true);
+        // The count line's set (task 9.9f) is read from the same views.
+        expect([...printedAllElsewherePositions(last()!)]).toEqual([0]);
         expect(printedAsOf(last()).length).toBeGreaterThan(0);
         // Every rebuilt email unticked: its forwarded parts are printed nowhere, the email stays (no flag).
         rebuiltChosen = () => [];
         rebuiltUnticked = () => ids;
         labels.rebuiltChanged();
         expect(last()?.views.get(0)?.printedAllElsewhere).toBeUndefined();
+        expect(printedAllElsewherePositions(last()!).size).toBe(0);
         // The forward with its own text: never marked.
         rebuiltChosen = () => rebuiltEntries(withOwnText).map((r) => r.id);
         rebuiltUnticked = () => [];

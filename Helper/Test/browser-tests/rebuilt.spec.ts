@@ -345,6 +345,34 @@ test('a phone forward of a flat thread (Android HTML): the empty emails put noth
     await expect(file.locator('.pdf-label', { hasText: en.pdf.printedAs.notRebuilt })).toHaveCount(0);
     await expect(file.locator('.pdf-note')).toBeVisible();
     await expect(file.locator('.pdf-note')).toHaveText(en.review.pdfNote['pdf-all-printed-elsewhere']);
+    // Task 9.9f: the count line says the same as the note and the PDF (the same no-repeat cut), once that cut is known
+    // (no longer busy); the rebuilt line is unchanged.
+    const includedLine = page.locator('#review-included');
+    const leftOutLine = '0 of 1 email will be in the PDF. 1 left out: all of its text is printed as other emails.';
+    await expect(includedLine).toHaveText(leftOutLine);
+    await expect(includedLine).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.locator('#review-rebuilt')).toHaveText('10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.');
+    // Unticked and ticked back: the line follows, and comes back to the cut's count.
+    const include = file.locator('input.include-checkbox');
+    await include.uncheck();
+    await expect(includedLine).toHaveText('0 of 1 email will be in the PDF.');
+    await include.check();
+    await expect(includedLine).toHaveText(leftOutLine);
+    await expect(includedLine).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready');
+    // The switch off: nothing printed as rebuilt emails, so the email is in the PDF; the status line (the page's one
+    // live region) ends on that true count, not the one of the old cut (task 9.9f review). On again: back to the cut's,
+    // and the status line says that the email left the PDF, before the rebuilt line (task 9.9f review).
+    const rebuildSwitch = page.locator('#rebuilt-include-all');
+    await rebuildSwitch.uncheck();
+    await expect(includedLine).toHaveText('1 of 1 email will be in the PDF.');
+    await expect(includedLine).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.getByRole('status')).toHaveText('1 of 1 email will be in the PDF.');
+    await rebuildSwitch.check();
+    await expect(includedLine).toHaveText(leftOutLine);
+    await expect(includedLine).not.toHaveAttribute('aria-busy', /.*/);
+    await expect(page.getByRole('status')).toHaveText(`${leftOutLine} 10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.`);
+    await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready');
 
     const makeButton = page.getByRole('button', { name: en.actions.makePdf });
     await expect(makeButton).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });
@@ -402,6 +430,12 @@ for (const names of [...PLAIN_PHONE_FORWARDS.map((name) => [name]), PLAIN_PHONE_
         await expect(page.locator('#preview-list')).not.toHaveAttribute('aria-busy', /.*/);
         await expect(page.locator('#review-rebuilt')).toHaveText('10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.');
         await expect(page.locator('#preview-list > li.message-rebuilt')).toHaveCount(13);
+        // Task 9.9f: the count line leaves the files' own emails out too, as the PDF does, once the cut is known.
+        await expect(page.locator('#preview-list')).toHaveAttribute('data-pdf-labels', 'ready');
+        await expect(page.locator('#review-included')).toHaveText(files === 1
+            ? '0 of 1 email will be in the PDF. 1 left out: all of its text is printed as other emails.'
+            : `0 of ${String(files)} emails will be in the PDF. ${String(files)} left out: all of their text is printed as other emails.`);
+        await expect(page.locator('#review-included')).not.toHaveAttribute('aria-busy', /.*/);
 
         const makeButton = page.getByRole('button', { name: en.actions.makePdf });
         await expect(makeButton).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });

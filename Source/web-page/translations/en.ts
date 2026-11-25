@@ -346,6 +346,13 @@ export const en = {
         // some ticked emails are left out because they have no text (task 8.14).
         // {count} is how many. They are not in {included}.
         noTextLeftOut: { one: '{count} left out because it has no text', other: '{count} left out because they have no text' },
+        // After `included` (and `noTextLeftOut`), as a sentence of its own (counts.sentence), only when
+        // some ticked emails are left out because all of their text is printed as other
+        // emails, e.g. rebuilt ones (task 9.9f). {count} is how many. They are not in {included}.
+        printedAllElsewhereLeftOut: {
+            one: '{count} left out: all of its text is printed as other emails',
+            other: '{count} left out: all of their text is printed as other emails',
+        },
         // Shown (and announced on each change) only when emails were rebuilt from quoted text. {count} is the total.
         rebuiltIncluded: {
             one: '{included} of {count} rebuilt email will be in the PDF.',

@@ -6,6 +6,7 @@
 // Helper/Test/browser-tests/download.spec.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocument, FakeElement, FakeEventTarget } from '../../Helper/Test/test-support/fake-dom';
+import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import type { ListenerTarget } from './add-files';
 import { noteText } from './download-step';
@@ -356,6 +357,9 @@ describe('step 3: when the PDF can be made', () =>
         expect(note().textContent).toBe(t('download.unavailable.labels-failed'));
         button().click();
         expect(runs).toEqual([]);
+        // No cut will come: the count line is final without it, not left busy (task 9.9f review).
+        expect(byId('review-included').textContent).toBe('3 of 3 emails will be in the PDF.');
+        expect(byId('review-included').hasAttribute('aria-busy')).toBe(false);
     });
 
     it('stays unavailable after a batch with no email', async () =>
@@ -749,6 +753,81 @@ describe('step 3: a change of choice drops the PDF', () =>
             box.fire('change');
             runTasks();
             expect(said).toEqual(['3 of 3 emails will be in the PDF.']);
+        });
+
+        it('the rebuild switch turned off on a forward printed all as rebuilt emails: the true count is said once final, the removal kept (task 9.9f review)', async () =>
+        {
+            // A synthetic phone forward (plain text) whose whole text is printed as rebuilt emails.
+            const forward = (await parseAllFixtures()).find((m) => m.source.fileName === 'eml/94-phone-forward-flat.eml');
+            if (forward === undefined)
+            {
+                throw new Error('no fixture 94');
+            }
+            choose(forward.source.fileName);
+            calls.at(-1)?.resolve({ ok: true, threadAnalysis: analyzeThread([{ ok: true, message: forward }]) });
+            await settle();
+            runTasks();
+            const included = byId('review-included');
+            const leftOut = '0 of 1 email will be in the PDF. 1 left out: all of its text is printed as other emails.';
+            expect(included.textContent).toBe(leftOut);
+            await makeReady();
+            const said = recordStatus();
+            const toggle = byId('rebuilt-include-all');
+            toggle.checked = false;
+            toggle.fire('change');
+            runTasks();
+            expect(included.textContent).toBe('1 of 1 email will be in the PDF.');
+            expect(included.hasAttribute('aria-busy')).toBe(false);
+            // Said at once with the old cut, then again from the final line: the last word is the true count, with the removal.
+            expect(said).toEqual([combined(leftOut), combined('1 of 1 email will be in the PDF.')]);
+            expect(status()).toBe(combined('1 of 1 email will be in the PDF.'));
+            // On again: the rebuilt line is said at once; the emails line is back to the cut's, so once final it is said too, first.
+            toggle.checked = true;
+            toggle.fire('change');
+            runTasks();
+            expect(included.textContent).toBe(leftOut);
+            const rebuiltText = '10 of 13 rebuilt emails will be in the PDF. Left out: 3 have no text.';
+            expect(said.slice(2)).toEqual([rebuiltText, `${leftOut} ${rebuiltText}`]);
+            expect(status()).toBe(`${leftOut} ${rebuiltText}`);
+        });
+
+        it('a count corrected once final is said again in place of the old one, the removal kept (task 9.9f review)', async () =>
+        {
+            await addAndShow(3);
+            await makeReady();
+            untickFirst();
+            const said = recordStatus();
+            page.download.newsCorrected('2 of 3 emails will be in the PDF.', '1 of 3 emails will be in the PDF.');
+            expect(said).toEqual([combined('1 of 3 emails will be in the PDF.')]);
+            // Corrected again: still with the removal.
+            page.download.newsCorrected('1 of 3 emails will be in the PDF.', '2 of 3 emails will be in the PDF.');
+            expect(status()).toBe(combined('2 of 3 emails will be in the PDF.'));
+            // Not the news the status line says: nothing.
+            page.download.newsCorrected('3 of 3 emails will be in the PDF.', 'X.');
+            expect(said).toHaveLength(2);
+        });
+
+        it('a count corrected with no PDF removed: the new count alone; nothing once something else was said', async () =>
+        {
+            await addAndShow(3);
+            untickFirst();
+            const said = recordStatus();
+            page.download.newsCorrected('2 of 3 emails will be in the PDF.', '1 of 3 emails will be in the PDF.');
+            expect(said).toEqual(['1 of 3 emails will be in the PDF.']);
+            // Something else said since (here: the PDF being made): never overwritten.
+            runTasks();
+            button().click();
+            expect(status()).toBe(t('download.making'));
+            page.download.newsCorrected('1 of 3 emails will be in the PDF.', '2 of 3 emails will be in the PDF.');
+            expect(status()).toBe(t('download.making'));
+            // Another part of the page said something (step 1, straight to the shell): never overwritten either.
+            lastRun().resolve({ ok: false, error: 'timeout' });
+            await settle();
+            untickFirst();
+            expect(status()).toBe('2 of 3 emails will be in the PDF.');
+            page.shell.setStatus('Something else.');
+            page.download.newsCorrected('2 of 3 emails will be in the PDF.', '1 of 3 emails will be in the PDF.');
+            expect(status()).toBe('Something else.');
         });
     });
 

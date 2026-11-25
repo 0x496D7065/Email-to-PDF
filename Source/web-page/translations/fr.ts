@@ -252,6 +252,10 @@ export const fr: Messages = {
             other: 'E-mails dans le PDF\u00A0: {included} sur {count}.',
         },
         noTextLeftOut: { one: '{count} exclu car sans texte', other: '{count} exclus car sans texte' },
+        printedAllElsewhereLeftOut: {
+            one: '{count} exclu\u00A0: tout son texte est imprimé dans d’autres e-mails',
+            other: '{count} exclus\u00A0: tout leur texte est imprimé dans d’autres e-mails',
+        },
         rebuiltIncluded: {
             one: 'E-mail reconstitué dans le PDF\u00A0: {included} sur {count}.',
             other: 'E-mails reconstitués dans le PDF\u00A0: {included} sur {count}.',

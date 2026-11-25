@@ -132,6 +132,26 @@ export interface PdfLabels
     rebuiltChanged(): void;
 }
 
+/**
+ * The list positions whose view in `plans` says the PDF leaves the email out
+ * because all of its text is printed as other emails (PdfView.printedAllElsewhere,
+ * set by withCut from the no-repeat rule's own result; task 9.9e). The count
+ * line of step 2 takes them from here (task 9.9f: Source/web-page/review.ts,
+ * printedAllElsewhereKnown), so it says what the labels and the PDF do.
+ */
+export function printedAllElsewherePositions(plans: PreviewPdfPlans): Set<number>
+{
+    const found = new Set<number>();
+    for (const [position, view] of plans.views)
+    {
+        if (view.printedAllElsewhere === true)
+        {
+            found.add(position);
+        }
+    }
+    return found;
+}
+
 /** The input of one planning: everything the plans depend on. */
 interface Inputs
 {
