@@ -116,6 +116,21 @@ test('loads with zero requests outside its own origin', async ({ page }) =>
     expect(websockets).toEqual([]);
 });
 
+// Source/index.html sets an empty data: icon, so the browser never asks the
+// site for /favicon.ico (a failed request when offline). The data: URL is
+// allowed by img-src and fetches nothing. Headless Chromium skips the
+// /favicon.ico request even without the link, so the link check is what
+// guards this; the request check catches a regression in headed runs.
+test('sets an empty data: icon and never requests /favicon.ico', async ({ page }) =>
+{
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await expect(page.locator('link[rel="icon"]')).toHaveCount(1);
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', 'data:,');
+    const favicons = requests.map((request) => request.url()).filter((url) => new URL(url).pathname.endsWith('favicon.ico'));
+    expect(favicons).toEqual([]);
+    expect(await violations(page)).toEqual([]);
+});
+
 test('loads with zero CSP violations', async ({ page }) =>
 {
     await page.goto('/', { waitUntil: 'networkidle' });

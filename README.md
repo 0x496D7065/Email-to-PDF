@@ -111,7 +111,13 @@ add the files inside.
   [Offline copy](#offline-copy-service-worker).
 - **What the host still sees:** like any website, the site that serves the
   page sees that the page was loaded (and the browser's periodic check for
-  a new version, below). It never sees your emails.
+  a new version, below). It never sees your emails. The host also tells
+  browsers to send it a short report, possibly later, when loading
+  something from the site fails, e.g. a connection drop or a missing file
+  (the web address that failed, the kind of error and how long it took);
+  nothing is reported for loads that work. These network-error reports are
+  sent by the browser on the host's instruction, not by the page, and
+  never contain your files or emails.
 - **One link to another website: the Ko-fi donation button.** The button
   at the top right of the page is the only link to another site. It is a
   normal link that does nothing until you click it: no Ko-fi script,

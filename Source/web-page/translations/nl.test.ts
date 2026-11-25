@@ -190,11 +190,14 @@ describe('Dutch strings', () =>
 
         it('the privacy panel keeps its key promises', () =>
         {
-            expect(nl.privacy.does.noUpload).toBe('Niets verlaat uw computer.');
+            expect(nl.privacy.does.noUpload).toBe('Niets uit uw bestanden verlaat uw computer.');
             expect(nl.privacy.does.noSaving).toContain('bewaart niets van u: geen cookies');
             // The offline copy holds the page's own files, never the emails.
             expect(nl.privacy.check.offline).toContain('(nooit van uw e-mails)');
             expect(nl.privacy.notes.trust).toContain('maar nooit uw e-mails');
+            expect(nl.privacy.notes.hostReports).toContain('bevat nooit uw bestanden of uw e-mails');
+            expect(nl.privacy.notes.hostReports).toContain('naar het bedrijf waar deze site op staat');
+            expect(nl.privacy.check.network).toContain('er gaat niets van deze pagina naar internet');
             // "No analytics": the usual Dutch word for visitor statistics.
             expect(nl.privacy.never.tracking).toContain('geen bezoekersstatistieken');
         });

@@ -33,7 +33,7 @@ import type { DedupeWarningCode, ThreadAnalysisWarningCode, FoldReason, OrderRea
 export const en = {
     app: {
         name: 'Email to PDF',
-        promise: 'Everything stays on your computer.',
+        promise: 'Your files stay on your computer.',
     },
 
     // The Ko-fi donation button at the top right of the page (Source/web-page/page-shell.ts):
@@ -67,7 +67,8 @@ export const en = {
         does: {
             title: 'What this page does',
             local: 'Your email files are read only inside this browser tab, on your computer.',
-            noUpload: 'Nothing leaves your computer.',
+            // "Nothing from your files": the host's error reports (notes.hostReports) are sent by the browser, never with the files.
+            noUpload: 'Nothing from your files leaves your computer.',
             // The service worker (Source/offline-copy/) keeps the page's own files, never user data.
             noSaving:
                 "This page saves nothing of yours: no cookies, and nothing from your emails in the browser. Your browser only keeps a copy of this page's own files, so the page can open without internet. Only the PDF you choose to download is saved, in your downloads folder.",
@@ -86,13 +87,16 @@ export const en = {
             offline:
                 "After the page has loaded, turn off your internet (or use airplane mode), then use the tool: it still works. In most browsers, once you have opened the page with the internet on, you can also reload it or open it again without internet: your browser keeps a copy of this page's own files (never your emails).",
             network:
-                "For technical people: open your browser's developer tools and go to the Network tab. The page's own files load when it opens. Your browser may also fetch them again from this site in the background, to keep its copy for use without internet up to date, and it asks this site for the file \"/sw.js\" to see whether a new version is out. After that, watch while you use the tool: nothing goes out to the internet. A few entries whose address starts with \"blob:\" are parts of this page running inside your browser.",
+                "For technical people: open your browser's developer tools and go to the Network tab. The page's own files load when it opens. Your browser may also fetch them again from this site in the background, to keep its copy for use without internet up to date, and it asks this site for the file \"/sw.js\" to see whether a new version is out. After that, watch while you use the tool: nothing from this page goes out to the internet. A few entries whose address starts with \"blob:\" are parts of this page running inside your browser.",
             // The repository link is added next to this text later, in one place (Source/web-page/page-shell.ts).
             source: "This page's code is open source: anyone can read it and check what it does.",
         },
         notes: {
             title: 'Good to know',
             trust: 'Your trust depends on the code this site sends to your browser. That is why the code is open source and can be checked. Like any website, the site that hosts this page can see that the page was loaded, but never your emails.',
+            // The host's Network Error Logging headers (README.md, "How the privacy model works").
+            hostReports:
+                'If loading something from this site fails (for example the connection drops or a file is missing), your browser may later send the company that hosts it a short error report: which web address failed, the kind of error and how long it took. Your browser does this because the host asks it to, not this page, and the report never contains your files or your emails. Nothing is reported when everything loads normally.',
             console:
                 'Your browser\'s developer tools may show red error lines that mention a "Content Security Policy". That is the browser refusing styles, scripts or links, for example ones found inside your emails: the protection working. Nothing from your emails was run or loaded.',
             scripts:

@@ -244,7 +244,7 @@ describe('mountPageShell', () =>
             ['privacy.does.title', ['privacy.does.local', 'privacy.does.noUpload', 'privacy.does.noSaving', 'privacy.does.wiped', 'privacy.does.pdf']],
             ['privacy.never.title', ['privacy.never.upload', 'privacy.never.tracking', 'privacy.never.remote', 'privacy.never.attachments']],
             ['privacy.check.title', ['privacy.check.offline', 'privacy.check.network', 'privacy.check.source']],
-            ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
+            ['privacy.notes.title', ['privacy.notes.trust', 'privacy.notes.hostReports', 'privacy.notes.console', 'privacy.notes.scripts', 'disclaimer.text']],
         ] as const;
 
         it('is a closed <details> in the header, after the promise, opened by its summary', () =>
@@ -291,7 +291,7 @@ describe('mountPageShell', () =>
             const text = byId('privacy').textContent;
             for (const phrase of [
                 'only inside this browser tab',
-                'Nothing leaves your computer',
+                'Nothing from your files leaves your computer',
                 'no cookies, and nothing from your emails in the browser',
                 "a copy of this page's own files",
                 'Only the PDF you choose to download is saved',
@@ -303,8 +303,13 @@ describe('mountPageShell', () =>
                 '(never your emails)',
                 'Network tab',
                 "The page's own files load when it opens",
+                'nothing from this page goes out to the internet',
                 'open source',
                 'can see that the page was loaded, but never your emails',
+                'a file is missing), your browser may later send',
+                'which web address failed',
+                'the report never contains your files or your emails',
+                'Nothing is reported when everything loads normally',
                 'Content Security Policy',
                 '[U+05D0]',
                 'Latin, Greek and Cyrillic text shows normally',

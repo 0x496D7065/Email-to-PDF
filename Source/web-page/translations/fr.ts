@@ -24,7 +24,7 @@ import type { Messages } from './index';
 export const fr: Messages = {
     app: {
         name: 'Email to PDF',
-        promise: 'Tout reste sur votre ordinateur.',
+        promise: 'Vos fichiers restent sur votre ordinateur.',
     },
 
     donate: {
@@ -41,7 +41,7 @@ export const fr: Messages = {
         does: {
             title: 'Ce que fait cette page',
             local: 'Vos fichiers e-mail sont lus uniquement dans cet onglet du navigateur, sur votre ordinateur.',
-            noUpload: 'Rien ne quitte votre ordinateur.',
+            noUpload: 'Aucune donnée de vos fichiers ne quitte votre ordinateur.',
             noSaving:
                 'Cette page n’enregistre rien de ce qui vous appartient\u00A0: aucun cookie, et rien de vos e-mails dans le navigateur. Votre navigateur garde seulement une copie des fichiers propres à cette page, pour qu’elle puisse s’ouvrir sans internet. Seul le PDF que vous choisissez de télécharger est enregistré, dans votre dossier de téléchargements.',
             wiped:
@@ -61,13 +61,15 @@ export const fr: Messages = {
             offline:
                 'Une fois la page chargée, coupez internet (ou activez le mode avion), puis utilisez l’outil\u00A0: il fonctionne toujours. Dans la plupart des navigateurs, une fois la page ouverte avec internet, vous pouvez aussi la recharger ou la rouvrir sans internet\u00A0: votre navigateur garde une copie des fichiers propres à cette page (jamais de vos e-mails).',
             network:
-                'Pour les personnes techniques\u00A0: ouvrez les outils de développement de votre navigateur et allez dans l’onglet Réseau. Les fichiers propres à la page se chargent à son ouverture. Votre navigateur peut aussi les télécharger de nouveau depuis ce site en arrière-plan, pour tenir à jour sa copie utilisable sans internet, et il demande à ce site le fichier «\u00A0/sw.js\u00A0» pour savoir si une nouvelle version est sortie. Ensuite, observez pendant que vous utilisez l’outil\u00A0: rien ne part vers internet. Quelques lignes dont l’adresse commence par «\u00A0blob:\u00A0» sont des parties de cette page qui fonctionnent dans votre navigateur.',
+                'Pour les personnes techniques\u00A0: ouvrez les outils de développement de votre navigateur et allez dans l’onglet Réseau. Les fichiers propres à la page se chargent à son ouverture. Votre navigateur peut aussi les télécharger de nouveau depuis ce site en arrière-plan, pour tenir à jour sa copie utilisable sans internet, et il demande à ce site le fichier «\u00A0/sw.js\u00A0» pour savoir si une nouvelle version est sortie. Ensuite, observez pendant que vous utilisez l’outil\u00A0: rien de cette page ne part vers internet. Quelques lignes dont l’adresse commence par «\u00A0blob:\u00A0» sont des parties de cette page qui fonctionnent dans votre navigateur.',
             source: 'Le code de cette page est open source\u00A0: tout le monde peut le lire et vérifier ce qu’il fait.',
         },
         notes: {
             title: 'Bon à savoir',
             trust:
                 'Votre confiance dépend du code que ce site envoie à votre navigateur. C’est pourquoi ce code est open source et peut être vérifié. Comme tout site web, le site qui héberge cette page peut voir que la page a été chargée, mais jamais vos e-mails.',
+            hostReports:
+                'Si le chargement d’un élément de ce site échoue (par exemple si la connexion est coupée ou si un fichier est manquant), votre navigateur peut envoyer plus tard à l’entreprise qui héberge ce site un court rapport d’erreur\u00A0: l’adresse web qui a échoué, le type d’erreur et le temps écoulé. C’est votre navigateur qui le fait, à la demande de l’hébergeur, et non cette page, et ce rapport ne contient jamais vos fichiers ni vos e-mails. Rien n’est signalé quand tout se charge normalement.',
             console:
                 'Les outils de développement de votre navigateur peuvent afficher des lignes d’erreur rouges qui mentionnent une «\u00A0Content Security Policy\u00A0». C’est le navigateur qui refuse des styles, des scripts ou des liens, par exemple ceux trouvés dans vos e-mails\u00A0: la protection fonctionne. Rien de ce que contiennent vos e-mails n’a été exécuté ni chargé.',
             scripts:

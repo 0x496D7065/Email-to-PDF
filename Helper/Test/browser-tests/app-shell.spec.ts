@@ -199,9 +199,10 @@ test('has no inline styles, no inline handlers and no links to other sites but t
                 .filter((s) => !/^(?:SCRIPT src|LINK href)=\/assets\/[\w-]+\.(?:js|css)$/.test(s)),
         ),
     );
-    // Besides them, only the Ko-fi button (Helper/Test/browser-tests/no-network.spec.ts checks it
+    // Besides them, only the empty data: icon (so no /favicon.ico request) and the
+    // Ko-fi button (Helper/Test/browser-tests/no-network.spec.ts checks both
     // further): its link to the donation page and its bundled image.
-    expect(found).toEqual([`A#donate-link href=${DONATION_URL}`, `IMG src=${DONATION_IMAGE.src}`]);
+    expect(found).toEqual(['LINK href=data:,', `A#donate-link href=${DONATION_URL}`, `IMG src=${DONATION_IMAGE.src}`]);
 });
 
 test('loads without console errors, page errors or CSP violations', async ({ page }) =>

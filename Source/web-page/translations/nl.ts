@@ -25,7 +25,7 @@ import type { Messages } from './index';
 export const nl: Messages = {
     app: {
         name: 'Email to PDF',
-        promise: 'Alles blijft op uw computer.',
+        promise: 'Uw bestanden blijven op uw computer.',
     },
 
     donate: {
@@ -42,7 +42,7 @@ export const nl: Messages = {
         does: {
             title: 'Wat deze pagina doet',
             local: 'Uw e-mailbestanden worden alleen in dit tabblad van de browser gelezen, op uw computer.',
-            noUpload: 'Niets verlaat uw computer.',
+            noUpload: 'Niets uit uw bestanden verlaat uw computer.',
             noSaving:
                 'Deze pagina bewaart niets van u: geen cookies, en niets uit uw e-mails in de browser. Uw browser bewaart alleen een kopie van de eigen bestanden van deze pagina, zodat de pagina ook zonder internet kan openen. Alleen de PDF die u zelf downloadt, wordt opgeslagen, in uw downloadmap.',
             wiped:
@@ -61,13 +61,15 @@ export const nl: Messages = {
             offline:
                 'Zet uw internet uit nadat de pagina is geladen (of gebruik de vliegtuigmodus), en gebruik dan de tool: hij werkt nog steeds. In de meeste browsers kunt u de pagina, als u ze één keer met internet hebt geopend, ook zonder internet opnieuw laden of opnieuw openen: uw browser bewaart een kopie van de eigen bestanden van deze pagina (nooit van uw e-mails).',
             network:
-                'Voor technische mensen: open de ontwikkelaarstools van uw browser en ga naar het tabblad Netwerk. Bij het openen worden de eigen bestanden van de pagina geladen. Uw browser kan ze ook op de achtergrond opnieuw van deze site ophalen, om zijn kopie voor gebruik zonder internet bij te werken, en hij vraagt deze site om het bestand “/sw.js” om te zien of er een nieuwe versie is. Kijk daarna mee terwijl u de tool gebruikt: er gaat niets naar internet. Een paar regels waarvan het adres begint met “blob:” zijn delen van deze pagina die in uw browser werken.',
+                'Voor technische mensen: open de ontwikkelaarstools van uw browser en ga naar het tabblad Netwerk. Bij het openen worden de eigen bestanden van de pagina geladen. Uw browser kan ze ook op de achtergrond opnieuw van deze site ophalen, om zijn kopie voor gebruik zonder internet bij te werken, en hij vraagt deze site om het bestand “/sw.js” om te zien of er een nieuwe versie is. Kijk daarna mee terwijl u de tool gebruikt: er gaat niets van deze pagina naar internet. Een paar regels waarvan het adres begint met “blob:” zijn delen van deze pagina die in uw browser werken.',
             source: 'De code van deze pagina is open source: iedereen kan hem lezen en controleren wat hij doet.',
         },
         notes: {
             title: 'Goed om te weten',
             trust:
                 'Uw vertrouwen hangt af van de code die deze site naar uw browser stuurt. Daarom is de code open source en kan iedereen hem controleren. Zoals bij elke website kan de site waarop deze pagina staat zien dat de pagina is geladen, maar nooit uw e-mails.',
+            hostReports:
+                'Als het laden van iets van deze site mislukt (bijvoorbeeld doordat de verbinding wegvalt of een bestand ontbreekt), kan uw browser later een kort foutrapport sturen naar het bedrijf waar deze site op staat: bij welk webadres het misging, het soort fout en hoe lang het duurde. Dat doet uw browser op verzoek van dat bedrijf, niet deze pagina, en het rapport bevat nooit uw bestanden of uw e-mails. Er wordt niets gemeld als alles gewoon laadt.',
             console:
                 'De ontwikkelaarstools van uw browser kunnen rode foutregels tonen waarin “Content Security Policy” staat. Dat is de browser die stijlen, scripts of links weigert, bijvoorbeeld die uit uw e-mails: de beveiliging werkt. Niets uit uw e-mails is uitgevoerd of geladen.',
             scripts:
