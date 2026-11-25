@@ -77,17 +77,25 @@ void [parseWarningsComplete, dedupeWarningsComplete, threadAnalysisWarningsCompl
  * 8.13a): rule 4 keeps the whole email, but the PDF's no-repeat rule
  * (Source/pdf-export/build-pdf-document.ts) still leaves out of it the parts it prints as emails
  * of their own, so "the whole email" would not be true.
+ * 'pdf-all-printed-elsewhere' (task 9.9e): the PDF leaves the email out,
+ * because the no-repeat rule left nothing of its text to print (PdfView.printedAllElsewhere).
  */
-export const PDF_NOTES = ['pdf-kept-all-empty', 'pdf-kept-all-empty-elsewhere', 'pdf-fallback'] as const;
+export const PDF_NOTES = ['pdf-kept-all-empty', 'pdf-kept-all-empty-elsewhere', 'pdf-fallback', 'pdf-all-printed-elsewhere'] as const;
 export type PdfNoteCode = (typeof PDF_NOTES)[number];
 
 /**
  * The PDF note of a plan, or null. `printedElsewhere`: the PDF leaves parts
  * of this email out because it prints them as emails of their own (the
  * preview's view of the email has such parts, Source/web-page-logic/pdf-plan.ts).
+ * `printedAllElsewhere`: the PDF leaves the whole email out for that (task
+ * 9.9e, PdfView.printedAllElsewhere); it wins, being what the PDF does.
  */
-export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>, printedElsewhere = false): PdfNoteCode | null
+export function pdfPlanNote(plan: Pick<MessagePlan, 'keptAllBecauseEmpty' | 'fallback'>, printedElsewhere = false, printedAllElsewhere = false): PdfNoteCode | null
 {
+    if (printedAllElsewhere)
+    {
+        return 'pdf-all-printed-elsewhere';
+    }
     if (plan.fallback)
     {
         return 'pdf-fallback';

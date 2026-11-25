@@ -362,5 +362,5 @@ export function viewKey(view: PdfView | null): string
     const ranges = plan.ranges.map((r) => `${String(r.start)}-${String(r.end)}${r.keep ? '+' : '-'}${r.reason}`).join(',');
     const from = [...view.signatureFrom].map(([s, n]) => `${String(s)}>${String(n)}`).join(',');
     const cut = (view.pdfRanges ?? []).map((r) => `${String(r.start)}-${String(r.end)}${r.keep ? '+' : '-'}${printedKey(r)}`).join(',');
-    return `${ranges}|${plan.keptAllBecauseEmpty ? 'E' : ''}${plan.fallback ? 'F' : ''}|${from}|${cut}`;
+    return `${ranges}|${plan.keptAllBecauseEmpty ? 'E' : ''}${plan.fallback ? 'F' : ''}${view.printedAllElsewhere === true ? 'A' : ''}|${from}|${cut}`;
 }

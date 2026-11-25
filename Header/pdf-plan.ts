@@ -23,6 +23,13 @@ export interface PdfView
      * replace `plan.ranges` for the labels. Absent: the plan's ranges.
      */
     readonly pdfRanges?: readonly PdfRange[];
+    /**
+     * True when the PDF leaves this email out because the no-repeat rule left
+     * nothing of its text to print: all of it is printed as other emails or
+     * left out (Source/pdf-export/build-pdf-document.ts, NoRepeatResult.printedAllElsewhere;
+     * task 9.9e). Absent: false.
+     */
+    readonly printedAllElsewhere?: boolean;
 }
 
 /** What the preview says about one block. */

@@ -468,24 +468,103 @@ describe('buildPdfDocument: no email twice (task 8.10)', () =>
         }
     });
 
-    it('a forward with no text of its own (dates with a zone): "(no text)", its forwarded emails printed once as their own', () =>
+    // Task 9.9e (user rule F2: an email with no text puts nothing in the PDF; it replaces Q6 of task 8.14,
+    // which printed the forward's header rows over "(no text)"): a forward whose whole body is printed as its
+    // rebuilt emails is left out of the PDF, as an email with no text is. Its data is unchanged.
+    const passedOnForward = (prefix = '', attachments: NormalizedMessage['attachments'] = []): ThreadAnalysisResult =>
     {
         const built = buildThread(FORWARD.messages!);
         const passedOn = exactDates(built.body.slice(built.headers[0]!.start));
-        const result = analyzeThread([{ ok: true, message: realFile(FORWARD.messages!, 2, passedOn) }]);
+        return analyzeThread([{ ok: true, message: { ...realFile(FORWARD.messages!, 2, prefix + passedOn), attachments } }]);
+    };
+
+    it('a forward with no text of its own (dates with a zone): left out of the PDF, its forwarded emails printed once as their own (task 9.9e)', () =>
+    {
+        const result = passedOnForward();
+        const bodyBefore = result.messages[0]!.message.bodyText;
         expect(rebuiltEntries(result)).toHaveLength(2);
         const pdfDocument = build(result);
-        const forward = realOf(pdfDocument, 0);
-        expect(forward.body).toEqual([]);
-        expect(forward.notes.map(lineText)).toEqual([EN.noText]);
-        // Task 8.14, Q6: its body has text (printed elsewhere), so it is NOT left out like an email with no text.
-        expect(hasNoPrintableText(result.messages[0]!.message)).toBe(false);
-        expect(pdfDocument.pdfNumberByPosition[0]).toBe(forward.number);
-        expect(pdfDocument.emails).toHaveLength(3);
+        // No page, no number, no index entry; the cover counts the 2 rebuilt emails only.
+        expect(pdfDocument.emails.map((e) => e.position)).toEqual([null, null]);
+        expect(pdfDocument.emails.map((e) => e.number)).toEqual([1, 2]);
+        expect(pdfDocument.index.entries.map((e) => e.number)).toEqual([1, 2]);
+        expect(pdfDocument.cover.emailCount).toBe(2);
+        expect(pdfDocument.pdfNumberByPosition[0]).toBeNull();
+        // No "(no text)" placeholder anywhere, and each forwarded email printed once.
+        expect(pdfDocument.emails.every((e) => e.notes.length === 0)).toBe(true);
         for (const sentenceIndex of [0, 1])
         {
             expect(pdfDocument.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, sentenceIndex)))).toHaveLength(1);
         }
+        // Its body has text (printed elsewhere): not an email with no text; the data is untouched (collapse, never delete).
+        expect(hasNoPrintableText(result.messages[0]!.message)).toBe(false);
+        expect(result.messages[0]!.message.bodyText).toBe(bodyBefore);
+        // The preview's calculation says the same: left out, every part with text printed as a rebuilt email in the PDF.
+        const positions = [0];
+        const plans = planOutput([result.messages[0]!]);
+        const noRepeat = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt: rebuiltEntries(result).map((r) => r.id) });
+        expect([...noRepeat.printedAllElsewhere]).toEqual([[0, 0]]);
+        expect(noRepeat.order.slots.map((slot) => slot.kind)).toEqual(['rebuilt', 'rebuilt']);
+        const ranges = pdfRanges(bodyBefore, plans[0], DEFAULT_OUTPUT_POLICY, noRepeat.parts.get(0) ?? [], noRepeat.restored.get(0)) ?? [];
+        const withText = ranges.filter((r) => /\S/u.test(bodyBefore.slice(r.start, r.end)));
+        expect(withText.length).toBeGreaterThan(0);
+        for (const range of withText)
+        {
+            expect(range.keep).toBe(false);
+            expect(range.printedAs?.kind).toBe('rebuilt');
+            expect([1, 2]).toContain(range.printedAs?.kind === 'rebuilt' ? range.printedAs.number : 0);
+        }
+    });
+
+    it('a forward with no text of its own: "Print full original text" prints it whole, as before (task 9.9e)', () =>
+    {
+        const result = passedOnForward();
+        const pdfDocument = build(result, { policy: EVERYTHING });
+        expect(pdfDocument.emails).toHaveLength(1);
+        expect(realOf(pdfDocument, 0).number).toBe(1);
+        expect(squash(bodyOf(realOf(pdfDocument, 0)))).toContain(sentence(FORWARD, 0));
+        expect(applyNoRepeatRule({ result, positions: [0], plans: planOutput([result.messages[0]!], EVERYTHING), policy: EVERYTHING,
+            rebuilt: rebuiltEntries(result).map((r) => r.id) }).printedAllElsewhere.size).toBe(0);
+    });
+
+    it('a forward with text of its own above the forwarded emails stays, with its own text only (task 9.9e)', () =>
+    {
+        const own = 'Please see the order history below before Friday.';
+        const result = passedOnForward(`${own}\n\n`);
+        expect(rebuiltEntries(result)).toHaveLength(2);
+        const pdfDocument = build(result);
+        expect(pdfDocument.emails).toHaveLength(3);
+        const forward = realOf(pdfDocument, 0);
+        expect(forward.number).toBe(3);
+        expect(squash(bodyOf(forward))).toContain(own);
+        expect(forward.notes).toEqual([]);
+        expect(pdfDocument.cover.emailCount).toBe(3);
+        for (const sentenceIndex of [0, 1])
+        {
+            expect(pdfDocument.emails.filter((e) => squash(bodyOf(e)).includes(sentence(FORWARD, sentenceIndex)))).toHaveLength(1);
+        }
+    });
+
+    it('a forward with no text of its own that lists an attachment stays, under "(no text)" (task 9.9e: when unsure, keep)', () =>
+    {
+        const result = passedOnForward('', [{ fileName: 'order.pdf', size: 2048, mimeType: 'application/pdf' }]);
+        const pdfDocument = build(result);
+        expect(pdfDocument.emails).toHaveLength(3);
+        const forward = realOf(pdfDocument, 0);
+        expect(forward.body).toEqual([]);
+        expect(forward.notes.map(lineText)).toEqual([EN.noText]);
+        expect(forward.attachments?.items).toHaveLength(1);
+    });
+
+    it('a forward whose forwarded emails are all unticked stays, under "(no text)": nothing of it is printed as another email (task 9.9e)', () =>
+    {
+        const result = passedOnForward();
+        const ids = rebuiltEntries(result).map((r) => r.id);
+        const pdfDocument = build(result, { rebuilt: [], unticked: ids });
+        expect(pdfDocument.emails).toHaveLength(1);
+        const forward = realOf(pdfDocument, 0);
+        expect(forward.body).toEqual([]);
+        expect(forward.notes.map(lineText)).toEqual([EN.noText]);
     });
 
     it('a reply: its quoted history is left out by its plan anyway, the rule changes nothing', () =>

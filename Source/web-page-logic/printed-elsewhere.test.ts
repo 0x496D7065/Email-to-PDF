@@ -19,7 +19,7 @@ import { createPdfStrings } from '../pdf-export/pdf-strings';
 import { bodyLines, lineText } from '../pdf-export/pdf-text-transforms';
 import { hasNoPrintableText, rebuiltHasNoPrintableText } from './no-printable-text';
 import { pdfBlocks, signatureSources } from './pdf-plan';
-import { printedElsewhereRanges } from './printed-elsewhere';
+import { pdfCut, printedElsewhereRanges } from './printed-elsewhere';
 import { rebuiltEntries } from './rebuilt-email-display';
 import type { MessagePlan, OutputPolicy } from '../../Header/output-plan';
 import type { NormalizedMessage, ParseResult } from '../../Header/parsed-email';
@@ -536,5 +536,39 @@ describe('"printed as email #N" labels with an email attached inside a dropped f
         expect(counts.attachedTargets).toBeGreaterThan(20);
         expect(counts.untickedAttachedTargets).toBeGreaterThan(5);
         expect(counts.sentencesLabelled).toBeGreaterThan(50);
+    });
+});
+
+describe('pdfCut: an email left out because all of its text is printed as other emails (task 9.9e)', () =>
+{
+    it('names it in printedAllElsewhere and still gives its ranges, each part labelled with the rebuilt email that prints it', () =>
+    {
+        const forwardCase = THREAD_CASES.find((c) => c.id === 'gmail forward of an outlook thread')!;
+        const threadMessages = forwardCase.messages!;
+        const built = buildThread(threadMessages);
+        // The forward with no text of its own: its body is the forwarded chain alone.
+        const forward = { ...realFile(threadMessages, 2, 'all-elsewhere'), bodyText: built.body.slice(built.headers[0]!.start) };
+        const result = analyzeThread([{ ok: true, message: forward }]);
+        const rebuilt = rebuiltEntries(result).map((r) => r.id);
+        expect(rebuilt.length).toBeGreaterThan(0);
+        const input = { result, positions: [0], plans: planOutput([result.messages[0]!]), policy: DEFAULT_OUTPUT_POLICY, rebuilt };
+        const cut = pdfCut(input);
+        expect([...cut.printedAllElsewhere]).toEqual([0]);
+        const ranges = cut.ranges.get(0)!;
+        expect(ranges).toBeDefined();
+        const body = forward.bodyText;
+        const withText = ranges.filter((r) => /\S/u.test(body.slice(r.start, r.end)));
+        expect(withText.length).toBeGreaterThan(0);
+        expect(withText.every((r) => !r.keep && r.printedAs?.kind === 'rebuilt')).toBe(true);
+        // The numbers named are those of the PDF, where the forward has no page.
+        const pdf = buildPdfDocument({ ...input, generatedOffsetMinutes: 0, generatedAt: 0, strings: EN });
+        expect(pdf.emails.every((e) => e.rebuilt !== null)).toBe(true);
+        const numbers = new Set(pdf.emails.map((e) => e.number));
+        expect(withText.every((r) => r.printedAs?.kind === 'rebuilt' && numbers.has(r.printedAs.number))).toBe(true);
+        // Rebuilt emails unticked: its text stays where its plan puts it, so it is in the PDF and not named.
+        const off = pdfCut({ ...input, rebuilt: [], unticked: [] });
+        expect(off.printedAllElsewhere.size).toBe(0);
+        // "Print full original text": nothing is cut.
+        expect(pdfCut({ ...input, policy: { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true } }).printedAllElsewhere.size).toBe(0);
     });
 });

@@ -280,6 +280,7 @@ export const nl: Messages = {
             'pdf-kept-all-empty': 'De hele e-mail komt in de PDF: de tool kon de eigen tekst niet van het citaat onderscheiden.',
             'pdf-kept-all-empty-elsewhere': 'De tool kon de eigen tekst niet van het citaat onderscheiden: alles staat in de PDF, behalve de delen die als aparte e-mails zijn afgedrukt.',
             'pdf-fallback': 'De hele e-mail komt in de PDF: de tool kon niet bepalen welke delen moeten worden weggelaten.',
+            'pdf-all-printed-elsewhere': 'Niet in de PDF: al zijn tekst staat in andere e-mails of is weggelaten, zoals hieronder aangegeven.',
         },
         codedCharacters: 'Deze e-mail bevat onzichtbare of beschadigde tekens. In de PDF kunnen die als codes staan, zoals [U+0000].',
     },

@@ -195,7 +195,9 @@ function expectNoHeaderLines(made: Made, what: string): Stats
         const message = result.messages[position]!.message;
         const body = message.bodyText;
         const email = pdfDocument.emails.find((e) => e.position === position);
-        expect(email, `${what}: email at ${String(position)} in the PDF`).toBeDefined();
+        // Task 9.9e: an email all of whose text is printed as other emails is not in the PDF (its parts are still checked below).
+        const leftOutAll = noRepeat.printedAllElsewhere.has(position);
+        expect(email === undefined, `${what}: email at ${String(position)} in the PDF`).toBe(leftOutAll);
         const { kept, ranges } = printedOf(made, k);
         const places = new Set(result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt.start));
         // 1. No header block shown, except one the thread analysis could not rebuild.
@@ -240,7 +242,7 @@ function expectNoHeaderLines(made: Made, what: string): Stats
                 .map((x) => `${x.reason}${x.keep ? '+' : '-'}`))];
             const entryId = rebuiltEntry.link === 'entry' ? rebuiltEntry.id : rebuiltEntry.sameAs;
             violations.push(
-                `email ${String(email!.number)}: link ${rebuiltEntry.link} ${entryId !== null ? (made.rebuilt.includes(entryId) ? 'ticked' : 'unticked') : `real in pdf ${String(made.pdfDocument.pdfNumberByPosition[result.positionByIndex[rebuiltEntry.realIndex!]!] != null)}`} [${reasons.join(',')}] "${squash(body.slice(header.start, header.headEnd)).slice(0, 50)}"`);
+                `email ${email === undefined ? 'left out' : String(email.number)}: link ${rebuiltEntry.link} ${entryId !== null ? (made.rebuilt.includes(entryId) ? 'ticked' : 'unticked') : `real in pdf ${String(made.pdfDocument.pdfNumberByPosition[result.positionByIndex[rebuiltEntry.realIndex!]!] != null)}`} [${reasons.join(',')}] "${squash(body.slice(header.start, header.headEnd)).slice(0, 50)}"`);
         }
         // 3. Every character left out by the rule is printed where its label says (or nowhere: Q2).
         for (const range of ranges ?? [])

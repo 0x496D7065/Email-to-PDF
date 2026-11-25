@@ -12,7 +12,10 @@
 // Source/pdf-export/build-pdf-document.ts, NoRepeatResult.restored; task 8.13b-3, review round 3) comes
 // back kept, so its label says "In the PDF".
 // It also hands over the signature plans of the rebuilt emails in the PDF
-// (pdfCut, task 9.9b-2), for the labels of the folds of their cards.
+// (pdfCut, task 9.9b-2), for the labels of the folds of their cards, and the
+// real emails the PDF leaves out because all of their text is printed as
+// other emails (task 9.9e, NoRepeatResult.printedAllElsewhere): their parts
+// keep their labels, and the preview says the email is not in the PDF.
 //
 // It decides nothing on its own: it calls the PDF model's own functions
 // (Source/pdf-export/build-pdf-document.ts: applyNoRepeatRule, which buildPdfDocument calls too, and
@@ -70,6 +73,12 @@ export interface PdfCut
      * not in the PDF is not in the map. Empty under "Print full original text".
      */
     readonly rebuiltPlans: Map<number, MessagePlan>;
+    /**
+     * The list positions of the real emails the PDF leaves out because the no-repeat rule left nothing of
+     * their text to print (Source/pdf-export/build-pdf-document.ts, NoRepeatResult.printedAllElsewhere;
+     * task 9.9e). Their ranges are in `ranges` too. Empty under "Print full original text".
+     */
+    readonly printedAllElsewhere: Set<number>;
 }
 
 /** printedElsewhereRanges, and the signature plans of the rebuilt emails in the PDF, from ONE run of the PDF model's calculation. */
@@ -79,19 +88,20 @@ export function pdfCut(input: PrintedElsewhereInput): PdfCut
     const plansOfRebuilt = new Map<number, MessagePlan>();
     if (input.policy.unfoldEverything)
     {
-        return { ranges: out, rebuiltPlans: plansOfRebuilt };
+        return { ranges: out, rebuiltPlans: plansOfRebuilt, printedAllElsewhere: new Set() };
     }
-    const { order, parts, restored, rebuiltPlans } = applyNoRepeatRule(input);
+    const { order, parts, restored, rebuiltPlans, printedAllElsewhere } = applyNoRepeatRule(input);
     for (const [id, plan] of rebuiltPlans)
     {
         plansOfRebuilt.set(id, plan.own);
     }
-    for (const slot of order.slots)
+    // The emails in the PDF, then those left out because all of their text is printed as other emails (task 9.9e).
+    const emails = [
+        ...order.slots.flatMap((slot) => (slot.kind === 'email' ? [{ position: slot.position, plan: slot.plan }] : [])),
+        ...[...printedAllElsewhere].map(([position, plan]) => ({ position, plan })),
+    ];
+    for (const slot of emails)
     {
-        if (slot.kind !== 'email')
-        {
-            continue;
-        }
         const list = parts.get(slot.position);
         const back = restored.get(slot.position);
         const message = input.result.messages[slot.position]?.message;
@@ -105,5 +115,5 @@ export function pdfCut(input: PrintedElsewhereInput): PdfCut
             out.set(slot.position, ranges);
         }
     }
-    return { ranges: out, rebuiltPlans: plansOfRebuilt };
+    return { ranges: out, rebuiltPlans: plansOfRebuilt, printedAllElsewhere: new Set(printedAllElsewhere.keys()) };
 }

@@ -432,6 +432,35 @@ describe('the no-repeat cut in the views (task 8.11)', () =>
         expect(last()?.views.get(0)?.pdfRanges).toBeUndefined();
     });
 
+    it('marks the view of an email left out because all of its text is printed as other emails, only while it is (task 9.9e)', () =>
+    {
+        const withOwnText = forwardAlone();
+        const built = buildThread(FORWARD.messages!);
+        // The same forward with no text of its own: its body is the forwarded chain alone.
+        const forward = { ...withOwnText.messages[0]!.message, bodyText: built.body.slice(built.headers[0]!.start) };
+        const result = analysisOf([forward]);
+        const ids = rebuiltEntries(result).map((r) => r.id);
+        expect(ids).toHaveLength(2);
+        included = [0];
+        rebuiltChosen = () => ids;
+        labels.show(result);
+        runAll();
+        expect(last()?.views.get(0)?.printedAllElsewhere).toBe(true);
+        expect(printedAsOf(last()).length).toBeGreaterThan(0);
+        // Every rebuilt email unticked: its forwarded parts are printed nowhere, the email stays (no flag).
+        rebuiltChosen = () => [];
+        rebuiltUnticked = () => ids;
+        labels.rebuiltChanged();
+        expect(last()?.views.get(0)?.printedAllElsewhere).toBeUndefined();
+        // The forward with its own text: never marked.
+        rebuiltChosen = () => rebuiltEntries(withOwnText).map((r) => r.id);
+        rebuiltUnticked = () => [];
+        labels.show(withOwnText);
+        runAll();
+        expect(printedAsOf(last()).length).toBeGreaterThan(0);
+        expect(last()?.views.get(0)?.printedAllElsewhere).toBeUndefined();
+    });
+
     it('nothing is handed over while plans are on their way; they get the choice made by then', () =>
     {
         const result = forwardAlone();

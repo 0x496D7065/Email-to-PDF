@@ -101,10 +101,21 @@
 // so nothing printed elsewhere is left out twice and nothing is lost: what
 // is left out is always printed as another email, and "Print full original
 // text", the preview and the original files still give every character. A
-// forward with no text of its own whose forwarded emails are all on their
-// own pages shows the "(no text)" placeholder (it is NOT left out like an
-// email with no text: its body has text, printed elsewhere; Q6 of task
-// 8.14). `flags.printedElsewhere` (data only) tells when the rule left
+// real email whose text is ALL printed elsewhere this way (a phone forward
+// whose whole body is a chain of earlier emails, each on its own page as a
+// rebuilt email) is left out of the PDF (EMAILS PRINTED AS OTHER EMAILS,
+// task 9.9e, user rule F2: "an email with no text puts nothing in the
+// PDF"; before, Q6 of task 8.14 printed its header rows over the "(no
+// text)" placeholder): no slot, no number (the others are numbered 1..n
+// without a gap), no index entry, and it does not count on the cover (count,
+// date range, people), as an email with no text. Its File row is then
+// printed nowhere. Only when nothing of its text is left to print, at least
+// one part of it is printed as an email in the PDF, its text was read in
+// full, it lists no attachment and no part of any body is printed as it
+// (applyNoRepeatRule, printedAllElsewhere). The preview keeps it, each part
+// labelled with the email it is printed as, under a note saying the email
+// is not in the PDF. "Print full original text" prints it whole, as before.
+// `flags.printedElsewhere` (data only) tells when the rule left
 // something out. Known repeats this
 // rule cannot remove (when unsure, the tool shows text twice rather than
 // lose it): a rebuilt email that link-rebuilt-messages.ts could not prove to be
@@ -218,8 +229,10 @@
 // original text" prints the block, as before.
 // The "(no text)" placeholder stays for a text that could not be read (Q2:
 // the warnings of Source/web-page-logic/no-printable-text.ts) and for a body with text whose
-// every part is printed elsewhere (a forward whose forwarded emails are on
-// pages of their own, see the no-repeat rule; Q6).
+// every part is left out but that EMAILS PRINTED AS OTHER EMAILS (the
+// no-repeat rule above, task 9.9e) keeps: it lists attachments, no part of
+// it is printed as an email in the PDF (only unticked or empty forwards),
+// or another body's part is printed as it.
 // FULL ORIGINAL TEXT RULE ("Print full original text"; user decision
 // 2026-10-28, task 7.8b, kept as a safety net in task 7.8c): with
 // `policy.unfoldEverything` NO rebuilt email is in the PDF, whatever
@@ -303,7 +316,7 @@ import { formatEmailDate, formatWallClock, isDisplayableMs, type WallClockTime }
 import { displayAuthor } from '../web-page-logic/display-author';
 import { FILE_CHAIN_SEPARATOR, fileChain } from '../web-page-logic/file-chain';
 import { joinMailboxes } from '../web-page-logic/mailbox-list';
-import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
+import { hasNoPrintableText, rebuiltHasNoPrintableText, UNREADABLE_BODY_WARNINGS } from '../web-page-logic/no-printable-text';
 import { previewOrder, rebuiltDate, rebuiltInPdf } from '../web-page-logic/rebuilt-email-display';
 import { createPrintedText } from './printed-somewhere-check';
 import { bodyLines, inlineRuns, joinKeptLines, lineText } from './pdf-text-transforms';
@@ -2171,6 +2184,15 @@ export interface NoRepeatResult
      * under "Print full original text" (no rebuilt email is in the PDF then).
      */
     readonly rebuiltPlans: ReadonlyMap<number, RebuiltPlan>;
+    /**
+     * EMAILS PRINTED AS OTHER EMAILS (task 9.9e; see the top of this file):
+     * list position -> its index into `plans`, for each real email the PDF
+     * leaves out because the no-repeat rule left nothing of its text to print
+     * (printedAllElsewhere). They have no slot in `order` and no PDF number;
+     * their `parts`, `elsewhere` and `restored` stay (the preview labels each
+     * part with the email it is printed as). Empty under "Print full original text".
+     */
+    readonly printedAllElsewhere: ReadonlyMap<number, number>;
 }
 
 /** The signature plans of one rebuilt entry in the PDF (NoRepeatResult.rebuiltPlans). */
@@ -2470,7 +2492,7 @@ export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
     const order = planPdfOrder(result, positions, unfoldEverything ? [] : (input.rebuilt ?? []));
     if (unfoldEverything)
     {
-        return { order, parts: new Map(), elsewhere: new Map(), moved: new Map(), restored: new Map(), rebuiltPlans: new Map() };
+        return { order, parts: new Map(), elsewhere: new Map(), moved: new Map(), restored: new Map(), rebuiltPlans: new Map(), printedAllElsewhere: new Map() };
     }
     const planByPosition = new Map<number, MessagePlan | undefined>();
     for (const slot of order.slots)
@@ -2496,7 +2518,131 @@ export function applyNoRepeatRule(input: NoRepeatInput): NoRepeatResult
     }
     const plansOfRebuilt = rebuiltPlans(result, order.slots, planByPosition, elsewhere, input.policy);
     const restored = printedNowhere(result, order, planByPosition, elsewhere, moved, plansOfRebuilt);
-    return { order, parts, elsewhere, moved, restored, rebuiltPlans: plansOfRebuilt };
+    // Task 9.9e: a real email left with nothing to print gets no slot, and every slot after it a number one lower.
+    // Done last, on the final cut: its page printed nothing, so no decision above depends on it being there.
+    const leftOut = printedAllElsewhere(result, order.slots, plans, input.policy, parts, elsewhere, restored);
+    if (leftOut.size === 0)
+    {
+        return { order, parts, elsewhere, moved, restored, rebuiltPlans: plansOfRebuilt, printedAllElsewhere: leftOut };
+    }
+    const renumbered = withoutSlots(order, leftOut);
+    return { order: renumbered.order, parts: renumberedParts(parts, renumbered.numbers), elsewhere, moved, restored, rebuiltPlans: plansOfRebuilt,
+        printedAllElsewhere: leftOut };
+}
+
+/**
+ * EMAILS PRINTED AS OTHER EMAILS (task 9.9e, user rule F2 "an email with no text puts nothing in the PDF"):
+ * the real emails (`slots` of kind 'email') whose page would print an empty text, and only because the
+ * no-repeat rule left their text out (a phone forward whose whole body is a chain of earlier emails, each
+ * printed as a rebuilt email of its own, say). Before task 9.9e they printed their header rows over the
+ * "(no text)" placeholder (Q6 of task 8.14). Each one returned must:
+ * - print no line at all: its body as buildEmail prints it (bodyTextOf, then bodyLines) is empty, its
+ *   plan valid (a plan fallback prints the whole body), restored pieces included;
+ * - owe that to the no-repeat rule (`leftOutElsewhere`), with at least one part printed as an email in
+ *   the PDF (a part of kind 'rebuilt' or 'email'), so its text really is in the PDF (a body only unticked
+ *   or empty forwards hold stays, as before);
+ * - have no warning that its text could not be read (Q2: the placeholder stays), and list no
+ *   attachment (as an attached email with attachments keeps its block, user decision 2026-11-22: the
+ *   PDF still says who sent the files; when unsure, it stays);
+ * - not be the email any part of any body is printed as (kind 'email'): that part would be printed
+ *   nowhere.
+ * Returns list position -> index into `plans`. Pure.
+ */
+function printedAllElsewhere(
+    result: ThreadAnalysisResult,
+    slots: readonly PdfSlot[],
+    plans: readonly MessagePlan[],
+    policy: Pick<OutputPolicy, 'unfoldEverything'>,
+    parts: ReadonlyMap<number, readonly PrintedPart[]>,
+    elsewhere: ReadonlyMap<number, BodyIntervals>,
+    restored: ReadonlyMap<number, BodyIntervals>,
+): Map<number, number>
+{
+    const leftOut = new Map<number, number>();
+    if (policy.unfoldEverything)
+    {
+        return leftOut;
+    }
+    const printedAsTargets = new Set<number>();
+    for (const list of parts.values())
+    {
+        for (const part of list)
+        {
+            if (part.printedAs.kind === 'email')
+            {
+                printedAsTargets.add(part.printedAs.position);
+            }
+        }
+    }
+    for (const slot of slots)
+    {
+        if (slot.kind !== 'email' || printedAsTargets.has(slot.position))
+        {
+            continue;
+        }
+        const message = result.messages[slot.position]?.message;
+        const ownParts = parts.get(slot.position);
+        if (message === undefined || ownParts === undefined || !ownParts.some((p) => p.printedAs.kind === 'rebuilt' || p.printedAs.kind === 'email'))
+        {
+            continue;
+        }
+        // A plain boolean check: Array.isArray as a type guard would turn the list into any[].
+        const warningsAreList: boolean = Array.isArray(message.warnings);
+        if (!warningsAreList || message.warnings.some((w) => UNREADABLE_BODY_WARNINGS.includes(w)) || listsAttachments(message))
+        {
+            continue;
+        }
+        const body = bodyTextOf(message.bodyText, plans[slot.plan], policy, elsewhere.get(slot.position) ?? NO_INTERVALS,
+            restored.get(slot.position) ?? NO_INTERVALS);
+        if (body.planFallback || !body.leftOutElsewhere || bodyLines(body.text, { notLineStarts: body.notLineStarts }).lines.length > 0)
+        {
+            continue;
+        }
+        leftOut.set(slot.position, slot.plan);
+    }
+    return leftOut;
+}
+
+/** `order` less the email slots of `leftOut`, numbered 1..n again without gaps; `numbers`: old PDF number -> new one (kept slots only). */
+function withoutSlots(order: PdfOrder, leftOut: ReadonlyMap<number, number>): { readonly order: PdfOrder; readonly numbers: ReadonlyMap<number, number> }
+{
+    const numbers = new Map<number, number>();
+    const pdfNumberByPosition = order.pdfNumberByPosition.map(() => null as number | null);
+    const slots: PdfSlot[] = [];
+    for (const slot of order.slots)
+    {
+        if (slot.kind === 'email' && leftOut.has(slot.position))
+        {
+            continue;
+        }
+        const number = slots.length + 1;
+        numbers.set(slot.number, number);
+        if (slot.kind === 'email')
+        {
+            pdfNumberByPosition[slot.position] = number;
+        }
+        slots.push({ ...slot, number });
+    }
+    return { order: { slots, pdfNumberByPosition }, numbers };
+}
+
+/** `parts` with the PDF numbers of their `printedAs` changed by `numbers` (withoutSlots); a number not in it is kept. */
+function renumberedParts(parts: ReadonlyMap<number, readonly PrintedPart[]>, numbers: ReadonlyMap<number, number>): Map<number, readonly PrintedPart[]>
+{
+    const out = new Map<number, readonly PrintedPart[]>();
+    for (const [position, list] of parts)
+    {
+        out.set(position, list.map((part): PrintedPart =>
+        {
+            const printedAs = part.printedAs;
+            if (printedAs.kind !== 'rebuilt' && printedAs.kind !== 'email')
+            {
+                return part;
+            }
+            return { ...part, printedAs: { ...printedAs, number: numbers.get(printedAs.number) ?? printedAs.number } };
+        }));
+    }
+    return out;
 }
 
 /** pdfBodyText, and whether the no-repeat rule left something out. `restored`: see NoRepeatResult.restored. */
@@ -2743,7 +2889,8 @@ function buildEmail(
     // text. What the tool was unsure about is said in the app, never in the
     // PDF (user rule, task 8.8). An email with no text at all never gets here
     // (task 8.14, planPdfOrder): the placeholder is for a text that could not
-    // be read (Q2) or whose every part is printed elsewhere (Q6).
+    // be read (Q2) or whose every part is left out but that applyNoRepeatRule keeps (task 9.9e,
+    // printedAllElsewhere: attachments listed, say).
     const notes: PdfLine[] = lines.lines.length === 0 ? [ownTextLine(strings.noText, 'muted')] : [];
     const warnings = message.warnings;
 

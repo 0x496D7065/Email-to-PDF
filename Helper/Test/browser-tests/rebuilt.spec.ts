@@ -324,9 +324,11 @@ test('a phone forward of a flat thread (Android HTML): 13 rebuilt cards, field b
 });
 
 // Task 9.9b (user decision F2, 2026-11-19): the 3 empty emails of fixture 98 put nothing in the PDF, not even
-// their header lines: the PDF holds 11 emails (the 10 rebuilt ones with text and the file), and the lines of
-// the empty forward at the top ("17 nov. 2026 19:23") and of the empty attribution over 27 Sep 08:27
-// ("27 sept. 2026 08:31") are printed nowhere. The preview keeps them in the file's text, labelled.
+// their header lines: the lines of the empty forward at the top ("17 nov. 2026 19:23") and of the empty
+// attribution over 27 Sep 08:27 ("27 sept. 2026 08:31") are printed nowhere. The preview keeps them in the
+// file's text, labelled. Task 9.9e: the file's own email is left out too, all of its text being printed as
+// the rebuilt emails, so the PDF holds the 10 rebuilt emails only: no "(no text)" block, a cover and an
+// index of 10. The preview still lists the file's email, with a note saying why it is not in the PDF.
 test('a phone forward of a flat thread (Android HTML): the empty emails put nothing in the PDF, the preview says so', async ({ page }) =>
 {
     test.setTimeout(90_000);
@@ -341,6 +343,8 @@ test('a phone forward of a flat thread (Android HTML): the empty emails put noth
     await expect(file).toHaveCount(1);
     await expect(file.locator('.pdf-label', { hasText: en.pdf.printedAs.noText })).not.toHaveCount(0);
     await expect(file.locator('.pdf-label', { hasText: en.pdf.printedAs.notRebuilt })).toHaveCount(0);
+    await expect(file.locator('.pdf-note')).toBeVisible();
+    await expect(file.locator('.pdf-note')).toHaveText(en.review.pdfNote['pdf-all-printed-elsewhere']);
 
     const makeButton = page.getByRole('button', { name: en.actions.makePdf });
     await expect(makeButton).not.toHaveAttribute('aria-disabled', /.*/, { timeout: 60_000 });
@@ -349,11 +353,15 @@ test('a phone forward of a flat thread (Android HTML): the empty emails put noth
     const bytes = new Uint8Array(readFileSync(await (await next).path()));
     const text = (await readPageRuns(readPdf(bytes))).map((runs) => textLines(runs).map((l) => l.shown).join(' ')).join(' ');
     const heading = (n: number): string => en.pdf.document.emailHeading.replace('{number}', String(n));
-    for (let n = 1; n <= 11; n++)
+    for (let n = 1; n <= 10; n++)
     {
         expect(text.split(`${heading(n)} From`), heading(n)).toHaveLength(2);
     }
-    expect(text).not.toContain(`${heading(12)} From`);
+    expect(text).not.toContain(`${heading(11)} From`);
+    // Task 9.9e: no "(no text)" block, the cover counts 10 emails, and the file's email (its File row) is not printed.
+    expect(text).not.toContain(en.preview.noText);
+    expect(text).toContain(en.pdf.document.emailCount.other.replace('{count}', '10'));
+    expect(text).not.toContain('98-phone-forward-android-html.eml');
     expect(text).not.toContain('17 nov. 2026 19:23');
     expect(text).not.toContain('27 sept. 2026 08:31');
     // Task 9.9b-2 (user decision F4): the workshop's 15-line signature is folded in its 4 rebuilt emails,
@@ -375,7 +383,8 @@ test('a phone forward of a flat thread (Android HTML): the empty emails put noth
 // Task 9.9b-4: the phone forward as plain text (fixtures 94 to 97: the same 13 earlier emails, 3 of them empty), each
 // file alone and the four together. Together, the copies of each earlier email are linked (the 3 empty ones by their
 // header facts), so step 2 counts 13 rebuilt emails, not 22. In every run the PDF prints each of the 10 rebuilt emails
-// with text exactly once and no header lines of the 3 empty ones.
+// with text exactly once and no header lines of the 3 empty ones. Task 9.9e: the files' own emails are not in the PDF
+// (all of their text is printed as the rebuilt emails): 10 emails, no "(no text)" block.
 const PLAIN_PHONE_FORWARDS = ['94-phone-forward-flat.eml', '95-phone-forward-wrapped.eml', '96-phone-forward-cut-address.eml', '97-phone-forward-alternative.eml'];
 for (const names of [...PLAIN_PHONE_FORWARDS.map((name) => [name]), PLAIN_PHONE_FORWARDS])
 {
@@ -402,13 +411,19 @@ for (const names of [...PLAIN_PHONE_FORWARDS.map((name) => [name]), PLAIN_PHONE_
         const squash = (text: string): string => text.replace(/\s+/gu, ' ').trim();
         const text = squash((await readPageRuns(readPdf(bytes))).map((runs) => textLines(runs).map((l) => l.shown).join(' ')).join(' '));
         const count = (part: string): number => text.split(part).length - 1;
-        // 10 rebuilt emails and the files, numbered.
+        // The 10 rebuilt emails, numbered; the files' own emails are left out (task 9.9e).
         const heading = (n: number): string => en.pdf.document.emailHeading.replace('{number}', String(n));
-        for (let n = 1; n <= 10 + files; n++)
+        for (let n = 1; n <= 10; n++)
         {
             expect(count(`${heading(n)} From`), heading(n)).toBe(1);
         }
-        expect(text).not.toContain(`${heading(11 + files)} From`);
+        expect(text).not.toContain(`${heading(11)} From`);
+        expect(text).not.toContain(en.preview.noText);
+        expect(count(en.pdf.document.emailCount.other.replace('{count}', '10'))).toBe(1);
+        for (const name of names)
+        {
+            expect(text).not.toContain(name);
+        }
         // Each rebuilt email with text once: its longest line that no other earlier email has (not a signature line).
         const parts = phoneForwardParts('fr').parts;
         const linesOf = (part: (typeof parts)[number]): string[] => part.body.flatMap((p) => p.split('\n')).map(squash).filter((l) => l !== '');

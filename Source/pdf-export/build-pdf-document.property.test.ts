@@ -45,7 +45,7 @@ import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-pla
 import { groupAsAttached, type AttachMode } from '../../Helper/Test/test-support/attached-builder';
 import { hasNoPrintableText, pdfPositions } from '../web-page-logic/no-printable-text';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
-import { buildPdfDocument, headerLinesEnd, holdsQuotedText, applyNoRepeatRule, pdfRanges, type PrintedPart } from './build-pdf-document';
+import { buildPdfDocument, headerLinesEnd, holdsQuotedText, applyNoRepeatRule, pdfRanges, type NoRepeatInput, type NoRepeatResult, type PrintedPart } from './build-pdf-document';
 import { createPdfStrings } from './pdf-strings';
 import { lineText } from './pdf-text-transforms';
 import type { MessagePlan } from '../../Header/output-plan';
@@ -233,16 +233,20 @@ function filesOf(messages: readonly NormalizedMessage[], seed: number, grouping:
 let attachedSeen = 0;
 /** How many ticked emails with no text the property tests saw left out (task 8.14; they must really be there). */
 let noTextSeen = 0;
+/** How many emails the property tests saw left out because all of their text is printed as other emails (task 9.9e). */
+let allElsewhereSeen = 0;
 
 /**
  * Task 8.14: the ticked emails not in the PDF (`positions` less `printed`)
  * are exactly those with no text: their body is white space only (so no
  * text is printed nowhere) and none has a PDF number; with none of them
  * (`printed` equal to `positions`), the slots are the ticked emails, as
- * before. Returns how many were left out.
+ * before. Task 9.9e: the emails of `allElsewhere` (NoRepeatResult.printedAllElsewhere)
+ * are left out too, though they have text (expectPrintedAllElsewhere checks
+ * where it went). Returns how many were left out for having no text.
  */
 function expectOnlyNoTextLeftOut(result: ThreadAnalysisResult, positions: readonly number[], printed: readonly number[],
-    pdfDocument: PdfDocument): number
+    pdfDocument: PdfDocument, allElsewhere: ReadonlyMap<number, number> = new Map()): number
 {
     const left = positions.filter((p) => !printed.includes(p));
     for (const position of left)
@@ -256,11 +260,55 @@ function expectOnlyNoTextLeftOut(result: ThreadAnalysisResult, positions: readon
     {
         expect(hasNoPrintableText(result.messages[position]!.message)).toBe(false);
     }
-    if (left.length === 0)
+    for (const position of allElsewhere.keys())
     {
-        expect(realEmails(pdfDocument).map((x) => x.position)).toEqual([...positions]);
+        expect(printed).toContain(position);
+        expect(pdfDocument.pdfNumberByPosition[position]).toBeNull();
     }
+    expect(realEmails(pdfDocument).map((x) => x.position)).toEqual(printed.filter((p) => !allElsewhere.has(p)));
     return left.length;
+}
+
+/**
+ * Task 9.9e (collapse, never delete): an email left out because all of its text is printed as other
+ * emails (`printedAllElsewhere`) lists no attachment, and every piece of its body with text is left
+ * out: as printed by an email that IS in the PDF (kinds 'rebuilt' and 'email', with that email's
+ * number), as printed nowhere by an earlier rule (unticked or empty forwards, a failed rebuild), or
+ * by its own plan (a repeated signature, app quoted history); at least one of them is printed as an
+ * email in the PDF. Returns how many such emails it checked.
+ */
+function expectPrintedAllElsewhere(input: NoRepeatInput, noRepeat: NoRepeatResult, pdfDocument: PdfDocument, where: string): number
+{
+    const numbers = new Set(pdfDocument.emails.map((e) => e.number));
+    for (const [position, planIndex] of noRepeat.printedAllElsewhere)
+    {
+        const message = input.result.messages[position]!.message;
+        const at = `${where} position ${String(position)}`;
+        expect(message.attachments, at).toEqual([]);
+        const ranges = pdfRanges(message.bodyText, input.plans[planIndex], input.policy, noRepeat.parts.get(position) ?? [], noRepeat.restored.get(position));
+        expect(ranges, at).not.toBeNull();
+        let asEmail = 0;
+        for (const range of ranges ?? [])
+        {
+            if (!/\S/u.test(message.bodyText.slice(range.start, range.end)))
+            {
+                continue;
+            }
+            expect(range.keep, at).toBe(false);
+            const printedAs = range.printedAs;
+            if (printedAs?.kind === 'rebuilt' || printedAs?.kind === 'email')
+            {
+                asEmail++;
+                expect(numbers.has(printedAs.number), at).toBe(true);
+                if (printedAs.kind === 'email')
+                {
+                    expect(pdfDocument.pdfNumberByPosition[printedAs.position], at).toBe(printedAs.number);
+                }
+            }
+        }
+        expect(asEmail, at).toBeGreaterThan(0);
+    }
+    return noRepeat.printedAllElsewhere.size;
 }
 
 const strings = createPdfStrings('en');
@@ -300,16 +348,18 @@ const squash = (s: string): string => s.replace(/\s+/gu, ' ').trim();
  * words, or in quoted text before it); each range has its own place, in
  * the order of the body. The match is searched from the end of the previous
  * one (the kept text in between may be quoted text the plan keeps). Returns
- * how many ranges were checked.
+ * how many ranges were checked. `email` null: an email the PDF leaves out
+ * because all of its text is printed as other emails (task 9.9e): it prints
+ * nothing, so every piece of own text must be printed as another email.
  */
-function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: PdfEmail, where: string,
+function expectOwnTextKept(body: string, plan: MessagePlan | undefined, email: PdfEmail | null, where: string,
     made?: { pdfDocument: PdfDocument; parts: readonly PrintedPart[]; places: readonly ReconstructedMessage[]; leftOut?: ReadonlyMap<number, readonly string[]> }): number
 {
     if (plan === undefined || plan.fallback)
     {
         return 0;
     }
-    const shown = squash(bodyOf(email));
+    const shown = email === null ? '' : squash(bodyOf(email));
     // Task 8.13a, Q3: the plan's ranges as the PDF cuts them; a 'text' piece left out names the email that prints it.
     const ranges = (made === undefined ? null : pdfRanges(body, plan, DEFAULT_OUTPUT_POLICY, made.parts)) ?? plan.ranges.map((r) => ({ ...r, printedAs: null }));
     let checked = 0;
@@ -473,9 +523,14 @@ describe('PDF document model properties', () =>
                     { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings });
                 // Task 8.14: the emails with no text are left out, the others numbered 1..k without a gap.
                 const printed = pdfPositions(result, positions);
-                noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, pdfDocument);
-                printed.forEach((p, k) => expect(pdfDocument.pdfNumberByPosition[p]).toBe(k + 1));
-                expect(pdfDocument.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(printed.length);
+                // Task 9.9e: and those all of whose text is printed as other emails (attached emails here).
+                const noRepeatInput = { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY };
+                const noRepeat = applyNoRepeatRule(noRepeatInput);
+                noTextSeen += expectOnlyNoTextLeftOut(result, positions, printed, pdfDocument, noRepeat.printedAllElsewhere);
+                allElsewhereSeen += expectPrintedAllElsewhere(noRepeatInput, noRepeat, pdfDocument, `${grouping} seed ${String(seed)}`);
+                const kept = printed.filter((p) => !noRepeat.printedAllElsewhere.has(p));
+                kept.forEach((p, k) => expect(pdfDocument.pdfNumberByPosition[p]).toBe(k + 1));
+                expect(pdfDocument.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(kept.length);
                 for (const { email, position } of realEmails(pdfDocument))
                 {
                     const full = referenceDisplayText(result.messages[position]!.message.bodyText);
@@ -528,7 +583,11 @@ describe('PDF document model properties', () =>
                 const folded = buildPdfDocument({ ...defaultInput, rebuilt });
                 const foldedReal = realEmails(folded);
                 rebuiltShown += folded.emails.length - foldedReal.length;
-                expect(foldedReal.map((x) => x.position)).toEqual(positions);
+                // Task 9.9e: less those all of whose text is printed as the rebuilt emails (checked there).
+                const foldedNoRepeat = applyNoRepeatRule({ ...defaultInput, rebuilt });
+                allElsewhereSeen += expectPrintedAllElsewhere({ ...defaultInput, rebuilt }, foldedNoRepeat, folded, `seed ${String(seed)}`);
+                const keptPositions = positions.filter((p) => !foldedNoRepeat.printedAllElsewhere.has(p));
+                expect(foldedReal.map((x) => x.position)).toEqual(keptPositions);
                 // Task 8.3: every email, rebuilt ones too, is numbered 1..n in PDF order, index alike;
                 // the real emails keep their order and carry the number pdfNumberByPosition gives.
                 const all = folded.emails.map((_, k) => k + 1);
@@ -539,7 +598,7 @@ describe('PDF document model properties', () =>
                 {
                     expect(folded.pdfNumberByPosition[position]).toBe(email.number);
                 }
-                expect(folded.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(positions.length);
+                expect(folded.pdfNumberByPosition.filter((n) => n !== null)).toHaveLength(keptPositions.length);
                 // Task 8.10 (the no-repeat rule; before it, task 7.7 wanted the real
                 // emails' text the same with and without rebuilt emails): a real
                 // email's text changes only where it quotes a rebuilt email that is in
@@ -547,7 +606,9 @@ describe('PDF document model properties', () =>
                 // each one from the place such a rebuilt email was read from, and
                 // printed elsewhere (in another email's text) unless it is a line of
                 // the quoted header (shown as that email's header rows).
-                const plain = realEmails(buildPdfDocument({ ...defaultInput, rebuilt: [] }));
+                const plainAll = realEmails(buildPdfDocument({ ...defaultInput, rebuilt: [] }));
+                expect(plainAll.map((x) => x.position)).toEqual(positions);
+                const plain = plainAll.filter((x) => !foldedNoRepeat.printedAllElsewhere.has(x.position));
                 expect(foldedReal.map((x) => x.position)).toEqual(plain.map((x) => x.position));
                 const inPdf = new Set(folded.emails.flatMap((e) => (e.rebuilt === null ? [] : [e.rebuilt.id])));
                 const otherTexts = (self: PdfEmail): string => folded.emails.filter((e) => e !== self).map(bodyOf).join('\n');
@@ -619,11 +680,18 @@ describe('PDF document model properties', () =>
                 // random body can hold such a place: its text is printed as that rebuilt email.
                 const { parts: defaultParts, rebuiltPlans: defaultRebuiltPlans, order: defaultOrder } = applyNoRepeatRule({ ...defaultInput, rebuilt });
                 const leftOut = leftOutSignatures(result, defaultRebuiltPlans, defaultOrder);
-                for (const [k, { email, position }] of foldedReal.entries())
+                for (const { email, position } of foldedReal)
                 {
                     const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
-                    ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[k], email,
+                    ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[positions.indexOf(position)], email,
                         `seed ${String(seed)} position ${String(position)}`, { pdfDocument: folded, parts: defaultParts.get(position) ?? [], places, leftOut });
+                }
+                // Task 9.9e: the emails left out because all of their text is printed as other emails: their own text too.
+                for (const [position, planIndex] of foldedNoRepeat.printedAllElsewhere)
+                {
+                    const places = result.reconstructed.filter((r) => result.positionByIndex[r.sourceIndex] === position).map((r) => r.rebuilt);
+                    ownTextChecked += expectOwnTextKept(result.messages[position]!.message.bodyText, defaultPlans[planIndex], null,
+                        `seed ${String(seed)} position ${String(position)} (left out)`, { pdfDocument: folded, parts: defaultParts.get(position) ?? [], places, leftOut });
                 }
                 // "Print full original text" (user decision 2026-10-28): the same choice gives NO rebuilt email.
                 const pdfDocument = buildPdfDocument(
@@ -702,9 +770,11 @@ describe('PDF document model properties', () =>
                 .filter(() => random() < 0.7);
             const pdfDocument = buildPdfDocument(
                 { result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0, strings, rebuilt });
-            const { parts, rebuiltPlans, order } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
+            const { parts, rebuiltPlans, order, printedAllElsewhere } = applyNoRepeatRule({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, rebuilt });
             const leftOut = leftOutSignatures(result, rebuiltPlans, order);
-            for (const { email, position } of realEmails(pdfDocument))
+            // Task 9.9e: the emails left out because all of their text is printed as other emails are checked too (email null).
+            const checkedEmails = [...realEmails(pdfDocument), ...[...printedAllElsewhere.keys()].map((position) => ({ email: null, position }))];
+            for (const { email, position } of checkedEmails)
             {
                 const body = result.messages[position]!.message.bodyText;
                 const where = `seed ${String(seed)} ${threadCase.id} position ${String(position)}`;
@@ -741,6 +811,9 @@ describe('PDF document model properties', () =>
         expect(attachedSeen).toBeGreaterThan(500);
         // Task 8.14: the random emails include some with no text (an empty random body), left out of the PDF.
         expect(noTextSeen).toBeGreaterThan(0);
+        // Task 9.9e: and some all of whose text is printed as other emails (a forward of an attached email, say).
+        console.log(`PDF model properties: ${String(allElsewhereSeen)} emails left out, all of their text printed as other emails`);
+        expect(allElsewhereSeen).toBeGreaterThan(0);
         // Task 9.9b-2: some rebuilt emails left out a signature block their sender printed earlier.
         console.log(`PDF model properties: ${String(leftOutSignatureSeen)} own-text pieces with a repeated signature left out`);
         expect(leftOutSignatureSeen).toBeGreaterThan(0);

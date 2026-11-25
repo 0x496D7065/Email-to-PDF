@@ -80,6 +80,14 @@ describe('pdfPlanNote', () =>
             'The tool could not tell its own text from the quote: everything is in the PDF except the parts printed as emails of their own.',
         );
     });
+
+    it('says the email is not in the PDF when all of its text is printed as other emails, whatever the plan (task 9.9e)', () =>
+    {
+        expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: false }, true, true)).toBe('pdf-all-printed-elsewhere');
+        expect(pdfPlanNote({ keptAllBecauseEmpty: true, fallback: false }, true, true)).toBe('pdf-all-printed-elsewhere');
+        expect(pdfPlanNote({ keptAllBecauseEmpty: false, fallback: false }, true, false)).toBeNull();
+        expect(t('review.pdfNote.pdf-all-printed-elsewhere')).toBe('Not in the PDF: all of its text is printed as other emails or left out, as labelled below.');
+    });
 });
 
 describe('relatedListNumbers', () =>

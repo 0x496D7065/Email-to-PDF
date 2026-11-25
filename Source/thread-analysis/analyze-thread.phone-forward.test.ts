@@ -152,7 +152,8 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
     // rebuiltEntries lists them oldest first.
     expect(entries.filter((r) => r.rebuilt.noOwnText).map((r) => r.rebuilt.dateText)).toEqual([...expected].reverse().filter((e) => e.noOwnText).map((e) => e.dateText));
 
-    // The PDF with every rebuilt email chosen (the default): 10 rebuilt emails, oldest first, then the file's.
+    // The PDF with every rebuilt email chosen (the default): the 10 rebuilt emails, oldest first. The file's own
+    // email is left out (task 9.9e, user rule F2): all of its text is printed as those rebuilt emails.
     const positions = result.messages.map((_, k) => k);
     const plans = planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY);
     const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0,
@@ -164,9 +165,9 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
     const printedBlocks = new Map<string, Set<string>>();
     let foldedEmails = 0;
     let leftOut = 0;
-    expect(pdf.emails).toHaveLength(11);
-    expect(pdf.index.entries).toHaveLength(11);
-    expect(pdf.cover.emailCount).toBe(11);
+    expect(pdf.emails).toHaveLength(10);
+    expect(pdf.index.entries).toHaveLength(10);
+    expect(pdf.cover.emailCount).toBe(10);
     printed.forEach((want, k) =>
     {
         const email = pdf.emails[k]!;
@@ -223,16 +224,24 @@ function expectWholeChain(message: NormalizedMessage, expected: readonly Expecte
     {
         expect((r.segments ?? []).map((s) => r.rebuilt.reconstructedText.slice(s.start, s.end)).join('')).toBe(r.segments === undefined ? '' : r.rebuilt.reconstructedText);
     }
-    const last = pdf.emails[10]!;
-    expect(last.rebuilt).toBeNull();
-    expect(fieldOf(last, 'Subject')).toBe(message.subject);
     // F2 (user decision 2026-11-19, task 9.9b): no header lines with no text anywhere in the PDF. Every
     // other part of the file's text is printed as a rebuilt email above (each one's text checked whole),
     // and the 3 empty ones (the empty forward at the top, the empty attributions over 27 Sep 08:27 and
-    // 14 Jul 16:53) are printed nowhere, not even in the file's own text: that text is empty, so it shows
-    // the "(no text)" placeholder (task 8.14, Q6). Before task 9.9b it printed those 3 header blocks.
-    expect(last.body).toEqual([]);
-    expect(last.notes.map(lineText)).toEqual(['(no text)']);
+    // 14 Jul 16:53) are printed nowhere, not even in the file's own text. That text is then empty, so the
+    // file's email is not in the PDF at all (task 9.9e; from task 9.9b it printed its header rows over the
+    // "(no text)" placeholder, task 8.14 Q6; before task 9.9b it printed those 3 header blocks). No page,
+    // no number, no "(no text)" anywhere; its data is unchanged (the preview shows it).
+    expect(pdf.emails.every((e) => e.rebuilt !== null)).toBe(true);
+    expect(pdf.emails.every((e) => e.notes.length === 0)).toBe(true);
+    expect(pdf.pdfNumberByPosition).toEqual([null]);
+    expect(pdf.index.entries.map((e) => e.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    // "Print full original text": the file's email alone, printed whole, as before.
+    const full = buildPdfDocument({ result, positions, plans: planOutput(positions.map((p) => result.messages[p]!), { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true }),
+        policy: { ...DEFAULT_OUTPUT_POLICY, unfoldEverything: true }, generatedOffsetMinutes: 0, generatedAt: 0, strings: createPdfStrings('en'),
+        rebuilt: entries.map((r) => r.id) });
+    expect(full.emails.map((e) => [e.position, e.number])).toEqual([[0, 1]]);
+    expect(fieldOf(full.emails[0]!, 'Subject')).toBe(message.subject);
+    expect(full.emails[0]!.body.length).toBeGreaterThan(100);
     // With rebuilding off, or every rebuilt email unticked, their lines are not printed either. Only the
     // empty 14 Jul attribution has the very words of another header (the one with text under it), which
     // the file's text prints once, with its text, when rebuilding is off.
@@ -299,13 +308,15 @@ describe('phone forward of a flat thread: the fixtures (parse -> analysis -> pla
             expect(squashWhiteSpace(copy.rebuilt.reconstructedText)).toBe(squashWhiteSpace(entry.rebuilt.reconstructedText));
             expect(copy.rebuilt.dateText).toBe(entry.rebuilt.dateText);
         }
-        // The PDF: the 10 rebuilt emails with text once each, and the 4 files.
+        // The PDF: the 10 rebuilt emails with text once each; the 4 files' emails are left out, all of their
+        // text being printed as those rebuilt emails (task 9.9e).
         const positions = result.messages.map((_, k) => k);
         const plans = planOutput(positions.map((p) => result.messages[p]!), DEFAULT_OUTPUT_POLICY);
         const pdf = buildPdfDocument({ result, positions, plans, policy: DEFAULT_OUTPUT_POLICY, generatedOffsetMinutes: 0, generatedAt: 0,
             strings: createPdfStrings('en'), rebuilt: entries.map((r) => r.id) });
         expect(pdf.emails.filter((e) => e.rebuilt !== null)).toHaveLength(10);
-        expect(pdf.emails.filter((e) => e.rebuilt === null)).toHaveLength(4);
+        expect(pdf.emails.filter((e) => e.rebuilt === null)).toHaveLength(0);
+        expect(pdf.pdfNumberByPosition).toEqual([null, null, null, null]);
     });
 
     it('the fixtures hold the French form: 94 and the text part of 97 exactly, 95 and 96 wrapped', async () =>

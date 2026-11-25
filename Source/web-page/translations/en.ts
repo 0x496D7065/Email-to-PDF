@@ -390,6 +390,9 @@ export const en = {
             // The same, when parts of it are printed as emails of their own (task 8.11, S1).
             'pdf-kept-all-empty-elsewhere': 'The tool could not tell its own text from the quote: everything is in the PDF except the parts printed as emails of their own.',
             'pdf-fallback': 'The whole email will be in the PDF: the tool could not work out which parts to leave out.',
+            // Task 9.9e: the PDF leaves this email out, because each part of its text is printed as
+            // another email (labelled below) or left out, so nothing is left to print for it.
+            'pdf-all-printed-elsewhere': 'Not in the PDF: all of its text is printed as other emails or left out, as labelled below.',
         } satisfies Record<PdfNoteCode, string>,
         // An email with control or broken characters (Source/web-page-logic/message-notes.ts,
         // codedCharacters). Said here only: the PDF has no notes (task 8.8).

@@ -233,7 +233,7 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
         }
         const rebuilt = [...(options.includedRebuilt?.() ?? [])];
         const unticked = [...(options.untickedRebuilt?.() ?? [])];
-        const { ranges: cut, rebuiltPlans } = pdfCut({ ...madePlans.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
+        const { ranges: cut, rebuiltPlans, printedAllElsewhere } = pdfCut({ ...madePlans.plans, rebuilt, rebuildingOff: options.rebuildingOff?.() === true, unticked });
         // The signature plans of the rebuilt cards in the PDF (task 9.9b-2): the labels of their folds.
         const rebuiltViews = new Map<number, PdfView>();
         for (const [id, plan] of rebuiltPlans)
@@ -251,7 +251,8 @@ export function createPdfLabels(options: PdfLabelsOptions): PdfLabels
             const view = views.get(position);
             if (view !== undefined)
             {
-                views.set(position, { ...view, pdfRanges });
+                // Task 9.9e: left out of the PDF, all of its text printed as other emails (the preview's note says so).
+                views.set(position, printedAllElsewhere.has(position) ? { ...view, pdfRanges, printedAllElsewhere: true } : { ...view, pdfRanges });
             }
         }
         return withRebuilt({ result: madePlans.preview.result, views });

@@ -1209,7 +1209,8 @@ export function mountPreview(shell: Pick<PageShell, 'checkArea'>, options: Previ
             slot.shape = shape;
         }
         // Parts printed as emails of their own (task 8.11, S1): the note does not say "the whole email".
-        const note = view === null ? null : pdfPlanNote(view.plan, printedAsEmailOfItsOwn(view, email.message.bodyText));
+        // Task 9.9e: an email all of whose text is printed as other emails is left out of the PDF, and the note says so.
+        const note = view === null ? null : pdfPlanNote(view.plan, printedAsEmailOfItsOwn(view, email.message.bodyText), view.printedAllElsewhere === true);
         slot.noteCode = note;
         writeNote(slot);
         setSafeAttribute(slot.note, 'hidden', note === null);

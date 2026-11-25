@@ -1790,6 +1790,28 @@ describe('PDF labels', () =>
         expect(renderedBody(items()[1]!)).toBe(result.messages[1]!.message.bodyText);
     });
 
+    it('notes an email the PDF leaves out because all of its text is printed as other emails, and drops the note when that changes (task 9.9e)', () =>
+    {
+        const result = analysisOf(benchThread());
+        preview.show(result);
+        runAll();
+        const plans = plansFor(result, [0, 1, 2]);
+        const views = new Map(plans.views);
+        views.set(1, { ...plans.views.get(1)!, printedAllElsewhere: true });
+        preview.setPdfPlans({ result, views });
+        runAll();
+        const note = one(items()[1]!, 'pdf-note');
+        expect(note.hasAttribute('hidden')).toBe(false);
+        expect(note.textContent).toBe(t('review.pdfNote.pdf-all-printed-elsewhere'));
+        expect(one(items()[0]!, 'pdf-note').hasAttribute('hidden')).toBe(true);
+        // Nothing is dropped from the page: the whole text is still shown.
+        expect(renderedBody(items()[1]!)).toBe(result.messages[1]!.message.bodyText);
+        // The same plan without the flag: the note goes (the view key includes it).
+        preview.setPdfPlans(plansFor(result, [0, 1, 2]));
+        runAll();
+        expect(one(items()[1]!, 'pdf-note').hasAttribute('hidden')).toBe(true);
+    });
+
     it('failed plans: labels hidden, a note says so; reset() turns everything off', () =>
     {
         const result = analysisOf(benchThread());

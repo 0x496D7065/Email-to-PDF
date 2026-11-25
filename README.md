@@ -243,10 +243,10 @@ The tool never throws message text away on its own:
   "Rebuild conversation from replies"). The PDF keeps only the
   placeholders for blank fields ("(no subject)", "(no date)", "Unknown
   sender", "(no text)"), its headings, labels, index, bookmarks and page
-  numbers. "(no text)" is only for an email whose text could not be read
-  (or whose whole text is printed as emails of their own, see R6): an
-  email that simply has no text is not in the PDF at all (see
-  [R6](#r6-collapse-never-delete)).
+  numbers. "(no text)" is mainly for an email whose text could not be read
+  (and for the few cases under "No email twice" in R6): an email that
+  simply has no text, or whose whole text is printed as emails of their
+  own, is not in the PDF at all (see [R6](#r6-collapse-never-delete)).
   After the cover information come the index (number, date, sender,
   subject, attachments, page) and the emails, with page numbers and PDF
   bookmarks. Every email
@@ -655,10 +655,20 @@ at all (see "Emails with no text" below).
   [Earlier emails rebuilt from quoted text](#earlier-emails-rebuilt-from-quoted-text))
   that is in the PDF, or one the tool found to be an email you added that
   is in the PDF too. So a forward no longer prints the emails it passes on
-  inside its own text when they also have their own pages; a forward with
-  nothing of its own then shows "(no text)" (it is not left out like an
-  email with no text, see "Emails with no text" below: its text is there,
-  printed on those pages). The same goes for an email
+  inside its own text when they also have their own pages. A forward with
+  nothing of its own left to print (such as a phone forward whose whole
+  text is a chain of earlier emails, each rebuilt as an email of its own)
+  is then left out of the PDF like an email with no text (see "Emails
+  with no text" below): no page, no number, no index line, and it does not
+  count on the cover (so its own header rows, File row included, are not
+  printed). Its text is there, printed on those pages; the
+  preview keeps it, labels each part with the email that prints it and
+  says "Not in the PDF: all of its text is printed as other emails or left
+  out, as labelled below." It stays, under "(no text)", when it lists
+  attachments, when none of its parts is printed as an email in the PDF
+  (only forwarded emails you unticked, say), or when another email's
+  part is printed as it. "Print full original text" prints it whole, as
+  before. Leaving out what is printed elsewhere also covers an email
   attached to it (an inline forward in an `.eml` file, which the file
   prints inside the email's text): it is printed on its own page, so what
   that page prints of its block (the "Forwarded message" line, its header

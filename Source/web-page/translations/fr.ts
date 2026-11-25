@@ -279,6 +279,7 @@ export const fr: Messages = {
             'pdf-kept-all-empty': 'L’e-mail entier sera dans le PDF\u00A0: l’outil n’a pas pu distinguer son propre texte de la citation.',
             'pdf-kept-all-empty-elsewhere': 'L’outil n’a pas pu distinguer son propre texte de la citation\u00A0: tout est dans le PDF, sauf les parties imprimées comme e-mails à part entière.',
             'pdf-fallback': 'L’e-mail entier sera dans le PDF\u00A0: l’outil n’a pas pu déterminer quelles parties laisser de côté.',
+            'pdf-all-printed-elsewhere': 'Pas dans le PDF\u00A0: tout son texte est imprimé dans d’autres e-mails ou laissé de côté, comme indiqué ci-dessous.',
         },
         codedCharacters: 'Cet e-mail contient des caractères invisibles ou endommagés. Dans le PDF, ils peuvent apparaître sous forme de codes, comme [U+0000].',
     },

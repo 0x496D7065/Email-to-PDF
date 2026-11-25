@@ -22,7 +22,7 @@ import { parseAllFixtures } from '../../Helper/Test/test-data/parse-all-fixtures
 import { phoneForwardThread } from '../../Helper/Test/test-support/phone-forward-thread';
 import { analyzeThread } from '../thread-analysis/analyze-thread';
 import { DEFAULT_OUTPUT_POLICY, planOutput } from '../thread-analysis/output-plan';
-import { rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
+import { hasNoPrintableText, rebuiltHasNoPrintableText } from '../web-page-logic/no-printable-text';
 import { pdfBlocks } from '../web-page-logic/pdf-plan';
 import { printedElsewhereRanges, type PrintedElsewhereInput } from '../web-page-logic/printed-elsewhere';
 import { rebuiltEntries } from '../web-page-logic/rebuilt-email-display';
@@ -206,14 +206,19 @@ describe('F2: an email with no text puts nothing in the PDF, not even its header
     {
         const message = file('Fwd: Fwd: Desk order', EMPTY_FORWARD_AT_TOP);
         expect(expectNoLoneHeaders([message], 'empty forward')).toBe(3);
-        const { pdf } = make([message], MODES[0]);
-        expect(pdf.emails.map((e) => e.rebuilt === null ? 'file' : 'rebuilt')).toEqual(['rebuilt', 'file']);
-        expect(pdf.index.entries).toHaveLength(2);
+        const made = make([message], MODES[0]);
+        const { pdf } = made;
+        // The file's own text: nothing left of it (every part printed elsewhere or empty), so the file's email is
+        // not in the PDF either (task 9.9e; before, its header rows over the "(no text)" placeholder).
+        expect(pdf.emails.map((e) => e.rebuilt === null ? 'file' : 'rebuilt')).toEqual(['rebuilt']);
+        expect(pdf.index.entries).toHaveLength(1);
+        expect(pdf.pdfNumberByPosition).toEqual([null]);
+        expect(pdf.emails.every((e) => e.notes.length === 0)).toBe(true);
+        expect(applyNoRepeatRule(made.input).printedAllElsewhere.has(0)).toBe(true);
         expect(allText(pdf)).not.toContain('From: Alice Example');
         expect(allText(pdf).split('The twelve oak desks are ready').length - 1).toBe(1);
-        // The file's own text: nothing left of it (every part printed elsewhere or empty): the placeholder.
-        expect(pdf.emails[1]!.body).toEqual([]);
-        expect(pdf.emails[1]!.notes.map(lineText)).toEqual(['(no text)']);
+        // The preview labels every character of it "not in the PDF".
+        expect(expectLabelsTruthful(made, 0, 'empty forward, left out')).toBe(0);
     });
 
     it('an empty Outlook block over another one: its lines nowhere, the writer\'s own text kept', () =>
@@ -288,10 +293,11 @@ describe('F2: an email with no text puts nothing in the PDF, not even its header
             // 3 empty emails, in 3 modes.
             expect(expectNoLoneHeaders([message], message.source.fileName)).toBe(9);
             const { pdf } = make([message], MODES[0]);
-            // 10 rebuilt emails and the file.
+            // 10 rebuilt emails; the file's email is left out, all of its text printed as them (task 9.9e).
             expect(pdf.emails.filter((e) => e.rebuilt !== null)).toHaveLength(10);
-            expect(pdf.emails.filter((e) => e.rebuilt === null)).toHaveLength(1);
-            expect(pdf.index.entries).toHaveLength(11);
+            expect(pdf.emails.filter((e) => e.rebuilt === null)).toHaveLength(0);
+            expect(pdf.index.entries).toHaveLength(10);
+            expect(pdf.emails.every((e) => e.notes.length === 0), message.source.fileName).toBe(true);
             // The empty forward's own lines (its date is that of the forward itself) are nowhere in the PDF.
             expect(allText(pdf), message.source.fileName).not.toContain('17 nov. 2026 19:23');
         }
@@ -783,16 +789,25 @@ describe('Q3 on every fixture: forwarded text the PDF prints outside a rebuilt e
         let headersChecked = 0;
         let bodiesChecked = 0;
         let foldedInChecked = 0;
+        let leftOutChecked = 0;
         for (const group of [...messages.map((m) => [m]), messages])
         {
             for (const mode of MODES)
             {
                 const made = make(group, mode);
+                const allElsewhere = applyNoRepeatRule(made.input).printedAllElsewhere;
                 for (const position of made.positions)
                 {
                     const plan = made.plans[made.positions.indexOf(position)]!;
                     const inPdf = made.pdf.emails.some((e) => e.position === position && e.rebuilt === null);
                     const where = `${group.length === 1 ? group[0]!.source.fileName : 'all fixtures'}, ${mode.name}, #${String(position + 1)}`;
+                    // Task 9.9e: an email left out because all of its text is printed as other emails: every label says "not in the PDF".
+                    expect(inPdf || hasNoPrintableText(made.result.messages[position]!.message), where).toBe(!allElsewhere.has(position));
+                    if (allElsewhere.has(position))
+                    {
+                        expect(expectLabelsTruthful(made, position, where), where).toBe(0);
+                        leftOutChecked++;
+                    }
                     if (inPdf && !plan.fallback)
                     {
                         foldedInChecked += expectLabelsTruthful(made, position, where);
@@ -807,9 +822,12 @@ describe('Q3 on every fixture: forwarded text the PDF prints outside a rebuilt e
                 }
             }
         }
-        // 8 bodies with a forwarded part in the PDF (fixtures alone, then all together), in 3 modes. None prints forwarded text outside a rebuilt
-        // email under header lines today (every such forward is rebuilt); the synthetic cases above do.
-        expect(bodiesChecked).toBe(24);
+        // 8 bodies with a forwarded part (fixtures alone, then all together), in 3 modes: 24, less the 8 the PDF leaves out with every
+        // rebuilt email ticked (the phone forwards 94 to 97, alone and together: all of their text is printed as those rebuilt emails,
+        // task 9.9e; 98 is HTML, stubbed here). None prints forwarded text outside a rebuilt email under header lines today (every
+        // such forward is rebuilt); the synthetic cases above do.
+        expect(bodiesChecked).toBe(16);
+        expect(leftOutChecked).toBe(8);
         expect(headersChecked).toBe(0);
         // Folded text the PDF prints (kept signatures, writer quotes, forwards with rebuilding off) is labelled "In the PDF".
         expect(foldedInChecked).toBeGreaterThan(1000);
